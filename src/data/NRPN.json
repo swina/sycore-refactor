@@ -1,0 +1,245 @@
+[
+    {
+        "name": "attack",
+        "cc": 73,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 73
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "decay",
+        "cc": 75,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 75
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "sustain",
+        "category": "ENV",
+        "cc": 30,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 30
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "release",
+        "cc": 72,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 72
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "cutoff",
+        "cc": 74,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 74
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "reso",
+        "cc": 71,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 71
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "oscSq",
+        "cc": 20,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 20
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "oscSaw",
+        "cc": 19,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 19
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "oscSub",
+        "cc": 21,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 21
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "oscNoise",
+        "cc": 23,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 23
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    },
+    {
+        "name": "oscLFO",
+        "cc": 13,
+        "nrpn": [
+            {
+                "name": "msb",
+                "cc": 99,
+                "value": 0
+            },
+            {
+                "name": "lsb",
+                "cc": 98,
+                "value": 13
+            },
+            {
+                "min": 0
+            },
+            {
+                "max": 255
+            }
+        ]
+    }
+]

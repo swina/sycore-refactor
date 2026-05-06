@@ -1,0 +1,30 @@
+{
+  "name": "sycore-gen-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "^1.52.0",
+    "@tailwindcss/postcss": "^4.2.4",
+    "lucide-vue-next": "^1.0.0",
+    "pinia": "^3.0.4",
+    "tone": "^15.1.22",
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4",
+    "webmidi": "^3.1.16"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/tsconfig": "^0.9.1",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}
