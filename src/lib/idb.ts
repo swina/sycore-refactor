@@ -119,9 +119,10 @@ async function idbGet(store: string, key: string): Promise<any | undefined> {
 
 async function idbPut(store: string, value: Record<string, any>): Promise<void> {
   const db = await openDb();
+  const plain = JSON.parse(JSON.stringify(value));
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, 'readwrite');
-    const req = tx.objectStore(store).put(value);
+    const req = tx.objectStore(store).put(plain);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });

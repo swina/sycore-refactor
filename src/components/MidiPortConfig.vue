@@ -5,7 +5,15 @@ import { useMidiStore } from '@/stores/useMidiStore'
 const midiStore = useMidiStore()
 const emit = defineEmits(['close'])
 
-const uniqueNames = (devices) => [...new Set(devices.map(d => d.name))]
+// Deduplicate by name but keep the full device object so we can use .id as option value
+const uniqueDevices = (devices) => {
+  const seen = new Set()
+  return devices.filter(d => {
+    if (seen.has(d.name)) return false
+    seen.add(d.name)
+    return true
+  })
+}
 </script>
 
 <template>
@@ -26,7 +34,7 @@ const uniqueNames = (devices) => [...new Set(devices.map(d => d.name))]
         <div class="p-6 flex flex-col gap-6">
           <!-- No device warning -->
           <div
-            v-if="!midiStore.selectedDevice || !midiStore.outputs.some(o => o.name === midiStore.selectedDevice)"
+            v-if="!midiStore.selectedDevice || !midiStore.outputs.some(o => o.id === midiStore.selectedDevice)"
             class="bg-red-900/20 border border-red-500/50 rounded-lg p-4 flex flex-col items-center text-center gap-2"
           >
             <span class="text-red-500 font-black uppercase tracking-widest text-sm">NO S-1 CONNECTED</span>
@@ -47,8 +55,8 @@ const uniqueNames = (devices) => [...new Set(devices.map(d => d.name))]
                     class="bg-transparent text-xs font-mono font-bold focus:outline-none cursor-pointer uppercase w-full border-none"
                   >
                     <option value="" disabled class="bg-neutral-950">Select Hardware</option>
-                    <option v-for="name in uniqueNames(midiStore.outputs)" :key="name" :value="name" class="bg-neutral-950">
-                      {{ name || 'Unknown' }}
+                    <option v-for="device in uniqueDevices(midiStore.outputs)" :key="device.id" :value="device.id" class="bg-neutral-950">
+                      {{ device.name || 'Unknown' }}
                     </option>
                     <option v-if="midiStore.outputs.length === 0" value="" disabled class="bg-neutral-950">No Device</option>
                   </select>
@@ -68,8 +76,8 @@ const uniqueNames = (devices) => [...new Set(devices.map(d => d.name))]
                     class="bg-transparent text-xs font-mono font-bold focus:outline-none cursor-pointer uppercase w-full border-none"
                   >
                     <option value="" disabled class="bg-neutral-950">Select Input</option>
-                    <option v-for="name in uniqueNames(midiStore.inputs)" :key="name" :value="name" class="bg-neutral-950">
-                      {{ name || 'Unknown' }}
+                    <option v-for="device in uniqueDevices(midiStore.inputs)" :key="device.id" :value="device.id" class="bg-neutral-950">
+                      {{ device.name || 'Unknown' }}
                     </option>
                     <option v-if="midiStore.inputs.length === 0" value="" disabled class="bg-neutral-950">No Input</option>
                   </select>

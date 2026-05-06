@@ -454,7 +454,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-0 pb-[42px] md:pb-[44px] z-[200] flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-neon overflow-hidden">
+  <div v-if="isOpen" class="fixed inset-0 pt-[70px] pb-[42px] md:pt-[70px] md:pb-[44px] z-[200] flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-neon overflow-hidden">
     <!-- Header -->
     <div class="flex items-center justify-between p-4 bg-neutral-900 border-b border-neutral-800">
       <div class="flex items-center gap-4">

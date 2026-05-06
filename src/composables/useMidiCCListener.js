@@ -53,11 +53,11 @@ export function useMidiCCListener() {
       if (cfg) effectiveCC = cfg.cc
     }
 
-    // 3. Echo / thru logic
+    // 3. Echo / thru logic — forward when input and output are different devices
     const thruMode  = midiStore.selectedInputDevice &&
                       midiStore.selectedDevice &&
                       midiStore.selectedInputDevice !== midiStore.selectedDevice
-    const shouldEcho = thruMode && !isControl
+    const shouldEcho = thruMode
 
     // 4. Global mod-wheel CC redirect
     if (effectiveCC === 1 && uiStore.globalModCC !== 1) {

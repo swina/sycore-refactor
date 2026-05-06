@@ -71,7 +71,34 @@ const AVAILABLE_ICONS = [
   'Activity','Sliders','Menu','MoreVertical','Plus','Minus','ChevronDown','ChevronUp',
   'Clock','Music','Volume2','Pause','Play','Square','Circle','Triangle',
   'Eye','EyeOff','Lock','Unlock','Trash2','Save','Download','Upload','Search','Filter',
-  'Database','Palette','Disc3','Radio','BarChart3','ListFilter',
+  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic',
+]
+
+// All functions the app exposes as toolbar buttons.
+// Add new entries here when a new panel/feature is wired up in SynthApp.
+const KNOWN_TOOLBAR_FUNCTIONS = [
+  { id: 'types',          label: 'Sound Types',      icon: 'LayoutGrid'   },
+  { id: 'history',        label: 'Sounds History',   icon: 'Layers'       },
+  { id: 'keyboard',       label: 'Virtual Keyboard', icon: 'KeyboardMusic'},
+  { id: 'sequencer',      label: 'Step Sequencer',   icon: 'ListMusic'    },
+  { id: 'arp',            label: 'Arpeggiator',      icon: 'Activity'     },
+  { id: 'audio-capture',  label: 'Audio Capture',    icon: 'Mic'          },
+  { id: 'visualizer',     label: 'Audio Visualizer', icon: 'Activity'     },
+  { id: 'capture',        label: 'MIDI Capture',     icon: 'BarChart3'    },
+  { id: 'routing',        label: 'MIDI Routing',     icon: 'Cable'        },
+  { id: 'midilearn',      label: 'MIDI Mapping',     icon: 'Workflow'     },
+  { id: 'midiactions',    label: 'MIDI Actions',     icon: 'Gamepad2'     },
+  { id: 'midiports',      label: 'MIDI Ports',       icon: 'Zap'          },
+  { id: 'liveset',        label: 'Live Set',         icon: 'Zap'          },
+  { id: 'favorites',      label: 'Favorites',        icon: 'Heart'        },
+  { id: 'profile',        label: 'User Profile',     icon: 'User'         },
+  { id: 'help',           label: 'Help',             icon: 'HelpCircle'   },
+  { id: 'support',        label: 'Support',          icon: 'Mail'         },
+  { id: 'manual',         label: 'User Manual',      icon: 'BookOpen'     },
+  { id: 'portal',         label: 'Portal',           icon: 'BookOpen'     },
+  { id: 'panic',          label: 'PANIC',            icon: 'AlertTriangle'},
+  { id: 'experimental',   label: 'Experimental',     icon: 'Settings2'    },
+  { id: 'midilogger',     label: 'MIDI Logger',      icon: 'Settings2'    },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -82,6 +109,11 @@ const filteredControllers = computed(() =>
     c.cc?.toString().includes(searchQuery.value)
   )
 )
+
+const addableButtons = computed(() => {
+  const existing = new Set(toolbarButtons.value.map(b => b.id))
+  return KNOWN_TOOLBAR_FUNCTIONS.filter(f => !existing.has(f.id))
+})
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -316,7 +348,7 @@ function removeController(id) {
   controllers.value = controllers.value.filter(c => c.id !== id)
 }
 
-// ─── Toolbar reorder ──────────────────────────────────────────────────────────
+// ─── Toolbar reorder / add / remove ──────────────────────────────────────────
 
 function moveButton(index, dir) {
   const next = [...toolbarButtons.value]
@@ -324,6 +356,14 @@ function moveButton(index, dir) {
   if (target < 0 || target >= next.length) return
   ;[next[index], next[target]] = [next[target], next[index]]
   toolbarButtons.value = next
+}
+
+function removeButton(index) {
+  toolbarButtons.value = toolbarButtons.value.filter((_, i) => i !== index)
+}
+
+function addButton(fn) {
+  toolbarButtons.value = [...toolbarButtons.value, { id: fn.id, label: fn.label, icon: fn.icon, enabled: true }]
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -841,8 +881,30 @@ watch(() => props.isOpen, (open) => {
                     >
                       <div :class="['absolute top-1 w-4 h-4 rounded-full bg-black transition-all', button.enabled ? 'left-[26px]' : 'left-1']" />
                     </button>
+                    <!-- Remove -->
+                    <button
+                      @click="removeButton(index)"
+                      title="Remove from toolbar"
+                      class="text-neutral-600 hover:text-red-400 transition-colors shrink-0"
+                    >
+                      <X class="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
+              </div>
+
+              <!-- Add Function -->
+              <div v-if="addableButtons.length > 0" class="flex items-center gap-2 pt-2 border-t border-neutral-800/60">
+                <span class="text-[10px] font-mono text-neutral-500 shrink-0">Add function</span>
+                <select
+                  @change="e => { const fn = KNOWN_TOOLBAR_FUNCTIONS.find(f => f.id === e.target.value); if (fn) addButton(fn); e.target.value = '' }"
+                  class="flex-1 bg-black border border-neutral-800 text-[10px] text-neutral-400 rounded px-2 py-1 focus:outline-none focus:border-synth-neon font-mono"
+                >
+                  <option value="">— pick a function —</option>
+                  <option v-for="fn in addableButtons" :key="fn.id" :value="fn.id">
+                    {{ fn.label }} ({{ fn.id }})
+                  </option>
+                </select>
               </div>
             </div>
           </div>

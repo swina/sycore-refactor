@@ -8,7 +8,7 @@ import {
 import { useMidiStore } from './useMidiStore'
 import { useArpStore }  from './useArpStore'
 import { useAuthStore } from './useAuthStore'
-import { S1_TYPES }     from '@/constants/s1-config'
+import { S1_TYPES, FIELD_TO_CC } from '@/constants/s1-config'
 
 export const usePresetStore = defineStore('preset', () => {
   const midiStore = useMidiStore()
@@ -83,7 +83,12 @@ export const usePresetStore = defineStore('preset', () => {
   // Apply a preset's CC values to the hardware
   function applyPresetCCs(preset) {
     if (!preset?.data) return
-    midiStore.sendAllCCs(preset.data)
+    const ccMap = {}
+    for (const [fieldName, value] of Object.entries(preset.data)) {
+      const cc = FIELD_TO_CC[fieldName]
+      if (cc !== undefined) ccMap[cc] = value
+    }
+    midiStore.sendAllCCs(ccMap)
   }
 
   // Recall a preset: send CCs, restore arp/seq state, update current context

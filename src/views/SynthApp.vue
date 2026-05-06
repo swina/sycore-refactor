@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
   LayoutGrid, Layers, Heart, ListMusic, User, BookOpen, Workflow, Cable,
-  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3
+  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic
 } from 'lucide-vue-next'
 import * as lucideIcons from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -29,6 +29,8 @@ import ArpeggiatorPanel from '@/components/ArpeggiatorPanel.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import LiveSet from '@/components/LiveSet.vue'
 import MidiCapture from '@/components/MidiCapture.vue'
+import AudioCapture from '@/components/AudioCapture.vue'
+import AudioVisualizer from '@/components/AudioVisualizer.vue'
 import UserProfileModal from '@/components/UserProfileModal.vue'
 import StepSequencer from '@/components/StepSequencer.vue'
 import AdminPanel from '@/components/AdminPanel.vue'
@@ -83,8 +85,11 @@ const toolbarButtonMap = {
   panic:       { state: null,               icon: AlertTriangle,  label: 'PANIC: All Notes Off', action: 'panic' },
   support:     { state: 'isSupportOpen',    icon: Mail,          label: 'Support Request' },
   midiports:   { state: 'isMidiPortOpen',   icon: Zap,           label: 'MIDI Ports' },
-  capture:     { state: 'isCaptureOpen',    icon: BarChart3,  label: 'MIDI Capture', badge: 'capture' },
-  arp:         { state: 'isArpOpen',        icon: BarChart3,  label: 'Arpeggiator' },
+  capture:       { state: 'isCaptureOpen',      icon: BarChart3, label: 'MIDI Capture', badge: 'capture' },
+  'audio-capture': { state: 'isAudioCaptureOpen',  icon: Mic,      label: 'Audio Capture'    },
+  visualizer:      { state: 'isVisualizerOpen',    icon: Activity,  label: 'Audio Visualizer' },
+  midilogger:      { state: 'isAdminLoggerOpen',  icon: Settings2, label: 'MIDI Logger'      },
+  arp:           { state: 'isArpOpen',          icon: BarChart3, label: 'Arpeggiator' },
 }
 
 function getToolbarIcon(buttonId) {
@@ -203,7 +208,7 @@ onMounted(() => {
 <template>
   <div class="w-full h-screen bg-neutral-950 text-white overflow-hidden flex flex-col">
     <!-- Main Toolbar -->
-    <div class="flex items-center justify-between h-18 px-4 border-b border-neutral-900 bg-black/50 backdrop-blur-xl z-50">
+    <div class="flex items-center justify-between h-18 px-4 border-b border-neutral-900 bg-black/50 backdrop-blur-xl z-350">
       <div class="flex items-center gap-4 py-4">
         <h1 class="text-lg font-black uppercase tracking-tighter text-synth-neon">{{configStore.appName}}</h1>
         <span class="text-[10px] font-mono text-neutral-500">{{configStore.appSubtitle}}</span>
@@ -249,14 +254,6 @@ onMounted(() => {
 
           <!-- Admin-only buttons -->
           <template v-if="isAdmin">
-            <Tooltip content="MIDI Logger" :disabled="false">
-              <button
-                @click="uiStore.isAdminLoggerOpen = !uiStore.isAdminLoggerOpen"
-                :class="['ml-2 p-2 rounded-lg border-1 bg-neutral-900/80 border-neutral-800 transition-colors relative cursor-pointer', uiStore.isAdminLoggerOpen ? 'bg-emerald-500/20 text-emerald-400' : 'text-neutral-400 hover:text-emerald-400 hover:border-emerald-400']"
-              >
-                <Activity :class="getIconSize()" />
-              </button>
-            </Tooltip>
             <Tooltip content="Admin Settings" :disabled="false">
               <button
                 @click="uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen"
@@ -331,13 +328,13 @@ onMounted(() => {
         />
       </Transition>
 
-      <!-- Arpeggiator -->
-      <Transition name="panel">
-        <ArpeggiatorPanel
-          v-if="uiStore.isArpOpen"
-          @close="uiStore.isArpOpen = false"
-        />
-      </Transition>
+      <!-- Arpeggiator — always mounted so the engine runs even when the panel is closed -->
+      <ArpeggiatorPanel
+        :isOpen="uiStore.isArpOpen"
+        :channel="midiStore.midiChannel - 1"
+        :inputChannel="midiStore.midiInputChannel"
+        @close="uiStore.isArpOpen = false"
+      />
 
       <!-- Virtual Keyboard -->
       <Transition name="panel">
@@ -370,6 +367,12 @@ onMounted(() => {
           @reset="captureNotesRef.current = []"
         />
       </Transition>
+
+      <!-- Audio Capture -->
+      <AudioCapture />
+
+      <!-- Audio Visualizer -->
+      <AudioVisualizer />
 
       <!-- Step Sequencer -->
       <StepSequencer

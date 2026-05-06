@@ -17,8 +17,9 @@ export const useUiStore = defineStore('ui', () => {
   const isManualOpen       = ref(false)
   const isSupportOpen      = ref(false)
   const isVisualizerOpen   = ref(false)
-  const isCaptureOpen      = ref(false)
-  const isRoutingOpen      = ref(false)
+  const isCaptureOpen       = ref(false)
+  const isAudioCaptureOpen  = ref(false)
+  const isRoutingOpen       = ref(false)
   const isBackingTrackOpen = ref(false)
   const isLiveSetOpen      = ref(false)
   const isAppMidiMapperOpen = ref(false)
@@ -56,8 +57,9 @@ export const useUiStore = defineStore('ui', () => {
     isManualOpen.value       = false
     isSupportOpen.value      = false
     isVisualizerOpen.value   = false
-    isCaptureOpen.value      = false
-    isRoutingOpen.value      = false
+    isCaptureOpen.value       = false
+    isAudioCaptureOpen.value  = false
+    isRoutingOpen.value       = false
     isBackingTrackOpen.value = false
     isLiveSetOpen.value      = false
     isAppMidiMapperOpen.value = false
@@ -75,7 +77,7 @@ export const useUiStore = defineStore('ui', () => {
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen,
     isArpOpen, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
     isAuthModalOpen, isAdminPanelOpen, isHelpOpen, isManualOpen,
-    isSupportOpen, isVisualizerOpen, isCaptureOpen, isRoutingOpen,
+    isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,
     isBackingTrackOpen, isLiveSetOpen, isAppMidiMapperOpen,
     isPatchNotesOpen, isVelocityMapOpen, isAdminLoggerOpen,
     isFavoritesOpen, isPortalOpen, isExperimentalOpen, isMidiActionsOpen, isPanicOpen,

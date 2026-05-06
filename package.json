@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@google/genai": "^1.52.0",
     "@tailwindcss/postcss": "^4.2.4",
     "lucide-vue-next": "^1.0.0",

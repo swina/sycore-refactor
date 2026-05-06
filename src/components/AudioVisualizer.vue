@@ -1,8 +1,9 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Activity, X, Mic, MicOff, Volume2, SlidersHorizontal, RotateCcw } from 'lucide-vue-next'
+import { useUiStore } from '@/stores/useUiStore'
 
-const emit = defineEmits(['close'])
+const uiStore = useUiStore()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DEFAULT_EQ = [
@@ -317,6 +318,7 @@ function startDrawLoop() {
 // ── Watchers ──────────────────────────────────────────────────────────────────
 watch([isActive, mode], () => nextTick(startDrawLoop), { flush: 'post' })
 watch([eqBands, showEq, isActive], () => nextTick(drawEqCurve), { deep: true, flush: 'post' })
+watch(() => uiStore.isVisualizerOpen, open => { if (!open) stop() })
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(() => {
@@ -329,7 +331,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed bottom-[52px] right-4 z-[300] w-[480px] bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl shadow-black/60">
+  <Transition name="capture">
+  <div v-if="uiStore.isVisualizerOpen" class="fixed bottom-[52px] right-4 z-[300] w-[480px] bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl shadow-black/60">
 
     <!-- Header -->
     <div class="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800">
@@ -344,7 +347,7 @@ onUnmounted(() => {
           @click="mode = btn.id"
           :class="['text-[10px] font-bold px-2 py-0.5 rounded transition-colors', mode === btn.id ? 'bg-synth-neon/20 text-synth-neon border border-synth-neon/30' : 'text-neutral-500 hover:text-neutral-300 border border-transparent']"
         >{{ btn.label }}</button>
-        <button @click="emit('close')" class="ml-1 text-neutral-600 hover:text-white transition-colors">
+        <button @click="uiStore.isVisualizerOpen = false" class="ml-1 text-neutral-600 hover:text-white transition-colors">
           <X class="w-3.5 h-3.5" />
         </button>
       </div>
@@ -500,9 +503,19 @@ onUnmounted(() => {
     </div>
 
   </div>
+  </Transition>
 </template>
 
 <style scoped>
+.capture-enter-active,
+.capture-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.capture-enter-from,
+.capture-leave-to {
+  opacity: 0;
+  transform: scale(0.95) translateY(16px);
+}
 .collapse-enter-active,
 .collapse-leave-active {
   transition: max-height 0.2s ease, opacity 0.15s ease;

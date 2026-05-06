@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { Edit3, Play, Copy, Trash2, Save, ChevronDown, ChevronUp, Heart, Zap, Layers } from 'lucide-vue-next'
+import { ref, computed, onUnmounted } from 'vue'
+import { Edit3, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, Heart, Zap, Layers, ListMusic } from 'lucide-vue-next'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -19,6 +19,54 @@ const isEditingName = ref(false)
 const tempName = ref('')
 const isPanelCollapsed = ref(false)
 const showCopyFeedback = ref(false)
+const isPlayingPreview = ref(false)
+const _previewTimeouts = []
+
+function stopPreview() {
+  _previewTimeouts.forEach(id => clearTimeout(id))
+  _previewTimeouts.length = 0
+  isPlayingPreview.value = false
+}
+
+function playPreview() {
+  stopPreview()
+  isPlayingPreview.value = true
+
+  const bpmScale = 120 / (arpStore.arpBpm || 120)
+  const step = 280 * bpmScale
+
+  // Simple ascending arpeggio: C4 major + octave
+  const notes = [60, 64, 67, 72, 67, 64, 60]
+  notes.forEach((note, i) => {
+    _previewTimeouts.push(
+      setTimeout(() => midiStore.sendNoteOn(note, 80), i * step),
+      setTimeout(() => midiStore.sendNoteOff(note), i * step + step * 0.75),
+    )
+  })
+  _previewTimeouts.push(
+    setTimeout(() => { isPlayingPreview.value = false }, notes.length * step),
+  )
+}
+
+function selectEngineA() {
+  const wasAlt = presetStore.useAlternativeEngine
+  presetStore.useAlternativeEngine = false
+  if (wasAlt && presetStore.engineCacheA) {
+    stopPreview()
+    presetStore.recallPreset(presetStore.engineCacheA)
+  }
+}
+
+function selectEngineB() {
+  const wasStd = !presetStore.useAlternativeEngine
+  presetStore.useAlternativeEngine = true
+  if (wasStd && presetStore.engineCacheB) {
+    stopPreview()
+    presetStore.recallPreset(presetStore.engineCacheB)
+  }
+}
+
+onUnmounted(() => stopPreview())
 
 const selectedPreset = computed(() => presetStore.lastPreset)
 
@@ -163,7 +211,7 @@ function getCategoryIcon(cat) {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col overflow-hidden bg-neutral-950 relative">
+  <div class="max-w-5xl m-auto h-full flex flex-col overflow-hidden bg-neutral-950 relative">
 
     <!-- ── NO PRESET: idle prompt ── -->
     <div v-if="!selectedPreset" class="flex-1 flex flex-col items-center justify-center gap-8 p-8">
@@ -197,7 +245,7 @@ function getCategoryIcon(cat) {
     <template v-else>
 
       <!-- ── HEADER ── -->
-      <div class="shrink-0 px-4 md:px-6 py-4 border-b border-neutral-900 bg-neutral-900/50 flex flex-col xl:flex-row xl:items-center gap-4">
+      <div class="shrink-0 px-4 md:px-6 py-12 border-b border-neutral-900 bg-neutral-900/50 flex flex-col xl:flex-row xl:items-center gap-4">
 
         <!-- Col 1: Preset identity + primary actions -->
         <div class="flex items-center gap-4 min-w-0 flex-1">
@@ -223,7 +271,7 @@ function getCategoryIcon(cat) {
               v-else
               @click="startEditingName"
               :class="[
-                'text-base font-black uppercase tracking-tight leading-none hover:text-synth-neon cursor-pointer transition-colors group flex items-center gap-2 truncate',
+                'text-2xl font-black uppercase tracking-tight leading-none hover:text-synth-neon cursor-pointer transition-colors group flex items-center gap-2 truncate',
                 presetStore.hasUnsavedChanges ? 'text-neutral-400' : 'text-white'
               ]"
             >
@@ -284,12 +332,12 @@ function getCategoryIcon(cat) {
         <div class="flex items-center gap-2 shrink-0 flex-wrap">
           <!-- A/B engine -->
           <div v-if="presetStore.engineCacheA || presetStore.engineCacheB"
-            class="flex bg-neutral-900 border border-neutral-800 rounded-xl p-0.5 h-9">
-            <button @click="presetStore.useAlternativeEngine = false"
+            class="flex bg-neutral-900 border border-neutral-800 rounded-xl p-0.5 h-9" title="Generative Engine (A=Standard, B=Alternative)">
+            <button @click="selectEngineA"
               :class="['px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full', !presetStore.useAlternativeEngine ? 'bg-neutral-800 text-synth-neon' : 'text-neutral-500 hover:text-neutral-300']">
               A: STD
             </button>
-            <button @click="presetStore.useAlternativeEngine = true"
+            <button @click="selectEngineB"
               :class="['px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full', presetStore.useAlternativeEngine ? 'bg-neutral-800 text-orange-400' : 'text-orange-400/50 hover:text-orange-300']">
               B: ALT
             </button>
@@ -319,6 +367,28 @@ function getCategoryIcon(cat) {
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
             </button>
           </div>
+
+          <!-- Preview sound -->
+          <button
+            @click="isPlayingPreview ? stopPreview() : playPreview()"
+            :class="['w-9 h-9 rounded-xl border flex items-center justify-center transition-colors shrink-0', isPlayingPreview ? 'bg-synth-neon/20 text-synth-neon border-synth-neon/50' : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white']"
+            title="Preview Sound"
+          >
+            <Square v-if="isPlayingPreview" class="w-3.5 h-3.5 fill-current" />
+            <Play v-else class="w-3.5 h-3.5 fill-current" />
+          </button>
+
+          <!-- Sequencer link -->
+          <button
+            @click="uiStore.isSequencerOpen = !uiStore.isSequencerOpen"
+            :class="['h-9 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border flex items-center gap-1.5 transition-colors shrink-0',
+              (uiStore.isSequencerOpen || presetStore.currentSeqConfig)
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-amber-400 hover:border-amber-500/30']"
+            title="Step Sequencer"
+          >
+            <ListMusic class="w-3.5 h-3.5" /> SEQ
+          </button>
 
           <!-- Keyboard shortcut -->
           <button @click="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"

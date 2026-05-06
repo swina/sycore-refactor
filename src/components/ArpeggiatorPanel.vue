@@ -115,8 +115,10 @@ function stopAprEngine() {
   }
 }
 
+let _unsubNote = null
+
 onMounted(() => {
-  const unsub = midiService.addNoteListener((type, note, velocity, chan) => {
+  _unsubNote = midiService.addNoteListener((type, note, velocity, chan) => {
     if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
 
     if (type === 'on' && velocity > 0) {
@@ -135,20 +137,19 @@ onMounted(() => {
       }
     }
   })
-
-  return () => unsub?.()
 })
 
 watch(() => arpStore.arpEnabled, (enabled) => {
   if (enabled) startAprEngine()
   else stopAprEngine()
-})
+}, { immediate: true })
 
 watch(() => [arpStore.arpBpm, arpStore.arpSubdivision, arpStore.arpMode], () => {
   if (arpStore.arpEnabled) startAprEngine()
 }, { deep: true })
 
 onUnmounted(() => {
+  _unsubNote?.()
   stopAprEngine()
 })
 
