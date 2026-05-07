@@ -7,7 +7,7 @@ import { usePresetStore }   from '@/stores/usePresetStore'
 import { useConfigStore }   from '@/stores/useConfigStore'
 import { useAppActions }    from './useAppActions'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
-import { FIELD_TO_CC }      from '@/constants/s1-config'
+import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 
 /**
  * Registers CC, note, and pitch-bend listeners once on mount.
@@ -90,16 +90,22 @@ export function useMidiCCListener() {
       return
     }
 
+    // 5b. Fallback: S-1 hardware CC map — ensures knob moves always update
+    //     lastPreset even when midiConfig doesn't cover every CC
+    const s1Field = S1_CC_MAP[effectiveCC]
+    if (s1Field) {
+      applyParam(s1Field, val)
+      if (shouldEcho) midiStore.sendCC(effectiveCC, val)
+      return
+    }
+
     // 6. Fallback: echo raw CC
     if (shouldEcho) midiStore.sendCC(effectiveCC, val)
   }
 
   function applyParam(fieldName, val) {
     if (!presetStore.lastPreset) return
-    presetStore.lastPreset = {
-      ...presetStore.lastPreset,
-      data: { ...(presetStore.lastPreset.data || {}), [fieldName]: val },
-    }
+    presetStore.updateFieldValue(fieldName, val)
   }
 
   // AppAction raw listeners (per-device, direct midimessage events)

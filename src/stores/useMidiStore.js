@@ -14,7 +14,7 @@ export const useMidiStore = defineStore('midi', () => {
   const selectedDevice     = ref(localStorage.getItem(LS_DEVICE) || '')
   const selectedInputDevice = ref(localStorage.getItem(LS_INPUT) || '')
   const midiChannel        = ref(parseInt(localStorage.getItem(LS_CHANNEL) || '1'))
-  const midiInputChannel   = ref(parseInt(localStorage.getItem(LS_IN_CHANNEL) || '0'))
+  const midiInputChannel   = ref(parseInt(localStorage.getItem(LS_IN_CHANNEL) || '-1'))
 
   const isDeviceConnected = computed(() =>
     outputs.value.some(o => o.id === selectedDevice.value)
@@ -52,6 +52,7 @@ export const useMidiStore = defineStore('midi', () => {
     selectedInputDevice.value = id
     localStorage.setItem(LS_INPUT, id)
     midiService.setKeyboardInput(id)
+    midiService.setControlInput(id)
   }
 
   function setControlInput(id) {

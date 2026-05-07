@@ -23,7 +23,7 @@ function saveMidiChannel() {
 }
 
 function saveMidiInputChannel() {
-  midiStore.setControlInput(midiInputChannel.value)
+  midiStore.setMidiInputChannel(midiInputChannel.value)
 }
 
 function toggleToolbarButton(buttonId) {

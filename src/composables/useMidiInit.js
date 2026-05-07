@@ -25,8 +25,9 @@ export function useMidiInit() {
     if (s1Out) {
       midiStore.setOutput(s1Out.id)
 
-      // Match input by same name
+      // Match input: exact name first, then fuzzy 's-1' substring
       const s1In = midiStore.inputs.find(i => i.name === s1Out.name)
+             ?? midiStore.inputs.find(i => i.name?.toLowerCase().includes('s-1'))
       if (s1In) {
         midiStore.setKeyboardInput(s1In.id)
         midiStore.setControlInput(s1In.id)
