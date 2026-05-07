@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { midiService }      from '@/core/midi/MidiService'
 import { useMidiStore }     from '@/stores/useMidiStore'
 import { useMappingStore }  from '@/stores/useMappingStore'
@@ -152,7 +152,43 @@ export function useMidiCCListener() {
     appActionHandlers.length = 0
   }
 
-  let unsubCC, unsubNote, unsubPitch
+  // ── Hardware CC feedback ──────────────────────────────────────────────────
+  // Direct midimessage listeners on ALL available inputs — same pattern as
+  // MidiLoggerPanel and AppAction handlers. This works regardless of whether
+  // keyboardInput / controlInput is configured in midiService, which is the
+  // only path addCCListener (onCC above) uses.
+  const hwCCHandlers = []
+
+  function setupHardwareCCListeners() {
+    hwCCHandlers.forEach(({ input, fn }) => input.removeEventListener('midimessage', fn))
+    hwCCHandlers.length = 0
+
+    midiService.getInputs().forEach(input => {
+      const fn = (event) => {
+        if (!event.data || event.data.length < 3) return
+        if ((event.data[0] & 0xF0) !== 0xB0) return
+        if (mappingStore.isMidiLearning) return
+        const cc    = event.data[1]
+        const val   = event.data[2]
+        const field = S1_CC_MAP[cc]
+        if (!field || !presetStore.lastPreset) return
+        // Replace lastPreset (not mutate) to guarantee Vue 3 reactivity
+        presetStore.lastPreset = {
+          ...presetStore.lastPreset,
+          data: { ...(presetStore.lastPreset.data || {}), [field]: val },
+        }
+      }
+      input.addEventListener('midimessage', fn)
+      hwCCHandlers.push({ input, fn })
+    })
+  }
+
+  function cleanupHardwareCCListeners() {
+    hwCCHandlers.forEach(({ input, fn }) => input.removeEventListener('midimessage', fn))
+    hwCCHandlers.length = 0
+  }
+
+  let unsubCC, unsubNote, unsubPitch, stopInputWatch
 
   onMounted(() => {
     // Subscribe once — handlers read live store state at call time
@@ -160,13 +196,21 @@ export function useMidiCCListener() {
     unsubNote  = midiService.addNoteListener(onNote)
     unsubPitch = midiService.addPitchBendListener(onPitchBend)
     setupAppActionListeners()
+    setupHardwareCCListeners()
+    // Rebind whenever devices connect / disconnect
+    stopInputWatch = watch(() => midiStore.inputs.length, () => {
+      setupHardwareCCListeners()
+      setupAppActionListeners()
+    })
   })
 
   onUnmounted(() => {
     unsubCC?.()
     unsubNote?.()
     unsubPitch?.()
+    stopInputWatch?.()
     cleanupAppActionListeners()
+    cleanupHardwareCCListeners()
   })
 
   function onNote(type, note, velocity, chan) {
