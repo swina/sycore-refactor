@@ -5,6 +5,7 @@ import {
   Plus, Trash2, Edit2, Repeat, ListPlus, ChevronUp, ChevronDown,
   Save, FolderOpen, GripVertical, SkipBack, SkipForward, Link
 } from 'lucide-vue-next'
+import { useDraggable } from '@/composables/useDraggable'
 import {
   collection, onSnapshot, query, orderBy, addDoc,
   serverTimestamp, deleteDoc, doc, updateDoc, deleteField
@@ -49,6 +50,12 @@ const loopPlaylist        = ref(true)
 const saveName            = ref('')
 const showSaveInput       = ref(false)
 const dragOverIdx         = ref(null)
+
+const { x: panelX, y: panelY, startDrag } = useDraggable(
+  Math.max(8, (window.innerWidth  - 600) / 2),
+  Math.max(8,  window.innerHeight - 560),
+  'S1_BT_POS'
+)
 
 const SAVED_PL_KEY = 'S1_SAVED_PLAYLISTS'
 const savedPlaylists = ref((() => {
@@ -591,15 +598,19 @@ onUnmounted(() => {
     <Transition name="panel-up">
       <div
         v-if="isOpen"
-        class="fixed bottom-[52px] left-1/2 -translate-x-1/2 w-[90vw] md:w-[600px] max-h-[80vh] flex flex-col bg-black/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-[0_0_50px_rgba(0,163,112,0.15)] p-4 md:p-6 z-[220]"
+        :style="{ left: panelX + 'px', top: panelY + 'px' }"
+        class="fixed w-[90vw] md:w-[600px] max-h-[80vh] flex flex-col bg-black/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-[0_0_50px_rgba(0,163,112,0.15)] p-4 md:p-6 z-[220]"
       >
         <!-- Header -->
-        <div class="flex justify-between items-center mb-4 shrink-0">
-          <h3 class="text-xs font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-            <Music class="w-3 h-3 text-synth-neon" />
-            Track Source
-          </h3>
-          <button @click="isOpen = false" class="text-neutral-600 hover:text-white transition-colors">
+        <div class="flex items-center mb-4 shrink-0">
+          <!-- Drag handle -->
+          <div class="flex items-center gap-2 flex-1 min-w-0 cursor-grab active:cursor-grabbing select-none"
+               @mousedown="startDrag">
+            <GripVertical class="w-3 h-3 text-neutral-600 shrink-0" />
+            <Music class="w-3 h-3 text-synth-neon shrink-0" />
+            <h3 class="text-xs font-black uppercase tracking-widest text-neutral-400 truncate">Track Source</h3>
+          </div>
+          <button @click="isOpen = false" class="ml-3 text-neutral-600 hover:text-white transition-colors shrink-0">
             <X class="w-3 h-3" />
           </button>
         </div>
@@ -880,15 +891,10 @@ onUnmounted(() => {
 <style scoped>
 .panel-up-enter-active,
 .panel-up-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.15s ease;
 }
 .panel-up-enter-from,
 .panel-up-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(12px);
-}
-.panel-up-enter-to,
-.panel-up-leave-from {
-  transform: translateX(-50%) translateY(0);
 }
 </style>

@@ -187,8 +187,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[120] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-auto p-4 md:p-8">
-    <div class="bg-neutral-950 border border-neutral-900 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl">
+  <div class="fixed inset-0 z-[120] max-h-[calc(100vh-40px)] pb-[30px] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-hidden p-4 md:p-8">
+    <div class="bg-neutral-950 border border-neutral-900 rounded-3xl max-w-4xl overflow-hidden shadow-2xl pt-[24px] pb-[24px]">
 
       <!-- Hidden file input -->
       <input ref="fileInput" type="file" accept=".json,.sco" class="hidden" @change="handleFileUpload" />
@@ -197,9 +197,11 @@ onMounted(async () => {
       <div class="flex flex-col md:flex-row md:items-center justify-between p-6 md:p-8 gap-4">
 
         <!-- Title + slot count -->
-        <div class="flex items-center gap-3">
-          <Layers class="w-5 h-5 text-synth-neon" />
-          <h2 class="text-xl font-black uppercase tracking-tight text-white">Sound History</h2>
+        <div class="flex flex-col items-center gap-3 w-full md:w-1/3 max-w-1/3">
+          <div class="flex items-center gap-3">
+            <Layers class="w-5 h-5 text-synth-neon" />
+            <h2 class="text-xl font-black uppercase tracking-tight text-white">Sound Bank</h2>
+          </div>
           <span
             v-if="authStore.profile"
             class="text-[10px] bg-neutral-900 border border-neutral-800 px-2 py-1 rounded-md ml-2 font-mono text-neutral-400"
@@ -209,7 +211,7 @@ onMounted(async () => {
         </div>
 
         <!-- Controls row -->
-        <div class="flex flex-wrap items-center gap-3 border-b md:border-none border-neutral-800 pb-4 md:pb-0">
+        <div class="flex flex-wrap items-start gap-3 border-b md:border-none border-neutral-800 pb-4 md:pb-0">
 
           <!-- Filter dropdown -->
           <div class="relative z-50">
@@ -276,7 +278,7 @@ onMounted(async () => {
       </div>
 
       <!-- ── PRESET GRID ── -->
-      <div class="p-6 md:p-8 pt-0">
+      <div class="p-6 md:p-2 pt-0 overflow-y-auto custom-scrollbar max-h-[660px]">
 
         <!-- Empty state -->
         <div v-if="filteredPresets.length === 0" class="py-20 text-center">
@@ -287,7 +289,7 @@ onMounted(async () => {
         </div>
 
         <!-- Card grid -->
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-scroll custom-scrollbar">
           <div
             v-for="preset in filteredPresets"
             :key="preset.id"
@@ -298,7 +300,7 @@ onMounted(async () => {
               <div class="min-w-0 flex-1">
                 <!-- Meta row: icon · category · polymode · seq · favorite -->
                 <div class="flex items-center gap-1.5 mb-1 flex-wrap">
-                  <span class="text-sm leading-none select-none">{{ getCategoryIcon(preset.category) }}</span>
+                  <span class="text-sm leading-none select-none grayscale">{{ getCategoryIcon(preset.category) }}</span>
                   <span class="text-[8px] font-mono text-synth-neon/60 uppercase">{{ preset.category }}</span>
 
                   <template v-if="preset.data?.polyMode !== undefined">

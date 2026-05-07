@@ -1,12 +1,18 @@
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
-import { Edit3, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, Heart, Zap, Layers, ListMusic } from 'lucide-vue-next'
+import { Edit3, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, Heart, Zap, Layers, ListMusic, LayoutGrid } from 'lucide-vue-next'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { S1_CC_MAP, FIELD_TO_CC } from '@/constants/s1-config'
+import AdsrEnvelope from '@/components/AdsrEnvelope.vue'
+import FilterEnvelope from '@/components/FilterEnvelope.vue'
+import WaveformVisualizer from '@/components/WaveformVisualizer.vue'
+import OscMixerVisualizer from '@/components/OscMixerVisualizer.vue'
+import EfxMixerVisualizer from '@/components/EfxMixerVisualizer.vue'
 
 const presetStore = usePresetStore()
 const midiStore = useMidiStore()
@@ -19,6 +25,7 @@ const isEditingName = ref(false)
 const tempName = ref('')
 const isPanelCollapsed = ref(false)
 const showCopyFeedback = ref(false)
+const liveSetFeedback = ref('')
 const isPlayingPreview = ref(false)
 const _previewTimeouts = []
 
@@ -51,19 +58,61 @@ function playPreview() {
 function selectEngineA() {
   const wasAlt = presetStore.useAlternativeEngine
   presetStore.useAlternativeEngine = false
-  if (wasAlt && presetStore.engineCacheA) {
+  if (wasAlt && presetStore.lastPreset?.data) {
     stopPreview()
-    presetStore.recallPreset(presetStore.engineCacheA)
+    presetStore.applyPresetCCs(presetStore.lastPreset)
   }
 }
 
 function selectEngineB() {
   const wasStd = !presetStore.useAlternativeEngine
   presetStore.useAlternativeEngine = true
-  if (wasStd && presetStore.engineCacheB) {
+  if (wasStd && presetStore.lastPreset?.abVariant?.data) {
     stopPreview()
-    presetStore.recallPreset(presetStore.engineCacheB)
+    presetStore.applyPresetCCs({ data: presetStore.lastPreset.abVariant.data })
   }
+}
+
+function addToLiveSet() {
+  const raw = localStorage.getItem('S1_LIVESET_SOUNDS')
+  const stored = Array.isArray(JSON.parse(raw || 'null')) ? JSON.parse(raw) : []
+  const slots = Array(16).fill(null).map((_, i) =>
+    stored[i] || { id: `ls_slot_${i}`, name: '', paramValues: {} }
+  )
+
+  const emptyIdx = slots.findIndex(s => !s.name)
+  if (emptyIdx === -1) {
+    liveSetFeedback.value = 'full'
+    setTimeout(() => { liveSetFeedback.value = '' }, 2500)
+    return
+  }
+
+  const paramsRaw = localStorage.getItem('S1_LIVESET_PARAMS')
+  const liveParams = Array.isArray(JSON.parse(paramsRaw || 'null')) ? JSON.parse(paramsRaw) : []
+  const paramValues = {}
+  liveParams.forEach((p, i) => {
+    if (p?.cc >= 0) {
+      const fieldName = S1_CC_MAP[p.cc]
+      if (fieldName !== undefined && activeData.value?.[fieldName] !== undefined) {
+        paramValues[i] = activeData.value[fieldName]
+      }
+    }
+  })
+
+  const ccData = {}
+  Object.entries(activeData.value || {}).forEach(([field, val]) => {
+    const cc = FIELD_TO_CC[field]
+    if (cc !== undefined) ccData[cc] = val
+  })
+
+  slots[emptyIdx].name = presetStore.currentName
+  slots[emptyIdx].category = presetStore.currentCategory
+  slots[emptyIdx].ccData = ccData
+  slots[emptyIdx].paramValues = paramValues
+  localStorage.setItem('S1_LIVESET_SOUNDS', JSON.stringify(slots))
+
+  liveSetFeedback.value = `ok:${emptyIdx + 1}`
+  setTimeout(() => { liveSetFeedback.value = '' }, 2500)
 }
 
 onUnmounted(() => stopPreview())
@@ -72,8 +121,14 @@ const selectedPreset = computed(() => presetStore.lastPreset)
 
 // ─── Control helpers ──────────────────────────────────────────────────────────
 
+const activeData = computed(() =>
+  (presetStore.useAlternativeEngine && presetStore.lastPreset?.abVariant?.data)
+    ? presetStore.lastPreset.abVariant.data
+    : presetStore.lastPreset?.data
+)
+
 function getVal(cfg) {
-  return presetStore.lastPreset?.data?.[cfg.name] ?? cfg.min ?? 0
+  return activeData.value?.[cfg.name] ?? cfg.min ?? 0
 }
 
 function getPercent(cfg) {
@@ -245,93 +300,112 @@ function getCategoryIcon(cat) {
     <template v-else>
 
       <!-- ── HEADER ── -->
-      <div class="shrink-0 px-4 md:px-6 py-12 border-b border-neutral-900 bg-neutral-900/50 flex flex-col xl:flex-row xl:items-center gap-4">
+      <div class="shrink-0 px-4 md:px-2 py-6 border-b border-neutral-900 bg-neutral-900/50 flex flex-col xl:flex-row xl:items-center gap-4">
 
         <!-- Col 1: Preset identity + primary actions -->
-        <div class="flex items-center gap-4 min-w-0 flex-1">
-          <!-- Category icon -->
-          <div class="p-2.5 bg-synth-neon text-black shrink-0 rounded-xl text-lg flex items-center justify-center select-none">
-            {{ getCategoryIcon(presetStore.currentCategory) }}
-          </div>
-
-          <!-- Name + category -->
-          <div class="flex flex-col min-w-0 flex-1">
-            <div v-if="isEditingName" class="flex items-center gap-2">
-              <input
-                v-model="tempName"
-                type="text"
-                @blur="saveName"
-                @keydown.enter="saveName"
-                @keydown.esc="isEditingName = false"
-                autofocus
-                class="bg-neutral-800 text-white text-base font-black uppercase tracking-tight px-2 py-0.5 rounded border border-synth-neon/50 outline-none w-full"
-              />
-            </div>
-            <h2
-              v-else
-              @click="startEditingName"
-              :class="[
-                'text-2xl font-black uppercase tracking-tight leading-none hover:text-synth-neon cursor-pointer transition-colors group flex items-center gap-2 truncate',
-                presetStore.hasUnsavedChanges ? 'text-neutral-400' : 'text-white'
-              ]"
-            >
-              <span class="truncate">{{ presetStore.hasUnsavedChanges ? `* ${presetStore.currentName}` : presetStore.currentName }}</span>
-              <Edit3 class="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-40" />
-            </h2>
-            <span class="text-[10px] font-mono text-synth-neon uppercase tracking-widest mt-0.5">
-              {{ presetStore.currentCategory }} MODE
-            </span>
-          </div>
-
-          <!-- Preset action icons -->
-          <div class="flex items-center gap-1.5 shrink-0">
-            <!-- Prev/Next -->
-            <div v-if="presetStore.filteredHistory.length > 0" class="flex bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden h-8">
-              <button
-                @click="presetStore.navigateHistory('prev')"
-                :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) <= 0"
-                class="px-2.5 text-neutral-500 hover:text-synth-neon hover:bg-neutral-800 transition-colors border-r border-neutral-800 disabled:opacity-30 disabled:pointer-events-none"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-              </button>
-              <button
-                @click="presetStore.navigateHistory('next')"
-                :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) >= presetStore.filteredHistory.length - 1"
-                class="px-2.5 text-neutral-500 hover:text-synth-neon hover:bg-neutral-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-              </button>
+        <div class="flex flex-col items-center gap-4 min-w-0 flex-1 py-4">
+          <!-- Preset identity -->
+          <div class="flex items-center w-full px-6 gap-2">
+            <!-- Category icon -->
+            <div class="p-2.5 bg-synth-neon text-black shrink-0 rounded-xl text-lg flex items-center justify-center select-none">
+              {{ getCategoryIcon(presetStore.currentCategory) }}
             </div>
 
-            <!-- Save -->
-            <button v-if="authStore.user" @click="handleSavePreset" :disabled="presetStore.isSaving" title="Save"
-              class="w-8 h-8 rounded-lg border flex items-center justify-center bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/40 disabled:opacity-50 transition-colors">
-              <Save :class="['w-3.5 h-3.5', presetStore.isSaving ? 'animate-pulse' : '']" />
-            </button>
+            <!-- Name + category -->
+            <div class="flex flex-col min-w-0 flex-1">
+              <div v-if="isEditingName" class="flex items-center gap-2">
+                <input
+                  v-model="tempName"
+                  type="text"
+                  @blur="saveName"
+                  @keydown.enter="saveName"
+                  @keydown.esc="isEditingName = false"
+                  autofocus
+                  class="bg-neutral-800 text-white text-base font-black uppercase tracking-tight px-2 py-0.5 rounded border border-synth-neon/50 outline-none w-full"
+                />
+              </div>
+              <h2
+                v-else
+                @click="startEditingName"
+                :class="[
+                  'text-2xl font-black uppercase tracking-tight leading-none hover:text-synth-neon cursor-pointer transition-colors group flex items-center gap-2 truncate',
+                  presetStore.hasUnsavedChanges ? 'text-neutral-400' : 'text-white'
+                ]"
+              >
+                <span class="truncate">{{ presetStore.hasUnsavedChanges ? `* ${presetStore.currentName}` : presetStore.currentName }}</span>
+                <Edit3 class="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-40" />
+              </h2>
+              <span class="text-[10px] font-mono text-synth-neon uppercase tracking-widest mt-0.5">
+                {{ presetStore.currentCategory }} MODE
+              </span>
+            </div>
+          </div>
 
-            <!-- Favorite -->
-            <button @click="toggleFavorite" :class="['w-8 h-8 rounded-lg border flex items-center justify-center transition-colors', isFavorite ? 'bg-rose-500/20 text-rose-500 border-rose-500/50' : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-rose-500']" title="Favorite">
-              <Heart :class="['w-3.5 h-3.5', isFavorite ? 'fill-current' : '']" />
-            </button>
+          <!-- Preset actions -->
+          <div class="flex items-center w-full px-6 pt-4 gap-2">
+            <!-- Preset action icons -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <!-- Prev/Next -->
+              <div v-if="presetStore.filteredHistory.length > 0" class="flex bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+                <button
+                  @click="presetStore.navigateHistory('prev')"
+                  :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) <= 0"
+                  class="px-2.5 py-2 text-neutral-500 hover:text-synth-neon hover:bg-neutral-800 transition-colors border-r border-neutral-800 disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <button
+                  @click="presetStore.navigateHistory('next')"
+                  :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) >= presetStore.filteredHistory.length - 1"
+                  class="px-2.5 py-2 text-neutral-500 hover:text-synth-neon hover:bg-neutral-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
 
-            <!-- Copy -->
-            <button @click="handleCopyToClipboard" :title="showCopyFeedback ? 'Copied!' : 'Copy CC data'"
-              class="w-8 h-8 rounded-lg border flex items-center justify-center bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white transition-colors">
-              <Copy class="w-3.5 h-3.5" />
-            </button>
+              <!-- Save -->
+              <button v-if="authStore.user" @click="handleSavePreset" :disabled="presetStore.isSaving" title="Save"
+                class="p-2 rounded-lg border flex items-center justify-center bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/40 disabled:opacity-50 transition-colors">
+                <Save :class="['w-6 h-6', presetStore.isSaving ? 'animate-pulse' : '']" />
+              </button>
 
-            <!-- Delete -->
-            <button @click="handleDeletePreset" title="Delete"
-              class="w-8 h-8 rounded-lg border flex items-center justify-center bg-red-950/30 text-red-400 border-red-900/30 hover:bg-red-950/50 transition-colors">
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
+              <!-- Favorite -->
+              <button @click="toggleFavorite" :class="['p-2 rounded-lg border flex items-center justify-center transition-colors', isFavorite ? 'bg-rose-500/20 text-rose-500 border-rose-500/50' : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-rose-500']" title="Favorite">
+                <Heart :class="['w-6 h-6', isFavorite ? 'fill-current' : '']" />
+              </button>
+
+              <!-- Copy -->
+              <button @click="handleCopyToClipboard" :title="showCopyFeedback ? 'Copied!' : 'Copy CC data'"
+                class="p-2 rounded-lg border flex items-center justify-center bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white transition-colors">
+                <Copy class="w-6 h-6" />
+              </button>
+
+              <!-- Add to Live Set -->
+              <button @click="addToLiveSet"
+                :title="liveSetFeedback === 'full' ? 'Live Set full (16/16)' : liveSetFeedback ? `Added to slot ${liveSetFeedback.split(':')[1]}` : 'Add to Live Set'"
+                :class="['p-2 rounded-lg border flex items-center justify-center transition-colors',
+                  liveSetFeedback === 'full'
+                    ? 'bg-red-950/30 text-red-400 border-red-900/30'
+                    : liveSetFeedback
+                      ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                      : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-purple-400 hover:border-purple-500/30']">
+                <Zap class="w-6 h-6" />
+              </button>
+
+              <!-- Delete -->
+              <button @click="handleDeletePreset" title="Delete"
+                class="p-2 rounded-lg border flex items-center justify-center bg-red-950/30 text-red-400 border-red-900/30 hover:bg-red-950/50 transition-colors">
+                <Trash2 class="w-6 h-6" />
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- Col 2: Generate / ARP / Keyboard -->
         <div class="flex items-center gap-2 shrink-0 flex-wrap">
           <!-- A/B engine -->
-          <div v-if="presetStore.engineCacheA || presetStore.engineCacheB"
+          
+          <div v-if="presetStore.lastPreset.abVariant" 
             class="flex bg-neutral-900 border border-neutral-800 rounded-xl p-0.5 h-9" title="Generative Engine (A=Standard, B=Alternative)">
             <button @click="selectEngineA"
               :class="['px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full', !presetStore.useAlternativeEngine ? 'bg-neutral-800 text-synth-neon' : 'text-neutral-500 hover:text-neutral-300']">
@@ -346,7 +420,7 @@ function getCategoryIcon(cat) {
           <!-- Regenerate -->
           <button @click="presetStore.generate(true)" :disabled="presetStore.isGenerating"
             class="flex items-center gap-1.5 bg-synth-neon text-black px-4 h-9 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors shadow-lg active:scale-95 shrink-0 disabled:opacity-50">
-            <Zap class="w-3.5 h-3.5" /> REGEN
+            <Zap class="w-6 h-6" /> REGEN
           </button>
 
           <!-- New -->
@@ -364,7 +438,7 @@ function getCategoryIcon(cat) {
             <div class="w-px h-4 bg-neutral-700" />
             <button @click="uiStore.isArpOpen = !uiStore.isArpOpen"
               :class="['px-2.5 h-full flex items-center', uiStore.isArpOpen ? 'text-synth-neon bg-neutral-800' : 'text-neutral-400 hover:text-synth-neon hover:bg-neutral-800']">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
             </button>
           </div>
 
@@ -374,8 +448,8 @@ function getCategoryIcon(cat) {
             :class="['w-9 h-9 rounded-xl border flex items-center justify-center transition-colors shrink-0', isPlayingPreview ? 'bg-synth-neon/20 text-synth-neon border-synth-neon/50' : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white']"
             title="Preview Sound"
           >
-            <Square v-if="isPlayingPreview" class="w-3.5 h-3.5 fill-current" />
-            <Play v-else class="w-3.5 h-3.5 fill-current" />
+            <Square v-if="isPlayingPreview" class="w-6 h-6 fill-current" />
+            <Play v-else class="w-6 h-6 fill-current" />
           </button>
 
           <!-- Sequencer link -->
@@ -387,14 +461,14 @@ function getCategoryIcon(cat) {
                 : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-amber-400 hover:border-amber-500/30']"
             title="Step Sequencer"
           >
-            <ListMusic class="w-3.5 h-3.5" /> SEQ
+            <ListMusic class="w-6 h-6" /> SEQ
           </button>
 
           <!-- Keyboard shortcut -->
-          <button @click="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
+          <!-- <button @click="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
             :class="['h-9 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-colors shrink-0', uiStore.isKeyboardOpen ? 'bg-synth-neon/20 text-synth-neon border-synth-neon/50' : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white']">
             KBD
-          </button>
+          </button> -->
         </div>
       </div>
 
@@ -434,6 +508,48 @@ function getCategoryIcon(cat) {
 
             <!-- Controllers -->
             <div class="flex flex-col gap-4">
+              <EfxMixerVisualizer v-if="cat.name =='EFX'"
+                  :delay="activeData?.delayLvl || 0"
+                  :reverb="activeData?.reverb || 0"
+                  :chorus="activeData?.chorus || 0"
+                  :width="200"
+                  :height="100"
+                  :color="cat.color"
+                />
+              <OscMixerVisualizer v-if="cat.name =='OSCILLATOR'"
+                  :pulse="activeData?.oscSq || 0"
+                  :saw="activeData?.oscSaw || 0"
+                  :lfo="activeData?.oscLFO || 0"
+                  :sub="activeData?.oscSub || 0"
+                  :noise="activeData?.oscNoise || 0"
+                  :width="200"
+                  :height="100"
+                  :color="cat.color"
+                />
+              <WaveformVisualizer v-if="cat.name =='LFO'"
+                  :waveform="activeData?.lfoWave || 0"
+                  :rate="activeData?.lfoRate || 64"
+                  :width="200"
+                  :height="100"
+                  :color="cat.color"
+                />
+              <AdsrEnvelope v-if="cat.name =='ENV'"
+                  :attack="activeData?.attack || 0"
+                  :decay="activeData?.decay || 64"
+                  :sustain="activeData?.sustain || 127"
+                  :release="activeData?.release || 64"
+                  :width="200"
+                  :height="100"
+                  :color="cat.color"
+                />
+                <!-- if cat.name == 'FILTER' -->
+                <FilterEnvelope v-if="cat.name =='FILTER'"
+                  :cutoff="activeData?.cutoff || 0"
+                  :resonance="activeData?.res || 0"
+                  :width="200"
+                  :height="100"
+                  :color="cat.color"
+                />
               <template v-for="cfg in cat.controllers" :key="cfg.id || cfg.cc">
 
                 <!-- SWITCH -->
@@ -528,6 +644,8 @@ function getCategoryIcon(cat) {
                 </div>
 
               </template>
+              <!-- if cat.name == 'ENV' -->
+              
             </div>
           </div>
         </div>
@@ -573,6 +691,19 @@ function getCategoryIcon(cat) {
       <div v-if="showCopyFeedback" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] pointer-events-none">
         <div class="flex items-center gap-2 bg-emerald-950/90 border border-emerald-800 text-emerald-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl">
           <span>✓ Copied to clipboard</span>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Live Set toast -->
+    <Transition name="fade">
+      <div v-if="liveSetFeedback" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-[200] pointer-events-none">
+        <div :class="['flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium shadow-xl border',
+          liveSetFeedback === 'full'
+            ? 'bg-red-950/90 border-red-800 text-red-300'
+            : 'bg-purple-950/90 border-purple-800 text-purple-300']">
+          <LayoutGrid class="w-4 h-4 shrink-0" />
+          <span>{{ liveSetFeedback === 'full' ? 'Live Set full — all 16 slots used' : `Added to Live Set slot ${liveSetFeedback.split(':')[1]}` }}</span>
         </div>
       </div>
     </Transition>

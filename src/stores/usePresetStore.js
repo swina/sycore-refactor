@@ -6,37 +6,37 @@ import {
   orderBy, serverTimestamp,
 } from '@/lib/idb'
 import { useMidiStore } from './useMidiStore'
-import { useArpStore }  from './useArpStore'
+import { useArpStore } from './useArpStore'
 import { useAuthStore } from './useAuthStore'
 import { S1_TYPES, FIELD_TO_CC } from '@/constants/s1-config'
 
 export const usePresetStore = defineStore('preset', () => {
   const midiStore = useMidiStore()
-  const arpStore  = useArpStore()
+  const arpStore = useArpStore()
   const authStore = useAuthStore()
 
   // State
-  const history              = ref([])
-  const lastPreset           = ref(null)
-  const currentName          = ref('')
-  const currentPatchNotes    = ref(null)
-  const isGenerating         = ref(false)
-  const showResults          = ref(false)
-  const currentCategory      = ref('pad')
-  const aiPrompt             = ref('')
+  const history = ref([])
+  const lastPreset = ref(null)
+  const currentName = ref('')
+  const currentPatchNotes = ref(null)
+  const isGenerating = ref(false)
+  const showResults = ref(false)
+  const currentCategory = ref('pad')
+  const aiPrompt = ref('')
   const useAlternativeEngine = ref(false)
   const historyCategoryFilter = ref('all')
-  const sessionGeneratedIds  = ref([])
-  const engineCacheA         = ref(null)
-  const engineCacheB         = ref(null)
-  const isSaving             = ref(false)
-  const currentSeqConfig     = ref(null)
+  const sessionGeneratedIds = ref([])
+  const engineCacheA = ref(null)
+  const engineCacheB = ref(null)
+  const isSaving = ref(false)
+  const currentSeqConfig = ref(null)
 
   let _unsubHistory = null
 
   // Getters
   const filteredHistory = computed(() => {
-    if (historyCategoryFilter.value === 'all')       return history.value
+    if (historyCategoryFilter.value === 'all') return history.value
     if (historyCategoryFilter.value === 'favorites') return history.value.filter(p => p.isFavorite)
     return history.value.filter(p => p.category === historyCategoryFilter.value)
   })
@@ -93,26 +93,26 @@ export const usePresetStore = defineStore('preset', () => {
 
   // Recall a preset: send CCs, restore arp/seq state, update current context
   function recallPreset(preset) {
-    lastPreset.value       = preset
-    currentName.value      = preset.name
+    lastPreset.value = preset
+    currentName.value = preset.name
     currentPatchNotes.value = preset.patchNotes || null
-    currentCategory.value  = preset.category || currentCategory.value
+    currentCategory.value = preset.category || currentCategory.value
     currentSeqConfig.value = preset.seqConfig || null
-
+    console.log(usePresetStore.useAlternativeEngine)
     applyPresetCCs(preset)
 
     if (preset.arpConfig) {
-      arpStore.arpEnabled     = preset.arpConfig.enabled     ?? arpStore.arpEnabled
-      arpStore.arpMode        = preset.arpConfig.mode        ?? arpStore.arpMode
-      arpStore.arpBpm         = preset.arpConfig.bpm         ?? arpStore.arpBpm
+      arpStore.arpEnabled = preset.arpConfig.enabled ?? arpStore.arpEnabled
+      arpStore.arpMode = preset.arpConfig.mode ?? arpStore.arpMode
+      arpStore.arpBpm = preset.arpConfig.bpm ?? arpStore.arpBpm
       arpStore.arpSubdivision = preset.arpConfig.subdivision ?? arpStore.arpSubdivision
-      arpStore.arpHold        = preset.arpConfig.hold        ?? arpStore.arpHold
+      arpStore.arpHold = preset.arpConfig.hold ?? arpStore.arpHold
     }
 
     if (authStore.user) {
       updateDoc(doc(db, 'users', authStore.user.uid), {
         lastSelectedPresetId: preset.id,
-      }).catch(() => {})
+      }).catch(() => { })
     }
   }
 
@@ -131,11 +131,11 @@ export const usePresetStore = defineStore('preset', () => {
         const cleanName = (name || currentName.value).replace(/^\*\s*/, '').trim()
 
         const currentArpConfig = {
-          enabled:     arpStore.arpEnabled,
-          mode:        arpStore.arpMode,
-          bpm:         arpStore.arpBpm,
+          enabled: arpStore.arpEnabled,
+          mode: arpStore.arpMode,
+          bpm: arpStore.arpBpm,
           subdivision: arpStore.arpSubdivision,
-          hold:        arpStore.arpHold,
+          hold: arpStore.arpHold,
         }
 
         const preset = lastPreset.value
@@ -149,25 +149,25 @@ export const usePresetStore = defineStore('preset', () => {
             throw new Error('slot_limit')
           }
           await setDoc(doc(presetsRef, preset.id), {
-            id:         preset.id,
-            name:       cleanName,
-            category:   currentCategory.value,
-            data:       preset.data,
+            id: preset.id,
+            name: cleanName,
+            category: currentCategory.value,
+            data: preset.data,
             ...aiPromptData,
             patchNotes: currentPatchNotes.value,
-            arpConfig:  currentArpConfig,
-            seqConfig:  currentSeqConfig.value || null,
-            createdAt:  serverTimestamp(),
+            arpConfig: currentArpConfig,
+            seqConfig: currentSeqConfig.value || null,
+            createdAt: serverTimestamp(),
           })
         } else {
           await updateDoc(doc(presetsRef, preset.id), {
-            data:       preset.data,
-            name:       cleanName,
+            data: preset.data,
+            name: cleanName,
             ...aiPromptData,
             patchNotes: currentPatchNotes.value,
-            arpConfig:  currentArpConfig,
-            seqConfig:  currentSeqConfig.value || null,
-            updatedAt:  serverTimestamp(),
+            arpConfig: currentArpConfig,
+            seqConfig: currentSeqConfig.value || null,
+            updatedAt: serverTimestamp(),
           })
         }
 
@@ -189,14 +189,14 @@ export const usePresetStore = defineStore('preset', () => {
       const cleanName = (name || '').trim()
 
       const presetData = {
-        id:         presetId,
-        name:       cleanName,
-        category:   category || 'pad',
-        data:       data || {},
+        id: presetId,
+        name: cleanName,
+        category: category || 'pad',
+        data: data || {},
         patchNotes: options.patchNotes || null,
-        arpConfig:  options.arpConfig || null,
-        seqConfig:  options.seqConfig || null,
-        createdAt:  options.createdAt ? new Date(options.createdAt) : serverTimestamp(),
+        arpConfig: options.arpConfig || null,
+        seqConfig: options.seqConfig || null,
+        createdAt: options.createdAt ? new Date(options.createdAt) : serverTimestamp(),
       }
 
       // Add optional fields
@@ -259,7 +259,7 @@ export const usePresetStore = defineStore('preset', () => {
     }
 
     isGenerating.value = true
-    showResults.value  = false
+    showResults.value = false
 
     try {
       const categoryConfig =
@@ -267,8 +267,8 @@ export const usePresetStore = defineStore('preset', () => {
         S1_TYPES['experimental']
 
       // Determine which engine slot (A or B) this generation targets
-      const isAlt      = isRegen && useAlternativeEngine.value
-      const cacheKey   = isAlt ? engineCacheB : engineCacheA
+      const isAlt = isRegen && useAlternativeEngine.value
+      const cacheKey = isAlt ? engineCacheB : engineCacheA
       const setCacheKey = isAlt ? (v) => { engineCacheB.value = v } : (v) => { engineCacheA.value = v }
 
       // --- AI call placeholder ---
@@ -284,26 +284,26 @@ export const usePresetStore = defineStore('preset', () => {
       }
       // --- end placeholder ---
 
-      const presetId   = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-      const genPreset  = {
-        id:       presetId,
-        name:     `* ${currentCategory.value} ${new Date().toLocaleTimeString()}`,
+      const presetId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const genPreset = {
+        id: presetId,
+        name: `* ${currentCategory.value} ${new Date().toLocaleTimeString()}`,
         category: currentCategory.value,
-        data:     ccValues,
+        data: ccValues,
         patchNotes: null,
         arpConfig: null,
         seqConfig: null,
       }
 
       setCacheKey(genPreset)
-      lastPreset.value        = genPreset
-      currentName.value       = genPreset.name
+      lastPreset.value = genPreset
+      currentName.value = genPreset.name
       currentPatchNotes.value = null
 
       sessionGeneratedIds.value = [...sessionGeneratedIds.value, presetId]
 
       applyPresetCCs(genPreset)
-      showResults.value  = true
+      showResults.value = true
     } catch (err) {
       console.error('Generation failed', err)
     } finally {
@@ -320,7 +320,7 @@ export const usePresetStore = defineStore('preset', () => {
     if (dir === 'prev') recallPreset(list[Math.max(0, idx - 1)])
     if (dir === 'next') recallPreset(list[Math.min(list.length - 1, idx + 1)])
     if (dir === 'first') recallPreset(list[0])
-    if (dir === 'last')  recallPreset(list[list.length - 1])
+    if (dir === 'last') recallPreset(list[list.length - 1])
   }
 
   return {

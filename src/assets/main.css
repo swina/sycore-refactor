@@ -68,6 +68,12 @@
     }
 }
 
+button {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+
 /* Hardware-style range sliders */
 input[type='range'] {
     height: 0.5rem;

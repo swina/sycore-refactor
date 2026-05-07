@@ -23,6 +23,10 @@ export type AppAction =
   | 'playlist_next'
   | 'liveset_up'
   | 'liveset_down'
+  | 'liveset_pad_1'  | 'liveset_pad_2'  | 'liveset_pad_3'  | 'liveset_pad_4'
+  | 'liveset_pad_5'  | 'liveset_pad_6'  | 'liveset_pad_7'  | 'liveset_pad_8'
+  | 'liveset_pad_9'  | 'liveset_pad_10' | 'liveset_pad_11' | 'liveset_pad_12'
+  | 'liveset_pad_13' | 'liveset_pad_14' | 'liveset_pad_15' | 'liveset_pad_16'
   | 'toggle_liveset'
   | 'toggle_panel'
   | 'open_sound_types'
@@ -63,6 +67,22 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   playlist_next:        'Playlist Next Track (Crossfade)',
   liveset_up:           'Live Set Prev Sound ↑',
   liveset_down:         'Live Set Next Sound ↓',
+  liveset_pad_1:        'Live Set Pad 1',
+  liveset_pad_2:        'Live Set Pad 2',
+  liveset_pad_3:        'Live Set Pad 3',
+  liveset_pad_4:        'Live Set Pad 4',
+  liveset_pad_5:        'Live Set Pad 5',
+  liveset_pad_6:        'Live Set Pad 6',
+  liveset_pad_7:        'Live Set Pad 7',
+  liveset_pad_8:        'Live Set Pad 8',
+  liveset_pad_9:        'Live Set Pad 9',
+  liveset_pad_10:       'Live Set Pad 10',
+  liveset_pad_11:       'Live Set Pad 11',
+  liveset_pad_12:       'Live Set Pad 12',
+  liveset_pad_13:       'Live Set Pad 13',
+  liveset_pad_14:       'Live Set Pad 14',
+  liveset_pad_15:       'Live Set Pad 15',
+  liveset_pad_16:       'Live Set Pad 16',
   toggle_liveset:       'Toggle Live Set Layer',
   toggle_panel:         'Expand Control Panel',
   open_sound_types:    'Open Sound Types',

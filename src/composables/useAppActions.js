@@ -77,7 +77,12 @@ export function useAppActions() {
         uiStore.globalTranspose = Math.round((ccVal / 127) * 48) - 24; break
 
       default:
-        console.warn('Unknown AppAction:', action)
+        if (action.startsWith('liveset_pad_')) {
+          const idx = parseInt(action.replace('liveset_pad_', ''), 10) - 1
+          window.dispatchEvent(new CustomEvent('liveset-select-pad', { detail: { idx } }))
+        } else {
+          console.warn('Unknown AppAction:', action)
+        }
     }
   }
 
