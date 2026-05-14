@@ -9,7 +9,7 @@ SY.CORE is a professional-grade, local-first ecosystem designed to bridge the ga
 At the core of SY.CORE lies the **Adaptive Sound Engine**, a proprietary synthesis and orchestration algorithm designed by SY.CORE Labs.
 
 - **Neural Sound Morphing**: Beyond simple presets, the engine uses adaptive logic to generate complex parameter maps for hardware synthesizers (optimized for the Roland S-1 and beyond).
-- **Infinite Creativity**: Generate "Pads", "Leads", "Basses", and "Experimental" textures instantly. Each sound is unique, mathematically balanced, and ready for the stage.
+- **Infinite Creativity**: Generate "Pads", "Leads", "Basses", and "Experimental" with "flavour" variations instantly. Each sound is unique, mathematically balanced, and ready for the stage.
 - **Hardware Synergy**: The engine doesn't just play sounds; it *talks* to your gear, automating most of CC (Control Change) messages to sculpt raw electricity into musical art.
 - **Bi-directional Feedback**: SY.CORE maintains a high-speed, 1:1 reflection of your hardware state. Every tweak on the Roland S-1 is instantly visualized in the app, and every UI adjustment is sent to the synth with zero perceptible latency, creating a seamless "hybrid instrument" experience.
 
@@ -17,15 +17,18 @@ At the core of SY.CORE lies the **Adaptive Sound Engine**, a proprietary synthes
 
 ## 🚀 Key Platform Pillars
 
-### 1. Professional Live Orchestration
-SY.CORE is built for the stage. The **Live Pad Grid** provides a high-density, touch-optimized interface for instant recall of complex multi-device configurations. Switch sounds across your Roland S-1 with a single tap.
+### 1. Adaptive Sound Engine for a better sound design workflow
+SY.CORE doesn't create sounds based on random values, it uses logic algorithms based on the electronic synthesis theory and the Roland S-1 architecture. This means that every sound can be unique and mathematically balanced, and possibly ready for the stage.
 
-### 2. Local-First Reliability
+### 2. Professional Live Orchestration
+SY.CORE is built for live jamming and performances. The **Live Pad Grid** provides a high-density, touch-optimized interface for instant recall of complex multi-device configurations. Switch sounds across your Roland S-1 with a single tap.
+
+### 3. Local-First Reliability
 Performance environments are unpredictable. SY.CORE utilizes a **Local-First Architecture** (IndexedDB), ensuring that all your presets, backing tracks, and configurations are stored directly in the browser.
 - **Zero Internet Dependency**: Load your project once and play offline.
 - **Instant Boot**: No cloud loading screens; your music is ready as fast as your hardware.
 
-### 3. Integrated Creativity Suite
+### 4. Integrated Creativity Suite
 SY.CORE replaces a rack of gear with a single, streamlined interface:
 - **Backing Track Player Pro**: A dual-slot engine with automatic crossfading, gapless playback, and MIDI transport synchronization.
 - **8-Track Audio Looper**: Capture live inspiration and instantly integrate it into your playlist.
