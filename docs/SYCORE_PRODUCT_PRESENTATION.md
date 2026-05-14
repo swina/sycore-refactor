@@ -30,6 +30,8 @@ SY.CORE replaces a rack of gear with a single, streamlined interface:
 - **Backing Track Player Pro**: A dual-slot engine with automatic crossfading, gapless playback, and MIDI transport synchronization.
 - **8-Track Audio Looper**: Capture live inspiration and instantly integrate it into your playlist.
 - **Advanced Step Sequencer**: Precision pattern creation with parameter automation and per-step MIDI routing.
+- **Live MIDI Performance Matrix**: Real-time cross-routing engine with visual Grid/Flow layouts and multi-source merging.
+- **Smart Latch**: An intelligent, generative Note Hold engine with per-output assignment and circular FIFO buffering.
 - **Real-Time Audio Visualizer**: Professional spectral analysis and waveform visualization for immersive performance monitoring.
 
 ---
@@ -38,9 +40,10 @@ SY.CORE replaces a rack of gear with a single, streamlined interface:
 
 | Feature | Capability |
 | :--- | :--- |
-| **MIDI Hub** | Centralized routing for USB-MIDI, Virtual Ports, and Hardware Sync. |
+| **MIDI Hub & Performance Matrix** | Centralized live routing (Grid/Flow views) for USB-MIDI, Virtual Ports, and Hardware Sync. |
+| **Smart Latch** | Generative, per-output note holding with FIFO policy and Replace Mode, preventing any oscillator freeze. |
 | **BPM Master Clock** | Rock-solid synchronization for all time-based effects and sequencers. |
-| **MIDI Learn & Mapping** | Effortlessly map any hardware controller to app functions. |
+| **MIDI Learn & Mapping** | Effortlessly map any hardware controller to app functions with advanced "Pass Thru" and "Consume" logic. |
 | **Audio Capture** | High-fidelity recording and MP3 export (192kbps) of your live sessions. |
 | **Preset History** | Intelligent browsing of all generated sounds with "Favorite" and "Recall" logic. |
 
