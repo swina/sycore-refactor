@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network } from 'lucide-vue-next'
+import { MidiSource } from '@/core/midi/MidiService'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -72,8 +73,8 @@ function playPreview() {
   const notes = [60, 64, 67, 72, 67, 64, 60]
   notes.forEach((note, i) => {
     _previewTimeouts.push(
-      setTimeout(() => midiStore.sendNoteOn(note, 80), i * step),
-      setTimeout(() => midiStore.sendNoteOff(note), i * step + step * 0.75),
+      setTimeout(() => midiStore.sendNoteOn(note, 80, undefined, MidiSource.UI), i * step),
+      setTimeout(() => midiStore.sendNoteOff(note, 0, undefined, MidiSource.UI), i * step + step * 0.75),
     )
   })
   _previewTimeouts.push(
@@ -181,7 +182,7 @@ function handleValueUpdate(cfg, rawValue) {
   const clamped = Math.max(min, Math.min(max, Math.round(rawValue)))
   
   presetStore.updateFieldValue(cfg.name, clamped)
-  midiStore.sendCC(cfg.cc, clamped)
+  midiStore.sendCC(cfg.cc, clamped, undefined, MidiSource.UI)
 }
 
 // ─── Drag handlers ────────────────────────────────────────────────────────────
@@ -728,13 +729,13 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           </div>
 
             <!-- RIGHT: CONTROLS (List) -->
-            <div class="flex-1 w-full space-y-6 md:max-h-[500px] overflow-y-auto pr-4 pl-2 pb-20 custom-scrollbar">
+            <div class="flex-1 w-full space-y-6 md:max-h-[500px] overflow-y-auto px-6 pb-20 custom-scrollbar">
               <div class="flex items-center gap-3 mb-2">
                 <h4 class="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Module Controls</h4>
                 <div class="h-px flex-1 bg-neutral-900"></div>
               </div>
               
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-2">
                 
                 <!-- COLUMN 1: SLIDERS -->
                 <div v-if="hasSliders(cat.controllers)" class="space-y-2">

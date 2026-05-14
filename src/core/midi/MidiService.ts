@@ -22,6 +22,16 @@ export interface RoutingConfig {
   thruFilters: { notes: boolean; cc: boolean };
 }
 
+export enum MidiSource {
+  SEQUENCER = 'SEQUENCER',
+  KEYBOARD = 'KEYBOARD',
+  ARP = 'ARP',
+  UI = 'UI'
+}
+
+const MIDI_ROUTING_KEY = 'S1_MIDI_ROUTING'
+const MIDI_BROADCAST_KEY = 'S1_MIDI_BROADCAST'
+
 // Global System Logger for debugging and hardware status
 if (typeof window !== 'undefined') {
   (window as any).SY_LOG = (msg: string) => {
@@ -33,6 +43,15 @@ if (typeof window !== 'undefined') {
 export class MidiService {
   private midiAccess: MIDIAccess | null = null;
   private routingConfig: RoutingConfig | null = null;
+  private broadcastMode: boolean = false;
+
+  // Multi-Output Routing Matrix
+  private routingMatrix: Map<MidiSource, Set<string>> = new Map([
+    [MidiSource.SEQUENCER, new Set()],
+    [MidiSource.KEYBOARD, new Set()],
+    [MidiSource.ARP, new Set()],
+    [MidiSource.UI, new Set()],
+  ]);
 
   private onCCListeners: ((cc: number, val: number, chan: number, inputId?: string) => void)[] = [];
   private onNoteListeners: ((type: 'on' | 'off', note: number, velocity: number, chan: number, inputId?: string) => void)[] = [];
@@ -46,6 +65,7 @@ export class MidiService {
   private clockInterval: number | null = null;
   private currentBpm: number = 120;
   private isPlayingClock: boolean = false;
+  // @ts-ignore - pulse count for potential future sync features
   private clockPulseCount: number = 0;
 
   private lastSentMessages = new Map<string, { data: string, time: number }>();
@@ -55,12 +75,11 @@ export class MidiService {
   private isThruThrottled = false;
   private globalChannel: number = 0;
 
-  private missingDevices = new Set<string>();
-
   private broadcast(
     type: 'noteon' | 'noteoff' | 'cc' | 'pc' | 'pitchbend' | 'clock' | 'start' | 'stop' | 'allnotesoff',
     data: any,
     channel: number = 0,
+    source: MidiSource = MidiSource.UI,
     skipDeviceId: string | null = null
   ) {
     if (!this.midiAccess) return;
@@ -69,14 +88,27 @@ export class MidiService {
     const targetDeviceIds = new Set<string>();
     const skipDeviceName = skipDeviceId ? this.midiAccess.inputs.get(skipDeviceId)?.name : null;
 
-    // 1. Resolve Matrix Outputs by Name
-    if (this.routingConfig) {
-      this.midiAccess.outputs.forEach(outPort => {
-        const config = this.routingConfig?.registrations[outPort.name];
-        if (!config || !config.outEnabled || outPort.id === skipDeviceId || outPort.name === skipDeviceName) return;
+    const targetsFromMatrix = this.routingMatrix.get(source) || new Set();
 
-        // Apply specific filters
-        let shouldAdd = false;
+    this.midiAccess.outputs.forEach(outPort => {
+      // 1. Matrix Match (Highest Priority - Bypass legacy outEnabled if explicitly selected)
+      const isMatrixMatch = targetsFromMatrix.has(outPort.id);
+      
+      // 2. Broadcast Mode Match
+      const isBroadcastTarget = this.broadcastMode;
+
+      if (!isMatrixMatch && !isBroadcastTarget) return;
+
+      // 3. Legacy Filters (Only applied to Broadcast or if config exists)
+      const config = this.routingConfig?.registrations[outPort.name];
+      
+      // If it's a matrix match, we allow it even without config, 
+      // but we still respect the notes/cc filters IF a config exists.
+      if (isBroadcastTarget && (!config || !config.outEnabled)) return;
+      if (outPort.id === skipDeviceId || outPort.name === skipDeviceName) return;
+
+      let shouldAdd = true; // Default to true for matrix matches without config
+      if (config) {
         switch (type) {
           case 'noteon':
           case 'noteoff':
@@ -88,12 +120,12 @@ export class MidiService {
           case 'start':
           case 'stop':      shouldAdd = config.transport; break;
         }
+      }
 
-        if (shouldAdd) targetDeviceIds.add(outPort.id);
-      });
-    }
+      if (shouldAdd) targetDeviceIds.add(outPort.id);
+    });
 
-    // 3. Send to all unique targets
+    // Send to all unique targets
     targetDeviceIds.forEach(id => {
       const out = this.midiAccess?.outputs.get(id);
       if (!out) return;
@@ -109,8 +141,6 @@ export class MidiService {
           targetChannel = config.outChannel;
         }
       }
-
-
 
       const statusCh = targetChannel % 16;
       let status = 0;
@@ -130,10 +160,7 @@ export class MidiService {
 
       if (status > 0) {
         const fullMsg = [status, ...bytes];
-        // Register globally to prevent Thru-echoing this back
         this.globalSentHashes.set(fullMsg.join(','), Date.now());
-        
-        
         out.send(fullMsg);
       }
     });
@@ -170,6 +197,9 @@ export class MidiService {
       };
 
       this.reScanInputs();
+      this.loadRoutingMatrix();
+      this.loadBroadcastMode();
+      
       console.log("[MIDI] Service fully initialized and inputs attached.");
       return true;
     } catch (e) {
@@ -179,14 +209,8 @@ export class MidiService {
     }
   }
 
-  /**
-   * Manually re-attach listeners to ALL currently available inputs.
-   */
   reScanInputs() {
-    if (!this.midiAccess) {
-      console.warn("[MIDI] reScanInputs called but midiAccess is not ready yet.");
-      return;
-    }
+    if (!this.midiAccess) return;
     const inputs = Array.from(this.midiAccess.inputs.values());
     inputs.forEach(input => {
       input.open();
@@ -218,6 +242,68 @@ export class MidiService {
     this.ingressFilter = fn;
   }
 
+  // --- Multi-Routing Actions ---
+
+  private saveRoutingMatrix() {
+    const data: Record<string, string[]> = {}
+    this.routingMatrix.forEach((targets, source) => {
+      data[source] = Array.from(targets)
+    })
+    localStorage.setItem(MIDI_ROUTING_KEY, JSON.stringify(data))
+  }
+
+  private loadRoutingMatrix() {
+    try {
+      const raw = localStorage.getItem(MIDI_ROUTING_KEY)
+      if (!raw) return
+      const data = JSON.parse(raw)
+      Object.entries(data).forEach(([source, targets]) => {
+        if (Array.isArray(targets)) {
+          this.routingMatrix.set(source as MidiSource, new Set(targets as string[]))
+        }
+      })
+    } catch (e) {
+      console.error('Failed to load MIDI routing matrix', e)
+    }
+  }
+
+  public setRouting(source: MidiSource, outputIds: string[]) {
+    this.routingMatrix.set(source, new Set(outputIds))
+    this.saveRoutingMatrix()
+  }
+
+  public toggleRouting(source: MidiSource, outputId: string) {
+    const targets = this.routingMatrix.get(source) || new Set()
+    if (targets.has(outputId)) {
+      targets.delete(outputId)
+    } else {
+      targets.add(outputId)
+    }
+    this.routingMatrix.set(source, targets)
+    this.saveRoutingMatrix()
+  }
+
+  public toggleBroadcastMode() {
+    this.broadcastMode = !this.broadcastMode
+    localStorage.setItem(MIDI_BROADCAST_KEY, JSON.stringify(this.broadcastMode))
+  }
+
+  private loadBroadcastMode() {
+    const raw = localStorage.getItem(MIDI_BROADCAST_KEY)
+    if (raw) this.broadcastMode = JSON.parse(raw) === true
+  }
+
+  getRouting(source: MidiSource): string[] {
+    return Array.from(this.routingMatrix.get(source) || []);
+  }
+
+  setBroadcastMode(enabled: boolean) {
+    this.broadcastMode = enabled;
+  }
+
+  getBroadcastMode(): boolean {
+    return this.broadcastMode;
+  }
 
   private handleIngress(event: MIDIMessageEvent) {
     if (!event.data || event.data.length === 0) return;
@@ -226,15 +312,10 @@ export class MidiService {
     const status = event.data[0];
     const now = Date.now();
 
-    // 1. App Internal Dispatch (RAW) - ALWAYS fires first
     this.onRawListeners.forEach(l => l(event));
 
-    // 2. Custom Ingress Filter (allows "consuming" messages for the rest of the flow)
-    if (this.ingressFilter && this.ingressFilter(event)) {
-      return;
-    }
+    if (this.ingressFilter && this.ingressFilter(event)) return;
 
-    // 2. Rate limiting to prevent total lockups
     this.ingressCount++;
     if (now - this.lastIngressReset > 1000) {
       if (this.ingressCount > 1500) {
@@ -244,8 +325,6 @@ export class MidiService {
       }
       this.ingressCount = 0;
       this.lastIngressReset = now;
-      
-      // Cleanup global hashes older than 2 seconds to keep memory low
       const threshold = now - 2000;
       for (const [hash, time] of this.globalSentHashes.entries()) {
         if (time < threshold) this.globalSentHashes.delete(hash);
@@ -254,41 +333,22 @@ export class MidiService {
 
     if (this.isThruThrottled) return;
 
-    // 3. Input filtering (Matrix) by Name
     if (this.routingConfig) {
       const inputDevice = this.midiAccess?.inputs.get(inputId);
       const config = inputDevice ? this.routingConfig.registrations[inputDevice.name] : null;
-      
-      // If we have a config but it is NOT enabled, we ONLY block Thru, not the app listeners?
-      // Actually, if a user unchecks 'IN' in the matrix, they probably want to mute it.
-      // But we should make sure that 'cc' / 'notes' flags are respected.
-      if (config && !config.inEnabled) {
-         // We'll let it pass for now but the Thru block below will check it again.
-      }
-      
       if (status < 0xF0) {
         const msgChannel = status & 0x0f;
-        if (config && config.inChannel !== -1 && config.inChannel !== msgChannel) {
-          if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Blocked ${inputDevice?.name} CH ${msgChannel+1} (Expected CH ${config.inChannel+1})`);
-          return;
-        }
+        if (config && config.inChannel !== -1 && config.inChannel !== msgChannel) return;
       }
     }
 
-    // 3. Unified Echo Suppression / Loop Prevention
-    // If we just sent THIS exact message to ANY port, ignore it if it comes back (hardware echo)
     const msgHash = event.data.join(',');
     const globalSentTime = this.globalSentHashes.get(msgHash);
-    if (globalSentTime && now - globalSentTime < 300) {
-       // Silent ignore for echo
-       return;
-    }
+    if (globalSentTime && now - globalSentTime < 300) return;
 
-    // Per-input deduplication
     const recent = this.lastSentMessages.get(inputId);
     if (recent && recent.data === `${inputId}:${msgHash}` && now - recent.time < 50) return;
 
-    // 4. Centralized Thru Relay
     if (this.routingConfig && this.routingConfig.globalThruEnabled) {
       const type = status & 0xf0;
       const isNote = type === 0x90 || type === 0x80;
@@ -307,69 +367,49 @@ export class MidiService {
 
         this.midiAccess.outputs.forEach(outDevice => {
           const outConfig = this.routingConfig?.registrations[outDevice.name];
-          const inputDevice = this.midiAccess?.inputs.get(inputId);
           const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
 
           if (!outConfig || !outConfig.outEnabled || outDevice.id === inputId) return;
-          if (inConfig && !inConfig.inEnabled) return; // Block THRU if input is disabled in matrix
+          if (inConfig && !inConfig.inEnabled) return; 
 
-          // Fuzzy Loop Prevention
           const normIn = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
           const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
-          
           if (normIn && normOut && normIn === normOut) return;
 
-          // Per-device filter overrides
           if (isNote && !outConfig.notes) return;
           if (isCC && !outConfig.cc) return;
           if (status === 0xF8 && !outConfig.clock) return;
           if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
 
           try {
-            // Record to prevent loopback
             this.lastSentMessages.set(outDevice.id, { data: msgHash, time: now });
-
-            // Apply channel remapping for Channel Voice messages
             let bytes = event.data;
             if (status < 0xF0) {
               let targetCh = -1;
-              
-              if (outConfig.isMulti) {
-                // Multi-timbral devices: follow the app's global channel
-                targetCh = this.globalChannel;
-              } else if (outConfig.outChannel !== -1) {
-                // Mono-timbral devices: stick to fixed channel
-                targetCh = outConfig.outChannel;
-              }
-
+              if (outConfig.isMulti) targetCh = this.globalChannel;
+              else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
               if (targetCh !== -1) {
                 const newStatus = (status & 0xf0) | (targetCh & 0x0f);
                 bytes = new Uint8Array([newStatus, event.data[1], event.data[2]]);
               }
             }
-            
             this.globalSentHashes.set(bytes.join(','), now);
             outDevice.send(bytes);
-          } catch (e) {
-            console.error(`[MIDI Thru] Send failed to ${outDevice.name}`, e);
-          }
+          } catch (e) {}
         });
       }
     }
     
-    if (status === 0xFA) { // MIDI Start
-      this.onTransportListeners.forEach(l => l('start'));
-    } else if (status === 0xFC) { // MIDI Stop
-      this.onTransportListeners.forEach(l => l('stop'));
-    } else if (status === 0xF8) { // MIDI Clock
-      this.onTransportListeners.forEach(l => l('clock'));
-    } else if (status < 0xF0) { // Channel Voice
+    if (status === 0xFA) this.onTransportListeners.forEach(l => l('start'));
+    else if (status === 0xFC) this.onTransportListeners.forEach(l => l('stop'));
+    else if (status === 0xF8) this.onTransportListeners.forEach(l => l('clock'));
+    else if (status < 0xF0) {
       const type = status & 0xf0;
       const channel = status & 0x0f;
       if (type === 0x90 || type === 0x80) {
         const note = event.data[1];
         const velocity = event.data[2];
-        this.onNoteListeners.forEach(l => l(type === 0x90 ? 'on' : 'off', note, velocity, channel));
+        this.onNoteListeners.forEach(l => l(type === 0x90 ? 'on' : 'off', note, velocity, channel, inputId));
         if (type === 0x90) this.globalNoteOnListeners.forEach(l => l(note, velocity));
       } else if (type === 0xb0) {
         this.onCCListeners.forEach(l => l(event.data[1], event.data[2], channel, inputId));
@@ -381,14 +421,6 @@ export class MidiService {
   }
 
   private handleIngressBound = this.handleIngress.bind(this);
-
-  setControlInput(id: string) {
-    // No longer needed with unified matrix
-  }
-
-  setKeyboardInput(id: string) {
-    // No longer needed with unified matrix
-  }
 
   addRawListener(callback: (event: MIDIMessageEvent) => void) {
     this.onRawListeners.push(callback);
@@ -404,14 +436,14 @@ export class MidiService {
     };
   }
 
-  addCCListener(callback: (cc: number, val: number, chan: number) => void) {
+  addCCListener(callback: (cc: number, val: number, chan: number, inputId?: string) => void) {
     this.onCCListeners.push(callback);
     return () => {
       this.onCCListeners = this.onCCListeners.filter(l => l !== callback);
     };
   }
 
-  addNoteListener(callback: (type: 'on' | 'off', note: number, velocity: number, chan: number) => void) {
+  addNoteListener(callback: (type: 'on' | 'off', note: number, velocity: number, chan: number, inputId?: string) => void) {
     this.onNoteListeners.push(callback);
     return () => {
       this.onNoteListeners = this.onNoteListeners.filter(l => l !== callback);
@@ -439,30 +471,26 @@ export class MidiService {
     };
   }
 
-  sendCC(cc: number, value: number, channel: number = 0, skipDeviceId: string | null = null) {
-    this.broadcast('cc', { cc, value }, channel, skipDeviceId);
+  sendCC(cc: number, value: number, channel: number = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null) {
+    this.broadcast('cc', { cc, value }, channel, source, skipDeviceId);
   }
 
-  sendProgramChange(program: number, channel: number = 0) {
-    this.broadcast('pc', { program }, channel);
+  sendProgramChange(program: number, channel: number = 0, source: MidiSource = MidiSource.UI) {
+    this.broadcast('pc', { program }, channel, source);
   }
 
-  sendNoteOn(note: number, velocity: number = 100, channel: number = 0, skipDeviceId: string | null = null) {
-    this.broadcast('noteon', { note, velocity }, channel, skipDeviceId);
+  sendNoteOn(note: number, velocity: number = 100, channel: number = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null) {
+    this.broadcast('noteon', { note, velocity }, channel, source, skipDeviceId);
   }
 
-  sendNoteOff(note: number, velocity: number = 0, channel: number = 0, skipDeviceId: string | null = null) {
-    this.broadcast('noteoff', { note, velocity }, channel, skipDeviceId);
+  sendNoteOff(note: number, velocity: number = 0, channel: number = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null) {
+    this.broadcast('noteoff', { note, velocity }, channel, source, skipDeviceId);
   }
 
   allNotesOff(channel: number = 0) {
-    this.broadcast('allnotesoff', {}, channel);
+    this.broadcast('allnotesoff', {}, channel, MidiSource.UI);
   }
 
-  /**
-   * Sends a raw MIDI message to a specific output device, bypassing the routing matrix.
-   * Useful for "killing" notes when a device is disabled in the UI.
-   */
   panic() {
     if (this.midiAccess) {
       console.log("[MIDI] PANIC! Sending All Notes Off to all devices and channels.");
@@ -470,9 +498,9 @@ export class MidiService {
       allOutputs.forEach(out => {
         for (let ch = 0; ch < 16; ch++) {
           try {
-            out.send([0xb0 + ch, 123, 0]); // All notes off
-            out.send([0xb0 + ch, 120, 0]); // All sound off
-            out.send([0xb0 + ch, 64, 0]);  // Reset sustain pedal
+            out.send([0xb0 + ch, 123, 0]); 
+            out.send([0xb0 + ch, 120, 0]); 
+            out.send([0xb0 + ch, 64, 0]);  
           } catch (e) {}
         }
       });
@@ -482,11 +510,7 @@ export class MidiService {
   sendRawToDevice(deviceId: string, data: number[]) {
     const out = this.midiAccess?.outputs.get(deviceId);
     if (out) {
-      try {
-        out.send(data);
-      } catch (e) {
-        console.error(`[MIDI] Failed to send raw data to ${deviceId}:`, e);
-      }
+      try { out.send(data); } catch (e) {}
     }
   }
 
@@ -494,18 +518,12 @@ export class MidiService {
     const out = this.midiAccess?.outputs.get(deviceId);
     if (out) {
       const config = this.routingConfig?.registrations[out.name];
-      // Only cleanup the channel the device is actually using
       const targetCh = (config && config.outChannel !== -1) ? config.outChannel : this.globalChannel;
       const statusCh = targetCh % 16;
-      
-      console.log(`[MIDI] Cleaning up device ${out.name} on CH ${statusCh + 1}`);
-      
-      // Send minimal cleanup to avoid flooding the bus (Roland devices are sensitive)
       const messages = [
-        [0xb0 + statusCh, 123, 0], // All Notes Off
-        [0xb0 + statusCh, 64, 0]   // Damper Pedal Off
+        [0xb0 + statusCh, 123, 0],
+        [0xb0 + statusCh, 64, 0] 
       ];
-
       messages.forEach(msg => {
         this.globalSentHashes.set(msg.join(','), Date.now());
         try { out.send(msg); } catch (e) {}
@@ -513,25 +531,23 @@ export class MidiService {
     }
   }
 
-  sendPitchBend(value: number, channel: number = 0, skipDeviceId: string | null = null) {
+  sendPitchBend(value: number, channel: number = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null) {
     const lsb = value & 0x7F;
     const msb = (value >> 7) & 0x7F;
-    this.broadcast('pitchbend', { lsb, msb }, channel, skipDeviceId);
+    this.broadcast('pitchbend', { lsb, msb }, channel, source, skipDeviceId);
   }
 
-  sendNRPN(nrpnLsb: number, value: number, channel: number = 0) {
-    // NRPN usually only goes to the first enabled output that supports CC? 
-    // Or we broadcast it. Let's broadcast to all outputs that have CC enabled.
+  sendNRPN(nrpnLsb: number, value: number, channel: number = 0, source: MidiSource = MidiSource.UI) {
     const statusCh = channel % 16;
-    const lsb = value & 0x7F;
-    const msb = (value >> 7) & 0x7F;
-    
     if (this.routingConfig) {
+      const targetsFromMatrix = this.routingMatrix.get(source) || new Set();
+
       Object.entries(this.routingConfig.registrations).forEach(([name, config]) => {
         if (config.outEnabled && config.cc) {
-          // We broadcast to all output ports that match this registered name
           const allOutputs = Array.from(this.midiAccess?.outputs.values() || []);
-          const ports = allOutputs.filter(p => p.name === name);
+          const ports = allOutputs.filter(p => {
+             return p.name === name && (this.broadcastMode || targetsFromMatrix.has(p.id));
+          });
           
           ports.forEach(out => {
             let ch = statusCh;
@@ -545,40 +561,34 @@ export class MidiService {
     }
   }
 
-  sendAllCCs(ccMap: Record<number, number>, channel: number = 0, nrpnCCs: number[] = []) {
+  sendAllCCs(ccMap: Record<number, number>, channel: number = 0, nrpnCCs: number[] = [], source: MidiSource = MidiSource.UI) {
     Object.entries(ccMap).forEach(([cc, val]) => {
       const ccNum = parseInt(cc);
       if (nrpnCCs.includes(ccNum)) {
-        this.sendNRPN(ccNum, val, channel);
+        this.sendNRPN(ccNum, val, channel, source);
       } else {
-        this.sendCC(ccNum, val, channel);
+        this.sendCC(ccNum, val, channel, source);
       }
     });
   }
 
   setBpm(bpm: number) {
     this.currentBpm = bpm;
-    if (this.clockInterval) {
-      this.startClock();
-    }
+    if (this.clockInterval) this.startClock();
   }
 
   startClock() {
     this.stopClock();
     if (!this.currentBpm || this.currentBpm < 1) return;
-
-    console.log(`[MIDI Clock] Starting Clock at ${this.currentBpm} BPM`);
     this.isPlayingClock = true;
     const intervalMs = 60000 / (this.currentBpm * 24);
-    const sendPulse = () => this.broadcast('clock', {});
-
+    const sendPulse = () => this.broadcast('clock', {}, 0, MidiSource.UI);
     sendPulse();
     this.clockInterval = window.setInterval(sendPulse, intervalMs);
   }
 
   stopClock() {
     if (this.clockInterval !== null) {
-      console.log(`[MIDI Clock] Stopping Clock`);
       window.clearInterval(this.clockInterval);
       this.clockInterval = null;
     }
@@ -586,16 +596,16 @@ export class MidiService {
   }
 
   sendStart() {
-    this.broadcast('stop', {});
+    this.broadcast('stop', {}, 0, MidiSource.UI);
     setTimeout(() => {
-      this.broadcast('start', {});
+      this.broadcast('start', {}, 0, MidiSource.UI);
       this.startClock();
     }, 10);
   }
 
   sendStop() {
     this.stopClock();
-    this.broadcast('stop', {});
+    this.broadcast('stop', {}, 0, MidiSource.UI);
   }
 }
 

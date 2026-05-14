@@ -1,53 +1,41 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { ListTree, X } from 'lucide-vue-next'
-import { midiService } from '@/core/midi/MidiService'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { X, Play, Square, Settings, ChevronUp, ChevronDown, ListMusic } from 'lucide-vue-next'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 
 const props = defineProps({
-  isOpen: Boolean,
-  channel: Number,
-  inputChannel: Number,
+  isOpen:       { type: Boolean, default: false },
+  channel:      { type: Number, default: 0 },
+  inputChannel: { type: Number, default: -1 },
 })
 const emit = defineEmits(['close'])
 
-const arpStore = useArpStore()
+const arpStore  = useArpStore()
 const midiStore = useMidiStore()
 
-const physicalKeysHeld = ref(0)
 let arpTimer = null
 let lastArpNote = null
-let currentArpIndex = 0
+let currentArpIndex = -1
 let arpDirection = 1
-
-const subdivisions = [
-  '1/4', '1/4d', '1/4t',
-  '1/8', '1/8d', '1/8t',
-  '1/16', '1/16d', '1/16t',
-  '1/32', '1/32d', '1/32t',
-]
+const physicalKeysHeld = ref(0)
 
 function calculateStepMs(bpm, subdivision) {
   const beatMs = 60000 / bpm
-  const map = {
-    '1/4': beatMs,
-    '1/4d': beatMs * 1.5,
-    '1/4t': beatMs * (2 / 3),
-    '1/8': beatMs * 0.5,
-    '1/8d': beatMs * 0.75,
-    '1/8t': beatMs * (1 / 3),
-    '1/16': beatMs * 0.25,
-    '1/16d': beatMs * 0.375,
-    '1/16t': beatMs * (1 / 6),
-    '1/32': beatMs * 0.125,
-    '1/32d': beatMs * 0.1875,
-    '1/32t': beatMs * (1 / 12),
+  switch (subdivision) {
+    case '1/4':   return beatMs
+    case '1/4t':  return beatMs * (2/3)
+    case '1/8':   return beatMs / 2
+    case '1/8t':  return beatMs / 3
+    case '1/16':  return beatMs / 4
+    case '1/16t': return beatMs / 6
+    case '1/32':  return beatMs / 8
+    default:      return beatMs / 4
   }
-  return map[subdivision] ?? beatMs * 0.25
 }
 
-function startAprEngine() {
+function startArpEngine() {
   if (arpTimer) clearInterval(arpTimer)
 
   const stepMs = calculateStepMs(arpStore.arpBpm, arpStore.arpSubdivision)
@@ -56,7 +44,7 @@ function startAprEngine() {
 
     if (notesArray.length === 0) {
       if (lastArpNote !== null) {
-        midiStore.sendNoteOff(lastArpNote, 0)
+        midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
         lastArpNote = null
       }
       return
@@ -64,8 +52,8 @@ function startAprEngine() {
 
     if (notesArray.length === 1) {
       if (lastArpNote !== notesArray[0]) {
-        if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0)
-        midiStore.sendNoteOn(notesArray[0], 100)
+        if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+        midiStore.sendNoteOn(notesArray[0], 100, props.channel, MidiSource.ARP)
         lastArpNote = notesArray[0]
       }
       return
@@ -93,26 +81,26 @@ function startAprEngine() {
     currentArpIndex = nextIndex
     const note = notesArray[nextIndex]
 
-    if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0)
-    midiStore.sendNoteOn(note, 100)
+    if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+    midiStore.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
     lastArpNote = note
 
     setTimeout(() => {
       if (lastArpNote === note) {
-        midiStore.sendNoteOff(note, 0)
+        midiStore.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
         lastArpNote = null
       }
     }, stepMs * 0.5)
   }, stepMs)
 }
 
-function stopAprEngine() {
+function stopArpEngine() {
   if (arpTimer) {
     clearInterval(arpTimer)
     arpTimer = null
   }
   if (lastArpNote !== null) {
-    midiStore.sendNoteOff(lastArpNote, 0)
+    midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
     lastArpNote = null
   }
 }
@@ -130,104 +118,114 @@ onMounted(() => {
         arpStore.pressNote(note)
       }
     } else {
-      physicalKeysHeld.value = Math.max(0, physicalKeysHeld.value - 1)
-      if (!arpStore.arpHold || (physicalKeysHeld.value === 0 && arpStore.heldNoteCount <= 1)) {
-        arpStore.releaseNote(note)
-        if (arpStore.arpHold && physicalKeysHeld.value === 0 && arpStore.heldNoteCount <= 1) {
-          arpStore.clearHeldNotes()
+      if (arpStore.arpEnabled) {
+        physicalKeysHeld.value = Math.max(0, physicalKeysHeld.value - 1)
+        if (!arpStore.arpHold || (physicalKeysHeld.value === 0 && arpStore.heldNoteCount <= 1)) {
+          arpStore.releaseNote(note)
+          if (arpStore.arpHold && physicalKeysHeld.value === 0 && arpStore.heldNoteCount <= 1) {
+            arpStore.clearHeldNotes()
+          }
         }
       }
     }
   })
 })
 
-watch(() => arpStore.arpEnabled, (enabled) => {
-  if (enabled) startAprEngine()
-  else stopAprEngine()
-}, { immediate: true })
-
-watch(() => [arpStore.arpBpm, arpStore.arpSubdivision, arpStore.arpMode], () => {
-  if (arpStore.arpEnabled) startAprEngine()
-}, { deep: true })
-
 onUnmounted(() => {
   _unsubNote?.()
-  stopAprEngine()
+  stopArpEngine()
 })
 
-watch(() => arpStore.arpHold, (hold) => {
-  if (!hold && physicalKeysHeld.value === 0) {
-    arpStore.clearHeldNotes()
-    if (arpStore.arpEnabled) {
-      setTimeout(() => { arpStore.arpHold = true }, 150)
-    }
-  }
+watch(() => arpStore.arpEnabled, (enabled) => {
+  if (enabled) startArpEngine()
+  else stopArpEngine()
+})
+
+watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
+  if (arpStore.arpEnabled) startArpEngine()
 })
 </script>
 
 <template>
-  <Transition name="panel" appear>
-    <div v-if="isOpen"
-      class="absolute top-16 right-4 md:right-32 w-[320px] bg-black/90 backdrop-blur-md border border-neutral-800 rounded-xl shadow-2xl p-4 z-[95] origin-top"
-    >
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-          <ListTree class="w-3 h-3 text-synth-neon" /> Arpeggiator
-        </h3>
-        <div class="flex items-center gap-3">
-          <button @click="arpStore.arpEnabled = !arpStore.arpEnabled"
-            :class="['w-10 h-5 rounded-full relative transition-colors', arpStore.arpEnabled ? 'bg-synth-neon' : 'bg-neutral-800']"
+  <Transition name="panel">
+    <div v-if="isOpen" class="fixed top-20 right-4 w-80 z-[600] bg-neutral-950/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl p-4">
+      <div class="flex flex-col gap-6">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-synth-neon/10 rounded-lg">
+              <ListMusic class="w-5 h-5 text-synth-neon" />
+            </div>
+            <div>
+              <h3 class="text-xs font-black text-white uppercase tracking-wider">Arpeggiator</h3>
+              <p class="text-[8px] font-mono text-neutral-500 uppercase tracking-tighter">Neural Pattern Engine</p>
+            </div>
+          </div>
+          <button @click="emit('close')" class="p-1 text-neutral-500 hover:text-white transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <!-- Master Switch -->
+        <div class="flex items-center justify-between p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
+          <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Active</span>
+          <button 
+            @click="arpStore.arpEnabled = !arpStore.arpEnabled"
+            :class="['w-12 h-6 rounded-full transition-all relative', arpStore.arpEnabled ? 'bg-synth-neon' : 'bg-neutral-800']"
           >
-            <div :class="['absolute top-0.5 bottom-0.5 w-4 bg-white rounded-full transition-transform', arpStore.arpEnabled ? 'translate-x-5' : 'translate-x-0.5']" />
-          </button>
-          <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors">
-            <X class="w-4 h-4" />
+            <div :class="['absolute top-1 w-4 h-4 rounded-full bg-white transition-all', arpStore.arpEnabled ? 'left-7' : 'left-1']" />
           </button>
         </div>
-      </div>
 
-      <div :class="['transition-opacity duration-200', arpStore.arpEnabled ? 'opacity-100 pointer-events-auto' : 'opacity-40 pointer-events-none']">
-        <div class="space-y-4">
-          <!-- Hold toggle -->
-          <div class="flex flex-col gap-1.5">
-            <div class="flex justify-between items-center mb-1">
-              <span class="text-[8px] font-mono text-neutral-500 uppercase">Hold</span>
-              <button @click="arpStore.arpHold = !arpStore.arpHold"
-                :class="['w-8 h-4 rounded-full relative transition-colors', arpStore.arpHold ? 'bg-synth-neon' : 'bg-neutral-800']"
-              >
-                <div :class="['absolute top-[1px] bottom-[1px] w-3.5 bg-white rounded-full transition-transform', arpStore.arpHold ? 'translate-x-[18px]' : 'translate-x-[1px]']" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Mode select -->
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[8px] font-mono text-neutral-500 uppercase">Mode</label>
-            <select v-model="arpStore.arpMode" class="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-[10px] text-neutral-300 focus:border-synth-neon outline-none font-mono">
-              <option>up</option>
-              <option>down</option>
-              <option>up-down</option>
-              <option>random</option>
+        <!-- Mode & Subdivision Grid -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="flex flex-col gap-2">
+            <span class="text-[8px] font-mono text-neutral-500 uppercase">Mode</span>
+            <select v-model="arpStore.arpMode" class="bg-black border border-neutral-800 text-[10px] text-white rounded-lg px-2 py-2 outline-none focus:border-synth-neon">
+              <option value="up">Up</option>
+              <option value="down">Down</option>
+              <option value="up-down">Up/Down</option>
+              <option value="random">Random</option>
             </select>
           </div>
-
-          <!-- BPM slider -->
-          <div class="flex flex-col gap-1.5">
-            <div class="flex justify-between items-center">
-              <label class="text-[8px] font-mono text-neutral-500 uppercase">BPM</label>
-              <span class="text-[10px] font-mono text-synth-neon font-bold">{{ arpStore.arpBpm }}</span>
-            </div>
-            <input v-model.number="arpStore.arpBpm" type="range" min="20" max="300" class="w-full" />
-          </div>
-
-          <!-- Subdivision -->
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[8px] font-mono text-neutral-500 uppercase">Subdivision</label>
-            <select v-model="arpStore.arpSubdivision" class="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-[10px] text-neutral-300 focus:border-synth-neon outline-none font-mono">
-              <option v-for="sub in subdivisions" :key="sub">{{ sub }}</option>
+          <div class="flex flex-col gap-2">
+            <span class="text-[8px] font-mono text-neutral-500 uppercase">Rate</span>
+            <select v-model="arpStore.arpSubdivision" class="bg-black border border-neutral-800 text-[10px] text-white rounded-lg px-2 py-2 outline-none focus:border-synth-neon">
+              <option value="1/4">1/4</option>
+              <option value="1/8">1/8</option>
+              <option value="1/8t">1/8t</option>
+              <option value="1/16">1/16</option>
+              <option value="1/16t">1/16t</option>
+              <option value="1/32">1/32</option>
             </select>
           </div>
         </div>
+
+        <!-- Hold Switch -->
+        <div class="flex items-center justify-between p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
+          <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Hold</span>
+          <button 
+            @click="arpStore.arpHold = !arpStore.arpHold"
+            :class="['px-4 py-1 rounded-lg text-[10px] font-black transition-all border', arpStore.arpHold ? 'bg-synth-neon text-black border-synth-neon' : 'bg-black text-neutral-500 border-neutral-800']"
+          >
+            {{ arpStore.arpHold ? 'ON' : 'OFF' }}
+          </button>
+        </div>
+
+        <!-- BPM Control -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <span class="text-[8px] font-mono text-neutral-500 uppercase">Arp BPM</span>
+            <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpBpm }}</span>
+          </div>
+          <input 
+            v-model.number="arpStore.arpBpm" 
+            type="range" min="40" max="250" 
+            class="h-1 accent-synth-neon bg-neutral-800 rounded-full appearance-none cursor-pointer"
+          />
+        </div>
+
       </div>
     </div>
   </Transition>

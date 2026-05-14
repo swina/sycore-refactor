@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
   LayoutGrid, Layers, Heart, ListMusic, User, BookOpen, Workflow,
@@ -12,6 +12,7 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { useLfoStore } from '@/stores/useLfoStore'
 
 // Icon Map for dynamic resolution
 const iconMap = {
@@ -24,7 +25,6 @@ import { useMidiInit } from '@/composables/useMidiInit'
 import { useMidiCCListener } from '@/composables/useMidiCCListener'
 import { useMidiCapture } from '@/composables/useMidiCapture'
 import { useControllerManager } from '@/composables/useControllerManager'
-import { S1_CC_MAP } from '@/constants/s1-config'
 
 // Components
 import GlobalTooltip from '@/components/GlobalTooltip.vue'
@@ -40,6 +40,7 @@ import AudioVisualizer from '@/components/AudioVisualizer.vue'
 import StepSequencer from '@/components/StepSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
+import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
 import BackingTrackPlayer from '@/components/BackingTrackPlayer.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import Welcome from '@/components/Welcome.vue'
@@ -56,7 +57,6 @@ import MidiMatrix from '@/components/MidiMatrix.vue'
 import AboutModal from '@/components/AboutModal.vue'
 import VelocityMappingDialog from '@/components/VelocityMappingDialog.vue'
 import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
-import { useLfoStore } from '@/stores/useLfoStore'
 
 
 // Stores
@@ -80,9 +80,6 @@ const { captureNotesRef, captureNoteCount } = useMidiCapture()
 const globalTranspose     = ref(0)
 const sessionBpmOverride  = ref(false)
 
-const currentYear = new Date().getFullYear()
-const copyrightYear = currentYear > 2026 ? `2026–${currentYear}` : '2026'
-
 const isAdmin = computed(() => authStore.isAdmin)
 
 // Map button IDs to their state properties, icons, and actions
@@ -96,12 +93,10 @@ const toolbarButtonMap = {
   midilearn:   { state: 'isMidiMappingOpen',icon: Workflow,      label: 'MIDI Mapping (Learn CC)' },
   manual:      { state: 'isManualOpen',     icon: BookOpen,      label: 'User Manual' },
   help:        { state: 'isHelpOpen',       icon: HelpCircle,    label: 'Help & Info' },
-  // routing:     { state: 'isMidiPortOpen',   icon: Cable,         label: 'MIDI Routing' },
   liveset:     { state: 'isLiveSetOpen',    icon: Zap,           label: 'Live Set' },
   midiactions: { state: 'isMidiActionsOpen',icon: Gamepad2,      label: 'MIDI Actions' },
   panic:       { state: null,               icon: AlertTriangle,  label: 'PANIC: All Notes Off', action: 'panic' },
   support:     { state: 'isSupportOpen',    icon: Mail,          label: 'Support Request' },
-  // midiports:   { state: 'isMidiPortOpen',   icon: Zap,           label: 'MIDI Ports' },
   capture:       { state: 'isCaptureOpen',      icon: BarChart3, label: 'MIDI Capture', badge: 'capture' },
   'audio-capture': { state: 'isAudioCaptureOpen',  icon: Mic,      label: 'Audio Capture'    },
   visualizer:      { state: 'isVisualizerOpen',    icon: Activity,  label: 'Audio Visualizer' },
@@ -109,37 +104,12 @@ const toolbarButtonMap = {
   arp:           { state: 'isArpOpen',          icon: BarChart3, label: 'Arpeggiator' },
   session:       { state: 'isSessionOpen',      icon: Save,       label: 'Session' },
   looper:        { state: 'isLooperOpen',       icon: RotateCw,   label: 'Looper' },
-  midi_matrix:   { state: 'isMidiMatrixOpen', icon: Cpu,        label: 'MIDI Matrix' },
-}
-
-function getToolbarIcon(buttonId) {
-  const config = toolbarButtonMap[buttonId]
-  return config?.icon || Settings
-}
-
-function getToolbarIconFromButton(button) {
-  if (button.icon && iconMap[button.icon]) {
-    return iconMap[button.icon]
-  }
-  return getToolbarIcon(button.id)
-}
-
-function getIconSize() {
-  const size = configStore.toolbarIconSize || 4
-  return `w-${size} h-${size}`
-}
-
-function getIsButtonActive(buttonId) {
-  const config = toolbarButtonMap[buttonId]
-  if (!config || !config.state) return false
-  if (buttonId === 'favorites') return uiStore.isHistoryOpen && presetStore.historyCategoryFilter === 'favorites'
-  if (buttonId === 'arp') return uiStore[config.state] || arpStore.arpEnabled
-  return uiStore[config.state]
+  midi_matrix:   { state: 'isMidiMatrixOpen',   icon: Cpu,        label: 'MIDI Matrix' },
+  'midi-performance': { state: 'isMidiPerformanceOpen', icon: Network, label: 'MIDI Performance Grid' },
 }
 
 function handleToolbarButtonClick(button) {
   const config = toolbarButtonMap[button.id]
-  console.log ( config )
   presetStore.isHistoryOpen = false
   if (!config) return
 
@@ -148,28 +118,8 @@ function handleToolbarButtonClick(button) {
     return
   }
 
-  // Favorites: open history panel filtered to favorites
-  if (button.id === 'favorites') {
-    const alreadyActive = uiStore.isHistoryOpen && presetStore.historyCategoryFilter === 'favorites'
-    if (alreadyActive) {
-      uiStore.isHistoryOpen = false
-    } else {
-      presetStore.historyCategoryFilter = 'favorites'
-      uiStore.isHistoryOpen = true
-    }
-    return
-  }
-
   // Toggle the panel state
   uiStore[config.state] = !uiStore[config.state]
-  if ( button.id !== 'history' && presetStore.historyCategoryFilter === 'all' ) {
-    console.log ( ">>>>>", button.id, presetStore.historyCategoryFilter, uiStore[config.state] )
-    presetStore.isHistoryOpen = false
-  }
-  // Close history when opening sound types
-  if (button.id === 'types' && uiStore[config.state]) {
-    uiStore.isHistoryOpen = false
-  }
 }
 
 function closeAllPanels() {
@@ -184,31 +134,21 @@ function handleStepSequencerTranspose(val) {
   globalTranspose.value = val
 }
 
-function onSoundTypeSelect(category) {
-  uiStore.isAICategoryOpen = category
-}
-
 onMounted(() => {
   presetStore.init()
   lfoStore.init()
-  // midiStore.init() // Managed by useMidiInit
   
-  // auto-refresh roles in config if admin - only if NOT already initialized
   if (authStore.isAdmin && !configStore.appVersion) {
     configStore.init()
   }
 
-  // Show auth modal only if user is not authenticated after loading completes
   const checkAuth = () => {
     if (!authStore.loadingAuth && !authStore.user) {
       uiStore.isAuthModalOpen = true
     }
   }
 
-  // Check immediately in case auth is already loaded
   checkAuth()
-
-  // Also watch for auth state changes
   const stopWatcher = watch(() => authStore.loadingAuth, checkAuth)
 
   const handleBpmUpdate = (e) => {
@@ -218,7 +158,6 @@ onMounted(() => {
   }
   window.addEventListener('bpm-update', handleBpmUpdate)
 
-  // Sync Global BPM to MIDI Clock
   watch(() => arpStore.arpBpm, (bpm) => {
     midiStore.currentBpm = bpm
     midiStore.setBpm(bpm)
@@ -232,7 +171,6 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
 
   return () => {
-    unsubAuth?.()
     stopWatcher?.()
     window.removeEventListener('keydown', handleKeyDown)
     window.removeEventListener('bpm-update', handleBpmUpdate)
@@ -264,13 +202,6 @@ onMounted(() => {
       </div>
     </Transition>
 
-    <!-- MAIN HEADER SECTION - COMMENTED FOR MINIMALIST TEST -->
-    <!-- 
-    <div class="flex items-center justify-between h-18 px-4 border-b border-neutral-900 bg-black/50 backdrop-blur-xl z-350">
-      ... (toolbar and header logic) ...
-    </div> 
-    -->
-
     <!-- Main Content Area -->
     <div class="flex-1 overflow-hidden">
       <Welcome v-if="!authStore.user || (!presetStore.lastPreset && !presetStore.showResults)" />
@@ -281,8 +212,6 @@ onMounted(() => {
     <Teleport to="body">
       <!-- Auth Modal -->
       <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />
-
-      <!-- MIDI Port Config removed -->
 
       <!-- Sound Types -->
       <Transition name="panel">
@@ -300,10 +229,6 @@ onMounted(() => {
         />
       </Transition>
 
-
-
-      <!-- Legacy MIDI Hub removed -->
-
       <!-- MIDI MATRIX -->
       <Transition name="panel">
         <MidiMatrix
@@ -312,6 +237,12 @@ onMounted(() => {
         />
       </Transition>
 
+      <!-- MIDI PERFORMANCE GRID -->
+      <MidiPerformancePanel
+        v-if="uiStore.isMidiPerformanceOpen"
+        @close="uiStore.isMidiPerformanceOpen = false"
+      />
+
       <!-- MIDI Mapping -->
       <Transition name="panel">
         <MidiMappingPanel
@@ -319,10 +250,11 @@ onMounted(() => {
           @close="uiStore.isMidiMappingOpen = false"
         />
       </Transition>
+      
       <!-- MIDI APP ACTION MAPPING -->
-       <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" /> 
+      <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" /> 
 
-      <!-- Arpeggiator — always mounted so the engine runs even when the panel is closed -->
+      <!-- Arpeggiator -->
       <ArpeggiatorPanel
         :isOpen="uiStore.isArpOpen"
         :channel="midiStore.midiChannel - 1"
@@ -427,8 +359,7 @@ onMounted(() => {
         <AudioLooper v-if="uiStore.isLooperOpen" @close="uiStore.isLooperOpen = false" />
       </Transition>
 
-
-      <!-- MIDI Logger (floating FAB — always mounted, self-managed) -->
+      <!-- MIDI Logger -->
       <MidiLoggerPanel />
 
       <!-- Global Tooltip -->
@@ -464,7 +395,6 @@ onMounted(() => {
           </Tooltip>
         </div>
 
-
         <!-- Right: controls -->
         <div class="flex-1 flex items-center justify-end gap-3 md:gap-5">
           <!-- Quick Channel Selector -->
@@ -472,7 +402,6 @@ onMounted(() => {
 
           <!-- Global MIDI Transport -->
           <div v-if="authStore.user" class="flex items-center gap-2">
-
             <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 border border-neutral-800/60 rounded-full group">
               <button 
                 @click="midiStore.toggleGlobalTransport()"
@@ -482,7 +411,6 @@ onMounted(() => {
                     ? 'text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500 hover:text-white' 
                     : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500 hover:text-black'
                 ]"
-                :title="midiStore.isTransportPlaying ? 'Send MIDI Stop' : 'Send MIDI Start'"
               >
                 <div class="flex items-center gap-1.5">
                   <span class="opacity-50 text-[7px] border border-current px-1 rounded-sm tracking-tighter">MIDI</span>
@@ -493,13 +421,11 @@ onMounted(() => {
             </div>
           </div>
 
-
           <!-- MIDI Panic Button -->
           <button 
             v-if="authStore.user"
             @click="midiStore.panic()"
             class="w-8 h-8 flex items-center justify-center rounded-full bg-red-950/30 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-90"
-            title="MIDI PANIC: All Notes Off"
           >
             <AlertTriangle class="w-3.5 h-3.5" />
           </button>
@@ -515,7 +441,6 @@ onMounted(() => {
             />
           </div>
         </div>
-
       </div>
     </footer>
     <SideBar />
@@ -524,20 +449,11 @@ onMounted(() => {
   </div>
 </template>
 
-
 <style scoped>
 .glow-neon {
   text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
   box-shadow: 0 0 20px rgba(0, 255, 204, 0.2), inset 0 0 20px rgba(0, 255, 204, 0.1);
 }
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.5s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.5s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

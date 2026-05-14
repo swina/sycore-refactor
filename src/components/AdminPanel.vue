@@ -86,6 +86,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'audio-capture',  label: 'Audio Capture',    icon: 'Mic'          },
   { id: 'visualizer',     label: 'Audio Visualizer', icon: 'Activity'     },
   { id: 'capture',        label: 'MIDI Capture',     icon: 'BarChart3'    },
+  { id: 'midi-performance', label: 'MIDI Performance', icon: 'Network'      },
   { id: 'routing',        label: 'MIDI Routing',     icon: 'Cable'        },
   { id: 'midilearn',      label: 'MIDI Mapping',     icon: 'Workflow'     },
   { id: 'midiactions',    label: 'MIDI Actions',     icon: 'Gamepad2'     },
@@ -99,7 +100,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'portal',         label: 'Portal',           icon: 'BookOpen'     },
   { id: 'panic',          label: 'PANIC',            icon: 'AlertTriangle'},
   { id: 'midi_matrix',    label: 'MIDI Matrix',      icon: 'Network'      },
-  { id: 'midilogger',     label: 'MIDI Logger',      icon: 'GotCompareArrows'    },
+  { id: 'midilogger',     label: 'MIDI Logger',      icon: 'GitCompareArrows'    },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

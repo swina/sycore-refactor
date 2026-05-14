@@ -37,8 +37,9 @@ export const useUiStore = defineStore('ui', () => {
   const isSideMenuOpen     = ref(false)
   const isSessionOpen      = ref(false)
   const isLooperOpen       = ref(false)
-  const isMidiMatrixOpen = ref(false)
-  const isAboutOpen      = ref(false)
+  const isMidiMatrixOpen   = ref(false)
+  const isAboutOpen        = ref(false)
+  const isMidiPerformanceOpen = ref(false)
 
   // UI state
   const isPanelCollapsed   = ref(false)
@@ -90,8 +91,9 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen.value     = false
     isSideMenuOpen.value     = false
     isSessionOpen.value      = false
-    isMidiMatrixOpen.value = false
-    isAboutOpen.value      = false
+    isMidiMatrixOpen.value   = false
+    isAboutOpen.value        = false
+    isMidiPerformanceOpen.value = false
   }
 
   function toggleMainMenu() {
@@ -118,6 +120,7 @@ export const useUiStore = defineStore('ui', () => {
     isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
+    isMidiPerformanceOpen,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen, 
     isPlayingPreview, isPlayingBacking, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig,

@@ -105,8 +105,10 @@ export const usePresetStore = defineStore('preset', () => {
           const synced = presets.find(p => p.id === lastPreset.value.id)
           if (synced) {
             lastPreset.value = synced
-            // If the synced preset has a category, ensure our filter matches if it's 'all'
-            // or if the user expects to stay in that category's flow
+            // Ensure the filter includes this preset so nav buttons are active
+            if (historyCategoryFilter.value !== 'all' && historyCategoryFilter.value !== synced.category) {
+              historyCategoryFilter.value = 'all'
+            }
           }
         }
         initialLoadDone = true

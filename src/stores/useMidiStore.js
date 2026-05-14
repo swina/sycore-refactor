@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { FIELD_TO_CC } from '@/constants/s1-config'
 import { useMappingStore } from './useMappingStore'
 
@@ -20,7 +20,7 @@ export const useMidiStore = defineStore('midi', () => {
   const isTransportPlaying = ref(false)
   const currentBpm = ref(120)
 
-  // Advanced Routing Config
+  // Advanced Routing Config (Per-Device Registration)
   const defaultRegistration = (name = '') => ({
     name,
     inEnabled: true,
@@ -44,41 +44,7 @@ export const useMidiStore = defineStore('midi', () => {
   try {
     const saved = localStorage.getItem('SYCORE_ADVANCED_MIDI_ROUTING')
     if (saved) {
-      const parsed = JSON.parse(saved)
-      // Migration from old inputs/outputs structure to registrations
-      if (parsed.outputs || parsed.inputs) {
-        const regs = {}
-        const allNames = new Set([...Object.keys(parsed.outputs || {}), ...Object.keys(parsed.inputs || {})])
-        allNames.forEach(name => {
-          // Skip numeric ID keys AND generic "input-X"/"output-X" IDs from old bug/browser defaults
-          if (/^\d+$/.test(name) || /^(input|output)-\d+$/i.test(name)) return
-          
-          const outCfg = parsed.outputs?.[name] || {}
-          const inCfg = parsed.inputs?.[name] || {}
-          
-          // Only migrate if it was actually enabled or has custom settings
-          const hasSettings = outCfg.enabled || inCfg.enabled || outCfg.channel !== -1 || inCfg.channel !== -1
-          if (!hasSettings) return
-
-          regs[name] = {
-            ...defaultRegistration(name),
-            inEnabled: inCfg.enabled || false,
-            inChannel: inCfg.channel || -1,
-            outEnabled: outCfg.enabled || false,
-            outChannel: outCfg.channel || -1,
-            clock: outCfg.clock !== undefined ? outCfg.clock : true,
-            transport: outCfg.transport !== undefined ? outCfg.transport : true,
-            notes: outCfg.notes !== undefined ? outCfg.notes : true,
-            cc: outCfg.cc !== undefined ? outCfg.cc : true,
-            pc: outCfg.pc !== undefined ? outCfg.pc : true,
-            isMulti: false
-          }
-        })
-        parsed.registrations = regs
-        delete parsed.outputs
-        delete parsed.inputs
-      }
-      initialConfig = parsed
+      initialConfig = JSON.parse(saved)
     }
   } catch (e) {
     console.error('[MIDI Store] Failed to parse routing config', e)
@@ -86,7 +52,16 @@ export const useMidiStore = defineStore('midi', () => {
   
   const routingConfig = ref(initialConfig)
 
-  // Single source of truth for persistence and service sync
+  // Source-based Routing Matrix (Performance Grid)
+  const broadcastMode      = ref(midiService.getBroadcastMode())
+  const routingMatrix      = ref({
+    [MidiSource.SEQUENCER]: midiService.getRouting(MidiSource.SEQUENCER),
+    [MidiSource.KEYBOARD]: midiService.getRouting(MidiSource.KEYBOARD),
+    [MidiSource.ARP]: midiService.getRouting(MidiSource.ARP),
+    [MidiSource.UI]: midiService.getRouting(MidiSource.UI)
+  })
+
+  // Watchers for service sync and persistence
   watch(routingConfig, (newVal) => {
     if (!newVal || !newVal.registrations) return
     localStorage.setItem('SYCORE_ADVANCED_MIDI_ROUTING', JSON.stringify(newVal))
@@ -97,9 +72,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.setGlobalChannel(newVal - 1)
   }, { immediate: true })
 
-  const isDeviceConnected = computed(() =>
-    outputs.value.length > 0
-  )
+  const isDeviceConnected = computed(() => outputs.value.length > 0)
 
   function addRegistration(name) {
     if (!name || routingConfig.value.registrations[name]) return
@@ -133,23 +106,22 @@ export const useMidiStore = defineStore('midi', () => {
   function refreshDevices() {
     outputs.value = midiService.getOutputs()
     inputs.value = midiService.getInputs()
+    
+    // Sync Matrix State from service (case devices were refreshed)
+    broadcastMode.value = midiService.getBroadcastMode()
+    Object.keys(routingMatrix.value).forEach(source => {
+      routingMatrix.value[source] = midiService.getRouting(source)
+    })
   }
 
   async function init() {
-    if (window.SY_LOG) window.SY_LOG('[MidiStore] Requesting MIDI Access from service...')
-    console.log('[MidiStore] Initializing...')
     const ok = await midiService.init()
-    if (window.SY_LOG) window.SY_LOG(`[MidiStore] MidiService.init result: ${ok}`)
     midiReady.value = ok
     if (!ok) return midiReady.value
 
-    console.log('[MidiStore] Refreshing devices...')
     refreshDevices()
 
-    midiService.addStateChangeListener(() => {
-      console.log('[MidiStore] State change detected, refreshing...')
-      refreshDevices()
-    })
+    midiService.addStateChangeListener(() => refreshDevices())
 
     // Listen for incoming Note On for Velocity Modulation
     midiService.addNoteListener((type, note, velocity, chan) => {
@@ -160,10 +132,8 @@ export const useMidiStore = defineStore('midi', () => {
     })
     
     if (sendClock.value) {
-      console.log('[MidiStore] Starting clock...')
       startClock()
     }
-    if (window.SY_LOG) window.SY_LOG('[MidiStore] Initialization complete')
     return midiReady.value
   }
 
@@ -176,12 +146,6 @@ export const useMidiStore = defineStore('midi', () => {
   function setMidiInputChannel(ch) {
     midiInputChannel.value = ch
     localStorage.setItem(LS_IN_CHANNEL, String(ch))
-  }
-
-  function saveRoutingConfig() {
-    // No manual saving needed, the deep watcher on routingConfig handles it
-    // But we trigger a reactive update just in case
-    routingConfig.value = { ...routingConfig.value }
   }
 
   function setSendClock(enabled) {
@@ -205,71 +169,95 @@ export const useMidiStore = defineStore('midi', () => {
     else sendStart()
   }
 
-  function sendProgramChange(pcValue) {
+  function sendProgramChange(pcValue, source = MidiSource.UI) {
     const programNumber = Math.max(0, Math.min(127, pcValue - 1))
     // S-1 receives Program Change on channel 16 (index 15) regardless of the active channel.
-    const s1ProgramChangeChannel = 15;
-    midiService.sendProgramChange(programNumber, s1ProgramChangeChannel)
+    // However, with source-based routing, we might want to respect the source.
+    midiService.sendProgramChange(programNumber, 15, source)
   }
 
-  function sendCC(cc, value) {
-    midiService.sendCC(cc, value, midiChannel.value - 1)
+  function setRouting(source, deviceIds) {
+    routingMatrix.value[source] = deviceIds
+    midiService.setRouting(source, deviceIds)
   }
 
-  function sendNRPN(param, value) {
-    midiService.sendNRPN(param, value, midiChannel.value - 1)
+  function toggleRouting(source, outputId) {
+    midiService.toggleRouting(source, outputId)
+    routingMatrix.value[source] = midiService.getRouting(source)
   }
 
-  function sendAllCCs(ccMap, nrpnCCs) {
-    midiService.sendAllCCs(ccMap, midiChannel.value - 1, nrpnCCs)
+  function toggleBroadcastMode() {
+    midiService.toggleBroadcastMode()
+    broadcastMode.value = midiService.getBroadcastMode()
   }
 
-  function sendNoteOn(note, velocity = 100, skipDeviceId = null) {
-    midiService.sendNoteOn(note, velocity, midiChannel.value - 1, skipDeviceId)
+  function sendCC(cc, value, channel = null, source = MidiSource.UI) {
+    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
+    midiService.sendCC(cc, value, targetChannel, source)
+  }
+
+  function sendNRPN(param, value, channel = null, source = MidiSource.UI) {
+    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
+    midiService.sendNRPN(param, value, targetChannel, source)
+  }
+
+  function sendAllCCs(ccMap, nrpnCCs, source = MidiSource.UI) {
+    midiService.sendAllCCs(ccMap, midiChannel.value - 1, nrpnCCs, source)
+  }
+
+  function sendNoteOn(note, velocity = 100, channel = null, source = MidiSource.UI, skipDeviceId = null) {
+    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
+    midiService.sendNoteOn(note, velocity, targetChannel, source, skipDeviceId)
     // Also trigger velocity modulation for internal notes
     const mappingStore = useMappingStore()
-    mappingStore.handleVelocity(velocity, midiChannel.value - 1)
+    mappingStore.handleVelocity(velocity, targetChannel)
   }
 
-  function sendNoteOff(note, velocity = 0, skipDeviceId = null) {
-    midiService.sendNoteOff(note, velocity, midiChannel.value - 1, skipDeviceId)
+  function sendNoteOff(note, velocity = 0, channel = null, source = MidiSource.UI, skipDeviceId = null) {
+    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
+    midiService.sendNoteOff(note, velocity, targetChannel, source, skipDeviceId)
   }
 
-  function sendPitchBend(value, skipDeviceId = null) {
-    midiService.sendPitchBend(value, midiChannel.value - 1, skipDeviceId)
+  function sendPitchBend(value, channel = null, source = MidiSource.UI, skipDeviceId = null) {
+    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
+    midiService.sendPitchBend(value, targetChannel, source, skipDeviceId)
   }
 
   function allNotesOff() {
     midiService.allNotesOff(midiChannel.value - 1)
   }
 
-  function sendControlValue(field, value) {
+  function sendControlValue(field, value, source = MidiSource.UI) {
     const cc = FIELD_TO_CC[field]
     if (cc !== undefined) {
-      sendCC(cc, value)
+      sendCC(cc, value, source)
     }
   }
 
   function startClock() { if (sendClock.value) midiService.startClock() }
   function stopClock() { midiService.stopClock() }
   function setBpm(bpm) { midiService.setBpm(bpm) }
+  
   function sendStart() { 
     isTransportPlaying.value = true
     midiService.sendStart() 
   }
+  
   function sendStop() { 
     isTransportPlaying.value = false
     midiService.sendStop() 
-    midiService.panic() // Kill all notes on stop as requested
+    midiService.panic() 
   }
+  
   function panic() { midiService.panic() }
 
   return {
     midiReady, outputs, inputs,
     midiChannel, midiInputChannel,
-    isDeviceConnected,
+    isDeviceConnected, broadcastMode, routingMatrix,
     init, refreshDevices,
     setMidiChannel, setMidiInputChannel,
+    setRouting, toggleRouting, toggleBroadcastMode,
     sendProgramChange, sendCC, sendNRPN, sendAllCCs, sendControlValue,
     sendNoteOn, sendNoteOff, sendPitchBend,
     allNotesOff, panic, startClock, stopClock, setBpm, sendStart, sendStop,
@@ -281,6 +269,7 @@ export const useMidiStore = defineStore('midi', () => {
     addRegistration,
     removeRegistration,
     updateRegistration,
-    clearRegistrations
+    clearRegistrations,
+    MidiSource
   }
 })
