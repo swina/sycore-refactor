@@ -2,6 +2,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useArpStore }    from '@/stores/useArpStore'
 import { useUiStore }     from '@/stores/useUiStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
+import { useMidiStore }    from '@/stores/useMidiStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 
 /**
@@ -14,6 +15,7 @@ export function useAppActions() {
   const arpStore    = useArpStore()
   const uiStore     = useUiStore()
   const livePadStore = useLivePadStore()
+  const midiStore   = useMidiStore()
 
   function dispatchAction(action, ccVal = 0) {
     switch (action) {
@@ -63,9 +65,27 @@ export function useAppActions() {
       case 'open_sound_types':     uiStore.isTypesOpen         = true;                        break
       case 'open_sound_history':   uiStore.isHistoryOpen       = true;                        break
       case 'open_midi_matrix':    uiStore.isMidiMatrixOpen  = !uiStore.isMidiMatrixOpen; break
+      case 'toggle_midi_performance': uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
       case 'midi_panic':
         midiStore.panic(); break
+
+      case 'global_start_stop':
+        if (ccVal > 0) {
+          if (!midiStore.isTransportPlaying) midiStore.sendStart()
+        } else {
+          if (midiStore.isTransportPlaying) midiStore.sendStop()
+        }
+        break
+
+      case 'smart_latch_cc':
+        // Turn latch on if CC >= 64, otherwise off
+        midiStore.toggleSmartLatch(ccVal >= 64)
+        break
+
+      case 'pass_thru':
+        // Do nothing in the app, it's just for routing and LED feedback
+        break
 
       case 'toggle_track_player':
         window.dispatchEvent(new CustomEvent('toggle-backing-track')); break

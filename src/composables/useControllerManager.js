@@ -50,6 +50,7 @@ export function useControllerManager() {
           case 'toggle_liveset':    return uiStore.isLiveSetOpen
           case 'toggle_looper':     return uiStore.isLooperOpen
           case 'open_midi_matrix':  return uiStore.isMidiMatrixOpen
+          case 'toggle_midi_performance': return uiStore.isMidiPerformanceOpen
           case 'toggle_midi_capture': return uiStore.isCaptureOpen
           case 'toggle_panel':      return !uiStore.isPanelCollapsed
           case 'toggle_types':      return uiStore.isTypesOpen
@@ -162,18 +163,20 @@ export function useControllerManager() {
       lastTriggerTimes.set(action, now)
 
       log(`User Override: Executing Custom Action ${action}`)
-      dispatchAction(action, data[2])
+      if (action !== 'pass_thru') {
+        dispatchAction(action, data[2])
+      }
       updateFeedback()
-      return true
+      return matchedMapping.consume !== false
     }
 
     // Special case: if a mapping exists for this note but we are at val 0 (release),
     // we MUST consume it to prevent fallthrough to native profiles or synth.
     if (note !== null && val === 0) {
-       const hasMapping = mappings.some(m => m.device === deviceName && m.note === note)
-       if (hasMapping) {
+       const mapped = mappings.find(m => m.device === deviceName && m.note === note)
+       if (mapped) {
          updateFeedback()
-         return true
+         return mapped.consume !== false
        }
     }
 

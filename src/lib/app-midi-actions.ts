@@ -19,7 +19,10 @@ export type AppAction =
   | 'toggle_visualizer'
   | 'toggle_midi_capture'
   | 'toggle_track_player'
+  | 'global_start_stop'
   | 'playlist_play_stop'
+  | 'smart_latch_cc'
+  | 'pass_thru'
   | 'playlist_next'
   | 'liveset_up'
   | 'liveset_down'
@@ -89,6 +92,9 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   toggle_visualizer:   'Toggle Visualizer',
   toggle_midi_capture: 'Toggle MIDI Capture',
   toggle_track_player:  'Track Player ON/OFF',
+  global_start_stop:    'MIDI START/STOP',
+  smart_latch_cc:       'Smart Latch (Hold Notes)',
+  pass_thru:            'PASS THRU (Routing/Feedback)',
   playlist_play_stop:   'Playlist Play / Stop',
   playlist_next:        'Playlist Next Track (Crossfade)',
   liveset_up:           'Live Set Prev Sound ↑',
@@ -151,5 +157,7 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'seq_key_cc',
   'seq_scale_cc',
   'seq_style_cc',
-  'seq_transpose_cc'
+  'seq_transpose_cc',
+  'global_start_stop',
+  'smart_latch_cc'
 ]);

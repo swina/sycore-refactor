@@ -20,6 +20,11 @@ export const useMidiStore = defineStore('midi', () => {
   const isTransportPlaying = ref(false)
   const currentBpm = ref(120)
 
+  // Smart Latch State
+  const isSmartLatchActive = ref(false)
+  const smartLatchMaxNotes = ref(parseInt(localStorage.getItem('SYCORE_SMARTLATCH_MAX') || '4'))
+  const smartLatchReplaceMode = ref(localStorage.getItem('SYCORE_SMARTLATCH_REPLACE') !== 'false')
+
   // Advanced Routing Config (Per-Device Registration)
   const defaultRegistration = (name = '') => ({
     name,
@@ -32,7 +37,8 @@ export const useMidiStore = defineStore('midi', () => {
     notes: true,
     cc: true,
     pc: true,
-    isMulti: false
+    isMulti: false,
+    smartLatch: false
   })
 
   let initialConfig = { 
@@ -54,12 +60,24 @@ export const useMidiStore = defineStore('midi', () => {
 
   // Source-based Routing Matrix (Performance Grid)
   const broadcastMode      = ref(midiService.getBroadcastMode())
-  const routingMatrix      = ref({
+  const initialMatrix = {
     [MidiSource.SEQUENCER]: midiService.getRouting(MidiSource.SEQUENCER),
     [MidiSource.KEYBOARD]: midiService.getRouting(MidiSource.KEYBOARD),
     [MidiSource.ARP]: midiService.getRouting(MidiSource.ARP),
-    [MidiSource.UI]: midiService.getRouting(MidiSource.UI)
-  })
+    [MidiSource.UI]: midiService.getRouting(MidiSource.UI),
+    [MidiSource.TRANSPORT]: midiService.getRouting(MidiSource.TRANSPORT)
+  }
+  try {
+    const rawMatrix = localStorage.getItem('S1_MIDI_ROUTING')
+    if (rawMatrix) {
+      const data = JSON.parse(rawMatrix)
+      Object.keys(data).forEach(key => {
+        initialMatrix[key] = midiService.getRouting(key)
+      })
+    }
+  } catch (e) {}
+
+  const routingMatrix = ref(initialMatrix)
 
   // Watchers for service sync and persistence
   watch(routingConfig, (newVal) => {
@@ -71,6 +89,30 @@ export const useMidiStore = defineStore('midi', () => {
   watch(midiChannel, (newVal) => {
     midiService.setGlobalChannel(newVal - 1)
   }, { immediate: true })
+
+  // Smart Latch watchers
+  watch(isSmartLatchActive, (active) => {
+    midiService.setSmartLatchActive(active)
+  })
+
+  watch([smartLatchMaxNotes, smartLatchReplaceMode], ([maxNotes, replace]) => {
+    localStorage.setItem('SYCORE_SMARTLATCH_MAX', maxNotes.toString())
+    localStorage.setItem('SYCORE_SMARTLATCH_REPLACE', replace.toString())
+    midiService.setSmartLatchConfig(maxNotes, replace)
+  }, { immediate: true })
+
+  function toggleSmartLatch(active) {
+    if (typeof active === 'boolean') isSmartLatchActive.value = active
+    else isSmartLatchActive.value = !isSmartLatchActive.value
+  }
+
+  function toggleDeviceLatch(deviceName) {
+    const reg = routingConfig.value.registrations[deviceName]
+    if (reg) {
+      reg.smartLatch = !reg.smartLatch
+      saveRoutingConfig()
+    }
+  }
 
   const isDeviceConnected = computed(() => outputs.value.length > 0)
 
@@ -246,7 +288,6 @@ export const useMidiStore = defineStore('midi', () => {
   function sendStop() { 
     isTransportPlaying.value = false
     midiService.sendStop() 
-    midiService.panic() 
   }
   
   function panic() { midiService.panic() }
@@ -270,6 +311,11 @@ export const useMidiStore = defineStore('midi', () => {
     removeRegistration,
     updateRegistration,
     clearRegistrations,
+    isSmartLatchActive,
+    smartLatchMaxNotes,
+    smartLatchReplaceMode,
+    toggleSmartLatch,
+    toggleDeviceLatch,
     MidiSource
   }
 })

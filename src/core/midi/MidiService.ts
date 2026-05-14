@@ -26,7 +26,8 @@ export enum MidiSource {
   SEQUENCER = 'SEQUENCER',
   KEYBOARD = 'KEYBOARD',
   ARP = 'ARP',
-  UI = 'UI'
+  UI = 'UI',
+  TRANSPORT = 'TRANSPORT'
 }
 
 const MIDI_ROUTING_KEY = 'S1_MIDI_ROUTING'
@@ -46,7 +47,7 @@ export class MidiService {
   private broadcastMode: boolean = false;
 
   // Multi-Output Routing Matrix
-  private routingMatrix: Map<MidiSource, Set<string>> = new Map([
+  private routingMatrix: Map<string, Set<string>> = new Map([
     [MidiSource.SEQUENCER, new Set()],
     [MidiSource.KEYBOARD, new Set()],
     [MidiSource.ARP, new Set()],
@@ -61,6 +62,12 @@ export class MidiService {
   private onTransportListeners: ((type: 'start' | 'stop' | 'clock') => void)[] = [];
   private onRawListeners: ((event: MIDIMessageEvent) => void)[] = [];
   private ingressFilter: ((event: MIDIMessageEvent) => boolean) | null = null;
+
+  // Smart Latch
+  public isSmartLatchActive = false;
+  public smartLatchMaxNotes = 4;
+  public smartLatchReplace = true;
+  private latchedNotesByOutput = new Map<string, { inputId: string, channel: number, note: number, velocity: number }[]>();
 
   private clockInterval: number | null = null;
   private currentBpm: number = 120;
@@ -242,6 +249,56 @@ export class MidiService {
     this.ingressFilter = fn;
   }
 
+  // --- Smart Latch ---
+  public setSmartLatchActive(active: boolean) {
+    this.isSmartLatchActive = active;
+    if (!active) this.clearLatchedNotes();
+  }
+
+  public setSmartLatchConfig(maxNotes: number, replace: boolean) {
+    this.smartLatchMaxNotes = maxNotes;
+    this.smartLatchReplace = replace;
+    for (const [outId, notes] of this.latchedNotesByOutput.entries()) {
+      const outDevice = this.midiAccess?.outputs.get(outId);
+      const outConfig = outDevice ? this.routingConfig?.registrations[outDevice.name] : null;
+      while (notes.length > this.smartLatchMaxNotes) {
+        const oldest = notes.shift();
+        if (oldest && outDevice && outConfig) {
+          this.sendDirectNoteOff(outDevice, oldest, outConfig, Date.now());
+        }
+      }
+    }
+  }
+
+  private clearLatchedNotes() {
+    const now = Date.now();
+    for (const [outId, notes] of this.latchedNotesByOutput.entries()) {
+      const outDevice = this.midiAccess?.outputs.get(outId);
+      if (outDevice) {
+        const outConfig = this.routingConfig?.registrations[outDevice.name];
+        if (outConfig) {
+          notes.forEach(n => this.sendDirectNoteOff(outDevice, n, outConfig, now));
+        }
+      }
+    }
+    this.latchedNotesByOutput.clear();
+  }
+
+  private sendDirectNoteOff(outDevice: any, n: { inputId: string, channel: number, note: number }, outConfig: any, now: number) {
+    let targetCh = -1;
+    if (outConfig.isMulti) targetCh = this.globalChannel;
+    else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
+    
+    const finalCh = targetCh !== -1 ? targetCh : n.channel;
+    const bytes = new Uint8Array([0x80 | (finalCh & 0x0f), n.note, 0]);
+    try {
+      this.lastSentMessages.set(outDevice.id, { data: bytes.join(','), time: now });
+      this.globalSentHashes.set(bytes.join(','), now);
+      outDevice.send(bytes);
+    } catch (e) {}
+  }
+  // -------------------
+
   // --- Multi-Routing Actions ---
 
   private saveRoutingMatrix() {
@@ -259,7 +316,7 @@ export class MidiService {
       const data = JSON.parse(raw)
       Object.entries(data).forEach(([source, targets]) => {
         if (Array.isArray(targets)) {
-          this.routingMatrix.set(source as MidiSource, new Set(targets as string[]))
+          this.routingMatrix.set(source, new Set(targets as string[]))
         }
       })
     } catch (e) {
@@ -267,12 +324,12 @@ export class MidiService {
     }
   }
 
-  public setRouting(source: MidiSource, outputIds: string[]) {
+  public setRouting(source: string, outputIds: string[]) {
     this.routingMatrix.set(source, new Set(outputIds))
     this.saveRoutingMatrix()
   }
 
-  public toggleRouting(source: MidiSource, outputId: string) {
+  public toggleRouting(source: string, outputId: string) {
     const targets = this.routingMatrix.get(source) || new Set()
     if (targets.has(outputId)) {
       targets.delete(outputId)
@@ -293,7 +350,7 @@ export class MidiService {
     if (raw) this.broadcastMode = JSON.parse(raw) === true
   }
 
-  getRouting(source: MidiSource): string[] {
+  getRouting(source: string): string[] {
     return Array.from(this.routingMatrix.get(source) || []);
   }
 
@@ -362,41 +419,7 @@ export class MidiService {
                          (!isNote && !isCC && !isSystem);
 
       if (passGlobal) {
-        const inputDevice = this.midiAccess?.inputs.get(inputId);
-        const inputName = inputDevice?.name || "";
-
-        this.midiAccess.outputs.forEach(outDevice => {
-          const outConfig = this.routingConfig?.registrations[outDevice.name];
-          const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
-
-          if (!outConfig || !outConfig.outEnabled || outDevice.id === inputId) return;
-          if (inConfig && !inConfig.inEnabled) return; 
-
-          const normIn = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
-          const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
-          if (normIn && normOut && normIn === normOut) return;
-
-          if (isNote && !outConfig.notes) return;
-          if (isCC && !outConfig.cc) return;
-          if (status === 0xF8 && !outConfig.clock) return;
-          if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
-
-          try {
-            this.lastSentMessages.set(outDevice.id, { data: msgHash, time: now });
-            let bytes = event.data;
-            if (status < 0xF0) {
-              let targetCh = -1;
-              if (outConfig.isMulti) targetCh = this.globalChannel;
-              else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
-              if (targetCh !== -1) {
-                const newStatus = (status & 0xf0) | (targetCh & 0x0f);
-                bytes = new Uint8Array([newStatus, event.data[1], event.data[2]]);
-              }
-            }
-            this.globalSentHashes.set(bytes.join(','), now);
-            outDevice.send(bytes);
-          } catch (e) {}
-        });
+        this.routeMessageToOutputs(event.data, inputId, now);
       }
     }
     
@@ -418,6 +441,95 @@ export class MidiService {
         this.onPitchBendListeners.forEach(l => l(val, channel, inputId));
       }
     }
+  }
+
+  private routeMessageToOutputs(data: Uint8Array, inputId: string, now: number) {
+    if (!this.midiAccess) return;
+    const status = data[0];
+    const msgHash = data.join(',');
+    const inputDevice = this.midiAccess.inputs.get(inputId);
+    const inputName = inputDevice?.name || "";
+    const targetsFromMatrix = inputName ? this.routingMatrix.get(inputName) : null;
+    const isNote = (status & 0xf0) === 0x90 || (status & 0xf0) === 0x80;
+    const isCC = (status & 0xf0) === 0xb0;
+
+    this.midiAccess.outputs.forEach(outDevice => {
+      const outConfig = this.routingConfig?.registrations[outDevice.name];
+      const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
+
+      if (!outConfig || !outConfig.outEnabled || outDevice.id === inputId) return;
+      if (inConfig && !inConfig.inEnabled) return; 
+
+      const normIn = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+      const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+      if (normIn && normOut && normIn === normOut) return;
+
+      const isRoutedByMatrix = targetsFromMatrix ? targetsFromMatrix.has(outDevice.id) : false;
+      if (!isRoutedByMatrix && !this.broadcastMode) return;
+
+      if (isNote && !outConfig.notes) return;
+      if (isCC && !outConfig.cc) return;
+      if (status === 0xF8 && !outConfig.clock) return;
+      if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
+
+      let bytes = data;
+      let shouldForward = true;
+
+      const isNoteOn = (status & 0xf0) === 0x90 && data[2] > 0;
+      const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
+
+      if (this.isSmartLatchActive && outConfig.smartLatch && (isNoteOn || isNoteOff)) {
+         const channel = status & 0x0f;
+         const note = data[1];
+         const velocity = data[2];
+
+         let latched = this.latchedNotesByOutput.get(outDevice.id);
+         if (!latched) {
+            latched = [];
+            this.latchedNotesByOutput.set(outDevice.id, latched);
+         }
+
+         if (isNoteOn) {
+            const existingIdx = latched.findIndex(n => n.note === note && n.channel === channel && n.inputId === inputId);
+            if (existingIdx !== -1) latched.splice(existingIdx, 1);
+            
+            latched.push({ inputId, channel, note, velocity });
+            if (latched.length > this.smartLatchMaxNotes) {
+               if (this.smartLatchReplace) {
+                 const oldest = latched.shift();
+                 if (oldest) {
+                    this.sendDirectNoteOff(outDevice, oldest, outConfig, now);
+                 }
+               } else {
+                 latched.pop();
+                 shouldForward = false;
+               }
+            }
+         } else if (isNoteOff) {
+            const isLatched = latched.some(n => n.note === note && n.channel === channel && n.inputId === inputId);
+            if (isLatched) {
+               shouldForward = false;
+            }
+         }
+      }
+
+      if (!shouldForward) return;
+
+      try {
+        this.lastSentMessages.set(outDevice.id, { data: msgHash, time: now });
+        if (status < 0xF0) {
+          let targetCh = -1;
+          if (outConfig.isMulti) targetCh = this.globalChannel;
+          else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
+          if (targetCh !== -1) {
+            const newStatus = (status & 0xf0) | (targetCh & 0x0f);
+            bytes = new Uint8Array([newStatus, data[1], data[2]]);
+          }
+        }
+        this.globalSentHashes.set(bytes.join(','), now);
+        outDevice.send(bytes);
+      } catch (e) {}
+    });
   }
 
   private handleIngressBound = this.handleIngress.bind(this);
@@ -582,7 +694,7 @@ export class MidiService {
     if (!this.currentBpm || this.currentBpm < 1) return;
     this.isPlayingClock = true;
     const intervalMs = 60000 / (this.currentBpm * 24);
-    const sendPulse = () => this.broadcast('clock', {}, 0, MidiSource.UI);
+    const sendPulse = () => this.broadcast('clock', {}, 0, MidiSource.TRANSPORT);
     sendPulse();
     this.clockInterval = window.setInterval(sendPulse, intervalMs);
   }
@@ -596,16 +708,16 @@ export class MidiService {
   }
 
   sendStart() {
-    this.broadcast('stop', {}, 0, MidiSource.UI);
+    this.broadcast('stop', {}, 0, MidiSource.TRANSPORT);
     setTimeout(() => {
-      this.broadcast('start', {}, 0, MidiSource.UI);
+      this.broadcast('start', {}, 0, MidiSource.TRANSPORT);
       this.startClock();
     }, 10);
   }
 
   sendStop() {
     this.stopClock();
-    this.broadcast('stop', {}, 0, MidiSource.UI);
+    this.broadcast('stop', {}, 0, MidiSource.TRANSPORT);
   }
 }
 
