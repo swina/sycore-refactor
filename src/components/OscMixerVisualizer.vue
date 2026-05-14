@@ -1,6 +1,6 @@
 <template>
-  <div class="osc-mixer-container pl-2" :style="{ width: `${width}px`, height: `${height}px` }">
-    <svg :width="width" :height="height" class="osc-mixer-svg">
+  <div class="osc-mixer-container w-full h-full">
+    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="osc-mixer-svg">
       <!-- Grid/Background -->
       <rect x="0" y="0" :width="width" :height="height" class="osc-mixer-bg" />
 
@@ -118,11 +118,10 @@ const oscillators = computed(() => {
 <style scoped>
 .osc-mixer-container {
   position: relative;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 6px;
   overflow: hidden;
-  box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
-  border: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .osc-mixer-bg {

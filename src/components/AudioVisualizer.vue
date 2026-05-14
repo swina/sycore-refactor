@@ -1,7 +1,10 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Activity, X, Mic, MicOff, Volume2, SlidersHorizontal, RotateCcw } from 'lucide-vue-next'
+import { Activity, X, Mic, MicOff, Volume2, SlidersHorizontal, RotateCcw, GripVertical } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
+import { useDraggable } from '@/composables/useDraggable'
+import { useResizable } from '@/composables/useResizable'
+import { useLocalStorage } from '@/composables/useLocalStorage'
 
 const uiStore = useUiStore()
 
@@ -26,10 +29,22 @@ const isActive        = ref(false)
 const mode            = ref('both')
 const error           = ref(null)
 const devices         = ref([])
-const selectedDeviceId = ref('default')
+const { state: selectedDeviceId } = useLocalStorage('S1_VISUALIZER_DEVICE', 'default')
 const volume          = ref(1)
 const showEq          = ref(false)
 const eqBands         = ref(DEFAULT_EQ.map(b => ({ ...b })))
+
+const { x, y, startDrag } = useDraggable(
+  Math.max(8, (window.innerWidth - 480) / 2),
+  window.innerHeight - 450,
+  'S1_VISUALIZER_POS'
+)
+
+const { width, height, startResize } = useResizable(
+  480, 
+  320, 
+  'S1_VISUALIZER_SIZE'
+)
 const scopeAmpZoom    = ref(1)
 const scopeTimeZoom   = ref(1)
 
@@ -238,7 +253,7 @@ function startDrawLoop() {
   const draw = () => {
     rafRef = requestAnimationFrame(draw)
     const dpr = window.devicePixelRatio || 1
-    const W = canvas.offsetWidth * dpr, H = canvas.offsetHeight * dpr
+    const W = width.value * dpr, H = height.value * dpr
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H }
 
     ctx2d.fillStyle = BG; ctx2d.fillRect(0, 0, W, H)
@@ -318,11 +333,30 @@ function startDrawLoop() {
 // ── Watchers ──────────────────────────────────────────────────────────────────
 watch([isActive, mode], () => nextTick(startDrawLoop), { flush: 'post' })
 watch([eqBands, showEq, isActive], () => nextTick(drawEqCurve), { deep: true, flush: 'post' })
-watch(() => uiStore.isVisualizerOpen, open => { if (!open) stop() })
+watch(() => uiStore.isVisualizerOpen, async (open) => {
+  if (open) {
+    await refreshDevices()
+    const exists = selectedDeviceId.value === 'default' || devices.value.some(d => d.deviceId === selectedDeviceId.value)
+    if (exists && !isActive.value) {
+      start()
+    }
+  } else {
+    stop()
+  }
+})
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
-onMounted(() => {
+onMounted(async () => {
   navigator.mediaDevices?.addEventListener('devicechange', refreshDevices)
+  
+  // If it's already open at mount (e.g. page refresh), try to refresh and auto-start
+  if (uiStore.isVisualizerOpen) {
+    await refreshDevices()
+    const exists = selectedDeviceId.value === 'default' || devices.value.some(d => d.deviceId === selectedDeviceId.value)
+    if (exists && !isActive.value) {
+      start()
+    }
+  }
 })
 onUnmounted(() => {
   stop()
@@ -332,11 +366,22 @@ onUnmounted(() => {
 
 <template>
   <Transition name="capture">
-  <div v-if="uiStore.isVisualizerOpen" class="fixed bottom-[52px] right-4 z-[300] w-[480px] bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl shadow-black/60">
+  <div v-if="uiStore.isVisualizerOpen" 
+    class="fixed z-[300] bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl shadow-black/60 flex flex-col"
+    :style="{ 
+      left: x + 'px', 
+      top: y + 'px',
+      width: width + 'px',
+      height: height + 'px'
+    }"
+  >
 
     <!-- Header -->
-    <div class="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800">
+    <div class="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0">
       <div class="flex items-center gap-2">
+        <div @mousedown="startDrag" class="cursor-grab active:cursor-grabbing p-1 -ml-2 text-neutral-600 hover:text-neutral-400">
+          <GripVertical class="w-3.5 h-3.5" />
+        </div>
         <Activity class="w-3.5 h-3.5 text-synth-neon" />
         <span class="text-[10px] font-black uppercase tracking-widest text-synth-neon">Audio Visualizer</span>
         <span class="text-[8px] font-mono text-neutral-600 px-1.5 py-0.5 bg-neutral-800 rounded">EXPERIMENTAL</span>
@@ -472,7 +517,7 @@ onUnmounted(() => {
     </Transition>
 
     <!-- Canvas -->
-    <div class="relative bg-[#080808]" style="height: 200px">
+    <div class="relative bg-[#080808] flex-1 min-h-[100px]">
       <canvas ref="canvasRef" class="w-full h-full block" />
       <div v-if="!isActive" class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm gap-3">
         <p v-if="error" class="text-red-400 text-[10px] font-mono px-4 text-center">{{ error }}</p>
@@ -500,6 +545,14 @@ onUnmounted(() => {
         <MicOff class="w-3 h-3" />
         Stop
       </button>
+    </div>
+
+    <!-- Resize Handle -->
+    <div 
+      @mousedown="startResize"
+      class="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-[400] flex items-center justify-center group"
+    >
+      <div class="w-1.5 h-1.5 border-r-2 border-b-2 border-neutral-700 group-hover:border-synth-neon transition-colors mr-0.5 mb-0.5"></div>
     </div>
 
   </div>

@@ -6,6 +6,7 @@ import {
 } from 'lucide-vue-next'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { S1_MUSICAL_VARIATIONS } from '@/constants/s1-musical-variations'
 
 const emit = defineEmits(['close'])
 
@@ -36,7 +37,20 @@ const getIcon = (id) => iconMap[id] ?? Wind
 
 function selectCategory(id) {
   presetStore.setCategory(id)
+  presetStore.currentVariation = null
   showPrompt.value = false
+}
+
+const categoryVariations = computed(() => {
+  return S1_MUSICAL_VARIATIONS[presetStore.currentCategory] || []
+})
+
+function selectVariation(v) {
+  if (presetStore.currentVariation?.name === v.name) {
+    presetStore.currentVariation = null
+  } else {
+    presetStore.currentVariation = v
+  }
 }
 
 function handleGenerate() {
@@ -109,6 +123,33 @@ function discardAndGenerate() {
               </div>
             </button>
           </div>
+
+          <!-- Variations / Keywords -->
+          <Transition name="panel">
+            <div v-if="categoryVariations.length > 0" class="mt-8">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="h-[1px] flex-1 bg-neutral-900"></div>
+                <span class="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500">Refine with Keywords</span>
+                <div class="h-[1px] flex-1 bg-neutral-900"></div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="v in categoryVariations"
+                  :key="v.name"
+                  @click="selectVariation(v)"
+                  :class="[
+                    'px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all flex flex-col items-start gap-1',
+                    presetStore.currentVariation?.name === v.name
+                      ? 'bg-synth-neon/10 border-synth-neon text-synth-neon shadow-[0_0_15px_rgba(0,255,159,0.2)]'
+                      : 'bg-neutral-900/50 border-neutral-800 text-neutral-400 hover:border-neutral-700 hover:text-white'
+                  ]"
+                >
+                  <span>{{ v.name }}</span>
+                  <span class="text-[8px] opacity-50 font-medium normal-case tracking-normal">{{ v.keywords }}</span>
+                </button>
+              </div>
+            </div>
+          </Transition>
         </div>
 
         <!-- Footer -->
@@ -127,11 +168,16 @@ function discardAndGenerate() {
                     {{ presetStore.isSaving ? 'SAVING...' : 'SAVE' }}</button>
                 </div>
               </div>
-              <div v-else>
-                <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Selected: </span>
-                <span class="text-[12px] font-black text-synth-neon uppercase tracking-tight">
-                  {{ presetStore.currentCategory === 'ai' ? 'AI SYNTH' : presetStore.currentCategory }}
-                </span>
+              <div v-else class="flex flex-col">
+                <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Target Mode: </span>
+                <div class="flex items-baseline gap-2">
+                  <span class="text-[12px] font-black text-synth-neon uppercase tracking-tight">
+                    {{ presetStore.currentCategory === 'ai' ? 'AI SYNTH' : presetStore.currentCategory }}
+                  </span>
+                  <span v-if="presetStore.currentVariation" class="text-[10px] font-bold text-white uppercase tracking-wider opacity-80">
+                    / {{ presetStore.currentVariation.name }}
+                  </span>
+                </div>
               </div>
             </Transition>
           </div>

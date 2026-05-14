@@ -1,6 +1,6 @@
 <template>
-  <div class="adsr-container" :style="{ width: `${width}px`, height: `${height}px` }">
-    <svg :width="width" :height="height" class="adsr-svg">
+  <div class="adsr-container w-full h-full">
+    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="adsr-svg">
       <!-- Grid/Background (Optional) -->
       <rect x="0" y="0" :width="width" :height="height" class="adsr-bg" />
       
@@ -16,16 +16,16 @@
         :points="envelopePoints" 
         fill="none"
         :stroke="color"
-        stroke-width="2.5"
+        stroke-width="1.5"
         stroke-linejoin="round"
       />
       
       <!-- Interactive handles/nodes -->
-      <circle :cx="points.start.x" :cy="points.start.y" r="4" class="adsr-node" :stroke="color" />
-      <circle :cx="points.attack.x" :cy="points.attack.y" r="4" class="adsr-node" :stroke="color" />
-      <circle :cx="points.sustain.x" :cy="points.sustain.y" r="4" class="adsr-node" :stroke="color" />
-      <circle :cx="points.releaseStart.x" :cy="points.releaseStart.y" r="4" class="adsr-node" :stroke="color" />
-      <circle :cx="points.end.x" :cy="points.end.y" r="4" class="adsr-node" :stroke="color" />
+      <circle :cx="points.start.x" :cy="points.start.y" r="2.5" class="adsr-node" :stroke="color" />
+      <circle :cx="points.attack.x" :cy="points.attack.y" r="2.5" class="adsr-node" :stroke="color" />
+      <circle :cx="points.sustain.x" :cy="points.sustain.y" r="2.5" class="adsr-node" :stroke="color" />
+      <circle :cx="points.releaseStart.x" :cy="points.releaseStart.y" r="2.5" class="adsr-node" :stroke="color" />
+      <circle :cx="points.end.x" :cy="points.end.y" r="2.5" class="adsr-node" :stroke="color" />
     </svg>
   </div>
 </template>
@@ -86,20 +86,16 @@ const envelopePoints = computed(() => {
 <style scoped>
 .adsr-container {
   position: relative;
-  background: #111;
-  border-radius: 8px;
   overflow: hidden;
-  box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-  border: 1px solid #222222;
 }
 
 .adsr-bg {
-  fill: #000000;
+  fill: transparent;
 }
 
 .adsr-node {
   fill: #c0880e;
-  stroke-width: 2;
+  stroke-width: 1.5;
   transition: all 0.1s ease;
 }
 </style>

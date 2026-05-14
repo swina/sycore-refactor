@@ -65,14 +65,15 @@ const FEATURE_KEYS = [
   'importBank','seqGen','seqParam2','seqGlobalTranspose','seqSyncTrack',
 ]
 
-const AVAILABLE_ICONS = [
-  'LayoutGrid','Layers','Heart','KeyboardMusic','ListMusic','User','BookOpen','Workflow',
+const ALL_AVAILABLE_ICONS = [
+  'AudioLines','LayoutGrid','Cpu','Layers','Heart','KeyboardMusic','ListMusic','User','BookOpen','Workflow',
   'Cable','Settings','Settings2','Gamepad2','AlertTriangle','Mail','HelpCircle','Zap',
   'Activity','Sliders','Menu','MoreVertical','Plus','Minus','ChevronDown','ChevronUp',
   'Clock','Music','Volume2','Pause','Play','Square','Circle','Triangle',
   'Eye','EyeOff','Lock','Unlock','Trash2','Save','Download','Upload','Search','Filter',
-  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','Network',
+  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','GitCompareArrows','Grid3x3','RotateCw','RotateCcw','Network','ListTree',
 ]
+const AVAILABLE_ICONS = ALL_AVAILABLE_ICONS.sort()
 
 // All functions the app exposes as toolbar buttons.
 // Add new entries here when a new panel/feature is wired up in SynthApp.
@@ -85,7 +86,6 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'audio-capture',  label: 'Audio Capture',    icon: 'Mic'          },
   { id: 'visualizer',     label: 'Audio Visualizer', icon: 'Activity'     },
   { id: 'capture',        label: 'MIDI Capture',     icon: 'BarChart3'    },
-  { id: 'midi-performance', label: 'MIDI Performance', icon: 'Network'      },
   { id: 'routing',        label: 'MIDI Routing',     icon: 'Cable'        },
   { id: 'midilearn',      label: 'MIDI Mapping',     icon: 'Workflow'     },
   { id: 'midiactions',    label: 'MIDI Actions',     icon: 'Gamepad2'     },
@@ -98,8 +98,8 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'manual',         label: 'User Manual',      icon: 'BookOpen'     },
   { id: 'portal',         label: 'Portal',           icon: 'BookOpen'     },
   { id: 'panic',          label: 'PANIC',            icon: 'AlertTriangle'},
-  { id: 'experimental',   label: 'Experimental',     icon: 'Settings2'    },
-  { id: 'midilogger',     label: 'MIDI Logger',      icon: 'Settings2'    },
+  { id: 'midi_matrix',    label: 'MIDI Matrix',      icon: 'Network'      },
+  { id: 'midilogger',     label: 'MIDI Logger',      icon: 'GotCompareArrows'    },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -246,8 +246,8 @@ async function handleSaveConfig() {
 function handleLoadDefaults() {
   if (!confirm('Load default controller mappings? This will replace unsaved changes.')) return
   controllers.value = [
-    { id:'d_3',  cc:3,  name:'lfoRate',   label:'LFO Rate',    category:'LFO',        type:'SLIDER_H', min:0, max:127, order:1 },
-    { id:'d_12', cc:12, name:'lfoWave',   label:'LFO Wave',    category:'LFO',        type:'MULTI',    min:0, max:4,   order:2, options:[{label:'SIN',value:0},{label:'TRI',value:1},{label:'SAW',value:2},{label:'SQU',value:3},{label:'RND',value:4}] },
+    { id:'d_3',  cc:3,  name:'lfoRate',   label:'LFO Rate',    category:'LFO',        type:'SLIDER_H', min:0, max:30,  order:1 },
+    { id:'d_12', cc:12, name:'lfoWave',   label:'LFO Wave',    category:'LFO',        type:'MULTI',    min:0, max:5,   order:2, options:[{label:'SAW',value:0},{label:'SAW REV',value:1},{label:'SIN',value:2},{label:'PUL',value:3},{label:'RND',value:4},{label:'NOI',value:5}] },
     { id:'d_13', cc:13, name:'oscLFO',    label:'OSC LFO',     category:'LFO',        type:'SLIDER_H', min:0, max:127, order:3 },
     { id:'d_15', cc:15, name:'pwWidth',   label:'Pulse Width', category:'OSCILLATOR', type:'SLIDER_H', min:0, max:127, order:1 },
     { id:'d_16', cc:16, name:'pwmSrc',    label:'PWM Source',  category:'OSCILLATOR', type:'SLIDER_H', min:0, max:127, order:2 },
@@ -276,6 +276,8 @@ function handleExportConfig() {
   const data = {
     appVersion: appVersion.value, appEngine: appEngine.value, appOsTarget: appOsTarget.value,
     toolbarIconSize: toolbarIconSize.value, appName: appName.value, appSubtitle: appSubtitle.value,
+    syncMidiTransportFromLivePad: syncMidiTransportFromLivePad.value,
+    enablePartSelector: enablePartSelector.value,
     rolesConfig: rolesConfig.value, categories: categories.value,
     appSoundTypes: appSoundTypes.value, soundTypeBg: soundTypeBg.value, controllers: controllers.value,
   }
@@ -364,7 +366,7 @@ function removeButton(index) {
 }
 
 function addButton(fn) {
-  toolbarButtons.value = [...toolbarButtons.value, { id: fn.id, label: fn.label, icon: fn.icon, enabled: true }]
+  toolbarButtons.value = [...toolbarButtons.value, { id: fn.id, label: fn.label, icon: fn.icon, enabled: true, fab: 'main' }]
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -710,9 +712,16 @@ watch(() => props.isOpen, (open) => {
                   >
                     <!-- Main row -->
                     <div class="flex items-center gap-4">
-                      <!-- CC badge -->
-                      <div class="w-8 h-8 shrink-0 rounded-lg bg-black flex items-center justify-center font-mono text-[10px] font-bold text-synth-neon border border-neutral-800">
-                        {{ ctrl.cc }}
+                      <!-- CC badge (Editable) -->
+                      <div class="w-10 h-8 shrink-0 rounded-lg bg-black flex items-center justify-center font-mono text-[10px] font-bold text-synth-neon border border-neutral-800 focus-within:border-synth-neon/50 transition-colors">
+                        <input 
+                          v-if="editingId === ctrl.id"
+                          :value="ctrl.cc" 
+                          @input="e => updateController(ctrl.id, { cc: parseInt(e.target.value) || 0 })"
+                          type="number"
+                          class="w-full bg-transparent border-none text-center focus:outline-none text-synth-neon [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span v-else>{{ ctrl.cc }}</span>
                       </div>
 
                       <!-- Label / name (click to edit) -->
@@ -873,6 +882,15 @@ watch(() => props.isOpen, (open) => {
                       class="bg-black/50 border border-neutral-800 text-xs text-neutral-400 rounded px-2 py-1 focus:outline-none focus:border-synth-neon w-32"
                     >
                       <option v-for="iconName in AVAILABLE_ICONS" :key="iconName" :value="iconName">{{ iconName }}</option>
+                    </select>
+
+                    <!-- FAB Target -->
+                    <select
+                      v-model="button.fab"
+                      class="bg-black/50 border border-neutral-800 text-xs text-synth-neon rounded px-2 py-1 focus:outline-none focus:border-synth-neon w-24 font-mono font-bold"
+                    >
+                      <option value="main">MAIN</option>
+                      <option value="settings">SETT</option>
                     </select>
                     <!-- Toggle switch -->
                     <button

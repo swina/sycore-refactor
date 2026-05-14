@@ -1,5 +1,5 @@
 <script setup>
-import { Zap, Lock } from 'lucide-vue-next'
+import { Zap, Lock, RotateCw } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -105,6 +105,22 @@ const midiStore = useMidiStore()
           Connect Roland S-1 or select a MIDI interface from the menu above
         </p>
       </div>
+      
+      <!-- Current Sound Type & Part indicator (pre-midi) -->
+      <div class="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-1.5">
+          <span class="text-[9px] font-black font-mono text-neutral-600 uppercase tracking-[0.3em]">Current Engine Profile</span>
+          <span class="text-xs font-black uppercase tracking-widest text-synth-neon bg-synth-neon/10 px-4 py-1 rounded-full border border-synth-neon/20 shadow-[0_0_15px_rgba(0,163,112,0.1)]">
+            {{ presetStore.currentCategory }}
+          </span>
+        </div>
+        
+        <div v-if="midiStore.midiChannel > 1" class="flex flex-col items-center gap-1">
+          <span class="text-[7px] font-black font-mono text-neutral-700 uppercase tracking-widest">Active Part</span>
+          <span class="text-[10px] font-mono font-bold text-emerald-500/60 uppercase">Channel {{ midiStore.midiChannel }}</span>
+        </div>
+      </div>
+
     </div>
 
     <!-- Logged in, MIDI ready — main generate pad -->
@@ -141,11 +157,39 @@ const midiStore = useMidiStore()
         </button>
       </div>
 
-      <!-- Remaining gens indicator -->
-      <div v-if="presetStore.remainingGens !== Infinity && presetStore.remainingGens > 0" class="flex items-center gap-2">
-        <span class="text-[10px] font-mono text-neutral-600 uppercase tracking-widest">Remaining Free Syncs:</span>
-        <span class="text-xs font-mono font-bold text-synth-neon">{{ presetStore.remainingGens }}</span>
+      <!-- Restore Last Sound Link -->
+      <div v-if="presetStore.lastPreset" class="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-700 delay-300">
+        <button 
+          @click="presetStore.recallPreset(presetStore.lastPreset); presetStore.showResults = true"
+          class="flex items-center gap-3 px-5 py-2.5 bg-neutral-900/30 border border-neutral-800/50 rounded-full hover:border-synth-neon/40 hover:bg-neutral-900/50 transition-all group active:scale-95 shadow-lg"
+        >
+          <div class="flex flex-col items-start text-left">
+            <span class="text-[8px] font-black font-mono text-neutral-600 uppercase tracking-[0.2em]">Restore Last Session</span>
+            <span class="text-[11px] font-bold text-neutral-200 uppercase group-hover:text-synth-neon transition-colors">{{ presetStore.lastPreset.name }}</span>
+          </div>
+          <div class="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center group-hover:bg-synth-neon group-hover:text-black transition-all">
+            <RotateCw class="w-3.5 h-3.5" />
+          </div>
+        </button>
       </div>
+
+      <!-- Current Sound Type & Part indicator -->
+      <div class="flex flex-col items-center gap-4 mt-8">
+        <div class="flex flex-col items-center gap-1.5">
+          <span class="text-[9px] font-black font-mono text-neutral-600 uppercase tracking-[0.3em]">Current Engine Profile</span>
+          <span class="text-xs font-black uppercase tracking-widest text-synth-neon bg-synth-neon/10 px-4 py-1 rounded-full border border-synth-neon/20 shadow-[0_0_15px_rgba(0,163,112,0.1)]">
+            {{ presetStore.currentCategory }}
+          </span>
+        </div>
+
+        <div v-if="midiStore.midiChannel > 1" class="flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-500">
+          <span class="text-[7px] font-black font-mono text-neutral-700 uppercase tracking-widest">Targeting Multi-Part</span>
+          <div class="px-3 py-0.5 rounded bg-emerald-500/5 border border-emerald-500/20">
+            <span class="text-[10px] font-mono font-bold text-emerald-500 uppercase tracking-widest">Channel {{ midiStore.midiChannel }}</span>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div>

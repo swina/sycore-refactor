@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { X, Trash2, GripVertical } from 'lucide-vue-next'
+import { X, Trash2, GripVertical, ListMusic, ClockArrowDown, SkipBack, Play, Pause, SkipForward, ChevronLeft, ChevronRight, Bookmark } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
+import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { S1_CC_MAP } from '@/constants/s1-config'
-import { useDraggable } from '@/composables/useDraggable'
+import PlayList from '@/components/PlayList.vue'
+import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue' // Import the new component
 
 const props = defineProps({
   isOpen: Boolean,
@@ -17,25 +19,101 @@ const emit = defineEmits(['close'])
 const midiStore = useMidiStore()
 const presetStore = usePresetStore()
 const configStore = useConfigStore()
+const livePadStore = useLivePadStore()
 
-const { x: panelX, y: panelY, startDrag } = useDraggable(
-  Math.max(8, (window.innerWidth  - 672) / 2),
-  Math.max(8, (window.innerHeight - 620) / 2),
-  'S1_LS_POS'
-)
-
-const { state: soundsStorage } = useLocalStorage('S1_LIVESET_SOUNDS', [])
 const { state: paramsStorage } = useLocalStorage('S1_LIVESET_PARAMS', Array(8).fill(null).map(() => ({ label: '', cc: -1 })))
 const { state: sliderModeStorage } = useLocalStorage('S1_LIVESET_SLIDER_MODE', 'vertical')
 const { state: currentIdxStorage } = useLocalStorage('S1_LIVESET_CURRENT', -1)
+const { state: sendPcStorage } = useLocalStorage('S1_LIVESET_SEND_PC', true)
 
-const sounds      = ref([])
+const sounds = computed(() => livePadStore.sounds)
 const params      = ref([])
 const sliderMode  = ref('vertical')
-const currentIdx  = ref(Number.isInteger(currentIdxStorage.value) ? currentIdxStorage.value : -1)
+const currentIdx = computed({
+  get: () => livePadStore.activePadIndex,
+  set: (v) => { livePadStore.activePadIndex = v }
+})
 const paramValues = ref(Array(8).fill(64))
+const sendPcEnabled = ref(sendPcStorage.value !== false)
 const tab         = ref('perf')
 const setupTab    = ref('sounds')
+
+// Preset Library Browsing (Evaluation & Assignment)
+const libraryIdx = ref(-1)
+const currentLibraryPreset = computed(() => {
+  if (libraryIdx.value < 0 || !presetStore.history.length) return null
+  return presetStore.history[libraryIdx.value]
+})
+
+function nextLibraryPreset() {
+  if (!presetStore.history.length) return
+  libraryIdx.value = (libraryIdx.value + 1) % presetStore.history.length
+  evaluateLibraryPreset()
+}
+
+function prevLibraryPreset() {
+  if (!presetStore.history.length) return
+  libraryIdx.value = (libraryIdx.value - 1 + presetStore.history.length) % presetStore.history.length
+  evaluateLibraryPreset()
+}
+
+function evaluateLibraryPreset() {
+  const p = currentLibraryPreset.value
+  if (!p) return
+  presetStore.recallPreset(p)
+  currentIdx.value = -1 // Enter browser/assignment mode
+}
+
+function exitLibraryBrowser() {
+  libraryIdx.value = -1
+}
+
+// Sync store state to local reactive values for the template
+const playlist = computed(() => livePadStore.playlist)
+const playlistRepeats = computed(() => livePadStore.playlistRepeats)
+const playlistIdx = computed(() => livePadStore.playlistIdx)
+const playlistCurrentRepeat = computed(() => livePadStore.playlistCurrentRepeat)
+const crossfadeSec = computed(() => livePadStore.crossfadeSec)
+const loopPlaylist = computed(() => livePadStore.loopPlaylist)
+const isPlaylistMode = computed(() => playlistIdx.value >= 0 && playlist.value.length > 0)
+const currentTime = ref(0)
+const duration = ref(0)
+const isPlaying = ref(false)
+const volume = ref(0.5)
+const totalPlaylistDuration = ref(0)
+
+const totalCurrentTime = computed(() => {
+  if (playlistIdx.value < 0 || playlist.value.length === 0) return 0
+  let elapsed = 0
+  for (let i = 0; i < playlistIdx.value; i++) {
+    elapsed += playlist.value[i]?.duration || 0
+  }
+  return elapsed + currentTime.value
+})
+
+const totalProgressPct = computed(() => {
+  if (totalPlaylistDuration.value <= 0) return 0
+  return Math.min(100, (totalCurrentTime.value / totalPlaylistDuration.value) * 100)
+})
+
+function playFromPlaylist(idx) { 
+  window.dispatchEvent(new CustomEvent('playlist-play', { detail: { idx } })) 
+}
+function clearPlaylist() { window.dispatchEvent(new CustomEvent('playlist-clear')) }
+
+function mutatePlaylist(key, value) { window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key, value } })) }
+function prevTrack() { window.dispatchEvent(new CustomEvent('playlist-prev')) }
+function nextTrack() { window.dispatchEvent(new CustomEvent('playlist-next')) }
+function togglePlayStop() { window.dispatchEvent(new CustomEvent('playlist-play-stop')) }
+function handlePlaylistToggle(idx) {
+  if (typeof idx === 'number') playFromPlaylist(idx)
+  else togglePlayStop()
+}
+function seekTrack(pos) { window.dispatchEvent(new CustomEvent('playlist-seek', { detail: pos })) }
+function updateVolume(v) { 
+  volume.value = v; 
+  window.dispatchEvent(new CustomEvent('playlist-volume', { detail: v })) 
+}
 
 const S1_CC_OPTIONS = computed(() => {
   return (configStore.midiConfig || [])
@@ -43,19 +121,6 @@ const S1_CC_OPTIONS = computed(() => {
     .map(cfg => ({ cc: Number(cfg.cc), label: cfg.label || cfg.name || `CC ${cfg.cc}` }))
     .sort((a, b) => a.label.localeCompare(b.label))
 })
-
-function loadSounds() {
-  try {
-    const raw = localStorage.getItem('S1_LIVESET_SOUNDS')
-    const arr = raw ? JSON.parse(raw) : []
-    return Array(16).fill(null).map((_, i) => {
-      const existing = Array.isArray(arr) ? arr[i] : null
-      return { id: `ls_slot_${i}`, name: existing?.name || '', category: existing?.category || '', ccData: existing?.ccData || {}, paramValues: existing?.paramValues || {} }
-    })
-  } catch {
-    return Array(16).fill(null).map((_, i) => ({ id: `ls_slot_${i}`, name: '', category: '', ccData: {}, paramValues: {} }))
-  }
-}
 
 function loadParams() {
   try {
@@ -93,27 +158,57 @@ function onNavigate(e) {
   if (next) selectSound(next.i)
 }
 
+function handleStateUpdate(e) {
+  const d = e.detail
+  if (d.currentTime !== undefined) currentTime.value = d.currentTime
+  if (d.duration !== undefined) duration.value = d.duration
+  if (d.isPlaying !== undefined) isPlaying.value = d.isPlaying
+  if (d.volume !== undefined) volume.value = d.volume
+  
+  // Update store for session state
+  if (d.playlistIdx !== undefined) livePadStore.playlistIdx = d.playlistIdx
+  if (d.playlist !== undefined) {
+    // AUTO-POPULATE: If both session and active playlist are empty, but library has tracks
+    if (livePadStore.playlist.length === 0 && d.playlist.length === 0 && d.tracks?.length > 0) {
+      const autoPlaylist = d.tracks.slice(0, 16)
+      livePadStore.playlist = autoPlaylist
+      // Sync back to player
+      window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key: 'playlist', value: autoPlaylist } }))
+      window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key: 'playlistRepeats', value: Array(autoPlaylist.length).fill(1) } }))
+    } else {
+      // Normal sync: Player is the source of truth
+      livePadStore.playlist = d.playlist
+    }
+  }
+  if (d.playlistRepeats !== undefined) livePadStore.playlistRepeats = d.playlistRepeats
+  if (d.crossfadeSec !== undefined) livePadStore.crossfadeSec = d.crossfadeSec
+  if (d.loopPlaylist !== undefined) livePadStore.loopPlaylist = d.loopPlaylist
+  if (d.playlistCurrentRepeat !== undefined) livePadStore.playlistCurrentRepeat = d.playlistCurrentRepeat
+  
+  if (d.totalPlaylistDuration !== undefined) totalPlaylistDuration.value = d.totalPlaylistDuration
+}
+
 onMounted(() => {
-  sounds.value = loadSounds()
   params.value = loadParams()
   sliderMode.value = sliderModeStorage.value || 'vertical'
   if (props.isOpen) tab.value = 'perf'
   restoreSelection()
   window.addEventListener('liveset-select-pad', onSelectPad)
   window.addEventListener('liveset-navigate', onNavigate)
+  window.addEventListener('player-state-sync', handleStateUpdate)
+  window.dispatchEvent(new CustomEvent('player-state-request'))
 })
 
-watch(() => [sounds.value, params.value, sliderMode.value], () => {
-  soundsStorage.value = sounds.value
+watch(() => [params.value, sliderMode.value, sendPcEnabled.value], () => {
   paramsStorage.value = params.value
   sliderModeStorage.value = sliderMode.value
+  sendPcStorage.value = sendPcEnabled.value
 }, { deep: true })
 
 watch(currentIdx, (v) => { currentIdxStorage.value = v })
 
 watch(() => props.isOpen, (open) => {
   if (!open) return
-  sounds.value = loadSounds()
   tab.value = 'perf'
   restoreSelection()
 })
@@ -121,6 +216,7 @@ watch(() => props.isOpen, (open) => {
 onUnmounted(() => {
   window.removeEventListener('liveset-select-pad', onSelectPad)
   window.removeEventListener('liveset-navigate', onNavigate)
+  window.removeEventListener('player-state-sync', handleStateUpdate)
 })
 
 function sendParamCC(slotIdx, val) {
@@ -131,49 +227,91 @@ function sendParamCC(slotIdx, val) {
 }
 
 function selectSound(idx) {
-  currentIdx.value = idx
-  const sound = sounds.value[idx]
-  if (!sound?.name) return
-  paramValues.value = Array(8).fill(64)
-
-  const numericCcMap = {}
-  if (sound.ccData && Object.keys(sound.ccData).length > 0) {
-    Object.entries(sound.ccData).forEach(([cc, val]) => { numericCcMap[Number(cc)] = val })
-    midiStore.sendAllCCs(numericCcMap)
+  if (idx < 0 || idx >= livePadStore.sounds.length) return
+  
+  // Toggle logic
+  if (currentIdx.value === idx) {
+    currentIdx.value = -1
+    return
   }
 
-  if (sound.paramValues) {
-    Object.entries(sound.paramValues).forEach(([slot, val]) => {
-      paramValues.value[parseInt(slot)] = val
-      sendParamCC(parseInt(slot), val)
+  // IF we are in Library Evaluation mode, Clicking a pad ASSIGNS the sound
+  if (currentLibraryPreset.value) {
+    const p = currentLibraryPreset.value
+    livePadStore.updateSound(idx, {
+      name: p.name,
+      category: p.category,
+      ccData: p.ccData || {},
+      paramValues: { ...p.data }
     })
+    currentIdx.value = idx
+    return
   }
 
-  // Sync ResultsPanel: convert CC-keyed data back to field-name-keyed data
-  const fieldData = {}
-  Object.entries(numericCcMap).forEach(([cc, val]) => {
-    const field = S1_CC_MAP[Number(cc)]
-    if (field) fieldData[field] = val
-  })
-  presetStore.lastPreset = { id: sound.id, name: sound.name, category: sound.category, data: fieldData }
-  presetStore.currentName = sound.name
-  presetStore.showResults = true
+  // Normal recall/assign mode
+  currentIdx.value = idx
+  const sound = livePadStore.sounds[idx]
+  
+  if (!sound.name) {
+    const last = presetStore.lastPreset
+    if (last) {
+      livePadStore.updateSound(idx, {
+        name: last.name,
+        category: last.category,
+        ccData: last.ccData || {},
+        paramValues: { ...last.data }
+      })
+    }
+  } else {
+    // Normal recall: sync with global preset store so all UI/engine updates
+    presetStore.recallPreset({
+      name: sound.name,
+      category: sound.category,
+      ccData: sound.ccData || {},
+      data: sound.paramValues || {},
+      pc: sound.pc
+    })
+
+    // Also update local Live Set sliders and send MIDI CCs
+    if (sound.paramValues) {
+      Object.entries(sound.paramValues).forEach(([slot, val]) => {
+        const slotIdx = parseInt(slot)
+        if (slotIdx >= 0 && slotIdx < 8) {
+          paramValues.value[slotIdx] = val
+          sendParamCC(slotIdx, val)
+        }
+      })
+    }
+
+    // Send any additional CC data stored in the pad
+    if (sound.ccData && Object.keys(sound.ccData).length > 0) {
+      const numericCcMap = {}
+      Object.entries(sound.ccData).forEach(([cc, val]) => { 
+        numericCcMap[Number(cc)] = val 
+      })
+      midiStore.sendAllCCs(numericCcMap)
+    }
+  }
 }
 
 function clearSound(idx) {
-  sounds.value[idx].name = ''
-  sounds.value[idx].ccData = {}
-  sounds.value[idx].paramValues = {}
-  sounds.value[idx].category = ''
+  livePadStore.updateSound(idx, {
+    name: '',
+    ccData: {},
+    paramValues: {},
+    category: '',
+    pc: idx + 1
+  })
   if (currentIdx.value === idx) {
     paramValues.value = Array(8).fill(64)
   }
 }
 
 function saveCurrentSound() {
-  if (currentIdx.value < 0 || currentIdx.value >= sounds.value.length) return
-  const sound = sounds.value[currentIdx.value]
-  sound.paramValues = { ...paramValues.value }
+  if (currentIdx.value < 0 || currentIdx.value >= livePadStore.sounds.length) return
+  livePadStore.updateSound(currentIdx.value, {
+    paramValues: { ...paramValues.value }
+  })
 }
 
 function updateParamValue(idx, val) {
@@ -187,105 +325,262 @@ function getPadColorClass(idx, isActive) {
   const colors = [
     { base: 'border-synth-neon text-synth-neon hover:bg-synth-neon/20', active: 'bg-synth-neon text-black shadow-[0_0_15px_rgba(0,255,136,0.5)]' },
     { base: 'border-fuchsia-500 text-fuchsia-500 hover:bg-fuchsia-500/20', active: 'bg-fuchsia-500 text-black shadow-[0_0_15px_rgba(217,70,239,0.5)]' },
-    { base: 'border-amber-400 text-amber-400 hover:bg-amber-400/20', active: 'bg-amber-400 text-black shadow-[0_0_15px_rgba(251,191,36,0.5)]' },
+    { base: 'border-orange-700 text-orange-700 hover:bg-orange-700/20', active: 'bg-orange-700 text-black shadow-[0_0_15px_rgba(251,191,36,0.5)]' },
     { base: 'border-cyan-400 text-cyan-400 hover:bg-cyan-400/20', active: 'bg-cyan-400 text-black shadow-[0_0_15px_rgba(34,211,238,0.5)]' }
   ]
   return isActive ? colors[row].active : colors[row].base
 }
+
+function formatTime(t) {
+  if (isNaN(t) || !isFinite(t)) return '0:00'
+  const m = Math.floor(t / 60)
+  const s = Math.floor(t % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
 </script>
 
 <template>
-  <Transition name="panel">
-    <div v-if="isOpen"
-      :style="{ left: panelX + 'px', top: panelY + 'px' }"
-      class="fixed z-[100] bg-neutral-950 border border-neutral-800 rounded-2xl w-[672px] max-w-[95vw] max-h-[90vh] flex flex-col shadow-2xl"
-    >
-        <!-- Header -->
-        <div class="p-4 border-b border-neutral-900 flex items-center shrink-0">
-          <!-- Drag handle -->
-          <div class="flex items-center gap-2 flex-1 min-w-0 cursor-grab active:cursor-grabbing select-none"
-               @mousedown="startDrag">
-            <GripVertical class="w-4 h-4 text-neutral-600 shrink-0" />
-            <h2 class="text-lg font-black uppercase tracking-widest text-white truncate">Live Pad</h2>
-          </div>
-          <button @click="emit('close')" class="p-1 ml-3 text-neutral-400 hover:text-white transition-colors shrink-0">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-
-        <!-- Tabs -->
-        <div class="flex gap-1 p-2 border-b border-neutral-900 bg-neutral-900/50 shrink-0">
-          <button @click="tab = 'perf'"
-            :class="['px-4 py-1 rounded-lg text-sm font-bold uppercase tracking-widest transition-all', tab === 'perf' ? 'bg-synth-neon text-black' : 'text-neutral-400 hover:text-white']"
-          >Performance</button>
-          <button @click="tab = 'setup'"
-            :class="['px-4 py-1 rounded-lg text-sm font-bold uppercase tracking-widest transition-all', tab === 'setup' ? 'bg-synth-neon text-black' : 'text-neutral-400 hover:text-white']"
-          >Setup</button>
-        </div>
-
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
-
-          <!-- Performance tab -->
-          <div v-if="tab === 'perf'" class="flex flex-col h-full space-y-8">
-            <!-- 4x4 Grid -->
-            <div class="grid grid-cols-4 gap-3">
-              <button v-for="(sound, idx) in sounds" :key="idx"
-                @click="selectSound(idx)"
-                :class="[
-                  'h-20 rounded-xl border-2 flex flex-col items-center justify-center p-2 gap-0.5 transition-all overflow-hidden',
-                  getPadColorClass(idx, currentIdx === idx)
-                ]"
-              >
-                <span class="w-full text-center text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-2 break-words">{{ sound.name || `PAD ${idx + 1}` }}</span>
-                <span v-if="sound.name && sound.category" class="w-full text-center text-[8px] font-mono uppercase tracking-widest opacity-60 truncate">{{ sound.category }}</span>
-              </button>
+  <div v-if="isOpen"
+    class="fixed z-[500] bg-neutral-950 border border-neutral-900 rounded-2xl top-[100px] bottom-[60px] left-1/2 -translate-x-1/2 w-full max-w-4xl flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
+  >
+        <div class="px-6 py-2 border-b border-neutral-900 flex items-center shrink-0 bg-black/40 backdrop-blur-md">
+          <div class="flex items-center gap-8">
+            <div class="flex flex-col">
+              <h2 class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Live Pad</h2>
+              <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Jam Mode / Controller</span>
             </div>
+            
+            <!-- Tabs -->
+            <nav class="flex items-center gap-6 ml-4">
+              <button @click="tab = 'perf'"
+                :class="['relative py-1 text-[11px] font-black uppercase tracking-[0.2em] transition-all', 
+                  tab === 'perf' ? 'text-white' : 'text-neutral-600 hover:text-neutral-400']"
+              >
+                Performance
+                <div v-if="tab === 'perf'" class="absolute -bottom-[17px] left-0 w-full h-[2px] bg-synth-neon shadow-[0_0_10px_rgba(0,255,136,0.8)]"></div>
+              </button>
+              <button @click="tab = 'setup'"
+                :class="['relative py-1 text-[11px] font-black uppercase tracking-[0.2em] transition-all', 
+                  tab === 'setup' ? 'text-white' : 'text-neutral-600 hover:text-neutral-400']"
+              >
+                Setup
+                <div v-if="tab === 'setup'" class="absolute -bottom-[17px] left-0 w-full h-[2px] bg-synth-neon/50"></div>
+              </button>
+            </nav>
+          </div>
 
-            <!-- Vertical Sliders -->
-            <!-- <div v-if="currentIdx >= 0" class="flex justify-between gap-4 h-48 bg-neutral-900/50 p-4 rounded-xl border border-neutral-900">
-              <div v-for="(p, i) in params" :key="i" class="flex flex-col items-center flex-1 gap-2 min-w-0">
-                <div class="text-[9px] font-mono text-neutral-400 text-center w-full truncate px-1" :title="p.label || `PARAM ${i+1}`">
-                  {{ p.label || `PARAM ${i+1}` }}
+          <div class="flex-1" />
+
+          <!-- Header actions -->
+          <div class="flex items-center gap-6">
+            <div @click="sendPcEnabled = !sendPcEnabled" class="cursor-pointer group flex items-center gap-2">
+              <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest group-hover:text-neutral-400 transition-colors">PC</span>
+              <span :class="['text-[9px] font-mono font-bold transition-colors', sendPcEnabled ? 'text-synth-neon' : 'text-rose-500']">
+                {{ sendPcEnabled ? "ON" : "OFF" }}
+              </span>
+            </div>
+            
+            <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+
+
+            <div v-if="tab === 'perf'" class="flex-1 flex flex-col min-h-0 bg-neutral-950/50 p-6 overflow-y-hidden custom-scrollbar">
+              
+              <!-- SECTION: SOUND PADS -->
+              <div class="mb-4">
+                <div class="flex items-center justify-between mb-4 px-1">
+                  <div class="flex items-center gap-3">
+                    <h3 class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono">Preset Launchpad</h3>
+                    
+                    <!-- Library Browser / Evaluator -->
+                    <div class="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-xl p-1 ml-2">
+                      <button @click="prevLibraryPreset" class="p-2 sm:p-3 hover:text-synth-neon transition-colors active:scale-90" title="Previous Preset">
+                        <ChevronLeft class="w-5 h-5 sm:w-6 sm:h-6" />
+                      </button>
+                      
+                      <div class="px-4 py-1 min-w-[140px] text-center flex flex-col justify-center">
+                        <span class="text-[9px] font-black text-neutral-500 uppercase leading-none mb-1 tracking-tighter">
+                          {{ currentLibraryPreset ? "EVALUATING" : "LIBRARY" }}
+                        </span>
+                        <span :class="['text-[11px] font-bold uppercase truncate max-w-[180px] leading-tight', currentLibraryPreset ? 'text-white' : 'text-neutral-600']">
+                          {{ currentLibraryPreset ? currentLibraryPreset.name : "SELECT..." }}
+                        </span>
+                      </div>
+
+                      <button @click="nextLibraryPreset" class="p-2 sm:p-3 hover:text-synth-neon transition-colors active:scale-90" title="Next Preset">
+                        <ChevronRight class="w-5 h-5 sm:w-6 sm:h-6" />
+                      </button>
+
+                      <button v-if="currentLibraryPreset" @click="exitLibraryBrowser" class="p-2 sm:p-3 text-rose-500 hover:text-rose-400 transition-colors ml-1 active:scale-90" title="Cancel Evaluation">
+                        <X class="w-4 h-4 sm:w-5 sm:h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div class="h-px flex-1 bg-neutral-900 mx-4"></div>
+                  
+                  <!-- Info/Helper -->
+                  <div v-if="currentLibraryPreset" class="text-[9px] font-mono text-synth-neon animate-pulse uppercase tracking-widest hidden sm:block">
+                    Click any pad to assign
+                  </div>
                 </div>
-                <input v-model.number="paramValues[i]" type="range" min="0" max="127" 
-                  @input="updateParamValue(i, paramValues[i])" 
-                  class="flex-1 w-full max-w-[20px] cursor-ns-resize vertical-slider" 
+                
+                <div class="grid grid-cols-8 gap-3">
+                  <button v-for="(sound, idx) in sounds" :key="idx"
+                    @click="selectSound(idx)"
+                    :class="[
+                      'h-20 rounded-xl border-2 flex flex-col items-center justify-center p-2 gap-1 transition-all relative overflow-hidden group',
+                      getPadColorClass(idx, currentIdx === idx)
+                    ]"
+                  >
+                    <div v-if="currentIdx === idx" class="absolute inset-0 bg-white/5 animate-pulse pointer-events-none"></div>
+                    <span class="w-full text-center text-[11px] font-black uppercase tracking-tight leading-tight line-clamp-2 break-words z-10">{{ sound.name || `PAD ${idx + 1}` }}</span>
+                    <span v-if="sound.name && sound.category" class="w-full text-center text-[9px] font-mono uppercase tracking-widest opacity-40 z-10">{{ sound.category }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- SECTION: TRACK PADS -->
+              <div class="mb-4 ">
+                <div class="flex items-center justify-between mb-4 px-1 overflow-y-hidden">
+                  <h3 class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono">Backing Tracks</h3>
+                  <div class="h-px flex-1 bg-neutral-900 mx-4"></div>
+                </div>
+                
+                <PlaylistPadGrid
+                  :playlist="playlist"
+                  :playlist-idx="playlistIdx"
+                  :is-playing="isPlaying"
+                  :current-time="currentTime"
+                  @play="playFromPlaylist"
+                  @prev="prevTrack"
+                  @next="nextTrack"
+                  @togglePlay="handlePlaylistToggle"
                 />
-                <div class="text-[10px] font-mono text-synth-neon font-bold h-4">{{ paramValues[i] }}</div>
               </div>
             </div>
-            <div v-else class="flex items-center justify-center h-48 border border-dashed border-neutral-800 rounded-xl">
-              <span class="text-xs font-mono text-neutral-600 uppercase tracking-widest">Select a pad to view controls</span>
-            </div> -->
-          </div>
 
+            <!-- PERFORMANCE FOOTER PLAYER -->
+            <div v-if="tab === 'perf'" class="shrink-0 p-4 bg-black/60 border-t border-neutral-900 flex items-center justify-between px-8 py-2">
+              <!-- Left: Stats -->
+              <div class="flex flex-col gap-1">
+                <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Total Playlist</span>
+                <span class="text-xs font-black text-neutral-300 font-mono tracking-wider">{{ formatTime(totalPlaylistDuration) }}</span>
+              </div>
+
+              <!-- Center: Controls -->
+              <div class="flex items-center gap-6">
+                <button @click="prevTrack" class="p-2 text-neutral-500 hover:text-white transition-colors active:scale-90">
+                  <SkipBack class="w-6 h-6" />
+                </button>
+                
+                <button @click="handlePlaylistToggle" 
+                  class="w-12 h-12 rounded-full bg-synth-neon text-black flex items-center justify-center shadow-[0_0_20px_rgba(0,255,136,0.3)] hover:scale-105 active:scale-95 transition-all">
+                  <Pause v-if="isPlaying" class="w-7 h-7 fill-current" />
+                  <Play v-else class="w-7 h-7 fill-current translate-x-0.5" />
+                </button>
+
+                <button @click="nextTrack" class="p-2 text-neutral-500 hover:text-white transition-colors active:scale-90">
+                  <SkipForward class="w-6 h-6" />
+                </button>
+              </div>
+
+              <!-- Right: Volume/Status -->
+              <div class="flex flex-col items-end gap-1">
+                <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Active Slot</span>
+                <span class="text-xs font-black text-synth-neon font-mono">{{ playlistIdx >= 0 ? `#${playlistIdx + 1}` : 'IDLE' }}</span>
+              </div>
+            </div>
+
+            <!-- Global Playlist Progress Bar -->
+            <div v-if="tab === 'perf' && totalPlaylistDuration > 0" class="h-1 bg-neutral-900 w-full shrink-0 relative">
+              <div 
+                class="absolute inset-y-0 left-0 bg-synth-neon shadow-[0_0_10px_rgba(0,255,136,0.5)] transition-all duration-300"
+                :style="{ width: `${totalProgressPct}%` }"
+              />
+            </div>
+          
           <!-- Setup tab -->
-          <div v-else class="space-y-6">
-            <div class="flex gap-1 border-b border-neutral-900 pb-2">
+          <div v-if="tab === 'setup'" class="flex flex-col space-y-6 w-full p-6">
+            <div class="flex w-full gap-1 border-b border-neutral-900 pb-2">
               <button @click="setupTab = 'sounds'"
                 :class="['px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors', setupTab === 'sounds' ? 'text-synth-neon border-b-2 border-synth-neon' : 'text-neutral-500 hover:text-neutral-400']"
               >Pads (Sounds)</button>
-              <button @click="setupTab = 'params'"
+              <button @click="setupTab = 'playlist'"
+                :class="['px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors', setupTab === 'playlist' ? 'text-synth-neon border-b-2 border-synth-neon' : 'text-neutral-500 hover:text-neutral-400']"
+              >Playlist</button>
+              <!-- <button @click="setupTab = 'params'"
                 :class="['px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors', setupTab === 'params' ? 'text-synth-neon border-b-2 border-synth-neon' : 'text-neutral-500 hover:text-neutral-400']"
-              >Sliders (Params)</button>
+              >Sliders (Params)</button> -->
             </div>
 
             <!-- Manage sounds -->
             <div v-if="setupTab === 'sounds'" class="space-y-4">
+              <div class="flex items-center justify-between bg-neutral-900 rounded-lg p-3 border border-neutral-800">
+                <div class="flex flex-col">
+                  <span class="text-[10px] font-bold uppercase tracking-widest text-neutral-300">Send Program Change</span>
+                  <span class="text-[9px] font-mono text-neutral-500 mt-0.5">Change hardware patches automatically when selecting pads.</span>
+                </div>
+                <button @click="sendPcEnabled = !sendPcEnabled"
+                  :class="['w-10 h-5 rounded-full relative transition-colors shrink-0', sendPcEnabled ? 'bg-synth-neon' : 'bg-neutral-700']">
+                  <div :class="['w-3 h-3 bg-black rounded-full absolute top-1 transition-all', sendPcEnabled ? 'left-6' : 'left-1']"></div>
+                </button>
+              </div>
+              <div class="flex flex-col overflow-y-auto custom-overflow max-h-[300px]">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div v-for="(sound, idx) in sounds" :key="sound.id" class="flex items-center gap-2 bg-neutral-900 rounded-lg p-2 border border-neutral-800">
                   <span class="text-xs font-mono font-bold text-neutral-500 w-6 text-right">{{ idx + 1 }}.</span>
                   <input v-model="sound.name" type="text" :placeholder="`Pad ${idx + 1} Name...`" class="flex-1 bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none transition-colors" />
+                  <div class="flex items-center gap-1.5 bg-black border border-neutral-700 rounded px-2 py-1.5 shrink-0" title="Program Change">
+                    <span class="text-[9px] font-mono text-neutral-500 uppercase">PC</span>
+                    <input v-model.number="sound.pc" type="number" min="0" max="128" class="w-8 bg-transparent text-xs text-center text-white focus:outline-none custom-number-input" />
+                  </div>
                   <button @click="clearSound(idx)" class="p-1.5 text-neutral-500 hover:text-red-500 transition-colors" title="Clear Pad">
                     <Trash2 class="w-4 h-4" />
                   </button>
                 </div>
               </div>
+              </div>
             </div>
 
+            <!-- Manage playlist -->
+            <div v-if="setupTab === 'playlist'" class="space-y-3">
+              <!-- Playlist Panel -->
+              <div class="w-2/3 flex-1 border-l border-neutral-900 bg-neutral-950/30 overflow-y-auto custom-scrollbar p-4 flex flex-col min-w-[320px]">
+                <PlayList
+                  :playlist="playlist"
+                  :playlistRepeats="playlistRepeats"
+                  :playlistIdx="playlistIdx"
+                  :playlistCurrentRepeat="playlistCurrentRepeat"
+                  :crossfadeSec="crossfadeSec"
+                  :loopPlaylist="loopPlaylist"
+                  :is-playlist-mode="isPlaylistMode"
+                  :current-time="currentTime"
+                  :duration="duration"
+                  :total-playlist-duration="totalPlaylistDuration"
+                  :is-playing="isPlaying"
+                  :volume="volume"
+                  @update:playlist="v => mutatePlaylist('playlist', v)"
+                  @update:playlistRepeats="v => mutatePlaylist('playlistRepeats', v)"
+                  @update:playlistIdx="v => mutatePlaylist('playlistIdx', v)"
+                  @update:playlistCurrentRepeat="v => mutatePlaylist('playlistCurrentRepeat', v)"
+                  @update:crossfadeSec="v => mutatePlaylist('crossfadeSec', v)"
+                  @update:loopPlaylist="v => mutatePlaylist('loopPlaylist', v)"
+                  @play="playFromPlaylist"
+                  @clear="clearPlaylist"
+                  @seek="seekTrack"
+                  @prev="prevTrack"
+                  @next="nextTrack"
+                  @togglePlay="handlePlaylistToggle"
+                  @update:volume="updateVolume"
+                />
+              </div>
+            </div>
             <!-- Manage parameters -->
-            <div v-else class="space-y-3">
+            <!-- <div v-if="setupTab === 'params'" class="space-y-3">
               <div v-for="(p, i) in params" :key="i" class="flex flex-col sm:flex-row sm:items-center gap-3 bg-neutral-900 rounded-lg p-3 border border-neutral-800">
                 <div class="flex items-center gap-2 w-16">
                   <span class="text-xs font-mono font-bold text-neutral-500">S{{ i + 1 }}.</span>
@@ -304,13 +599,11 @@ function getPadColorClass(idx, isActive) {
                   </select>
                 </div>
               </div>
-            </div>
+            </div> -->
           </div>
-
-        </div>
-
+         
+        <!-- </div> -->
     </div>
-  </Transition>
 </template>
 
 <style scoped>
@@ -339,5 +632,15 @@ function getPadColorClass(idx, isActive) {
 
 .vertical-slider:focus {
   outline: none;
+}
+
+.custom-number-input::-webkit-outer-spin-button,
+.custom-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.custom-number-input {
+  -moz-appearance: textfield;
 }
 </style>

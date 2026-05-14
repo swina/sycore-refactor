@@ -1,58 +1,69 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { db, getDoc, setDoc, doc } from '@/lib/idb'
 import { DEFAULT_ROLES_CONFIG } from '@/lib/roles'
+import systemSeed from '@/data/system_config.json'
 
 export const useConfigStore = defineStore('config', () => {
-  const rolesConfig  = ref({ ...DEFAULT_ROLES_CONFIG })
+  const rolesConfig = ref({ ...DEFAULT_ROLES_CONFIG })
   const appSoundTypes = ref([])
-  const soundTypeBg  = ref({})
-  const midiConfig   = ref([])   // MidiController[] from admin panel
-  const categories   = ref([])   // ControlCategory[] { id, name, color, order }
-  const appVersion   = ref('')
-  const appEngine    = ref('')
-  const appName      = ref('SY.CORE')
-  const appSubtitle  = ref('for ROLAND S-1 Tweak Synth')
-  const osTarget     = ref('')
+  const soundTypeBg = ref({})
+  const midiConfig = ref([])   // MidiController[] from admin panel
+  const categories = ref([])   // ControlCategory[] { id, name, color, order }
+  const appVersion = ref('')
+  const appEngine = ref('')
+  const appName = ref('SY.CORE')
+  const appSubtitle = ref('for ROLAND S-1 Tweak Synth')
+  const osTarget = ref('')
   const toolbarConfig = ref([])  // Array of toolbar button configs
   const toolbarIconSize = ref(6)
+  const syncMidiTransportFromLivePad = ref(true)
+  const enablePartSelector = ref(true)
+
+  // Combined app settings for convenience
+  const appSettings = computed(() => ({
+    appVersion: appVersion.value,
+    appEngine: appEngine.value,
+    appName: appName.value,
+    appSubtitle: appSubtitle.value,
+    osTarget: osTarget.value,
+    toolbarIconSize: toolbarIconSize.value,
+    syncMidiTransportFromLivePad: syncMidiTransportFromLivePad.value,
+    enablePartSelector: enablePartSelector.value
+  }))
 
   async function init() {
     try {
-      // Load roles config
+      console.log('[ConfigStore] Initializing...')
+
+      // 1. Defensive seeding for empty DB
+      const settingsRef = doc(db, 'system', 'app_settings')
+      const settingsSnap = await getDoc(settingsRef)
+
+      if (!settingsSnap.exists()) {
+        console.warn('[ConfigStore] Empty DB detected. Seeding system config...')
+        if (Array.isArray(systemSeed)) {
+          for (const item of systemSeed) {
+            if (item.key && item.value) {
+              await setDoc(doc(db, 'system', item.key), item.value)
+            }
+          }
+          console.log('[ConfigStore] System seeding complete')
+        }
+      }
+
+      // 2. Load all system configs into memory
+      // Roles
       const rolesSnap = await getDoc(doc(db, 'system', 'roles_config'))
       if (rolesSnap.exists()) rolesConfig.value = rolesSnap.data()
 
-      // Load MIDI controller config
-      const ctrlSnap = await getDoc(doc(db, 'system', 'midi_config'))
-      if (ctrlSnap.exists() && Array.isArray(ctrlSnap.data().controllers)) {
-        midiConfig.value = ctrlSnap.data().controllers
-      }
-
-      // Load categories config
-      const catSnap = await getDoc(doc(db, 'system', 'categories_config'))
-      if (catSnap.exists() && Array.isArray(catSnap.data().list)) {
-        categories.value = catSnap.data().list.sort((a, b) => (a.order || 0) - (b.order || 0))
-      } else {
-        categories.value = [
-          { id: 'LFO',        name: 'LFO',        color: '#794b20', order: 1 },
-          { id: 'OSCILLATOR', name: 'OSCILLATOR',  color: '#26924a', order: 2 },
-          { id: 'ENV',        name: 'ENV',         color: '#4dcfef', order: 3 },
-          { id: 'FILTER',     name: 'FILTER',      color: '#be7c09', order: 4 },
-          { id: 'EFX',        name: 'EFX',         color: '#d50bc4', order: 5 },
-          { id: 'POLY',       name: 'POLY',        color: '#a30041', order: 6 },
-          { id: 'ADVANCED',   name: 'ADVANCED',    color: '#b4b87a', order: 7 },
-          { id: 'DYNAMIC',    name: 'DYNAMIC',     color: '#293a7f', order: 8 },
-        ]
-      }
-
-      // Load sound types
+      // Sound Types
       const typesSnap = await getDoc(doc(db, 'system', 'sound_types_config'))
       if (typesSnap.exists() && Array.isArray(typesSnap.data().list)) {
         appSoundTypes.value = typesSnap.data().list
       }
 
-      // Load background images per sound type
+      // Sound Type BGs
       const bgSnap = await getDoc(doc(db, 'system', 'sound_type_bg'))
       if (bgSnap.exists()) {
         const data = bgSnap.data()
@@ -61,24 +72,109 @@ export const useConfigStore = defineStore('config', () => {
         )
       }
 
-      // Load app metadata and toolbar config
+      // MIDI Config
+      const midiSnap = await getDoc(doc(db, 'system', 'midi_config'))
+      if (midiSnap.exists() && Array.isArray(midiSnap.data().controllers)) {
+        midiConfig.value = midiSnap.data().controllers
+      }
+
+      // Categories
+      const catSnap = await getDoc(doc(db, 'system', 'categories_config'))
+      if (catSnap.exists() && Array.isArray(catSnap.data().list)) {
+        categories.value = catSnap.data().list.sort((a, b) => (a.order || 0) - (b.order || 0))
+      }
+
+      // App Settings & Toolbar
       const appSnap = await getDoc(doc(db, 'system', 'app_settings'))
       if (appSnap.exists()) {
         const appData = appSnap.data()
         appVersion.value = appData.appVersion || ''
-        appEngine.value  = appData.appEngine  || ''
+        appEngine.value = appData.appEngine || ''
         appName.value = appData.appName || 'SY.CORE'
         appSubtitle.value = appData.appSubtitle || 'for ROLAND S-1 Tweak Synth'
         osTarget.value = appData.osTarget || ''
         if (Array.isArray(appData.toolbar)) {
           toolbarConfig.value = appData.toolbar
+
+          // Migration: Ensure 'session' button exists for existing DBs
+          if (!toolbarConfig.value.find(b => b.id === 'session')) {
+            console.log('[ConfigStore] Migration: Adding session button to toolbar')
+            toolbarConfig.value.push({
+              id: 'session',
+              label: 'Session',
+              icon: 'Save',
+              enabled: true,
+              fab: 'settings',
+              toolbar: 'main'
+            })
+            // Self-persist the migration
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData,
+              toolbar: toolbarConfig.value,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.error('[ConfigStore] Migration save failed', err))
+          }
+
+          // Migration: Ensure 'looper' button exists
+          if (!toolbarConfig.value.find(b => b.id === 'looper')) {
+            console.log('[ConfigStore] Migration: Adding looper button to toolbar')
+            toolbarConfig.value.push({
+              id: 'looper',
+              label: 'Looper',
+              icon: 'RotateCw',
+              enabled: true,
+              toolbar: 'main'
+            })
+            // Self-persist the migration
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData,
+              toolbar: toolbarConfig.value,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.error('[ConfigStore] Migration save failed', err))
+          }
+          // Migration: Rename experimental/advancedmidi to midi_matrix
+          const legacyIdx = toolbarConfig.value.findIndex(b => b.id === 'experimental' || b.id === 'advancedmidi')
+          if (legacyIdx !== -1) {
+            console.log(`[ConfigStore] Migration: Renaming ${toolbarConfig.value[legacyIdx].id} to midi_matrix`)
+            toolbarConfig.value[legacyIdx].id = 'midi_matrix'
+            toolbarConfig.value[legacyIdx].label = 'MIDI Matrix'
+            toolbarConfig.value[legacyIdx].icon = 'Network'
+            toolbarConfig.value[legacyIdx].fab = 'settings'
+            // Self-persist
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData,
+              toolbar: toolbarConfig.value,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.error('[ConfigStore] Migration rename failed', err))
+          } else if (!toolbarConfig.value.find(b => b.id === 'midi_matrix')) {
+            console.log('[ConfigStore] Migration: Adding midi_matrix button to toolbar')
+            toolbarConfig.value.push({
+              id: 'midi_matrix',
+              label: 'MIDI Matrix',
+              icon: 'Network',
+              enabled: true,
+              fab: 'settings',
+              toolbar: 'main'
+            })
+            // Self-persist
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData,
+              toolbar: toolbarConfig.value,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.error('[ConfigStore] Migration add failed', err))
+          }
         }
         if (appData.toolbarIconSize) {
           toolbarIconSize.value = appData.toolbarIconSize
         }
+        
+        syncMidiTransportFromLivePad.value = appData.syncMidiTransportFromLivePad ?? true
+        enablePartSelector.value = appData.enablePartSelector ?? true
       }
+
+      console.log('[ConfigStore] Initialization complete')
     } catch (e) {
-      console.error('Config load error', e)
+      console.error('[ConfigStore] Initialization failed', e)
     }
   }
 
@@ -111,6 +207,8 @@ export const useConfigStore = defineStore('config', () => {
       osTarget: osTarget.value,
       toolbar: toolbarConfig.value,
       toolbarIconSize: toolbarIconSize.value,
+      syncMidiTransportFromLivePad: syncMidiTransportFromLivePad.value,
+      enablePartSelector: enablePartSelector.value,
       updatedAt: new Date().toISOString(),
     })
   }
@@ -119,6 +217,7 @@ export const useConfigStore = defineStore('config', () => {
     rolesConfig, appSoundTypes,
     soundTypeBg, midiConfig, categories, appVersion, appEngine,
     appName, appSubtitle, osTarget, toolbarConfig, toolbarIconSize,
+    syncMidiTransportFromLivePad, enablePartSelector, appSettings,
     init,
     saveRolesConfig, saveMidiConfig,
     saveSoundTypes, saveSoundTypeBg, saveAppSettings,

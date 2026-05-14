@@ -1,6 +1,7 @@
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useArpStore }    from '@/stores/useArpStore'
 import { useUiStore }     from '@/stores/useUiStore'
+import { useLivePadStore } from '@/stores/useLivePadStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 
 /**
@@ -12,6 +13,7 @@ export function useAppActions() {
   const presetStore = usePresetStore()
   const arpStore    = useArpStore()
   const uiStore     = useUiStore()
+  const livePadStore = useLivePadStore()
 
   function dispatchAction(action, ccVal = 0) {
     switch (action) {
@@ -57,8 +59,13 @@ export function useAppActions() {
       case 'toggle_midi_capture':  uiStore.isCaptureOpen       = !uiStore.isCaptureOpen;       break
       case 'toggle_liveset':       uiStore.isLiveSetOpen       = !uiStore.isLiveSetOpen;       break
       case 'toggle_panel':         uiStore.isPanelCollapsed    = !uiStore.isPanelCollapsed;    break
+      case 'toggle_looper':        uiStore.isLooperOpen        = !uiStore.isLooperOpen;        break
       case 'open_sound_types':     uiStore.isTypesOpen         = true;                        break
       case 'open_sound_history':   uiStore.isHistoryOpen       = true;                        break
+      case 'open_midi_matrix':    uiStore.isMidiMatrixOpen  = !uiStore.isMidiMatrixOpen; break
+
+      case 'midi_panic':
+        midiStore.panic(); break
 
       case 'toggle_track_player':
         window.dispatchEvent(new CustomEvent('toggle-backing-track')); break
@@ -66,6 +73,26 @@ export function useAppActions() {
         window.dispatchEvent(new CustomEvent('playlist-play-stop')); break
       case 'playlist_next':
         window.dispatchEvent(new CustomEvent('playlist-next')); break
+      case 'playlist_volume_cc':
+        window.dispatchEvent(new CustomEvent('playlist-volume', { detail: ccVal / 127 })); break
+      case 'capture_rec_toggle':
+        window.dispatchEvent(new CustomEvent('capture-rec-toggle')); break
+
+      case 'arp_mode_cc': {
+        const modes = ['up', 'down', 'up-down', 'random']
+        const idx = Math.floor((ccVal / 128) * modes.length)
+        arpStore.arpMode = modes[idx]
+        break
+      }
+      case 'arp_subdivision_cc': {
+        const subs = [
+          '1/4', '1/4d', '1/4t', '1/8', '1/8d', '1/8t',
+          '1/16', '1/16d', '1/16t', '1/32', '1/32d', '1/32t'
+        ]
+        const idx = Math.floor((ccVal / 128) * subs.length)
+        arpStore.arpSubdivision = subs[idx]
+        break
+      }
 
       case 'liveset_up':
         window.dispatchEvent(new CustomEvent('liveset-navigate', { detail: { dir: 'up' } })); break
@@ -76,10 +103,25 @@ export function useAppActions() {
         // Map CC value 0-127 → transpose -24..+24
         uiStore.globalTranspose = Math.round((ccVal / 127) * 48) - 24; break
 
+      case 'seq_swing_cc':
+      case 'seq_density_cc':
+      case 'seq_length_cc':
+      case 'seq_key_cc':
+      case 'seq_scale_cc':
+      case 'seq_style_cc':
+      case 'seq_transpose_cc':
+      case 'seq_gen_trigger':
+      case 'seq_duplicate':
+      case 'seq_reduce':
+        window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
+
       default:
         if (action.startsWith('liveset_pad_')) {
           const idx = parseInt(action.replace('liveset_pad_', ''), 10) - 1
           window.dispatchEvent(new CustomEvent('liveset-select-pad', { detail: { idx } }))
+        } else if (action === 'grid_pad_press') {
+          // Generic grid pad press, can be used by other components
+          window.dispatchEvent(new CustomEvent('grid-pad-press', { detail: ccVal }))
         } else {
           console.warn('Unknown AppAction:', action)
         }

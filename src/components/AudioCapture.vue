@@ -1,7 +1,8 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
+import { useDraggable } from '@/composables/useDraggable'
 import { Mp3Encoder } from '@breezystack/lamejs'
 
 const props = defineProps({
@@ -9,6 +10,12 @@ const props = defineProps({
 })
 
 const uiStore = useUiStore()
+
+const { x, y, startDrag } = useDraggable(
+  Math.max(8, (window.innerWidth - 480) / 2),
+  window.innerHeight - 320,
+  'S1_CAPTURE_POS'
+)
 
 // ── Reactive state ────────────────────────────────────────────────────────────
 const devices          = ref([])
@@ -326,14 +333,23 @@ function fmtTime(s) {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
+let _recToggleHandler = null
+
 onMounted(() => {
   navigator.mediaDevices?.addEventListener('devicechange', refreshDevices)
   if (uiStore.isAudioCaptureOpen) startMonitor(selectedDeviceId.value)
+  
+  _recToggleHandler = () => {
+    if (isRecording.value) stopRecording()
+    else startRecording()
+  }
+  window.addEventListener('capture-rec-toggle', _recToggleHandler)
 })
 
 onUnmounted(() => {
   stopAll()
   navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
+  window.removeEventListener('capture-rec-toggle', _recToggleHandler)
 })
 </script>
 
@@ -341,11 +357,15 @@ onUnmounted(() => {
   <Transition name="capture">
     <div
       v-if="uiStore.isAudioCaptureOpen"
-      class="fixed bottom-[52px] right-4 z-[1000] w-[480px] bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl shadow-black/60"
+      class="fixed z-[1000] min-w-[480px] min-h-[280px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
+      :style="{ left: x + 'px', top: y + 'px' }"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800">
+      <div class="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0">
         <div class="flex items-center gap-2">
+          <div @mousedown="startDrag" class="cursor-grab active:cursor-grabbing p-1 -ml-2 text-neutral-600 hover:text-neutral-400">
+            <GripVertical class="w-3.5 h-3.5" />
+          </div>
           <Mic :class="['w-3.5 h-3.5', isRecording ? 'text-red-400' : 'text-synth-neon']" />
           <span :class="['text-[10px] font-black uppercase tracking-widest', isRecording ? 'text-red-400' : 'text-synth-neon']">
             Audio Capture
@@ -365,7 +385,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Input device selector + playlist toggle -->
-      <div class="flex items-center gap-2 px-4 py-1.5 bg-neutral-900/40 border-b border-neutral-800/60">
+      <div class="flex items-center gap-2 px-4 py-1.5 bg-neutral-900/40 border-b border-neutral-800/60 shrink-0">
         <Mic class="w-3 h-3 text-neutral-500 shrink-0" />
         <select
           :value="selectedDeviceId"
@@ -392,7 +412,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Waveform canvas -->
-      <div class="relative bg-[#080808]" style="height: 120px">
+      <div class="relative bg-[#080808] flex-1 min-h-[60px]">
         <canvas ref="canvasRef" class="w-full h-full block" />
         <div v-if="!isMonitoring" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
           <template v-if="error">
@@ -409,7 +429,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Footer controls -->
-      <div class="flex items-center gap-2 px-4 py-2 bg-neutral-900/60 border-t border-neutral-800">
+      <div class="flex items-center gap-2 px-4 py-2 bg-neutral-900/60 border-t border-neutral-800 shrink-0">
         <!-- Level meter -->
         <div class="flex items-center gap-1.5 w-24 shrink-0">
           <span class="text-[8px] font-mono text-neutral-600">IN</span>

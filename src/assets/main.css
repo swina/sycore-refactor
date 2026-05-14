@@ -36,6 +36,10 @@
         text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
     }
 
+    .text-light-blue {
+        color: rgb(56, 189, 248);
+    }
+
     /* Custom Scrollbar */
     .custom-scrollbar::-webkit-scrollbar {
         width: 6px;

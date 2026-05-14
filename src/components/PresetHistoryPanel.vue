@@ -4,18 +4,19 @@ import { X, Layers, Heart, Trash2, Download, Ghost, ChevronDown } from 'lucide-v
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useConfigStore } from '@/stores/useConfigStore'
-import BANK_DEFAULT from '@/data/BANK_DEFAULT.json'
+import { useLivePadStore } from '@/stores/useLivePadStore'
 
 const emit = defineEmits(['close'])
 
 const presetStore = usePresetStore()
 const authStore = useAuthStore()
 const configStore = useConfigStore()
+const livePadStore = useLivePadStore()
 
 const fileInput = ref(null)
 const isExporting = ref(false)
-const defaultBankLoaded = ref(false)
 const isFilterDropdownOpen = ref(false)
+const showDeleteConfirm = ref(false)
 
 // ─── Slot limit ───────────────────────────────────────────────────────────────
 
@@ -69,9 +70,13 @@ function recallPreset(preset) {
   emit('close')
 }
 
-function deletePreset(e, id) {
+async function deletePreset(e, id) {
   e.stopPropagation()
-  presetStore.deletePreset(id)
+  try {
+    await presetStore.deletePreset(id)
+  } catch (err) {
+    console.error('Failed to delete individual preset', err)
+  }
 }
 
 // ─── Export bank ──────────────────────────────────────────────────────────────
@@ -80,15 +85,16 @@ function exportBank() {
   isExporting.value = true
   try {
     const bankData = {
-      version: '1.0',
+      version: '1.1', // Increment version
       exportDate: new Date().toISOString(),
       presets: presetStore.history,
+      session: livePadStore.getSnapshot(), // Include live session snapshot
     }
     const blob = new Blob([JSON.stringify(bankData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `preset-bank-${Date.now()}.json`
+    link.download = `sycore-session-${Date.now()}.json`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -114,18 +120,33 @@ async function handleFileUpload(event) {
   try {
     const text = await file.text()
     const bankData = JSON.parse(text)
-    if (!bankData.presets || !Array.isArray(bankData.presets)) {
-      alert('Invalid bank file format')
-      return
+    
+    // Import Presets
+    if (bankData.presets && Array.isArray(bankData.presets)) {
+      for (const preset of bankData.presets) {
+        await presetStore.importPreset(preset.name, preset.data, preset.category, {
+          id: preset.id, 
+          patchNotes: preset.patchNotes, 
+          arpConfig: preset.arpConfig,
+          seqConfig: preset.seqConfig, 
+          isFavorite: preset.isFavorite,
+          createdAt: preset.createdAt, 
+          updatedAt: preset.updatedAt,
+        })
+      }
     }
-    for (const preset of bankData.presets) {
-      await presetStore.savePreset(preset.name, preset.data, preset.category, {
-        id: preset.id, patchNotes: preset.patchNotes, arpConfig: preset.arpConfig,
-        seqConfig: preset.seqConfig, isFavorite: preset.isFavorite,
-        createdAt: preset.createdAt, updatedAt: preset.updatedAt,
-      })
+
+    // Import Session
+    if (bankData.session) {
+      livePadStore.loadSnapshot(bankData.session)
+      // Trigger a refresh event for components listening to playlist changes
+      window.dispatchEvent(new CustomEvent('playlist-clear'))
+      if (bankData.session.playlist?.length > 0) {
+        // Re-emit playlist update if needed
+      }
     }
-    alert(`Imported ${bankData.presets.length} presets`)
+
+    alert(`Imported ${bankData.presets?.length || 0} presets and Live Session.`)
   } catch (err) {
     console.error('Import failed', err)
     alert('Failed to import bank file')
@@ -135,53 +156,28 @@ async function handleFileUpload(event) {
 
 // ─── Delete all ───────────────────────────────────────────────────────────────
 
-async function deleteAllPresets() {
-  if (!confirm(`Delete all ${presetStore.history.length} presets? This cannot be undone.`)) return
+function deleteAllPresets() {
+  if (presetStore.history.length === 0) {
+    // Even if empty, let's try to clear just in case of stale state
+    console.warn('Bank seems empty but calling clear anyway')
+  }
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteAll() {
+  // Mark as seeded BEFORE deleting to avoid immediate re-seeding by the store listener
+  localStorage.setItem('sycore_bank_seeded', 'true')
   await presetStore.deleteAllPresets()
+  showDeleteConfirm.value = false
 }
 
-// ─── Default bank seeding ─────────────────────────────────────────────────────
-
-async function loadDefaultBankIfNeeded() {
-  if (defaultBankLoaded.value) return
-  defaultBankLoaded.value = true
-
-  if (!authStore.user) {
-    defaultBankLoaded.value = false
-    return
-  }
-
-  await new Promise(resolve => setTimeout(resolve, 100))
-
-  if (presetStore.history.length === 0 && BANK_DEFAULT) {
-    const presets = Array.isArray(BANK_DEFAULT) ? BANK_DEFAULT : (BANK_DEFAULT.presets || BANK_DEFAULT)
-    if (presets && Array.isArray(presets)) {
-      try {
-        for (const preset of presets) {
-          await presetStore.savePreset(preset.name, preset.data, preset.category, {
-            id: preset.id, patchNotes: preset.patchNotes, arpConfig: preset.arpConfig,
-            seqConfig: preset.seqConfig, abVariant: preset.abVariant,
-            isFavorite: preset.isFavorite, createdAt: preset.createdAt, updatedAt: preset.updatedAt,
-          })
-        }
-      } catch (err) {
-        console.error('Failed to load default bank:', err)
-      }
-    }
-  }
+function cancelDeleteAll() {
+  showDeleteConfirm.value = false
 }
 
-onMounted(async () => {
+onMounted(() => {
   if (authStore.user) {
-    presetStore.loadHistory(authStore.user.uid)
-    await loadDefaultBankIfNeeded()
-  } else {
-    watch(() => authStore.user, async (newUser) => {
-      if (newUser) {
-        presetStore.loadHistory(newUser.uid)
-        await loadDefaultBankIfNeeded()
-      }
-    }, { once: true })
+    presetStore.init()
   }
 })
 </script>
@@ -262,10 +258,16 @@ onMounted(async () => {
             </label>
             <button
               @click="deleteAllPresets"
-              :disabled="presetStore.history.length === 0"
               class="text-[10px] font-mono text-red-500/70 hover:text-red-500 uppercase tracking-widest px-3 py-2 bg-neutral-900 rounded border border-red-900/30 hover:border-red-500/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Delete All
+            </button>
+            <button
+              v-if="presetStore.history.length === 0"
+              @click="presetStore.seedDefaultBank(authStore.user.uid, true)"
+              class="text-[10px] font-mono text-synth-neon/70 hover:text-synth-neon uppercase tracking-widest px-3 py-2 bg-neutral-900 rounded border border-synth-neon/30 hover:border-synth-neon/50 transition-colors"
+            >
+              Restore Defaults
             </button>
             <button
               @click="emit('close')"
@@ -355,6 +357,36 @@ onMounted(async () => {
       </div>
 
     </div>
+
+    <!-- ── DELETE ALL CONFIRM MODAL ── -->
+    <Transition name="fade">
+      <div v-if="showDeleteConfirm" class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-md" @click="cancelDeleteAll" />
+        <div class="relative bg-neutral-950 border border-red-500/30 rounded-3xl p-8 max-w-sm w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] text-center">
+          <div class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+            <Trash2 class="w-8 h-8 text-red-500" />
+          </div>
+          <h3 class="text-xl font-black text-white uppercase tracking-tight mb-2">Wipe Sound Bank?</h3>
+          <p class="text-neutral-400 text-xs font-mono uppercase tracking-widest leading-relaxed mb-8">
+            This will permanently delete all {{ presetStore.history.length }} sounds. This action cannot be undone.
+          </p>
+          <div class="flex flex-col gap-3">
+            <button
+              @click="confirmDeleteAll"
+              class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl uppercase tracking-widest text-xs transition-all active:scale-95"
+            >
+              Yes, Delete Everything
+            </button>
+            <button
+              @click="cancelDeleteAll"
+              class="w-full bg-neutral-900 hover:bg-neutral-800 text-neutral-400 font-black py-4 rounded-xl uppercase tracking-widest text-xs border border-neutral-800 transition-all active:scale-95"
+            >
+              Cancel / Undo
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -368,4 +400,7 @@ onMounted(async () => {
   opacity: 0;
   transform: translateY(-4px);
 }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

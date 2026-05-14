@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Settings2, Trash2, RefreshCw } from 'lucide-vue-next'
+import { Settings2, Trash2, RefreshCw, X } from 'lucide-vue-next'
 import { midiService } from '@/core/midi/MidiService'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -94,11 +94,39 @@ watch(logs, async () => {
 // ─── Colour helper ────────────────────────────────────────────────────────────
 
 function logClass(log) {
-  if (log.includes('SysEx')) return 'text-blue-400'
-  if (log.includes('CC#'))   return 'text-emerald-400'
-  if (log.includes('Note'))  return 'text-yellow-400'
+  if (log.includes('[SYSTEM]')) return 'text-indigo-400 font-bold italic'
+  if (log.includes('SysEx'))    return 'text-blue-400'
+  if (log.includes('CC#'))      return 'text-emerald-400'
+  if (log.includes('Note'))     return 'text-yellow-400'
   return 'text-neutral-300'
 }
+
+// ─── System Logs ──────────────────────────────────────────────────────────────
+const systemBuffer = ref([])
+function addLog(entry) {
+  logs.value = logs.value.length >= 500
+    ? [...logs.value.slice(logs.value.length - 499), entry]
+    : [...logs.value, entry]
+}
+
+function handleSystemLog(e) {
+  const time = new Date().toISOString().substring(11, 23)
+  const msg = e.detail || e
+  const entry = `[${time}] [SYSTEM] ${msg}`
+  if (!uiStore.isAdminLoggerOpen) {
+    systemBuffer.value.push(entry)
+  } else {
+    addLog(entry)
+  }
+}
+
+// Flush buffer when opened
+watch(() => uiStore.isAdminLoggerOpen, (open) => {
+  if (open && systemBuffer.value.length > 0) {
+    systemBuffer.value.forEach(addLog)
+    systemBuffer.value = []
+  }
+})
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -107,17 +135,19 @@ let _unsubState = null
 onMounted(() => {
   refreshInputs()
   _unsubState = midiService.addStateChangeListener(() => refreshInputs())
+  window.addEventListener('app-system-log', handleSystemLog)
 })
 
 onUnmounted(() => {
   if (_currentInput && _handler) _currentInput.removeEventListener('midimessage', _handler)
   _unsubState?.()
+  window.removeEventListener('app-system-log', handleSystemLog)
 })
 </script>
 
 <template>
   <!-- Always-visible FAB + conditionally visible log panel -->
-  <div class="fixed bottom-4 right-4 z-[999] flex flex-col items-end gap-3 pointer-events-none">
+  <div class="fixed bottom-[52px] left-1/2 -translate-x-1/2 z-[999] flex flex-col items-center gap-3 pointer-events-none">
 
     <!-- Log panel (slides up when active) -->
     <Transition name="logger">
@@ -161,6 +191,9 @@ onUnmounted(() => {
             <span class="w-px h-4 bg-neutral-800 shrink-0" />
             <button @click="logs = []" class="text-neutral-500 hover:text-rose-500 p-1 rounded transition-colors" title="Clear">
               <Trash2 class="w-3 h-3" />
+            </button>
+            <button @click="uiStore.isAdminLoggerOpen = false" class="text-neutral-500 hover:text-white p-1 transition-colors" title="Close">
+              <X class="w-3 h-3" />
             </button>
           </div>
         </div>
@@ -210,7 +243,7 @@ onUnmounted(() => {
     </Transition>
 
     <!-- Persistent FAB button -->
-    <button
+    <!-- <button
       @click="uiStore.isAdminLoggerOpen = !uiStore.isAdminLoggerOpen"
       :class="[
         'pointer-events-auto p-3 rounded-full shadow-lg border transition-all',
@@ -221,7 +254,7 @@ onUnmounted(() => {
       title="MIDI Logger"
     >
       <Settings2 class="w-5 h-5" />
-    </button>
+    </button> -->
   </div>
 </template>
 

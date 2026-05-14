@@ -84,32 +84,44 @@ async function handleGoogleLogin() {
         </div>
 
         <form @submit.prevent="handleSubmit" class="flex flex-col gap-4">
-          <div class="relative">
-            <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-            <input
-              v-model="email"
-              type="email" placeholder="Email address" required
-              class="w-full bg-black border border-neutral-800 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-synth-neon transition-colors"
-            />
+          <div class="flex flex-col gap-1.5">
+            <label for="email" class="text-[10px] font-bold text-neutral-500 uppercase tracking-widest px-1">Email Address</label>
+            <div class="relative">
+              <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+              <input
+                id="email"
+                v-model="email"
+                type="email" placeholder="Email address" required
+                class="w-full bg-black border border-neutral-800 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-synth-neon transition-colors"
+              />
+            </div>
           </div>
 
-          <div class="relative">
-            <Lock class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-            <input
-              v-model="password"
-              type="password" placeholder="Password" required minlength="6"
-              class="w-full bg-black border border-neutral-800 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-synth-neon transition-colors"
-            />
+          <div class="flex flex-col gap-1.5">
+            <label for="password" class="text-[10px] font-bold text-neutral-500 uppercase tracking-widest px-1">Password</label>
+            <div class="relative">
+              <Lock class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+              <input
+                id="password"
+                v-model="password"
+                type="password" placeholder="Password" required minlength="6"
+                class="w-full bg-black border border-neutral-800 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-synth-neon transition-colors"
+              />
+            </div>
           </div>
 
           <Transition name="modal-card">
-            <div v-if="!isLogin" class="relative">
-              <Lock class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-              <input
-                v-model="confirmPassword"
-                type="password" placeholder="Confirm password" required minlength="6"
-                class="w-full bg-black border border-neutral-800 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-synth-neon transition-colors"
-              />
+            <div v-if="!isLogin" class="flex flex-col gap-1.5">
+              <label for="confirmPassword" class="text-[10px] font-bold text-neutral-500 uppercase tracking-widest px-1">Confirm Password</label>
+              <div class="relative">
+                <Lock class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                <input
+                  id="confirmPassword"
+                  v-model="confirmPassword"
+                  type="password" placeholder="Confirm password" required minlength="6"
+                  class="w-full bg-black border border-neutral-800 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-synth-neon transition-colors"
+                />
+              </div>
             </div>
           </Transition>
 

@@ -1,6 +1,6 @@
 <template>
-  <div class="filter-container" :style="{ width: `${width}px`, height: `${height}px` }">
-    <svg :width="width" :height="height" class="filter-svg">
+  <div class="filter-container w-full h-full">
+    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="filter-svg">
       <!-- Grid/Background -->
       <rect x="0" y="0" :width="width" :height="height" class="filter-bg" />
       
@@ -16,12 +16,12 @@
         :d="linePath" 
         fill="none"
         :stroke="color"
-        stroke-width="2.5"
+        stroke-width="1.5"
         stroke-linejoin="round"
       />
       
       <!-- Interactive node (Cutoff & Resonance representation) -->
-      <circle :cx="nodeX" :cy="nodeY" r="5" class="filter-node" :stroke="color" />
+      <circle :cx="nodeX" :cy="nodeY" r="3" class="filter-node" :stroke="color" />
     </svg>
   </div>
 </template>
@@ -51,7 +51,6 @@ const paths = computed(() => {
   const peakY = nodeY.value
   const baseY = props.height * 0.6
   const bottomY = props.height + 20 // Extend past the canvas bottom to hide the line's end
-
   const preWidth = 50  // Width of the resonance rising curve
   const postWidth = 50 // Width of the cutoff drop-off slope
 
@@ -84,20 +83,16 @@ const filledPath = computed(() => {
 <style scoped>
 .filter-container {
   position: relative;
-  background: #111;
-  border-radius: 8px;
   overflow: hidden;
-  box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-  border: 1px solid #333;
 }
 
 .filter-bg {
-  fill: #000000;
+  fill: transparent;
 }
 
 .filter-node {
   fill: #fff;
-  stroke-width: 2;
+  stroke-width: 1.5;
   transition: all 0.1s ease;
 }
 </style>

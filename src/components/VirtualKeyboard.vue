@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ChevronUp, ChevronDown, X, Settings } from 'lucide-vue-next'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { useMidiStore } from '@/stores/useMidiStore'
 
 const props = defineProps({
   channel:      { type: Number, default: 0 },
@@ -15,6 +16,7 @@ const emit = defineEmits(['close'])
 const arpStore    = useArpStore()
 const uiStore     = useUiStore()
 const configStore = useConfigStore()
+const midiStore   = useMidiStore()
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -79,7 +81,7 @@ function keyClass(key) {
     : 'bg-neutral-100 border-neutral-200 hover:bg-neutral-200'
 
   const base = key.black
-    ? 'absolute -left-3 top-0 w-6 h-20 z-20 rounded-b-md shadow-lg transition-all flex flex-col items-center justify-end pb-1 select-none cursor-pointer'
+    ? 'absolute -left-[11px] top-0 w-5 h-20 z-20 rounded-b-md shadow-lg transition-all flex flex-col items-center justify-end pb-1 select-none cursor-pointer'
     : 'w-full h-full border-r border-neutral-900 rounded-b-md transition-all flex flex-col items-center justify-end pb-2 select-none cursor-pointer'
 
   return `${base} ${key.isActive ? activeStyle : inactiveStyle}`
@@ -100,7 +102,7 @@ function handleNoteOn(keyI) {
     physicalVirtualKeysHeld++
     arpStore.pressNote(midiNote)
   } else {
-    midiService.sendNoteOn(midiNote, 100, props.channel, MidiSource.KEYBOARD)
+    midiStore.sendNoteOn(midiNote, 100)
   }
   activeNotes.value = new Set(activeNotes.value).add(midiNote)
 }
@@ -116,7 +118,7 @@ function handleNoteOff(keyI) {
       }
     }
   } else {
-    midiService.sendNoteOff(midiNote, 0, props.channel, MidiSource.KEYBOARD)
+    midiStore.sendNoteOff(midiNote, 0)
   }
   const next = new Set(activeNotes.value)
   next.delete(midiNote)
@@ -134,15 +136,15 @@ function handleMouseLeave(keyI) {
 
 function handleModChange(val) {
   modValue.value = val
-  midiService.sendCC(uiStore.globalModCC, val, props.channel, MidiSource.KEYBOARD)
+  midiStore.sendCC(uiStore.globalModCC, val)
 }
 
 function handlePitchChange(val) {
   pitchValue.value = val
   if (pitchCC.value === 128) {
-    midiService.sendPitchBend(val, props.channel, MidiSource.KEYBOARD)
+    midiStore.sendPitchBend(val)
   } else {
-    midiService.sendCC(pitchCC.value, Math.floor(val / 128), props.channel, MidiSource.KEYBOARD)
+    midiStore.sendCC(pitchCC.value, Math.floor(val / 128))
   }
 }
 
@@ -226,8 +228,8 @@ onUnmounted(() => {
 
 <template>
   <Transition name="keyboard" appear>
-    <div class="fixed bottom-[42px] left-0 w-full z-[250] bg-neutral-950/95 backdrop-blur-xl border-t border-neutral-800 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] p-2 md:px-4 pb-2">
-      <div class="max-w-6xl mx-auto flex flex-col gap-2 relative">
+    <div class="fixed bottom-[52px] left-1/2 -translate-x-1/2 w-full max-w-4xl z-[700] bg-neutral-950/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] p-2 md:px-4 pb-2">
+      <div class="flex flex-col gap-2 relative">
 
         <!-- Header -->
         <div class="flex items-center justify-between">
@@ -340,10 +342,10 @@ onUnmounted(() => {
           </div>
 
           <!-- Piano keys (25 = 2 octaves + C) -->
-          <div class="flex flex-col flex-1 ml-4 overflow-x-auto custom-scrollbar">
-            <div class="flex w-full items-start relative h-32 min-w-[600px]">
+          <div class="flex flex-col flex-1 ml-4 overflow-x-auto overflow-y-hidden custom-scrollbar">
+            <div class="flex w-full items-start justify-center relative h-32">
               <template v-for="key in keys" :key="key.i">
-                <div :class="['key-container relative', key.black ? 'w-0' : 'flex-1 h-32']">
+                <div :class="['key-container relative', key.black ? 'w-0' : 'w-10 h-32']">
                   <button
                     :class="keyClass(key)"
                     @mousedown="handleNoteOn(key.i)"
@@ -372,7 +374,7 @@ onUnmounted(() => {
 }
 .keyboard-enter-from,
 .keyboard-leave-to {
-  transform: translateY(100%);
+  transform: translate(-50%, 100%);
   opacity: 0;
 }
 

@@ -67,6 +67,13 @@
                     "toolbar": "secondary"
                 },
                 {
+                    "id": "looper",
+                    "label": "Looper",
+                    "icon": "RotateCw",
+                    "enabled": true,
+                    "toolbar": "main"
+                },
+                {
                     "id": "help",
                     "label": "Help & Info",
                     "icon": "HelpCircle",
@@ -77,13 +84,8 @@
                     "id": "routing",
                     "label": "MIDI Routing",
                     "icon": "Cable",
-                    "enabled": true
-                },
-                {
-                    "id": "experimental",
-                    "label": "Experimental Multi-MIDI",
-                    "icon": "Settings2",
-                    "enabled": true
+                    "enabled": true,
+                    "toolbar": "secondary"
                 },
                 {
                     "id": "liveset",
@@ -97,13 +99,22 @@
                     "label": "MIDI Actions",
                     "icon": "Gamepad2",
                     "enabled": true,
-                    "toolbar": "main"
+                    "toolbar": "secondary"
                 },
                 {
                     "id": "midilogger",
                     "label": "MIDI Logger",
                     "icon": "Activity",
-                    "enabled": true
+                    "enabled": true,
+                    "toolbar": "secondary"
+                },
+                {
+                    "id": "session",
+                    "label": "Session",
+                    "icon": "Save",
+                    "enabled": true,
+                    "fab": "settings",
+                    "toolbar": "main"
                 },
                 {
                     "id": "panic",
@@ -128,7 +139,9 @@
             "appName": "SY.CORE",
             "appSubtitle": "for ROLAND S-1 Tweak Synth",
             "osTarget": "ROLAND S-1-v1.02",
-            "toolbarIconSize": 6
+            "toolbarIconSize": 6,
+            "syncMidiTransportFromLivePad": true,
+            "enablePartSelector": true
         }
     },
     {
@@ -240,6 +253,21 @@
                     ]
                 },
                 {
+                    "cc": 79,
+                    "name": "lfoMode",
+                    "id": "cc_79_1777028476290",
+                    "order": 5,
+                    "category": "LFO",
+                    "type": "MULTI",
+                    "label": "LFO MODE",
+                    "min": 0,
+                    "max": 1,
+                    "options": [
+                        { "value": 0, "label": "NORM" },
+                        { "value": 1, "label": "FAST" }
+                    ]
+                },
+                {
                     "min": 0,
                     "label": "LFO",
                     "max": 127,
@@ -335,7 +363,7 @@
                     "min": 0,
                     "cc": 25,
                     "label": "LFO",
-                    "category": "FILTER",
+                    "category": "LFO",
                     "order": 2,
                     "id": "cc_25_1777028476290"
                 },
@@ -510,14 +538,18 @@
                 },
                 {
                     "cc": 106,
-                    "name": "btnSync",
+                    "name": "lfoSync",
                     "id": "cc_106_1777028476290",
-                    "order": 3,
-                    "category": "ADVANCED",
-                    "type": "SWITCH",
-                    "label": "SYNC",
+                    "order": 4,
+                    "category": "LFO",
+                    "type": "MULTI",
+                    "label": "LFO SYNC",
                     "max": 1,
-                    "min": 0
+                    "min": 0,
+                    "options": [
+                        { "value": 0, "label": "OFF" },
+                        { "value": 1, "label": "ON" }
+                    ]
                 },
                 {
                     "label": "DRAW MODE",

@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 export const useUiStore = defineStore('ui', () => {
+  const isAppInitializing = ref(true)
   // Panel visibility
   const isHistoryOpen      = ref(false)
   const isTypesOpen        = ref(false)
@@ -25,19 +26,32 @@ export const useUiStore = defineStore('ui', () => {
   const isAppMidiMapperOpen = ref(false)
   const isPatchNotesOpen   = ref(false)
   const isVelocityMapOpen  = ref(false)
+  const isLfo1Open         = ref(false)
+  const isLfo2Open         = ref(false)
   const isAdminLoggerOpen  = ref(false)
   const isFavoritesOpen    = ref(false)
   const isPortalOpen       = ref(false)
-  const isExperimentalOpen = ref(false)
   const isMidiActionsOpen  = ref(false)
   const isPanicOpen        = ref(false)
-  const isMidiPerformanceOpen = ref(false)
+  const isMainMenuOpen     = ref(false)
+  const isSideMenuOpen     = ref(false)
+  const isSessionOpen      = ref(false)
+  const isLooperOpen       = ref(false)
+  const isMidiMatrixOpen = ref(false)
+  const isAboutOpen      = ref(false)
 
   // UI state
   const isPanelCollapsed   = ref(false)
   const showFavoritesOnly  = ref(false)
   const toolbarIconSize    = ref('md')   // 'sm' | 'md' | 'lg'
   const isFullscreen       = ref(false)
+  const isPlayingPreview   = ref(false)
+  const isPlayingBacking   = ref(false)
+
+  const isAudioPlaying     = computed(() => isPlayingPreview.value || isPlayingBacking.value)
+  const lastPlaylistName   = ref(localStorage.getItem('S1_LAST_PLAYLIST') || '')
+  const activeVisualizerCategory = ref('FILTER')
+  const seqCurrentConfig        = ref(null)
 
   // Global MIDI modifiers (shared between VirtualKeyboard and ArpeggiatorPanel)
   const globalModCC        = ref(1)   // CC number for mod wheel
@@ -66,25 +80,48 @@ export const useUiStore = defineStore('ui', () => {
     isAppMidiMapperOpen.value = false
     isPatchNotesOpen.value   = false
     isVelocityMapOpen.value  = false
+    isLfo1Open.value         = false
+    isLfo2Open.value         = false
     isAdminLoggerOpen.value  = false
     isFavoritesOpen.value    = false
     isPortalOpen.value       = false
-    isExperimentalOpen.value = false
     isMidiActionsOpen.value  = false
     isPanicOpen.value        = false
-    isMidiPerformanceOpen.value = false
+    isMainMenuOpen.value     = false
+    isSideMenuOpen.value     = false
+    isSessionOpen.value      = false
+    isMidiMatrixOpen.value = false
+    isAboutOpen.value      = false
   }
 
+  function toggleMainMenu() {
+    isMainMenuOpen.value = !isMainMenuOpen.value
+    if (isMainMenuOpen.value) isSideMenuOpen.value = false
+  }
+
+  function toggleSideMenu() {
+    isSideMenuOpen.value = !isSideMenuOpen.value
+    if (isSideMenuOpen.value) isMainMenuOpen.value = false
+  }
+
+  watch(lastPlaylistName, (v) => {
+    localStorage.setItem('S1_LAST_PLAYLIST', v)
+  })
+
   return {
+    isAppInitializing,
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen,
     isArpOpen, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
     isAuthModalOpen, isAdminPanelOpen, isHelpOpen, isManualOpen,
     isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,
     isBackingTrackOpen, isLiveSetOpen, isAppMidiMapperOpen,
-    isPatchNotesOpen, isVelocityMapOpen, isAdminLoggerOpen,
-    isFavoritesOpen, isPortalOpen, isExperimentalOpen, isMidiActionsOpen, isPanicOpen, isMidiPerformanceOpen,
-    isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
+    isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,
+    isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
+    isMainMenuOpen, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
+    isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen, 
+    isPlayingPreview, isPlayingBacking, isAudioPlaying, lastPlaylistName,
+    activeVisualizerCategory, seqCurrentConfig,
     globalModCC, globalTranspose,
-    closeAll,
+    closeAll, toggleMainMenu, toggleSideMenu
   }
 })

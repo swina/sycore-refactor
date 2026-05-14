@@ -31,15 +31,41 @@ export type AppAction =
   | 'toggle_panel'
   | 'open_sound_types'
   | 'open_sound_history'
-  | 'transpose_cc';
+  | 'transpose_cc'
+  | 'toggle_looper'
+  | 'looper_record'
+  | 'looper_clear_all'
+  | 'looper_mute_take_1'
+  | 'looper_mute_take_2'
+  | 'looper_mute_take_3'
+  | 'looper_mute_take_4'
+  | 'open_midi_matrix'
+  | 'playlist_volume_cc'
+  | 'capture_rec_toggle'
+  | 'arp_mode_cc'
+  | 'arp_subdivision_cc'
+  | 'seq_swing_cc'
+  | 'seq_density_cc'
+  | 'seq_length_cc'
+  | 'seq_key_cc'
+  | 'seq_scale_cc'
+  | 'seq_style_cc'
+  | 'seq_transpose_cc'
+  | 'seq_gen_trigger'
+  | 'seq_duplicate'
+  | 'seq_reduce';
 
 export interface AppMidiMapping {
   id: string;
   device: string;   // MIDI input device name
-  cc: number;       // CC# 0–127
+  cc?: number;      // CC# 0–127
+  note?: number;    // MIDI Note# 0–127
   channel: number;  // -1 = any channel, 0–15 = specific
-  value: number;    // -1 = any (triggers when val > 63), 0–127 = exact match
+  value: number;    // -1 = any (triggers when val > 63 or Note On), 0–127 = exact match
   action: AppAction;
+  feedbackOn?: number;  // MIDI value to send back when state is ON
+  feedbackOff?: number; // MIDI value to send back when state is OFF
+  consume?: boolean;    // If true, the message will not be passed through (thru)
 }
 
 export const APP_ACTION_LABELS: Record<AppAction, string> = {
@@ -88,7 +114,42 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   open_sound_types:    'Open Sound Types',
   open_sound_history:  'Open Sound History',
   transpose_cc:        'Global Transpose via CC  (−24…+24)',
+  toggle_looper:       'Toggle Looper Panel',
+  looper_record:       'Looper: Record/Stop',
+  looper_clear_all:    'Looper: Clear All',
+  looper_mute_take_1:  'Looper: Mute/Unmute Take 1',
+  looper_mute_take_2:  'Looper: Mute/Unmute Take 2',
+  looper_mute_take_3:  'Looper: Mute/Unmute Take 3',
+  looper_mute_take_4:  'Looper: Mute/Unmute Take 4',
+  open_midi_matrix:    'Open MIDI MATRIX',
+  playlist_volume_cc:  'Track Player Volume via CC',
+  capture_rec_toggle:  'Capture: Record Start/Stop',
+  arp_mode_cc:         'Arp: Mode via CC',
+  arp_subdivision_cc:  'Arp: Division via CC',
+  seq_swing_cc:        'Seq: Swing via CC',
+  seq_density_cc:      'Seq: Density via CC',
+  seq_length_cc:       'Seq: Length via CC (2–64)',
+  seq_key_cc:          'Seq: Key via CC',
+  seq_scale_cc:        'Seq: Scale via CC',
+  seq_style_cc:        'Seq: Style via CC',
+  seq_transpose_cc:    'Seq: Transpose via CC (−24…+24)',
+  seq_gen_trigger:     'Seq: Trigger Generation',
+  seq_duplicate:       'Seq: Double Length (x2)',
+  seq_reduce:          'Seq: Half Length (/2)',
 };
 
 // Actions where the CC value (0–127) is mapped to a range (not just trigger on >63)
-export const CONTINUOUS_ACTIONS = new Set<AppAction>(['seq_bpm_cc', 'transpose_cc']);
+export const CONTINUOUS_ACTIONS = new Set<AppAction>([
+  'seq_bpm_cc', 
+  'transpose_cc', 
+  'playlist_volume_cc', 
+  'arp_mode_cc', 
+  'arp_subdivision_cc',
+  'seq_swing_cc',
+  'seq_density_cc',
+  'seq_length_cc',
+  'seq_key_cc',
+  'seq_scale_cc',
+  'seq_style_cc',
+  'seq_transpose_cc'
+]);

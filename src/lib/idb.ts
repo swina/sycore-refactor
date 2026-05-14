@@ -28,9 +28,9 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
         result[k] = new Date().toISOString();
       } else if (fv.__type === 'increment') {
         const base = (existing?.[k] as number) ?? 0;
-        result[k] = base + (fv as any).n;
+        result[k] = base + fv.n;
       } else if (fv.__type === 'deleteField') {
-        // skip — field is removed
+        result[k] = undefined;
       }
     } else {
       result[k] = v;
@@ -43,7 +43,7 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
@@ -81,31 +81,31 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-type PathSegments = string[]; // ['users', uid] | ['system', 'roles_config'] | ['users', uid, 'presets', pid]
+type PathSegments = string[];
 
 function parsePath(segments: PathSegments): { store: string; key: string } {
   if (segments.length === 2) {
     // top-level doc: e.g. ['users', uid]
-    const [col, id] = segments;
-    const storeMap: Record<string, string> = {
-      users: 'users',
-      system: 'system',
-      settings: 'settings',
-      backing_tracks: 'backing_tracks',
-      support_tickets: 'support_tickets',
-    };
-    return { store: storeMap[col] || col, key: id };
+    const [store, key] = segments;
+    return { store, key };
   }
   if (segments.length === 4) {
     // sub-collection doc: e.g. ['users', uid, 'presets', pid]
     const [, uid, , pid] = segments;
     return { store: 'user_presets', key: `${uid}__${pid}` };
   }
-  throw new Error(`Unsupported path depth: ${segments.join('/')}`);
+  throw new Error(`Invalid path segments: ${segments.join('/')}`);
 }
+
+const listeners = new Map<string, Set<() => void>>();
+
+function notifyListeners(storeKey: string) {
+  (listeners.get(storeKey) || new Set()).forEach(fn => fn());
+}
+
+// ---------------------------------------------------------------------------
+// Store Operations
+// ---------------------------------------------------------------------------
 
 async function idbGet(store: string, key: string): Promise<any | undefined> {
   const db = await openDb();
@@ -129,12 +129,19 @@ async function idbPut(store: string, value: Record<string, any>): Promise<void> 
 }
 
 async function idbDelete(store: string, key: string): Promise<void> {
+  console.log(`[IDB] Deleting from ${store}: ${key}`);
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, 'readwrite');
     const req = tx.objectStore(store).delete(key);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      console.log(`[IDB] Successfully deleted: ${key}`);
+      resolve();
+    };
+    req.onerror = () => {
+      console.error(`[IDB] Failed to delete: ${key}`, req.error);
+      reject(req.error);
+    };
   });
 }
 
@@ -143,229 +150,124 @@ async function idbGetAll(store: string): Promise<any[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, 'readonly');
     const req = tx.objectStore(store).getAll();
-    req.onsuccess = () => resolve(req.result || []);
+    req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Snapshot listeners (simple polling / event-based)
+// "Firestore" API Emulation
 // ---------------------------------------------------------------------------
-const listeners: Map<string, Set<() => void>> = new Map();
 
-function notifyListeners(storeKey: string) {
-  (listeners.get(storeKey) || new Set()).forEach(fn => fn());
-}
-
-// ---------------------------------------------------------------------------
-// DocumentReference
-// ---------------------------------------------------------------------------
 export class DocumentReference {
-  _segments: PathSegments;
-  id: string;
-
-  constructor(segments: PathSegments) {
-    this._segments = segments;
-    this.id = segments[segments.length - 1];
-  }
-
-  get path(): string { return this._segments.join('/'); }
+  constructor(public _segments: PathSegments) {}
 }
 
-// ---------------------------------------------------------------------------
-// CollectionReference
-// ---------------------------------------------------------------------------
 export class CollectionReference {
-  _segments: PathSegments; // path up to collection name
-
-  constructor(segments: PathSegments) {
-    this._segments = segments;
-  }
+  constructor(public _segments: PathSegments) {}
 }
 
-// ---------------------------------------------------------------------------
-// DocumentSnapshot
-// ---------------------------------------------------------------------------
-export class DocumentSnapshot {
-  _data: any;
-  id: string;
-  exists: () => boolean;
-
-  constructor(id: string, rawData: any) {
-    this.id = id;
-    this._data = rawData;
-    this.exists = () => rawData !== undefined && rawData !== null;
-  }
-
-  data(): any {
-    if (!this.exists()) return undefined;
-    // Remove internal __store_key if present
-    const { __store_key, ...rest } = this._data || {};
-    return rest;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// QuerySnapshot
-// ---------------------------------------------------------------------------
-export class QuerySnapshot {
-  docs: DocumentSnapshot[];
-
-  constructor(docs: DocumentSnapshot[]) {
-    this.docs = docs;
-  }
-
-  forEach(fn: (doc: DocumentSnapshot) => void) {
-    this.docs.forEach(fn);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Query (for collection queries)
-// ---------------------------------------------------------------------------
 export class Query {
-  _colRef: CollectionReference;
-  _orderField?: string;
-  _orderDir?: 'asc' | 'desc';
-  _limit?: number;
-
-  constructor(colRef: CollectionReference) {
-    this._colRef = colRef;
-  }
+  constructor(public _colRef: CollectionReference, public _ops: any[] = []) {}
 }
 
-// ---------------------------------------------------------------------------
-// Public API — mirroring Firestore
-// ---------------------------------------------------------------------------
+export class DocumentSnapshot {
+  constructor(public id: string, private _data: any) {}
+  data() { return this._data; }
+  exists() { return !!this._data; }
+}
+
+export class QuerySnapshot {
+  constructor(public docs: DocumentSnapshot[]) {}
+  get size() { return this.docs.length; }
+  get empty() { return this.docs.length === 0; }
+  forEach(callback: (doc: DocumentSnapshot) => void) {
+    this.docs.forEach(callback);
+  }
+}
 
 export function doc(dbOrCol: any, ...pathSegments: string[]): DocumentReference {
-  // Supports: doc(db, 'users', uid) | doc(db, 'users', uid, 'presets', pid) | doc(colRef, id)
   if (dbOrCol instanceof CollectionReference) {
     return new DocumentReference([...dbOrCol._segments, pathSegments[0]]);
   }
-  // dbOrCol is the 'db' placeholder — we don't actually use it
   return new DocumentReference(pathSegments);
 }
 
-export function collection(dbOrDoc: any, ...pathSegments: string[]): CollectionReference {
-  if (dbOrDoc instanceof DocumentReference) {
-    return new CollectionReference([...dbOrDoc._segments, ...pathSegments]);
-  }
+export function collection(db: any, ...pathSegments: string[]): CollectionReference {
   return new CollectionReference(pathSegments);
 }
 
-export function query(colRef: CollectionReference, ...constraints: any[]): Query {
-  const q = new Query(colRef);
-  for (const c of constraints) {
-    if (c.__type === 'orderBy') { q._orderField = c.field; q._orderDir = c.dir; }
-    if (c.__type === 'limit') { q._limit = c.n; }
-  }
-  return q;
+export function query(colRef: CollectionReference, ...ops: any[]): Query {
+  return new Query(colRef, ops);
 }
 
-export function orderBy(field: string, dir: 'asc' | 'desc' = 'asc') {
-  return { __type: 'orderBy', field, dir };
-}
-
-export function limit(n: number) {
-  return { __type: 'limit', n };
-}
+export function orderBy(field: string, dir: 'asc' | 'desc' = 'asc') { return { type: 'orderBy', field, dir }; }
+export function where(field: string, op: string, val: any) { return { type: 'where', field, op, val }; }
+export function limit(n: number) { return { type: 'limit', n }; }
 
 export async function getDoc(ref: DocumentReference): Promise<DocumentSnapshot> {
   const { store, key } = parsePath(ref._segments);
-  const raw = await idbGet(store, key);
-  return new DocumentSnapshot(ref.id, raw);
+  const data = await idbGet(store, key);
+  const id = ref._segments[ref._segments.length - 1];
+  return new DocumentSnapshot(id, data);
 }
 
-export async function getDocs(q: Query | CollectionReference): Promise<QuerySnapshot> {
-  const colRef = q instanceof Query ? q._colRef : q;
-  const { store, key: _prefix } = parsePath([...colRef._segments, '__placeholder__']);
-
+export async function getDocs(target: CollectionReference | Query): Promise<QuerySnapshot> {
+  const colRef = target instanceof Query ? target._colRef : target;
+  const { store } = parsePath([...colRef._segments, '__ph__']);
+  
   let all = await idbGetAll(store);
-
-  // Filter for sub-collections using uid prefix
+  
+  // Filter by user if it's user_presets
   if (colRef._segments.length === 3) {
-    // e.g. users/{uid}/presets
     const uid = colRef._segments[1];
     all = all.filter((r: any) => r.id?.startsWith(`${uid}__`));
   }
 
-  // Apply orderBy
-  if (q instanceof Query && q._orderField) {
-    const field = q._orderField;
-    const dir = q._orderDir === 'desc' ? -1 : 1;
-    all.sort((a: any, b: any) => {
-      const av = a[field] ?? '';
-      const bv = b[field] ?? '';
-      if (av < bv) return -dir;
-      if (av > bv) return dir;
-      return 0;
-    });
-  }
-
-  // Apply limit
-  if (q instanceof Query && q._limit !== undefined) {
-    all = all.slice(0, q._limit);
-  }
-
   const docs = all.map((raw: any) => {
     const id = colRef._segments.length === 3
-      ? raw.id?.replace(/^[^_]+__/, '') // strip uid prefix
+      ? raw.id?.split('__').slice(1).join('__') // strip uid prefix
       : raw.id;
     return new DocumentSnapshot(id, raw);
   });
+  
+  // Minimal query logic support (orderBy)
+  const ops = target instanceof Query ? target._ops : [];
+  let result = [...docs];
+  
+  ops.forEach(op => {
+    if (op.type === 'orderBy') {
+      result.sort((a, b) => {
+        const va = a.data()[op.field];
+        const vb = b.data()[op.field];
+        if (va < vb) return op.dir === 'asc' ? -1 : 1;
+        if (va > vb) return op.dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    if (op.type === 'limit') {
+      result = result.slice(0, op.n);
+    }
+  });
 
-  return new QuerySnapshot(docs);
+  return new QuerySnapshot(result);
 }
 
-export async function setDoc(
-  ref: DocumentReference,
-  data: Record<string, any>,
-  options?: { merge?: boolean }
-): Promise<void> {
+export async function setDoc(ref: DocumentReference, data: Record<string, any>, options?: { merge?: boolean }): Promise<void> {
   const { store, key } = parsePath(ref._segments);
-  let existing: any = undefined;
-  if (options?.merge) {
-    existing = await idbGet(store, key);
-  }
+  const existing = await idbGet(store, key);
   const resolved = resolveFieldValues(data, existing);
-  const toWrite = options?.merge
+  
+  const toWrite = options?.merge 
     ? { ...(existing || {}), ...resolved, id: key }
     : { ...resolved, id: key };
+  
   await idbPut(store, toWrite);
   notifyListeners(store);
 }
 
-export async function updateDoc(
-  ref: DocumentReference,
-  data: Record<string, any>
-): Promise<void> {
-  const { store, key } = parsePath(ref._segments);
-  const existing = await idbGet(store, key) || {};
-  const resolved = resolveFieldValues(data, existing);
-  // Handle dotted paths like 'midiSettings.channel'
-  const merged: Record<string, any> = { ...existing };
-  for (const [k, v] of Object.entries(resolved)) {
-    if (k.includes('.')) {
-      const parts = k.split('.');
-      let obj = merged;
-      for (let i = 0; i < parts.length - 1; i++) {
-        if (!obj[parts[i]] || typeof obj[parts[i]] !== 'object') obj[parts[i]] = {};
-        obj = obj[parts[i]];
-      }
-      obj[parts[parts.length - 1]] = v;
-    } else {
-      merged[k] = v;
-    }
-  }
-  // Handle deleteField (keys not in resolved but that were FieldValue.deleteField)
-  for (const [k, v] of Object.entries(data)) {
-    if (v && typeof v === 'object' && (v as any).__type === 'deleteField') {
-      delete merged[k];
-    }
-  }
-  await idbPut(store, { ...merged, id: key });
-  notifyListeners(store);
+export async function updateDoc(ref: DocumentReference, data: Record<string, any>): Promise<void> {
+  await setDoc(ref, data, { merge: true });
 }
 
 export async function deleteDoc(ref: DocumentReference): Promise<void> {
@@ -374,87 +276,93 @@ export async function deleteDoc(ref: DocumentReference): Promise<void> {
   notifyListeners(store);
 }
 
-export async function addDoc(
-  colRef: CollectionReference,
-  data: Record<string, any>
-): Promise<DocumentReference> {
-  const id = `auto_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const docRef = doc(colRef, id);
-  await setDoc(docRef, data);
-  return docRef;
+export async function deleteDocs(refs: DocumentReference[]): Promise<void> {
+  if (refs.length === 0) return;
+  const { store } = parsePath(refs[0]._segments);
+  const keys = refs.map(ref => parsePath(ref._segments).key);
+  
+  console.log(`[IDB] Batch deleting ${keys.length} items from ${store}`, keys);
+
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    
+    tx.oncomplete = () => {
+      console.log(`[IDB] Batch delete complete for ${keys.length} items`);
+      resolve();
+    };
+    tx.onerror = () => {
+      console.error("[IDB] Batch delete failed", tx.error);
+      reject(tx.error);
+    };
+    tx.onabort = () => {
+      console.error("[IDB] Batch delete aborted");
+      reject(new Error("Transaction aborted"));
+    };
+
+    keys.forEach(key => {
+      try {
+        os.delete(key);
+      } catch (e) {
+        console.error(`[IDB] Error calling delete for key: ${key}`, e);
+      }
+    });
+  });
+  
+  notifyListeners(store);
 }
 
-// ---------------------------------------------------------------------------
-// onSnapshot — real-time listener (polling every 2 seconds for sub-collections,
-// immediate for top-level docs)
-// ---------------------------------------------------------------------------
-export function onSnapshot(
-  target: DocumentReference,
-  callback: (snap: DocumentSnapshot) => void,
-  onError?: (error: any) => void
-): () => void;
-export function onSnapshot(
-  target: Query | CollectionReference,
-  callback: (snap: QuerySnapshot) => void,
-  onError?: (error: any) => void
-): () => void;
-export function onSnapshot(
-  target: DocumentReference | Query | CollectionReference,
-  callback: ((snap: DocumentSnapshot) => void) & ((snap: QuerySnapshot) => void),
-  onError?: (error: any) => void
-): () => void {
-  let cancelled = false;
-  let intervalId: ReturnType<typeof setInterval> | null = null;
+export async function clearCollectionRange(store: string, prefix: string): Promise<void> {
+  console.log(`[IDB] Clearing range in ${store} with prefix: ${prefix}`);
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    
+    const range = IDBKeyRange.bound(`${prefix}__`, `${prefix}__\uffff`);
+    os.delete(range);
+
+    tx.oncomplete = () => {
+      console.log(`[IDB] Range clear complete for ${prefix}`);
+      resolve();
+    };
+    tx.onerror = () => {
+      console.error("[IDB] Range clear failed", tx.error);
+      reject(tx.error);
+    };
+  });
+  
+  notifyListeners(store);
+}
+
+export async function addDoc(colRef: CollectionReference, data: Record<string, any>): Promise<DocumentReference> {
+  const id = Math.random().toString(36).slice(2, 11);
+  const ref = doc(colRef, id);
+  await setDoc(ref, data);
+  return ref;
+}
+
+export function onSnapshot(target: CollectionReference | Query, callback: (snapshot: QuerySnapshot) => void): () => void {
+  const colRef = target instanceof Query ? target._colRef : target;
+  let store = '';
+  try { store = parsePath([...colRef._segments, '__ph__']).store; } catch (_) {}
 
   const run = async () => {
-    if (cancelled) return;
-    try {
-      if (target instanceof DocumentReference) {
-        const snap = await getDoc(target);
-        if (!cancelled) (callback as (s: DocumentSnapshot) => void)(snap);
-      } else {
-        const snap = await getDocs(target as Query | CollectionReference);
-        if (!cancelled) (callback as (s: QuerySnapshot) => void)(snap);
-      }
-    } catch (err) {
-      if (!cancelled && onError) onError(err);
-    }
+    const snap = await getDocs(target);
+    callback(snap);
   };
 
-  // Initial fetch
-  run();
-
-  // Determine store to watch
-  let store = '';
-  if (target instanceof DocumentReference) {
-    try { store = parsePath(target._segments).store; } catch (_) {}
-  } else {
-    const colRef = target instanceof Query ? target._colRef : target;
-    try { store = parsePath([...colRef._segments, '__ph__']).store; } catch (_) {}
-  }
-
-  // Register listener
   if (store) {
     if (!listeners.has(store)) listeners.set(store, new Set());
-    const fn = () => run();
-    listeners.get(store)!.add(fn);
-
-    return () => {
-      cancelled = true;
-      if (intervalId) clearInterval(intervalId);
-      listeners.get(store)?.delete(fn);
-    };
+    listeners.get(store)!.add(run);
   }
 
-  // Fallback polling
-  intervalId = setInterval(run, 3000);
+  run();
+  
   return () => {
-    cancelled = true;
-    if (intervalId) clearInterval(intervalId);
+    if (store) listeners.get(store)?.delete(run);
   };
 }
 
-// ---------------------------------------------------------------------------
-// "db" placeholder (we don't need a real Firestore instance)
-// ---------------------------------------------------------------------------
-export const db = { __idb: true };
+export const db = {};

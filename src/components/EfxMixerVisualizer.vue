@@ -1,6 +1,6 @@
 <template>
-  <div class="efx-mixer-container pl-3" :style="{ width: `${width}px`, height: `${height}px` }">
-    <svg :width="width" :height="height" class="efx-mixer-svg">
+  <div class="efx-mixer-container w-full h-full">
+    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="efx-mixer-svg">
       <!-- Grid/Background -->
       <rect x="0" y="0" :width="width" :height="height" class="efx-mixer-bg" />
 
@@ -113,11 +113,7 @@ const effects = computed(() => {
 <style scoped>
 .efx-mixer-container {
   position: relative;
-  background: rgba(0, 0, 0,.60);
-  border-radius: 6px;
   overflow: hidden;
-  box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
-  border: 1px solid #333;
   display: flex;
   align-items: center;
   justify-content: center;

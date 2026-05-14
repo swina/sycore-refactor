@@ -1,65 +1,85 @@
 import { onMounted, onUnmounted, watch } from 'vue'
-import { midiService }      from '@/core/midi/MidiService'
-import { useMidiStore }     from '@/stores/useMidiStore'
-import { useMappingStore }  from '@/stores/useMappingStore'
-import { useUiStore }       from '@/stores/useUiStore'
-import { usePresetStore }   from '@/stores/usePresetStore'
-import { useConfigStore }   from '@/stores/useConfigStore'
-import { useAppActions }    from './useAppActions'
+import { midiService } from '@/core/midi/MidiService'
+import { useMidiStore } from '@/stores/useMidiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useUiStore } from '@/stores/useUiStore'
+import { usePresetStore } from '@/stores/usePresetStore'
+import { useConfigStore } from '@/stores/useConfigStore'
+import { useAppActions } from './useAppActions'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 
-/**
- * Registers CC, note, and pitch-bend listeners once on mount.
- * Handlers read current store state at call time (no stale-closure issue
- * since Pinia state is always live).
- *
- * Routing order for CC messages:
- *   1. MIDI Learn capture (mappingStore.isMidiLearning)
- *   2. Custom CC→param mapping (mappingStore.midiMappings)
- *   3. AppAction mapping (mappingStore.appMidiMappings — handled via raw listener)
- *   4. Normal param update (presetStore.lastPreset + send to hardware if echo)
- */
 export function useMidiCCListener() {
-  const midiStore    = useMidiStore()
+  const midiStore = useMidiStore()
   const mappingStore = useMappingStore()
-  const uiStore      = useUiStore()
-  const presetStore  = usePresetStore()
-  const configStore  = useConfigStore()
+  const uiStore = useUiStore()
+  const presetStore = usePresetStore()
+  const configStore = useConfigStore()
   const { dispatchAction } = useAppActions()
 
-  // Stable mod-wheel override map (mirrors MidiApp's originalModValueMap ref)
   const originalModValueMap = {}
 
-  function onCC(cc, val, chan) {
-    const midiCh    = midiStore.midiChannel - 1
-    const inputCh   = midiStore.midiInputChannel    // -1 = OMNI
-    const isControl = chan === midiCh
-    const isInput   = inputCh === -1 || chan === inputCh
+  function onCC(cc, val, chan, inputId) {
+    const midiCh = midiStore.midiChannel - 1
+    const inputCh = midiStore.midiInputChannel
+    // Find device name for mapping lookup - using service directly for latest list
+    const inputs = midiService.getInputs()
+    const inputDevice = inputs.find(i => i.id === inputId)
+    const deviceName = inputDevice?.name || null
 
-    if (!isControl && !isInput) return
-
-    // 1. MIDI Learn capture
     if (mappingStore.isMidiLearning) {
-      mappingStore.incomingCC(cc)
+      mappingStore.incomingCC(cc, deviceName, chan)
       return
     }
 
-    // 2. Remap CC via custom mapping (only from input channel, not control channel)
+    // 1. Check for User Mapping with high specificity (Device + Channel + CC)
+    // New format: "Device:CH#:CC#"
+    const preciseKey = deviceName 
+      ? `${deviceName}:CH${chan + 1}:CC${cc}`
+      : `CH${chan + 1}:CC${cc}`
+    
+    // Fallback formats for backward compatibility
+    const deviceCCKey = deviceName ? `${deviceName}:${cc}` : null
+    const plainCCKey  = `${cc}`
+
+    const mapping = mappingStore.midiMappings[preciseKey] || 
+                    (deviceCCKey ? mappingStore.midiMappings[deviceCCKey] : null) ||
+                    mappingStore.midiMappings[plainCCKey]
+    
+    if (mapping) {
+      const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+      console.log(`[MIDI Listener] Mapped input: ${deviceName || 'Unknown'} CH${chan+1} CC${cc} -> ${paramName} (${val})`)
+      applyParam(paramName, val)
+      return
+    }
+
+    // 2. Standard Channel Filtering for non-mapped messages
+    const isControl = chan === midiCh
+    const isInput = inputCh === -1 || chan === inputCh
+    
+    // Check if this device has a fixed input channel in the matrix that matches the incoming channel
+    const registration = midiStore.routingConfig.registrations[deviceName]
+    const isDeviceMatch = registration && (registration.inChannel === -1 || registration.inChannel === chan)
+
+    if (!isControl && !isInput && !isDeviceMatch) {
+       // Only log if it's not a noise/clock message
+       if (cc !== undefined) {
+         console.log(`[MIDI Listener] Filtered CC ${cc} from ${deviceName || 'Unknown'} (CH ${chan+1}). Active PART: CH ${midiCh+1}, Input: ${inputCh === -1 ? 'OMNI' : inputCh+1}`)
+       }
+       return
+    }
+
     let effectiveCC = cc
-    if (isInput && !isControl && mappingStore.midiMappings[cc]) {
-      const mappedName = mappingStore.midiMappings[cc]
+    
+    // Legacy mapping (CC only) - Check both string and number keys for safety
+    const legacyMapping = mappingStore.midiMappings[cc] || mappingStore.midiMappings[String(cc)]
+    if (isInput && !isControl && legacyMapping) {
+      const mappedName = typeof legacyMapping === 'object' ? legacyMapping.paramName : legacyMapping
       const cfg = configStore.midiConfig.find(m => m.name === mappedName)
       if (cfg) effectiveCC = cfg.cc
     }
 
-    // 3. Echo / thru logic — forward when input and output are different devices
-    const thruMode  = midiStore.selectedInputDevice &&
-                      midiStore.selectedDevice &&
-                      midiStore.selectedInputDevice !== midiStore.selectedDevice
-    const shouldEcho = thruMode
-
-    // 4. Global mod-wheel CC redirect
+    // Modulation Wheel remapping
     if (effectiveCC === 1 && uiStore.globalModCC !== 1) {
       const targetCfg = configStore.midiConfig.find(m => m.cc === uiStore.globalModCC)
       if (targetCfg) {
@@ -68,39 +88,29 @@ export function useMidiCCListener() {
             originalModValueMap[uiStore.globalModCC] =
               presetStore.lastPreset?.data?.[targetCfg.name] ?? 0
           }
-          if (shouldEcho) midiStore.sendCC(uiStore.globalModCC, val)
           applyParam(targetCfg.name, val)
         } else {
           const base = originalModValueMap[uiStore.globalModCC] ?? 0
           delete originalModValueMap[uiStore.globalModCC]
-          if (shouldEcho) midiStore.sendCC(uiStore.globalModCC, base)
           applyParam(targetCfg.name, base)
         }
-      } else if (shouldEcho) {
-        midiStore.sendCC(uiStore.globalModCC, val)
       }
       return
     }
 
-    // 5. Normal param update via dynamic config
+    // Standard Config lookup
     const paramCfg = configStore.midiConfig.find(m => m.cc === effectiveCC)
     if (paramCfg) {
       applyParam(paramCfg.name, val)
-      if (shouldEcho) midiStore.sendCC(effectiveCC, val)
       return
     }
 
-    // 5b. Fallback: S-1 hardware CC map — ensures knob moves always update
-    //     lastPreset even when midiConfig doesn't cover every CC
+    // S-1 Hardware lookup
     const s1Field = S1_CC_MAP[effectiveCC]
     if (s1Field) {
       applyParam(s1Field, val)
-      if (shouldEcho) midiStore.sendCC(effectiveCC, val)
       return
     }
-
-    // 6. Fallback: echo raw CC
-    if (shouldEcho) midiStore.sendCC(effectiveCC, val)
   }
 
   function applyParam(fieldName, val) {
@@ -108,7 +118,6 @@ export function useMidiCCListener() {
     presetStore.updateFieldValue(fieldName, val)
   }
 
-  // AppAction raw listeners (per-device, direct midimessage events)
   const appActionHandlers = []
 
   function setupAppActionListeners() {
@@ -117,26 +126,49 @@ export function useMidiCCListener() {
     if (!mappings.length || !midiStore.inputs.length) return
 
     midiStore.inputs.forEach(input => {
-      const devMappings = mappings.filter(m => m.device === input.name)
+      const devName = input.name || input.id
+      const devMappings = mappings.filter(m => m.device === devName)
       if (!devMappings.length) return
 
       const fn = (e) => {
         const data = e.data
         if (!data || data.length < 3) return
         const status = data[0]
-        if ((status & 0xF0) !== 0xB0) return
         const chan = status & 0x0F
-        const cc   = data[1]
-        const val  = data[2]
+        const isNoteOn  = (status & 0xF0) === 0x90
+        const isNoteOff = (status & 0xF0) === 0x80
+        const isCC      = (status & 0xF0) === 0xB0
+        
+        if (!isNoteOn && !isNoteOff && !isCC) return
 
+        const note = (isNoteOn || isNoteOff) ? data[1] : null
+        const cc   = isCC ? data[1] : null
+        const val  = data[2]
+        
         for (const mapping of devMappings) {
-          if (mapping.cc !== cc) continue
+          // Check message type match
+          if (mapping.note !== undefined && note !== mapping.note) continue
+          if (mapping.cc !== undefined && cc !== mapping.cc) continue
+          
           if (mapping.channel !== -1 && mapping.channel !== chan) continue
+          
+          // For triggers (non-continuous), check value or simply Note On
           if (!CONTINUOUS_ACTIONS.has(mapping.action)) {
-            const mv = mapping.value ?? -1
-            if (mv === -1) { if (val <= 63) continue }
-            else { if (val !== mv) continue }
+            // IGNORE ALL RELEASE MESSAGES for triggers
+            // (Note Off or Note On with velocity 0)
+            if (mapping.note !== undefined) {
+              if (isNoteOff || (isNoteOn && val === 0)) continue
+            } else {
+              // CC trigger logic
+              const mv = mapping.value ?? -1
+              if (mv === -1) {
+                if (val <= 63) continue
+              } else {
+                if (val !== mv) continue
+              }
+            }
           }
+
           dispatchAction(mapping.action, val)
           break
         }
@@ -152,35 +184,10 @@ export function useMidiCCListener() {
     appActionHandlers.length = 0
   }
 
-  // ── Hardware CC feedback ──────────────────────────────────────────────────
-  // Direct midimessage listeners on ALL available inputs — same pattern as
-  // MidiLoggerPanel and AppAction handlers. This works regardless of whether
-  // keyboardInput / controlInput is configured in midiService, which is the
-  // only path addCCListener (onCC above) uses.
   const hwCCHandlers = []
 
   function setupHardwareCCListeners() {
-    hwCCHandlers.forEach(({ input, fn }) => input.removeEventListener('midimessage', fn))
-    hwCCHandlers.length = 0
-
-    midiService.getInputs().forEach(input => {
-      const fn = (event) => {
-        if (!event.data || event.data.length < 3) return
-        if ((event.data[0] & 0xF0) !== 0xB0) return
-        if (mappingStore.isMidiLearning) return
-        const cc    = event.data[1]
-        const val   = event.data[2]
-        const field = S1_CC_MAP[cc]
-        if (!field || !presetStore.lastPreset) return
-        // Replace lastPreset (not mutate) to guarantee Vue 3 reactivity
-        presetStore.lastPreset = {
-          ...presetStore.lastPreset,
-          data: { ...(presetStore.lastPreset.data || {}), [field]: val },
-        }
-      }
-      input.addEventListener('midimessage', fn)
-      hwCCHandlers.push({ input, fn })
-    })
+    // Handled by onCC which is called from MidiService
   }
 
   function cleanupHardwareCCListeners() {
@@ -191,17 +198,20 @@ export function useMidiCCListener() {
   let unsubCC, unsubNote, unsubPitch, stopInputWatch
 
   onMounted(() => {
-    // Subscribe once — handlers read live store state at call time
-    unsubCC    = midiService.addCCListener(onCC)
-    unsubNote  = midiService.addNoteListener(onNote)
+    unsubCC = midiService.addCCListener(onCC)
+    unsubNote = midiService.addNoteListener(onNote)
     unsubPitch = midiService.addPitchBendListener(onPitchBend)
     setupAppActionListeners()
     setupHardwareCCListeners()
-    // Rebind whenever devices connect / disconnect
-    stopInputWatch = watch(() => midiStore.inputs.length, () => {
-      setupHardwareCCListeners()
-      setupAppActionListeners()
-    })
+    
+    stopInputWatch = watch(
+      [() => midiStore.inputs.length, () => mappingStore.appMidiMappings], 
+      () => {
+        setupHardwareCCListeners()
+        setupAppActionListeners()
+      },
+      { deep: true, immediate: true }
+    )
   })
 
   onUnmounted(() => {
@@ -213,36 +223,30 @@ export function useMidiCCListener() {
     cleanupHardwareCCListeners()
   })
 
-  function onNote(type, note, velocity, chan) {
-    const midiCh  = midiStore.midiChannel - 1
+  function onNote(type, note, velocity, chan, inputId) {
+    const midiCh = midiStore.midiChannel - 1
     const inputCh = midiStore.midiInputChannel
     const isControl = chan === midiCh
-    const isInput   = inputCh === -1 || chan === inputCh
-    if (!isControl && !isInput) return
+    const isInput = inputCh === -1 || chan === inputCh
+    
+    if (!isControl && !isInput) {
+      // console.log(`[MIDI Debug] Ignoring note from ch ${chan+1} (Target Input Ch: ${inputCh === -1 ? 'OMNI' : inputCh+1})`)
+      return
+    }
 
-    const thruMode   = midiStore.selectedInputDevice &&
-                       midiStore.selectedDevice &&
-                       midiStore.selectedInputDevice !== midiStore.selectedDevice
-    const shouldEcho = thruMode && !isControl
-
-    if (shouldEcho) {
-      if (type === 'on' && velocity > 0) midiStore.sendNoteOn(note, velocity)
-      else midiStore.sendNoteOff(note)
+    if (type === 'on' && velocity > 0) {
+      // Note logic (already handled by thru in MidiService if enabled)
     }
   }
 
-  function onPitchBend(val, chan) {
-    const midiCh  = midiStore.midiChannel - 1
+  function onPitchBend(val, chan, inputId) {
+    const midiCh = midiStore.midiChannel - 1
     const inputCh = midiStore.midiInputChannel
     const isControl = chan === midiCh
-    const isInput   = inputCh === -1 || chan === inputCh
+    const isInput = inputCh === -1 || chan === inputCh
     if (!isControl && !isInput) return
 
-    const thruMode   = midiStore.selectedInputDevice &&
-                       midiStore.selectedDevice &&
-                       midiStore.selectedInputDevice !== midiStore.selectedDevice
-    const shouldEcho = thruMode && !isControl
-    if (shouldEcho) midiStore.sendPitchBend(val)
+    // Pitch bend logic (already handled by thru in MidiService if enabled)
   }
 
   return { setupAppActionListeners }

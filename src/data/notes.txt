@@ -1,0 +1,17 @@
+1. F:\Projects\sy.core\sy.core-app\src\components\BackingTrackPlayer.vue
+    Volume Track Player as mappable action. Stop Track Player with crossfade.
+
+2. F:\Projects\sy.core\sy.core-app\src\components\AudioCapture.vue
+    Audio Capture : Play/Stop mappable. Review modal size. Draggable
+
+3. F:\Projects\sy.core\sy.core-app\src\components\LivePad.vue
+    Track Pads no track length and no progress on the pad. 
+    No total time as sum of the tracks length
+
+4. F:\Projects\sy.core\sy.core-app\src\components\Arpeggiator: 
+    Arp Mode and Arp Divisions mappable actions
+    
+5. F:\Projects\sy.core\sy.core-app\src\components\ResultsPanel.vue
+    Add to favorite doesn't work. 
+    Save has to show a message: "Preset Saved". 
+    Add Copy Preset button.

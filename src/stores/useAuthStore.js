@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { auth, onAuthStateChanged } from '@/lib/auth'
-import { db, getDoc, doc } from '@/lib/idb'
+import { db, getDoc, getDocs, collection, query, doc, setDoc } from '@/lib/idb'
 import { DEFAULT_ROLES_CONFIG } from '@/lib/roles'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -26,14 +26,23 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const userRef  = doc(db, 'users', firebaseUser.uid)
       const userSnap = await getDoc(userRef)
+      
       if (userSnap.exists()) {
         profile.value = userSnap.data()
       } else {
-        profile.value = {
+        // If this is the first user ever, make them admin
+        const usersCol = await getDocs(query(collection(db, 'users')))
+        const isFirstUser = usersCol.docs.length === 0
+        
+        const newProfile = {
           uid:   firebaseUser.uid,
           email: firebaseUser.email || '',
-          role:  'demo',
+          role:  isFirstUser ? 'admin' : 'demo',
+          createdAt: new Date().toISOString()
         }
+        await setDoc(userRef, newProfile)
+        profile.value = newProfile
+        console.log(`[AuthStore] New profile created. Role: ${newProfile.role}`)
       }
     } catch (e) {
       console.error('Failed to load profile', e)

@@ -203,15 +203,6 @@ async function handleIconSizeChange() {
               </div>
             </div>
 
-            <div v-if="midiStore.selectedDevice" class="bg-black/30 rounded-lg p-3">
-              <p class="text-xs text-neutral-500 mb-1">Active Output</p>
-              <p class="text-sm font-mono text-white">{{ midiStore.selectedDevice.name }}</p>
-            </div>
-
-            <div v-if="midiStore.selectedInputDevice" class="bg-black/30 rounded-lg p-3">
-              <p class="text-xs text-neutral-500 mb-1">Active Input</p>
-              <p class="text-sm font-mono text-white">{{ midiStore.selectedInputDevice.name }}</p>
-            </div>
           </div>
         </div>
 
