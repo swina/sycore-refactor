@@ -71,7 +71,7 @@ const AVAILABLE_ICONS = [
   'Activity','Sliders','Menu','MoreVertical','Plus','Minus','ChevronDown','ChevronUp',
   'Clock','Music','Volume2','Pause','Play','Square','Circle','Triangle',
   'Eye','EyeOff','Lock','Unlock','Trash2','Save','Download','Upload','Search','Filter',
-  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic',
+  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','Network',
 ]
 
 // All functions the app exposes as toolbar buttons.
@@ -85,6 +85,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'audio-capture',  label: 'Audio Capture',    icon: 'Mic'          },
   { id: 'visualizer',     label: 'Audio Visualizer', icon: 'Activity'     },
   { id: 'capture',        label: 'MIDI Capture',     icon: 'BarChart3'    },
+  { id: 'midi-performance', label: 'MIDI Performance', icon: 'Network'      },
   { id: 'routing',        label: 'MIDI Routing',     icon: 'Cable'        },
   { id: 'midilearn',      label: 'MIDI Mapping',     icon: 'Workflow'     },
   { id: 'midiactions',    label: 'MIDI Actions',     icon: 'Gamepad2'     },

@@ -2,6 +2,16 @@
  * MIDI Service per gestire l'accesso WebMIDI e l'invio di messaggi CC
  */
 
+const MIDI_PORT_CONFIG_KEY = 'S1_MIDI_PORTS'
+const MIDI_ROUTING_KEY = 'S1_MIDI_ROUTING'
+
+export enum MidiSource {
+  SEQUENCER = 'SEQUENCER',
+  KEYBOARD = 'KEYBOARD',
+  ARP = 'ARP',
+  UI = 'UI'
+}
+
 export class MidiService {
   private midiAccess: MIDIAccess | null = null;
   private output: MIDIOutput | null = null;
@@ -11,6 +21,17 @@ export class MidiService {
   // Stored IDs so we can re-attach after device reconnect
   private keyboardInputId: string | null = null;
   private controlInputId: string | null = null;
+
+  // Multi-Output Routing Matrix
+  private routingMatrix: Map<MidiSource, Set<string>> = new Map([
+    [MidiSource.SEQUENCER, new Set()],
+    [MidiSource.KEYBOARD, new Set()],
+    [MidiSource.ARP, new Set()],
+    [MidiSource.UI, new Set()],
+  ]);
+
+  private activeOutputs: Map<string, MIDIOutput> = new Map();
+  private broadcastMode: boolean = false;
 
   private onCCListeners: ((cc: number, val: number, chan: number) => void)[] = [];
   private onNoteListeners: ((type: 'on' | 'off', note: number, velocity: number, chan: number) => void)[] = [];
@@ -52,6 +73,8 @@ export class MidiService {
         this.onStateChangeListeners.forEach(l => l(event));
       };
 
+      this.loadRoutingMatrix();
+      this.loadBroadcastMode();
       return true;
     } catch (e) {
       console.error("Failed to access MIDI devices:", e);
@@ -72,6 +95,98 @@ export class MidiService {
   setOutput(id: string) {
     if (!this.midiAccess) return;
     this.output = this.midiAccess.outputs.get(id) || null;
+    
+    // Default: Map all sources to the primary output if none are set
+    if (this.output) {
+      this.routingMatrix.forEach((targets) => {
+        if (targets.size === 0) targets.add(id);
+      });
+      this.saveRoutingMatrix();
+    }
+  }
+
+  // --- Multi-Routing Actions ---
+
+  private saveRoutingMatrix() {
+    const data: Record<string, string[]> = {}
+    this.routingMatrix.forEach((targets, source) => {
+      data[source] = Array.from(targets)
+    })
+    localStorage.setItem(MIDI_ROUTING_KEY, JSON.stringify(data))
+  }
+
+  private loadRoutingMatrix() {
+    try {
+      const raw = localStorage.getItem(MIDI_ROUTING_KEY)
+      if (!raw) return
+      const data = JSON.parse(raw)
+      Object.entries(data).forEach(([source, targets]) => {
+        if (Array.isArray(targets)) {
+          this.routingMatrix.set(source as MidiSource, new Set(targets as string[]))
+        }
+      })
+    } catch (e) {
+      console.error('Failed to load MIDI routing matrix', e)
+    }
+  }
+
+  public setRouting(source: MidiSource, outputIds: string[]) {
+    this.routingMatrix.set(source, new Set(outputIds))
+    this.saveRoutingMatrix()
+  }
+
+  public toggleRouting(source: MidiSource, outputId: string) {
+    const targets = this.routingMatrix.get(source) || new Set()
+    if (targets.has(outputId)) {
+      targets.delete(outputId)
+    } else {
+      targets.add(outputId)
+    }
+    this.routingMatrix.set(source, targets)
+    this.saveRoutingMatrix()
+  }
+
+  public toggleBroadcastMode() {
+    this.broadcastMode = !this.broadcastMode
+    localStorage.setItem('S1_MIDI_BROADCAST', JSON.stringify(this.broadcastMode))
+  }
+
+  private loadBroadcastMode() {
+    const raw = localStorage.getItem('S1_MIDI_BROADCAST')
+    if (raw) this.broadcastMode = JSON.parse(raw) === true
+  }
+
+  getRouting(source: MidiSource): string[] {
+    return Array.from(this.routingMatrix.get(source) || []);
+  }
+
+  setBroadcastMode(enabled: boolean) {
+    this.broadcastMode = enabled;
+  }
+
+  getBroadcastMode(): boolean {
+    return this.broadcastMode;
+  }
+
+  private getTargetOutputs(source: MidiSource): MIDIOutput[] {
+    if (!this.midiAccess) return [];
+
+    if (this.broadcastMode) {
+      return Array.from(this.midiAccess.outputs.values());
+    }
+
+    const targetIds = this.routingMatrix.get(source);
+    if (!targetIds || targetIds.size === 0) {
+      // Fallback to primary output if nothing defined for this source
+      return this.output ? [this.output] : [];
+    }
+
+    const outs: MIDIOutput[] = [];
+    targetIds.forEach(id => {
+      const out = this.midiAccess?.outputs.get(id);
+      if (out) outs.push(out);
+    });
+    return outs;
   }
 
   private onRawListeners: ((event: MIDIMessageEvent) => void)[] = [];
@@ -238,24 +353,28 @@ export class MidiService {
     };
   }
 
-  sendCC(cc: number, value: number, channel: number = 0) {
-    if (!this.output) return;
+  sendCC(cc: number, value: number, channel: number = 0, source: MidiSource = MidiSource.UI) {
+    const targets = this.getTargetOutputs(source);
+    if (targets.length === 0) return;
 
-    // Status byte for CC on channel n: 0xB0 + channel
     const statusByte = 0xb0 + (channel % 16);
-    this.output.send([statusByte, cc, value]);
+    targets.forEach(out => out.send([statusByte, cc, value]));
   }
 
-  sendNoteOn(note: number, velocity: number = 100, channel: number = 0) {
-    if (!this.output) return;
+  sendNoteOn(note: number, velocity: number = 100, channel: number = 0, source: MidiSource = MidiSource.UI) {
+    const targets = this.getTargetOutputs(source);
+    if (targets.length === 0) return;
+
     const statusByte = 0x90 + (channel % 16);
-    this.output.send([statusByte, note, velocity]);
+    targets.forEach(out => out.send([statusByte, note, velocity]));
   }
 
-  sendNoteOff(note: number, velocity: number = 0, channel: number = 0) {
-    if (!this.output) return;
+  sendNoteOff(note: number, velocity: number = 0, channel: number = 0, source: MidiSource = MidiSource.UI) {
+    const targets = this.getTargetOutputs(source);
+    if (targets.length === 0) return;
+
     const statusByte = 0x80 + (channel % 16);
-    this.output.send([statusByte, note, velocity]);
+    targets.forEach(out => out.send([statusByte, note, velocity]));
   }
 
   allNotesOff(channel: number = 0) {

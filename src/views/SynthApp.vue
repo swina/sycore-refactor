@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
   LayoutGrid, Layers, Heart, ListMusic, User, BookOpen, Workflow, Cable,
-  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic
+  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Network
 } from 'lucide-vue-next'
 import * as lucideIcons from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -37,6 +37,7 @@ import AdminPanel from '@/components/AdminPanel.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiHubPanel from '@/components/MidiHubPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
+import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
 import BackingTrackPlayer from '@/components/BackingTrackPlayer.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import Welcome from '@/components/Welcome.vue'
@@ -90,6 +91,7 @@ const toolbarButtonMap = {
   visualizer:      { state: 'isVisualizerOpen',    icon: Activity,  label: 'Audio Visualizer' },
   midilogger:      { state: 'isAdminLoggerOpen',  icon: Settings2, label: 'MIDI Logger'      },
   arp:           { state: 'isArpOpen',          icon: BarChart3, label: 'Arpeggiator' },
+  'midi-performance': { state: 'isMidiPerformanceOpen', icon: Network, label: 'MIDI Performance Grid' },
 }
 
 function getToolbarIcon(buttonId) {
@@ -318,6 +320,12 @@ onMounted(() => {
       <MidiHubPanel
         v-if="uiStore.isExperimentalOpen"
         @close="uiStore.isExperimentalOpen = false"
+      />
+
+      <!-- MIDI PERFORMANCE GRID -->
+      <MidiPerformancePanel
+        v-if="uiStore.isMidiPerformanceOpen"
+        @close="uiStore.isMidiPerformanceOpen = false"
       />
 
       <!-- MIDI Mapping -->

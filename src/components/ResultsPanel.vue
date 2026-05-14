@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
 import { Edit3, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, Heart, Zap, Layers, ListMusic, LayoutGrid } from 'lucide-vue-next'
+import { MidiSource } from '@/core/midi/MidiService'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -46,8 +47,8 @@ function playPreview() {
   const notes = [60, 64, 67, 72, 67, 64, 60]
   notes.forEach((note, i) => {
     _previewTimeouts.push(
-      setTimeout(() => midiStore.sendNoteOn(note, 80), i * step),
-      setTimeout(() => midiStore.sendNoteOff(note), i * step + step * 0.75),
+      setTimeout(() => midiStore.sendNoteOn(note, 80, undefined, MidiSource.UI), i * step),
+      setTimeout(() => midiStore.sendNoteOff(note, MidiSource.UI), i * step + step * 0.75),
     )
   })
   _previewTimeouts.push(
@@ -144,7 +145,7 @@ function handleValueUpdate(cfg, rawValue) {
   const clamped = Math.max(min, Math.min(max, Math.round(rawValue)))
   presetStore.updateFieldValue(cfg.name, clamped)
   if (midiStore.selectedDevice) {
-    midiStore.sendCC(cfg.cc, clamped)
+    midiStore.sendCC(cfg.cc, clamped, undefined, MidiSource.UI)
   }
 }
 

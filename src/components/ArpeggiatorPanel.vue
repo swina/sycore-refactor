@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { ListTree, X } from 'lucide-vue-next'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
 
 const props = defineProps({
@@ -54,7 +54,7 @@ function startAprEngine() {
 
     if (notesArray.length === 0) {
       if (lastArpNote !== null) {
-        midiService.sendNoteOff(lastArpNote, 0, props.channel)
+        midiService.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
         lastArpNote = null
       }
       return
@@ -62,8 +62,8 @@ function startAprEngine() {
 
     if (notesArray.length === 1) {
       if (lastArpNote !== notesArray[0]) {
-        if (lastArpNote !== null) midiService.sendNoteOff(lastArpNote, 0, props.channel)
-        midiService.sendNoteOn(notesArray[0], 100, props.channel)
+        if (lastArpNote !== null) midiService.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+        midiService.sendNoteOn(notesArray[0], 100, props.channel, MidiSource.ARP)
         lastArpNote = notesArray[0]
       }
       return
@@ -91,13 +91,13 @@ function startAprEngine() {
     currentArpIndex = nextIndex
     const note = notesArray[nextIndex]
 
-    if (lastArpNote !== null) midiService.sendNoteOff(lastArpNote, 0, props.channel)
-    midiService.sendNoteOn(note, 100, props.channel)
+    if (lastArpNote !== null) midiService.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+    midiService.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
     lastArpNote = note
 
     setTimeout(() => {
       if (lastArpNote === note) {
-        midiService.sendNoteOff(note, 0, props.channel)
+        midiService.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
         lastArpNote = null
       }
     }, stepMs * 0.5)
@@ -110,7 +110,7 @@ function stopAprEngine() {
     arpTimer = null
   }
   if (lastArpNote !== null) {
-    midiService.sendNoteOff(lastArpNote, 0, props.channel)
+    midiService.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
     lastArpNote = null
   }
 }

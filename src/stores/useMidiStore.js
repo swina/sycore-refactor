@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 
 const LS_DEVICE     = 'midiDevice'
 const LS_INPUT      = 'midiInputDevice'
@@ -15,6 +15,14 @@ export const useMidiStore = defineStore('midi', () => {
   const selectedInputDevice = ref(localStorage.getItem(LS_INPUT) || '')
   const midiChannel        = ref(parseInt(localStorage.getItem(LS_CHANNEL) || '1'))
   const midiInputChannel   = ref(parseInt(localStorage.getItem(LS_IN_CHANNEL) || '-1'))
+
+  const broadcastMode      = ref(midiService.getBroadcastMode())
+  const routingMatrix      = ref({
+    [MidiSource.SEQUENCER]: midiService.getRouting(MidiSource.SEQUENCER),
+    [MidiSource.KEYBOARD]: midiService.getRouting(MidiSource.KEYBOARD),
+    [MidiSource.ARP]: midiService.getRouting(MidiSource.ARP),
+    [MidiSource.UI]: midiService.getRouting(MidiSource.UI)
+  })
 
   const isDeviceConnected = computed(() =>
     outputs.value.some(o => o.id === selectedDevice.value)
@@ -38,6 +46,12 @@ export const useMidiStore = defineStore('midi', () => {
       midiService.setKeyboardInput(selectedInputDevice.value)
       midiService.setControlInput(selectedInputDevice.value)
     }
+
+    // Sync matrix and broadcast from service
+    broadcastMode.value = midiService.getBroadcastMode()
+    Object.keys(routingMatrix.value).forEach(source => {
+      routingMatrix.value[source] = midiService.getRouting(source)
+    })
 
     midiService.addStateChangeListener(() => refreshDevices())
   }
@@ -69,8 +83,23 @@ export const useMidiStore = defineStore('midi', () => {
     localStorage.setItem(LS_IN_CHANNEL, String(ch))
   }
 
-  function sendCC(cc, value) {
-    midiService.sendCC(cc, value, midiChannel.value - 1)
+  function setRouting(source, deviceIds) {
+    routingMatrix.value[source] = deviceIds
+    midiService.setRouting(source, deviceIds)
+  }
+
+  function toggleRouting(source, outputId) {
+    midiService.toggleRouting(source, outputId)
+    routingMatrix.value[source] = midiService.getRouting(source)
+  }
+
+  function toggleBroadcastMode() {
+    midiService.toggleBroadcastMode()
+    broadcastMode.value = midiService.getBroadcastMode()
+  }
+
+  function sendCC(cc, value, source = MidiSource.UI) {
+    midiService.sendCC(cc, value, midiChannel.value - 1, source)
   }
 
   function sendNRPN(param, value) {
@@ -81,12 +110,12 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.sendAllCCs(ccMap, midiChannel.value - 1, nrpnCCs)
   }
 
-  function sendNoteOn(note, velocity = 100) {
-    midiService.sendNoteOn(note, velocity, midiChannel.value - 1)
+  function sendNoteOn(note, velocity = 100, source = MidiSource.UI) {
+    midiService.sendNoteOn(note, velocity, midiChannel.value - 1, source)
   }
 
-  function sendNoteOff(note) {
-    midiService.sendNoteOff(note, 0, midiChannel.value - 1)
+  function sendNoteOff(note, source = MidiSource.UI) {
+    midiService.sendNoteOff(note, 0, midiChannel.value - 1, source)
   }
 
   function sendPitchBend(value) {
@@ -105,12 +134,14 @@ export const useMidiStore = defineStore('midi', () => {
     midiReady, outputs, inputs,
     selectedDevice, selectedInputDevice,
     midiChannel, midiInputChannel,
-    isDeviceConnected,
+    isDeviceConnected, broadcastMode, routingMatrix,
     init, refreshDevices,
     setOutput, setKeyboardInput, setControlInput,
     setMidiChannel, setMidiInputChannel,
+    setRouting, toggleRouting, toggleBroadcastMode,
     sendCC, sendNRPN, sendAllCCs,
     sendNoteOn, sendNoteOff, sendPitchBend,
     allNotesOff, startClock, stopClock, setBpm,
+    MidiSource
   }
 })

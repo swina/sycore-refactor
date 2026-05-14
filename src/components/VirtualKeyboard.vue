@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ChevronUp, ChevronDown, X, Settings } from 'lucide-vue-next'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -100,7 +100,7 @@ function handleNoteOn(keyI) {
     physicalVirtualKeysHeld++
     arpStore.pressNote(midiNote)
   } else {
-    midiService.sendNoteOn(midiNote, 100, props.channel)
+    midiService.sendNoteOn(midiNote, 100, props.channel, MidiSource.KEYBOARD)
   }
   activeNotes.value = new Set(activeNotes.value).add(midiNote)
 }
@@ -116,7 +116,7 @@ function handleNoteOff(keyI) {
       }
     }
   } else {
-    midiService.sendNoteOff(midiNote, 0, props.channel)
+    midiService.sendNoteOff(midiNote, 0, props.channel, MidiSource.KEYBOARD)
   }
   const next = new Set(activeNotes.value)
   next.delete(midiNote)
@@ -134,15 +134,15 @@ function handleMouseLeave(keyI) {
 
 function handleModChange(val) {
   modValue.value = val
-  midiService.sendCC(uiStore.globalModCC, val, props.channel)
+  midiService.sendCC(uiStore.globalModCC, val, props.channel, MidiSource.KEYBOARD)
 }
 
 function handlePitchChange(val) {
   pitchValue.value = val
   if (pitchCC.value === 128) {
-    midiService.sendPitchBend(val, props.channel)
+    midiService.sendPitchBend(val, props.channel, MidiSource.KEYBOARD)
   } else {
-    midiService.sendCC(pitchCC.value, Math.floor(val / 128), props.channel)
+    midiService.sendCC(pitchCC.value, Math.floor(val / 128), props.channel, MidiSource.KEYBOARD)
   }
 }
 

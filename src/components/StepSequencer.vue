@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, ChevronDown, Save, Keyboard, Circle, RotateCcw } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
@@ -355,7 +355,7 @@ watch(isPlaying, (playing) => {
     fadeOutIntervalRef.value = window.setInterval(() => {
       fadeStep++
       const ratio = 1 - (fadeStep / fadeSteps)
-      midiStore.sendCC(11, Math.max(0, Math.floor(127 * ratio)), props.channel)
+      midiStore.sendCC(11, Math.max(0, Math.floor(127 * ratio)), props.channel, MidiSource.SEQUENCER)
 
       if (fadeStep >= fadeSteps) {
         if (fadeOutIntervalRef.value !== null) {
@@ -363,7 +363,7 @@ watch(isPlaying, (playing) => {
           fadeOutIntervalRef.value = null
         }
         emit('stop')
-        setTimeout(() => midiStore.sendCC(11, 127, props.channel), 50)
+        setTimeout(() => midiStore.sendCC(11, 127, props.channel, MidiSource.SEQUENCER), 50)
       }
     }, intervalMs)
 
@@ -372,7 +372,7 @@ watch(isPlaying, (playing) => {
     if (fadeOutIntervalRef.value !== null) {
       clearInterval(fadeOutIntervalRef.value)
       fadeOutIntervalRef.value = null
-      midiStore.sendCC(11, 127, props.channel)
+      midiStore.sendCC(11, 127, props.channel, MidiSource.SEQUENCER)
     }
 
     let stepCounter = 0
@@ -388,8 +388,8 @@ watch(isPlaying, (playing) => {
         const step = state.steps[stepIdx]
 
         if (step.active) {
-          if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel)
-          if (state.param2CC !== null) midiStore.sendCC(state.param2CC, step.param2Value, state.channel)
+          if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel, MidiSource.SEQUENCER)
+          if (state.param2CC !== null) midiStore.sendCC(state.param2CC, step.param2Value, state.channel, MidiSource.SEQUENCER)
 
           const stepDurationMs = 60000 / (state.bpm * 4)
           let noteDurationMs = stepDurationMs * (step.gate / 100)
@@ -398,8 +398,8 @@ watch(isPlaying, (playing) => {
 
           step.notes.forEach(note => {
             const clampedNote = Math.max(0, Math.min(127, note + state.transpose))
-            midiStore.sendNoteOn(clampedNote, step.velocity, state.channel)
-            window.setTimeout(() => midiStore.sendNoteOff(clampedNote, 0, state.channel), noteDurationMs)
+            midiStore.sendNoteOn(clampedNote, step.velocity, state.channel, midiStore.MidiSource.SEQUENCER)
+            window.setTimeout(() => midiStore.sendNoteOff(clampedNote, midiStore.MidiSource.SEQUENCER), noteDurationMs)
           })
         }
 

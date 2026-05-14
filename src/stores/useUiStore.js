@@ -31,6 +31,7 @@ export const useUiStore = defineStore('ui', () => {
   const isExperimentalOpen = ref(false)
   const isMidiActionsOpen  = ref(false)
   const isPanicOpen        = ref(false)
+  const isMidiPerformanceOpen = ref(false)
 
   // UI state
   const isPanelCollapsed   = ref(false)
@@ -71,6 +72,7 @@ export const useUiStore = defineStore('ui', () => {
     isExperimentalOpen.value = false
     isMidiActionsOpen.value  = false
     isPanicOpen.value        = false
+    isMidiPerformanceOpen.value = false
   }
 
   return {
@@ -80,7 +82,7 @@ export const useUiStore = defineStore('ui', () => {
     isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,
     isBackingTrackOpen, isLiveSetOpen, isAppMidiMapperOpen,
     isPatchNotesOpen, isVelocityMapOpen, isAdminLoggerOpen,
-    isFavoritesOpen, isPortalOpen, isExperimentalOpen, isMidiActionsOpen, isPanicOpen,
+    isFavoritesOpen, isPortalOpen, isExperimentalOpen, isMidiActionsOpen, isPanicOpen, isMidiPerformanceOpen,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
     globalModCC, globalTranspose,
     closeAll,
