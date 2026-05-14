@@ -35,6 +35,7 @@ const ACTION_MAP = {
   looper:         () => uiStore.isLooperOpen = !uiStore.isLooperOpen,
   admin:          () => uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen,
   midi_matrix:   () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
+  'midi-performance':() => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
 }
 
 const COLORS = [

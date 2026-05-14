@@ -33,6 +33,7 @@ const ACTION_MAP = {
   session:        () => uiStore.isSessionOpen = !uiStore.isSessionOpen,
   admin:          () => uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen,
   midi_matrix:    () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
+  'midi-performance': () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
 }
 
 const COLORS = [
