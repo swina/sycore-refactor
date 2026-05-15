@@ -62,7 +62,11 @@
               <span v-if="track.bpm" class="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }} BPM</span>
             </span>
             <span v-if="track.url?.startsWith('blob:')" class="text-[9px] font-mono text-sky-400 bg-sky-400/10 px-1 rounded w-fit">LOCAL</span>
-            <span v-else class="text-[10px] text-neutral-500 uppercase tracking-wider">{{ track.genre }}</span>
+            <span v-else class="text-[10px] text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+              {{ track.genre }}
+              <span v-if="track.author" class="text-neutral-700">•</span>
+              <span v-if="track.author" class="text-neutral-400 normal-case italic font-medium truncate">{{ track.author }}</span>
+            </span>
           </div>
           <!-- Repeat N× -->
           <div class="flex items-center gap-0.5 shrink-0" @click.stop>
@@ -293,7 +297,8 @@ function deleteSavedPlaylist(name) {
   }
 }
 onMounted(() => {
-  if (uiStore.lastPlaylistName && savedPlaylists.value[uiStore.lastPlaylistName]) {
+  // Only auto-load if current playlist is empty to avoid overwriting tracks added from Library
+  if (props.playlist.length === 0 && uiStore.lastPlaylistName && savedPlaylists.value[uiStore.lastPlaylistName]) {
     loadSavedPlaylist(uiStore.lastPlaylistName)
   }
 })

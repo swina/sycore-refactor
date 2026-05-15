@@ -48,7 +48,9 @@ const isAdding        = ref(false)
 const newTrackUrl     = ref('')
 const newTrackLabel   = ref('')
 const newTrackGenre   = ref('')
+const newTrackAuthor  = ref('')
 const editingTrackId  = ref(null)
+const editingTrackIsBase64 = ref(false)
 const deletingTrackId = ref(null)
 const tracks          = ref([])
 const detectedBpm     = ref(null)
@@ -462,6 +464,7 @@ function clearPlaylist() {
   playlistRepeats.value = []
   playlistIdx.value = -1
   playlistCurrentRepeat.value = 1
+  uiStore.lastPlaylistName = ""
 }
 
 function playlistPrev() {
@@ -479,14 +482,35 @@ function playlistNext() {
 }
 
 // ── Admin CRUD ────────────────────────────────────────────────────────────────
-function cancelAdd() { isAdding.value = false; newTrackUrl.value = ''; newTrackLabel.value = ''; newTrackGenre.value = ''; newTrackBpm.value = '' }
-function cancelEdit() { editingTrackId.value = null; newTrackUrl.value = ''; newTrackLabel.value = ''; newTrackGenre.value = ''; newTrackBpm.value = '' }
+function cancelAdd() { 
+  isAdding.value = false; 
+  newTrackUrl.value = ''; 
+  newTrackLabel.value = ''; 
+  newTrackGenre.value = ''; 
+  newTrackAuthor.value = '';
+  newTrackBpm.value = '' 
+}
+function cancelEdit() { 
+  editingTrackId.value = null; 
+  editingTrackIsBase64.value = false;
+  newTrackUrl.value = ''; 
+  newTrackLabel.value = ''; 
+  newTrackGenre.value = ''; 
+  newTrackAuthor.value = '';
+  newTrackBpm.value = '' 
+}
 
 async function addTrack(e) {
   e.preventDefault()
   if (!newTrackUrl.value || !newTrackLabel.value || !newTrackGenre.value) return
   try {
-    const data = { url: newTrackUrl.value, label: newTrackLabel.value, genre: newTrackGenre.value, createdAt: serverTimestamp() }
+    const data = { 
+      url: newTrackUrl.value, 
+      label: newTrackLabel.value, 
+      genre: newTrackGenre.value, 
+      author: newTrackAuthor.value,
+      createdAt: serverTimestamp() 
+    }
     if (newTrackBpm.value !== '') data.bpm = Number(newTrackBpm.value)
     await addDoc(collection(db, 'backing_tracks'), data)
     cancelAdd()
@@ -495,9 +519,18 @@ async function addTrack(e) {
 
 async function saveEditTrack(e) {
   e.preventDefault()
-  if (!editingTrackId.value || !newTrackUrl.value || !newTrackLabel.value || !newTrackGenre.value) return
+  if (!editingTrackId.value || !newTrackLabel.value || !newTrackGenre.value) return
   try {
-    const data = { url: newTrackUrl.value, label: newTrackLabel.value, genre: newTrackGenre.value }
+    const data = { 
+      label: newTrackLabel.value, 
+      genre: newTrackGenre.value,
+      author: newTrackAuthor.value
+    }
+    // Only update URL if not base64 (local)
+    if (!editingTrackIsBase64.value) {
+      data.url = newTrackUrl.value
+    }
+    
     data.bpm = newTrackBpm.value !== '' ? Number(newTrackBpm.value) : deleteField()
     await updateDoc(doc(db, 'backing_tracks', editingTrackId.value), data)
     cancelEdit()
@@ -508,7 +541,13 @@ function startEditTrack(track, e) {
   e.stopPropagation()
   isAdding.value = false
   editingTrackId.value = track.id
-  newTrackUrl.value = track.url; newTrackLabel.value = track.label; newTrackGenre.value = track.genre; newTrackBpm.value = track.bpm || ''
+  editingTrackIsBase64.value = track.url?.startsWith('data:')
+  
+  newTrackUrl.value = editingTrackIsBase64.value ? 'Local File (Base64)' : track.url
+  newTrackLabel.value = track.label
+  newTrackGenre.value = track.genre
+  newTrackAuthor.value = track.author || ''
+  newTrackBpm.value = track.bpm || ''
 }
 
 async function deleteTrack(id, e) {
@@ -891,7 +930,10 @@ onUnmounted(() => {
               <form v-if="isAdmin && isAdding" @submit="addTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
                 <input type="url" placeholder="MP3 URL" v-model="newTrackUrl" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
                 <input type="text" placeholder="Label" v-model="newTrackLabel" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
-                <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
+                  <input type="text" placeholder="Author" v-model="newTrackAuthor" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                </div>
                 <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
                 <div class="flex gap-2 mt-1">
                   <button type="submit" class="flex-1 bg-synth-neon text-black text-xs font-bold py-1.5 rounded hover:bg-white transition-colors">Save</button>
@@ -905,9 +947,22 @@ onUnmounted(() => {
                   <!-- Edit form for this track -->
                   <div v-if="editingTrackId === track.id" @click.stop>
                     <form @submit="saveEditTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
-                      <input type="url" placeholder="MP3 URL" v-model="newTrackUrl" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
+                      <div class="relative">
+                        <input 
+                          type="text" 
+                          placeholder="MP3 URL" 
+                          v-model="newTrackUrl" 
+                          :readonly="editingTrackIsBase64"
+                          :class="['w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs focus:border-synth-neon outline-none', editingTrackIsBase64 ? 'text-neutral-500 cursor-not-allowed italic' : 'text-white']" 
+                          required 
+                        />
+                        <span v-if="editingTrackIsBase64" class="absolute right-2 top-1.5 text-[8px] font-black uppercase text-synth-neon/50">Local Only</span>
+                      </div>
                       <input type="text" placeholder="Label" v-model="newTrackLabel" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
-                      <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
+                      <div class="grid grid-cols-2 gap-2">
+                        <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
+                        <input type="text" placeholder="Author" v-model="newTrackAuthor" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                      </div>
                       <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
                       <div class="flex gap-2 mt-1">
                         <button type="submit" class="flex-1 bg-synth-neon text-black text-xs font-bold py-1.5 rounded hover:bg-white transition-colors">Save</button>
@@ -926,7 +981,11 @@ onUnmounted(() => {
                         <span v-if="track.bpm" class="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }} BPM</span>
                         <span v-if="track.duration" class="text-[9px] font-mono text-neutral-400 bg-neutral-800 px-1 rounded">{{ formatTime(track.duration) }}</span>
                       </span>
-                      <span class="text-[10px] text-neutral-500 uppercase tracking-wider">{{ track.genre }}</span>
+                      <span class="text-[10px] text-neutral-500 uppercase tracking-wider flex items-center gap-2">
+                        {{ track.genre }}
+                        <span v-if="track.author" class="text-neutral-700">•</span>
+                        <span v-if="track.author" class="text-neutral-400 normal-case italic font-medium">{{ track.author }}</span>
+                      </span>
                     </div>
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button @click.stop="addToPlaylist(track)" title="Add to playlist" class="p-1 text-neutral-500 hover:text-synth-neon transition-colors">

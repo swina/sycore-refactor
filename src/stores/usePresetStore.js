@@ -232,7 +232,15 @@ export const usePresetStore = defineStore('preset', () => {
   function applyPresetCCs(preset) {
     if (!preset?.data) return
     const midiStore = useMidiStore()
+
+    // Ensure lfoSync (CC#106) is sent first as it defines the sync mode for lfoRate (CC#3)
+    if (preset.data.lfoSync !== undefined) {
+      midiStore.sendControlValue('lfoSync', preset.data.lfoSync)
+    }
+
     Object.entries(preset.data).forEach(([field, value]) => {
+      // Skip lfoSync as it was already sent
+      if (field === 'lfoSync') return
       midiStore.sendControlValue(field, value)
     })
   }
