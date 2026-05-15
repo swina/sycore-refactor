@@ -35,7 +35,7 @@ const DEFAULT_STEP = {
   active: false,
   notes: [60],
   velocity: 100,
-  gate: 0,
+  gate: 50,
   tieSteps: 0,
   param1Value: 64,
   param2Value: 64,
@@ -547,11 +547,19 @@ onMounted(() => {
       if (now - lastHandledNoteTimeRef.value < 150) return
       lastHandledNoteTimeRef.value = now
 
+      const currentStepObj = steps.value[selectedStepIdx.value]
+      const updates = { active: true, notes: [note], velocity }
+      
+      // If gate is 0, set to default 50
+      if (!currentStepObj.gate || currentStepObj.gate === 0) {
+        updates.gate = 50
+      }
+
       if (isRecording.value) {
-        updateStep(selectedStepIdx.value, { active: true, notes: [note], velocity })
+        updateStep(selectedStepIdx.value, updates)
         selectedStepIdx.value = (selectedStepIdx.value + 1) % numSteps.value
       } else {
-        updateStep(selectedStepIdx.value, { active: true, notes: [note], velocity })
+        updateStep(selectedStepIdx.value, updates)
       }
     }
   }
