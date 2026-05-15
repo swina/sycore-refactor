@@ -33,7 +33,7 @@ export const LaunchpadMiniMK1: ControllerProfile = {
                 case 106: dispatch('toggle_arp', val); return true;
                 case 107: dispatch('toggle_liveset', val); return true;
                 case 108: dispatch('open_midi_matrix', val); return true;
-                case 109: dispatch('toggle_midi_capture', val); return true;
+                case 109: dispatch('toggle_audio_capture', val); return true;
                 case 110: dispatch('toggle_looper', val); return true;
                 case 111: dispatch('toggle_panel', val); return true;
             }
@@ -72,7 +72,7 @@ export const LaunchpadMiniMK1: ControllerProfile = {
                 if (n === 106) val = getGreen(state.arp.arpEnabled);
                 if (n === 107) val = getGreen(state.ui.isLiveSetOpen);
                 if (n === 108) val = getGreen(state.ui.isMidiMatrixOpen);
-                if (n === 109) val = getGreen(state.ui.isCaptureOpen);
+                if (n === 109) val = getGreen(state.ui.isAudioCaptureOpen);
                 if (n === 110) val = getGreen(state.ui.isLooperOpen);
                 if (n === 111) val = getGreen(!state.ui.isPanelCollapsed);
                 send([ccStatus, n, val]);

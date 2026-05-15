@@ -1,8 +1,11 @@
 import { usePresetStore } from '@/stores/usePresetStore'
-import { useArpStore }    from '@/stores/useArpStore'
-import { useUiStore }     from '@/stores/useUiStore'
+import { useArpStore } from '@/stores/useArpStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
-import { useMidiStore }    from '@/stores/useMidiStore'
+import { useMidiStore } from '@/stores/useMidiStore'
+import { useLfoStore } from '@/stores/useLfoStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 
 /**
@@ -12,21 +15,23 @@ import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
  */
 export function useAppActions() {
   const presetStore = usePresetStore()
-  const arpStore    = useArpStore()
-  const uiStore     = useUiStore()
+  const arpStore = useArpStore()
+  const uiStore = useUiStore()
   const livePadStore = useLivePadStore()
-  const midiStore   = useMidiStore()
+  const midiStore = useMidiStore()
+  const lfoStore = useLfoStore()
+  const mappingStore = useMappingStore()
 
   function dispatchAction(action, ccVal = 0) {
     switch (action) {
-      case 'prev_preset':        presetStore.navigateHistory('prev');  break
-      case 'next_preset':        presetStore.navigateHistory('next');  break
-      case 'first_preset':       presetStore.navigateHistory('first'); break
-      case 'last_preset':        presetStore.navigateHistory('last');  break
+      case 'prev_preset': presetStore.navigateHistory('prev'); break
+      case 'next_preset': presetStore.navigateHistory('next'); break
+      case 'first_preset': presetStore.navigateHistory('first'); break
+      case 'last_preset': presetStore.navigateHistory('last'); break
 
       case 'new_sound':
-      case 'generate':           presetStore.generate(false); break
-      case 'regenerate':         presetStore.generate(true);  break
+      case 'generate': presetStore.generate(false); break
+      case 'regenerate': presetStore.generate(true); break
 
       case 'save_preset':
         if (presetStore.showResults) presetStore.savePreset(); break
@@ -41,9 +46,29 @@ export function useAppActions() {
         if (presetStore.engineCacheB) presetStore.recallPreset(presetStore.engineCacheB)
         break
 
-      case 'toggle_arp':         arpStore.arpEnabled = !arpStore.arpEnabled; break
+      case 'toggle_arp':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] ARP: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
+        arpStore.arpEnabled = ccVal > 63;
+        break
+      case 'toggle_lfo_1':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] LFO 1: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
+        lfoStore.lfo1.active = ccVal > 63;
+        break
+      case 'toggle_lfo_2':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] LFO 2: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
+        lfoStore.lfo2.active = ccVal > 63;
+        break
+      case 'toggle_velocity_mapping':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] VELOCITY MAPPING: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
+        if (ccVal > 63) {
+          mappingStore.velocityConfig.active = true;
+        } else {
+          mappingStore.velocityConfig.active = false;
+          mappingStore.restoreOriginalValues();
+        }
+        break
 
-      case 'toggle_sequencer':   uiStore.isSequencerOpen = !uiStore.isSequencerOpen; break
+      case 'toggle_sequencer': uiStore.isSequencerOpen = !uiStore.isSequencerOpen; break
       case 'seq_play':
         window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } })); break
       case 'seq_stop':
@@ -57,14 +82,18 @@ export function useAppActions() {
         // Map CC value 0-127 → BPM 20-300
         arpStore.arpBpm = 20 + Math.round((ccVal / 127) * 280); break
 
-      case 'toggle_visualizer':    uiStore.isVisualizerOpen    = !uiStore.isVisualizerOpen;    break
-      case 'toggle_midi_capture':  uiStore.isCaptureOpen       = !uiStore.isCaptureOpen;       break
-      case 'toggle_liveset':       uiStore.isLiveSetOpen       = !uiStore.isLiveSetOpen;       break
-      case 'toggle_panel':         uiStore.isPanelCollapsed    = !uiStore.isPanelCollapsed;    break
-      case 'toggle_looper':        uiStore.isLooperOpen        = !uiStore.isLooperOpen;        break
-      case 'open_sound_types':     uiStore.isTypesOpen         = true;                        break
-      case 'open_sound_history':   uiStore.isHistoryOpen       = true;                        break
-      case 'open_midi_matrix':    uiStore.isMidiMatrixOpen  = !uiStore.isMidiMatrixOpen; break
+      case 'toggle_visualizer': uiStore.isVisualizerOpen = !uiStore.isVisualizerOpen; break
+      case 'toggle_midi_capture': uiStore.isCaptureOpen = !uiStore.isCaptureOpen; break
+      case 'toggle_liveset': uiStore.isLiveSetOpen = !uiStore.isLiveSetOpen; break
+      case 'toggle_panel': uiStore.isPanelCollapsed = !uiStore.isPanelCollapsed; break
+      case 'toggle_looper': uiStore.isLooperOpen = !uiStore.isLooperOpen; break
+      case 'toggle_audio_capture':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] AUDIO CAPTURE: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
+        uiStore.isAudioCaptureOpen = ccVal > 63;
+        break
+      case 'open_sound_types': uiStore.isTypesOpen = true; break
+      case 'open_sound_history': uiStore.isHistoryOpen = true; break
+      case 'open_midi_matrix': uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
       case 'toggle_midi_performance': uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
       case 'midi_panic':
@@ -105,12 +134,8 @@ export function useAppActions() {
         break
       }
       case 'arp_subdivision_cc': {
-        const subs = [
-          '1/4', '1/4d', '1/4t', '1/8', '1/8d', '1/8t',
-          '1/16', '1/16d', '1/16t', '1/32', '1/32d', '1/32t'
-        ]
-        const idx = Math.floor((ccVal / 128) * subs.length)
-        arpStore.arpSubdivision = subs[idx]
+        const idx = Math.floor((ccVal / 128) * ARP_SUBDIVISIONS.length)
+        arpStore.arpSubdivision = ARP_SUBDIVISIONS[idx]
         break
       }
 

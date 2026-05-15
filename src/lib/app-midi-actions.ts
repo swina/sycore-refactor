@@ -56,7 +56,11 @@ export type AppAction =
   | 'seq_transpose_cc'
   | 'seq_gen_trigger'
   | 'seq_duplicate'
-  | 'seq_reduce';
+  | 'seq_reduce'
+  | 'toggle_lfo_1'
+  | 'toggle_lfo_2'
+  | 'toggle_velocity_mapping'
+  | 'toggle_audio_capture';
 
 export interface AppMidiMapping {
   id: string;
@@ -142,6 +146,10 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   seq_gen_trigger:     'Seq: Trigger Generation',
   seq_duplicate:       'Seq: Double Length (x2)',
   seq_reduce:          'Seq: Half Length (/2)',
+  toggle_lfo_1:        'Toggle LFO 1',
+  toggle_lfo_2:        'Toggle LFO 2',
+  toggle_velocity_mapping: 'Toggle Velocity Mapping',
+  toggle_audio_capture:    'Toggle Audio Capture',
 };
 
 // Actions where the CC value (0–127) is mapped to a range (not just trigger on >63)

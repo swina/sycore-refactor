@@ -169,7 +169,11 @@ export const usePresetStore = defineStore('preset', () => {
     lastPreset.value = preset
     currentName.value = preset.name
     currentPatchNotes.value = preset.patchNotes
+    currentCategory.value = preset.category || 'pad'
     useAlternativeEngine.value = false
+
+    // Trigger auto-play on recall
+    window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
     
     // Sync Velocity Modulation State from Preset
     if (preset.velocityConfig) {
@@ -229,6 +233,20 @@ export const usePresetStore = defineStore('preset', () => {
     Object.entries(preset.data).forEach(([field, value]) => {
       midiStore.sendControlValue(field, value)
     })
+  }
+
+  function selectEngine(type) {
+    if (!lastPreset.value) return
+    const isAlt = type === 'B'
+    useAlternativeEngine.value = isAlt
+    
+    const targetData = isAlt ? lastPreset.value.abVariant?.data : lastPreset.value.data
+    const targetNotes = isAlt ? lastPreset.value.abVariant?.patchNotes : lastPreset.value.patchNotes
+    
+    if (targetData) {
+      applyPresetCCs({ data: targetData })
+      if (targetNotes) currentPatchNotes.value = targetNotes
+    }
   }
 
   async function savePreset(name, data, category, options = {}) {
@@ -462,6 +480,47 @@ export const usePresetStore = defineStore('preset', () => {
     return ccValues
   }
 
+  function _generatePatchNotes(data) {
+    const traits = []
+    const cat = currentCategory.value
+    
+    // Filter / Timbre
+    if (data.cutoff < 45) traits.push('Dark')
+    else if (data.cutoff > 95) traits.push('Bright')
+    
+    if (data.res > 70) traits.push('Resonant')
+    if (data.res > 100) traits.push('Acidic')
+    
+    // Envelopes
+    if (data.attack > 50) traits.push('Swelling')
+    else if (data.decay < 40 && data.sustain < 40) traits.push('Percussive')
+    if (data.release > 85) traits.push('Long-tail')
+    
+    // Oscillators
+    const hasSaw = data.oscSaw > 60
+    const hasSq = data.oscSq > 60
+    if (hasSaw && hasSq) traits.push('Rich')
+    else if (hasSaw) traits.push('Saw-driven')
+    else if (hasSq) traits.push('Square-focused')
+    
+    if (data.oscSub > 80) traits.push('Deep')
+    if (data.oscNoise > 40) traits.push('Gritty')
+    
+    // Effects
+    if (data.reverb > 70) traits.push('Spacey')
+    if (data.delayLvl > 50) traits.push('Echoing')
+    if (data.chorusMode > 0) traits.push('Wide')
+    
+    // S-1 unique
+    if (data.oscChopOvertone > 60 || data.oscChopComb > 60) traits.push('Complex')
+
+    const description = traits.length > 0 
+      ? traits.slice(0, 3).join(', ') 
+      : 'Balanced'
+      
+    return `${description} ${cat} patch.`
+  }
+
   function _createPreset(data) {
     const presetId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     return {
@@ -469,7 +528,7 @@ export const usePresetStore = defineStore('preset', () => {
       name: `${generateRandomName(currentCategory.value)}`,
       category: currentCategory.value,
       data: data,
-      patchNotes: null,
+      patchNotes: _generatePatchNotes(data),
       arpConfig: null,
       seqConfig: null,
       velocityConfig: {
@@ -528,7 +587,8 @@ export const usePresetStore = defineStore('preset', () => {
         useAlternativeEngine.value = false
         lastPreset.value = presetA
         currentName.value = presetA.name
-
+        currentPatchNotes.value = presetA.patchNotes
+        
         sessionGeneratedIds.value = [...sessionGeneratedIds.value, presetA.id, presetB.id]
         applyPresetCCs(presetA)
         
@@ -550,18 +610,20 @@ export const usePresetStore = defineStore('preset', () => {
           }
           lastPreset.value = engineCacheA.value
           applyPresetCCs(engineCacheA.value)
+          currentPatchNotes.value = engineCacheA.value.patchNotes
         } else {
           if (engineCacheB.value) {
             engineCacheB.value.data = newData
             if (engineCacheA.value) {
-              engineCacheB.value.abVariant = { data: engineCacheA.value.data }
-              engineCacheA.value.abVariant = { data: newData }
+              engineCacheB.value.abVariant = { data: engineCacheA.value.data, patchNotes: engineCacheA.value.patchNotes }
+              engineCacheA.value.abVariant = { data: newData, patchNotes: engineCacheB.value.patchNotes }
             }
           } else {
             engineCacheB.value = _createPreset(newData)
           }
           lastPreset.value = engineCacheB.value
           applyPresetCCs(engineCacheB.value)
+          currentPatchNotes.value = engineCacheB.value.patchNotes
         }
         currentName.value = lastPreset.value.name
       }
@@ -575,13 +637,21 @@ export const usePresetStore = defineStore('preset', () => {
   }
 
   function navigateHistory(direction) {
-    const idx = filteredHistory.value.findIndex(p => p.id === lastPreset.value?.id)
+    let list = filteredHistory.value
+    let idx = list.findIndex(p => p.id === lastPreset.value?.id)
+    
+    // Fallback to full history if not found in filtered list
+    if (idx === -1) {
+      list = history.value
+      idx = list.findIndex(p => p.id === lastPreset.value?.id)
+    }
+    
     if (idx === -1) return
 
     let nextIdx = direction === 'next' ? idx + 1 : idx - 1
-    if (nextIdx < 0 || nextIdx >= filteredHistory.value.length) return
+    if (nextIdx < 0 || nextIdx >= list.length) return
 
-    recallPreset(filteredHistory.value[nextIdx])
+    recallPreset(list[nextIdx])
   }
 
   function generateRandomName(cat) {
@@ -602,7 +672,7 @@ export const usePresetStore = defineStore('preset', () => {
     sessionGeneratedIds, currentName, currentPatchNotes, hasUnsavedChanges, lastModifiedField,
     currentVariation,
     remainingGens, limitReached,
-    loadHistory, recallPreset, applyPresetCCs, savePreset, importPreset,
+    loadHistory, recallPreset, applyPresetCCs, selectEngine, savePreset, importPreset,
     deletePreset, deleteAllPresets, toggleFavorite, setCategory,
     updateFieldValue, clearSessionCache, generate, navigateHistory, init,
     seedDefaultBank

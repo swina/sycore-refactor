@@ -437,7 +437,7 @@ onMounted(() => {
               type="number" min="20" max="300"
               :value="arpStore.arpBpm"
               @change="e => { const v = parseInt(e.target.value); if (!isNaN(v)) { arpStore.arpBpm = v; sessionBpmOverride = true } }"
-              class="w-12 bg-neutral-900 border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[10px] focus:outline-none focus:border-synth-neon transition-colors"
+              class="w-24 bg-neutral-900 border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-lg focus:outline-none focus:border-synth-neon transition-colors"
             />
           </div>
         </div>

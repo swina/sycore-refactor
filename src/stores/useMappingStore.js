@@ -205,6 +205,13 @@ export const useMappingStore = defineStore('mapping', () => {
     await setDoc(doc(db, IDB_COLLECTION, IDB_DOC_NAME), { mappings })
   }
 
+  function toggleVelocityMapping() {
+    velocityConfig.value.active = !velocityConfig.value.active
+    if (!velocityConfig.value.active) {
+      restoreOriginalValues()
+    }
+  }
+
   console.log('MappingStore initialized with velocityConfig:', !!velocityConfig)
 
   return {
@@ -213,6 +220,6 @@ export const useMappingStore = defineStore('mapping', () => {
     mappingCount,
     startLearn, cancelLearn, confirmLearn, removeMapping, incomingCC,
     loadAppMidiMappings, saveAppMidiMappings,
-    velocityConfig, handleVelocity, restoreOriginalValues
+    velocityConfig, handleVelocity, restoreOriginalValues, toggleVelocityMapping
   }
 })

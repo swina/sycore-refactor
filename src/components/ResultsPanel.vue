@@ -525,17 +525,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
         <!-- MODULATION CONTROLS (Sotto i pulsanti, allineati a dx) -->
         <div class="flex justify-end gap-3 mt-1.5">
-          <!-- Arp Toggle -->
-            <div class="flex items-center">
-              <button @click="arpStore.arpEnabled = !arpStore.arpEnabled"
-                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', arpStore.arpEnabled ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
-                ARP
-              </button>
-              <button @click="uiStore.isArpOpen = !uiStore.isArpOpen"
-                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', uiStore.isArpOpen ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
-                <Settings2 class="w-4 h-4" />
-              </button>
-            </div>
+          
           <!-- LFO Controls -->
           <div class="flex items-center gap-1 ">
             <div class="flex items-center">
@@ -579,6 +569,18 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 <Settings2 class="w-4 h-4" />
               </button>
             </div>
+          </div>
+          
+          <!-- Arp Toggle -->
+          <div class="flex items-center">
+            <button @click="arpStore.arpEnabled = !arpStore.arpEnabled"
+              :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', arpStore.arpEnabled ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+              ARP
+            </button>
+            <button @click="uiStore.isArpOpen = !uiStore.isArpOpen"
+              :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', uiStore.isArpOpen ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
+              <Settings2 class="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>

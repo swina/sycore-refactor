@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { X, Play, Square, Settings, ChevronUp, ChevronDown, ListMusic } from 'lucide-vue-next'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
-import { useArpStore } from '@/stores/useArpStore'
+import { useArpStore, ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 
 const props = defineProps({
@@ -23,16 +23,18 @@ const physicalKeysHeld = ref(0)
 
 function calculateStepMs(bpm, subdivision) {
   const beatMs = 60000 / bpm
-  switch (subdivision) {
-    case '1/4':   return beatMs
-    case '1/4t':  return beatMs * (2/3)
-    case '1/8':   return beatMs / 2
-    case '1/8t':  return beatMs / 3
-    case '1/16':  return beatMs / 4
-    case '1/16t': return beatMs / 6
-    case '1/32':  return beatMs / 8
-    default:      return beatMs / 4
-  }
+  const match = subdivision.match(/(\d+)\/(\d+)(d|t)?/)
+  if (!match) return beatMs / 4
+
+  const count = parseInt(match[1])
+  const base = parseInt(match[2])
+  const type = match[3]
+
+  let ratio = count / base
+  if (type === 'd') ratio *= 1.5
+  if (type === 't') ratio *= (2/3)
+
+  return beatMs * 4 * ratio
 }
 
 function startArpEngine() {
@@ -190,15 +192,20 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
             </select>
           </div>
           <div class="flex flex-col gap-2">
-            <span class="text-[8px] font-mono text-neutral-500 uppercase">Rate</span>
-            <select v-model="arpStore.arpSubdivision" class="bg-black border border-neutral-800 text-[10px] text-white rounded-lg px-2 py-2 outline-none focus:border-synth-neon">
-              <option value="1/4">1/4</option>
-              <option value="1/8">1/8</option>
-              <option value="1/8t">1/8t</option>
-              <option value="1/16">1/16</option>
-              <option value="1/16t">1/16t</option>
-              <option value="1/32">1/32</option>
-            </select>
+            <div class="flex justify-between items-center">
+              <span class="text-[8px] font-mono text-neutral-500 uppercase">Rate</span>
+              <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpSubdivision }}</span>
+            </div>
+            <div class="px-1">
+              <input 
+                type="range" 
+                :min="0" 
+                :max="ARP_SUBDIVISIONS.length - 1" 
+                :value="ARP_SUBDIVISIONS.indexOf(arpStore.arpSubdivision)"
+                @input="arpStore.arpSubdivision = ARP_SUBDIVISIONS[$event.target.value]"
+                class="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-synth-neon"
+              />
+            </div>
           </div>
         </div>
 

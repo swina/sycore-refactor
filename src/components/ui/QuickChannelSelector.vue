@@ -51,7 +51,7 @@ function setChannel(ch) {
     <!-- Quick Dropdown / Matrix (Optional Expansion) -->
     <div class="hidden group-hover:flex items-center gap-1 pl-2 border-l border-neutral-800 animate-in fade-in slide-in-from-left-2 duration-300">
       <button 
-        v-for="ch in [1, 2, 8, 10]" :key="ch"
+        v-for="ch in [1, 2, 3, 4, 5, 6, 7,8,9,10,11,12,13,14,15,16]" :key="ch"
         @click="setChannel(ch)"
         :class="[
           'w-4 h-4 rounded-sm flex items-center justify-center text-[8px] font-bold transition-all',
