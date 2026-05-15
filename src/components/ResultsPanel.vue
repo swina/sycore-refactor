@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
-import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network } from 'lucide-vue-next'
+import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical} from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/MidiService'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -495,7 +495,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           <!-- Performance Tools -->
           <div class="flex items-center gap-2">
             <!-- Arp Toggle -->
-            <div class="flex bg-neutral-900 border border-neutral-800 rounded-full p-1 shadow-inner">
+            <!-- <div class="flex bg-neutral-900 border border-neutral-800 rounded-full p-1 shadow-inner">
               <button @click="arpStore.arpEnabled = !arpStore.arpEnabled"
                 :class="['w-10 h-8 rounded-full text-[8px] font-black uppercase tracking-tighter transition-all', arpStore.arpEnabled ? 'bg-synth-neon text-black shadow-lg' : 'text-neutral-600 hover:text-neutral-400']">
                 ARP
@@ -504,7 +504,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 :class="['w-8 h-8 rounded-full flex items-center justify-center transition-all', uiStore.isArpOpen ? 'text-synth-neon' : 'text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
-            </div>
+            </div> -->
 
             <!-- Sequencer -->
             <button @click="uiStore.isSequencerOpen = !uiStore.isSequencerOpen"
@@ -525,16 +525,27 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
         <!-- MODULATION CONTROLS (Sotto i pulsanti, allineati a dx) -->
         <div class="flex justify-end gap-3 mt-1.5">
+          <!-- Arp Toggle -->
+            <div class="flex items-center">
+              <button @click="arpStore.arpEnabled = !arpStore.arpEnabled"
+                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', arpStore.arpEnabled ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                ARP
+              </button>
+              <button @click="uiStore.isArpOpen = !uiStore.isArpOpen"
+                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', uiStore.isArpOpen ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
+                <Settings2 class="w-4 h-4" />
+              </button>
+            </div>
           <!-- LFO Controls -->
-          <div class="flex items-center gap-1 p-0.5 border border-neutral-800/50 rounded-full">
+          <div class="flex items-center gap-1 ">
             <div class="flex items-center">
               <button @click="lfoStore.toggleLfo(1)"
-                :class="['px-2.5 py-1 rounded-l-full text-[12px] font-black uppercase tracking-widest transition-all border-y border-l', 
+                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
                   lfoStore.lfo1.active ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
                 LFO 1
               </button>
               <button @click="uiStore.isLfo1Open = !uiStore.isLfo1Open"
-                :class="['px-1.5 py-1 rounded-r-full text-[12px] transition-all border border-y border-r', 
+                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
                   uiStore.isLfo1Open ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
@@ -542,12 +553,12 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
             <div class="flex items-center ml-1">
               <button @click="lfoStore.toggleLfo(2)"
-                :class="['px-2.5 py-1 rounded-l-full text-[12px] font-black uppercase tracking-widest transition-all border-y border-l', 
+                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
                   lfoStore.lfo2.active ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
                 LFO 2
               </button>
               <button @click="uiStore.isLfo2Open = !uiStore.isLfo2Open"
-                :class="['px-1.5 py-1 rounded-r-full text-[12px] transition-all border border-y border-r', 
+                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
                   uiStore.isLfo2Open ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
@@ -555,16 +566,16 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           </div>
 
           <!-- Velocity Control -->
-          <div class="flex items-center gap-1 p-0.5 border border-neutral-800/50 rounded-full">
+          <div class="flex items-center ml-1">
             <div class="flex items-center">
               <button @click="toggleVelocityMod"
-                :class="['px-2.5 py-1 rounded-l-full text-[12px] font-black uppercase tracking-widest transition-all border-y border-l', 
-                  mappingStore.velocityConfig?.active ? 'bg-synth-neon text-black border-synth-neon shadow-[0_0_8px_rgba(0,255,166,0.4)]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
+                  mappingStore.velocityConfig?.active ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
                 VEL
               </button>
               <button @click="uiStore.isVelocityMapOpen = !uiStore.isVelocityMapOpen"
-                :class="['px-1.5 py-1 rounded-r-full text-[12px] transition-all border border-y border-r', 
-                  uiStore.isVelocityMapOpen ? 'bg-neutral-800 text-synth-neon border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
+                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
+                  uiStore.isVelocityMapOpen ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
             </div>
@@ -600,6 +611,13 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
             <!-- CATEGORY TABS -->
             <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-1 min-w-0">
+              <!---@click="isPanelCollapsed = !isPanelCollapsed"-->
+              <button
+                @click="isPanelCollapsed = !isPanelCollapsed"
+                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Hide Controls':'Show Controls'"
+              >
+                <SlidersHorizontal class="w-3 h-3" />
+              </button>
               <button
                 @click="activeCategory = null"
                 :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !activeCategory ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
@@ -1073,7 +1091,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             </span>
           </button>
         </div>
-        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-[0.4em] mt-12 animate-pulse">
+        <p class="text-[12px] font-mono text-neutral-600 uppercase tracking-[0.4em] mt-12">
+          Current Type <span class="text-[20px] text-synth-neon border border-synth-neon rounded-lg px-2 py-1">{{ presetStore.currentCategory }}</span>
+        </p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-[0.4em] mt-4 animate-pulse">
           Controls are currently hidden
         </p>
       </div>

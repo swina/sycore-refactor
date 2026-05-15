@@ -277,11 +277,13 @@ function handlePrimaryEnded(slot) {
 function handlePrimaryTimeUpdate(slot, ct, dur) {
   if (activeSlot !== slot) return
   currentTime.value = ct
-  window.dispatchEvent(new CustomEvent('player-state-sync', { detail: { currentTime: ct, duration: dur } }))
-  if (!isPlaylistMode.value || isCrossfadingRef || dur <= 0 || isNaN(dur) || ct < 0.5) return
+  const effectiveDur = isFinite(dur) ? dur : (playingTrack.value?.duration || duration.value || 0)
+  if (isFinite(dur) && dur > 0) duration.value = dur
+  window.dispatchEvent(new CustomEvent('player-state-sync', { detail: { currentTime: ct, duration: effectiveDur } }))
+  if (!isPlaylistMode.value || isCrossfadingRef || effectiveDur <= 0 || isNaN(effectiveDur) || ct < 0.5) return
   const isLastRepeat = playlistCurrentRepeat.value >= (playlistRepeats.value[playlistIdx.value] ?? 1)
   if (!isLastRepeat) return
-  const timeLeft = dur - ct
+  const timeLeft = effectiveDur - ct
   if (timeLeft <= crossfadeSec.value && timeLeft > 0.1) {
     const nextIdx = getNextIdx(playlistIdx.value)
     if (nextIdx !== null) {
@@ -291,7 +293,7 @@ function handlePrimaryTimeUpdate(slot, ct, dur) {
 }
 
 // ── Load helpers ──────────────────────────────────────────────────────────────
-function loadDirect(url, track, label) {
+function loadDirect(url, track, label, autoPlay = false) {
   if (isCrossfadingRef) {
     if (crossfadeTimerRef) clearTimeout(crossfadeTimerRef)
     isCrossfadingRef = false
@@ -306,9 +308,19 @@ function loadDirect(url, track, label) {
   src.value = url
   playingTrack.value = track
   fileName.value = label
-  isPlaying.value = false
   currentTime.value = 0
   playlistIdx.value = -1
+  
+  if (autoPlay) {
+    audio.play().catch(console.error)
+    isPlaying.value = true
+    if (syncInternalSequencer.value) {
+      window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true, source: 'backing-track' } }))
+    }
+  } else {
+    isPlaying.value = false
+  }
+  
   if (track?.bpm) {
     detectedBpm.value = track.bpm
     window.dispatchEvent(new CustomEvent('bpm-update', { detail: { bpm: track.bpm } }))
@@ -317,7 +329,7 @@ function loadDirect(url, track, label) {
 
 function playTrack(track) {
   if (editingTrackId.value) return
-  loadDirect(track.url, track, track.label)
+  loadDirect(track.url, track, track.label, true)
 }
 
 function playFromPlaylist(idx, source = 'manual') {
@@ -354,7 +366,37 @@ function handleFileChange(e) {
   const file = e.target.files?.[0]
   if (!file) return
   if (pendingLocalFile.value) URL.revokeObjectURL(pendingLocalFile.value.url)
-  pendingLocalFile.value = { url: URL.createObjectURL(file), name: file.name }
+  pendingLocalFile.value = { url: URL.createObjectURL(file), name: file.name, file }
+}
+
+async function saveLocalFileToLibrary() {
+  if (!pendingLocalFile.value?.file) return
+  const file = pendingLocalFile.value.file
+  
+  const tempAudio = new Audio(URL.createObjectURL(file))
+  tempAudio.addEventListener('loadedmetadata', () => {
+    const duration = tempAudio.duration
+    
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const dataUrl = e.target.result
+      try {
+        const data = {
+          url: dataUrl,
+          label: file.name.replace(/\.[^.]+$/, ''),
+          genre: 'Local',
+          createdAt: serverTimestamp(),
+          duration: isFinite(duration) ? duration : 0
+        }
+        await addDoc(collection(db, 'backing_tracks'), data)
+        inputType.value = 'list'
+        pendingLocalFile.value = null
+      } catch (err) {
+        console.error('Failed to add local track to library:', err)
+      }
+    }
+    reader.readAsDataURL(file)
+  })
 }
 
 function loadLocalFile() {
@@ -477,7 +519,8 @@ async function deleteTrack(id, e) {
 
 function onLoadedMeta(slot, d) {
   if (activeSlot !== slot) return
-  duration.value = d; currentTime.value = 0
+  duration.value = isFinite(d) ? d : (playingTrack.value?.duration || 0)
+  currentTime.value = 0
   if (isAdmin.value && playingTrack.value && !playingTrack.value.duration && d && isFinite(d)) {
     updateDoc(doc(db, 'backing_tracks', playingTrack.value.id), { duration: d }).catch(console.error)
   }
@@ -562,9 +605,9 @@ onMounted(() => {
   }
 
   const handleAddFromCapture = (e) => {
-    const { url, label } = e.detail || {}
+    const { url, label, duration } = e.detail || {}
     if (!url) return
-    addToPlaylist({ id: `rec_${Date.now()}`, url, label, genre: 'Recording' })
+    addToPlaylist({ id: `rec_${Date.now()}`, url, label, genre: 'Recording', duration })
     inputType.value = 'playlist'; isOpen.value = true
   }
   
@@ -962,6 +1005,11 @@ onUnmounted(() => {
                   <button @click="addLocalFileToPlaylist"
                     class="flex-1 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10 transition-colors">
                     <ListPlus class="w-3 h-3" /> Add to Playlist
+                  </button>
+                  <button @click="saveLocalFileToLibrary"
+                    class="flex-1 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-purple-400 border-purple-400/30 hover:bg-purple-400/10 transition-colors"
+                    title="Save persistently for offline playback">
+                    <Save class="w-3 h-3" /> Save to Library
                   </button>
                 </div>
               </div>

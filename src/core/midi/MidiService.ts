@@ -278,6 +278,26 @@ export class MidiService {
         const outConfig = this.routingConfig?.registrations[outDevice.name];
         if (outConfig) {
           notes.forEach(n => this.sendDirectNoteOff(outDevice, n, outConfig, now));
+
+          const channels = new Set<number>();
+          notes.forEach(n => {
+            let targetCh = -1;
+            if (outConfig.isMulti) targetCh = this.globalChannel;
+            else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
+            channels.add(targetCh !== -1 ? targetCh : n.channel);
+          });
+          
+          channels.forEach(ch => {
+            const statusCh = ch % 16;
+            const messages = [
+              [0xb0 + statusCh, 123, 0], // All Notes Off
+              [0xb0 + statusCh, 64, 0]   // Sustain Off
+            ];
+            messages.forEach(msg => {
+              this.globalSentHashes.set(msg.join(','), now);
+              try { outDevice.send(msg); } catch (e) {}
+            });
+          });
         }
       }
     }

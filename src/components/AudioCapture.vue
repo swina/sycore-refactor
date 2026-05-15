@@ -19,7 +19,7 @@ const { x, y, startDrag } = useDraggable(
 
 // ── Reactive state ────────────────────────────────────────────────────────────
 const devices          = ref([])
-const selectedDeviceId = ref('default')
+const selectedDeviceId = ref(localStorage.getItem('S1_CAPTURE_DEVICE') || 'default')
 const isMonitoring     = ref(false)
 const isRecording      = ref(false)
 const recSecs          = ref(0)
@@ -120,6 +120,7 @@ watch(() => uiStore.isAudioCaptureOpen, (open) => {
 // ── Device hot-swap ───────────────────────────────────────────────────────────
 async function handleDeviceChange(id) {
   selectedDeviceId.value = id
+  localStorage.setItem('S1_CAPTURE_DEVICE', id)
   if (!isMonitoring.value) return
   if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
   if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
@@ -154,7 +155,7 @@ function startRecording() {
       const pad = n => String(n).padStart(2, '0')
       const ts = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
       const playlistUrl = URL.createObjectURL(blob)
-      window.dispatchEvent(new CustomEvent('playlist-add-from-capture', { detail: { url: playlistUrl, label: `REC ${ts}` } }))
+      window.dispatchEvent(new CustomEvent('playlist-add-from-capture', { detail: { url: playlistUrl, label: `REC ${ts}`, duration: recSecs.value } }))
     }
   }
   recorder.start(100)
