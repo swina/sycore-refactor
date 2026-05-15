@@ -250,7 +250,7 @@ function generateSequence() {
   if (chordsEnabled.value) {
     const progressions = STYLE_PROGRESSIONS[selectedStyle.value] ?? [[0, 3, 4, 0]]
     const baseProgression = progressions[Math.floor(Math.random() * progressions.length)]
-    const effectiveDensity = Math.min(chordDensity.value, numSteps.value)
+    const effectiveDensity = genDensity.value === 100 ? numSteps.value : Math.max(1, Math.round(numSteps.value * (genDensity.value / 100)))
     const segSize = numSteps.value / effectiveDensity
     const avgGateFactor = (styleCfg.gateMin + styleCfg.gateMax) / 200
 
@@ -279,10 +279,17 @@ function generateSequence() {
       return { ...DEFAULT_STEP, active: true, notes, velocity, gate: 90, tieSteps }
     })
   } else {
+    const numActive = Math.round(numSteps.value * (genDensity.value / 100))
+    const allIndices = Array.from({ length: numSteps.value }, (_, i) => i)
+    for (let i = allIndices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allIndices[i], allIndices[j]] = [allIndices[j], allIndices[i]];
+    }
+    const activeIndices = new Set(allIndices.slice(0, numActive))
+
     steps.value = Array(numSteps.value).fill(null).map((_, i) => {
+      const active = activeIndices.has(i)
       const accentHit = styleCfg.accentGrid ? styleCfg.accentGrid[i % styleCfg.accentGrid.length] : false
-      const densityProb = styleCfg.density * (genDensity.value / 100)
-      const active = Math.random() < densityProb
       let notes = [60]
       if (active) {
         const [octMin, octMax] = styleCfg.octaves
@@ -516,6 +523,12 @@ onMounted(() => {
         break
       case 'seq_reduce':
         if (val > 63) reduceLength()
+        break
+      case 'seq_skip_step':
+        if (val > 63) {
+          if (selectedStepIdx.value === null) selectedStepIdx.value = 0
+          else selectedStepIdx.value = (selectedStepIdx.value + 2) % numSteps.value
+        }
         break
     }
   }
