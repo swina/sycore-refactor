@@ -135,71 +135,7 @@ const activeOutputs = computed(() => {
 
         <div class="flex-1 overflow-auto custom-scrollbar p-6 space-y-8">
           
-          <!-- Broadcast Mode Section -->
-          <div class="flex items-center justify-between bg-neutral-900/40 border border-neutral-800 p-6 rounded-2xl group transition-all hover:border-synth-neon/20">
-            <div class="flex items-center gap-4">
-              <div :class="['p-3 rounded-xl transition-all', midiStore.broadcastMode ? 'bg-synth-neon/20 text-synth-neon shadow-[0_0_15px_rgba(0,255,204,0.3)]' : 'bg-neutral-800 text-neutral-600']">
-                <Globe class="w-6 h-6" />
-              </div>
-              <div>
-                <h3 class="text-sm font-bold text-white uppercase tracking-wider">Broadcast Mode</h3>
-                <p class="text-[10px] text-neutral-500 font-mono mt-1">Send all messages to all active devices (Overrides Grid)</p>
-              </div>
-            </div>
-            <button 
-              @click="toggleBroadcast"
-              :class="['w-16 h-8 rounded-full relative transition-all duration-300', midiStore.broadcastMode ? 'bg-synth-neon' : 'bg-neutral-800']"
-            >
-              <div :class="['absolute top-1 bottom-1 w-6 bg-white rounded-full transition-transform duration-300', midiStore.broadcastMode ? 'translate-x-9' : 'translate-x-1']" />
-            </button>
-          </div>
-
-          <!-- Smart Latch Section -->
-          <div class="flex items-center justify-between bg-neutral-900/40 border border-neutral-800 p-6 rounded-2xl group transition-all hover:border-synth-neon/20">
-            <div class="flex items-center gap-4">
-              <div :class="['p-3 rounded-xl transition-all', midiStore.isSmartLatchActive ? 'bg-synth-neon/20 text-synth-neon shadow-[0_0_15px_rgba(0,255,204,0.3)]' : 'bg-neutral-800 text-neutral-600']">
-                <Lock class="w-6 h-6" />
-              </div>
-              <div>
-                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  Smart Latch
-                  <span v-if="midiStore.isSmartLatchActive" class="px-2 py-0.5 rounded-full bg-synth-neon/20 text-synth-neon text-[9px] uppercase tracking-widest border border-synth-neon/30">Active</span>
-                </h3>
-                <p class="text-[10px] text-neutral-500 font-mono mt-1">Holds incoming notes (Can be toggled via CC)</p>
-              </div>
-            </div>
-            
-            <div class="flex items-center gap-6">
-              <!-- Config -->
-              <div class="flex flex-col gap-2 border-r border-neutral-800 pr-6">
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] font-mono text-neutral-500 uppercase">Max Notes:</span>
-                  <input 
-                    type="range" 
-                    min="1" max="8" 
-                    v-model.number="midiStore.smartLatchMaxNotes"
-                    class="w-20 accent-synth-neon"
-                  />
-                  <span class="text-xs font-bold text-white w-4">{{ midiStore.smartLatchMaxNotes }}</span>
-                </div>
-                <label class="flex items-center gap-2 cursor-pointer group">
-                  <input type="checkbox" v-model="midiStore.smartLatchReplaceMode" class="hidden" />
-                  <div :class="['w-4 h-4 rounded-sm border flex items-center justify-center transition-all', midiStore.smartLatchReplaceMode ? 'bg-synth-neon border-synth-neon' : 'border-neutral-600 bg-neutral-800 group-hover:border-neutral-500']">
-                    <Check v-if="midiStore.smartLatchReplaceMode" class="w-3 h-3 text-black" />
-                  </div>
-                  <span class="text-[10px] font-mono text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">FIFO Replace</span>
-                </label>
-              </div>
-
-              <!-- Main Toggle -->
-              <button 
-                @click="midiStore.toggleSmartLatch()"
-                :class="['w-16 h-8 rounded-full relative transition-all duration-300 shrink-0', midiStore.isSmartLatchActive ? 'bg-synth-neon' : 'bg-neutral-800']"
-              >
-                <div :class="['absolute top-1 bottom-1 w-6 bg-white rounded-full transition-transform duration-300', midiStore.isSmartLatchActive ? 'translate-x-9' : 'translate-x-1']" />
-              </button>
-            </div>
-          </div>
+          
 
           <!-- Routing Section -->
           <div :class="['space-y-4 transition-all duration-500', midiStore.broadcastMode ? 'opacity-30 grayscale pointer-events-none scale-[0.98]' : 'opacity-100']">
@@ -321,7 +257,71 @@ const activeOutputs = computed(() => {
             </div>
 
           </div>
+          <!-- Broadcast Mode Section -->
+          <div class="flex items-center justify-between bg-neutral-900/40 border border-neutral-800 p-2 rounded-2xl group transition-all hover:border-synth-neon/20">
+            <div class="flex items-center gap-4">
+              <div :class="['p-3 rounded-xl transition-all', midiStore.broadcastMode ? 'bg-synth-neon/20 text-synth-neon shadow-[0_0_15px_rgba(0,255,204,0.3)]' : 'bg-neutral-800 text-neutral-600']">
+                <Globe class="w-6 h-6" />
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider">Broadcast Mode</h3>
+                <p class="text-[10px] text-neutral-500 font-mono mt-1">Send all messages to all active devices (Overrides Grid)</p>
+              </div>
+            </div>
+            <button 
+              @click="toggleBroadcast"
+              :class="['w-16 h-8 rounded-full relative transition-all duration-300', midiStore.broadcastMode ? 'bg-synth-neon' : 'bg-neutral-800']"
+            >
+              <div :class="['absolute top-1 bottom-1 w-6 bg-white rounded-full transition-transform duration-300', midiStore.broadcastMode ? 'translate-x-9' : 'translate-x-1']" />
+            </button>
+          </div>
 
+          <!-- Smart Latch Section -->
+          <div class="flex items-center justify-between bg-neutral-900/40 border border-neutral-800 p-2 rounded-2xl group transition-all hover:border-synth-neon/20">
+            <div class="flex items-center gap-4">
+              <div :class="['p-3 rounded-xl transition-all', midiStore.isSmartLatchActive ? 'bg-synth-neon/20 text-synth-neon shadow-[0_0_15px_rgba(0,255,204,0.3)]' : 'bg-neutral-800 text-neutral-600']">
+                <Lock class="w-6 h-6" />
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  Smart Latch
+                  <span v-if="midiStore.isSmartLatchActive" class="px-2 py-0.5 rounded-full bg-synth-neon/20 text-synth-neon text-[9px] uppercase tracking-widest border border-synth-neon/30">Active</span>
+                </h3>
+                <p class="text-[10px] text-neutral-500 font-mono mt-1">Holds incoming notes (Can be toggled via CC)</p>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-6">
+              <!-- Config -->
+              <div class="flex flex-col gap-2 border-r border-neutral-800 pr-6">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-mono text-neutral-500 uppercase">Max Notes:</span>
+                  <input 
+                    type="range" 
+                    min="1" max="8" 
+                    v-model.number="midiStore.smartLatchMaxNotes"
+                    class="w-20 accent-synth-neon"
+                  />
+                  <span class="text-xs font-bold text-white w-4">{{ midiStore.smartLatchMaxNotes }}</span>
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" v-model="midiStore.smartLatchReplaceMode" class="hidden" />
+                  <div :class="['w-4 h-4 rounded-sm border flex items-center justify-center transition-all', midiStore.smartLatchReplaceMode ? 'bg-synth-neon border-synth-neon' : 'border-neutral-600 bg-neutral-800 group-hover:border-neutral-500']">
+                    <Check v-if="midiStore.smartLatchReplaceMode" class="w-3 h-3 text-black" />
+                  </div>
+                  <span class="text-[10px] font-mono text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">FIFO Replace</span>
+                </label>
+              </div>
+
+              <!-- Main Toggle -->
+              <button 
+                @click="midiStore.toggleSmartLatch()"
+                :class="['w-16 h-8 rounded-full relative transition-all duration-300 shrink-0', midiStore.isSmartLatchActive ? 'bg-synth-neon' : 'bg-neutral-800']"
+              >
+                <div :class="['absolute top-1 bottom-1 w-6 bg-white rounded-full transition-transform duration-300', midiStore.isSmartLatchActive ? 'translate-x-9' : 'translate-x-1']" />
+              </button>
+            </div>
+          </div>
           <!-- Bottom Legend -->
           <div class="mt-8 pt-8 border-t border-neutral-900 flex flex-wrap gap-8 justify-center opacity-60">
             <div class="flex items-center gap-2">
