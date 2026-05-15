@@ -148,11 +148,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { ListMusic, ListPlus, GripVertical, ChevronUp, ChevronDown, X, Repeat, Trash2, Play, Save, FolderOpen, SkipBack, SkipForward, Pause, Volume2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { db, doc, collection, setDoc, deleteDoc, onSnapshot } from '@/lib/idb'
 
 const uiStore = useUiStore()
+const authStore = useAuthStore()
 
 const props = defineProps({
   playlist: { type: Array, required: true },
@@ -180,10 +183,54 @@ const dragOverIdx = ref(null)
 const saveName = ref('')
 const showSaveInput = ref(false)
 
-const SAVED_PL_KEY = 'S1_SAVED_PLAYLISTS'
-const savedPlaylists = ref((() => {
-  try { return JSON.parse(localStorage.getItem(SAVED_PL_KEY) || '{}') } catch { return {} }
-})())
+const SAVED_PL_KEY = 'S1_SAVED_PLAYLISTS' // For migration from localStorage only
+const savedPlaylists = ref({})
+let unsubscribePlaylists = null
+
+async function migrateFromLocalStorage(uid) {
+  const oldData = localStorage.getItem(SAVED_PL_KEY)
+  if (oldData) {
+    try {
+      const playlists = JSON.parse(oldData)
+      for (const [name, data] of Object.entries(playlists)) {
+        const playlistRef = doc(db, 'users', uid, 'playlists', name)
+        await setDoc(playlistRef, data)
+      }
+      localStorage.removeItem(SAVED_PL_KEY)
+      console.log('[PlayList] Migration to IndexedDB complete.')
+    } catch (e) {
+      console.error('[PlayList] Migration failed', e)
+    }
+  }
+}
+
+watch(() => authStore.user, async (user) => {
+  if (unsubscribePlaylists) unsubscribePlaylists()
+  if (user) {
+    // Migration check
+    await migrateFromLocalStorage(user.uid)
+
+    const colRef = collection(db, 'users', user.uid, 'playlists')
+    unsubscribePlaylists = onSnapshot(colRef, (snapshot) => {
+      const plMap = {}
+      snapshot.docs.forEach(d => {
+        plMap[d.id] = d.data()
+      })
+      savedPlaylists.value = plMap
+      
+      // Auto-load the last used playlist if current is empty
+      if (props.playlist.length === 0 && uiStore.lastPlaylistName && plMap[uiStore.lastPlaylistName]) {
+        loadSavedPlaylist(uiStore.lastPlaylistName)
+      }
+    })
+  } else {
+    savedPlaylists.value = {}
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  if (unsubscribePlaylists) unsubscribePlaylists()
+})
 
 function onSeek(e) {
   const rect = e.currentTarget.getBoundingClientRect()
@@ -255,21 +302,21 @@ function setRepeatForIdx(idx, n) {
   emit('update:playlistRepeats', rp)
 }
 
-function savePlaylist() {
+async function savePlaylist() {
   const name = saveName.value.trim()
-  if (!name || props.playlist.length === 0) return
-  const updated = {
-    ...savedPlaylists.value,
-    [name]: {
-      tracks: props.playlist,
-      repeats: props.playlistRepeats,
-      crossfadeSec: props.crossfadeSec,
-      loopPlaylist: props.loopPlaylist,
-      savedAt: new Date().toISOString()
-    }
+  if (!name || props.playlist.length === 0 || !authStore.user) return
+  
+  const playlistData = {
+    tracks: props.playlist,
+    repeats: props.playlistRepeats,
+    crossfadeSec: props.crossfadeSec,
+    loopPlaylist: props.loopPlaylist,
+    savedAt: new Date().toISOString()
   }
-  savedPlaylists.value = updated
-  localStorage.setItem(SAVED_PL_KEY, JSON.stringify(updated))
+  
+  const playlistRef = doc(db, 'users', authStore.user.uid, 'playlists', name)
+  await setDoc(playlistRef, playlistData)
+  
   saveName.value = ''
   showSaveInput.value = false
 }
@@ -287,19 +334,16 @@ function loadSavedPlaylist(name) {
   emit('update:playlistCurrentRepeat', 1)
 }
 
-function deleteSavedPlaylist(name) {
-  const updated = { ...savedPlaylists.value }
-  delete updated[name]
-  savedPlaylists.value = updated
-  localStorage.setItem(SAVED_PL_KEY, JSON.stringify(updated))
+async function deleteSavedPlaylist(name) {
+  if (!authStore.user) return
+  const playlistRef = doc(db, 'users', authStore.user.uid, 'playlists', name)
+  await deleteDoc(playlistRef)
+  
   if (uiStore.lastPlaylistName === name) {
     uiStore.lastPlaylistName = ''
   }
 }
 onMounted(() => {
-  // Only auto-load if current playlist is empty to avoid overwriting tracks added from Library
-  if (props.playlist.length === 0 && uiStore.lastPlaylistName && savedPlaylists.value[uiStore.lastPlaylistName]) {
-    loadSavedPlaylist(uiStore.lastPlaylistName)
-  }
+  // Logic moved to authStore.user watcher
 })
 </script>
