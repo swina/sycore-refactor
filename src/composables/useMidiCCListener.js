@@ -153,7 +153,10 @@ export function useMidiCCListener() {
           if (mapping.channel !== -1 && mapping.channel !== chan) continue
           
           // For triggers (non-continuous), check value or simply Note On
-          if (!CONTINUOUS_ACTIONS.has(mapping.action)) {
+          const isContinuous = CONTINUOUS_ACTIONS.has(mapping.action)
+          if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Action: ${mapping.action}, Val: ${val}, IsContinuous: ${isContinuous}`);
+
+          if (!isContinuous) {
             // IGNORE ALL RELEASE MESSAGES for triggers
             // (Note Off or Note On with velocity 0)
             if (mapping.note !== undefined) {
@@ -162,13 +165,20 @@ export function useMidiCCListener() {
               // CC trigger logic
               const mv = mapping.value ?? -1
               if (mv === -1) {
-                if (val <= 63) continue
+                if (val <= 63) {
+                  if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Skipping trigger val ${val} for ${mapping.action}`);
+                  continue
+                }
               } else {
-                if (val !== mv) continue
+                if (val !== mv) {
+                  if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Skipping non-matching val ${val} (expected ${mv}) for ${mapping.action}`);
+                  continue
+                }
               }
             }
           }
 
+          if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Dispatching ${mapping.action} with val ${val}`);
           dispatchAction(mapping.action, val)
           break
         }

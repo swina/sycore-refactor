@@ -165,15 +165,17 @@ export const usePresetStore = defineStore('preset', () => {
     }, { immediate: true })
   }
 
-  function recallPreset(preset) {
+  function recallPreset(preset, shouldAutoPlay = true) {
     lastPreset.value = preset
     currentName.value = preset.name
     currentPatchNotes.value = preset.patchNotes
     currentCategory.value = preset.category || 'pad'
     useAlternativeEngine.value = false
 
-    // Trigger auto-play on recall
-    window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
+    // Trigger auto-play on recall only if explicitly requested (not during navigation)
+    if (shouldAutoPlay) {
+      window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
+    }
     
     // Sync Velocity Modulation State from Preset
     if (preset.velocityConfig) {
@@ -238,6 +240,8 @@ export const usePresetStore = defineStore('preset', () => {
   function selectEngine(type) {
     if (!lastPreset.value) return
     const isAlt = type === 'B'
+    if (useAlternativeEngine.value === isAlt && initialLoadDone) return
+    
     useAlternativeEngine.value = isAlt
     
     const targetData = isAlt ? lastPreset.value.abVariant?.data : lastPreset.value.data
@@ -651,7 +655,7 @@ export const usePresetStore = defineStore('preset', () => {
     let nextIdx = direction === 'next' ? idx + 1 : idx - 1
     if (nextIdx < 0 || nextIdx >= list.length) return
 
-    recallPreset(list[nextIdx])
+    recallPreset(list[nextIdx], false)
   }
 
   function generateRandomName(cat) {

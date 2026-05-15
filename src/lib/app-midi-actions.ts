@@ -6,6 +6,8 @@ export type AppAction =
   | 'new_sound'
   | 'select_sound_a'
   | 'select_sound_b'
+  | 'toggle_sound_ab'
+  | 'select_sound_ab_range'
   | 'generate'
   | 'regenerate'
   | 'save_preset'
@@ -83,6 +85,8 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   new_sound:           'New Sound',
   select_sound_a:      'Select Sound A',
   select_sound_b:      'Select Sound B',
+  toggle_sound_ab:     'Toggle Sound A/B',
+  select_sound_ab_range: 'Select A/B via Range (1-63=A, 64-127=B)',
   generate:            'Generate Sound',
   regenerate:          'Regenerate (A/B)',
   save_preset:         'Save Preset',
@@ -156,7 +160,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
   'Sound & Presets': [
     'prev_preset', 'next_preset', 'first_preset', 'last_preset',
     'new_sound', 'generate', 'regenerate', 'save_preset',
-    'select_sound_a', 'select_sound_b'
+    'select_sound_a', 'select_sound_b', 'toggle_sound_ab', 'select_sound_ab_range'
   ],
   'Arpeggiator': [
     'toggle_arp', 'arp_mode_cc', 'arp_subdivision_cc'
@@ -205,5 +209,6 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'seq_style_cc',
   'seq_transpose_cc',
   'global_start_stop',
-  'smart_latch_cc'
+  'smart_latch_cc',
+  'select_sound_ab_range'
 ]);

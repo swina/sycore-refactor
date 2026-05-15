@@ -24,7 +24,7 @@ const triggerMode     = ref('any')
 const exactValue      = ref(127)
 const selectedCategory = ref('')
 const selectedAction   = ref('')
-const collapsedCategories = ref(new Set())
+const collapsedCategories = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))
 
 const categories = Object.keys(MIDI_ACTION_GROUPS)
 
@@ -496,52 +496,52 @@ onUnmounted(() => cancelLearn())
                 <div
                   v-for="m in mappings"
                   :key="m.id"
-                :class="[
-                  'flex items-center justify-between rounded-lg p-3 border',
-                  S1_CC_MAP[m.cc] ? 'bg-red-900/10 border-red-500/30' : 'bg-neutral-900 border-neutral-800'
-                ]"
-              >
-                <div class="flex items-center gap-2 min-w-0">
-                  <div class="shrink-0 text-center">
-                    <span v-if="m.cc !== undefined" class="bg-black border border-neutral-800 text-violet-400 font-mono text-[10px] px-2 py-1 rounded block">
-                      CC#{{ m.cc }}
-                    </span>
-                    <span v-else-if="m.note !== undefined" class="bg-black border border-neutral-800 text-amber-400 font-mono text-[10px] px-2 py-1 rounded block">
-                      NOTE#{{ m.note }}
-                    </span>
-                    <span class="text-neutral-600 font-mono text-[9px] block mt-0.5">{{ valueLabel(m) }}</span>
-                  </div>
-                  <div class="min-w-0">
-                    <p class="text-neutral-300 font-bold uppercase tracking-wide text-[10px] truncate">
-                      {{ APP_ACTION_LABELS[m.action] }}
-                    </p>
-                    <p class="text-neutral-500 font-mono text-[10px] bg-neutral-950/50 px-1.5 py-0.5 rounded border border-neutral-800/50 w-fit mt-1">
-                      {{ m.device }} <span class="mx-1 text-neutral-700">|</span> {{ m.channel === -1 ? 'OMNI' : `CH${m.channel + 1}` }}
-                    </p>
-                    <div v-if="m.feedbackOn !== undefined || m.consume" class="flex flex-wrap gap-2 mt-1">
-                      <span v-if="m.consume" class="text-[8px] bg-violet-500/10 text-violet-400 border border-violet-500/20 px-1 rounded uppercase font-black">CONSUME</span>
-                      <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-green-500/10 text-green-400 border border-green-500/20 px-1 rounded uppercase font-black">LED ON: {{ m.feedbackOn }}</span>
-                      <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-red-500/10 text-red-400 border border-red-500/20 px-1 rounded uppercase font-black">LED OFF: {{ m.feedbackOff }}</span>
-                      <button
-                        v-if="m.feedbackOn !== undefined"
-                        @click="testFeedback(m)"
-                        class="text-[8px] text-violet-400 hover:text-violet-300 underline font-black uppercase"
-                      >
-                        Test
-                      </button>
-                    </div>
-                  </div>
-                  <span v-if="S1_CC_MAP[m.cc]" :title="`Conflicts with S-1 ${S1_CC_MAP[m.cc]}`" class="shrink-0">
-                    <AlertTriangle class="w-3.5 h-3.5 text-red-400" />
-                  </span>
-                </div>
-                <button
-                  @click="handleRemove(m.id)"
-                  class="text-neutral-500 hover:text-rose-500 p-1 shrink-0"
-                  title="Remove mapping"
+                  :class="[
+                    'flex items-center justify-between rounded-lg p-3 border',
+                    S1_CC_MAP[m.cc] ? 'bg-red-900/10 border-red-500/30' : 'bg-neutral-900 border-neutral-800'
+                  ]"
                 >
-                  <Trash2 class="w-4 h-4" />
-                </button>
+                  <div class="flex items-center gap-2 min-w-0">
+                    <div class="shrink-0 text-center">
+                      <span v-if="m.cc !== undefined" class="bg-black border border-neutral-800 text-violet-400 font-mono text-[10px] px-2 py-1 rounded block">
+                        CC#{{ m.cc }}
+                      </span>
+                      <span v-else-if="m.note !== undefined" class="bg-black border border-neutral-800 text-amber-400 font-mono text-[10px] px-2 py-1 rounded block">
+                        NOTE#{{ m.note }}
+                      </span>
+                      <span class="text-neutral-600 font-mono text-[9px] block mt-0.5">{{ valueLabel(m) }}</span>
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-neutral-300 font-bold uppercase tracking-wide text-[10px] truncate">
+                        {{ APP_ACTION_LABELS[m.action] }}
+                      </p>
+                      <p class="text-neutral-500 font-mono text-[10px] bg-neutral-950/50 px-1.5 py-0.5 rounded border border-neutral-800/50 w-fit mt-1">
+                        {{ m.device }} <span class="mx-1 text-neutral-700">|</span> {{ m.channel === -1 ? 'OMNI' : `CH${m.channel + 1}` }}
+                      </p>
+                      <div v-if="m.feedbackOn !== undefined || m.consume" class="flex flex-wrap gap-2 mt-1">
+                        <span v-if="m.consume" class="text-[8px] bg-violet-500/10 text-violet-400 border border-violet-500/20 px-1 rounded uppercase font-black">CONSUME</span>
+                        <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-green-500/10 text-green-400 border border-green-500/20 px-1 rounded uppercase font-black">LED ON: {{ m.feedbackOn }}</span>
+                        <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-red-500/10 text-red-400 border border-red-500/20 px-1 rounded uppercase font-black">LED OFF: {{ m.feedbackOff }}</span>
+                        <button
+                          v-if="m.feedbackOn !== undefined"
+                          @click="testFeedback(m)"
+                          class="text-[8px] text-violet-400 hover:text-violet-300 underline font-black uppercase"
+                        >
+                          Test
+                        </button>
+                      </div>
+                    </div>
+                    <span v-if="S1_CC_MAP[m.cc]" :title="`Conflicts with S-1 ${S1_CC_MAP[m.cc]}`" class="shrink-0">
+                      <AlertTriangle class="w-3.5 h-3.5 text-red-400" />
+                    </span>
+                  </div>
+                  <button
+                    @click="handleRemove(m.id)"
+                    class="text-neutral-500 hover:text-rose-500 p-1 shrink-0"
+                    title="Remove mapping"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>

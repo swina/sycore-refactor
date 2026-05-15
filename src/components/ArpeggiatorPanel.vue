@@ -196,15 +196,19 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
               <span class="text-[8px] font-mono text-neutral-500 uppercase">Rate</span>
               <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpSubdivision }}</span>
             </div>
-            <div class="px-1">
+            <div class="px-1 relative group/slider">
               <input 
                 type="range" 
                 :min="0" 
                 :max="ARP_SUBDIVISIONS.length - 1" 
                 :value="ARP_SUBDIVISIONS.indexOf(arpStore.arpSubdivision)"
                 @input="arpStore.arpSubdivision = ARP_SUBDIVISIONS[$event.target.value]"
-                class="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-synth-neon"
+                class="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-synth-neon hover:accent-synth-neon/80 transition-all"
               />
+              <!-- Visual markers for subdivisions -->
+              <div class="flex justify-between px-0.5 mt-1 pointer-events-none">
+                <div v-for="i in 5" :key="i" class="w-0.5 h-1 bg-neutral-800 rounded-full"></div>
+              </div>
             </div>
           </div>
         </div>

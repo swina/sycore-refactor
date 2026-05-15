@@ -24,26 +24,35 @@ export function useAppActions() {
 
   function dispatchAction(action, ccVal = 0) {
     switch (action) {
-      case 'prev_preset': presetStore.navigateHistory('prev'); break
-      case 'next_preset': presetStore.navigateHistory('next'); break
-      case 'first_preset': presetStore.navigateHistory('first'); break
-      case 'last_preset': presetStore.navigateHistory('last'); break
+      case 'prev_preset': if (ccVal > 63) presetStore.navigateHistory('prev'); break
+      case 'next_preset': if (ccVal > 63) presetStore.navigateHistory('next'); break
+      case 'first_preset': if (ccVal > 63) presetStore.navigateHistory('first'); break
+      case 'last_preset': if (ccVal > 63) presetStore.navigateHistory('last'); break
 
       case 'new_sound':
-      case 'generate': presetStore.generate(false); break
-      case 'regenerate': presetStore.generate(true); break
+      case 'generate': if (ccVal > 63) presetStore.generate(false); break
+      case 'regenerate': if (ccVal > 63) presetStore.generate(true); break
 
       case 'save_preset':
-        if (presetStore.showResults) presetStore.savePreset(); break
+        if (ccVal > 63 && presetStore.showResults) presetStore.savePreset(); break
 
       case 'select_sound_a':
-        presetStore.useAlternativeEngine = false
-        if (presetStore.engineCacheA) presetStore.recallPreset(presetStore.engineCacheA)
-        break
+        if (ccVal > 63) presetStore.selectEngine('A'); break
 
       case 'select_sound_b':
-        presetStore.useAlternativeEngine = true
-        if (presetStore.engineCacheB) presetStore.recallPreset(presetStore.engineCacheB)
+        if (ccVal > 63) presetStore.selectEngine('B'); break
+
+      case 'toggle_sound_ab':
+        if (ccVal > 63) {
+          if (presetStore.useAlternativeEngine) presetStore.selectEngine('A')
+          else presetStore.selectEngine('B')
+        }
+        break
+
+      case 'select_sound_ab_range':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] AB Range selection: val ${ccVal} -> ${ccVal < 64 ? 'A' : 'B'}`);
+        if (ccVal < 64) presetStore.selectEngine('A')
+        else presetStore.selectEngine('B')
         break
 
       case 'toggle_arp':
@@ -68,41 +77,45 @@ export function useAppActions() {
         }
         break
 
-      case 'toggle_sequencer': uiStore.isSequencerOpen = !uiStore.isSequencerOpen; break
+      case 'toggle_sequencer':
+        if (ccVal > 63) uiStore.isSequencerOpen = !uiStore.isSequencerOpen;
+        break
       case 'seq_play':
-        window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } })); break
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }));
+        break
       case 'seq_stop':
-        window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false } })); break
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false } }));
+        break
 
       case 'seq_bpm_up':
-        arpStore.arpBpm = Math.min(300, arpStore.arpBpm + 1); break
+        if (ccVal > 63) arpStore.arpBpm = Math.min(300, arpStore.arpBpm + 1); break
       case 'seq_bpm_down':
-        arpStore.arpBpm = Math.max(20, arpStore.arpBpm - 1); break
+        if (ccVal > 63) arpStore.arpBpm = Math.max(20, arpStore.arpBpm - 1); break
       case 'seq_bpm_cc':
         // Map CC value 0-127 → BPM 20-300
         arpStore.arpBpm = 20 + Math.round((ccVal / 127) * 280); break
 
-      case 'toggle_visualizer': uiStore.isVisualizerOpen = !uiStore.isVisualizerOpen; break
-      case 'toggle_midi_capture': uiStore.isCaptureOpen = !uiStore.isCaptureOpen; break
-      case 'toggle_liveset': uiStore.isLiveSetOpen = !uiStore.isLiveSetOpen; break
-      case 'toggle_panel': uiStore.isPanelCollapsed = !uiStore.isPanelCollapsed; break
-      case 'toggle_looper': uiStore.isLooperOpen = !uiStore.isLooperOpen; break
+      case 'toggle_visualizer': if (ccVal > 63) uiStore.isVisualizerOpen = !uiStore.isVisualizerOpen; break
+      case 'toggle_midi_capture': if (ccVal > 63) uiStore.isCaptureOpen = !uiStore.isCaptureOpen; break
+      case 'toggle_liveset': if (ccVal > 63) uiStore.isLiveSetOpen = !uiStore.isLiveSetOpen; break
+      case 'toggle_panel': if (ccVal > 63) uiStore.isPanelCollapsed = !uiStore.isPanelCollapsed; break
+      case 'toggle_looper': if (ccVal > 63) uiStore.isLooperOpen = !uiStore.isLooperOpen; break
       case 'toggle_audio_capture':
         if (window.SY_LOG) window.SY_LOG(`[AppActions] AUDIO CAPTURE: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
         uiStore.isAudioCaptureOpen = ccVal > 63;
         break
-      case 'open_sound_types': uiStore.isTypesOpen = true; break
-      case 'open_sound_history': uiStore.isHistoryOpen = true; break
-      case 'open_midi_matrix': uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
-      case 'toggle_midi_performance': uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
+      case 'open_sound_types': if (ccVal > 63) uiStore.isTypesOpen = true; break
+      case 'open_sound_history': if (ccVal > 63) uiStore.isHistoryOpen = true; break
+      case 'open_midi_matrix': if (ccVal > 63) uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
+      case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
       case 'midi_panic':
-        midiStore.panic(); break
+        if (ccVal > 63) midiStore.panic(); break
 
       case 'global_start_stop':
-        if (ccVal > 0) {
+        if (ccVal > 63) {
           if (!midiStore.isTransportPlaying) midiStore.sendStart()
-        } else {
+        } else if (ccVal < 64) {
           if (midiStore.isTransportPlaying) midiStore.sendStop()
         }
         break
@@ -117,24 +130,24 @@ export function useAppActions() {
         break
 
       case 'toggle_track_player':
-        window.dispatchEvent(new CustomEvent('toggle-backing-track')); break
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('toggle-backing-track')); break
       case 'playlist_play_stop':
-        window.dispatchEvent(new CustomEvent('playlist-play-stop')); break
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('playlist-play-stop')); break
       case 'playlist_next':
-        window.dispatchEvent(new CustomEvent('playlist-next')); break
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('playlist-next')); break
       case 'playlist_volume_cc':
         window.dispatchEvent(new CustomEvent('playlist-volume', { detail: ccVal / 127 })); break
       case 'capture_rec_toggle':
-        window.dispatchEvent(new CustomEvent('capture-rec-toggle')); break
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('capture-rec-toggle')); break
 
       case 'arp_mode_cc': {
         const modes = ['up', 'down', 'up-down', 'random']
-        const idx = Math.floor((ccVal / 128) * modes.length)
+        const idx = Math.floor((ccVal / 127.1) * modes.length)
         arpStore.arpMode = modes[idx]
         break
       }
       case 'arp_subdivision_cc': {
-        const idx = Math.floor((ccVal / 128) * ARP_SUBDIVISIONS.length)
+        const idx = Math.floor((ccVal / 127.1) * ARP_SUBDIVISIONS.length)
         arpStore.arpSubdivision = ARP_SUBDIVISIONS[idx]
         break
       }

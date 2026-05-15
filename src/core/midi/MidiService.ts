@@ -44,7 +44,7 @@ if (typeof window !== 'undefined') {
 export class MidiService {
   private midiAccess: MIDIAccess | null = null;
   private routingConfig: RoutingConfig | null = null;
-  private broadcastMode: boolean = false;
+  private broadcastMode: boolean = true;
 
   // Multi-Output Routing Matrix
   private routingMatrix: Map<string, Set<string>> = new Map([
