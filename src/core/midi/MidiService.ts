@@ -99,7 +99,7 @@ export class MidiService {
 
     this.midiAccess.outputs.forEach(outPort => {
       // 1. Matrix Match (Highest Priority - Bypass legacy outEnabled if explicitly selected)
-      const isMatrixMatch = targetsFromMatrix.has(outPort.id);
+      const isMatrixMatch = targetsFromMatrix.has(outPort.name);
       
       // 2. Broadcast Mode Match
       const isBroadcastTarget = this.broadcastMode;
@@ -344,17 +344,17 @@ export class MidiService {
     }
   }
 
-  public setRouting(source: string, outputIds: string[]) {
-    this.routingMatrix.set(source, new Set(outputIds))
+  public setRouting(source: string, outputNames: string[]) {
+    this.routingMatrix.set(source, new Set(outputNames))
     this.saveRoutingMatrix()
   }
 
-  public toggleRouting(source: string, outputId: string) {
+  public toggleRouting(source: string, outputName: string) {
     const targets = this.routingMatrix.get(source) || new Set()
-    if (targets.has(outputId)) {
-      targets.delete(outputId)
+    if (targets.has(outputName)) {
+      targets.delete(outputName)
     } else {
-      targets.add(outputId)
+      targets.add(outputName)
     }
     this.routingMatrix.set(source, targets)
     this.saveRoutingMatrix()
@@ -484,7 +484,7 @@ export class MidiService {
       const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
       if (normIn && normOut && normIn === normOut) return;
 
-      const isRoutedByMatrix = targetsFromMatrix ? targetsFromMatrix.has(outDevice.id) : false;
+      const isRoutedByMatrix = targetsFromMatrix ? targetsFromMatrix.has(outDevice.name) : false;
       if (!isRoutedByMatrix && !this.broadcastMode) return;
 
       if (isNote && !outConfig.notes) return;
@@ -678,7 +678,7 @@ export class MidiService {
         if (config.outEnabled && config.cc) {
           const allOutputs = Array.from(this.midiAccess?.outputs.values() || []);
           const ports = allOutputs.filter(p => {
-             return p.name === name && (this.broadcastMode || targetsFromMatrix.has(p.id));
+             return p.name === name && (this.broadcastMode || targetsFromMatrix.has(p.name));
           });
           
           ports.forEach(out => {

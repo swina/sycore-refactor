@@ -152,6 +152,44 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   toggle_audio_capture:    'Toggle Audio Capture',
 };
 
+export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
+  'Sound & Presets': [
+    'prev_preset', 'next_preset', 'first_preset', 'last_preset',
+    'new_sound', 'generate', 'regenerate', 'save_preset',
+    'select_sound_a', 'select_sound_b'
+  ],
+  'Arpeggiator': [
+    'toggle_arp', 'arp_mode_cc', 'arp_subdivision_cc'
+  ],
+  'Sequencer': [
+    'toggle_sequencer', 'seq_play', 'seq_stop', 'seq_bpm_up', 'seq_bpm_down', 'seq_bpm_cc',
+    'seq_swing_cc', 'seq_density_cc', 'seq_length_cc', 'seq_key_cc', 'seq_scale_cc', 'seq_style_cc',
+    'seq_transpose_cc', 'seq_gen_trigger', 'seq_duplicate', 'seq_reduce'
+  ],
+  'Modulation': [
+    'toggle_lfo_1', 'toggle_lfo_2', 'toggle_velocity_mapping'
+  ],
+  'Audio & Looper': [
+    'toggle_audio_capture', 'toggle_looper', 'looper_record', 'looper_clear_all',
+    'looper_mute_take_1', 'looper_mute_take_2', 'looper_mute_take_3', 'looper_mute_take_4'
+  ],
+  'UI & Panels': [
+    'toggle_panel', 'toggle_visualizer', 'toggle_liveset', 'open_sound_types',
+    'open_sound_history', 'open_midi_matrix'
+  ],
+  'Transport & Performance': [
+    'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
+    'playlist_volume_cc', 'transpose_cc', 'pass_thru', 'capture_rec_toggle'
+  ],
+  'Live Set': [
+    'liveset_up', 'liveset_down',
+    'liveset_pad_1', 'liveset_pad_2', 'liveset_pad_3', 'liveset_pad_4',
+    'liveset_pad_5', 'liveset_pad_6', 'liveset_pad_7', 'liveset_pad_8',
+    'liveset_pad_9', 'liveset_pad_10', 'liveset_pad_11', 'liveset_pad_12',
+    'liveset_pad_13', 'liveset_pad_14', 'liveset_pad_15', 'liveset_pad_16'
+  ]
+};
+
 // Actions where the CC value (0–127) is mapped to a range (not just trigger on >63)
 export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'seq_bpm_cc', 

@@ -218,13 +218,13 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.sendProgramChange(programNumber, 15, source)
   }
 
-  function setRouting(source, deviceIds) {
-    routingMatrix.value[source] = deviceIds
-    midiService.setRouting(source, deviceIds)
+  function setRouting(source, outputNames) {
+    routingMatrix.value[source] = outputNames
+    midiService.setRouting(source, outputNames)
   }
 
-  function toggleRouting(source, outputId) {
-    midiService.toggleRouting(source, outputId)
+  function toggleRouting(source, outputName) {
+    midiService.toggleRouting(source, outputName)
     routingMatrix.value[source] = midiService.getRouting(source)
   }
 
@@ -272,7 +272,7 @@ export const useMidiStore = defineStore('midi', () => {
   function sendControlValue(field, value, source = MidiSource.UI) {
     const cc = FIELD_TO_CC[field]
     if (cc !== undefined) {
-      sendCC(cc, value, source)
+      sendCC(cc, value, null, source)
     }
   }
 

@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
-import { X, Gamepad2, Radio, CircleDashed, CheckCircle2, AlertTriangle, Trash2 } from 'lucide-vue-next'
-import { APP_ACTION_LABELS, CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { X, Gamepad2, Radio, CircleDashed, CheckCircle2, AlertTriangle, Trash2, FolderTree, ChevronUp } from 'lucide-vue-next'
+import { APP_ACTION_LABELS, CONTINUOUS_ACTIONS, MIDI_ACTION_GROUPS } from '@/lib/app-midi-actions'
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -22,7 +22,28 @@ const detectedChannel = ref(null)
 const detectedValue   = ref(null)
 const triggerMode     = ref('any')
 const exactValue      = ref(127)
-const selectedAction  = ref('')
+const selectedCategory = ref('')
+const selectedAction   = ref('')
+const collapsedCategories = ref(new Set())
+
+const categories = Object.keys(MIDI_ACTION_GROUPS)
+
+const filteredActions = computed(() => {
+  if (!selectedCategory.value) return []
+  return MIDI_ACTION_GROUPS[selectedCategory.value].map(action => ({
+    value: action,
+    label: APP_ACTION_LABELS[action]
+  }))
+})
+
+watch(selectedCategory, (newCat) => {
+  if (newCat) {
+    const currentActions = MIDI_ACTION_GROUPS[newCat]
+    if (!currentActions.includes(selectedAction.value)) {
+      selectedAction.value = ''
+    }
+  }
+})
 const fbOn            = ref(127)
 const fbOff           = ref(0)
 const hasFeedback     = ref(false)
@@ -31,7 +52,6 @@ const consume         = ref(true)
 const learnListenerRef = ref(null)
 const learnInputRef    = ref(null)
 
-const actionEntries = Object.entries(APP_ACTION_LABELS)
 const s1Entries     = Object.entries(S1_CC_MAP)
 const channels16    = Array.from({ length: 16 }, (_, i) => i)
 
@@ -42,6 +62,42 @@ const conflict = computed(() =>
 const isContinuousSelected = computed(() =>
   selectedAction.value !== '' && CONTINUOUS_ACTIONS.has(selectedAction.value)
 )
+
+const groupedMappings = computed(() => {
+  const groups = {}
+  
+  // Initialize groups
+  Object.keys(MIDI_ACTION_GROUPS).forEach(cat => {
+    groups[cat] = []
+  })
+  
+  // Distribute mappings
+  mappingStore.appMidiMappings.forEach(m => {
+    const category = Object.keys(MIDI_ACTION_GROUPS).find(cat => 
+      MIDI_ACTION_GROUPS[cat].includes(m.action)
+    ) || 'Other'
+    
+    if (!groups[category]) groups[category] = []
+    groups[category].push(m)
+  })
+  
+  // Return only non-empty groups
+  return Object.fromEntries(
+    Object.entries(groups).filter(([_, ms]) => ms.length > 0)
+  )
+})
+
+function toggleCategory(cat) {
+  if (collapsedCategories.value.has(cat)) {
+    collapsedCategories.value.delete(cat)
+  } else {
+    collapsedCategories.value.add(cat)
+  }
+}
+
+onMounted(() => {
+  categories.forEach(cat => collapsedCategories.value.add(cat))
+})
 
 function cancelLearn() {
   if (learnListenerRef.value && learnInputRef.value) {
@@ -289,21 +345,35 @@ onUnmounted(() => cancelLearn())
                 </div>
               </div>
 
-              <!-- Action selector -->
-              <div>
-                <label class="block text-neutral-400 text-[10px] uppercase mb-2">Assign App Action</label>
-                <select
-                  v-model="selectedAction"
-                  class="w-full bg-black border border-neutral-700 rounded-lg p-3 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none"
-                  :size="6"
-                >
-                  <option value="" disabled>Select action…</option>
-                  <option v-for="[action, label] in actionEntries" :key="action" :value="action">{{ label }}</option>
-                </select>
-                <p v-if="isContinuousSelected" class="text-[10px] font-mono text-violet-400/70 mt-1">
-                  Continuous — CC value (0–127) maps to the full parameter range
-                </p>
+              <!-- Category selector -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-neutral-400 text-[10px] uppercase mb-2">Category</label>
+                  <select
+                    v-model="selectedCategory"
+                    class="w-full bg-black border border-neutral-700 rounded-lg p-2.5 text-neutral-300 font-mono text-xs focus:border-violet-400 outline-none"
+                  >
+                    <option value="" disabled>Select category…</option>
+                    <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                  </select>
+                </div>
+
+                <!-- Action selector -->
+                <div>
+                  <label class="block text-neutral-400 text-[10px] uppercase mb-2">Action</label>
+                  <select
+                    v-model="selectedAction"
+                    :disabled="!selectedCategory"
+                    class="w-full bg-black border border-neutral-700 rounded-lg p-2.5 text-neutral-300 font-mono text-xs focus:border-violet-400 outline-none disabled:opacity-50"
+                  >
+                    <option value="" disabled>{{ selectedCategory ? 'Select action…' : 'Pick category first' }}</option>
+                    <option v-for="act in filteredActions" :key="act.value" :value="act.value">{{ act.label }}</option>
+                  </select>
+                </div>
               </div>
+              <p v-if="isContinuousSelected" class="text-[10px] font-mono text-violet-400/70 mt-1">
+                Continuous — CC value (0–127) maps to the full parameter range
+              </p>
 
               <!-- Consumption toggle -->
               <div class="bg-neutral-900/50 rounded-lg p-3 border border-neutral-700/50">
@@ -402,56 +472,78 @@ onUnmounted(() => cancelLearn())
           >
             No app actions mapped yet.
           </p>
-          <div v-else class="space-y-2">
-            <div
-              v-for="m in mappingStore.appMidiMappings"
-              :key="m.id"
-              :class="[
-                'flex items-center justify-between rounded-lg p-3 border',
-                S1_CC_MAP[m.cc] ? 'bg-red-900/10 border-red-500/30' : 'bg-neutral-900 border-neutral-800'
-              ]"
-            >
-              <div class="flex items-center gap-2 min-w-0">
-                <div class="shrink-0 text-center">
-                  <span v-if="m.cc !== undefined" class="bg-black border border-neutral-800 text-violet-400 font-mono text-[10px] px-2 py-1 rounded block">
-                    CC#{{ m.cc }}
-                  </span>
-                  <span v-else-if="m.note !== undefined" class="bg-black border border-neutral-800 text-amber-400 font-mono text-[10px] px-2 py-1 rounded block">
-                    NOTE#{{ m.note }}
-                  </span>
-                  <span class="text-neutral-600 font-mono text-[9px] block mt-0.5">{{ valueLabel(m) }}</span>
-                </div>
-                <div class="min-w-0">
-                  <p class="text-neutral-300 font-bold uppercase tracking-wide text-[10px] truncate">
-                    {{ APP_ACTION_LABELS[m.action] }}
-                  </p>
-                  <p class="text-neutral-500 font-mono text-[10px] bg-neutral-950/50 px-1.5 py-0.5 rounded border border-neutral-800/50 w-fit mt-1">
-                    {{ m.device }} <span class="mx-1 text-neutral-700">|</span> {{ m.channel === -1 ? 'OMNI' : `CH${m.channel + 1}` }}
-                  </p>
-                  <div v-if="m.feedbackOn !== undefined || m.consume" class="flex flex-wrap gap-2 mt-1">
-                    <span v-if="m.consume" class="text-[8px] bg-violet-500/10 text-violet-400 border border-violet-500/20 px-1 rounded uppercase font-black">CONSUME</span>
-                    <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-green-500/10 text-green-400 border border-green-500/20 px-1 rounded uppercase font-black">LED ON: {{ m.feedbackOn }}</span>
-                    <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-red-500/10 text-red-400 border border-red-500/20 px-1 rounded uppercase font-black">LED OFF: {{ m.feedbackOff }}</span>
-                    <button
-                      v-if="m.feedbackOn !== undefined"
-                      @click="testFeedback(m)"
-                      class="text-[8px] text-violet-400 hover:text-violet-300 underline font-black uppercase"
-                    >
-                      Test
-                    </button>
-                  </div>
-                </div>
-                <span v-if="S1_CC_MAP[m.cc]" :title="`Conflicts with S-1 ${S1_CC_MAP[m.cc]}`" class="shrink-0">
-                  <AlertTriangle class="w-3.5 h-3.5 text-red-400" />
-                </span>
-              </div>
-              <button
-                @click="handleRemove(m.id)"
-                class="text-neutral-500 hover:text-rose-500 p-1 shrink-0"
-                title="Remove mapping"
+          <div v-else class="space-y-4">
+            <div v-for="(mappings, category) in groupedMappings" :key="category" class="space-y-2">
+              <!-- Category Header (Collapsible) -->
+              <button 
+                @click="toggleCategory(category)"
+                class="w-full flex items-center justify-between gap-2 px-2 py-1 hover:bg-white/5 rounded-lg transition-colors group/cat"
               >
-                <Trash2 class="w-4 h-4" />
+                <div class="flex items-center gap-2">
+                  <FolderTree :class="['w-3.5 h-3.5 transition-colors', collapsedCategories.has(category) ? 'text-neutral-600' : 'text-violet-400']" />
+                  <span :class="['text-[10px] font-black uppercase tracking-widest transition-colors', collapsedCategories.has(category) ? 'text-neutral-500' : 'text-neutral-200']">
+                    {{ category }}
+                  </span>
+                  <span class="text-[9px] font-mono text-neutral-600 bg-neutral-800 px-1.5 rounded-full">
+                    {{ mappings.length }}
+                  </span>
+                </div>
+                <ChevronUp :class="['w-3 h-3 text-neutral-600 group-hover/cat:text-neutral-400 transition-transform', collapsedCategories.has(category) ? 'rotate-180' : '']" />
               </button>
+
+              <!-- Mappings in Category (Collapsible Content) -->
+              <div v-if="!collapsedCategories.has(category)" class="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div
+                  v-for="m in mappings"
+                  :key="m.id"
+                :class="[
+                  'flex items-center justify-between rounded-lg p-3 border',
+                  S1_CC_MAP[m.cc] ? 'bg-red-900/10 border-red-500/30' : 'bg-neutral-900 border-neutral-800'
+                ]"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="shrink-0 text-center">
+                    <span v-if="m.cc !== undefined" class="bg-black border border-neutral-800 text-violet-400 font-mono text-[10px] px-2 py-1 rounded block">
+                      CC#{{ m.cc }}
+                    </span>
+                    <span v-else-if="m.note !== undefined" class="bg-black border border-neutral-800 text-amber-400 font-mono text-[10px] px-2 py-1 rounded block">
+                      NOTE#{{ m.note }}
+                    </span>
+                    <span class="text-neutral-600 font-mono text-[9px] block mt-0.5">{{ valueLabel(m) }}</span>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-neutral-300 font-bold uppercase tracking-wide text-[10px] truncate">
+                      {{ APP_ACTION_LABELS[m.action] }}
+                    </p>
+                    <p class="text-neutral-500 font-mono text-[10px] bg-neutral-950/50 px-1.5 py-0.5 rounded border border-neutral-800/50 w-fit mt-1">
+                      {{ m.device }} <span class="mx-1 text-neutral-700">|</span> {{ m.channel === -1 ? 'OMNI' : `CH${m.channel + 1}` }}
+                    </p>
+                    <div v-if="m.feedbackOn !== undefined || m.consume" class="flex flex-wrap gap-2 mt-1">
+                      <span v-if="m.consume" class="text-[8px] bg-violet-500/10 text-violet-400 border border-violet-500/20 px-1 rounded uppercase font-black">CONSUME</span>
+                      <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-green-500/10 text-green-400 border border-green-500/20 px-1 rounded uppercase font-black">LED ON: {{ m.feedbackOn }}</span>
+                      <span v-if="m.feedbackOn !== undefined" class="text-[8px] bg-red-500/10 text-red-400 border border-red-500/20 px-1 rounded uppercase font-black">LED OFF: {{ m.feedbackOff }}</span>
+                      <button
+                        v-if="m.feedbackOn !== undefined"
+                        @click="testFeedback(m)"
+                        class="text-[8px] text-violet-400 hover:text-violet-300 underline font-black uppercase"
+                      >
+                        Test
+                      </button>
+                    </div>
+                  </div>
+                  <span v-if="S1_CC_MAP[m.cc]" :title="`Conflicts with S-1 ${S1_CC_MAP[m.cc]}`" class="shrink-0">
+                    <AlertTriangle class="w-3.5 h-3.5 text-red-400" />
+                  </span>
+                </div>
+                <button
+                  @click="handleRemove(m.id)"
+                  class="text-neutral-500 hover:text-rose-500 p-1 shrink-0"
+                  title="Remove mapping"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

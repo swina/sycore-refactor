@@ -35,8 +35,8 @@ const sources = computed(() => {
   return [...coreSources, ...dynamicSources]
 })
 
-function isRouted(source, outputId) {
-  return midiStore.routingMatrix[source]?.includes(outputId)
+function isRouted(source, outputName) {
+  return midiStore.routingMatrix[source]?.includes(outputName)
 }
 
 const experimentalThruOutputId = ref('')
@@ -68,8 +68,8 @@ const outputs = computed(() => {
   })
 })
 
-function toggleRouting(source, outputId) {
-  midiStore.toggleRouting(source, outputId)
+function toggleRouting(source, outputName) {
+  midiStore.toggleRouting(source, outputName)
 }
 
 function toggleBroadcast() {
@@ -79,7 +79,7 @@ function toggleBroadcast() {
 const viewMode = ref('grid')
 
 function getActiveOutputsFor(sourceId) {
-  return outputs.value.filter(o => isRouted(sourceId, o.id))
+  return outputs.value.filter(o => isRouted(sourceId, o.name))
 }
 
 const sourcesWithActiveRoutes = computed(() => {
@@ -88,7 +88,7 @@ const sourcesWithActiveRoutes = computed(() => {
 
 const activeOutputs = computed(() => {
   return outputs.value.filter(o => {
-    return sourcesWithActiveRoutes.value.some(src => isRouted(src.id, o.id))
+    return sourcesWithActiveRoutes.value.some(src => isRouted(src.id, o.name))
   })
 })
 
@@ -251,13 +251,13 @@ const activeOutputs = computed(() => {
                 <div class="flex gap-4 items-center">
                   <div v-for="output in outputs" :key="output.id" class="min-w-[120px] flex justify-center">
                     <button 
-                      @click="toggleRouting(source.id, output.id)"
+                      @click="toggleRouting(source.id, output.name)"
                       :class="['w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all duration-200', 
-                        isRouted(source.id, output.id) 
+                        isRouted(source.id, output.name) 
                           ? 'bg-synth-neon/10 border-synth-neon shadow-[0_0_15px_rgba(0,255,204,0.2)]' 
                           : 'bg-neutral-900 border-neutral-800 hover:border-neutral-600']"
                     >
-                      <Radio v-if="isRouted(source.id, output.id)" class="w-5 h-5 text-synth-neon animate-pulse" />
+                      <Radio v-if="isRouted(source.id, output.name)" class="w-5 h-5 text-synth-neon animate-pulse" />
                       <div v-else class="w-1.5 h-1.5 rounded-full bg-neutral-800" />
                     </button>
                   </div>
@@ -272,9 +272,9 @@ const activeOutputs = computed(() => {
               <!-- CONNECTIONS SVG -->
               <svg class="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
                 <template v-for="(source, sIdx) in sourcesWithActiveRoutes" :key="'svg-src-'+source.id">
-                  <template v-for="out in getActiveOutputsFor(source.id)" :key="'svg-out-'+out.id">
+                  <template v-for="out in getActiveOutputsFor(source.id)" :key="'svg-out-'+out.name">
                     <path 
-                      :d="`M 250,${250 + (sIdx - (sourcesWithActiveRoutes.length-1)/2) * 80} C 400,${250 + (sIdx - (sourcesWithActiveRoutes.length-1)/2) * 80} 500,${250 + (activeOutputs.findIndex(o => o.id === out.id) - (activeOutputs.length-1)/2) * 80} 650,${250 + (activeOutputs.findIndex(o => o.id === out.id) - (activeOutputs.length-1)/2) * 80}`"
+                      :d="`M 250,${250 + (sIdx - (sourcesWithActiveRoutes.length-1)/2) * 80} C 400,${250 + (sIdx - (sourcesWithActiveRoutes.length-1)/2) * 80} 500,${250 + (activeOutputs.findIndex(o => o.name === out.name) - (activeOutputs.length-1)/2) * 80} 650,${250 + (activeOutputs.findIndex(o => o.name === out.name) - (activeOutputs.length-1)/2) * 80}`"
                       fill="none" 
                       stroke="rgba(0,255,204,0.15)" 
                       stroke-width="2"
@@ -299,7 +299,7 @@ const activeOutputs = computed(() => {
 
               <!-- OUTPUTS (Right) -->
               <div class="flex flex-col gap-6 z-10 w-48">
-                <div v-for="out in activeOutputs" :key="'flow-out-'+out.id"
+                <div v-for="out in activeOutputs" :key="'flow-out-'+out.name"
                   class="h-16 bg-neutral-900 border p-4 rounded-2xl flex items-center gap-3 shadow-2xl shrink-0 border-r-4 justify-end"
                   :class="experimentalThruOutputId === out.id ? 'border-emerald-500/20 border-r-emerald-500/50' : 'border-synth-neon/20 border-r-synth-neon/50'">
                   <div class="flex flex-col min-w-0 flex-1 items-end">
