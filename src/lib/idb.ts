@@ -43,12 +43,13 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
   users: 'id',
   user_presets: 'id',   // composite id = uid + '__' + docId
+  user_playlists: 'id', // composite id = uid + '__' + docId
   system: 'id',
   settings: 'id',
   backing_tracks: 'id',
@@ -91,8 +92,14 @@ function parsePath(segments: PathSegments): { store: string; key: string } {
   }
   if (segments.length === 4) {
     // sub-collection doc: e.g. ['users', uid, 'presets', pid]
-    const [, uid, , pid] = segments;
-    return { store: 'user_presets', key: `${uid}__${pid}` };
+    const [, uid, collectionName, docId] = segments;
+    const storeMap: Record<string, string> = {
+      'presets': 'user_presets',
+      'playlists': 'user_playlists'
+    };
+    const store = storeMap[collectionName];
+    if (!store) throw new Error(`Unsupported sub-collection: ${collectionName}`);
+    return { store, key: `${uid}__${docId}` };
   }
   throw new Error(`Invalid path segments: ${segments.join('/')}`);
 }
