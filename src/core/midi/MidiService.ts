@@ -14,6 +14,7 @@ export interface DeviceRegistration {
   cc: boolean;
   pc: boolean;
   isMulti: boolean;
+  smartLatch: boolean;
 }
 
 export interface RoutingConfig {
@@ -65,9 +66,10 @@ export class MidiService {
 
   // Smart Latch
   public isSmartLatchActive = false;
-  public smartLatchMaxNotes = 4;
-  public smartLatchReplace = true;
-  private latchedNotesByOutput = new Map<string, { inputId: string, channel: number, note: number, velocity: number }[]>();
+  private smartLatchMaxNotes: number = 4;
+  private smartLatchReplace: boolean = true;
+  private smartLatchFadeTime: number = 0;
+  private latchedNotesByOutput: Map<string, { inputId: string, channel: number, note: number, velocity: number }[]> = new Map();
 
   private clockInterval: number | null = null;
   private currentBpm: number = 120;
@@ -250,24 +252,74 @@ export class MidiService {
   }
 
   // --- Smart Latch ---
-  public setSmartLatchActive(active: boolean) {
-    this.isSmartLatchActive = active;
-    if (!active) this.clearLatchedNotes();
-  }
-
-  public setSmartLatchConfig(maxNotes: number, replace: boolean) {
+  public setSmartLatchConfig(maxNotes: number, replace: boolean, fadeTime: number = 0) {
     this.smartLatchMaxNotes = maxNotes;
     this.smartLatchReplace = replace;
-    for (const [outId, notes] of this.latchedNotesByOutput.entries()) {
-      const outDevice = this.midiAccess?.outputs.get(outId);
-      const outConfig = outDevice ? this.routingConfig?.registrations[outDevice.name] : null;
-      while (notes.length > this.smartLatchMaxNotes) {
-        const oldest = notes.shift();
-        if (oldest && outDevice && outConfig) {
-          this.sendDirectNoteOff(outDevice, oldest, outConfig, Date.now());
-        }
+    this.smartLatchFadeTime = fadeTime;
+    if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Smart Latch Config: Max=${maxNotes}, Replace=${replace}, Fade=${fadeTime}ms`);
+  }
+
+  public async setSmartLatchActive(active: boolean) {
+    if (this.isSmartLatchActive === active) return;
+    this.isSmartLatchActive = active;
+    if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Smart Latch: ${active ? 'ENABLED' : 'DISABLED'}`);
+    
+    if (!active) {
+      if (this.smartLatchFadeTime > 0) {
+        await this.startFadeOut();
+      } else {
+        this.clearLatchedNotes();
       }
     }
+  }
+
+  private async startFadeOut() {
+    const fadeMs = this.smartLatchFadeTime;
+    const steps = 12;
+    const interval = Math.max(20, fadeMs / steps);
+    
+    const outputChannels = new Map<string, Set<number>>();
+    this.latchedNotesByOutput.forEach((notes, outId) => {
+      const channels = new Set<number>();
+      const outDevice = this.midiAccess?.outputs.get(outId);
+      const outConfig = outDevice ? this.routingConfig?.registrations[outDevice.name] : null;
+
+      notes.forEach(n => {
+        let targetCh = -1;
+        if (outConfig) {
+          if (outConfig.isMulti) targetCh = this.globalChannel;
+          else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
+        }
+        channels.add(targetCh !== -1 ? targetCh : n.channel);
+      });
+      outputChannels.set(outId, channels);
+    });
+
+    if (outputChannels.size === 0) return;
+
+    for (let i = steps; i >= 0; i--) {
+      const expValue = Math.floor((i / steps) * 127);
+      outputChannels.forEach((channels, outId) => {
+        const outDevice = this.midiAccess?.outputs.get(outId);
+        if (outDevice) {
+          channels.forEach(ch => {
+             outDevice.send([0xB0 | (ch & 0x0f), 11, expValue]);
+          });
+        }
+      });
+      if (i > 0) await new Promise(r => setTimeout(r, interval));
+    }
+
+    this.clearLatchedNotes();
+
+    outputChannels.forEach((channels, outId) => {
+      const outDevice = this.midiAccess?.outputs.get(outId);
+      if (outDevice) {
+        channels.forEach(ch => {
+           outDevice.send([0xB0 | (ch & 0x0f), 11, 127]);
+        });
+      }
+    });
   }
 
   private clearLatchedNotes() {
@@ -498,7 +550,10 @@ export class MidiService {
       const isNoteOn = (status & 0xf0) === 0x90 && data[2] > 0;
       const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
 
-      if (this.isSmartLatchActive && outConfig.smartLatch && (isNoteOn || isNoteOff)) {
+      if (this.isSmartLatchActive && (isNoteOn || isNoteOff)) {
+        if (!outConfig.smartLatch) {
+           if (isNoteOn && (window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch active but skipped for ${outDevice.name} (Device Lock is OFF)`);
+        } else {
          const channel = status & 0x0f;
          const note = data[1];
          const velocity = data[2];
@@ -509,28 +564,34 @@ export class MidiService {
             this.latchedNotesByOutput.set(outDevice.id, latched);
          }
 
-         if (isNoteOn) {
-            const existingIdx = latched.findIndex(n => n.note === note && n.channel === channel && n.inputId === inputId);
+          if (isNoteOn) {
+            const existingIdx = latched.findIndex(n => n.note === note && n.channel === channel);
             if (existingIdx !== -1) latched.splice(existingIdx, 1);
             
             latched.push({ inputId, channel, note, velocity });
+            
             if (latched.length > this.smartLatchMaxNotes) {
                if (this.smartLatchReplace) {
                  const oldest = latched.shift();
                  if (oldest) {
+                    if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch FIFO: Replacing note ${oldest.note} with ${note}`);
                     this.sendDirectNoteOff(outDevice, oldest, outConfig, now);
                  }
                } else {
                  latched.pop();
                  shouldForward = false;
+                 if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch BLOCKED: Limit reached (${this.smartLatchMaxNotes}) and Replace is OFF`);
                }
+            } else {
+               if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch: Holding note ${note} on ${outDevice.name}`);
             }
-         } else if (isNoteOff) {
-            const isLatched = latched.some(n => n.note === note && n.channel === channel && n.inputId === inputId);
+          } else if (isNoteOff) {
+            const isLatched = latched.some(n => n.note === note && n.channel === channel);
             if (isLatched) {
-               shouldForward = false;
+               shouldForward = false; // Block release
             }
-         }
+          }
+        }
       }
 
       if (!shouldForward) return;

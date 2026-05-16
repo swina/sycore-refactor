@@ -21,9 +21,10 @@ export const useMidiStore = defineStore('midi', () => {
   const currentBpm = ref(120)
 
   // Smart Latch State
-  const isSmartLatchActive = ref(false)
+  const isSmartLatchActive = ref(localStorage.getItem('SYCORE_SMARTLATCH_ACTIVE') === 'true')
   const smartLatchMaxNotes = ref(parseInt(localStorage.getItem('SYCORE_SMARTLATCH_MAX') || '4'))
   const smartLatchReplaceMode = ref(localStorage.getItem('SYCORE_SMARTLATCH_REPLACE') !== 'false')
+  const smartLatchFadeTime = ref(parseInt(localStorage.getItem('SYCORE_SMARTLATCH_FADE') || '0'))
 
   // Advanced Routing Config (Per-Device Registration)
   const defaultRegistration = (name = '') => ({
@@ -91,19 +92,22 @@ export const useMidiStore = defineStore('midi', () => {
   }, { immediate: true })
 
   // Smart Latch watchers
-  watch(isSmartLatchActive, (active) => {
-    midiService.setSmartLatchActive(active)
+  watch(isSmartLatchActive, (val) => {
+    localStorage.setItem('SYCORE_SMARTLATCH_ACTIVE', val.toString())
+    midiService.setSmartLatchActive(val)
   })
 
-  watch([smartLatchMaxNotes, smartLatchReplaceMode], ([maxNotes, replace]) => {
-    localStorage.setItem('SYCORE_SMARTLATCH_MAX', maxNotes.toString())
+  watch([smartLatchMaxNotes, smartLatchReplaceMode, smartLatchFadeTime], ([max, replace, fade]) => {
+    localStorage.setItem('SYCORE_SMARTLATCH_MAX', max.toString())
     localStorage.setItem('SYCORE_SMARTLATCH_REPLACE', replace.toString())
-    midiService.setSmartLatchConfig(maxNotes, replace)
+    localStorage.setItem('SYCORE_SMARTLATCH_FADE', fade.toString())
+    midiService.setSmartLatchConfig(max, replace, fade)
   }, { immediate: true })
 
   function toggleSmartLatch(active) {
     if (typeof active === 'boolean') isSmartLatchActive.value = active
     else isSmartLatchActive.value = !isSmartLatchActive.value
+    localStorage.setItem('SYCORE_SMARTLATCH_ACTIVE', isSmartLatchActive.value)
   }
 
   function toggleDeviceLatch(deviceName) {
@@ -314,6 +318,7 @@ export const useMidiStore = defineStore('midi', () => {
     isSmartLatchActive,
     smartLatchMaxNotes,
     smartLatchReplaceMode,
+    smartLatchFadeTime,
     toggleSmartLatch,
     toggleDeviceLatch,
     MidiSource

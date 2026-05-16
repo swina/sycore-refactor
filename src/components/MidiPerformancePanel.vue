@@ -304,6 +304,16 @@ const activeOutputs = computed(() => {
                   />
                   <span class="text-xs font-bold text-white w-4">{{ midiStore.smartLatchMaxNotes }}</span>
                 </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-mono text-neutral-500 uppercase">Fade Out:</span>
+                  <input 
+                    type="range" 
+                    min="0" max="5000" step="100"
+                    v-model.number="midiStore.smartLatchFadeTime"
+                    class="w-20 accent-synth-neon"
+                  />
+                  <span class="text-xs font-bold text-white w-10 text-right">{{ midiStore.smartLatchFadeTime }}ms</span>
+                </div>
                 <label class="flex items-center gap-2 cursor-pointer group">
                   <input type="checkbox" v-model="midiStore.smartLatchReplaceMode" class="hidden" />
                   <div :class="['w-4 h-4 rounded-sm border flex items-center justify-center transition-all', midiStore.smartLatchReplaceMode ? 'bg-synth-neon border-synth-neon' : 'border-neutral-600 bg-neutral-800 group-hover:border-neutral-500']">

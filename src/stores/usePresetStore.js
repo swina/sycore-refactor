@@ -619,40 +619,17 @@ export const usePresetStore = defineStore('preset', () => {
 
   function _createPreset(data) {
     const presetId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    const notes = _generatePatchNotes(data)
+    const variant = _createVariant(data, notes)
+    
     return {
       id: presetId,
-      name: `${generateRandomName(currentCategory.value)}`,
+      name: generateRandomName(currentCategory.value),
       category: currentCategory.value,
-      data: data,
-      patchNotes: _generatePatchNotes(data),
-      arpConfig: null,
-      seqConfig: null,
-      velocityConfig: {
-        active: false,
-        targetParameter: 'cutoff',
-        amount: 0,
-        curve: 'linear'
-      },
-      lfo1Config: {
-        active: false,
-        targetParameter: 'cutoff',
-        waveform: 'sine',
-        mode: 'free',
-        rate: 0.5,
-        syncDivision: '1/4',
-        depth: 30,
-        offset: 64
-      },
-      lfo2Config: {
-        active: false,
-        targetParameter: 'cutoff',
-        waveform: 'sine',
-        mode: 'free',
-        rate: 0.5,
-        syncDivision: '1/4',
-        depth: 30,
-        offset: 64
-      }
+      aVariant: variant,
+      bVariant: JSON.parse(JSON.stringify(variant)), // Symmetric B
+      patchNotes: notes,
+      createdAt: new Date().toISOString()
     }
   }
 
@@ -701,37 +678,36 @@ export const usePresetStore = defineStore('preset', () => {
         // Save to cache
         localStorage.setItem('sycore_last_session', JSON.stringify(newPreset))
       } else {
+        // REGENERATION
+        if (!lastPreset.value) return
+
         const isAlt = useAlternativeEngine.value
         const newData = _generateData(categoryConfig, variation)
+        const newNotes = _generatePatchNotes(newData)
+        const newVariant = _createVariant(newData, newNotes)
 
         if (!isAlt) {
-          if (engineCacheA.value) {
-            engineCacheA.value.data = newData
-            if (engineCacheB.value) {
-              engineCacheA.value.abVariant = { data: engineCacheB.value.data }
-              engineCacheB.value.abVariant = { data: newData }
-            }
-          } else {
-            engineCacheA.value = _createPreset(newData)
-          }
-          lastPreset.value = engineCacheA.value
-          applyPresetCCs(engineCacheA.value)
-          currentPatchNotes.value = engineCacheA.value.patchNotes
+          lastPreset.value.aVariant = newVariant
+          engineCacheA.value = newVariant
         } else {
-          if (engineCacheB.value) {
-            engineCacheB.value.data = newData
-            if (engineCacheA.value) {
-              engineCacheB.value.abVariant = { data: engineCacheA.value.data, patchNotes: engineCacheA.value.patchNotes }
-              engineCacheA.value.abVariant = { data: newData, patchNotes: engineCacheB.value.patchNotes }
-            }
-          } else {
-            engineCacheB.value = _createPreset(newData)
-          }
-          lastPreset.value = engineCacheB.value
-          applyPresetCCs(engineCacheB.value)
-          currentPatchNotes.value = engineCacheB.value.patchNotes
+          lastPreset.value.bVariant = newVariant
+          engineCacheB.value = newVariant
         }
-        currentName.value = lastPreset.value.name
+
+        // Apply changes to hardware/stores
+        _applyMetadataToStores(newVariant)
+        applyPresetCCs(newVariant)
+        
+        currentPatchNotes.value = newNotes
+        // currentName remains as it was on lastPreset (Fixes disappearing name bug)
+        
+        // Mark as modified if not already a session preset
+        if (!sessionGeneratedIds.value.includes(lastPreset.value.id)) {
+           sessionGeneratedIds.value = [...sessionGeneratedIds.value, lastPreset.value.id]
+        }
+
+        // Update session cache
+        localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
       }
 
       showResults.value = true
