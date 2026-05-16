@@ -143,11 +143,11 @@ const selectedPreset = computed(() => presetStore.lastPreset)
 
 // ─── Control helpers ──────────────────────────────────────────────────────────
 
-const activeData = computed(() =>
-  (presetStore.useAlternativeEngine && presetStore.lastPreset?.abVariant?.data)
-    ? presetStore.lastPreset.abVariant.data
-    : presetStore.lastPreset?.data
-)
+const activeData = computed(() => {
+  const preset = presetStore.lastPreset
+  if (!preset) return null
+  return presetStore.useAlternativeEngine ? preset.bVariant?.data : preset.aVariant?.data
+})
 
 function getVal(cfg) {
   const name = typeof cfg === 'string' ? cfg : cfg.name
@@ -273,7 +273,7 @@ function saveName() { if (tempName.value.trim()) presetStore.currentName = tempN
 
 async function handleCopyToClipboard() {
   try {
-    await navigator.clipboard.writeText(JSON.stringify(selectedPreset.value?.data || {}, null, 2))
+    await navigator.clipboard.writeText(JSON.stringify(activeData.value || {}, null, 2))
     showCopyFeedback.value = true
     setTimeout(() => { showCopyFeedback.value = false }, 2000)
   } catch (e) { console.error('Copy failed', e) }
@@ -429,14 +429,14 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <!-- A/B Switch (Circular) -->
           <button 
             @click="toggleAB"
-            :disabled="!presetStore.lastPreset.abVariant"
+            :disabled="!presetStore.lastPreset?.bVariant"
             :class="[
               'w-10 h-10 rounded-full border flex items-center justify-center text-[10px] font-black transition-all shadow-lg active:scale-90 disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed disabled:border-neutral-800',
               presetStore.useAlternativeEngine 
                 ? 'bg-violet-500/10 border-violet-500 text-violet-400 shadow-violet-500/20' 
                 : 'bg-synth-neon/10 border-synth-neon text-synth-neon shadow-synth-neon/20'
             ]"
-            :title="presetStore.lastPreset.abVariant ? 'Toggle Engine A/B' : 'A/B Variant Not Available'"
+            :title="presetStore.lastPreset?.bVariant ? 'Toggle Engine A/B' : 'A/B Variant Not Available'"
           >
             {{ presetStore.useAlternativeEngine ? 'B' : 'A' }}
           </button>

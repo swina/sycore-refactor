@@ -196,48 +196,104 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  function _applyMetadataToStores(meta) {
-    if (!meta) return
+  function _createVariant(data, patchNotes = '') {
+    const meta = _captureCurrentMetadata()
+    return {
+      data: data || {},
+      patchNotes: patchNotes || '',
+      arpConfig: meta.arpConfig,
+      seqConfig: null,
+      velocityConfig: meta.velocityConfig,
+      lfo1Config: meta.lfo1Config,
+      lfo2Config: meta.lfo2Config
+    }
+  }
+
+  function _applyMetadataToStores(variant) {
+    if (!variant) return
     
     // Arp
     const arpStore = useArpStore()
-    if (meta.arpConfig) {
-      arpStore.arpEnabled = meta.arpConfig.enabled ?? meta.arpConfig.active ?? false
-      arpStore.arpMode = meta.arpConfig.mode || 'up'
-      arpStore.arpBpm = meta.arpConfig.bpm || 120
-      arpStore.arpSubdivision = meta.arpConfig.subdivision || '1/8'
-      arpStore.arpHold = meta.arpConfig.hold || false
+    if (variant.arpConfig) {
+      arpStore.arpEnabled = variant.arpConfig.enabled ?? variant.arpConfig.active ?? false
+      arpStore.arpMode = variant.arpConfig.mode || 'up'
+      arpStore.arpBpm = variant.arpConfig.bpm || 120
+      arpStore.arpSubdivision = variant.arpConfig.subdivision || '1/8'
+      arpStore.arpHold = variant.arpConfig.hold || false
     } else {
       arpStore.arpEnabled = false
     }
     
     // LFOs
     const lfoStore = useLfoStore()
-    if (meta.lfo1Config) {
-      Object.assign(lfoStore.lfo1, meta.lfo1Config)
+    if (variant.lfo1Config) {
+      Object.assign(lfoStore.lfo1, variant.lfo1Config)
     } else {
       lfoStore.lfo1.active = false
     }
     
-    if (meta.lfo2Config) {
-      Object.assign(lfoStore.lfo2, meta.lfo2Config)
+    if (variant.lfo2Config) {
+      Object.assign(lfoStore.lfo2, variant.lfo2Config)
     } else {
       lfoStore.lfo2.active = false
     }
     
     // Velocity
     const mappingStore = useMappingStore()
-    if (meta.velocityConfig) {
-      mappingStore.velocityConfig.active = meta.velocityConfig.active ?? meta.velocityConfig.enabled ?? false
-      if (meta.velocityConfig.targetParameter) mappingStore.velocityConfig.targetParameter = meta.velocityConfig.targetParameter
-      if (meta.velocityConfig.amount !== undefined) mappingStore.velocityConfig.amount = meta.velocityConfig.amount
-      if (meta.velocityConfig.curve) mappingStore.velocityConfig.curve = meta.velocityConfig.curve
+    if (variant.velocityConfig) {
+      mappingStore.velocityConfig.active = variant.velocityConfig.active ?? variant.velocityConfig.enabled ?? false
+      if (variant.velocityConfig.targetParameter) mappingStore.velocityConfig.targetParameter = variant.velocityConfig.targetParameter
+      if (variant.velocityConfig.amount !== undefined) mappingStore.velocityConfig.amount = variant.velocityConfig.amount
+      if (variant.velocityConfig.curve) mappingStore.velocityConfig.curve = variant.velocityConfig.curve
     } else {
       mappingStore.velocityConfig.active = false
     }
   }
 
   function recallPreset(preset, shouldAutoPlay = true) {
+    // Compatibility Layer: Migrate old structure to new symmetric A/B structure
+    if (!preset.aVariant) {
+      console.log(`[PresetStore] Migrating preset ${preset.id} to new symmetric structure`)
+      const aData = preset.data || {}
+      const aMeta = {
+        arpConfig: preset.arpConfig || null,
+        velocityConfig: preset.velocityConfig || null,
+        lfo1Config: preset.lfo1Config || null,
+        lfo2Config: preset.lfo2Config || null
+      }
+      
+      preset.aVariant = {
+        data: aData,
+        patchNotes: preset.patchNotes || '',
+        ...aMeta,
+        seqConfig: preset.seqConfig || null
+      }
+
+      if (preset.abVariant) {
+        preset.bVariant = {
+          data: preset.abVariant.data || {},
+          patchNotes: preset.abVariant.patchNotes || preset.patchNotes || '',
+          arpConfig: preset.abVariant.arpConfig || preset.arpConfig || null,
+          velocityConfig: preset.abVariant.velocityConfig || preset.velocityConfig || null,
+          lfo1Config: preset.abVariant.lfo1Config || preset.lfo1Config || null,
+          lfo2Config: preset.abVariant.lfo2Config || preset.lfo2Config || null,
+          seqConfig: preset.abVariant.seqConfig || preset.seqConfig || null
+        }
+      } else {
+        // Create B as a clone of A if it doesn't exist
+        preset.bVariant = JSON.parse(JSON.stringify(preset.aVariant))
+      }
+
+      // Cleanup old fields
+      delete preset.data
+      delete preset.abVariant
+      delete preset.arpConfig
+      delete preset.velocityConfig
+      delete preset.lfo1Config
+      delete preset.lfo2Config
+      delete preset.seqConfig
+    }
+
     lastPreset.value = preset
     currentName.value = preset.name
     currentPatchNotes.value = preset.patchNotes
@@ -249,10 +305,10 @@ export const usePresetStore = defineStore('preset', () => {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
     }
     
-    // Sync all metadata (Arp, LFO, Velocity)
-    _applyMetadataToStores(preset)
+    // Sync all metadata from aVariant (default)
+    _applyMetadataToStores(preset.aVariant)
 
-    applyPresetCCs(preset)
+    applyPresetCCs(preset.aVariant)
     
     // Save to local cache for refresh persistence
     localStorage.setItem('sycore_last_session', JSON.stringify(preset))
@@ -289,40 +345,25 @@ export const usePresetStore = defineStore('preset', () => {
     const isAlt = type === 'B'
     if (useAlternativeEngine.value === isAlt && initialLoadDone) return
     
-    // 1. Capture current metadata into the current engine's slot before switching
+    // 1. Capture current metadata into the active engine slot before switching
     const currentMeta = _captureCurrentMetadata()
-    if (useAlternativeEngine.value) {
-      // We are currently on B, save to abVariant
-      if (!lastPreset.value.abVariant) {
-        lastPreset.value.abVariant = { data: { ...lastPreset.value.data } }
-      }
-      Object.assign(lastPreset.value.abVariant, currentMeta)
-    } else {
-      // We are currently on A, save to main object
-      Object.assign(lastPreset.value, currentMeta)
+    const activeVariant = useAlternativeEngine.value ? lastPreset.value.bVariant : lastPreset.value.aVariant
+    if (activeVariant) {
+      Object.assign(activeVariant, currentMeta)
     }
     
     // 2. Switch engine state
     useAlternativeEngine.value = isAlt
     
     // 3. Load target data
-    // If switching to B and it doesn't exist, initialize it as a clone of A
-    if (isAlt && !lastPreset.value.abVariant) {
-      lastPreset.value.abVariant = {
-        data: JSON.parse(JSON.stringify(lastPreset.value.data)),
-        patchNotes: lastPreset.value.patchNotes,
-        ...JSON.parse(JSON.stringify(currentMeta))
-      }
-    }
-
-    const target = isAlt ? lastPreset.value.abVariant : lastPreset.value
+    const target = isAlt ? lastPreset.value.bVariant : lastPreset.value.aVariant
     if (target) {
       if (target.data) {
         applyPresetCCs({ data: target.data })
       }
       if (target.patchNotes) currentPatchNotes.value = target.patchNotes
       
-      // 4. Restore target metadata (Arp, LFO, Velocity) to stores
+      // 4. Restore target metadata to stores
       _applyMetadataToStores(target)
       
       // 5. Update session cache
@@ -352,13 +393,9 @@ export const usePresetStore = defineStore('preset', () => {
         
         // Always capture current state into the active engine slot before saving
         const currentMeta = _captureCurrentMetadata()
-        if (useAlternativeEngine.value) {
-          if (!preset.abVariant) {
-             preset.abVariant = { data: { ...preset.data } }
-          }
-          Object.assign(preset.abVariant, currentMeta)
-        } else {
-          Object.assign(preset, currentMeta)
+        const activeVariant = useAlternativeEngine.value ? preset.bVariant : preset.aVariant
+        if (activeVariant) {
+          Object.assign(activeVariant, currentMeta)
         }
 
         // Use toRaw to ensure we are saving a plain object to IndexedDB/Firebase
@@ -369,29 +406,19 @@ export const usePresetStore = defineStore('preset', () => {
             id: rawPreset.id,
             name: cleanName,
             category: category || currentCategory.value,
-            data: rawPreset.data,
-            patchNotes: options.patchNotes || currentPatchNotes.value,
-            arpConfig: rawPreset.arpConfig,
-            seqConfig: options.seqConfig || rawPreset.seqConfig || null,
-            velocityConfig: rawPreset.velocityConfig,
-            lfo1Config: rawPreset.lfo1Config,
-            lfo2Config: rawPreset.lfo2Config,
-            createdAt: serverTimestamp(),
-            abVariant: rawPreset.abVariant || null
+            aVariant: rawPreset.aVariant,
+            bVariant: rawPreset.bVariant,
+            patchNotes: options.patchNotes || currentPatchNotes.value || rawPreset.patchNotes,
+            createdAt: serverTimestamp()
           }
           await setDoc(presetRef, presetData)
         } else {
           await updateDoc(presetRef, {
             name: cleanName,
             category: category || rawPreset.category,
-            data: rawPreset.data,
-            patchNotes: options.patchNotes !== undefined ? options.patchNotes : rawPreset.patchNotes,
-            arpConfig: rawPreset.arpConfig,
-            seqConfig: options.seqConfig || rawPreset.seqConfig || null,
-            velocityConfig: rawPreset.velocityConfig,
-            lfo1Config: rawPreset.lfo1Config,
-            lfo2Config: rawPreset.lfo2Config,
-            abVariant: rawPreset.abVariant || null,
+            aVariant: rawPreset.aVariant,
+            bVariant: rawPreset.bVariant,
+            patchNotes: options.patchNotes !== undefined ? options.patchNotes : (currentPatchNotes.value || rawPreset.patchNotes),
             updatedAt: serverTimestamp(),
           })
         }
@@ -419,16 +446,11 @@ export const usePresetStore = defineStore('preset', () => {
         id: presetId,
         name: name || 'Imported Preset',
         category: category || 'pad',
-        data: data || {},
         patchNotes: options.patchNotes || null,
-        arpConfig: options.arpConfig || null,
-        seqConfig: options.seqConfig || null,
+        aVariant: options.aVariant || _createVariant(data || {}, options.patchNotes),
+        bVariant: options.bVariant || _createVariant(data || {}, options.patchNotes),
         createdAt: options.createdAt ? options.createdAt : serverTimestamp(),
-        abVariant: options.abVariant || null,
         isFavorite: options.isFavorite || false,
-        velocityConfig: options.velocityConfig || null,
-        lfo1Config: options.lfo1Config || null,
-        lfo2Config: options.lfo2Config || null
       }
       await setDoc(presetRef, presetData)
     } catch (err) {
@@ -495,9 +517,8 @@ export const usePresetStore = defineStore('preset', () => {
     if (!lastPreset.value) return
     
     // Target the correct data object based on current engine
-    const targetData = (useAlternativeEngine.value && lastPreset.value.abVariant?.data)
-      ? lastPreset.value.abVariant.data
-      : lastPreset.value.data;
+    const activeVariant = useAlternativeEngine.value ? lastPreset.value.bVariant : lastPreset.value.aVariant
+    const targetData = activeVariant?.data;
 
     if (!targetData) return;
     targetData[fieldName] = value;
@@ -650,43 +671,35 @@ export const usePresetStore = defineStore('preset', () => {
         const dataA = _generateData(categoryConfig, variation)
         const dataB = _generateData(categoryConfig, variation)
 
-        const presetA = _createPreset(dataA)
-        const presetB = _createPreset(dataB)
+        const notesA = _generatePatchNotes(dataA)
+        const notesB = _generatePatchNotes(dataB)
 
-        engineCacheA.value = presetA
-        engineCacheB.value = presetB
+        const newPreset = {
+          id: `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          name: generateRandomName(currentCategory.value),
+          category: currentCategory.value,
+          aVariant: _createVariant(dataA, notesA),
+          bVariant: _createVariant(dataB, notesB),
+          patchNotes: notesA, // Default to A's notes
+          createdAt: new Date().toISOString()
+        }
 
-        // Variants should include full metadata, not just data
-        presetA.abVariant = { 
-          data: presetB.data, 
-          patchNotes: presetB.patchNotes,
-          arpConfig: presetB.arpConfig,
-          lfo1Config: presetB.lfo1Config,
-          lfo2Config: presetB.lfo2Config,
-          velocityConfig: presetB.velocityConfig
-        }
-        presetB.abVariant = { 
-          data: presetA.data,
-          patchNotes: presetA.patchNotes,
-          arpConfig: presetA.arpConfig,
-          lfo1Config: presetA.lfo1Config,
-          lfo2Config: presetA.lfo2Config,
-          velocityConfig: presetA.velocityConfig
-        }
+        engineCacheA.value = newPreset.aVariant
+        engineCacheB.value = newPreset.bVariant
 
         useAlternativeEngine.value = false
-        lastPreset.value = presetA
-        currentName.value = presetA.name
-        currentPatchNotes.value = presetA.patchNotes
+        lastPreset.value = newPreset
+        currentName.value = newPreset.name
+        currentPatchNotes.value = newPreset.patchNotes
         
-        sessionGeneratedIds.value = [...sessionGeneratedIds.value, presetA.id, presetB.id]
+        sessionGeneratedIds.value = [...sessionGeneratedIds.value, newPreset.id]
         
         // Restore A's metadata to stores
-        _applyMetadataToStores(presetA)
-        applyPresetCCs(presetA)
+        _applyMetadataToStores(newPreset.aVariant)
+        applyPresetCCs(newPreset.aVariant)
         
         // Save to cache
-        localStorage.setItem('sycore_last_session', JSON.stringify(presetA))
+        localStorage.setItem('sycore_last_session', JSON.stringify(newPreset))
       } else {
         const isAlt = useAlternativeEngine.value
         const newData = _generateData(categoryConfig, variation)
