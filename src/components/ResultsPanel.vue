@@ -83,21 +83,11 @@ function playPreview() {
 }
 
 function selectEngineA() {
-  const wasAlt = presetStore.useAlternativeEngine
-  presetStore.useAlternativeEngine = false
-  if (wasAlt && presetStore.lastPreset?.data) {
-    stopPreview()
-    presetStore.applyPresetCCs(presetStore.lastPreset)
-  }
+  presetStore.selectEngine('A')
 }
 
 function selectEngineB() {
-  const wasStd = !presetStore.useAlternativeEngine
-  presetStore.useAlternativeEngine = true
-  if (wasStd && presetStore.lastPreset?.abVariant?.data) {
-    stopPreview()
-    presetStore.applyPresetCCs({ data: presetStore.lastPreset.abVariant.data })
-  }
+  presetStore.selectEngine('B')
 }
 
 function toggleAB() {

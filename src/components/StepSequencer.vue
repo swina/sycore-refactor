@@ -127,6 +127,18 @@ const syncTrack = ref(syncTrackStorage.value ?? false)
 const genDensity = ref(75)
 const swingAmount = ref(0)
 const basePatternLength = ref(16)
+const selectedOctave = ref((() => {
+  try {
+    const saved = seqStateStorage.value
+    return saved?.selectedOctave ?? 4
+  } catch { return 4 }
+})())
+const octaveRange = ref((() => {
+  try {
+    const saved = seqStateStorage.value
+    return saved?.octaveRange ?? 0
+  } catch { return 0 }
+})())
 let baseLengthTimer = null
 
 const numSteps = ref((() => {
@@ -169,12 +181,14 @@ watch(syncTrack, (val) => {
   syncTrackStorage.value = val
 }, { deep: true })
 
-watch([numSteps, steps, param1CC, param2CC, () => props.globalTranspose, () => props.bpm], () => {
+watch([numSteps, steps, param1CC, param2CC, selectedOctave, octaveRange, () => props.globalTranspose, () => props.bpm], () => {
   const config = { 
     numSteps: numSteps.value, 
     steps: steps.value, 
     param1CC: param1CC.value, 
-    param2CC: param2CC.value, 
+    param2CC: param2CC.value,
+    selectedOctave: selectedOctave.value,
+    octaveRange: octaveRange.value,
     transpose: props.globalTranspose || 0,
     bpm: props.bpm || 120
   }
@@ -247,6 +261,11 @@ function generateSequence() {
   const keyIdx = NOTE_NAMES.indexOf(selectedKey.value)
   const scaleIntervals = SCALES[selectedScale.value] ?? SCALES['Major']
 
+  const octMin = octaveRange.value >= 0 ? selectedOctave.value : selectedOctave.value + octaveRange.value
+  const octMax = octaveRange.value >= 0 ? selectedOctave.value + octaveRange.value : selectedOctave.value
+  const finalOctMin = Math.max(0, Math.min(8, octMin))
+  const finalOctMax = Math.max(0, Math.min(8, octMax))
+
   if (chordsEnabled.value) {
     const progressions = STYLE_PROGRESSIONS[selectedStyle.value] ?? [[0, 3, 4, 0]]
     const baseProgression = progressions[Math.floor(Math.random() * progressions.length)]
@@ -263,8 +282,7 @@ function generateSequence() {
       if (!onsetSet.has(i)) return { ...DEFAULT_STEP, active: false }
 
       const chordIdx = onsetPositions.indexOf(i)
-      const [octMin, octMax] = styleCfg.octaves
-      const octave = octMin + Math.floor(Math.random() * (octMax - octMin + 1))
+      const octave = finalOctMin + Math.floor(Math.random() * (finalOctMax - finalOctMin + 1))
       const scaleDegree = baseProgression[chordIdx % baseProgression.length] % scaleIntervals.length
       const notes = buildChordNotes(scaleDegree, scaleIntervals, keyIdx, octave, maxPolyphony.value)
 
@@ -292,8 +310,7 @@ function generateSequence() {
       const accentHit = styleCfg.accentGrid ? styleCfg.accentGrid[i % styleCfg.accentGrid.length] : false
       let notes = [60]
       if (active) {
-        const [octMin, octMax] = styleCfg.octaves
-        const octave = octMin + Math.floor(Math.random() * (octMax - octMin + 1))
+        const octave = finalOctMin + Math.floor(Math.random() * (finalOctMax - finalOctMin + 1))
         const rootMidi = (octave + 1) * 12 + keyIdx
         const interval = scaleIntervals[Math.floor(Math.random() * scaleIntervals.length)]
         notes = [rootMidi + interval]
@@ -529,6 +546,12 @@ onMounted(() => {
           if (selectedStepIdx.value === null) selectedStepIdx.value = 0
           else selectedStepIdx.value = (selectedStepIdx.value + 2) % numSteps.value
         }
+        break
+      case 'seq_octave_cc':
+        selectedOctave.value = Math.max(0, Math.min(8, Math.round((val / 127) * 8)))
+        break
+      case 'seq_range_cc':
+        octaveRange.value = Math.max(-3, Math.min(3, Math.round((val / 127) * 6) - 3))
         break
     }
   }
@@ -841,6 +864,18 @@ function handleClear() {
             </select>
             <select v-model="selectedScale" class="bg-neutral-900 text-synth-neon font-bold text-[9px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="scale in Object.keys(SCALES)" :key="scale" :value="scale" class="bg-neutral-900">{{ scale }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="text-[9px] font-mono text-neutral-500 uppercase">Oct</span>
+          <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800/50">
+            <select v-model="selectedOctave" class="bg-neutral-900 text-synth-neon font-bold text-[9px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
+              <option v-for="o in [0,1,2,3,4,5,6,7,8]" :key="o" :value="o" class="bg-neutral-900">{{ o }}</option>
+            </select>
+            <select v-model="octaveRange" class="bg-neutral-900 text-synth-neon font-bold text-[9px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
+              <option v-for="r in [-3,-2,-1,0,1,2,3]" :key="r" :value="r" class="bg-neutral-900">{{ r >= 0 ? '+' + r : r }}</option>
             </select>
           </div>
         </div>

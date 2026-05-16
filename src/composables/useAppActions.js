@@ -172,6 +172,8 @@ export function useAppActions() {
       case 'seq_duplicate':
       case 'seq_reduce':
       case 'seq_skip_step':
+      case 'seq_octave_cc':
+      case 'seq_range_cc':
         window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
 
       default:

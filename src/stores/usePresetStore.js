@@ -1,10 +1,11 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, toRaw } from 'vue'
 import { defineStore } from 'pinia'
 import { db, doc, collection, query, onSnapshot, getDocs, setDoc, updateDoc, deleteDoc, deleteDocs, clearCollectionRange, serverTimestamp } from '@/lib/idb'
 import { useAuthStore } from './useAuthStore'
 import { useMidiStore } from './useMidiStore'
 import { useMappingStore } from './useMappingStore'
 import { useLfoStore } from './useLfoStore'
+import { useArpStore } from './useArpStore'
 import { S1_TYPES } from '@/constants/s1-config'
 import BANK_DEFAULT from '@/data/BANK_DEFAULT.json'
 
@@ -33,9 +34,21 @@ export const usePresetStore = defineStore('preset', () => {
 
   // --- Getters ---
   const filteredHistory = computed(() => {
-    if (historyCategoryFilter.value === 'all') return history.value
-    if (historyCategoryFilter.value === 'favorites') return history.value.filter(p => p.isFavorite)
-    return history.value.filter(p => p.category === historyCategoryFilter.value)
+    let list = history.value
+
+    if (historyCategoryFilter.value === 'favorites') {
+      list = list.filter(p => p.isFavorite)
+    } else if (historyCategoryFilter.value && historyCategoryFilter.value !== 'all') {
+      list = list.filter(p => p.category === historyCategoryFilter.value)
+    }
+
+    // Fix: If the current preset is newly generated (not in history), 
+    // prepend it to the list so navigation (NEXT/PREV) works immediately.
+    if (lastPreset.value && !list.some(p => p.id === lastPreset.value.id)) {
+      list = [lastPreset.value, ...list]
+    }
+
+    return list
   })
 
   const hasUnsavedChanges = computed(() => {
@@ -55,10 +68,8 @@ export const usePresetStore = defineStore('preset', () => {
       try {
         const preset = JSON.parse(cached)
         if (preset) {
-          lastPreset.value = preset
-          currentName.value = preset.name
-          currentPatchNotes.value = preset.patchNotes
-          currentCategory.value = preset.category || 'pad'
+          // Use recallPreset to ensure all store states (Arp, LFO, etc.) are properly restored
+          recallPreset(preset, false)
           showResults.value = true
           
           // Restore filter if it was saved
@@ -165,6 +176,67 @@ export const usePresetStore = defineStore('preset', () => {
     }, { immediate: true })
   }
 
+  function _captureCurrentMetadata() {
+    return {
+      arpConfig: {
+        enabled: useArpStore().arpEnabled,
+        mode: useArpStore().arpMode,
+        bpm: useArpStore().arpBpm,
+        subdivision: useArpStore().arpSubdivision,
+        hold: useArpStore().arpHold
+      },
+      lfo1Config: { ...useLfoStore().lfo1, lastSentValue: null },
+      lfo2Config: { ...useLfoStore().lfo2, lastSentValue: null },
+      velocityConfig: {
+        active: useMappingStore().velocityConfig.active,
+        targetParameter: useMappingStore().velocityConfig.targetParameter,
+        amount: useMappingStore().velocityConfig.amount,
+        curve: useMappingStore().velocityConfig.curve
+      }
+    }
+  }
+
+  function _applyMetadataToStores(meta) {
+    if (!meta) return
+    
+    // Arp
+    const arpStore = useArpStore()
+    if (meta.arpConfig) {
+      arpStore.arpEnabled = meta.arpConfig.enabled ?? meta.arpConfig.active ?? false
+      arpStore.arpMode = meta.arpConfig.mode || 'up'
+      arpStore.arpBpm = meta.arpConfig.bpm || 120
+      arpStore.arpSubdivision = meta.arpConfig.subdivision || '1/8'
+      arpStore.arpHold = meta.arpConfig.hold || false
+    } else {
+      arpStore.arpEnabled = false
+    }
+    
+    // LFOs
+    const lfoStore = useLfoStore()
+    if (meta.lfo1Config) {
+      Object.assign(lfoStore.lfo1, meta.lfo1Config)
+    } else {
+      lfoStore.lfo1.active = false
+    }
+    
+    if (meta.lfo2Config) {
+      Object.assign(lfoStore.lfo2, meta.lfo2Config)
+    } else {
+      lfoStore.lfo2.active = false
+    }
+    
+    // Velocity
+    const mappingStore = useMappingStore()
+    if (meta.velocityConfig) {
+      mappingStore.velocityConfig.active = meta.velocityConfig.active ?? meta.velocityConfig.enabled ?? false
+      if (meta.velocityConfig.targetParameter) mappingStore.velocityConfig.targetParameter = meta.velocityConfig.targetParameter
+      if (meta.velocityConfig.amount !== undefined) mappingStore.velocityConfig.amount = meta.velocityConfig.amount
+      if (meta.velocityConfig.curve) mappingStore.velocityConfig.curve = meta.velocityConfig.curve
+    } else {
+      mappingStore.velocityConfig.active = false
+    }
+  }
+
   function recallPreset(preset, shouldAutoPlay = true) {
     lastPreset.value = preset
     currentName.value = preset.name
@@ -177,46 +249,13 @@ export const usePresetStore = defineStore('preset', () => {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
     }
     
-    // Sync Velocity Modulation State from Preset
-    if (preset.velocityConfig) {
-      const mappingStore = useMappingStore()
-      mappingStore.velocityConfig.active = preset.velocityConfig.active ?? preset.velocityConfig.enabled ?? false
-      if (preset.velocityConfig.targetParameter) {
-        mappingStore.velocityConfig.targetParameter = preset.velocityConfig.targetParameter
-      }
-      if (preset.velocityConfig.amount !== undefined) {
-        mappingStore.velocityConfig.amount = preset.velocityConfig.amount
-      }
-      if (preset.velocityConfig.curve) {
-        mappingStore.velocityConfig.curve = preset.velocityConfig.curve
-      }
-    } else {
-      const mappingStore = useMappingStore()
-      mappingStore.velocityConfig = {
-        active: false,
-        targetParameter: 'cutoff',
-        amount: 0,
-        curve: 'linear'
-      }
-    }
+    // Sync all metadata (Arp, LFO, Velocity)
+    _applyMetadataToStores(preset)
 
     applyPresetCCs(preset)
     
     // Save to local cache for refresh persistence
     localStorage.setItem('sycore_last_session', JSON.stringify(preset))
-
-    // Sync LFO settings
-    const lfoStore = useLfoStore()
-    if (preset.lfo1Config) {
-      Object.assign(lfoStore.lfo1, preset.lfo1Config)
-    } else {
-      lfoStore.lfo1.active = false
-    }
-    if (preset.lfo2Config) {
-      Object.assign(lfoStore.lfo2, preset.lfo2Config)
-    } else {
-      lfoStore.lfo2.active = false
-    }
 
     // Send Program Change if provided
     if (preset.pc !== undefined && preset.pc !== null) {
@@ -250,14 +289,44 @@ export const usePresetStore = defineStore('preset', () => {
     const isAlt = type === 'B'
     if (useAlternativeEngine.value === isAlt && initialLoadDone) return
     
+    // 1. Capture current metadata into the current engine's slot before switching
+    const currentMeta = _captureCurrentMetadata()
+    if (useAlternativeEngine.value) {
+      // We are currently on B, save to abVariant
+      if (!lastPreset.value.abVariant) {
+        lastPreset.value.abVariant = { data: { ...lastPreset.value.data } }
+      }
+      Object.assign(lastPreset.value.abVariant, currentMeta)
+    } else {
+      // We are currently on A, save to main object
+      Object.assign(lastPreset.value, currentMeta)
+    }
+    
+    // 2. Switch engine state
     useAlternativeEngine.value = isAlt
     
-    const targetData = isAlt ? lastPreset.value.abVariant?.data : lastPreset.value.data
-    const targetNotes = isAlt ? lastPreset.value.abVariant?.patchNotes : lastPreset.value.patchNotes
-    
-    if (targetData) {
-      applyPresetCCs({ data: targetData })
-      if (targetNotes) currentPatchNotes.value = targetNotes
+    // 3. Load target data
+    // If switching to B and it doesn't exist, initialize it as a clone of A
+    if (isAlt && !lastPreset.value.abVariant) {
+      lastPreset.value.abVariant = {
+        data: JSON.parse(JSON.stringify(lastPreset.value.data)),
+        patchNotes: lastPreset.value.patchNotes,
+        ...JSON.parse(JSON.stringify(currentMeta))
+      }
+    }
+
+    const target = isAlt ? lastPreset.value.abVariant : lastPreset.value
+    if (target) {
+      if (target.data) {
+        applyPresetCCs({ data: target.data })
+      }
+      if (target.patchNotes) currentPatchNotes.value = target.patchNotes
+      
+      // 4. Restore target metadata (Arp, LFO, Velocity) to stores
+      _applyMetadataToStores(target)
+      
+      // 5. Update session cache
+      localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
     }
   }
 
@@ -281,54 +350,48 @@ export const usePresetStore = defineStore('preset', () => {
         const isExisting = history.value.some(p => p.id === preset.id)
         const presetRef = doc(db, 'users', uid, 'presets', preset.id)
         
+        // Always capture current state into the active engine slot before saving
+        const currentMeta = _captureCurrentMetadata()
+        if (useAlternativeEngine.value) {
+          if (!preset.abVariant) {
+             preset.abVariant = { data: { ...preset.data } }
+          }
+          Object.assign(preset.abVariant, currentMeta)
+        } else {
+          Object.assign(preset, currentMeta)
+        }
+
+        // Use toRaw to ensure we are saving a plain object to IndexedDB/Firebase
+        const rawPreset = toRaw(preset)
+
         if (!isExisting) {
           const presetData = {
-            id: preset.id,
+            id: rawPreset.id,
             name: cleanName,
             category: category || currentCategory.value,
-            data: data || preset.data,
+            data: rawPreset.data,
             patchNotes: options.patchNotes || currentPatchNotes.value,
-            arpConfig: options.arpConfig || preset.arpConfig || null,
-            seqConfig: options.seqConfig || preset.seqConfig || null,
-            velocityConfig: {
-              active: useMappingStore().velocityConfig.active,
-              targetParameter: useMappingStore().velocityConfig.targetParameter,
-              amount: useMappingStore().velocityConfig.amount,
-              curve: useMappingStore().velocityConfig.curve
-            },
-            lfo1Config: { ...useLfoStore().lfo1, lastSentValue: null },
-            lfo2Config: { ...useLfoStore().lfo2, lastSentValue: null },
+            arpConfig: rawPreset.arpConfig,
+            seqConfig: options.seqConfig || rawPreset.seqConfig || null,
+            velocityConfig: rawPreset.velocityConfig,
+            lfo1Config: rawPreset.lfo1Config,
+            lfo2Config: rawPreset.lfo2Config,
             createdAt: serverTimestamp(),
-            ...(sessionGeneratedIds.value.includes(preset.id) && engineCacheA.value?.id === preset.id && engineCacheB.value
-              ? { abVariant: { data: engineCacheB.value.data } }
-              : {}),
-            ...(sessionGeneratedIds.value.includes(preset.id) && engineCacheB.value?.id === preset.id && engineCacheA.value
-              ? { abVariant: { data: engineCacheA.value.data } }
-              : {}),
+            abVariant: rawPreset.abVariant || null
           }
           await setDoc(presetRef, presetData)
         } else {
           await updateDoc(presetRef, {
             name: cleanName,
-            category: category || preset.category,
-            data: data || preset.data,
-            patchNotes: options.patchNotes !== undefined ? options.patchNotes : preset.patchNotes,
-            arpConfig: options.arpConfig || preset.arpConfig || null,
-            seqConfig: options.seqConfig || preset.seqConfig || null,
-            velocityConfig: {
-              active: useMappingStore().velocityConfig.active,
-              targetParameter: useMappingStore().velocityConfig.targetParameter,
-              amount: useMappingStore().velocityConfig.amount,
-              curve: useMappingStore().velocityConfig.curve
-            },
-            ...(sessionGeneratedIds.value.includes(preset.id) && engineCacheA.value?.id === preset.id && engineCacheB.value
-              ? { abVariant: { data: engineCacheB.value.data } }
-              : {}),
-            ...(sessionGeneratedIds.value.includes(preset.id) && engineCacheB.value?.id === preset.id && engineCacheA.value
-              ? { abVariant: { data: engineCacheA.value.data } }
-              : {}),
-            lfo1Config: { ...useLfoStore().lfo1, lastSentValue: null },
-            lfo2Config: { ...useLfoStore().lfo2, lastSentValue: null },
+            category: category || rawPreset.category,
+            data: rawPreset.data,
+            patchNotes: options.patchNotes !== undefined ? options.patchNotes : rawPreset.patchNotes,
+            arpConfig: rawPreset.arpConfig,
+            seqConfig: options.seqConfig || rawPreset.seqConfig || null,
+            velocityConfig: rawPreset.velocityConfig,
+            lfo1Config: rawPreset.lfo1Config,
+            lfo2Config: rawPreset.lfo2Config,
+            abVariant: rawPreset.abVariant || null,
             updatedAt: serverTimestamp(),
           })
         }
@@ -593,8 +656,23 @@ export const usePresetStore = defineStore('preset', () => {
         engineCacheA.value = presetA
         engineCacheB.value = presetB
 
-        presetA.abVariant = { data: presetB.data }
-        presetB.abVariant = { data: presetA.data }
+        // Variants should include full metadata, not just data
+        presetA.abVariant = { 
+          data: presetB.data, 
+          patchNotes: presetB.patchNotes,
+          arpConfig: presetB.arpConfig,
+          lfo1Config: presetB.lfo1Config,
+          lfo2Config: presetB.lfo2Config,
+          velocityConfig: presetB.velocityConfig
+        }
+        presetB.abVariant = { 
+          data: presetA.data,
+          patchNotes: presetA.patchNotes,
+          arpConfig: presetA.arpConfig,
+          lfo1Config: presetA.lfo1Config,
+          lfo2Config: presetA.lfo2Config,
+          velocityConfig: presetA.velocityConfig
+        }
 
         useAlternativeEngine.value = false
         lastPreset.value = presetA
@@ -602,6 +680,9 @@ export const usePresetStore = defineStore('preset', () => {
         currentPatchNotes.value = presetA.patchNotes
         
         sessionGeneratedIds.value = [...sessionGeneratedIds.value, presetA.id, presetB.id]
+        
+        // Restore A's metadata to stores
+        _applyMetadataToStores(presetA)
         applyPresetCCs(presetA)
         
         // Save to cache
