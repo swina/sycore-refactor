@@ -582,6 +582,7 @@ watch([playlist, playlistRepeats, crossfadeSec, loopPlaylist, playlistCurrentRep
       totalPlaylistDuration: totalPlaylistDuration.value,
       playlistCurrentRepeat: playlistCurrentRepeat.value
     }
+  }))
 }, { deep: true })
 
 // Automatically restore missing URLs in the playlist from the loaded tracks library
