@@ -6,7 +6,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { useConfigStore } from '@/stores/useConfigStore'
-import { S1_CC_MAP } from '@/constants/s1-config'
+import { S1_CC_MAP, FIELD_TO_CC } from '@/constants/s1-config'
 import PlayList from '@/components/PlayList.vue'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue' // Import the new component
 
@@ -25,6 +25,7 @@ const { state: paramsStorage } = useLocalStorage('S1_LIVESET_PARAMS', Array(8).f
 const { state: sliderModeStorage } = useLocalStorage('S1_LIVESET_SLIDER_MODE', 'vertical')
 const { state: currentIdxStorage } = useLocalStorage('S1_LIVESET_CURRENT', -1)
 const { state: sendPcStorage } = useLocalStorage('S1_LIVESET_SEND_PC', true)
+const { state: padSyncStorage } = useLocalStorage('S1_LIVESET_PAD_SYNC', false)
 
 const sounds = computed(() => livePadStore.sounds)
 const params      = ref([])
@@ -35,6 +36,7 @@ const currentIdx = computed({
 })
 const paramValues = ref(Array(8).fill(64))
 const sendPcEnabled = ref(sendPcStorage.value !== false)
+const padSyncEnabled = ref(padSyncStorage.value === true)
 const tab         = ref('perf')
 const setupTab    = ref('sounds')
 
@@ -60,7 +62,7 @@ function prevLibraryPreset() {
 function evaluateLibraryPreset() {
   const p = currentLibraryPreset.value
   if (!p) return
-  presetStore.recallPreset(p)
+  presetStore.recallPreset(p, false)
   currentIdx.value = -1 // Enter browser/assignment mode
 }
 
@@ -199,13 +201,51 @@ onMounted(() => {
   window.dispatchEvent(new CustomEvent('player-state-request'))
 })
 
-watch(() => [params.value, sliderMode.value, sendPcEnabled.value], () => {
+watch(() => [params.value, sliderMode.value, sendPcEnabled.value, padSyncEnabled.value], () => {
   paramsStorage.value = params.value
   sliderModeStorage.value = sliderMode.value
   sendPcStorage.value = sendPcEnabled.value
+  padSyncStorage.value = padSyncEnabled.value
 }, { deep: true })
 
 watch(currentIdx, (v) => { currentIdxStorage.value = v })
+
+function validatePadsAgainstBank() {
+  if (!presetStore.history || presetStore.history.length === 0) return
+  sounds.value.forEach((sound, idx) => {
+    if (sound.name) {
+      const matchedPreset = presetStore.history.find(p => p.name === sound.name)
+      if (!matchedPreset) {
+        console.warn(`[LiveSet] Sound "${sound.name}" not found in current bank. Clearing pad ${idx + 1}.`)
+        clearSound(idx)
+      } else if (!sound.preset) {
+        // Auto-upgrade legacy pad to store full preset and build accurate CC mapping
+        console.log(`[LiveSet] Auto-upgrading legacy pad ${idx + 1} with full preset for "${sound.name}"`)
+        const activeVariant = presetStore.useAlternativeEngine ? matchedPreset.bVariant : matchedPreset.aVariant
+        const dataValues = activeVariant?.data || matchedPreset.aVariant?.data || matchedPreset.data || {}
+        
+        const ccData = {}
+        Object.entries(dataValues).forEach(([field, val]) => {
+          const cc = FIELD_TO_CC[field]
+          if (cc !== undefined) {
+            ccData[cc] = val
+          }
+        })
+        
+        livePadStore.updateSound(idx, {
+          preset: JSON.parse(JSON.stringify(matchedPreset)),
+          ccData: ccData
+        })
+      }
+    }
+  })
+}
+
+watch(() => presetStore.history, (newHistory) => {
+  if (newHistory && newHistory.length > 0) {
+    validatePadsAgainstBank()
+  }
+}, { immediate: true })
 
 watch(() => props.isOpen, (open) => {
   if (!open) return
@@ -238,11 +278,25 @@ function selectSound(idx) {
   // IF we are in Library Evaluation mode, Clicking a pad ASSIGNS the sound
   if (currentLibraryPreset.value) {
     const p = currentLibraryPreset.value
+    
+    // Construct ccData from the active variant or layout data
+    const activeVariant = presetStore.useAlternativeEngine ? p.bVariant : p.aVariant
+    const dataValues = activeVariant?.data || p.aVariant?.data || p.data || {}
+    
+    const ccData = {}
+    Object.entries(dataValues).forEach(([field, val]) => {
+      const cc = FIELD_TO_CC[field]
+      if (cc !== undefined) {
+        ccData[cc] = val
+      }
+    })
+
     livePadStore.updateSound(idx, {
       name: p.name,
       category: p.category,
-      ccData: p.ccData || {},
-      paramValues: { ...p.data }
+      ccData: ccData,
+      paramValues: Array(8).fill(64),
+      preset: JSON.parse(JSON.stringify(p))
     })
     currentIdx.value = idx
     return
@@ -255,22 +309,47 @@ function selectSound(idx) {
   if (!sound.name) {
     const last = presetStore.lastPreset
     if (last) {
+      const activeVariant = presetStore.useAlternativeEngine ? last.bVariant : last.aVariant
+      const dataValues = activeVariant?.data || last.aVariant?.data || last.data || {}
+      
+      const ccData = {}
+      Object.entries(dataValues).forEach(([field, val]) => {
+        const cc = FIELD_TO_CC[field]
+        if (cc !== undefined) {
+          ccData[cc] = val
+        }
+      })
+
       livePadStore.updateSound(idx, {
         name: last.name,
         category: last.category,
-        ccData: last.ccData || {},
-        paramValues: { ...last.data }
+        ccData: ccData,
+        paramValues: Array(8).fill(64),
+        preset: JSON.parse(JSON.stringify(last))
       })
     }
   } else {
     // Normal recall: sync with global preset store so all UI/engine updates
-    presetStore.recallPreset({
-      name: sound.name,
-      category: sound.category,
-      ccData: sound.ccData || {},
-      data: sound.paramValues || {},
-      pc: sound.pc
-    })
+    if (sound.preset) {
+      presetStore.recallPreset(sound.preset, padSyncEnabled.value)
+    } else {
+      // Compatibility Layer: convert CC numbers back to fields for legacy pads
+      const data = {}
+      if (sound.ccData) {
+        Object.entries(sound.ccData).forEach(([cc, val]) => {
+          const field = S1_CC_MAP[Number(cc)]
+          if (field) {
+            data[field] = val
+          }
+        })
+      }
+      presetStore.recallPreset({
+        name: sound.name,
+        category: sound.category,
+        data: data,
+        pc: sound.pc
+      }, padSyncEnabled.value)
+    }
 
     // Also update local Live Set sliders and send MIDI CCs
     if (sound.paramValues) {
@@ -300,6 +379,7 @@ function clearSound(idx) {
     ccData: {},
     paramValues: {},
     category: '',
+    preset: null,
     pc: idx + 1
   })
   if (currentIdx.value === idx) {
@@ -373,6 +453,13 @@ function formatTime(t) {
 
           <!-- Header actions -->
           <div class="flex items-center gap-6">
+            <div @click="padSyncEnabled = !padSyncEnabled" class="cursor-pointer group flex items-center gap-2" title="Enable MIDI START/STOP on Pad selection">
+              <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest group-hover:text-neutral-400 transition-colors">SYNC</span>
+              <span :class="['text-[9px] font-mono font-bold transition-colors', padSyncEnabled ? 'text-synth-neon' : 'text-rose-500']">
+                {{ padSyncEnabled ? "ON" : "OFF" }}
+              </span>
+            </div>
+
             <div @click="sendPcEnabled = !sendPcEnabled" class="cursor-pointer group flex items-center gap-2">
               <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest group-hover:text-neutral-400 transition-colors">PC</span>
               <span :class="['text-[9px] font-mono font-bold transition-colors', sendPcEnabled ? 'text-synth-neon' : 'text-rose-500']">
@@ -419,6 +506,17 @@ function formatTime(t) {
                         <X class="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
                     </div>
+
+                    <!-- Single CLEAR button for the selected pad -->
+                    <button 
+                      v-if="currentIdx >= 0 && sounds[currentIdx]?.name"
+                      @click="clearSound(currentIdx)"
+                      class="ml-2 px-3 py-1.5 rounded-xl border border-rose-900/40 bg-rose-950/40 hover:bg-rose-900/20 text-rose-400 hover:text-rose-300 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.1)] h-9 shrink-0"
+                      title="Clear Selected Pad"
+                    >
+                      <Trash2 class="w-3.5 h-3.5 text-rose-500" />
+                      Clear
+                    </button>
                   </div>
                   <div class="h-px flex-1 bg-neutral-900 mx-4"></div>
                   
@@ -439,6 +537,7 @@ function formatTime(t) {
                     <div v-if="currentIdx === idx" class="absolute inset-0 bg-white/5 animate-pulse pointer-events-none"></div>
                     <span class="w-full text-center text-[11px] font-black uppercase tracking-tight leading-tight line-clamp-2 break-words z-10">{{ sound.name || `PAD ${idx + 1}` }}</span>
                     <span v-if="sound.name && sound.category" class="w-full text-center text-[9px] font-mono uppercase tracking-widest opacity-40 z-10">{{ sound.category }}</span>
+                    
                   </button>
                 </div>
               </div>
