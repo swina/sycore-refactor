@@ -332,6 +332,28 @@ const activeOutputs = computed(() => {
               </button>
             </div>
           </div>
+
+          <!-- Sequencer Transport Sync Section -->
+          <div class="flex items-center justify-between bg-neutral-900/40 border border-neutral-800 p-2 rounded-2xl group transition-all hover:border-synth-neon/20">
+            <div class="flex items-center gap-4">
+              <div :class="['p-3 rounded-xl transition-all', midiStore.syncSequencerTransport ? 'bg-synth-neon/20 text-synth-neon shadow-[0_0_15px_rgba(0,255,204,0.3)]' : 'bg-neutral-800 text-neutral-600']">
+                <ListMusic class="w-6 h-6" />
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  Sequencer Sync
+                  <span v-if="midiStore.syncSequencerTransport" class="px-2 py-0.5 rounded-full bg-synth-neon/20 text-synth-neon text-[9px] uppercase tracking-widest border border-synth-neon/30">Synced</span>
+                </h3>
+                <p class="text-[10px] text-neutral-500 font-mono mt-1">Sync global MIDI START/STOP with internal Sequencer playback</p>
+              </div>
+            </div>
+            <button 
+              @click="midiStore.setSyncSequencerTransport(!midiStore.syncSequencerTransport)"
+              :class="['w-16 h-8 rounded-full relative transition-all duration-300 shrink-0', midiStore.syncSequencerTransport ? 'bg-synth-neon' : 'bg-neutral-800']"
+            >
+              <div :class="['absolute top-1 bottom-1 w-6 bg-white rounded-full transition-transform duration-300', midiStore.syncSequencerTransport ? 'translate-x-9' : 'translate-x-1']" />
+            </button>
+          </div>
           <!-- Bottom Legend -->
           <div class="mt-8 pt-8 border-t border-neutral-900 flex flex-wrap gap-8 justify-center opacity-60">
             <div class="flex items-center gap-2">

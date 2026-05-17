@@ -11,7 +11,13 @@ export const useLivePadStore = defineStore('livePad', () => {
       return defaultValue
     }
   }
-  const setItem = (key, val) => localStorage.setItem(key, JSON.stringify(val))
+  const setItem = (key, val) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(val))
+    } catch (e) {
+      console.warn(`[Storage] Failed to save ${key} to localStorage:`, e)
+    }
+  }
 
   // --- State ---
   // 16 pads for sounds (presets)
@@ -76,8 +82,18 @@ export const useLivePadStore = defineStore('livePad', () => {
   }
 
   function saveState() {
+    // Strip giant base64 data URLs from playlist to prevent QuotaExceededError
+    const cleanedPlaylist = (playlist.value || []).map(track => {
+      if (track.url && (track.url.startsWith('data:') || track.url.length > 2048)) {
+        return {
+          ...track,
+          url: '' // Strip it, we will restore it from Firestore/IndexedDB on reload
+        }
+      }
+      return track
+    })
     setItem('sycore_live_pads', sounds.value)
-    setItem('sycore_live_playlist', playlist.value)
+    setItem('sycore_live_playlist', cleanedPlaylist)
     // Other settings
     setItem('sycore_live_settings', {
       playlistRepeats: playlistRepeats.value,

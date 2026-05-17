@@ -309,7 +309,7 @@ onMounted(() => {
 
       <!-- Step Sequencer -->
       <StepSequencer
-        v-if="uiStore.isSequencerOpen"
+        v-show="uiStore.isSequencerOpen"
         :isOpen="uiStore.isSequencerOpen"
         :bpm="midiStore.currentBpm || 120"
         :channel="midiStore.midiChannel"

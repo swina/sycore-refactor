@@ -707,6 +707,13 @@ watch(isPlaying, (playing) => {
     }
   }
 
+  if (midiStore.syncSequencerTransport) {
+    if (midiStore.isTransportPlaying !== playing) {
+      if (playing) midiStore.sendStart()
+      else midiStore.sendStop()
+    }
+  }
+
   if (!playing) {
     getTransport().stop()
     if (repeatEventIdRef.value !== null) {
@@ -808,6 +815,14 @@ watch(isPlaying, (playing) => {
   } else {
     if (rafRef.value !== null) { cancelAnimationFrame(rafRef.value); rafRef.value = null }
     transportPosition.value = '1:1:1'
+  }
+})
+
+watch(() => midiStore.isTransportPlaying, (isPlayingMIDI) => {
+  if (midiStore.syncSequencerTransport) {
+    if (isPlaying.value !== isPlayingMIDI) {
+      isPlaying.value = isPlayingMIDI
+    }
   }
 })
 

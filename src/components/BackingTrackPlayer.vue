@@ -582,7 +582,33 @@ watch([playlist, playlistRepeats, crossfadeSec, loopPlaylist, playlistCurrentRep
       totalPlaylistDuration: totalPlaylistDuration.value,
       playlistCurrentRepeat: playlistCurrentRepeat.value
     }
-  }))
+}, { deep: true })
+
+// Automatically restore missing URLs in the playlist from the loaded tracks library
+function restorePlaylistUrls() {
+  if (!playlist.value.length || !tracks.value.length) return
+  let modified = false
+  const updated = playlist.value.map(track => {
+    if (!track.url && track.id) {
+      const match = tracks.value.find(t => t.id === track.id)
+      if (match && match.url) {
+        modified = true
+        return { ...track, url: match.url }
+      }
+    }
+    return track
+  })
+  if (modified) {
+    playlist.value = updated
+  }
+}
+
+watch(tracks, restorePlaylistUrls)
+watch(playlist, (newPlaylist) => {
+  const hasEmptyUrls = newPlaylist.some(t => !t.url && t.id)
+  if (hasEmptyUrls) {
+    restorePlaylistUrls()
+  }
 }, { deep: true })
 
 

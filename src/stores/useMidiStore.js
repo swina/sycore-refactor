@@ -8,6 +8,7 @@ const LS_CHANNEL = 'midiChannel'
 const LS_IN_CHANNEL = 'midiInputChannel'
 const LS_SEND_CLOCK = 'midiSendClock'
 const LS_SYNC_TRANSPORT = 'midiSyncTransport'
+const LS_SYNC_SEQUENCER_TRANSPORT = 'midiSyncSequencerTransport'
 
 export const useMidiStore = defineStore('midi', () => {
   const midiReady = ref(false)
@@ -17,6 +18,7 @@ export const useMidiStore = defineStore('midi', () => {
   const midiInputChannel = ref(parseInt(localStorage.getItem(LS_IN_CHANNEL) || '-1'))
   const sendClock = ref(localStorage.getItem(LS_SEND_CLOCK) === 'true')
   const syncMidiTransport = ref(localStorage.getItem(LS_SYNC_TRANSPORT) === 'true')
+  const syncSequencerTransport = ref(localStorage.getItem(LS_SYNC_SEQUENCER_TRANSPORT) === 'true')
   const isTransportPlaying = ref(false)
   const currentBpm = ref(120)
 
@@ -210,6 +212,11 @@ export const useMidiStore = defineStore('midi', () => {
     localStorage.setItem(LS_SYNC_TRANSPORT, String(enabled))
   }
 
+  function setSyncSequencerTransport(enabled) {
+    syncSequencerTransport.value = enabled
+    localStorage.setItem(LS_SYNC_SEQUENCER_TRANSPORT, String(enabled))
+  }
+
   function toggleGlobalTransport() {
     if (isTransportPlaying.value) sendStop()
     else sendStart()
@@ -308,6 +315,7 @@ export const useMidiStore = defineStore('midi', () => {
     allNotesOff, panic, startClock, stopClock, setBpm, sendStart, sendStop,
     sendClock, setSendClock, currentBpm,
     syncMidiTransport, setSyncMidiTransport,
+    syncSequencerTransport, setSyncSequencerTransport,
     isTransportPlaying, toggleGlobalTransport,
     routingConfig,
     saveRoutingConfig,
