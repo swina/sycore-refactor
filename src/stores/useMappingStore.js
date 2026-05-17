@@ -128,12 +128,11 @@ export const useMappingStore = defineStore('mapping', () => {
       return
     }
 
-    // Get base value from current preset data (account for AB engine)
-    const targetData = (presetStore.useAlternativeEngine && lastPreset.abVariant?.data)
-      ? lastPreset.abVariant.data
-      : lastPreset.data;
+    // Get base value from current preset data (account for AB engine with symmetric A/B variants)
+    const activeVariant = presetStore.useAlternativeEngine ? lastPreset.bVariant : lastPreset.aVariant
+    const targetData = activeVariant?.data || lastPreset.data || {}
 
-    if (!targetData) {
+    if (!targetData || Object.keys(targetData).length === 0) {
       if (window.SY_LOG) window.SY_LOG(`[VEL] Blocked: No target data for engine`);
       return
     }
@@ -176,10 +175,9 @@ export const useMappingStore = defineStore('mapping', () => {
     const cc = FIELD_TO_CC[field]
     if (cc === undefined) return
 
-    // Account for AB engine
-    const targetData = (presetStore.useAlternativeEngine && lastPreset.abVariant?.data)
-      ? lastPreset.abVariant.data
-      : lastPreset.data;
+    // Account for AB engine with symmetric A/B variants
+    const activeVariant = presetStore.useAlternativeEngine ? lastPreset.bVariant : lastPreset.aVariant
+    const targetData = activeVariant?.data || lastPreset.data || {}
 
     if (!targetData) return;
 
