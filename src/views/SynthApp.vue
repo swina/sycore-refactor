@@ -126,8 +126,15 @@ function closeAllPanels() {
   uiStore.closeAll()
 }
 
-function handleStepSequencerSave(config) {
+async function handleStepSequencerSave(config) {
   uiStore.seqCurrentConfig = config
+  if (presetStore.lastPreset) {
+    try {
+      await presetStore.savePreset()
+    } catch (e) {
+      console.error('Failed to save preset with sequencer data:', e)
+    }
+  }
 }
 
 function handleStepSequencerTranspose(val) {
@@ -322,6 +329,7 @@ onMounted(() => {
         @close="uiStore.isSequencerOpen = false"
         @bpmChange="bpm => midiStore.currentBpm = bpm"
         @transposeChange="handleStepSequencerTranspose"
+        @configChange="config => uiStore.seqCurrentConfig = config"
         @savePattern="handleStepSequencerSave"
         @openKeyboard="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
         @prevSlot="presetStore.navigateHistory('prev')"

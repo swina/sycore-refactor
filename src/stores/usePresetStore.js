@@ -6,6 +6,7 @@ import { useMidiStore } from './useMidiStore'
 import { useMappingStore } from './useMappingStore'
 import { useLfoStore } from './useLfoStore'
 import { useArpStore } from './useArpStore'
+import { useUiStore } from './useUiStore'
 import { S1_TYPES } from '@/constants/s1-config'
 import BANK_DEFAULT from '@/data/BANK_DEFAULT.json'
 
@@ -185,6 +186,7 @@ export const usePresetStore = defineStore('preset', () => {
         subdivision: useArpStore().arpSubdivision,
         hold: useArpStore().arpHold
       },
+      seqConfig: useUiStore().seqCurrentConfig || null,
       lfo1Config: { ...useLfoStore().lfo1, lastSentValue: null },
       lfo2Config: { ...useLfoStore().lfo2, lastSentValue: null },
       velocityConfig: {
@@ -202,7 +204,7 @@ export const usePresetStore = defineStore('preset', () => {
       data: data || {},
       patchNotes: patchNotes || '',
       arpConfig: meta.arpConfig,
-      seqConfig: null,
+      seqConfig: meta.seqConfig,
       velocityConfig: meta.velocityConfig,
       lfo1Config: meta.lfo1Config,
       lfo2Config: meta.lfo2Config
@@ -217,7 +219,7 @@ export const usePresetStore = defineStore('preset', () => {
     if (variant.arpConfig) {
       arpStore.arpEnabled = variant.arpConfig.enabled ?? variant.arpConfig.active ?? false
       arpStore.arpMode = variant.arpConfig.mode || 'up'
-      arpStore.arpBpm = variant.arpConfig.bpm || 120
+      // arpStore.arpBpm = variant.arpConfig.bpm || 120 // Removed to prevent overriding global tempo
       arpStore.arpSubdivision = variant.arpConfig.subdivision || '1/8'
       arpStore.arpHold = variant.arpConfig.hold || false
     } else {
@@ -247,6 +249,14 @@ export const usePresetStore = defineStore('preset', () => {
       if (variant.velocityConfig.curve) mappingStore.velocityConfig.curve = variant.velocityConfig.curve
     } else {
       mappingStore.velocityConfig.active = false
+    }
+
+    // Sequencer
+    const uiStore = useUiStore()
+    if (variant.seqConfig) {
+      uiStore.seqCurrentConfig = variant.seqConfig
+    } else {
+      uiStore.seqCurrentConfig = null
     }
   }
 

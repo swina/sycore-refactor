@@ -27,7 +27,7 @@ const props = defineProps({
   currentPresetCCValues: Object,
 })
 
-const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'openKeyboard', 'stop'])
+const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop'])
 
 const midiStore = useMidiStore()
 
@@ -169,6 +169,20 @@ const param2CC = ref((() => {
   } catch { return 71 }
 })())
 
+const param1Variation = ref((() => {
+  try {
+    const saved = seqStateStorage.value
+    return saved?.param1Variation ?? 25
+  } catch { return 25 }
+})())
+
+const param2Variation = ref((() => {
+  try {
+    const saved = seqStateStorage.value
+    return saved?.param2Variation ?? 25
+  } catch { return 25 }
+})())
+
 // Refs for playback state
 const playStateRef = { current: {} }
 const rafRef = ref(null)
@@ -181,18 +195,24 @@ watch(syncTrack, (val) => {
   syncTrackStorage.value = val
 }, { deep: true })
 
-watch([numSteps, steps, param1CC, param2CC, selectedOctave, octaveRange, () => props.globalTranspose, () => props.bpm], () => {
+let lastEmittedConfig = null;
+
+watch([numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange, () => props.globalTranspose, () => props.bpm], () => {
   const config = { 
     numSteps: numSteps.value, 
     steps: steps.value, 
     param1CC: param1CC.value, 
     param2CC: param2CC.value,
+    param1Variation: param1Variation.value,
+    param2Variation: param2Variation.value,
     selectedOctave: selectedOctave.value,
     octaveRange: octaveRange.value,
     transpose: props.globalTranspose || 0,
     bpm: props.bpm || 120
   }
   seqStateStorage.value = config
+  lastEmittedConfig = config
+  emit('configChange', config)
   midiStore.sendCC(77, Math.max(0, Math.min(127, (props.globalTranspose || 0) + 64)), props.channel)
 
   // Sync live playback state immediately
@@ -208,13 +228,42 @@ watch([numSteps, steps, param1CC, param2CC, selectedOctave, octaveRange, () => p
 
 watch(() => props.initialConfig, (cfg) => {
   if (cfg) {
-    if (cfg.numSteps !== undefined) numSteps.value = cfg.numSteps
-    if (cfg.steps !== undefined) steps.value = cfg.steps.map(s => ({ ...DEFAULT_STEP, ...s }))
-    if (cfg.param1CC !== undefined) param1CC.value = cfg.param1CC
-    if (cfg.param2CC !== undefined) param2CC.value = cfg.param2CC
-    if (cfg.transpose !== undefined) emit('transposeChange', cfg.transpose)
+    if (cfg.numSteps !== undefined && numSteps.value !== cfg.numSteps) {
+      numSteps.value = cfg.numSteps
+    }
+    if (cfg.steps !== undefined) {
+      const cleanStep = s => ({
+        active: !!s.active,
+        notes: s.notes || [60],
+        velocity: s.velocity ?? 100,
+        gate: s.gate ?? 50,
+        tieSteps: s.tieSteps ?? 0,
+        param1Value: s.param1Value ?? 64,
+        param2Value: s.param2Value ?? 64
+      })
+      const currentJSON = JSON.stringify(steps.value.map(cleanStep))
+      const incomingJSON = JSON.stringify(cfg.steps.map(cleanStep))
+      if (currentJSON !== incomingJSON) {
+        steps.value = cfg.steps.map(s => ({ ...DEFAULT_STEP, ...s }))
+      }
+    }
+    if (cfg.param1CC !== undefined && param1CC.value !== cfg.param1CC) {
+      param1CC.value = cfg.param1CC
+    }
+    if (cfg.param2CC !== undefined && param2CC.value !== cfg.param2CC) {
+      param2CC.value = cfg.param2CC
+    }
+    if (cfg.param1Variation !== undefined && param1Variation.value !== cfg.param1Variation) {
+      param1Variation.value = cfg.param1Variation
+    }
+    if (cfg.param2Variation !== undefined && param2Variation.value !== cfg.param2Variation) {
+      param2Variation.value = cfg.param2Variation
+    }
+    if (cfg.transpose !== undefined && props.globalTranspose !== cfg.transpose) {
+      emit('transposeChange', cfg.transpose)
+    }
   }
-})
+}, { immediate: true })
 
 watch(() => props.bpm, (bpm) => {
   getTransport().bpm.value = bpm
@@ -294,7 +343,7 @@ function generateSequence() {
       const sustainSteps = Math.round(thisSpan * avgGateFactor)
       const tieSteps = Math.max(0, sustainSteps + (Math.floor(Math.random() * 3) - 1) - 1)
 
-      return { ...DEFAULT_STEP, active: true, notes, velocity, gate: 90, tieSteps }
+      return { ...DEFAULT_STEP, active: true, notes, velocity, gate: 90, tieSteps, param1Value: Math.floor(Math.random() * 128), param2Value: Math.floor(Math.random() * 128) }
     })
   } else {
     const numActive = Math.round(numSteps.value * (genDensity.value / 100))
@@ -321,7 +370,18 @@ function generateSequence() {
       const gateRange = styleCfg.gateMax - styleCfg.gateMin
       const gate = active ? styleCfg.gateMin + Math.floor(Math.random() * (gateRange + 1)) : 0
       const tieSteps = active && styleCfg.slideProbability && Math.random() < styleCfg.slideProbability ? 1 : 0
-      return { ...DEFAULT_STEP, active, notes, velocity, gate, tieSteps }
+      
+      const p1BaseVal = getPresetValueForCC(param1CC.value)
+      const p1VarFactor = param1Variation.value / 100
+      const p1Variation = Math.random() * p1VarFactor
+      const param1Value = Math.max(0, Math.min(127, Math.round(p1BaseVal + (p1BaseVal * p1Variation))))
+
+      const p2BaseVal = getPresetValueForCC(param2CC.value)
+      const p2VarFactor = param2Variation.value / 100
+      const p2Variation = Math.random() * p2VarFactor
+      const param2Value = Math.max(0, Math.min(127, Math.round(p2BaseVal + (p2BaseVal * p2Variation))))
+
+      return { ...DEFAULT_STEP, active, notes, velocity, gate, tieSteps, param1Value, param2Value }
     })
   }
   basePatternLength.value = numSteps.value
@@ -350,15 +410,36 @@ function updateStep(idx, updates) {
 function applyToAll(field, value) {
   steps.value = steps.value.map(s => ({ ...s, [field]: value }))
 }
+const getPresetValueForCC = (cc) => {
+  if (!props.currentPresetCCValues) return 64;
+  for (const [key, mapCc] of Object.entries(S1_CC_MAP)) {
+    if (mapCc === cc) {
+      const val = props.currentPresetCCValues[key];
+      return val !== undefined ? val : 64;
+    }
+  }
+  return 64;
+}
 
 function randomize(field) {
-  steps.value = steps.value.map(s => ({
-    ...s,
-    [field]: field === 'velocity' ? Math.floor(Math.random() * 127) + 1 :
-      field === 'gate' ? Math.floor(Math.random() * 101) :
-        field === 'param1Value' || field === 'param2Value' ? Math.floor(Math.random() * 128) :
-          s[field]
-  }))
+  steps.value = steps.value.map(s => {
+    let newVal = s[field]
+    if (field === 'velocity') newVal = Math.floor(Math.random() * 127) + 1
+    else if (field === 'gate') newVal = Math.floor(Math.random() * 101)
+    else if (field === 'param1Value') {
+      const varFactor = param1Variation.value / 100
+      const variation = Math.random() * varFactor
+      const baseVal = getPresetValueForCC(param1CC.value)
+      newVal = Math.max(0, Math.min(127, Math.round(baseVal + (baseVal * variation))))
+    }
+    else if (field === 'param2Value') {
+      const varFactor = param2Variation.value / 100
+      const variation = Math.random() * varFactor
+      const baseVal = getPresetValueForCC(param2CC.value)
+      newVal = Math.max(0, Math.min(127, Math.round(baseVal + (baseVal * variation))))
+    }
+    return { ...s, [field]: newVal }
+  })
 }
 
 function exportMidi() {
@@ -843,7 +924,7 @@ function handleClear() {
             <Download class="w-4 h-4" />
           </button>
 
-          <button @click="emit('savePattern', { numSteps, steps, param1CC, param2CC, transpose: globalTranspose, bpm })"
+          <button @click="emit('savePattern', { numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, transpose: globalTranspose, bpm })"
             class="p-2 bg-neutral-800 text-synth-neon rounded-lg border border-neutral-700 hover:text-white transition-colors" title="Save Pattern">
             <Save class="w-4 h-4" />
           </button>
@@ -857,61 +938,47 @@ function handleClear() {
       <!-- ── GENERATION SETTINGS ROW ── -->
       <div class="shrink-0 flex items-center gap-4 px-4 py-2 border-b border-neutral-900 bg-black/20">
         <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Scale</span>
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Scale</span>
           <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800/50">
-            <select v-model="selectedKey" class="bg-neutral-900 text-synth-neon font-bold text-[9px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
+            <select v-model="selectedKey" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
               <option v-for="key in NOTE_NAMES" :key="key" :value="key" class="bg-neutral-900">{{ key }}</option>
             </select>
-            <select v-model="selectedScale" class="bg-neutral-900 text-synth-neon font-bold text-[9px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
+            <select v-model="selectedScale" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="scale in Object.keys(SCALES)" :key="scale" :value="scale" class="bg-neutral-900">{{ scale }}</option>
             </select>
           </div>
         </div>
 
         <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Oct</span>
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Oct</span>
           <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800/50">
-            <select v-model="selectedOctave" class="bg-neutral-900 text-synth-neon font-bold text-[9px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
+            <select v-model="selectedOctave" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
               <option v-for="o in [0,1,2,3,4,5,6,7,8]" :key="o" :value="o" class="bg-neutral-900">{{ o }}</option>
             </select>
-            <select v-model="octaveRange" class="bg-neutral-900 text-synth-neon font-bold text-[9px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
+            <select v-model="octaveRange" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="r in [-3,-2,-1,0,1,2,3]" :key="r" :value="r" class="bg-neutral-900">{{ r >= 0 ? '+' + r : r }}</option>
             </select>
           </div>
         </div>
 
         <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Style</span>
-          <select v-model="selectedStyle" class="bg-black/40 border border-neutral-800 text-synth-neon rounded-lg px-2 py-1 text-[9px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Style</span>
+          <select v-model="selectedStyle" class="bg-black/40 border border-neutral-800 text-synth-neon rounded-lg px-2 py-1 text-[14px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
             <option v-for="style in Object.keys(STYLES)" :key="style" :value="style" class="bg-neutral-900">{{ style }}</option>
           </select>
         </div>
 
         <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Density</span>
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Density</span>
           <div class="flex items-center gap-3 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7">
             <input v-model.number="genDensity" type="range" min="0" max="100" class="w-24 h-1 accent-synth-neon bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-            <span class="text-[9px] font-mono text-synth-neon w-8 text-right">{{ genDensity }}%</span>
+            <span class="text-[12px] font-mono text-synth-neon w-8 text-right">{{ genDensity }}%</span>
           </div>
         </div>
 
         <div class="w-px h-6 bg-neutral-800 mx-2" />
 
-        <!-- Param Assign -->
-        <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2">
-            <span class="text-[8px] font-mono text-neutral-500 uppercase leading-none">P1</span>
-            <select v-model="param1CC" class="bg-black/40 border border-neutral-800 text-synth-neon rounded px-1.5 py-0.5 text-[9px] font-mono outline-none w-24 cursor-pointer [color-scheme:dark]">
-              <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
-            </select>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-[8px] font-mono text-neutral-500 uppercase leading-none">P2</span>
-            <select v-model="param2CC" class="bg-black/40 border border-neutral-800 text-synth-neon rounded px-1.5 py-0.5 text-[9px] font-mono outline-none w-24 cursor-pointer [color-scheme:dark]">
-              <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
-            </select>
-          </div>
-        </div>
+        
 
         <button @click="generateSequence" 
           class="ml-auto flex items-center gap-2 px-4 py-1.5 bg-synth-neon text-black rounded-lg hover:bg-white transition-all font-black text-[9px] uppercase shadow-[0_0_15px_rgba(0,255,204,0.3)]">
@@ -919,7 +986,36 @@ function handleClear() {
           Generate Pattern
         </button>
       </div>
+      <div class="flex w-full gap-3 px-4">
+        <!-- Param Assign -->
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-[12px] font-mono text-neutral-500 uppercase leading-none">P1</span>
+            <select v-model="param1CC" class="bg-black/40 border border-neutral-800 text-synth-neon rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-30 cursor-pointer [color-scheme:dark]">
+              <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
+            </select>
+            <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
+              <span class="text-[8px] font-mono text-neutral-500" title="Variazione P1 RND">RND%</span>
+              <input v-model.number="param1Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-neon bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
+              <span class="text-[9px] font-mono text-synth-neon w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param1Variation > 0 ? '+' : '' }}{{ param1Variation }}</span>
+            </div>
+          </div>
+          
+          <div class="w-px h-5 bg-neutral-800 mx-1" />
 
+          <div class="flex items-center gap-2">
+            <span class="text-[12px] font-mono text-neutral-500 uppercase leading-none">P2</span>
+            <select v-model="param2CC" class="bg-black/40 border border-neutral-800 text-synth-neon rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-24 cursor-pointer [color-scheme:dark]">
+              <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
+            </select>
+            <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
+              <span class="text-[8px] font-mono text-neutral-500" title="Variazione P2 RND">RND%</span>
+              <input v-model.number="param2Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-neon bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
+              <span class="text-[9px] font-mono text-synth-neon w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param2Variation > 0 ? '+' : '' }}{{ param2Variation }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- ── MAIN TOOLBAR ── -->
       <div class="shrink-0 flex flex-wrap items-center gap-4 p-3 border-b border-neutral-900 bg-neutral-900/50">
         <!-- Transport Controls -->
