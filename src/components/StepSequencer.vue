@@ -39,6 +39,7 @@ const DEFAULT_STEP = {
   tieSteps: 0,
   param1Value: 64,
   param2Value: 64,
+  edited: false,
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -96,6 +97,16 @@ function getNoteName(midiNote) {
   return `${note}${octave}`
 }
 
+function formatStepNotes(notes) {
+  if (!notes || notes.length === 0) return '–'
+  if (notes.length === 1) return getNoteName(notes[0])
+  const sortedNotes = [...notes].sort((a, b) => a - b)
+  if (sortedNotes.length <= 2) {
+    return sortedNotes.map(getNoteName).join('+')
+  }
+  return `${getNoteName(sortedNotes[0])}+${sortedNotes.length - 1}`
+}
+
 function buildChordNotes(scaleDegree, scaleIntervals, keyMidi, octave, voices) {
   const baseNote = (octave + 1) * 12 + keyMidi
   const len = scaleIntervals.length
@@ -151,7 +162,13 @@ const numSteps = ref((() => {
 const steps = ref((() => {
   try {
     const saved = seqStateStorage.value
-    return saved?.steps ? saved.steps.map(s => ({ ...DEFAULT_STEP, ...s })) : Array(16).fill(null).map(() => ({ ...DEFAULT_STEP }))
+    return saved?.steps 
+      ? saved.steps.map(s => {
+          const step = { ...DEFAULT_STEP, ...s }
+          step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+          return step
+        })
+      : Array(16).fill(null).map(() => ({ ...DEFAULT_STEP }))
   } catch { return Array(16).fill(null).map(() => ({ ...DEFAULT_STEP })) }
 })())
 
@@ -198,6 +215,14 @@ const rafRef = ref(null)
 const repeatEventIdRef = ref(null)
 const fadeOutIntervalRef = ref(null)
 const lastHandledNoteTimeRef = ref(0)
+const currentlyHeldNotes = ref(new Set())
+const recordedNotesForCurrentStep = ref([])
+
+watch([isRecording, isPlaying, selectedStepIdx], () => {
+  currentlyHeldNotes.value.clear()
+  recordedNotesForCurrentStep.value = []
+})
+
 const skipBackingTrackSync = ref(false)
 
 watch(syncTrack, (val) => {
@@ -297,7 +322,11 @@ watch(() => props.initialConfig, (cfg) => {
       const currentJSON = JSON.stringify(steps.value.map(cleanStep))
       const incomingJSON = JSON.stringify(cfg.steps.map(cleanStep))
       if (currentJSON !== incomingJSON) {
-        steps.value = cfg.steps.map(s => ({ ...DEFAULT_STEP, ...s }))
+        steps.value = cfg.steps.map(s => {
+          const step = { ...DEFAULT_STEP, ...s }
+          step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+          return step
+        })
       }
     }
     if (cfg.param1CC !== undefined && param1CC.value !== cfg.param1CC) {
@@ -366,7 +395,7 @@ function generateSequence() {
       const sustainSteps = Math.round(thisSpan * avgGateFactor)
       const tieSteps = Math.max(0, sustainSteps + (Math.floor(Math.random() * 3) - 1) - 1)
 
-      return { ...DEFAULT_STEP, active: true, notes, velocity, gate: 90, tieSteps, param1Value: Math.floor(Math.random() * 128), param2Value: Math.floor(Math.random() * 128) }
+      return { ...DEFAULT_STEP, active: true, notes, velocity, gate: 90, tieSteps, param1Value: Math.floor(Math.random() * 128), param2Value: Math.floor(Math.random() * 128), edited: true }
     })
   } else {
     const numActive = Math.round(numSteps.value * (genDensity.value / 100))
@@ -404,7 +433,7 @@ function generateSequence() {
       const p2Variation = Math.random() * p2VarFactor
       const param2Value = Math.max(0, Math.min(127, Math.round(p2BaseVal + (p2BaseVal * p2Variation))))
 
-      return { ...DEFAULT_STEP, active, notes, velocity, gate, tieSteps, param1Value, param2Value }
+      return { ...DEFAULT_STEP, active, notes, velocity, gate, tieSteps, param1Value, param2Value, edited: active }
     })
   }
   basePatternLength.value = numSteps.value
@@ -436,7 +465,14 @@ function reduceLength() {
 }
 
 function updateStep(idx, updates) {
-  steps.value[idx] = { ...steps.value[idx], ...updates }
+  const current = steps.value[idx]
+  const hasChanges = Object.keys(updates).some(k => k !== 'active' && updates[k] !== current[k])
+  
+  steps.value[idx] = { 
+    ...current, 
+    ...updates,
+    ...(hasChanges ? { edited: true } : {})
+  }
   steps.value = [...steps.value]
 }
 
@@ -694,8 +730,67 @@ onMounted(() => {
   }
   window.addEventListener('toggle-sequencer', handleToggle)
 
-  const handleIncomingNote = (type, note, velocity, chan) => {
+  const handleIncomingNote = (type, note, velocity, chan, inputId) => {
     if (!props.isOpen) return
+
+    // MIDI Performance routing matrix checks
+    if (inputId) {
+      const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+      if (inputDevice) {
+        const deviceName = inputDevice.name
+        
+        const normalizeName = (name) => {
+          if (!name) return ''
+          return name.toLowerCase()
+            .replace(/^(1-|2-|midi\s+|usb\s+|port\s+)/i, '')
+            .replace(/(midi\s+port|midi\s+in|midi\s+out)$/i, '')
+            .trim()
+        }
+
+        const normDevice = normalizeName(deviceName)
+
+        // 1. Basic config checks (if exists in registrations)
+        const config = Object.entries(midiStore.routingConfig?.registrations || {}).find(([key]) => {
+          const normKey = normalizeName(key)
+          return normKey === normDevice || normKey.includes(normDevice) || normDevice.includes(normKey)
+        })?.[1]
+
+        if (config) {
+          if (!config.inEnabled) {
+            if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (inEnabled=false)`)
+            return
+          }
+          if (config.inChannel !== -1 && config.inChannel !== chan) {
+            if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (channel mismatch: expected ${config.inChannel}, got ${chan})`)
+            return
+          }
+        }
+
+        // 2. Performance Matrix matching (if not in broadcast mode)
+        if (!midiStore.broadcastMode) {
+          const seqTargets = midiStore.routingMatrix?.['SEQUENCER'] || []
+          
+          // Match by normalized name
+          const deviceTargets = Object.entries(midiStore.routingMatrix || {}).find(([key]) => {
+            const normKey = normalizeName(key)
+            return normKey === normDevice || normKey.includes(normDevice) || normDevice.includes(normKey)
+          })?.[1] || []
+
+          // Case-insensitive trimmed target comparison
+          const hasCommonTarget = seqTargets.some(sTarget => 
+            deviceTargets.some(dTarget => sTarget.toLowerCase().trim() === dTarget.toLowerCase().trim())
+          )
+          
+          if (window.SY_LOG) {
+            window.SY_LOG(`[Seq Ingress] ${deviceName} (${normDevice}) -> seqTargets: [${seqTargets.join(', ')}], deviceTargets: [${deviceTargets.join(', ')}], hasCommonTarget: ${hasCommonTarget}`)
+          }
+
+          if (!hasCommonTarget) return
+        }
+      } else {
+        if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Input device not found for ID: ${inputId}`)
+      }
+    }
     
     // Dynamic transposition during PLAY mode (not recording)
     if (isPlaying.value && !isRecording.value) {
@@ -708,26 +803,49 @@ onMounted(() => {
     // Step modification is strictly enabled only when in RECORD mode
     if (!isRecording.value) return
 
-    const now = performance.now()
-    if (type === 'on' && velocity > 0 && selectedStepIdx.value !== null) {
-      if (now - lastHandledNoteTimeRef.value < 150) return
-      lastHandledNoteTimeRef.value = now
+    const isNoteOn = (type === 'on' && velocity > 0)
+    const isNoteOff = (type === 'off' || (type === 'on' && velocity === 0))
+
+    if (isNoteOn && selectedStepIdx.value !== null) {
+      // If we were not holding any notes, this starts a new step chord recording
+      if (currentlyHeldNotes.value.size === 0) {
+        recordedNotesForCurrentStep.value = [note]
+      } else {
+        // Otherwise, append to the active step chord
+        if (!recordedNotesForCurrentStep.value.includes(note)) {
+          recordedNotesForCurrentStep.value.push(note)
+        }
+      }
+      
+      currentlyHeldNotes.value.add(note)
+      recordedNotesForCurrentStep.value.sort((a, b) => a - b)
 
       const currentStepObj = steps.value[selectedStepIdx.value]
-      const updates = { active: true, notes: [note], velocity }
+      const updates = { 
+        active: true, 
+        notes: [...recordedNotesForCurrentStep.value], 
+        velocity 
+      }
       
-      // If gate is 0, set to default 50
       if (!currentStepObj.gate || currentStepObj.gate === 0) {
         updates.gate = 50
       }
 
       updateStep(selectedStepIdx.value, updates)
-      selectedStepIdx.value = (selectedStepIdx.value + 1) % numSteps.value
+    } 
+    else if (isNoteOff) {
+      currentlyHeldNotes.value.delete(note)
+      
+      // Once ALL notes are released, advance to the next step
+      if (currentlyHeldNotes.value.size === 0 && selectedStepIdx.value !== null) {
+        selectedStepIdx.value = (selectedStepIdx.value + 1) % numSteps.value
+        recordedNotesForCurrentStep.value = []
+      }
     }
   }
 
-  const unsubNote = midiService.addNoteListener((type, note, velocity, chan) => {
-    handleIncomingNote(type, note, velocity, chan)
+  const unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
+    handleIncomingNote(type, note, velocity, chan, inputId)
   })
 
   const handleVirtualNote = (e) => {
@@ -958,7 +1076,7 @@ function handleClear() {
               />
             </div>
             <div class="w-px h-3 bg-neutral-800" />
-            <span class="text-sm text-synth-neon font-mono tabular-nums leading-none">
+            <span class="text-3xl text-red-800 font-mono tabular-nums leading-none">
               {{ transportPosition }}
             </span>
           </div>
@@ -1175,7 +1293,7 @@ function handleClear() {
             <div class="flex items-center gap-4 shrink-0">
               <div class="flex flex-col">
                 <span class="text-[8px] font-mono text-neutral-500 uppercase">Note</span>
-                <span class="text-xs font-bold text-white leading-tight">{{ getNoteName(steps[selectedStepIdx].notes[0] || 60) }}</span>
+                <span class="text-xs font-bold text-white leading-tight">{{ steps[selectedStepIdx].notes.map(getNoteName).join(', ') }}</span>
               </div>
               
               <div class="flex flex-col min-w-[70px]">
@@ -1280,7 +1398,7 @@ function handleClear() {
             :class="[
               'group relative flex flex-col rounded-lg border transition-all cursor-pointer',
               selectedStepIdx === idx ? 'border-synth-neon ring-1 ring-synth-neon/50 bg-neutral-800' : 'border-neutral-800 bg-neutral-950/40',
-              currentStep === idx && isPlaying ? 'border-amber-400 bg-amber-500/5' : ''
+              currentStep === idx && isPlaying ? 'border-amber-400 ring-1 ring-amber-400/50 bg-neutral-900 z-10 shadow-[0_0_10px_rgba(245,158,11,0.25)]' : ''
             ]"
           >
             <!-- Step Number -->
@@ -1291,19 +1409,28 @@ function handleClear() {
             <!-- Step Content -->
             <div class="p-2 h-16 flex flex-col justify-center relative overflow-hidden">
               <template v-if="step?.active">
-                <span class="text-[10px] font-black text-white leading-none mb-1">{{ getNoteName(step?.notes[0]) }}</span>
+                <span class="text-[10px] font-black text-white leading-none mb-1">{{ formatStepNotes(step?.notes) }}</span>
                 <div class="space-y-1 mt-auto">
                   <div class="h-0.5 bg-orange-500/60 rounded-full" :style="{ width: (step.velocity / 127 * 100) + '%' }" />
                   <div class="h-0.5 bg-purple-500/60 rounded-full" :style="{ width: step.gate + '%' }" />
                 </div>
-                <!-- Play Indicator -->
-                <div v-if="currentStep === idx && isPlaying" class="absolute inset-0 bg-amber-500/10 animate-pulse pointer-events-none" />
               </template>
-              <template v-else>
-                <div class="h-full flex items-center justify-center opacity-10">
-                  <div class="w-1 h-1 rounded-full bg-neutral-500" />
+              <template v-else-if="step?.edited && step?.notes && step.notes.length > 0">
+                <!-- Inactive but edited/populated step (Ghost notes) -->
+                <span class="text-[10px] font-black text-neutral-600 leading-none mb-1 select-none">{{ formatStepNotes(step?.notes) }}</span>
+                <div class="space-y-1 mt-auto opacity-20">
+                  <div class="h-0.5 bg-neutral-700 rounded-full" :style="{ width: (step.velocity / 127 * 100) + '%' }" />
+                  <div class="h-0.5 bg-neutral-700 rounded-full" :style="{ width: step.gate + '%' }" />
                 </div>
               </template>
+              <template v-else>
+                <div class="h-full flex items-center justify-center opacity-20">
+                  <div class="w-1.5 h-1.5 rounded-full bg-neutral-500" />
+                </div>
+              </template>
+
+              <!-- Play Indicator (visible for active & inactive steps) -->
+              <div v-if="currentStep === idx && isPlaying" class="absolute inset-0 bg-amber-500/10 border-t-2 border-amber-400 pointer-events-none animate-pulse" />
             </div>
 
             <!-- Context Hint -->
