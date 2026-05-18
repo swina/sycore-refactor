@@ -44,6 +44,12 @@ function polyModeLabel(val) {
   return val === 0 ? 'MONO' : val === 1 ? 'UNISON' : val === 2 ? 'POLY' : 'CHORD'
 }
 
+function getPresetIndex(preset) {
+  const idx = presetStore.history.findIndex(p => p.id === preset.id)
+  if (idx === -1) return '+'
+  return presetStore.history.length - idx
+}
+
 // ─── Filtered preset list (uses store filter + optional text search) ──────────
 
 const filteredPresets = computed(() => presetStore.filteredHistory)
@@ -325,7 +331,7 @@ onMounted(() => {
 
                 <!-- Preset name -->
                 <h4 class="text-sm font-black uppercase tracking-tight text-neutral-200 truncate">
-                  {{ preset.name }}
+                  <span class="text-neutral-500 font-mono mr-1.5 text-xs">#{{ getPresetIndex(preset) }}</span>{{ preset.name }}
                 </h4>
               </div>
 

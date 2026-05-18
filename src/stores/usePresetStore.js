@@ -97,8 +97,8 @@ export const usePresetStore = defineStore('preset', () => {
     const colRef = collection(db, 'users', uid, 'presets')
     historyUnsubscribe = onSnapshot(colRef, async (snapshot) => {
       const presets = snapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data()
+        ...d.data(),
+        id: d.id
       })).sort((a, b) => {
         const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime()
         const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime()

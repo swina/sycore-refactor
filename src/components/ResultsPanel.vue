@@ -310,6 +310,13 @@ const isFavorite = computed(() => {
   return !!(id && presetStore.history.find(h => h.id === id)?.isFavorite)
 })
 
+const presetIndexLabel = computed(() => {
+  if (!selectedPreset.value) return ''
+  const idx = presetStore.history.findIndex(p => p.id === selectedPreset.value.id)
+  if (idx === -1) return ''
+  return `#${presetStore.history.length - idx} `
+})
+
 function getCategoryIcon(cat) {
   const map = { pad:'🎹', lead:'⚡', bass:'🔊', drum:'🥁', synth:'🎛️', ambient:'☁️',
     strings:'🎻', brass:'🎺', piano:'🎹', organ:'🎹', percussion:'🥁', pluck:'🎸',
@@ -389,7 +396,9 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 @click="startEditingName"
                 class="text-base font-black uppercase tracking-tight leading-tight hover:text-synth-neon cursor-pointer transition-colors group flex items-center gap-2 truncate text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]"
               >
-                <span class="truncate">{{ presetStore.hasUnsavedChanges ? `* ${presetStore.currentName}` : presetStore.currentName }}</span>
+                <span class="truncate">
+                  <span class="text-neutral-500 font-mono mr-1 text-sm font-normal">{{ presetIndexLabel }}</span>{{ presetStore.hasUnsavedChanges ? `* ${presetStore.currentName}` : presetStore.currentName }}
+                </span>
                 <Edit3 class="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-40" />
               </h2>
               <input

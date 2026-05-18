@@ -180,7 +180,14 @@ export class Query {
 
 export class DocumentSnapshot {
   constructor(public id: string, private _data: any) {}
-  data() { return this._data; }
+  data() {
+    if (!this._data) return this._data;
+    const result = { ...this._data };
+    if ('id' in result) {
+      result.id = this.id;
+    }
+    return result;
+  }
   exists() { return !!this._data; }
 }
 

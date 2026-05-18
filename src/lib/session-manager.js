@@ -29,7 +29,7 @@ export async function exportSession() {
     // 1. Fetch all presets from IDB for the current user
     const colRef = collection(db, 'users', uid, 'presets')
     const snapshot = await getDocs(colRef)
-    const presets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+    const presets = snapshot.docs.map(d => ({ ...d.data(), id: d.id }))
 
     // 2. Aggregate session data
     const sessionData = {
