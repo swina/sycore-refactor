@@ -190,16 +190,16 @@ onMounted(() => {
 
 <template>
   <div class="fixed inset-0 z-[120] max-h-[calc(100vh-40px)] pb-[30px] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-hidden p-4 md:p-8">
-    <div class="bg-neutral-950 border border-neutral-900 rounded-3xl max-w-4xl overflow-hidden shadow-2xl pt-[24px] pb-[24px]">
+    <div class="bg-neutral-950 border border-neutral-900 rounded-3xl max-w-4xl overflow-hidden shadow-2xl pb-[24px]">
 
       <!-- Hidden file input -->
       <input ref="fileInput" type="file" accept=".json,.sco" class="hidden" @change="handleFileUpload" />
 
       <!-- ── HEADER ── -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between p-6 md:p-8 gap-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between p-2 gap-4 bg-neutral-900">
 
         <!-- Title + slot count -->
-        <div class="flex flex-col items-center gap-3 w-full md:w-1/3 max-w-1/3">
+        <div class="flex flex-col items-start gap-3 w-full md:w-1/3 max-w-1/3">
           <div class="flex items-center gap-3">
             <Layers class="w-5 h-5 text-synth-neon" />
             <h2 class="text-xl font-black uppercase tracking-tight text-white">Sound Bank</h2>
@@ -213,7 +213,7 @@ onMounted(() => {
         </div>
 
         <!-- Controls row -->
-        <div class="flex flex-wrap items-start gap-3 border-b md:border-none border-neutral-800 pb-4 md:pb-0">
+        <div class="relative flex flex-col w-full items-start gap-3 border-b md:border-none border-neutral-800 pb-4 md:pb-0">
 
           <!-- Filter dropdown -->
           <div class="relative z-50">
@@ -275,13 +275,14 @@ onMounted(() => {
             >
               Restore Defaults
             </button>
-            <button
+            
+          </div>
+          <button
               @click="emit('close')"
-              class="text-[10px] font-mono text-neutral-500 hover:text-white uppercase tracking-widest px-3 py-2 transition-colors"
+              class="absolute top-0 right-0 text-[10px] font-mono text-neutral-500 hover:text-white uppercase tracking-widest px-3 py-2 transition-colors"
             >
               Close
             </button>
-          </div>
         </div>
       </div>
 
