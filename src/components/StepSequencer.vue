@@ -69,6 +69,9 @@ const STYLES = {
   Latin: { steps: 16, density: 0.55, octaves: [3, 4], velMin: 75, velMax: 115, gateMin: 30, gateMax: 60, accentGrid: [true, false, false, true, false, true, false, false, true, false, false, true, false, true, false, false] },
   Industrial: { steps: 16, density: 0.65, octaves: [1, 3], velMin: 100, velMax: 127, gateMin: 8, gateMax: 25 },
   Reggae: { steps: 16, density: 0.40, octaves: [3, 4], velMin: 70, velMax: 105, gateMin: 35, gateMax: 65, accentGrid: [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false] },
+  Pop: { steps: 16, density: 0.55, octaves: [3, 4], velMin: 80, velMax: 115, gateMin: 45, gateMax: 75, accentGrid: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
+  Rock: { steps: 16, density: 0.60, octaves: [2, 4], velMin: 90, velMax: 127, gateMin: 35, gateMax: 65, accentGrid: [true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false] },
+  Electronic: { steps: 16, density: 0.50, octaves: [3, 4], velMin: 85, velMax: 115, gateMin: 30, gateMax: 60, accentGrid: [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false] },
 }
 
 const SCALES = {
@@ -89,18 +92,33 @@ const SCALES = {
 }
 
 const STYLE_PROGRESSIONS = {
-  House: [[0, 3, 4, 3], [0, 5, 3, 4]],
-  Techno: [[0, 6, 5, 6], [0, 3, 0, 3]],
-  HipHop: [[0, 3, 4, 0], [1, 4, 0, 4]],
-  Acid: [[0, 6, 0, 6], [0, 3, 5, 3]],
+  House: [[0, 4, 7, 4, 0, 4, 7, 4],
+    [0, 2, 4, 5, 7, 5, 4, 2],
+    [0, 4, 5, 7, 5, 4, 0],[0, 3, 4, 3], [0, 5, 3, 4]],
+  Techno: [[0, 2, 4, 5, 7, 5, 4, 2],
+    [0, 7, 0, 7, 0, 7, 0, 7],
+    [0, 3, 7, 10, 7, 3, 0],[0, 6, 5, 6], [0, 3, 0, 3]],
+  HipHop: [ [0, 3, 5, 6, 5, 3, 0],
+    [0, 2, 3, 5, 7, 5, 3, 2],
+    [0, 3, 5, 7, 8, 7, 5, 3],[0, 3, 4, 0], [1, 4, 0, 4]],
+  Acid: [[0, 1, 3, 4, 6, 4, 3, 1],
+    [0, 2, 3, 5, 7, 5, 3, 2],
+    [0, 1, 2, 3, 4, 3, 2, 1],[0, 6, 0, 6], [0, 3, 5, 3]],
   Funk: [[0, 3, 0, 4], [1, 4, 0, 0]],
   Jazz: [[1, 4, 0, 5], [0, 5, 1, 4]],
   Ambient: [[0, 2, 3, 2], [0, 1, 3, 0]],
-  'Drum&Bass': [[0, 6, 5, 6], [0, 3, 0, 5]],
+  'Drum&Bass': [ [0, 2, 4, 5, 7, 9, 5, 4],
+    [0, 3, 5, 7, 8, 5, 3, 0],
+    [0, 2, 3, 5, 7, 5, 3, 2],[0, 6, 5, 6], [0, 3, 0, 5]],
   Minimal: [[0, 3, 0, 6], [0, 6, 0, 3]],
   Latin: [[0, 3, 4, 0], [0, 4, 3, 4]],
-  Industrial: [[0, 1, 0, 6], [0, 6, 5, 0]],
+  Industrial: [[0, 1, 6, 8, 6, 1, 0],
+    [0, 2, 6, 8, 6, 2, 0],
+    [0, 1, 4, 6, 8, 6, 4, 1],[0, 1, 0, 6], [0, 6, 5, 0]],
   Reggae: [[0, 3, 4, 3], [0, 4, 3, 0]],
+  Pop: [[0, 4, 5, 3], [0, 5, 3, 4]],
+  Rock: [[0, 6, 3, 0], [0, 3, 4, 0]],
+  Electronic: [[0, 2, 3, 5, 7, 5, 3, 2], [0, 3, 5, 4], [0, 5, 3, 4]],
 }
 
 function getNoteName(midiNote) {
