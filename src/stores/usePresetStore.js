@@ -254,7 +254,7 @@ export const usePresetStore = defineStore('preset', () => {
     // Sequencer
     const uiStore = useUiStore()
     if (variant.seqConfig) {
-      uiStore.seqCurrentConfig = variant.seqConfig
+      uiStore.seqCurrentConfig = JSON.parse(JSON.stringify(variant.seqConfig))
     } else {
       uiStore.seqCurrentConfig = null
     }

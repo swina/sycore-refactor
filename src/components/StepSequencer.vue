@@ -5,6 +5,7 @@ import { getTransport, getDraw, start as toneStart } from 'tone'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { usePresetStore } from '@/stores/usePresetStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { S1_CC_MAP } from '@/constants/s1-config'
 
@@ -30,6 +31,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop'])
 
 const midiStore = useMidiStore()
+const presetStore = usePresetStore()
 
 const DEFAULT_STEP = {
   active: false,
@@ -107,6 +109,9 @@ function formatStepNotes(notes) {
   return `${getNoteName(sortedNotes[0])}+${sortedNotes.length - 1}`
 }
 
+const hasP1Lock = (step) => step && step.param1Value !== undefined && step.param1Value !== 64
+const hasP2Lock = (step) => step && step.param2Value !== undefined && step.param2Value !== 64
+
 function buildChordNotes(scaleDegree, scaleIntervals, keyMidi, octave, voices) {
   const baseNote = (octave + 1) * 12 + keyMidi
   const len = scaleIntervals.length
@@ -166,6 +171,7 @@ const steps = ref((() => {
       ? saved.steps.map(s => {
           const step = { ...DEFAULT_STEP, ...s }
           step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+          step.explicitNotes = s.explicitNotes !== undefined ? s.explicitNotes : (s.notes && s.notes.length > 0 && !(s.notes.length === 1 && s.notes[0] === 60))
           return step
         })
       : Array(16).fill(null).map(() => ({ ...DEFAULT_STEP }))
@@ -217,10 +223,12 @@ const fadeOutIntervalRef = ref(null)
 const lastHandledNoteTimeRef = ref(0)
 const currentlyHeldNotes = ref(new Set())
 const recordedNotesForCurrentStep = ref([])
+const lastLiveRecordStepRef = ref(null)
 
 watch([isRecording, isPlaying, selectedStepIdx], () => {
   currentlyHeldNotes.value.clear()
   recordedNotesForCurrentStep.value = []
+  lastLiveRecordStepRef.value = null
 })
 
 const skipBackingTrackSync = ref(false)
@@ -325,6 +333,7 @@ watch(() => props.initialConfig, (cfg) => {
         steps.value = cfg.steps.map(s => {
           const step = { ...DEFAULT_STEP, ...s }
           step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+          step.explicitNotes = s.explicitNotes !== undefined ? s.explicitNotes : (s.notes && s.notes.length > 0 && !(s.notes.length === 1 && s.notes[0] === 60))
           return step
         })
       }
@@ -730,66 +739,133 @@ onMounted(() => {
   }
   window.addEventListener('toggle-sequencer', handleToggle)
 
+  const isMidiDeviceAllowed = (chan, inputId) => {
+    if (!inputId) return true
+
+    const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+    if (!inputDevice) {
+      if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Input device not found for ID: ${inputId}`)
+      return false
+    }
+
+    const deviceName = inputDevice.name
+    
+    const normalizeName = (name) => {
+      if (!name) return ''
+      return name.toLowerCase()
+        .replace(/^(1-|2-|midi\s+|usb\s+|port\s+)/i, '')
+        .replace(/(midi\s+port|midi\s+in|midi\s+out)$/i, '')
+        .trim()
+    }
+
+    const normDevice = normalizeName(deviceName)
+
+    // 1. Basic config checks (if exists in registrations)
+    const config = Object.entries(midiStore.routingConfig?.registrations || {}).find(([key]) => {
+      const normKey = normalizeName(key)
+      return normKey === normDevice || normKey.includes(normDevice) || normDevice.includes(normKey)
+    })?.[1]
+
+    if (config) {
+      if (!config.inEnabled) {
+        if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (inEnabled=false)`)
+        return false
+      }
+      if (config.inChannel !== -1 && config.inChannel !== chan) {
+        if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (channel mismatch: expected ${config.inChannel}, got ${chan})`)
+        return false
+      }
+    }
+
+    // 2. Performance Matrix matching (if not in broadcast mode)
+    if (!midiStore.broadcastMode) {
+      const seqTargets = midiStore.routingMatrix?.['SEQUENCER'] || []
+      
+      // Match by normalized name
+      const deviceTargets = Object.entries(midiStore.routingMatrix || {}).find(([key]) => {
+        const normKey = normalizeName(key)
+        return normKey === normDevice || normKey.includes(normDevice) || normDevice.includes(normKey)
+      })?.[1] || []
+
+      // Check if the input device itself is one of the sequencer targets
+      const isTargetSynth = seqTargets.some(sTarget => {
+        const normTarget = normalizeName(sTarget)
+        return normTarget === normDevice || normTarget.includes(normDevice) || normDevice.includes(normTarget)
+      })
+
+      if (isTargetSynth) {
+        if (window.SY_LOG) {
+          window.SY_LOG(`[Seq Ingress] Allowed ${deviceName} as it is the target synthesizer itself`)
+        }
+        return true
+      }
+
+      // Case-insensitive trimmed target comparison
+      const hasCommonTarget = seqTargets.some(sTarget => 
+        deviceTargets.some(dTarget => sTarget.toLowerCase().trim() === dTarget.toLowerCase().trim())
+      )
+      
+      if (window.SY_LOG) {
+        window.SY_LOG(`[Seq Ingress] ${deviceName} (${normDevice}) -> seqTargets: [${seqTargets.join(', ')}], deviceTargets: [${deviceTargets.join(', ')}], hasCommonTarget: ${hasCommonTarget}`)
+      }
+
+      if (!hasCommonTarget) return false
+    }
+
+    return true
+  }
+
   const handleIncomingNote = (type, note, velocity, chan, inputId) => {
     if (!props.isOpen) return
 
     // MIDI Performance routing matrix checks
-    if (inputId) {
-      const inputDevice = midiService.getInputs().find(i => i.id === inputId)
-      if (inputDevice) {
-        const deviceName = inputDevice.name
-        
-        const normalizeName = (name) => {
-          if (!name) return ''
-          return name.toLowerCase()
-            .replace(/^(1-|2-|midi\s+|usb\s+|port\s+)/i, '')
-            .replace(/(midi\s+port|midi\s+in|midi\s+out)$/i, '')
-            .trim()
-        }
+    if (!isMidiDeviceAllowed(chan, inputId)) return
+    
+    // Live overdub recording during PLAY + RECORD mode
+    if (isPlaying.value && isRecording.value) {
+      const isNoteOn = (type === 'on' && velocity > 0)
+      const isNoteOff = (type === 'off' || (type === 'on' && velocity === 0))
 
-        const normDevice = normalizeName(deviceName)
+      if (isNoteOn) {
+        // 1. Make the note audible immediately
+        midiStore.sendNoteOn(note, velocity, props.channel || 1, MidiSource.SEQUENCER)
 
-        // 1. Basic config checks (if exists in registrations)
-        const config = Object.entries(midiStore.routingConfig?.registrations || {}).find(([key]) => {
-          const normKey = normalizeName(key)
-          return normKey === normDevice || normKey.includes(normDevice) || normDevice.includes(normKey)
-        })?.[1]
+        // 2. Record it onto the currently active play step (overdub/overwrite)
+        const stepIdx = currentStep.value
+        if (stepIdx !== null && stepIdx >= 0 && stepIdx < steps.value.length) {
+          const currentStepObj = steps.value[stepIdx]
+          let newNotes = []
 
-        if (config) {
-          if (!config.inEnabled) {
-            if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (inEnabled=false)`)
-            return
+          if (lastLiveRecordStepRef.value === stepIdx) {
+            // Same step tick: append to chord
+            newNotes = [...(currentStepObj.notes || [])]
+            if (!newNotes.includes(note)) {
+              newNotes.push(note)
+            }
+          } else {
+            // New step tick: overwrite notes
+            newNotes = [note]
+            lastLiveRecordStepRef.value = stepIdx
           }
-          if (config.inChannel !== -1 && config.inChannel !== chan) {
-            if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (channel mismatch: expected ${config.inChannel}, got ${chan})`)
-            return
+          newNotes.sort((a, b) => a - b)
+
+          const updates = {
+            active: true,
+            notes: newNotes,
+            velocity: velocity,
+            edited: true,
+            explicitNotes: true
           }
-        }
-
-        // 2. Performance Matrix matching (if not in broadcast mode)
-        if (!midiStore.broadcastMode) {
-          const seqTargets = midiStore.routingMatrix?.['SEQUENCER'] || []
-          
-          // Match by normalized name
-          const deviceTargets = Object.entries(midiStore.routingMatrix || {}).find(([key]) => {
-            const normKey = normalizeName(key)
-            return normKey === normDevice || normKey.includes(normDevice) || normDevice.includes(normKey)
-          })?.[1] || []
-
-          // Case-insensitive trimmed target comparison
-          const hasCommonTarget = seqTargets.some(sTarget => 
-            deviceTargets.some(dTarget => sTarget.toLowerCase().trim() === dTarget.toLowerCase().trim())
-          )
-          
-          if (window.SY_LOG) {
-            window.SY_LOG(`[Seq Ingress] ${deviceName} (${normDevice}) -> seqTargets: [${seqTargets.join(', ')}], deviceTargets: [${deviceTargets.join(', ')}], hasCommonTarget: ${hasCommonTarget}`)
+          if (!currentStepObj.gate || currentStepObj.gate === 0) {
+            updates.gate = 50
           }
-
-          if (!hasCommonTarget) return
+          updateStep(stepIdx, updates)
         }
-      } else {
-        if (window.SY_LOG) window.SY_LOG(`[Seq Ingress] Input device not found for ID: ${inputId}`)
+      } else if (isNoteOff) {
+        // Make the note-off audible immediately
+        midiStore.sendNoteOff(note, 0, props.channel || 1, MidiSource.SEQUENCER)
       }
+      return
     }
     
     // Dynamic transposition during PLAY mode (not recording)
@@ -824,7 +900,8 @@ onMounted(() => {
       const updates = { 
         active: true, 
         notes: [...recordedNotesForCurrentStep.value], 
-        velocity 
+        velocity,
+        explicitNotes: true
       }
       
       if (!currentStepObj.gate || currentStepObj.gate === 0) {
@@ -844,8 +921,59 @@ onMounted(() => {
     }
   }
 
+  const handleIncomingCC = (cc, val, chan, inputId) => {
+    if (!props.isOpen) return
+    if (!isRecording.value) return
+
+    // MIDI Performance routing matrix checks
+    if (!isMidiDeviceAllowed(chan, inputId)) return
+
+    const isP1 = (param1CC.value !== null && Number(cc) === Number(param1CC.value))
+    const isP2 = (param2CC.value !== null && Number(cc) === Number(param2CC.value))
+    if (!isP1 && !isP2) return
+
+    let stepIdx = null
+    if (isPlaying.value) {
+      stepIdx = currentStep.value
+    } else {
+      stepIdx = selectedStepIdx.value
+    }
+
+    if (stepIdx === null || stepIdx < 0 || stepIdx >= steps.value.length) {
+      if (!isPlaying.value && window.SY_LOG) {
+        window.SY_LOG(`[Seq CC Record] Blocked: select a step to lock CC#${cc} while sequencer is stopped`)
+      }
+      return
+    }
+
+    const currentStepObj = steps.value[stepIdx]
+
+    const updates = {}
+    if (isP1) {
+      updates.param1Value = val
+    } else if (isP2) {
+      updates.param2Value = val
+    }
+    updates.edited = true
+    updates.active = true // Auto-activate step when parameter lock is recorded to ensure playback
+
+    // If the step has no explicitly recorded notes from a MIDI NOTE message, keep notes empty
+    if (!currentStepObj.explicitNotes) {
+      updates.notes = []
+    }
+
+    updateStep(stepIdx, updates)
+    if (window.SY_LOG) {
+      window.SY_LOG(`[Seq CC Record] Step ${stepIdx + 1} locked ${isP1 ? 'P1' : 'P2'} (CC#${cc}) = ${val}`)
+    }
+  }
+
   const unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
     handleIncomingNote(type, note, velocity, chan, inputId)
+  })
+
+  const unsubCC = midiService.addCCListener((cc, val, chan, inputId) => {
+    handleIncomingCC(cc, val, chan, inputId)
   })
 
   const handleVirtualNote = (e) => {
@@ -859,6 +987,7 @@ onMounted(() => {
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('sequencer-action', handleSequencerAction)
     unsubNote?.()
+    unsubCC?.()
   }
 })
 
@@ -965,8 +1094,8 @@ watch(isPlaying, (playing) => {
     steps: steps.value,
     bpm: props.bpm,
     channel: props.channel,
-    param1CC: param1CC.value,
-    param2CC: param2CC.value,
+    param1CC: param1CC.value !== null ? Number(param1CC.value) : null,
+    param2CC: param2CC.value !== null ? Number(param2CC.value) : null,
     transpose: props.globalTranspose || 0,
     dynamicMidiTranspose: dynamicMidiTranspose.value
   }
@@ -1035,6 +1164,65 @@ const handleKeyNudge = (stepField, e) => {
 
 const confirmClear = ref(false)
 const clearTimer = ref(null)
+const showReloadConfirm = ref(false)
+
+const hasSavedSeqConfig = computed(() => {
+  if (presetStore.lastPreset) {
+    const isAlt = presetStore.useAlternativeEngine
+    const variant = isAlt ? presetStore.lastPreset.bVariant : presetStore.lastPreset.aVariant
+    return !!(variant && variant.seqConfig)
+  }
+  return !!props.initialConfig
+})
+
+function handleReload() {
+  showReloadConfirm.value = true
+}
+
+function executeReload() {
+  let cfg = null
+  if (presetStore.lastPreset) {
+    const isAlt = presetStore.useAlternativeEngine
+    const variant = isAlt ? presetStore.lastPreset.bVariant : presetStore.lastPreset.aVariant
+    if (variant && variant.seqConfig) {
+      cfg = variant.seqConfig
+    }
+  }
+
+  if (!cfg && props.initialConfig) {
+    cfg = props.initialConfig
+  }
+
+  if (cfg) {
+    if (cfg.numSteps !== undefined) {
+      numSteps.value = cfg.numSteps
+    }
+    if (cfg.steps !== undefined) {
+      steps.value = cfg.steps.map(s => {
+        const step = { ...DEFAULT_STEP, ...s }
+        step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+        step.explicitNotes = s.explicitNotes !== undefined ? s.explicitNotes : (s.notes && s.notes.length > 0 && !(s.notes.length === 1 && s.notes[0] === 60))
+        return step
+      })
+    }
+    if (cfg.param1CC !== undefined) param1CC.value = cfg.param1CC
+    if (cfg.param2CC !== undefined) param2CC.value = cfg.param2CC
+    if (cfg.param1Variation !== undefined) param1Variation.value = cfg.param1Variation
+    if (cfg.param2Variation !== undefined) param2Variation.value = cfg.param2Variation
+    if (cfg.transpose !== undefined) {
+      emit('transposeChange', cfg.transpose)
+    }
+
+    emit('configChange', {
+      numSteps: numSteps.value,
+      steps: steps.value,
+      param1CC: param1CC.value,
+      param2CC: param2CC.value,
+      param1Variation: param1Variation.value,
+      param2Variation: param2Variation.value
+    })
+  }
+}
 
 function handleClear() {
   if (!confirmClear.value) {
@@ -1269,6 +1457,15 @@ function handleClear() {
 
         <!-- Toolbar Actions -->
         <div class="flex items-center gap-2 ml-auto">
+          <button 
+            v-if="hasSavedSeqConfig"
+            @click="handleReload"
+            class="h-9 px-4 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm bg-black text-neutral-500 border-neutral-800 hover:border-synth-neon/50 hover:text-synth-neon flex items-center gap-1.5"
+          >
+            <RotateCcw class="w-3.5 h-3.5" />
+            RELOAD
+          </button>
+          
           <button @click="handleClear"
             :class="['h-9 px-4 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm', confirmClear ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-neutral-500 border-neutral-800 hover:border-neutral-700']">
             {{ confirmClear ? 'SURE?' : 'CLEAR' }}
@@ -1429,6 +1626,12 @@ function handleClear() {
                 </div>
               </template>
 
+              <!-- Parameter Lock Indicators -->
+              <div class="absolute bottom-1 right-1 flex gap-1 z-20">
+                <div v-if="hasP1Lock(step)" class="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_4px_#22d3ee] animate-pulse" title="P1 Locked" />
+                <div v-if="hasP2Lock(step)" class="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-[0_0_4px_#818cf8] animate-pulse" title="P2 Locked" />
+              </div>
+
               <!-- Play Indicator (visible for active & inactive steps) -->
               <div v-if="currentStep === idx && isPlaying" class="absolute inset-0 bg-amber-500/10 border-t-2 border-amber-400 pointer-events-none animate-pulse" />
             </div>
@@ -1452,6 +1655,42 @@ function handleClear() {
           S-1 TWEAK // {{ selectedStyle }}
         </div>
       </div>
+
+      <!-- ── RELOAD CONFIRMATION MODAL (Vue custom) ── -->
+      <Transition name="fade">
+        <div v-if="showReloadConfirm" class="absolute inset-0 bg-black/85 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+          <div class="bg-neutral-950 border border-amber-500/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative overflow-hidden flex flex-col items-center text-center gap-4">
+            <!-- Neon amber pulsing top stripe -->
+            <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-red-500 via-amber-500 to-red-500 animate-pulse" />
+            
+            <div class="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+              <RotateCcw class="w-5 h-5 animate-spin" style="animation-duration: 4s;" />
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <h3 class="text-xs font-mono font-black uppercase text-amber-400 tracking-[0.2em]">Reload Saved Pattern</h3>
+              <p class="text-[10px] text-neutral-400 font-mono leading-relaxed mt-1 uppercase tracking-wider">
+                Current active sequence will be overwritten.<br />Are you sure you want to reload?
+              </p>
+            </div>
+
+            <div class="flex items-center gap-3 w-full mt-2 font-mono">
+              <button 
+                @click="showReloadConfirm = false"
+                class="flex-1 h-8 rounded border border-neutral-800 bg-neutral-900/50 hover:bg-neutral-800 text-[10px] font-bold text-neutral-400 hover:text-white transition-all uppercase tracking-wider"
+              >
+                CANCEL
+              </button>
+              <button 
+                @click="() => { showReloadConfirm = false; executeReload() }"
+                class="flex-1 h-8 rounded bg-amber-500 hover:bg-amber-400 text-[10px] font-bold text-black transition-all uppercase tracking-wider shadow-lg shadow-amber-500/10"
+              >
+                RELOAD
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -1472,4 +1711,7 @@ input[type=range] { -webkit-appearance: none; appearance: none; background: tran
 input[type=range]:focus { outline: none; }
 input[type=range]::-webkit-slider-runnable-track { background: #171717; height: 4px; border-radius: 2px; }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 10px; width: 10px; border-radius: 50%; background: currentColor; margin-top: -3px; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
