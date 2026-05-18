@@ -689,6 +689,8 @@ export class MidiService {
 
   allNotesOff(channel: number = 0) {
     this.broadcast('allnotesoff', {}, channel, MidiSource.UI);
+    this.sendCC(120, 0, channel, MidiSource.UI);
+    this.sendCC(64, 0, channel, MidiSource.UI);
   }
 
   panic() {

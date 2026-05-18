@@ -188,7 +188,7 @@ export function useAppActions() {
         if (window.SY_LOG) window.SY_LOG(`[AppActions] AUDIO CAPTURE: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
         uiStore.isAudioCaptureOpen = ccVal > 63;
         break
-      case 'open_sound_types': if (ccVal > 63) uiStore.isTypesOpen = true; break
+      case 'open_sound_types': uiStore.isTypesOpen = !uiStore.isTypesOpen; break
       case 'open_sound_history': uiStore.isHistoryOpen = !uiStore.isHistoryOpen; break
       case 'open_midi_matrix': if (ccVal > 63) uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
       case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
@@ -248,6 +248,13 @@ export function useAppActions() {
       case 'transpose_cc':
         // Map CC value 0-127 → transpose -24..+24
         uiStore.globalTranspose = Math.round((ccVal / 127) * 48) - 24; break
+
+      case 'seq_select_1':
+        if (ccVal > 63) uiStore.seqActiveSlot = 1
+        window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
+      case 'seq_select_2':
+        if (ccVal > 63) uiStore.seqActiveSlot = 2
+        window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
 
       case 'seq_swing_cc':
       case 'seq_density_cc':

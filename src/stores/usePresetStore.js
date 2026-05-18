@@ -187,6 +187,8 @@ export const usePresetStore = defineStore('preset', () => {
         hold: useArpStore().arpHold
       },
       seqConfig: useUiStore().seqCurrentConfig || null,
+      seqConfig2: useUiStore().seqCurrentConfig2 || null,
+      seqActiveSlot: useUiStore().seqActiveSlot || 1,
       lfo1Config: { ...useLfoStore().lfo1, lastSentValue: null },
       lfo2Config: { ...useLfoStore().lfo2, lastSentValue: null },
       velocityConfig: {
@@ -205,6 +207,8 @@ export const usePresetStore = defineStore('preset', () => {
       patchNotes: patchNotes || '',
       arpConfig: meta.arpConfig,
       seqConfig: meta.seqConfig,
+      seqConfig2: meta.seqConfig2,
+      seqActiveSlot: meta.seqActiveSlot,
       velocityConfig: meta.velocityConfig,
       lfo1Config: meta.lfo1Config,
       lfo2Config: meta.lfo2Config
@@ -258,6 +262,14 @@ export const usePresetStore = defineStore('preset', () => {
     } else {
       uiStore.seqCurrentConfig = null
     }
+
+    if (variant.seqConfig2) {
+      uiStore.seqCurrentConfig2 = JSON.parse(JSON.stringify(variant.seqConfig2))
+    } else {
+      uiStore.seqCurrentConfig2 = null
+    }
+
+    uiStore.seqActiveSlot = variant.seqActiveSlot || 1
   }
 
   function recallPreset(preset, shouldAutoPlay = true) {
@@ -276,9 +288,11 @@ export const usePresetStore = defineStore('preset', () => {
         data: aData,
         patchNotes: preset.patchNotes || '',
         ...aMeta,
-        seqConfig: preset.seqConfig || null
+        seqConfig: preset.seqConfig || null,
+        seqConfig2: preset.seqConfig2 || null,
+        seqActiveSlot: preset.seqActiveSlot || 1
       }
-
+      
       if (preset.abVariant) {
         preset.bVariant = {
           data: preset.abVariant.data || {},
@@ -287,7 +301,9 @@ export const usePresetStore = defineStore('preset', () => {
           velocityConfig: preset.abVariant.velocityConfig || preset.velocityConfig || null,
           lfo1Config: preset.abVariant.lfo1Config || preset.lfo1Config || null,
           lfo2Config: preset.abVariant.lfo2Config || preset.lfo2Config || null,
-          seqConfig: preset.abVariant.seqConfig || preset.seqConfig || null
+          seqConfig: preset.abVariant.seqConfig || preset.seqConfig || null,
+          seqConfig2: preset.abVariant.seqConfig2 || null,
+          seqActiveSlot: preset.abVariant.seqActiveSlot || 1
         }
       } else {
         // Create B as a clone of A if it doesn't exist
@@ -302,6 +318,8 @@ export const usePresetStore = defineStore('preset', () => {
       delete preset.lfo1Config
       delete preset.lfo2Config
       delete preset.seqConfig
+      delete preset.seqConfig2
+      delete preset.seqActiveSlot
     }
 
     lastPreset.value = preset

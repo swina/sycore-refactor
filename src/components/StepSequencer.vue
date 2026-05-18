@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw } from 'lucide-vue-next'
+import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
@@ -8,6 +8,8 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { S1_CC_MAP } from '@/constants/s1-config'
+import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -26,12 +28,20 @@ const props = defineProps({
   midiMappings: Object,
   initialConfig: Object,
   currentPresetCCValues: Object,
+  activeSlot: { type: Number, default: 1 }
 })
 
-const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop'])
+const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'activeSlotChange'])
 
 const midiStore = useMidiStore()
 const presetStore = usePresetStore()
+const authStore = useAuthStore()
+
+const showSaveLibraryModal = ref(false)
+const showLoadLibraryModal = ref(false)
+const libraryPatternName = ref('')
+const libraryPatterns = ref([])
+const loadingLibrary = ref(false)
 
 const DEFAULT_STEP = {
   active: false,
@@ -224,6 +234,8 @@ const lastHandledNoteTimeRef = ref(0)
 const currentlyHeldNotes = ref(new Set())
 const recordedNotesForCurrentStep = ref([])
 const lastLiveRecordStepRef = ref(null)
+const activeTimeouts = ref([])
+const activeMidiNotes = ref(new Set())
 
 watch([isRecording, isPlaying, selectedStepIdx], () => {
   currentlyHeldNotes.value.clear()
@@ -236,6 +248,127 @@ const skipBackingTrackSync = ref(false)
 watch(syncTrack, (val) => {
   syncTrackStorage.value = val
 }, { deep: true })
+
+function openSaveLibraryModal() {
+  if (!authStore.user) return
+  libraryPatternName.value = `${props.currentSoundName || 'Pattern'} Slot ${props.activeSlot}`
+  showSaveLibraryModal.value = true
+}
+
+async function savePatternToLibrary() {
+  if (!authStore.user || !libraryPatternName.value.trim()) return
+  
+  const uid = authStore.user.uid
+  const patternName = libraryPatternName.value.trim()
+  const patternId = `seq_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  
+  const docRef = doc(db, 'users', uid, 'sequences', patternId)
+  
+  const config = {
+    numSteps: numSteps.value,
+    steps: JSON.parse(JSON.stringify(steps.value)),
+    param1CC: param1CC.value,
+    param2CC: param2CC.value,
+    param1Variation: param1Variation.value,
+    param2Variation: param2Variation.value,
+    transpose: props.globalTranspose || 0,
+    selectedOctave: selectedOctave.value,
+    octaveRange: octaveRange.value,
+  }
+
+  const data = {
+    id: patternId,
+    name: patternName,
+    key: selectedKey.value,
+    scale: selectedScale.value,
+    style: selectedStyle.value,
+    config,
+    createdAt: new Date().toISOString()
+  }
+
+  try {
+    await setDoc(docRef, data)
+    showSaveLibraryModal.value = false
+  } catch (err) {
+    console.error('Failed to save pattern to library:', err)
+  }
+}
+
+async function openLoadLibraryModal() {
+  if (!authStore.user) return
+  showLoadLibraryModal.value = true
+  await fetchLibraryPatterns()
+}
+
+async function fetchLibraryPatterns() {
+  if (!authStore.user) return
+  loadingLibrary.value = true
+  try {
+    const uid = authStore.user.uid
+    const colRef = collection(db, 'users', uid, 'sequences')
+    const snap = await getDocs(colRef)
+    libraryPatterns.value = snap.docs.map(d => d.data()).sort((a, b) => {
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    })
+  } catch (err) {
+    console.error('Failed to fetch library patterns:', err)
+  } finally {
+    loadingLibrary.value = false
+  }
+}
+
+function loadPatternFromLibrary(pattern) {
+  const cfg = pattern.config
+  if (cfg) {
+    if (cfg.numSteps !== undefined) numSteps.value = cfg.numSteps
+    if (cfg.steps !== undefined) {
+      steps.value = cfg.steps.map(s => {
+        const step = { ...DEFAULT_STEP, ...s }
+        step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+        step.explicitNotes = s.explicitNotes !== undefined ? s.explicitNotes : (s.notes && s.notes.length > 0 && !(s.notes.length === 1 && s.notes[0] === 60))
+        return step
+      })
+    }
+    if (cfg.param1CC !== undefined) param1CC.value = cfg.param1CC
+    if (cfg.param2CC !== undefined) param2CC.value = cfg.param2CC
+    if (cfg.param1Variation !== undefined) param1Variation.value = cfg.param1Variation
+    if (cfg.param2Variation !== undefined) param2Variation.value = cfg.param2Variation
+    if (cfg.transpose !== undefined) {
+      emit('transposeChange', cfg.transpose)
+    }
+    if (cfg.selectedOctave !== undefined) selectedOctave.value = cfg.selectedOctave
+    if (cfg.octaveRange !== undefined) octaveRange.value = cfg.octaveRange
+    
+    if (pattern.key) selectedKey.value = pattern.key
+    if (pattern.scale) selectedScale.value = pattern.scale
+    if (pattern.style) selectedStyle.value = pattern.style
+
+    emit('configChange', {
+      numSteps: numSteps.value,
+      steps: steps.value,
+      param1CC: param1CC.value,
+      param2CC: param2CC.value,
+      param1Variation: param1Variation.value,
+      param2Variation: param2Variation.value,
+      transpose: props.globalTranspose || 0,
+      selectedOctave: selectedOctave.value,
+      octaveRange: octaveRange.value
+    })
+  }
+  showLoadLibraryModal.value = false
+}
+
+async function deletePatternFromLibrary(patternId) {
+  if (!authStore.user) return
+  try {
+    const uid = authStore.user.uid
+    const docRef = doc(db, 'users', uid, 'sequences', patternId)
+    await deleteDoc(docRef)
+    await fetchLibraryPatterns()
+  } catch (err) {
+    console.error('Failed to delete pattern:', err)
+  }
+}
 
 let lastEmittedConfig = null;
 
@@ -269,7 +402,12 @@ watch(numSteps, (newVal) => {
   }, 800)
 })
 
-watch([numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange, () => props.globalTranspose, () => props.bpm, dynamicMidiTranspose], () => {
+watch([
+  numSteps, steps, param1CC, param2CC, param1Variation, param2Variation,
+  selectedOctave, octaveRange, () => props.globalTranspose, () => props.bpm,
+  dynamicMidiTranspose, selectedKey, selectedScale, selectedStyle,
+  genDensity, chordsEnabled, maxPolyphony, chordDensity
+], () => {
   const config = { 
     numSteps: numSteps.value, 
     steps: steps.value, 
@@ -280,7 +418,14 @@ watch([numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, se
     selectedOctave: selectedOctave.value,
     octaveRange: octaveRange.value,
     transpose: props.globalTranspose || 0,
-    bpm: props.bpm || 120
+    bpm: props.bpm || 120,
+    selectedKey: selectedKey.value,
+    selectedScale: selectedScale.value,
+    selectedStyle: selectedStyle.value,
+    genDensity: genDensity.value,
+    chordsEnabled: chordsEnabled.value,
+    maxPolyphony: maxPolyphony.value,
+    chordDensity: chordDensity.value
   }
   seqStateStorage.value = config
   lastEmittedConfig = config
@@ -309,7 +454,16 @@ watch(() => props.initialConfig, (cfg) => {
        cfg.param1CC === lastEmittedConfig.param1CC &&
        cfg.param2CC === lastEmittedConfig.param2CC &&
        cfg.param1Variation === lastEmittedConfig.param1Variation &&
-       cfg.param2Variation === lastEmittedConfig.param2Variation)
+       cfg.param2Variation === lastEmittedConfig.param2Variation &&
+       cfg.selectedKey === lastEmittedConfig.selectedKey &&
+       cfg.selectedScale === lastEmittedConfig.selectedScale &&
+       cfg.selectedStyle === lastEmittedConfig.selectedStyle &&
+       cfg.genDensity === lastEmittedConfig.genDensity &&
+       cfg.chordsEnabled === lastEmittedConfig.chordsEnabled &&
+       cfg.selectedOctave === lastEmittedConfig.selectedOctave &&
+       cfg.octaveRange === lastEmittedConfig.octaveRange &&
+       cfg.maxPolyphony === lastEmittedConfig.maxPolyphony &&
+       cfg.chordDensity === lastEmittedConfig.chordDensity)
     )) {
       return
     }
@@ -353,6 +507,39 @@ watch(() => props.initialConfig, (cfg) => {
     if (cfg.transpose !== undefined && props.globalTranspose !== cfg.transpose) {
       emit('transposeChange', cfg.transpose)
     }
+
+    // Restore generator and style settings
+    if (cfg.selectedKey !== undefined && selectedKey.value !== cfg.selectedKey) {
+      selectedKey.value = cfg.selectedKey
+    }
+    if (cfg.selectedScale !== undefined && selectedScale.value !== cfg.selectedScale) {
+      selectedScale.value = cfg.selectedScale
+    }
+    if (cfg.selectedStyle !== undefined && selectedStyle.value !== cfg.selectedStyle) {
+      selectedStyle.value = cfg.selectedStyle
+    }
+    if (cfg.genDensity !== undefined && genDensity.value !== cfg.genDensity) {
+      genDensity.value = cfg.genDensity
+    }
+    if (cfg.chordsEnabled !== undefined && chordsEnabled.value !== cfg.chordsEnabled) {
+      chordsEnabled.value = cfg.chordsEnabled
+    }
+    if (cfg.selectedOctave !== undefined && selectedOctave.value !== cfg.selectedOctave) {
+      selectedOctave.value = cfg.selectedOctave
+    }
+    if (cfg.octaveRange !== undefined && octaveRange.value !== cfg.octaveRange) {
+      octaveRange.value = cfg.octaveRange
+    }
+    if (cfg.maxPolyphony !== undefined && maxPolyphony.value !== cfg.maxPolyphony) {
+      maxPolyphony.value = cfg.maxPolyphony
+    }
+    if (cfg.chordDensity !== undefined && chordDensity.value !== cfg.chordDensity) {
+      chordDensity.value = cfg.chordDensity
+    }
+  } else {
+    // Reset steps to a clean state when initialConfig is null/undefined
+    numSteps.value = 16
+    steps.value = Array(16).fill(null).map(() => ({ ...DEFAULT_STEP }))
   }
 }, { immediate: true })
 
@@ -719,6 +906,12 @@ onMounted(() => {
         }
         break
       }
+      case 'seq_select_1':
+        if (val > 63) emit('activeSlotChange', 1)
+        break
+      case 'seq_select_2':
+        if (val > 63) emit('activeSlotChange', 2)
+        break
     }
   }
   window.addEventListener('sequencer-action', handleSequencerAction)
@@ -1016,30 +1209,32 @@ watch(isPlaying, (playing) => {
       getTransport().clear(repeatEventIdRef.value)
       repeatEventIdRef.value = null
     }
+
+    if (fadeOutIntervalRef.value !== null) {
+      clearInterval(fadeOutIntervalRef.value)
+      fadeOutIntervalRef.value = null
+    }
+
+    // 1. Clear all active note-off timeouts
+    activeTimeouts.value.forEach(id => clearTimeout(id))
+    activeTimeouts.value = []
+
+    // 2. Send Note Off for all active MIDI notes immediately
+    activeMidiNotes.value.forEach(key => {
+      const [noteStr, chanStr] = key.split('-')
+      const note = parseInt(noteStr)
+      const chan = parseInt(chanStr)
+      midiStore.sendNoteOff(note, 0, chan, MidiSource.SEQUENCER)
+    })
+    activeMidiNotes.value.clear()
+
     midiStore.sendStop()
     midiStore.allNotesOff(props.channel)
 
-    let fadeStep = 0
-    const fadeSteps = 20
-    const intervalMs = 500 / fadeSteps
+    // Ensure Expression CC#11 is fully open at 127 immediately
+    midiStore.sendCC(11, 127, props.channel, MidiSource.SEQUENCER)
 
-    if (fadeOutIntervalRef.value !== null) clearInterval(fadeOutIntervalRef.value)
-
-    fadeOutIntervalRef.value = window.setInterval(() => {
-      fadeStep++
-      const ratio = 1 - (fadeStep / fadeSteps)
-      midiStore.sendCC(11, Math.max(0, Math.floor(127 * ratio)), props.channel, MidiSource.SEQUENCER)
-
-      if (fadeStep >= fadeSteps) {
-        if (fadeOutIntervalRef.value !== null) {
-          clearInterval(fadeOutIntervalRef.value)
-          fadeOutIntervalRef.value = null
-        }
-        emit('stop')
-        setTimeout(() => midiStore.sendCC(11, 127, props.channel, MidiSource.SEQUENCER), 50)
-      }
-    }, intervalMs)
-
+    emit('stop')
     currentStep.value = 0
   } else {
     if (fadeOutIntervalRef.value !== null) {
@@ -1057,6 +1252,7 @@ watch(isPlaying, (playing) => {
 
       repeatEventIdRef.value = getTransport().scheduleRepeat((time) => {
         const state = playStateRef.current
+        if (!state.isPlaying) return
         stepCounter = stepCounter % state.steps.length
         const stepIdx = stepCounter
         stepCounter = (stepCounter + 1) % state.steps.length
@@ -1074,7 +1270,16 @@ watch(isPlaying, (playing) => {
           step.notes.forEach(note => {
             const clampedNote = Math.max(0, Math.min(127, note + state.transpose + (state.dynamicMidiTranspose || 0)))
             midiStore.sendNoteOn(clampedNote, step.velocity, state.channel, MidiSource.SEQUENCER)
-            window.setTimeout(() => midiStore.sendNoteOff(clampedNote, 0, state.channel, MidiSource.SEQUENCER), noteDurationMs)
+            
+            const noteKey = `${clampedNote}-${state.channel}`
+            activeMidiNotes.value.add(noteKey)
+
+            const timeoutId = window.setTimeout(() => {
+              midiStore.sendNoteOff(clampedNote, 0, state.channel, MidiSource.SEQUENCER)
+              activeMidiNotes.value.delete(noteKey)
+              activeTimeouts.value = activeTimeouts.value.filter(id => id !== timeoutId)
+            }, noteDurationMs)
+            activeTimeouts.value.push(timeoutId)
           })
         }
 
@@ -1134,6 +1339,19 @@ onUnmounted(() => {
   if (rafRef.value !== null) {
     cancelAnimationFrame(rafRef.value)
   }
+
+  // Clear timeouts
+  activeTimeouts.value.forEach(id => clearTimeout(id))
+  activeTimeouts.value = []
+
+  // Send Note Offs
+  activeMidiNotes.value.forEach(key => {
+    const [noteStr, chanStr] = key.split('-')
+    const note = parseInt(noteStr)
+    const chan = parseInt(chanStr)
+    midiStore.sendNoteOff(note, 0, chan, MidiSource.SEQUENCER)
+  })
+  activeMidiNotes.value.clear()
 })
 const handleKeyNudge = (stepField, e) => {
   if (selectedStepIdx.value === null) return;
@@ -1282,6 +1500,22 @@ function handleClear() {
               <ChevronRight class="w-3.5 h-3.5" />
             </button>
           </div>
+
+          <!-- Dual sequence slot selector -->
+          <div class="flex items-center bg-black/60 border border-neutral-800 rounded-lg p-0.5 font-mono text-[9px]">
+            <button 
+              @click="emit('activeSlotChange', 1)"
+              :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', activeSlot === 1 ? 'bg-synth-neon text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
+            >
+              Seq 1
+            </button>
+            <button 
+              @click="emit('activeSlotChange', 2)"
+              :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', activeSlot === 2 ? 'bg-synth-neon text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
+            >
+              Seq 2
+            </button>
+          </div>
         </div>
 
         <div class="flex items-center gap-1.5 w-full sm:w-auto justify-end">
@@ -1293,6 +1527,16 @@ function handleClear() {
           <button @click="exportMidi"
             class="p-2 bg-neutral-800 text-synth-neon rounded-lg border border-neutral-700 hover:text-white transition-colors" title="Export MIDI">
             <Download class="w-4 h-4" />
+          </button>
+
+          <button v-if="authStore.user" @click="openLoadLibraryModal"
+            class="p-2 bg-neutral-800 text-synth-neon rounded-lg border border-neutral-700 hover:text-white transition-colors" title="Load from Library">
+            <FolderOpen class="w-4 h-4" />
+          </button>
+
+          <button v-if="authStore.user" @click="openSaveLibraryModal"
+            class="p-2 bg-neutral-800 text-synth-neon rounded-lg border border-neutral-700 hover:text-white transition-colors" title="Save to Library">
+            <FolderPlus class="w-4 h-4" />
           </button>
 
           <button @click="emit('savePattern', { numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, transpose: globalTranspose, bpm })"
@@ -1687,6 +1931,113 @@ function handleClear() {
               >
                 RELOAD
               </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- ── SAVE PATTERN TO LIBRARY MODAL ── -->
+      <Transition name="fade">
+        <div v-if="showSaveLibraryModal" class="absolute inset-0 bg-black/85 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+          <div class="bg-neutral-950 border border-synth-neon/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative overflow-hidden flex flex-col items-center text-center gap-4">
+            <!-- Neon pulsing top stripe -->
+            <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 via-synth-neon to-emerald-500 animate-pulse" />
+            
+            <div class="w-10 h-10 rounded-full bg-synth-neon/10 border border-synth-neon/20 flex items-center justify-center text-synth-neon">
+              <Save class="w-5 h-5" />
+            </div>
+
+            <div class="flex flex-col gap-1 w-full">
+              <h3 class="text-xs font-mono font-black uppercase text-synth-neon tracking-[0.2em]">Save Pattern</h3>
+              <p class="text-[9px] text-neutral-500 font-mono uppercase tracking-wider mb-2">Enter a unique name for this pattern</p>
+              <input 
+                v-model="libraryPatternName" 
+                type="text" 
+                placeholder="Pattern Name"
+                class="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-center text-white text-sm focus:outline-none focus:border-synth-neon transition-colors font-mono uppercase"
+                @keyup.enter="savePatternToLibrary"
+              />
+            </div>
+
+            <div class="flex items-center gap-3 w-full mt-2 font-mono">
+              <button 
+                @click="showSaveLibraryModal = false"
+                class="flex-1 h-8 rounded border border-neutral-800 bg-neutral-900/50 hover:bg-neutral-800 text-[10px] font-bold text-neutral-400 hover:text-white transition-all uppercase tracking-wider"
+              >
+                CANCEL
+              </button>
+              <button 
+                @click="savePatternToLibrary"
+                class="flex-1 h-8 rounded bg-synth-neon hover:bg-emerald-400 text-[10px] font-bold text-black transition-all uppercase tracking-wider shadow-lg shadow-synth-neon/10"
+              >
+                SAVE
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- ── LOAD PATTERN FROM LIBRARY MODAL ── -->
+      <Transition name="fade">
+        <div v-if="showLoadLibraryModal" class="absolute inset-0 bg-black/85 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+          <div class="bg-neutral-950 border border-synth-neon/30 rounded-xl max-w-lg w-full h-[360px] p-6 shadow-2xl relative overflow-hidden flex flex-col gap-4">
+            <!-- Neon pulsing top stripe -->
+            <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 via-synth-neon to-emerald-500 animate-pulse" />
+            
+            <!-- Header -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-synth-neon/10 border border-synth-neon/20 flex items-center justify-center text-synth-neon">
+                  <FolderOpen class="w-4 h-4" />
+                </div>
+                <h3 class="text-xs font-mono font-black uppercase text-synth-neon tracking-[0.2em]">Pattern Library</h3>
+              </div>
+              <button @click="showLoadLibraryModal = false" class="text-neutral-500 hover:text-white transition-colors">
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+
+            <!-- Loader -->
+            <div v-if="loadingLibrary" class="flex-1 flex flex-col items-center justify-center">
+              <div class="w-8 h-8 border-t-2 border-synth-neon rounded-full animate-spin mb-3"></div>
+              <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Accessing IndexedDB...</span>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else-if="libraryPatterns.length === 0" class="flex-1 flex flex-col items-center justify-center text-center p-4">
+              <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wider">No patterns saved in library yet.</span>
+              <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest mt-1">Use the save icon in the header to export sequences.</span>
+            </div>
+
+            <!-- Patterns List -->
+            <div v-else class="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+              <div 
+                v-for="pattern in libraryPatterns" 
+                :key="pattern.id"
+                class="flex items-center justify-between p-2.5 bg-neutral-900/60 border border-neutral-800/80 rounded-lg hover:border-synth-neon/40 hover:bg-neutral-900 transition-all group cursor-pointer"
+                @click="loadPatternFromLibrary(pattern)"
+              >
+                <div class="flex flex-col min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-white group-hover:text-synth-neon transition-colors uppercase font-mono truncate">{{ pattern.name }}</span>
+                    <span class="text-[8px] font-mono bg-neutral-800 text-neutral-400 px-1 rounded uppercase">{{ pattern.style }}</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[8px] font-mono text-neutral-500 uppercase tracking-wider mt-1">
+                    <span>Steps: <strong class="text-neutral-300">{{ pattern.config?.numSteps || 16 }}</strong></span>
+                    <span>Key: <strong class="text-neutral-300">{{ pattern.key || 'C' }} {{ pattern.scale || 'Major' }}</strong></span>
+                    <span class="hidden sm:inline">Saved: <strong class="text-neutral-400">{{ new Date(pattern.createdAt).toLocaleDateString() }}</strong></span>
+                  </div>
+                </div>
+
+                <!-- Delete action -->
+                <button 
+                  @click.stop="deletePatternFromLibrary(pattern.id)"
+                  class="p-2 text-neutral-600 hover:text-red-500 transition-colors"
+                  title="Delete Pattern"
+                >
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

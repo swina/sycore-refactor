@@ -262,6 +262,8 @@ export class MidiService {
     if (!this.output) return;
     const statusByte = 0xb0 + (channel % 16);
     this.output.send([statusByte, 123, 0]);
+    this.output.send([statusByte, 120, 0]);
+    this.output.send([statusByte, 64, 0]);
   }
 
   sendPitchBend(value: number, channel: number = 0) {

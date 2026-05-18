@@ -53,6 +53,8 @@ export const useUiStore = defineStore('ui', () => {
   const lastPlaylistName   = ref(localStorage.getItem('S1_LAST_PLAYLIST') || '')
   const activeVisualizerCategory = ref('FILTER')
   const seqCurrentConfig        = ref(null)
+  const seqCurrentConfig2       = ref(null)
+  const seqActiveSlot           = ref(1)
 
   // Global MIDI modifiers (shared between VirtualKeyboard and ArpeggiatorPanel)
   const globalModCC        = ref(1)   // CC number for mod wheel
@@ -123,7 +125,7 @@ export const useUiStore = defineStore('ui', () => {
     isMidiPerformanceOpen,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen, 
     isPlayingPreview, isPlayingBacking, isAudioPlaying, lastPlaylistName,
-    activeVisualizerCategory, seqCurrentConfig,
+    activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqActiveSlot,
     globalModCC, globalTranspose,
     closeAll, toggleMainMenu, toggleSideMenu
   }

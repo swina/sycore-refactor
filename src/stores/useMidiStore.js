@@ -276,8 +276,9 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.sendPitchBend(value, targetChannel, source, skipDeviceId)
   }
 
-  function allNotesOff() {
-    midiService.allNotesOff(midiChannel.value - 1)
+  function allNotesOff(channel = null) {
+    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
+    midiService.allNotesOff(targetChannel)
   }
 
   function sendControlValue(field, value, source = MidiSource.UI) {
