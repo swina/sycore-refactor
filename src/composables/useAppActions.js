@@ -67,6 +67,70 @@ export function useAppActions() {
         if (window.SY_LOG) window.SY_LOG(`[AppActions] LFO 2: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
         lfoStore.lfo2.active = ccVal > 63;
         break
+      case 'lfo1_waveform_cc': {
+        const waveforms = ['sine', 'triangle', 'square', 'saw', 'sh']
+        const idx = Math.floor((ccVal / 127.1) * waveforms.length)
+        lfoStore.lfo1.waveform = waveforms[idx]
+        break
+      }
+      case 'lfo2_waveform_cc': {
+        const waveforms = ['sine', 'triangle', 'square', 'saw', 'sh']
+        const idx = Math.floor((ccVal / 127.1) * waveforms.length)
+        lfoStore.lfo2.waveform = waveforms[idx]
+        break
+      }
+      case 'lfo1_mode_cc':
+        lfoStore.lfo1.mode = ccVal < 64 ? 'free' : 'sync'
+        break
+      case 'lfo2_mode_cc':
+        lfoStore.lfo2.mode = ccVal < 64 ? 'free' : 'sync'
+        break
+      case 'lfo1_target_cc': {
+        const targets = [
+          'cutoff', 'res', 'attack', 'decay', 'sustain', 'release', 
+          'oscLFO', 'pwWidth', 'pwmSrc', 'lfoRate', 'lfoMod', 
+          'oscSq', 'oscSaw', 'oscSub', 'oscNoise',
+          'delayLvl', 'reverb', 'delayTime', 'expression'
+        ]
+        const idx = Math.floor((ccVal / 127.1) * targets.length)
+        lfoStore.lfo1.targetParameter = targets[idx]
+        break
+      }
+      case 'lfo2_target_cc': {
+        const targets = [
+          'cutoff', 'res', 'attack', 'decay', 'sustain', 'release', 
+          'oscLFO', 'pwWidth', 'pwmSrc', 'lfoRate', 'lfoMod', 
+          'oscSq', 'oscSaw', 'oscSub', 'oscNoise',
+          'delayLvl', 'reverb', 'delayTime', 'expression'
+        ]
+        const idx = Math.floor((ccVal / 127.1) * targets.length)
+        lfoStore.lfo2.targetParameter = targets[idx]
+        break
+      }
+      case 'lfo1_rate_cc': {
+        if (lfoStore.lfo1.mode === 'free') {
+          lfoStore.lfo1.rate = 0.01 + (ccVal / 127) * (20 - 0.01)
+        } else if (lfoStore.SYNC_DIVISIONS) {
+          const idx = Math.floor((ccVal / 127.1) * lfoStore.SYNC_DIVISIONS.length)
+          lfoStore.lfo1.syncDivision = lfoStore.SYNC_DIVISIONS[idx]
+        }
+        break
+      }
+      case 'lfo2_rate_cc': {
+        if (lfoStore.lfo2.mode === 'free') {
+          lfoStore.lfo2.rate = 0.01 + (ccVal / 127) * (20 - 0.01)
+        } else if (lfoStore.SYNC_DIVISIONS) {
+          const idx = Math.floor((ccVal / 127.1) * lfoStore.SYNC_DIVISIONS.length)
+          lfoStore.lfo2.syncDivision = lfoStore.SYNC_DIVISIONS[idx]
+        }
+        break
+      }
+      case 'lfo1_depth_cc':
+        lfoStore.lfo1.depth = Math.round((ccVal / 127) * 100)
+        break
+      case 'lfo2_depth_cc':
+        lfoStore.lfo2.depth = Math.round((ccVal / 127) * 100)
+        break
       case 'toggle_velocity_mapping':
         if (window.SY_LOG) window.SY_LOG(`[AppActions] VELOCITY MAPPING: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
         if (ccVal > 63) {
@@ -76,6 +140,26 @@ export function useAppActions() {
           mappingStore.restoreOriginalValues();
         }
         break
+      case 'velocity_target_cc': {
+        const targets = [
+          'cutoff', 'res', 'attack', 'decay', 'sustain', 'release', 
+          'oscLFO', 'pwWidth', 'pwmSrc', 'lfoRate', 'lfoMod', 
+          'oscSq', 'oscSaw', 'oscSub', 'oscNoise',
+          'delayLvl', 'reverb'
+        ]
+        const idx = Math.floor((ccVal / 127.1) * targets.length)
+        mappingStore.velocityConfig.targetParameter = targets[idx]
+        break
+      }
+      case 'velocity_amount_cc':
+        mappingStore.velocityConfig.amount = Math.round((ccVal / 127) * 200) - 100
+        break
+      case 'velocity_curve_cc': {
+        const curves = ['linear', 'exp', 'log']
+        const idx = Math.floor((ccVal / 127.1) * curves.length)
+        mappingStore.velocityConfig.curve = curves[idx]
+        break
+      }
 
       case 'toggle_sequencer':
         if (ccVal > 63) uiStore.isSequencerOpen = !uiStore.isSequencerOpen;
@@ -146,11 +230,15 @@ export function useAppActions() {
         arpStore.arpMode = modes[idx]
         break
       }
-      case 'arp_subdivision_cc': {
+      case 'arp_subdivision_cc':
+      case 'arp_rate_cc': {
         const idx = Math.floor((ccVal / 127.1) * ARP_SUBDIVISIONS.length)
         arpStore.arpSubdivision = ARP_SUBDIVISIONS[idx]
         break
       }
+      case 'arp_hold_cc':
+        arpStore.arpHold = ccVal >= 64
+        break
 
       case 'liveset_up':
         window.dispatchEvent(new CustomEvent('liveset-navigate', { detail: { dir: 'up' } })); break

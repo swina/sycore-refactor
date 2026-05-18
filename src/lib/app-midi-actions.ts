@@ -65,7 +65,22 @@ export type AppAction =
   | 'toggle_lfo_1'
   | 'toggle_lfo_2'
   | 'toggle_velocity_mapping'
-  | 'toggle_audio_capture';
+  | 'toggle_audio_capture'
+  | 'lfo1_waveform_cc'
+  | 'lfo1_mode_cc'
+  | 'lfo1_target_cc'
+  | 'lfo1_rate_cc'
+  | 'lfo1_depth_cc'
+  | 'lfo2_waveform_cc'
+  | 'lfo2_mode_cc'
+  | 'lfo2_target_cc'
+  | 'lfo2_rate_cc'
+  | 'lfo2_depth_cc'
+  | 'velocity_target_cc'
+  | 'velocity_amount_cc'
+  | 'velocity_curve_cc'
+  | 'arp_rate_cc'
+  | 'arp_hold_cc';
 
 export interface AppMidiMapping {
   id: string;
@@ -160,6 +175,21 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   toggle_lfo_2:        'Toggle LFO 2',
   toggle_velocity_mapping: 'Toggle Velocity Mapping',
   toggle_audio_capture:    'Toggle Audio Capture',
+  lfo1_waveform_cc:     'LFO 1: Waveform via CC',
+  lfo1_mode_cc:         'LFO 1: Timing Mode via CC',
+  lfo1_target_cc:       'LFO 1: Modulation Target via CC',
+  lfo1_rate_cc:         'LFO 1: Rate/Division via CC',
+  lfo1_depth_cc:        'LFO 1: Depth via CC',
+  lfo2_waveform_cc:     'LFO 2: Waveform via CC',
+  lfo2_mode_cc:         'LFO 2: Timing Mode via CC',
+  lfo2_target_cc:       'LFO 2: Modulation Target via CC',
+  lfo2_rate_cc:         'LFO 2: Rate/Division via CC',
+  lfo2_depth_cc:        'LFO 2: Depth via CC',
+  velocity_target_cc:   'Velocity Map: Target Param via CC',
+  velocity_amount_cc:   'Velocity Map: Modulation Amount via CC (-100%..+100%)',
+  velocity_curve_cc:    'Velocity Map: Response Curve via CC',
+  arp_rate_cc:          'Arp: Rate/Subdivision via CC',
+  arp_hold_cc:          'Arp: Hold Toggle/State via CC',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -169,7 +199,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'select_sound_a', 'select_sound_b', 'toggle_sound_ab', 'select_sound_ab_range'
   ],
   'Arpeggiator': [
-    'toggle_arp', 'arp_mode_cc', 'arp_subdivision_cc'
+    'toggle_arp', 'arp_mode_cc', 'arp_subdivision_cc', 'arp_rate_cc', 'arp_hold_cc'
   ],
   'Sequencer': [
     'toggle_sequencer', 'seq_play', 'seq_stop', 'seq_bpm_up', 'seq_bpm_down', 'seq_bpm_cc',
@@ -178,7 +208,10 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'seq_octave_cc', 'seq_range_cc'
   ],
   'Modulation': [
-    'toggle_lfo_1', 'toggle_lfo_2', 'toggle_velocity_mapping'
+    'toggle_lfo_1', 'toggle_lfo_2', 'toggle_velocity_mapping',
+    'lfo1_waveform_cc', 'lfo1_mode_cc', 'lfo1_target_cc', 'lfo1_rate_cc', 'lfo1_depth_cc',
+    'lfo2_waveform_cc', 'lfo2_mode_cc', 'lfo2_target_cc', 'lfo2_rate_cc', 'lfo2_depth_cc',
+    'velocity_target_cc', 'velocity_amount_cc', 'velocity_curve_cc'
   ],
   'Audio & Looper': [
     'toggle_audio_capture', 'toggle_looper', 'looper_record', 'looper_clear_all',
@@ -219,5 +252,20 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'seq_range_cc',
   'global_start_stop',
   'smart_latch_cc',
-  'select_sound_ab_range'
+  'select_sound_ab_range',
+  'lfo1_waveform_cc',
+  'lfo1_mode_cc',
+  'lfo1_target_cc',
+  'lfo1_rate_cc',
+  'lfo1_depth_cc',
+  'lfo2_waveform_cc',
+  'lfo2_mode_cc',
+  'lfo2_target_cc',
+  'lfo2_rate_cc',
+  'lfo2_depth_cc',
+  'velocity_target_cc',
+  'velocity_amount_cc',
+  'velocity_curve_cc',
+  'arp_rate_cc',
+  'arp_hold_cc'
 ]);
