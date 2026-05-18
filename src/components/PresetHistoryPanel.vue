@@ -52,7 +52,7 @@ function getPresetIndex(preset) {
 
 // ─── Filtered preset list (uses store filter + optional text search) ──────────
 
-const filteredPresets = computed(() => presetStore.filteredHistory)
+const filteredPresets = computed(() => [...presetStore.filteredHistory].reverse())
 
 // ─── Filter dropdown label ────────────────────────────────────────────────────
 

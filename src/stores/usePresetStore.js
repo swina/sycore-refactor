@@ -738,9 +738,20 @@ export const usePresetStore = defineStore('preset', () => {
       idx = list.findIndex(p => p.id === lastPreset.value?.id)
     }
     
-    if (idx === -1) return
+    if (idx === -1 && direction !== 'first' && direction !== 'last') return
+    if (list.length === 0) return
 
-    let nextIdx = direction === 'next' ? idx + 1 : idx - 1
+    let nextIdx = -1
+    if (direction === 'first') {
+      nextIdx = list.length - 1 // Oldest preset in newest-first list
+    } else if (direction === 'last') {
+      nextIdx = 0 // Newest preset in newest-first list
+    } else if (direction === 'next') {
+      nextIdx = idx - 1 // Go towards newer preset (lower index)
+    } else if (direction === 'prev') {
+      nextIdx = idx + 1 // Go towards older preset (higher index)
+    }
+
     if (nextIdx < 0 || nextIdx >= list.length) return
 
     recallPreset(list[nextIdx], false)

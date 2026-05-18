@@ -1,12 +1,10 @@
-import { onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { midiService } from '@/core/midi/MidiService'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
-import { useAppActions } from './useAppActions'
-import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 
 export function useMidiCCListener() {
@@ -15,7 +13,6 @@ export function useMidiCCListener() {
   const uiStore = useUiStore()
   const presetStore = usePresetStore()
   const configStore = useConfigStore()
-  const { dispatchAction } = useAppActions()
 
   const originalModValueMap = {}
 
@@ -118,119 +115,18 @@ export function useMidiCCListener() {
     presetStore.updateFieldValue(fieldName, val)
   }
 
-  const appActionHandlers = []
-
-  function setupAppActionListeners() {
-    cleanupAppActionListeners()
-    const mappings = mappingStore.appMidiMappings
-    if (!mappings.length || !midiStore.inputs.length) return
-
-    midiStore.inputs.forEach(input => {
-      const devName = input.name || input.id
-      const devMappings = mappings.filter(m => m.device === devName)
-      if (!devMappings.length) return
-
-      const fn = (e) => {
-        const data = e.data
-        if (!data || data.length < 3) return
-        const status = data[0]
-        const chan = status & 0x0F
-        const isNoteOn  = (status & 0xF0) === 0x90
-        const isNoteOff = (status & 0xF0) === 0x80
-        const isCC      = (status & 0xF0) === 0xB0
-        
-        if (!isNoteOn && !isNoteOff && !isCC) return
-
-        const note = (isNoteOn || isNoteOff) ? data[1] : null
-        const cc   = isCC ? data[1] : null
-        const val  = data[2]
-        
-        for (const mapping of devMappings) {
-          // Check message type match
-          if (mapping.note !== undefined && note !== mapping.note) continue
-          if (mapping.cc !== undefined && cc !== mapping.cc) continue
-          
-          if (mapping.channel !== -1 && mapping.channel !== chan) continue
-          
-          // For triggers (non-continuous), check value or simply Note On
-          const isContinuous = CONTINUOUS_ACTIONS.has(mapping.action)
-          if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Action: ${mapping.action}, Val: ${val}, IsContinuous: ${isContinuous}`);
-
-          if (!isContinuous) {
-            // IGNORE ALL RELEASE MESSAGES for triggers
-            // (Note Off or Note On with velocity 0)
-            if (mapping.note !== undefined) {
-              if (isNoteOff || (isNoteOn && val === 0)) continue
-            } else {
-              // CC trigger logic
-              const mv = mapping.value ?? -1
-              if (mv === -1) {
-                if (val <= 63) {
-                  if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Skipping trigger val ${val} for ${mapping.action}`);
-                  continue
-                }
-              } else {
-                if (val !== mv) {
-                  if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Skipping non-matching val ${val} (expected ${mv}) for ${mapping.action}`);
-                  continue
-                }
-              }
-            }
-          }
-
-          if (window.SY_LOG) window.SY_LOG(`[MIDI Listener] Dispatching ${mapping.action} with val ${val}`);
-          dispatchAction(mapping.action, val)
-          break
-        }
-      }
-
-      input.addEventListener('midimessage', fn)
-      appActionHandlers.push({ input, fn })
-    })
-  }
-
-  function cleanupAppActionListeners() {
-    appActionHandlers.forEach(({ input, fn }) => input.removeEventListener('midimessage', fn))
-    appActionHandlers.length = 0
-  }
-
-  const hwCCHandlers = []
-
-  function setupHardwareCCListeners() {
-    // Handled by onCC which is called from MidiService
-  }
-
-  function cleanupHardwareCCListeners() {
-    hwCCHandlers.forEach(({ input, fn }) => input.removeEventListener('midimessage', fn))
-    hwCCHandlers.length = 0
-  }
-
-  let unsubCC, unsubNote, unsubPitch, stopInputWatch
+  let unsubCC, unsubNote, unsubPitch
 
   onMounted(() => {
     unsubCC = midiService.addCCListener(onCC)
     unsubNote = midiService.addNoteListener(onNote)
     unsubPitch = midiService.addPitchBendListener(onPitchBend)
-    setupAppActionListeners()
-    setupHardwareCCListeners()
-    
-    stopInputWatch = watch(
-      [() => midiStore.inputs.length, () => mappingStore.appMidiMappings], 
-      () => {
-        setupHardwareCCListeners()
-        setupAppActionListeners()
-      },
-      { deep: true, immediate: true }
-    )
   })
 
   onUnmounted(() => {
     unsubCC?.()
     unsubNote?.()
     unsubPitch?.()
-    stopInputWatch?.()
-    cleanupAppActionListeners()
-    cleanupHardwareCCListeners()
   })
 
   function onNote(type, note, velocity, chan, inputId) {
@@ -259,5 +155,5 @@ export function useMidiCCListener() {
     // Pitch bend logic (already handled by thru in MidiService if enabled)
   }
 
-  return { setupAppActionListeners }
+  return {}
 }
