@@ -105,37 +105,37 @@ export class MidiService {
     const skipDeviceName = skipDeviceId ? this.midiAccess.inputs.get(skipDeviceId)?.name : null;
 
     const targetsFromMatrix = this.routingMatrix.get(source) || new Set();
+    const hasMappings = targetsFromMatrix.size > 0;
 
     this.midiAccess.outputs.forEach(outPort => {
-      // 1. Matrix Match (Highest Priority - Bypass legacy outEnabled if explicitly selected)
+      // 1. Matrix Match
       const isMatrixMatch = targetsFromMatrix.has(outPort.name);
-      
+
       // 2. Broadcast Mode Match
-      const isBroadcastTarget = this.broadcastMode;
+      // Sequencer source should never broadcast, it must strictly follow performance mapping.
+      // Other sources only broadcast if they don't have explicit performance mapping.
+      const isBroadcastTarget = this.broadcastMode && (source !== MidiSource.SEQUENCER) && !hasMappings;
 
       if (!isMatrixMatch && !isBroadcastTarget) return;
 
-      // 3. Legacy Filters (Only applied to Broadcast or if config exists)
+      // 3. General MIDI Registry Matrix configuration check
       const config = this.routingConfig?.registrations[outPort.name];
-      
-      // If it's a matrix match, we allow it even without config, 
-      // but we still respect the notes/cc filters IF a config exists.
-      if (isBroadcastTarget && (!config || !config.outEnabled)) return;
+
+      // The output device must be registered and enabled for output in the general MIDI matrix
+      if (!config || !config.outEnabled) return;
       if (outPort.id === skipDeviceId || outPort.name === skipDeviceName) return;
 
-      let shouldAdd = true; // Default to true for matrix matches without config
-      if (config) {
-        switch (type) {
-          case 'noteon':
-          case 'noteoff':
-          case 'allnotesoff': shouldAdd = config.notes; break;
-          case 'cc':        shouldAdd = config.cc; break;
-          case 'pc':        shouldAdd = config.pc; break;
-          case 'pitchbend': shouldAdd = true; break; 
-          case 'clock':     shouldAdd = config.clock; break;
-          case 'start':
-          case 'stop':      shouldAdd = config.transport; break;
-        }
+      let shouldAdd = true;
+      switch (type) {
+        case 'noteon':
+        case 'noteoff':
+        case 'allnotesoff': shouldAdd = config.notes; break;
+        case 'cc': shouldAdd = config.cc; break;
+        case 'pc': shouldAdd = config.pc; break;
+        case 'pitchbend': shouldAdd = true; break;
+        case 'clock': shouldAdd = config.clock; break;
+        case 'start':
+        case 'stop': shouldAdd = config.transport; break;
       }
 
       if (shouldAdd) targetDeviceIds.add(outPort.id);
@@ -145,11 +145,11 @@ export class MidiService {
     targetDeviceIds.forEach(id => {
       const out = this.midiAccess?.outputs.get(id);
       if (!out) return;
-      
+
       // Determine channel from name-based config
       let targetChannel = channel;
       const config = this.routingConfig?.registrations[out.name];
-      
+
       if (config) {
         if (config.isMulti) {
           targetChannel = channel;
@@ -163,15 +163,15 @@ export class MidiService {
       let bytes: number[] = [];
 
       switch (type) {
-        case 'noteon':      status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
-        case 'noteoff':     status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
-        case 'cc':          status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
-        case 'pc':          status = 0xc0 + statusCh; bytes = [data.program]; break;
-        case 'pitchbend':   status = 0xe0 + statusCh; bytes = [data.lsb, data.msb]; break;
+        case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+        case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
+        case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
+        case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
+        case 'pitchbend': status = 0xe0 + statusCh; bytes = [data.lsb, data.msb]; break;
         case 'allnotesoff': status = 0xb0 + statusCh; bytes = [123, 0]; break;
-        case 'clock':       status = 0xF8; break;
-        case 'start':       status = 0xFA; break;
-        case 'stop':        status = 0xFC; break;
+        case 'clock': status = 0xF8; break;
+        case 'start': status = 0xFA; break;
+        case 'stop': status = 0xFC; break;
       }
 
       if (status > 0) {
@@ -188,7 +188,7 @@ export class MidiService {
 
   async init(): Promise<boolean> {
     if (this.midiAccess) return true;
-    
+
     if (!navigator.requestMIDIAccess) {
       console.error("WebMIDI is not supported in this browser.");
       return false;
@@ -203,11 +203,11 @@ export class MidiService {
       this.midiAccess.onstatechange = (event) => {
         const port = (event as MIDIConnectionEvent).port;
         if (port.type === 'input' && port.state === 'connected') {
-           const input = port as MIDIInput;
-           input.open();
-           input.removeEventListener('midimessage', this.handleIngressBound);
-           input.addEventListener('midimessage', this.handleIngressBound);
-           console.log(`[MIDI] New device connected: ${port.name}`);
+          const input = port as MIDIInput;
+          input.open();
+          input.removeEventListener('midimessage', this.handleIngressBound);
+          input.addEventListener('midimessage', this.handleIngressBound);
+          console.log(`[MIDI] New device connected: ${port.name}`);
         }
         this.onStateChangeListeners.forEach(l => l(event));
       };
@@ -215,7 +215,7 @@ export class MidiService {
       this.reScanInputs();
       this.loadRoutingMatrix();
       this.loadBroadcastMode();
-      
+
       console.log("[MIDI] Service fully initialized and inputs attached.");
       return true;
     } catch (e) {
@@ -270,7 +270,7 @@ export class MidiService {
     if (this.isSmartLatchActive === active) return;
     this.isSmartLatchActive = active;
     if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Smart Latch: ${active ? 'ENABLED' : 'DISABLED'}`);
-    
+
     if (!active) {
       if (this.smartLatchFadeTime > 0) {
         await this.startFadeOut();
@@ -284,7 +284,7 @@ export class MidiService {
     const fadeMs = this.smartLatchFadeTime;
     const steps = 12;
     const interval = Math.max(20, fadeMs / steps);
-    
+
     const outputChannels = new Map<string, Set<number>>();
     this.latchedNotesByOutput.forEach((notes, outId) => {
       const channels = new Set<number>();
@@ -310,7 +310,7 @@ export class MidiService {
         const outDevice = this.midiAccess?.outputs.get(outId);
         if (outDevice) {
           channels.forEach(ch => {
-             outDevice.send([0xB0 | (ch & 0x0f), 11, expValue]);
+            outDevice.send([0xB0 | (ch & 0x0f), 11, expValue]);
           });
         }
       });
@@ -323,7 +323,7 @@ export class MidiService {
       const outDevice = this.midiAccess?.outputs.get(outId);
       if (outDevice) {
         channels.forEach(ch => {
-           outDevice.send([0xB0 | (ch & 0x0f), 11, 127]);
+          outDevice.send([0xB0 | (ch & 0x0f), 11, 127]);
         });
       }
     });
@@ -345,7 +345,7 @@ export class MidiService {
             else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
             channels.add(targetCh !== -1 ? targetCh : n.channel);
           });
-          
+
           channels.forEach(ch => {
             const statusCh = ch % 16;
             const messages = [
@@ -354,7 +354,7 @@ export class MidiService {
             ];
             messages.forEach(msg => {
               this.globalSentHashes.set(msg.join(','), now);
-              try { outDevice.send(msg); } catch (e) {}
+              try { outDevice.send(msg); } catch (e) { }
             });
           });
         }
@@ -367,14 +367,14 @@ export class MidiService {
     let targetCh = -1;
     if (outConfig.isMulti) targetCh = this.globalChannel;
     else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
-    
+
     const finalCh = targetCh !== -1 ? targetCh : n.channel;
     const bytes = new Uint8Array([0x80 | (finalCh & 0x0f), n.note, 0]);
     try {
       this.lastSentMessages.set(outDevice.id, { data: bytes.join(','), time: now });
       this.globalSentHashes.set(bytes.join(','), now);
       outDevice.send(bytes);
-    } catch (e) {}
+    } catch (e) { }
   }
   // -------------------
 
@@ -492,16 +492,16 @@ export class MidiService {
       const isSystem = status >= 0xF8;
 
       const thru = this.routingConfig.thruFilters || { notes: true, cc: true };
-      const passGlobal = (isNote && thru.notes !== false) || 
-                         (isCC && thru.cc !== false) ||
-                         (isSystem) || 
-                         (!isNote && !isCC && !isSystem);
+      const passGlobal = (isNote && thru.notes !== false) ||
+        (isCC && thru.cc !== false) ||
+        (isSystem) ||
+        (!isNote && !isCC && !isSystem);
 
       if (passGlobal) {
         this.routeMessageToOutputs(event.data, inputId, now);
       }
     }
-    
+
     if (status === 0xFA) this.onTransportListeners.forEach(l => l('start'));
     else if (status === 0xFC) this.onTransportListeners.forEach(l => l('stop'));
     else if (status === 0xF8) this.onTransportListeners.forEach(l => l('clock'));
@@ -532,21 +532,36 @@ export class MidiService {
     const isNote = (status & 0xf0) === 0x90 || (status & 0xf0) === 0x80;
     const isCC = (status & 0xf0) === 0xb0;
 
-    if (this.isSequencerPlaying && isNote) return;
-
     this.midiAccess.outputs.forEach(outDevice => {
       const outConfig = this.routingConfig?.registrations[outDevice.name];
       const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
 
+      // Both input and output devices must be registered and enabled in the general MIDI matrix
       if (!outConfig || !outConfig.outEnabled || outDevice.id === inputId) return;
-      if (inConfig && !inConfig.inEnabled) return; 
+      if (!inConfig || !inConfig.inEnabled) return;
+
+      // If the sequencer is playing, block notes only if the target is also the sequencer's target
+      // This prevents double-triggering/audible notes on the sequencer's synth during transposition,
+      // while allowing independent keyboards to play other mapped synthesizers normally.
+      if (this.isSequencerPlaying && isNote) {
+        const sequencerTargets = this.routingMatrix.get(MidiSource.SEQUENCER);
+        if (sequencerTargets && sequencerTargets.has(outDevice.name)) {
+          return;
+        }
+      }
 
       const normIn = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
       const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
       if (normIn && normOut && normIn === normOut) return;
 
+      // MIDI Performance Matrix routing:
+      // If a mapping exists in the performance matrix, use it strictly.
+      // Otherwise, only fallback to broadcastMode if no mapping is specified.
       const isRoutedByMatrix = targetsFromMatrix ? targetsFromMatrix.has(outDevice.name) : false;
-      if (!isRoutedByMatrix && !this.broadcastMode) return;
+      const hasMappings = targetsFromMatrix && targetsFromMatrix.size > 0;
+      const isRouted = hasMappings ? isRoutedByMatrix : (isRoutedByMatrix || this.broadcastMode);
+
+      if (!isRouted) return;
 
       if (isNote && !outConfig.notes) return;
       if (isCC && !outConfig.cc) return;
@@ -561,43 +576,43 @@ export class MidiService {
 
       if (this.isSmartLatchActive && (isNoteOn || isNoteOff)) {
         if (!outConfig.smartLatch) {
-           if (isNoteOn && (window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch active but skipped for ${outDevice.name} (Device Lock is OFF)`);
+          if (isNoteOn && (window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch active but skipped for ${outDevice.name} (Device Lock is OFF)`);
         } else {
-         const channel = status & 0x0f;
-         const note = data[1];
-         const velocity = data[2];
+          const channel = status & 0x0f;
+          const note = data[1];
+          const velocity = data[2];
 
-         let latched = this.latchedNotesByOutput.get(outDevice.id);
-         if (!latched) {
+          let latched = this.latchedNotesByOutput.get(outDevice.id);
+          if (!latched) {
             latched = [];
             this.latchedNotesByOutput.set(outDevice.id, latched);
-         }
+          }
 
           if (isNoteOn) {
             const existingIdx = latched.findIndex(n => n.note === note && n.channel === channel);
             if (existingIdx !== -1) latched.splice(existingIdx, 1);
-            
+
             latched.push({ inputId, channel, note, velocity });
-            
+
             if (latched.length > this.smartLatchMaxNotes) {
-               if (this.smartLatchReplace) {
-                 const oldest = latched.shift();
-                 if (oldest) {
-                    if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch FIFO: Replacing note ${oldest.note} with ${note}`);
-                    this.sendDirectNoteOff(outDevice, oldest, outConfig, now);
-                 }
-               } else {
-                 latched.pop();
-                 shouldForward = false;
-                 if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch BLOCKED: Limit reached (${this.smartLatchMaxNotes}) and Replace is OFF`);
-               }
+              if (this.smartLatchReplace) {
+                const oldest = latched.shift();
+                if (oldest) {
+                  if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch FIFO: Replacing note ${oldest.note} with ${note}`);
+                  this.sendDirectNoteOff(outDevice, oldest, outConfig, now);
+                }
+              } else {
+                latched.pop();
+                shouldForward = false;
+                if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch BLOCKED: Limit reached (${this.smartLatchMaxNotes}) and Replace is OFF`);
+              }
             } else {
-               if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch: Holding note ${note} on ${outDevice.name}`);
+              if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch: Holding note ${note} on ${outDevice.name}`);
             }
           } else if (isNoteOff) {
             const isLatched = latched.some(n => n.note === note && n.channel === channel);
             if (isLatched) {
-               shouldForward = false; // Block release
+              shouldForward = false; // Block release
             }
           }
         }
@@ -618,7 +633,7 @@ export class MidiService {
         }
         this.globalSentHashes.set(bytes.join(','), now);
         outDevice.send(bytes);
-      } catch (e) {}
+      } catch (e) { }
     });
   }
 
@@ -702,10 +717,10 @@ export class MidiService {
       allOutputs.forEach(out => {
         for (let ch = 0; ch < 16; ch++) {
           try {
-            out.send([0xb0 + ch, 123, 0]); 
-            out.send([0xb0 + ch, 120, 0]); 
-            out.send([0xb0 + ch, 64, 0]);  
-          } catch (e) {}
+            out.send([0xb0 + ch, 123, 0]);
+            out.send([0xb0 + ch, 120, 0]);
+            out.send([0xb0 + ch, 64, 0]);
+          } catch (e) { }
         }
       });
     }
@@ -714,7 +729,7 @@ export class MidiService {
   sendRawToDevice(deviceId: string, data: number[]) {
     const out = this.midiAccess?.outputs.get(deviceId);
     if (out) {
-      try { out.send(data); } catch (e) {}
+      try { out.send(data); } catch (e) { }
     }
   }
 
@@ -726,11 +741,11 @@ export class MidiService {
       const statusCh = targetCh % 16;
       const messages = [
         [0xb0 + statusCh, 123, 0],
-        [0xb0 + statusCh, 64, 0] 
+        [0xb0 + statusCh, 64, 0]
       ];
       messages.forEach(msg => {
         this.globalSentHashes.set(msg.join(','), Date.now());
-        try { out.send(msg); } catch (e) {}
+        try { out.send(msg); } catch (e) { }
       });
     }
   }
@@ -750,15 +765,15 @@ export class MidiService {
         if (config.outEnabled && config.cc) {
           const allOutputs = Array.from(this.midiAccess?.outputs.values() || []);
           const ports = allOutputs.filter(p => {
-             return p.name === name && (this.broadcastMode || targetsFromMatrix.has(p.name));
+            return p.name === name && (this.broadcastMode || targetsFromMatrix.has(p.name));
           });
-          
+
           ports.forEach(out => {
             let ch = statusCh;
             if (config.outChannel !== -1) ch = config.outChannel % 16;
             out.send([0xb0 + ch, 99, 0]);
             out.send([0xb0 + ch, 98, nrpnLsb]);
-            out.send([0xb0 + ch, 6, value]); 
+            out.send([0xb0 + ch, 6, value]);
           });
         }
       });
@@ -792,22 +807,22 @@ export class MidiService {
     };
 
     sendPulse();
-    
+
     this.clockExpectedTime = performance.now() + intervalMs;
-    
+
     const tick = () => {
       if (!this.isPlayingClock) return;
-      
+
       sendPulse();
-      
+
       const now = performance.now();
       const drift = now - this.clockExpectedTime;
-      
+
       this.clockExpectedTime += intervalMs;
       const nextDelay = Math.max(0, intervalMs - drift);
       this.clockInterval = window.setTimeout(tick, nextDelay);
     };
-    
+
     this.clockInterval = window.setTimeout(tick, intervalMs);
   }
 
