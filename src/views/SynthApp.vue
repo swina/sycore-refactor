@@ -332,7 +332,7 @@ onMounted(() => {
         :currentPresetCCValues="presetStore.lastPreset?.data || {}"
         :activeSlot="uiStore.seqActiveSlot"
         @close="uiStore.isSequencerOpen = false"
-        @bpmChange="bpm => midiStore.currentBpm = bpm"
+        @bpmChange="bpm => { arpStore.arpBpm = bpm; sessionBpmOverride = true }"
         @transposeChange="handleStepSequencerTranspose"
         @configChange="config => {
           if (uiStore.seqActiveSlot === 2) {

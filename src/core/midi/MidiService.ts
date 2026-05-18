@@ -53,6 +53,7 @@ export class MidiService {
     [MidiSource.KEYBOARD, new Set()],
     [MidiSource.ARP, new Set()],
     [MidiSource.UI, new Set()],
+    [MidiSource.TRANSPORT, new Set()],
   ]);
 
   private onCCListeners: ((cc: number, val: number, chan: number, inputId?: string) => void)[] = [];
@@ -72,7 +73,8 @@ export class MidiService {
   private smartLatchFadeTime: number = 0;
   private latchedNotesByOutput: Map<string, { inputId: string, channel: number, note: number, velocity: number }[]> = new Map();
 
-  private clockInterval: number | null = null;
+  private clockInterval: any = null;
+  private clockExpectedTime: number = 0;
   private currentBpm: number = 120;
   private isPlayingClock: boolean = false;
   // @ts-ignore - pulse count for potential future sync features
@@ -784,14 +786,34 @@ export class MidiService {
     if (!this.currentBpm || this.currentBpm < 1) return;
     this.isPlayingClock = true;
     const intervalMs = 60000 / (this.currentBpm * 24);
-    const sendPulse = () => this.broadcast('clock', {}, 0, MidiSource.TRANSPORT);
+
+    const sendPulse = () => {
+      this.broadcast('clock', {}, 0, MidiSource.TRANSPORT);
+    };
+
     sendPulse();
-    this.clockInterval = window.setInterval(sendPulse, intervalMs);
+    
+    this.clockExpectedTime = performance.now() + intervalMs;
+    
+    const tick = () => {
+      if (!this.isPlayingClock) return;
+      
+      sendPulse();
+      
+      const now = performance.now();
+      const drift = now - this.clockExpectedTime;
+      
+      this.clockExpectedTime += intervalMs;
+      const nextDelay = Math.max(0, intervalMs - drift);
+      this.clockInterval = window.setTimeout(tick, nextDelay);
+    };
+    
+    this.clockInterval = window.setTimeout(tick, intervalMs);
   }
 
   stopClock() {
     if (this.clockInterval !== null) {
-      window.clearInterval(this.clockInterval);
+      window.clearTimeout(this.clockInterval);
       this.clockInterval = null;
     }
     this.isPlayingClock = false;
