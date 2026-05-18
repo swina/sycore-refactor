@@ -92,11 +92,11 @@ const activeCategoryColor = computed(() => {
 })
 
 // Get active data (similar to ResultsPanel)
-const activeData = computed(() =>
-  (presetStore.useAlternativeEngine && presetStore.lastPreset?.abVariant?.data)
-    ? presetStore.lastPreset.abVariant.data
-    : presetStore.lastPreset?.data
-)
+const activeData = computed(() => {
+  const preset = presetStore.lastPreset
+  if (!preset) return null
+  return presetStore.useAlternativeEngine ? preset.bVariant?.data : preset.aVariant?.data
+})
 
 const PARAM_VISUALIZER_MAP = {
   // LFO Visualizer

@@ -10,12 +10,10 @@ const props = defineProps({
   cat: { type: Object, required: true },
 })
 
-// Use the same active data source as ResultsPanel
 const activeData = computed(() => {
-  if (presetStore.useAlternativeEngine && presetStore.lastPreset?.abVariant) {
-    return presetStore.lastPreset.abVariant.data || {}
-  }
-  return presetStore.lastPreset?.data || {}
+  const preset = presetStore.lastPreset
+  if (!preset) return {}
+  return presetStore.useAlternativeEngine ? (preset.bVariant?.data || {}) : (preset.aVariant?.data || {})
 })
 
 function getVal(cfg) {
