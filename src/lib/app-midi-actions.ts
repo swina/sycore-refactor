@@ -62,6 +62,7 @@ export type AppAction =
   | 'seq_skip_step'
   | 'seq_octave_cc'
   | 'seq_range_cc'
+  | 'seq_step_select_cc'
   | 'toggle_lfo_1'
   | 'toggle_lfo_2'
   | 'toggle_velocity_mapping'
@@ -171,6 +172,7 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   seq_skip_step:       'Seq: Skip Step (+2)',
   seq_octave_cc:      'Seq: Gen Base Octave',
   seq_range_cc:       'Seq: Gen Octave Range',
+  seq_step_select_cc:  'Seq: Select Step via CC',
   toggle_lfo_1:        'Toggle LFO 1',
   toggle_lfo_2:        'Toggle LFO 2',
   toggle_velocity_mapping: 'Toggle Velocity Mapping',
@@ -205,7 +207,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'toggle_sequencer', 'seq_play', 'seq_stop', 'seq_bpm_up', 'seq_bpm_down', 'seq_bpm_cc',
     'seq_swing_cc', 'seq_density_cc', 'seq_length_cc', 'seq_key_cc', 'seq_scale_cc', 'seq_style_cc',
     'seq_transpose_cc', 'seq_gen_trigger', 'seq_duplicate', 'seq_reduce', 'seq_skip_step',
-    'seq_octave_cc', 'seq_range_cc'
+    'seq_octave_cc', 'seq_range_cc', 'seq_step_select_cc'
   ],
   'Modulation': [
     'toggle_lfo_1', 'toggle_lfo_2', 'toggle_velocity_mapping',
@@ -250,6 +252,7 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'seq_transpose_cc',
   'seq_octave_cc',
   'seq_range_cc',
+  'seq_step_select_cc',
   'global_start_stop',
   'smart_latch_cc',
   'select_sound_ab_range',

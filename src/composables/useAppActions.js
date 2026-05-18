@@ -189,7 +189,7 @@ export function useAppActions() {
         uiStore.isAudioCaptureOpen = ccVal > 63;
         break
       case 'open_sound_types': if (ccVal > 63) uiStore.isTypesOpen = true; break
-      case 'open_sound_history': if (ccVal > 63) uiStore.isHistoryOpen = true; break
+      case 'open_sound_history': uiStore.isHistoryOpen = !uiStore.isHistoryOpen; break
       case 'open_midi_matrix': if (ccVal > 63) uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
       case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
@@ -262,6 +262,7 @@ export function useAppActions() {
       case 'seq_skip_step':
       case 'seq_octave_cc':
       case 'seq_range_cc':
+      case 'seq_step_select_cc':
         window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
 
       default:

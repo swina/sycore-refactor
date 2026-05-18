@@ -6,6 +6,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { midiService }     from '@/core/midi/MidiService'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useAppActions }   from './useAppActions'
+import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 
 // Profiles
 import { LaunchpadMiniMK1 } from '../core/controllers/profiles/LaunchpadMiniMK1'
@@ -144,7 +145,7 @@ export function useControllerManager() {
       if (m.note !== undefined && val === 0) return false
 
       // For CCs: Check trigger mode (Exact value or Toggle > 63)
-      if (m.cc !== undefined && !['transpose_cc'].includes(m.action)) {
+      if (m.cc !== undefined && !CONTINUOUS_ACTIONS.has(m.action)) {
          const mv = m.value ?? -1
          if (mv !== -1 && val !== mv) return false
          if (mv === -1 && val <= 63) return false

@@ -634,6 +634,13 @@ onMounted(() => {
       case 'seq_range_cc':
         octaveRange.value = Math.max(-3, Math.min(3, Math.round((val / 127) * 6) - 3))
         break
+      case 'seq_step_select_cc': {
+        const stepNum = val
+        if (stepNum >= 1 && stepNum <= numSteps.value) {
+          selectedStepIdx.value = stepNum - 1
+        }
+        break
+      }
     }
   }
   window.addEventListener('sequencer-action', handleSequencerAction)
