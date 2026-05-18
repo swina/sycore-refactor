@@ -185,6 +185,15 @@ const param2Variation = ref((() => {
 
 // Refs for playback state
 const playStateRef = { current: {} }
+const dynamicMidiTranspose = ref(0)
+const sequenceRootMidi = computed(() => {
+  const firstActiveStep = steps.value.find(s => s.active && s.notes && s.notes.length > 0)
+  if (firstActiveStep) {
+    return firstActiveStep.notes[0]
+  }
+  const keyIdx = NOTE_NAMES.indexOf(selectedKey.value)
+  return (selectedOctave.value + 1) * 12 + (keyIdx >= 0 ? keyIdx : 0)
+})
 const rafRef = ref(null)
 const repeatEventIdRef = ref(null)
 const fadeOutIntervalRef = ref(null)
@@ -197,7 +206,37 @@ watch(syncTrack, (val) => {
 
 let lastEmittedConfig = null;
 
-watch([numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange, () => props.globalTranspose, () => props.bpm], () => {
+watch(numSteps, (newVal) => {
+  if (!newVal || isNaN(newVal)) return
+  const targetLen = Math.max(2, Math.min(64, Number(newVal)))
+  const currentSteps = [...steps.value]
+  const oldLen = currentSteps.length
+  
+  if (oldLen === targetLen) return
+  
+  if (oldLen < targetLen) {
+    // Create new steps by repeating the existing pattern (tiling)
+    // We use basePatternLength instead of oldLen to handle slider intermediate steps correctly
+    const additional = []
+    const tileBase = basePatternLength.value || oldLen
+    
+    for (let i = oldLen; i < targetLen; i++) {
+      const sourceStep = currentSteps[i % tileBase] || DEFAULT_STEP
+      additional.push(JSON.parse(JSON.stringify(sourceStep)))
+    }
+    steps.value = [...currentSteps, ...additional]
+  } else {
+    steps.value = currentSteps.slice(0, targetLen)
+  }
+
+  // Debounce updating the base pattern length so intermediate slider values don't break tiling
+  if (baseLengthTimer) clearTimeout(baseLengthTimer)
+  baseLengthTimer = setTimeout(() => {
+    basePatternLength.value = targetLen
+  }, 800)
+})
+
+watch([numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange, () => props.globalTranspose, () => props.bpm, dynamicMidiTranspose], () => {
   const config = { 
     numSteps: numSteps.value, 
     steps: steps.value, 
@@ -223,11 +262,25 @@ watch([numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, se
     playStateRef.current.param2CC = param2CC.value
     playStateRef.current.transpose = props.globalTranspose || 0
     playStateRef.current.channel = props.channel
+    playStateRef.current.dynamicMidiTranspose = dynamicMidiTranspose.value
   }
 }, { deep: true })
 
 watch(() => props.initialConfig, (cfg) => {
   if (cfg) {
+    // Guard to prevent reactive feedback loops from our own emitted changes
+    if (lastEmittedConfig && (
+      cfg === lastEmittedConfig ||
+      (cfg.numSteps === lastEmittedConfig.numSteps && 
+       JSON.stringify(cfg.steps) === JSON.stringify(lastEmittedConfig.steps) &&
+       cfg.param1CC === lastEmittedConfig.param1CC &&
+       cfg.param2CC === lastEmittedConfig.param2CC &&
+       cfg.param1Variation === lastEmittedConfig.param1Variation &&
+       cfg.param2Variation === lastEmittedConfig.param2Variation)
+    )) {
+      return
+    }
+
     if (cfg.numSteps !== undefined && numSteps.value !== cfg.numSteps) {
       numSteps.value = cfg.numSteps
     }
@@ -273,36 +326,6 @@ watch(() => props.bpm, (bpm) => {
 watch(swingAmount, (val) => {
   getTransport().swing = val / 100
   getTransport().swingSubdivision = '16n'
-})
-
-watch(numSteps, (newVal) => {
-  if (!newVal || isNaN(newVal)) return
-  const targetLen = Math.max(2, Math.min(64, Number(newVal)))
-  const currentSteps = [...steps.value]
-  const oldLen = currentSteps.length
-  
-  if (oldLen === targetLen) return
-  
-  if (oldLen < targetLen) {
-    // Create new steps by repeating the existing pattern (tiling)
-    // We use basePatternLength instead of oldLen to handle slider intermediate steps correctly
-    const additional = []
-    const tileBase = basePatternLength.value || oldLen
-    
-    for (let i = oldLen; i < targetLen; i++) {
-      const sourceStep = currentSteps[i % tileBase] || DEFAULT_STEP
-      additional.push(JSON.parse(JSON.stringify(sourceStep)))
-    }
-    steps.value = [...currentSteps, ...additional]
-  } else {
-    steps.value = currentSteps.slice(0, targetLen)
-  }
-
-  // Debounce updating the base pattern length so intermediate slider values don't break tiling
-  if (baseLengthTimer) clearTimeout(baseLengthTimer)
-  baseLengthTimer = setTimeout(() => {
-    basePatternLength.value = targetLen
-  }, 800)
 })
 
 function generateSequence() {
@@ -388,17 +411,27 @@ function generateSequence() {
 }
 
 function duplicateLength() {
-  const next = Math.min(64, numSteps.value * 2)
+  const next = Math.min(props.seqStepsLimit || 64, numSteps.value * 2)
   if (next !== numSteps.value) {
-    // Tiling logic is handled by the watch(numSteps)
+    const currentSteps = [...steps.value]
+    const additional = []
+    const tileBase = basePatternLength.value || currentSteps.length
+    for (let i = currentSteps.length; i < next; i++) {
+      const sourceStep = currentSteps[i % tileBase] || DEFAULT_STEP
+      additional.push(JSON.parse(JSON.stringify(sourceStep)))
+    }
+    steps.value = [...currentSteps, ...additional]
     numSteps.value = next
+    basePatternLength.value = next
   }
 }
 
 function reduceLength() {
   const next = Math.max(2, Math.round(numSteps.value / 2))
   if (next !== numSteps.value) {
+    steps.value = steps.value.slice(0, next)
     numSteps.value = next
+    basePatternLength.value = next
   }
 }
 
@@ -663,9 +696,18 @@ onMounted(() => {
 
   const handleIncomingNote = (type, note, velocity, chan) => {
     if (!props.isOpen) return
-    // Guard: ignore incoming notes for step editing if playing (prevents MIDI feedback loop)
-    if (isPlaying.value && !isRecording.value) return
     
+    // Dynamic transposition during PLAY mode (not recording)
+    if (isPlaying.value && !isRecording.value) {
+      if (type === 'on' && velocity > 0) {
+        dynamicMidiTranspose.value = note - sequenceRootMidi.value
+      }
+      return
+    }
+    
+    // Step modification is strictly enabled only when in RECORD mode
+    if (!isRecording.value) return
+
     const now = performance.now()
     if (type === 'on' && velocity > 0 && selectedStepIdx.value !== null) {
       if (now - lastHandledNoteTimeRef.value < 150) return
@@ -679,12 +721,8 @@ onMounted(() => {
         updates.gate = 50
       }
 
-      if (isRecording.value) {
-        updateStep(selectedStepIdx.value, updates)
-        selectedStepIdx.value = (selectedStepIdx.value + 1) % numSteps.value
-      } else {
-        updateStep(selectedStepIdx.value, updates)
-      }
+      updateStep(selectedStepIdx.value, updates)
+      selectedStepIdx.value = (selectedStepIdx.value + 1) % numSteps.value
     }
   }
 
@@ -698,6 +736,7 @@ onMounted(() => {
   window.addEventListener('virtual-midi-note', handleVirtualNote)
 
   return () => {
+    midiService.isSequencerPlaying = false
     window.removeEventListener('toggle-sequencer', handleToggle)
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('sequencer-action', handleSequencerAction)
@@ -706,6 +745,8 @@ onMounted(() => {
 })
 
 watch(isPlaying, (playing) => {
+  midiService.isSequencerPlaying = playing
+
   if (syncTrack.value) {
     if (skipBackingTrackSync.value) {
       skipBackingTrackSync.value = false
@@ -722,6 +763,7 @@ watch(isPlaying, (playing) => {
   }
 
   if (!playing) {
+    dynamicMidiTranspose.value = 0
     getTransport().stop()
     if (repeatEventIdRef.value !== null) {
       getTransport().clear(repeatEventIdRef.value)
@@ -783,7 +825,7 @@ watch(isPlaying, (playing) => {
           noteDurationMs = Math.max(noteDurationMs, 10)
 
           step.notes.forEach(note => {
-            const clampedNote = Math.max(0, Math.min(127, note + state.transpose))
+            const clampedNote = Math.max(0, Math.min(127, note + state.transpose + (state.dynamicMidiTranspose || 0)))
             midiStore.sendNoteOn(clampedNote, step.velocity, state.channel, MidiSource.SEQUENCER)
             window.setTimeout(() => midiStore.sendNoteOff(clampedNote, 0, state.channel, MidiSource.SEQUENCER), noteDurationMs)
           })
@@ -807,7 +849,8 @@ watch(isPlaying, (playing) => {
     channel: props.channel,
     param1CC: param1CC.value,
     param2CC: param2CC.value,
-    transpose: props.globalTranspose || 0
+    transpose: props.globalTranspose || 0,
+    dynamicMidiTranspose: dynamicMidiTranspose.value
   }
 })
 

@@ -66,6 +66,7 @@ export class MidiService {
 
   // Smart Latch
   public isSmartLatchActive = false;
+  public isSequencerPlaying = false;
   private smartLatchMaxNotes: number = 4;
   private smartLatchReplace: boolean = true;
   private smartLatchFadeTime: number = 0;
@@ -92,6 +93,10 @@ export class MidiService {
     skipDeviceId: string | null = null
   ) {
     if (!this.midiAccess) return;
+
+    if (this.isSequencerPlaying && (type === 'noteon' || type === 'noteoff') && source === MidiSource.KEYBOARD) {
+      return;
+    }
 
     // Use a Set of IDs to avoid duplicate sends if multiple name matches occur
     const targetDeviceIds = new Set<string>();
@@ -524,6 +529,8 @@ export class MidiService {
     const targetsFromMatrix = inputName ? this.routingMatrix.get(inputName) : null;
     const isNote = (status & 0xf0) === 0x90 || (status & 0xf0) === 0x80;
     const isCC = (status & 0xf0) === 0xb0;
+
+    if (this.isSequencerPlaying && isNote) return;
 
     this.midiAccess.outputs.forEach(outDevice => {
       const outConfig = this.routingConfig?.registrations[outDevice.name];
