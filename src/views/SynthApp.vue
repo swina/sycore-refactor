@@ -470,6 +470,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+
 .glow-neon {
   text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
   box-shadow: 0 0 20px rgba(0, 255, 204, 0.2), inset 0 0 20px rgba(0, 255, 204, 0.1);

@@ -338,7 +338,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 </script>
 
 <template>
-  <div class="max-w-4xl m-auto h-full flex flex-col overflow-hidden bg-neutral-950 relative">
+  <div class="max-w-4xl m-auto h-full flex flex-col overflow-hidden bg-neutral-950 relative bg-container">
 
     <!-- ── NO PRESET: idle prompt ── -->
     <template v-if="!selectedPreset">
@@ -657,7 +657,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
       <div
         v-if="!isPanelCollapsed"
         class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-6 pb-32"
-        :class = "activeCategory ? 'bg-black border border-black/50 rounded-lg': 'bg-grid-neon'"
+        :class = "activeCategory ? 'bg-black border border-black/50 rounded-lg': 'bg-transparent'"
       >
         <div v-if="activeCategory" class="h-full">
           <div v-for="cat in categoriesWithCtrls.filter(c => c.id === activeCategory)" :key="cat.id" class="h-full flex flex-col md:flex-row gap-8 items-start">
