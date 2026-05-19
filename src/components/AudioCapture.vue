@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical, Repeat } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDraggable } from '@/composables/useDraggable'
 import { Mp3Encoder } from '@breezystack/lamejs'
@@ -29,10 +29,63 @@ const isExportingMp3   = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const error            = ref(null)
 
+const isLooping           = ref(false)
+const audioDuration       = ref(0)
+const loopStart           = ref(0)
+const loopEnd             = ref(0)
+const playbackStart       = ref(0)
+const loopCrossfadeDur    = ref(0.5)
+const currentPlaybackTime = ref(0)
+const waveformPeaks = ref([])
+
+async function generateWaveformPeaks(blob) {
+  try {
+    const arrayBuffer = await blob.arrayBuffer()
+    const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
+    const tempCtx = new audioCtxClass(1, 1, 44100)
+    
+    const decoded = await new Promise((resolve, reject) => {
+      tempCtx.decodeAudioData(
+        arrayBuffer,
+        (buffer) => resolve(buffer),
+        (err) => reject(err || new Error('Failed to decode audio data'))
+      )
+    })
+    
+    const channelData = decoded.getChannelData(0)
+    const numPoints = 160
+    const step = Math.ceil(channelData.length / numPoints)
+    const peaks = []
+    
+    for (let i = 0; i < numPoints; i++) {
+      const start = i * step
+      let maxVal = 0
+      for (let j = 0; j < step && (start + j) < channelData.length; j++) {
+        const val = Math.abs(channelData[start + j])
+        if (val > maxVal) maxVal = val
+      }
+      peaks.push(maxVal)
+    }
+    waveformPeaks.value = peaks
+  } catch (e) {
+    console.error('Failed to generate waveform peaks', e)
+    waveformPeaks.value = []
+  }
+}
+
+watch(recordedBlob, async (newBlob) => {
+  if (newBlob) {
+    await generateWaveformPeaks(newBlob)
+  } else {
+    waveformPeaks.value = []
+  }
+})
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const canvasRef   = ref(null)
 const levelBarRef = ref(null)
-const audioRef    = ref(null)
+const audioRef1   = ref(null)
+const audioRef2   = ref(null)
 
 // ── Plain mutable (Web Audio nodes) ──────────────────────────────────────────
 let streamRef      = null
@@ -50,6 +103,49 @@ watch(toPlaylist, v => {
   toPlaylistRef = v
   localStorage.setItem('S1_CAPTURE_TO_PLAYLIST', v ? '1' : '0')
 })
+
+watch(loopStart, (ns) => {
+  if (ns >= loopEnd.value) {
+    loopEnd.value = Math.min(audioDuration.value, ns + 0.05)
+  }
+})
+
+watch(loopEnd, (ne) => {
+  if (ne <= loopStart.value) {
+    loopStart.value = Math.max(0, ne - 0.05)
+  }
+})
+
+watch(playbackStart, (ns) => {
+  if (ns > audioDuration.value) {
+    playbackStart.value = audioDuration.value
+  } else if (ns < 0) {
+    playbackStart.value = 0
+  }
+})
+
+function handleLoadedMetadata() {
+  if (audioRef1.value) {
+    const dur = audioRef1.value.duration
+    if (dur && isFinite(dur)) {
+      audioDuration.value = dur
+      loopStart.value = 0
+      loopEnd.value = dur
+      playbackStart.value = 0
+    }
+  }
+}
+
+function handleTimeUpdate() {
+  if (audioRef.value) {
+    currentPlaybackTime.value = audioRef.value.currentTime || 0
+  }
+}
+
+function formatTimeSecs(val) {
+  const v = typeof val === 'object' ? val.value : val
+  return `${v.toFixed(2)}s`
+}
 
 // ── Device enumeration ────────────────────────────────────────────────────────
 async function refreshDevices() {
@@ -71,6 +167,13 @@ function stopAll(keepBlob = false) {
   isRecordingRef = false
   isMonitoring.value = false
   isRecording.value = false
+  isPlaying.value = false
+
+  cleanupWebAudio()
+
+  if (audioRef1.value) { audioRef1.value.pause(); audioRef1.value.src = '' }
+  if (audioRef2.value) { audioRef2.value.pause(); audioRef2.value.src = '' }
+
   if (!keepBlob) {
     recordedBlob.value = null
     recSecs.value = 0
@@ -138,6 +241,11 @@ function startRecording() {
   if (blobUrlRef) { URL.revokeObjectURL(blobUrlRef); blobUrlRef = null }
   chunksRef = []
   recSecs.value = 0
+  
+  audioDuration.value = 0
+  loopStart.value = 0
+  loopEnd.value = 0
+  playbackStart.value = 0
 
   const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg']
     .find(t => MediaRecorder.isTypeSupported(t)) ?? ''
@@ -149,7 +257,19 @@ function startRecording() {
     recordedBlob.value = blob
     const previewUrl = URL.createObjectURL(blob)
     blobUrlRef = previewUrl
-    if (audioRef.value) { audioRef.value.src = previewUrl; audioRef.value.load() }
+    if (audioRef1.value && audioRef2.value) {
+      audioRef1.value.src = previewUrl
+      audioRef2.value.src = previewUrl
+      audioRef1.value.load()
+      audioRef2.value.load()
+    }
+    
+    // Explicitly initialize loop range to full recording duration
+    audioDuration.value = recSecs.value
+    loopStart.value = 0
+    loopEnd.value = recSecs.value
+    playbackStart.value = 0
+
     if (toPlaylistRef) {
       const d = new Date()
       const pad = n => String(n).padStart(2, '0')
@@ -196,10 +316,109 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url)
 }
 
-function handleDownload() {
+// ── Audio Cropping & WAV Encoding Helpers ─────────────────────────────────────
+function audioBufferToWav(buffer) {
+  const numOfChan = buffer.numberOfChannels
+  const sampleRate = buffer.sampleRate
+  const format = 1 // Raw PCM
+  const bitDepth = 16
+  
+  let result
+  if (numOfChan === 2) {
+    result = interleave(buffer.getChannelData(0), buffer.getChannelData(1))
+  } else {
+    result = buffer.getChannelData(0)
+  }
+  
+  const bufferLength = result.length * 2
+  const wavBuffer = new ArrayBuffer(44 + bufferLength)
+  const view = new DataView(wavBuffer)
+  
+  writeString(view, 0, 'RIFF')
+  view.setUint32(4, 36 + bufferLength, true)
+  writeString(view, 8, 'WAVE')
+  writeString(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, format, true)
+  view.setUint16(22, numOfChan, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * numOfChan * (bitDepth / 8), true)
+  view.setUint16(32, numOfChan * (bitDepth / 8), true)
+  view.setUint16(34, bitDepth, true)
+  writeString(view, 36, 'data')
+  view.setUint32(40, bufferLength, true)
+  
+  floatTo16BitPCM(view, 44, result)
+  return new Blob([view], { type: 'audio/wav' })
+}
+
+function interleave(inputL, inputR) {
+  const length = inputL.length + inputR.length
+  const result = new Float32Array(length)
+  let index = 0
+  let inputIndex = 0
+  while (index < length) {
+    result[index++] = inputL[inputIndex]
+    result[index++] = inputR[inputIndex]
+    inputIndex++
+  }
+  return result
+}
+
+function floatTo16BitPCM(output, offset, input) {
+  for (let i = 0; i < input.length; i++, offset += 2) {
+    let s = Math.max(-1, Math.min(1, input[i]))
+    output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+  }
+}
+
+function writeString(view, offset, string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i))
+  }
+}
+
+
+async function handleDownload() {
   if (!recordedBlob.value) return
-  const ext = recordedBlob.value.type.includes('ogg') ? 'ogg' : 'webm'
-  triggerDownload(recordedBlob.value, `s1-audio-${getTimestamp()}.${ext}`)
+  
+  const hasCrop = (loopStart.value > 0 || loopEnd.value < audioDuration.value)
+  if (hasCrop) {
+    try {
+      const arrayBuffer = await recordedBlob.value.arrayBuffer()
+      const audioCtxClass = window.AudioContext || window.webkitAudioContext
+      const audioCtx = new audioCtxClass()
+      const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+      await audioCtx.close()
+      
+      const sampleRate = decoded.sampleRate
+      const startSample = Math.floor(loopStart.value * sampleRate)
+      const endSample = Math.floor(loopEnd.value * sampleRate)
+      
+      const croppedLength = endSample - startSample
+      if (croppedLength <= 0) return
+      
+      const croppedBuffer = new AudioBuffer({
+        numberOfChannels: decoded.numberOfChannels,
+        length: croppedLength,
+        sampleRate: sampleRate
+      })
+      
+      for (let chan = 0; chan < decoded.numberOfChannels; chan++) {
+        const channelData = decoded.getChannelData(chan)
+        const croppedData = channelData.subarray(startSample, endSample)
+        croppedBuffer.copyToChannel(croppedData, chan)
+      }
+      
+      const croppedWav = audioBufferToWav(croppedBuffer)
+      triggerDownload(croppedWav, `s1-audio-cropped-${getTimestamp()}.wav`)
+    } catch (e) {
+      console.error('Failed to download cropped audio', e)
+    }
+  } else {
+    const ext = recordedBlob.value.type.includes('ogg') ? 'ogg' : 'webm'
+    triggerDownload(recordedBlob.value, `s1-audio-${getTimestamp()}.${ext}`)
+  }
 }
 
 async function handleExportMp3() {
@@ -207,7 +426,8 @@ async function handleExportMp3() {
   isExportingMp3.value = true
   try {
     const arrayBuffer = await recordedBlob.value.arrayBuffer()
-    const audioCtx = new AudioContext()
+    const audioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new audioCtxClass()
     const decoded = await audioCtx.decodeAudioData(arrayBuffer)
     await audioCtx.close()
 
@@ -215,6 +435,9 @@ async function handleExportMp3() {
     const sampleRate  = decoded.sampleRate
     const left  = decoded.getChannelData(0)
     const right = numChannels > 1 ? decoded.getChannelData(1) : left
+
+    const startSample = Math.floor(loopStart.value * sampleRate)
+    const endSample = Math.floor(loopEnd.value * sampleRate)
 
     const toInt16 = f32 => {
       const i16 = new Int16Array(f32.length)
@@ -225,8 +448,8 @@ async function handleExportMp3() {
       return i16
     }
 
-    const leftI16  = toInt16(left)
-    const rightI16 = numChannels > 1 ? toInt16(right) : leftI16
+    const leftI16  = toInt16(left.subarray(startSample, endSample))
+    const rightI16 = numChannels > 1 ? toInt16(right.subarray(startSample, endSample)) : leftI16
     const enc = new Mp3Encoder(numChannels, sampleRate, 192)
     const toAB = u => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength)
     const mp3Parts = []
@@ -249,19 +472,217 @@ async function handleExportMp3() {
   }
 }
 
-// ── Playback ──────────────────────────────────────────────────────────────────
+async function handleAddToPlaylist() {
+  if (!recordedBlob.value) return
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const audioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new audioCtxClass()
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+    
+    const sampleRate = decoded.sampleRate
+    const startSample = Math.floor(loopStart.value * sampleRate)
+    const endSample = Math.floor(loopEnd.value * sampleRate)
+    
+    const croppedLength = endSample - startSample
+    if (croppedLength <= 0) return
+    
+    const croppedBuffer = new AudioBuffer({
+      numberOfChannels: decoded.numberOfChannels,
+      length: croppedLength,
+      sampleRate: sampleRate
+    })
+    
+    for (let chan = 0; chan < decoded.numberOfChannels; chan++) {
+      const channelData = decoded.getChannelData(chan)
+      const croppedData = channelData.subarray(startSample, endSample)
+      croppedBuffer.copyToChannel(croppedData, chan)
+    }
+    
+    const croppedWav = audioBufferToWav(croppedBuffer)
+    const playlistUrl = URL.createObjectURL(croppedWav)
+    
+    const d = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    const ts = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    
+    const duration = loopEnd.value - loopStart.value
+    window.dispatchEvent(new CustomEvent('playlist-add-from-capture', {
+      detail: {
+        url: playlistUrl,
+        label: `CROP ${ts}`,
+        duration: duration
+      }
+    }))
+  } catch (e) {
+    console.error('Failed to add cropped audio to playlist', e)
+  }
+}
+
+// ── Playback & Crossfading ────────────────────────────────────────────────────
+let audioCtx = null
+let sourceNode1 = null
+let sourceNode2 = null
+let gainNode1 = null
+let gainNode2 = null
+let activeAudio = null
+let crossfadeTimeout = null
+let playbackRafRef = null
+
+watch(isPlaying, (playing) => {
+  if (playing) {
+    startPlaybackLoop()
+  } else {
+    if (playbackRafRef) {
+      cancelAnimationFrame(playbackRafRef)
+      playbackRafRef = null
+    }
+  }
+})
+
+function cleanupWebAudio() {
+  if (crossfadeTimeout) {
+    clearTimeout(crossfadeTimeout)
+    crossfadeTimeout = null
+  }
+}
+
+function destroyWebAudio() {
+  cleanupWebAudio()
+  if (audioCtx) {
+    audioCtx.close().catch(() => {})
+    audioCtx = null
+  }
+  sourceNode1 = null
+  sourceNode2 = null
+  gainNode1 = null
+  gainNode2 = null
+}
+
+function initWebAudio() {
+  if (audioCtx) return
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  audioCtx = new AudioContextClass()
+  
+  sourceNode1 = audioCtx.createMediaElementSource(audioRef1.value)
+  sourceNode2 = audioCtx.createMediaElementSource(audioRef2.value)
+  
+  gainNode1 = audioCtx.createGain()
+  gainNode2 = audioCtx.createGain()
+  
+  sourceNode1.connect(gainNode1)
+  sourceNode2.connect(gainNode2)
+  
+  gainNode1.connect(audioCtx.destination)
+  gainNode2.connect(audioCtx.destination)
+}
+
+function startPlaybackLoop() {
+  if (playbackRafRef) cancelAnimationFrame(playbackRafRef)
+  
+  let isCrossfading = false
+  
+  const tick = () => {
+    if (!isPlaying.value || !activeAudio) return
+    playbackRafRef = requestAnimationFrame(tick)
+    
+    let time = activeAudio.currentTime || 0
+    if (isLooping.value) {
+      time = Math.min(loopEnd.value, time)
+    }
+    currentPlaybackTime.value = time
+    
+    if (!isLooping.value) {
+      if (activeAudio.currentTime >= audioDuration.value) {
+        isPlaying.value = false
+        activeAudio.pause()
+        activeAudio.currentTime = 0
+        currentPlaybackTime.value = 0
+        return
+      }
+    } else {
+      const maxFade = (loopEnd.value - loopStart.value) / 2
+      const fadeTime = Math.max(0, Math.min(loopCrossfadeDur.value, maxFade))
+      
+      if (!isCrossfading && activeAudio.currentTime >= (loopEnd.value - fadeTime)) {
+        isCrossfading = true
+        initWebAudio()
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume()
+        }
+        
+        const nextAudio = activeAudio === audioRef1.value ? audioRef2.value : audioRef1.value
+        const activeGain = activeAudio === audioRef1.value ? gainNode1 : gainNode2
+        const nextGain = nextAudio === audioRef1.value ? gainNode1 : gainNode2
+        
+        nextAudio.currentTime = loopStart.value
+        nextAudio.play().catch(() => {})
+        
+        const now = audioCtx.currentTime
+        if (fadeTime > 0) {
+          activeGain.gain.setValueAtTime(1, now)
+          activeGain.gain.linearRampToValueAtTime(0, now + fadeTime)
+          
+          nextGain.gain.setValueAtTime(0, now)
+          nextGain.gain.linearRampToValueAtTime(1, now + fadeTime)
+        } else {
+          activeGain.gain.setValueAtTime(0, now)
+          nextGain.gain.setValueAtTime(1, now)
+        }
+        
+        if (crossfadeTimeout) clearTimeout(crossfadeTimeout)
+        crossfadeTimeout = setTimeout(() => {
+          activeAudio.pause()
+          activeAudio = nextAudio
+          isCrossfading = false
+        }, fadeTime * 1000)
+      }
+    }
+  }
+  tick()
+}
+
+function formatMmSs(s) {
+  const secs = Math.floor(s)
+  const mm = Math.floor(secs / 60).toString().padStart(2, '0')
+  const ss = (secs % 60).toString().padStart(2, '0')
+  return `${mm}:${ss}`
+}
+
 function togglePlay() {
-  if (!audioRef.value || !blobUrlRef) return
-  if (isPlaying.value) audioRef.value.pause()
-  else audioRef.value.play()
+  if (!audioRef1.value || !audioRef2.value || !blobUrlRef) return
+  
+  if (isPlaying.value) {
+    isPlaying.value = false
+    audioRef1.value.pause()
+    audioRef2.value.pause()
+    if (crossfadeTimeout) {
+      clearTimeout(crossfadeTimeout)
+      crossfadeTimeout = null
+    }
+  } else {
+    initWebAudio()
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume()
+    }
+    
+    gainNode1.gain.setValueAtTime(1, audioCtx.currentTime)
+    gainNode2.gain.setValueAtTime(0, audioCtx.currentTime)
+    
+    activeAudio = audioRef1.value
+    activeAudio.currentTime = playbackStart.value
+    activeAudio.play().catch(() => {})
+    
+    isPlaying.value = true
+  }
 }
 
 // ── rAF draw loop ─────────────────────────────────────────────────────────────
-watch(isMonitoring, async (active) => {
-  if (!active) return
+watch([isMonitoring, recordedBlob], async () => {
   await nextTick()
   startDrawLoop()
-})
+}, { immediate: true })
 
 function startDrawLoop() {
   if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
@@ -269,61 +690,162 @@ function startDrawLoop() {
   if (!canvas) return
 
   const draw = () => {
+    const monitoring = isMonitoring.value
+    const hasRecording = !!recordedBlob.value
+
+    if (!monitoring && !hasRecording) {
+      rafRef = null
+      return
+    }
+
     rafRef = requestAnimationFrame(draw)
-    const analyser = analyserRef
-    if (!analyser) return
 
     const dpr = window.devicePixelRatio || 1
     const W = canvas.offsetWidth * dpr
     const H = canvas.offsetHeight * dpr
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H }
 
-    const bufLen = analyser.frequencyBinCount
-    const data = new Uint8Array(bufLen)
-    analyser.getByteTimeDomainData(data)
-
-    let rms = 0
-    for (let i = 0; i < bufLen; i++) rms += ((data[i] / 128) - 1) ** 2
-    rms = Math.sqrt(rms / bufLen)
-    if (levelBarRef.value) {
-      const pct = Math.min(100, rms * 400)
-      levelBarRef.value.style.width = `${pct}%`
-      levelBarRef.value.style.background = pct > 85 ? '#ef4444' : pct > 55 ? '#fbbf24' : '#00ff9d'
-    }
-
     const ctx = canvas.getContext('2d')
     ctx.fillStyle = '#080808'
     ctx.fillRect(0, 0, W, H)
 
-    const rec   = isRecordingRef
-    const color = rec ? '#ef4444' : '#00ff9d'
-    const midY  = H / 2
+    const midY = H / 2
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)'
-    ctx.lineWidth = 1
-    ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
+    if (hasRecording && !isRecording.value && waveformPeaks.value.length > 0) {
+      const peaks = waveformPeaks.value
+      const len = peaks.length
 
-    ctx.beginPath()
-    ctx.strokeStyle = color
-    ctx.lineWidth = 1.5 * dpr
-    ctx.shadowColor = color
-    ctx.shadowBlur = rec ? 7 * dpr : 3 * dpr
-    for (let i = 0; i < W; i++) {
-      const idx = Math.min(bufLen - 1, Math.floor((i / W) * bufLen))
-      const y = midY + ((data[idx] / 128) - 1) * midY * 2.2
-      i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y)
-    }
-    ctx.stroke()
-    ctx.shadowBlur = 0
+      // Draw middle grid line
+      ctx.strokeStyle = 'rgba(255,255,255,0.03)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
 
-    if (rec) {
-      ctx.fillStyle = '#ef4444'
-      ctx.shadowColor = '#ef4444'
-      ctx.shadowBlur = 10 * dpr
-      ctx.beginPath()
-      ctx.arc(W - 11 * dpr, 11 * dpr, 4 * dpr, 0, Math.PI * 2)
-      ctx.fill()
+      // Calculate loop pixel points
+      const startPct = isLooping.value ? (loopStart.value / audioDuration.value) : 0
+      const endPct = isLooping.value ? (loopEnd.value / audioDuration.value) : 1
+      const startX = startPct * W
+      const endX = endPct * W
+
+      // Shade the loop area
+      if (isLooping.value) {
+        ctx.fillStyle = 'rgba(0, 255, 157, 0.04)'
+        ctx.fillRect(startX, 0, endX - startX, H)
+      }
+
+      // Draw waveform bars
+      const barWidth = Math.max(1.5, (W / len) * 0.6)
+      const gap = (W / len) - barWidth
+
+      for (let i = 0; i < len; i++) {
+        const x = i * (barWidth + gap)
+        const val = peaks[i]
+        const amplitude = Math.max(3 * dpr, val * (H * 0.75))
+        
+        // Highlight active loop area vs outside loop area
+        const inside = x >= startX && x <= endX
+        if (inside) {
+          ctx.fillStyle = '#00ff9d'
+          ctx.shadowColor = 'rgba(0, 255, 157, 0.5)'
+          ctx.shadowBlur = 1 * dpr
+        } else {
+          ctx.fillStyle = 'rgba(0, 255, 157, 0.22)'
+          ctx.shadowBlur = 0
+        }
+        
+        ctx.fillRect(x, midY - amplitude / 2, barWidth, amplitude)
+      }
       ctx.shadowBlur = 0
+
+      // Draw loop bounds vertical dashed lines
+      if (isLooping.value) {
+        ctx.lineWidth = 1 * dpr
+        ctx.setLineDash([4 * dpr, 3 * dpr])
+        
+        // Start bound (Green)
+        ctx.strokeStyle = '#00ff9d'
+        ctx.beginPath()
+        ctx.moveTo(startX, 0); ctx.lineTo(startX, H)
+        ctx.stroke()
+
+        // End bound (Red)
+        ctx.strokeStyle = '#ef4444'
+        ctx.beginPath()
+        ctx.moveTo(endX, 0); ctx.lineTo(endX, H)
+        ctx.stroke()
+        
+        ctx.setLineDash([])
+      }
+
+      // Draw playstart marker (Cyan dashed line)
+      const playStartPct = playbackStart.value / audioDuration.value
+      const playStartX = playStartPct * W
+
+      ctx.strokeStyle = '#00e5ff'
+      ctx.lineWidth = 1 * dpr
+      ctx.setLineDash([4 * dpr, 4 * dpr])
+      ctx.beginPath()
+      ctx.moveTo(playStartX, 0); ctx.lineTo(playStartX, H)
+      ctx.stroke()
+      ctx.setLineDash([])
+
+      // Draw playhead vertical cursor (neon pink with glow)
+      const playPct = currentPlaybackTime.value / audioDuration.value
+      const playX = playPct * W
+
+      ctx.strokeStyle = '#ff007f'
+      ctx.lineWidth = 2 * dpr
+      ctx.shadowColor = '#ff007f'
+      ctx.shadowBlur = 8 * dpr
+      ctx.beginPath()
+      ctx.moveTo(playX, 0); ctx.lineTo(playX, H)
+      ctx.stroke()
+      ctx.shadowBlur = 0
+    } else if (monitoring) {
+      const analyser = analyserRef
+      if (!analyser) return
+
+      const bufLen = analyser.frequencyBinCount
+      const data = new Uint8Array(bufLen)
+      analyser.getByteTimeDomainData(data)
+
+      let rms = 0
+      for (let i = 0; i < bufLen; i++) rms += ((data[i] / 128) - 1) ** 2
+      rms = Math.sqrt(rms / bufLen)
+      if (levelBarRef.value) {
+        const pct = Math.min(100, rms * 400)
+        levelBarRef.value.style.width = `${pct}%`
+        levelBarRef.value.style.background = pct > 85 ? '#ef4444' : pct > 55 ? '#fbbf24' : '#00ff9d'
+      }
+
+      const rec = isRecording.value
+      const color = rec ? '#ef4444' : '#00ff9d'
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
+
+      ctx.beginPath()
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.5 * dpr
+      ctx.shadowColor = color
+      ctx.shadowBlur = rec ? 7 * dpr : 3 * dpr
+      for (let i = 0; i < W; i++) {
+        const idx = Math.min(bufLen - 1, Math.floor((i / W) * bufLen))
+        const y = midY + ((data[idx] / 128) - 1) * midY * 2.2
+        i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y)
+      }
+      ctx.stroke()
+      ctx.shadowBlur = 0
+
+      if (rec) {
+        ctx.fillStyle = '#ef4444'
+        ctx.shadowColor = '#ef4444'
+        ctx.shadowBlur = 10 * dpr
+        ctx.beginPath()
+        ctx.arc(W - 11 * dpr, 11 * dpr, 4 * dpr, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.shadowBlur = 0
+      }
     }
   }
   draw()
@@ -349,6 +871,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopAll()
+  destroyWebAudio()
+  if (playbackRafRef) {
+    cancelAnimationFrame(playbackRafRef)
+    playbackRafRef = null
+  }
   navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
 })
@@ -358,7 +885,7 @@ onUnmounted(() => {
   <Transition name="capture">
     <div
       v-if="uiStore.isAudioCaptureOpen"
-      class="fixed z-[1000] min-w-[480px] min-h-[280px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
+      class="fixed z-[1000] min-w-[680px] min-h-[500px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
       :style="{ left: x + 'px', top: y + 'px' }"
     >
       <!-- Header -->
@@ -415,6 +942,12 @@ onUnmounted(() => {
       <!-- Waveform canvas -->
       <div class="relative bg-[#080808] flex-1 min-h-[60px]">
         <canvas ref="canvasRef" class="w-full h-full block" />
+        
+        <!-- Playback Time overlay in bottom-left corner of the canvas -->
+        <div v-if="recordedBlob" class="absolute bottom-2 left-2 bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">
+          {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
+        </div>
+
         <div v-if="!isMonitoring" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
           <template v-if="error">
             <p class="text-red-400 text-[10px] font-mono px-6 text-center">{{ error }}</p>
@@ -503,11 +1036,22 @@ onUnmounted(() => {
           {{ isExportingMp3 ? 'MP3…' : 'MP3' }}
         </button>
 
-        <!-- Save (original format) -->
+        <!-- Add to Playlist manually -->
+        <button
+          v-if="recordedBlob && !isRecording"
+          @click="handleAddToPlaylist"
+          title="Send cropped audio to Playlist"
+          class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon transition-colors"
+        >
+          <ListPlus class="w-3 h-3" />
+          +PL
+        </button>
+
+        <!-- Save (original format / WAV cropped) -->
         <button
           @click="handleDownload"
           :disabled="!recordedBlob"
-          title="Save recording (original format)"
+          title="Save recording (WAV if cropped, WebM if full)"
           :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
             recordedBlob
               ? 'text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon'
@@ -517,17 +1061,96 @@ onUnmounted(() => {
           Save
         </button>
       </div>
+
+      <!-- Loop settings area -->
+      <div v-if="recordedBlob" class="px-4 py-2 bg-neutral-950 border-t border-neutral-900/60 flex flex-col gap-2 shrink-0">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <button
+              @click="isLooping = !isLooping"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                isLooping 
+                  ? 'bg-synth-neon/15 text-synth-neon border-synth-neon/40' 
+                  : 'text-neutral-500 border-neutral-800 hover:text-neutral-400 hover:border-neutral-700']"
+            >
+              <Repeat class="w-3 h-3" />
+              Loop {{ isLooping ? 'ON' : 'OFF' }}
+            </button>
+            <span class="text-[12px] font-mono text-neutral-500">
+              Range: {{ formatTimeSecs(loopStart) }} - {{ formatTimeSecs(loopEnd) }} / {{ formatTimeSecs(audioDuration) }}
+            </span>
+          </div>
+          <span class="text-[12px] font-mono text-synth-neon">
+            Pos: {{ formatTimeSecs(currentPlaybackTime) }}
+          </span>
+        </div>
+
+        <div class="flex flex-col gap-1.5 mt-1">
+          <!-- Play Start Slider -->
+          <div class="flex items-center gap-3">
+            <span class="text-[8px] font-mono text-synth-neon w-16">PLAY START</span>
+            <input
+              v-model.number="playbackStart"
+              type="range"
+              min="0"
+              :max="audioDuration"
+              step="0.01"
+              class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+            />
+            <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(playbackStart) }}</span>
+          </div>
+
+          <div v-if="isLooping" class="flex flex-col gap-1.5 mt-1">
+            <!-- Loop Start Slider -->
+            <div class="flex items-center gap-3">
+              <span class="text-[8px] font-mono text-neutral-400 w-16">LOOP START</span>
+              <input
+                v-model.number="loopStart"
+                type="range"
+                min="0"
+                :max="audioDuration"
+                step="0.01"
+                class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+              />
+              <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopStart) }}</span>
+            </div>
+
+            <!-- Loop End Slider -->
+            <div class="flex items-center gap-3">
+              <span class="text-[8px] font-mono text-neutral-400 w-16">LOOP END</span>
+              <input
+                v-model.number="loopEnd"
+                type="range"
+                min="0"
+                :max="audioDuration"
+                step="0.01"
+                class="flex-1 h-1 accent-red-500 bg-neutral-800 rounded appearance-none cursor-pointer"
+              />
+              <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopEnd) }}</span>
+            </div>
+
+            <!-- Crossfade Slider -->
+            <div class="flex items-center gap-3">
+              <span class="text-[8px] font-mono text-neutral-400 w-16">CROSSFADE</span>
+              <input
+                v-model.number="loopCrossfadeDur"
+                type="range"
+                min="0"
+                max="5"
+                step="0.05"
+                class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+              />
+              <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopCrossfadeDur) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </Transition>
 
-  <!-- Hidden audio element for playback preview -->
-  <audio
-    ref="audioRef"
-    @play="isPlaying = true"
-    @pause="isPlaying = false"
-    @ended="isPlaying = false"
-    class="hidden"
-  />
+  <!-- Hidden audio elements for playback preview with crossfade -->
+  <audio ref="audioRef1" @loadedmetadata="handleLoadedMetadata" class="hidden" />
+  <audio ref="audioRef2" class="hidden" />
 </template>
 
 <style scoped>
