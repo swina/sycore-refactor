@@ -215,7 +215,7 @@ onMounted(() => {
 
     <!-- Main Content Area -->
     <div class="flex-1 overflow-hidden">
-      <Welcome v-if="!authStore.user || (!presetStore.lastPreset && !presetStore.showResults)" />
+      <Welcome v-if="!authStore.user || !presetStore.showResults" />
       <ResultsPanel v-else />
     </div>
 

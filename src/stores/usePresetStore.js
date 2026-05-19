@@ -21,13 +21,13 @@ export const usePresetStore = defineStore('preset', () => {
   const isGenerating = ref(false)
   const isSaving = ref(false)
   const showResults = ref(false)
-  
-  const engineCacheA = ref(null) 
-  const engineCacheB = ref(null) 
-  const useAlternativeEngine = ref(false) 
-  
+
+  const engineCacheA = ref(null)
+  const engineCacheB = ref(null)
+  const useAlternativeEngine = ref(false)
+
   const sessionGeneratedIds = ref([])
-  
+
   const currentName = ref('')
   const currentPatchNotes = ref(null)
   const lastModifiedField = ref(null)
@@ -72,7 +72,7 @@ export const usePresetStore = defineStore('preset', () => {
           // Use recallPreset to ensure all store states (Arp, LFO, etc.) are properly restored
           recallPreset(preset, false)
           showResults.value = true
-          
+
           // Restore filter if it was saved
           const savedFilter = localStorage.getItem('sycore_history_filter')
           if (savedFilter) {
@@ -93,7 +93,7 @@ export const usePresetStore = defineStore('preset', () => {
   let historyUnsubscribe = null
   function loadHistory(uid) {
     if (historyUnsubscribe) historyUnsubscribe()
-    
+
     const colRef = collection(db, 'users', uid, 'presets')
     historyUnsubscribe = onSnapshot(colRef, async (snapshot) => {
       const presets = snapshot.docs.map(d => ({
@@ -104,7 +104,7 @@ export const usePresetStore = defineStore('preset', () => {
         const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime()
         return dateB - dateA
       })
-      
+
       history.value = presets
 
       // Auto-load the last preset on startup IF not already restored from cache
@@ -128,7 +128,7 @@ export const usePresetStore = defineStore('preset', () => {
 
       // Auto-seed if empty and not already seeded in this session
       const seededFlag = localStorage.getItem('sycore_bank_seeded')
-      
+
       if (presets.length === 0 && !seededFlag) {
         await seedDefaultBank(uid)
       }
@@ -140,10 +140,10 @@ export const usePresetStore = defineStore('preset', () => {
       console.log('[PresetStore] Default bank already seeded (flag found), skipping auto-seed.');
       return;
     }
-    
+
     console.log(`[PresetStore] Seeding default bank for user: ${uid}`)
     localStorage.setItem('sycore_bank_seeded', 'true')
-    
+
     if (Array.isArray(BANK_DEFAULT)) {
       for (const preset of BANK_DEFAULT) {
         await importPreset(preset.name, preset.data, preset.category, {
@@ -217,7 +217,7 @@ export const usePresetStore = defineStore('preset', () => {
 
   function _applyMetadataToStores(variant) {
     if (!variant) return
-    
+
     // Arp
     const arpStore = useArpStore()
     if (variant.arpConfig) {
@@ -229,7 +229,7 @@ export const usePresetStore = defineStore('preset', () => {
     } else {
       arpStore.arpEnabled = false
     }
-    
+
     // LFOs
     const lfoStore = useLfoStore()
     if (variant.lfo1Config) {
@@ -237,13 +237,13 @@ export const usePresetStore = defineStore('preset', () => {
     } else {
       lfoStore.lfo1.active = false
     }
-    
+
     if (variant.lfo2Config) {
       Object.assign(lfoStore.lfo2, variant.lfo2Config)
     } else {
       lfoStore.lfo2.active = false
     }
-    
+
     // Velocity
     const mappingStore = useMappingStore()
     if (variant.velocityConfig) {
@@ -272,7 +272,7 @@ export const usePresetStore = defineStore('preset', () => {
     uiStore.seqActiveSlot = variant.seqActiveSlot || 1
   }
 
-  function recallPreset(preset, shouldAutoPlay = true) {
+  function recallPreset(preset, shouldAutoPlay = false) {
     // Compatibility Layer: Migrate old structure to new symmetric A/B structure
     if (!preset.aVariant) {
       console.log(`[PresetStore] Migrating preset ${preset.id} to new symmetric structure`)
@@ -283,7 +283,7 @@ export const usePresetStore = defineStore('preset', () => {
         lfo1Config: preset.lfo1Config || null,
         lfo2Config: preset.lfo2Config || null
       }
-      
+
       preset.aVariant = {
         data: aData,
         patchNotes: preset.patchNotes || '',
@@ -292,7 +292,7 @@ export const usePresetStore = defineStore('preset', () => {
         seqConfig2: preset.seqConfig2 || null,
         seqActiveSlot: preset.seqActiveSlot || 1
       }
-      
+
       if (preset.abVariant) {
         preset.bVariant = {
           data: preset.abVariant.data || {},
@@ -332,12 +332,12 @@ export const usePresetStore = defineStore('preset', () => {
     if (shouldAutoPlay) {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
     }
-    
+
     // Sync all metadata from aVariant (default)
     _applyMetadataToStores(preset.aVariant)
 
     applyPresetCCs(preset.aVariant)
-    
+
     // Save to local cache for refresh persistence
     localStorage.setItem('sycore_last_session', JSON.stringify(preset))
 
@@ -372,17 +372,17 @@ export const usePresetStore = defineStore('preset', () => {
     if (!lastPreset.value) return
     const isAlt = type === 'B'
     if (useAlternativeEngine.value === isAlt && initialLoadDone) return
-    
+
     // 1. Capture current metadata into the active engine slot before switching
     const currentMeta = _captureCurrentMetadata()
     const activeVariant = useAlternativeEngine.value ? lastPreset.value.bVariant : lastPreset.value.aVariant
     if (activeVariant) {
       Object.assign(activeVariant, currentMeta)
     }
-    
+
     // 2. Switch engine state
     useAlternativeEngine.value = isAlt
-    
+
     // 3. Load target data
     const target = isAlt ? lastPreset.value.bVariant : lastPreset.value.aVariant
     if (target) {
@@ -390,10 +390,10 @@ export const usePresetStore = defineStore('preset', () => {
         applyPresetCCs({ data: target.data })
       }
       if (target.patchNotes) currentPatchNotes.value = target.patchNotes
-      
+
       // 4. Restore target metadata to stores
       _applyMetadataToStores(target)
-      
+
       // 5. Update session cache
       localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
     }
@@ -401,11 +401,11 @@ export const usePresetStore = defineStore('preset', () => {
 
   async function savePreset(name, data, category, options = {}) {
     if (!authStore.user) return
-    
+
     // Check limits
     const limits = authStore.getLimits()
     if (history.value.length >= limits.maxPresets && !lastPreset.value?.createdAt) {
-       throw new Error('slot_limit')
+      throw new Error('slot_limit')
     }
 
     isSaving.value = true
@@ -418,7 +418,7 @@ export const usePresetStore = defineStore('preset', () => {
       if (preset) {
         const isExisting = history.value.some(p => p.id === preset.id)
         const presetRef = doc(db, 'users', uid, 'presets', preset.id)
-        
+
         // Always capture current state into the active engine slot before saving
         const currentMeta = _captureCurrentMetadata()
         const activeVariant = useAlternativeEngine.value ? preset.bVariant : preset.aVariant
@@ -469,7 +469,7 @@ export const usePresetStore = defineStore('preset', () => {
       const uid = authStore.user.uid
       const presetId = options.id || `pr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
       const presetRef = doc(db, 'users', uid, 'presets', presetId)
-      
+
       const presetData = {
         id: presetId,
         name: name || 'Imported Preset',
@@ -508,7 +508,7 @@ export const usePresetStore = defineStore('preset', () => {
       if (presetsToDelete.length === 0) return 0
 
       console.log(`[Store] Initiating bulk delete for ${presetsToDelete.length} presets for user: ${uid}`);
-      
+
       await clearCollectionRange('user_presets', uid)
 
       lastPreset.value = null
@@ -522,7 +522,7 @@ export const usePresetStore = defineStore('preset', () => {
   async function toggleFavorite(presetId) {
     if (!authStore.user) return
     let preset = history.value.find(p => p.id === presetId)
-    
+
     // If it's a session preset (not saved yet), save it first
     if (!preset && sessionGeneratedIds.value.includes(presetId)) {
       await savePreset()
@@ -543,7 +543,7 @@ export const usePresetStore = defineStore('preset', () => {
 
   function updateFieldValue(fieldName, value) {
     if (!lastPreset.value) return
-    
+
     // Target the correct data object based on current engine
     const activeVariant = useAlternativeEngine.value ? lastPreset.value.bVariant : lastPreset.value.aVariant
     const targetData = activeVariant?.data;
@@ -553,7 +553,7 @@ export const usePresetStore = defineStore('preset', () => {
 
     // Set last modified for visual feedback
     lastModifiedField.value = fieldName
-    
+
     // Update cache
     localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
 
@@ -577,15 +577,15 @@ export const usePresetStore = defineStore('preset', () => {
     for (const [field, range] of Object.entries(categoryConfig)) {
       if (!Array.isArray(range)) continue
       const [min, max] = range
-      
+
       // Special handling for transpose: must be octaves (40, 52, 64, 76, 88)
       if (field === 'transpose') {
         if (variation && variation.values && variation.values[field] !== undefined) {
           ccValues[field] = variation.values[field]
         } else {
           const octaves = [40, 52, 64, 76, 88].filter(v => v >= min && v <= max)
-          ccValues[field] = octaves.length > 0 
-            ? octaves[Math.floor(Math.random() * octaves.length)] 
+          ccValues[field] = octaves.length > 0
+            ? octaves[Math.floor(Math.random() * octaves.length)]
             : 64
         }
         continue
@@ -595,7 +595,7 @@ export const usePresetStore = defineStore('preset', () => {
       if (variation && variation.values && variation.values[field] !== undefined) {
         // We add a tiny bit of drift (±2) to keep it generative but close to the intent
         const base = variation.values[field]
-        const drift = Math.floor(Math.random() * 5) - 2 
+        const drift = Math.floor(Math.random() * 5) - 2
         ccValues[field] = Math.max(0, Math.min(127, base + drift))
       } else {
         ccValues[field] = Math.round(min + Math.random() * (max - min))
@@ -607,41 +607,41 @@ export const usePresetStore = defineStore('preset', () => {
   function _generatePatchNotes(data) {
     const traits = []
     const cat = currentCategory.value
-    
+
     // Filter / Timbre
     if (data.cutoff < 45) traits.push('Dark')
     else if (data.cutoff > 95) traits.push('Bright')
-    
+
     if (data.res > 70) traits.push('Resonant')
     if (data.res > 100) traits.push('Acidic')
-    
+
     // Envelopes
     if (data.attack > 50) traits.push('Swelling')
     else if (data.decay < 40 && data.sustain < 40) traits.push('Percussive')
     if (data.release > 85) traits.push('Long-tail')
-    
+
     // Oscillators
     const hasSaw = data.oscSaw > 60
     const hasSq = data.oscSq > 60
     if (hasSaw && hasSq) traits.push('Rich')
     else if (hasSaw) traits.push('Saw-driven')
     else if (hasSq) traits.push('Square-focused')
-    
+
     if (data.oscSub > 80) traits.push('Deep')
     if (data.oscNoise > 40) traits.push('Gritty')
-    
+
     // Effects
     if (data.reverb > 70) traits.push('Spacey')
     if (data.delayLvl > 50) traits.push('Echoing')
     if (data.chorusMode > 0) traits.push('Wide')
-    
+
     // S-1 unique
     if (data.oscChopOvertone > 60 || data.oscChopComb > 60) traits.push('Complex')
 
-    const description = traits.length > 0 
-      ? traits.slice(0, 3).join(', ') 
+    const description = traits.length > 0
+      ? traits.slice(0, 3).join(', ')
       : 'Balanced'
-      
+
     return `${description} ${cat} patch.`
   }
 
@@ -649,7 +649,7 @@ export const usePresetStore = defineStore('preset', () => {
     const presetId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     const notes = _generatePatchNotes(data)
     const variant = _createVariant(data, notes)
-    
+
     return {
       id: presetId,
       name: generateRandomName(currentCategory.value),
@@ -696,13 +696,13 @@ export const usePresetStore = defineStore('preset', () => {
         lastPreset.value = newPreset
         currentName.value = newPreset.name
         currentPatchNotes.value = newPreset.patchNotes
-        
+
         sessionGeneratedIds.value = [...sessionGeneratedIds.value, newPreset.id]
-        
+
         // Restore A's metadata to stores
         _applyMetadataToStores(newPreset.aVariant)
         applyPresetCCs(newPreset.aVariant)
-        
+
         // Save to cache
         localStorage.setItem('sycore_last_session', JSON.stringify(newPreset))
       } else {
@@ -725,13 +725,13 @@ export const usePresetStore = defineStore('preset', () => {
         // Apply changes to hardware/stores
         _applyMetadataToStores(newVariant)
         applyPresetCCs(newVariant)
-        
+
         currentPatchNotes.value = newNotes
         // currentName remains as it was on lastPreset (Fixes disappearing name bug)
-        
+
         // Mark as modified if not already a session preset
         if (!sessionGeneratedIds.value.includes(lastPreset.value.id)) {
-           sessionGeneratedIds.value = [...sessionGeneratedIds.value, lastPreset.value.id]
+          sessionGeneratedIds.value = [...sessionGeneratedIds.value, lastPreset.value.id]
         }
 
         // Update session cache
@@ -749,13 +749,13 @@ export const usePresetStore = defineStore('preset', () => {
   function navigateHistory(direction) {
     let list = filteredHistory.value
     let idx = list.findIndex(p => p.id === lastPreset.value?.id)
-    
+
     // Fallback to full history if not found in filtered list
     if (idx === -1) {
       list = history.value
       idx = list.findIndex(p => p.id === lastPreset.value?.id)
     }
-    
+
     if (idx === -1 && direction !== 'first' && direction !== 'last') return
     if (list.length === 0) return
 

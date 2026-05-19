@@ -756,7 +756,7 @@ onUnmounted(() => {
           
           <!-- 1. Controls Bar & Info -->
           <div 
-            class="fixed z-[500] flex flex-col items-center gap-1 pointer-events-none"
+            class="fixed z-[700] flex flex-col items-center gap-1 pointer-events-none"
             :style="{ left: barX + 'px', top: barY + 'px' }"
           >
 

@@ -1,20 +1,24 @@
 <script setup>
-import { Zap, Lock, RotateCw } from 'lucide-vue-next'
+import { ref } from 'vue'
+import { Zap, Lock, RotateCw, Presentation } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import SlideshowModal from '@/components/SlideshowModal.vue'
 
 const authStore = useAuthStore()
 const presetStore = usePresetStore()
 const configStore = useConfigStore()
 const uiStore = useUiStore()
 const midiStore = useMidiStore()
+
+const isSlideshowOpen = ref(false)
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col items-center justify-center p-8 overflow-y-auto custom-scrollbar">
+  <div class="welcome-container w-full h-full flex flex-col items-center justify-center p-8 overflow-y-auto custom-scrollbar">
 
     <!-- Not logged in -->
     <div v-if="!authStore.user" class="flex flex-col items-center justify-center gap-8">
@@ -41,6 +45,20 @@ const midiStore = useMidiStore()
       <p class="text-neutral-600 font-mono text-xs uppercase tracking-widest">
         Sign in to start generating sounds
       </p>
+
+      <!-- Presentation Link (Not logged in) -->
+      <button 
+        @click="isSlideshowOpen = true"
+        class="mt-2 flex items-center gap-3 px-5 py-2.5 bg-neutral-900/30 border border-neutral-800/50 rounded-full hover:border-synth-neon/40 hover:bg-neutral-900/50 transition-all group active:scale-95 shadow-lg"
+      >
+        <div class="flex flex-col items-start text-left">
+          <span class="text-[8px] font-black font-mono text-neutral-600 uppercase tracking-[0.2em]">Quick Guide</span>
+          <span class="text-[11px] font-bold text-neutral-200 uppercase group-hover:text-synth-neon transition-colors">S-1 Supercharger Slides</span>
+        </div>
+        <div class="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center group-hover:bg-synth-neon group-hover:text-black transition-all">
+          <Presentation class="w-3.5 h-3.5" />
+        </div>
+      </button>
     </div>
 
     <!-- Logged in but loading presets -->
@@ -105,19 +123,35 @@ const midiStore = useMidiStore()
           Connect Roland S-1 or select a MIDI interface from the menu above
         </p>
       </div>
+
+      <!-- Presentation Link (No MIDI state) -->
+      <button 
+        @click="isSlideshowOpen = true"
+        class="flex items-center gap-3 px-5 py-2.5 bg-neutral-900/30 border border-neutral-800/50 rounded-full hover:border-synth-neon/40 hover:bg-neutral-900/50 transition-all group active:scale-95 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-700 delay-300"
+      >
+        <div class="flex flex-col items-start text-left">
+          <span class="text-[8px] font-black font-mono text-neutral-600 uppercase tracking-[0.2em]">Quick Guide</span>
+          <span class="text-[11px] font-bold text-neutral-200 uppercase group-hover:text-synth-neon transition-colors">S-1 Supercharger Slides</span>
+        </div>
+        <div class="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center group-hover:bg-synth-neon group-hover:text-black transition-all">
+          <Presentation class="w-3.5 h-3.5" />
+        </div>
+      </button>
       
       <!-- Current Sound Type & Part indicator (pre-midi) -->
-      <div class="flex flex-col items-center gap-3">
+      <div class="flex items-center justify-center gap-8 mt-4">
         <div class="flex flex-col items-center gap-1.5">
           <span class="text-[9px] font-black font-mono text-neutral-600 uppercase tracking-[0.3em]">Current Engine Profile</span>
-          <span class="text-xs font-black uppercase tracking-widest text-synth-neon bg-synth-neon/10 px-4 py-1 rounded-full border border-synth-neon/20 shadow-[0_0_15px_rgba(0,163,112,0.1)]">
-            {{ presetStore.currentCategory }}
+          <span @click="uiStore.isTypesOpen = !uiStore.isTypesOpen" class="text-xs font-black uppercase tracking-widest text-synth-neon bg-synth-neon/10 px-4 py-1 rounded-full border border-synth-neon/20 shadow-[0_0_15px_rgba(0,163,112,0.1)] cursor-pointer hover:bg-synth-neon/20 transition-all">
+            {{ presetStore.currentCategory }} 
           </span>
         </div>
-        
-        <div v-if="midiStore.midiChannel > 1" class="flex flex-col items-center gap-1">
-          <span class="text-[7px] font-black font-mono text-neutral-700 uppercase tracking-widest">Active Part</span>
-          <span class="text-[10px] font-mono font-bold text-emerald-500/60 uppercase">Channel {{ midiStore.midiChannel }}</span>
+
+        <div v-if="presetStore.lastPreset" class="flex flex-col items-center gap-1.5">
+          <span class="text-[9px] font-black font-mono text-neutral-600 uppercase tracking-[0.3em]">Current Sound</span>
+          <span @click="presetStore.showResults = true" class="text-xs font-black uppercase tracking-widest text-cyan-400 bg-cyan-500/10 px-4 py-1 rounded-full border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.15)] cursor-pointer hover:bg-cyan-500/25 transition-all">
+            {{ presetStore.lastPreset.name }}
+          </span>
         </div>
       </div>
 
@@ -173,29 +207,62 @@ const midiStore = useMidiStore()
         </button>
       </div>
 
+      <!-- Presentation Link (Connected state) -->
+      <div class="mt-2 animate-in fade-in slide-in-from-bottom-2 duration-700 delay-500">
+        <button 
+          @click="isSlideshowOpen = true"
+          class="flex items-center gap-3 px-5 py-2.5 bg-neutral-900/30 border border-neutral-800/50 rounded-full hover:border-synth-neon/40 hover:bg-neutral-900/50 transition-all group active:scale-95 shadow-lg"
+        >
+          <div class="flex flex-col items-start text-left">
+            <span class="text-[8px] font-black font-mono text-neutral-600 uppercase tracking-[0.2em]">Before to start ...</span>
+            <span class="text-[11px] font-bold text-cyan-700 uppercase group-hover:text-synth-neon transition-colors">SY.CORE : S-1 Supercharger</span>
+          </div>
+          <div class="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center group-hover:bg-synth-neon group-hover:text-black transition-all">
+            <Presentation class="w-3.5 h-3.5" />
+          </div>
+        </button>
+      </div>
+
       <!-- Current Sound Type & Part indicator -->
-      <div class="flex flex-col items-center gap-4 mt-8">
+      <div class="flex items-center justify-center gap-8 mt-8">
         <div class="flex flex-col items-center gap-1.5">
           <span class="text-[9px] font-black font-mono text-neutral-600 uppercase tracking-[0.3em]">Current Engine Profile</span>
-          <span class="text-xs font-black uppercase tracking-widest text-synth-neon bg-synth-neon/10 px-4 py-1 rounded-full border border-synth-neon/20 shadow-[0_0_15px_rgba(0,163,112,0.1)]">
+          <span @click="uiStore.isTypesOpen = !uiStore.isTypesOpen" class="text-xs font-black uppercase tracking-widest text-synth-neon bg-synth-neon/10 px-4 py-1 rounded-full border border-synth-neon/20 shadow-[0_0_15px_rgba(0,163,112,0.1)] cursor-pointer hover:bg-synth-neon/20 transition-all">
             {{ presetStore.currentCategory }}
           </span>
         </div>
 
-        <div v-if="midiStore.midiChannel > 1" class="flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-500">
+        <div v-if="presetStore.lastPreset" class="flex flex-col items-center gap-1.5">
+          <span class="text-[9px] font-black font-mono text-neutral-600 uppercase tracking-[0.3em]">Current Sound</span>
+          <span @click="presetStore.showResults = true" class="text-xs font-black uppercase tracking-widest text-cyan-400 bg-cyan-500/10 px-4 py-1 rounded-full border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.15)] cursor-pointer hover:bg-cyan-500/25 transition-all">
+            {{ presetStore.lastPreset.name }}
+          </span>
+        </div>
+      </div>
+
+        <!-- <div v-if="midiStore.midiChannel > 1" class="flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-500">
           <span class="text-[7px] font-black font-mono text-neutral-700 uppercase tracking-widest">Targeting Multi-Part</span>
           <div class="px-3 py-0.5 rounded bg-emerald-500/5 border border-emerald-500/20">
             <span class="text-[10px] font-mono font-bold text-emerald-500 uppercase tracking-widest">Channel {{ midiStore.midiChannel }}</span>
           </div>
-        </div>
-      </div>
+        </div> -->
 
     </div>
+
+    <!-- Slideshow Modal -->
+    <SlideshowModal :isOpen="isSlideshowOpen" @close="isSlideshowOpen = false" />
 
   </div>
 </template>
 
 <style scoped>
+.welcome-container {
+  background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.75), rgba(10, 10, 10, 0.95)), url('/background-2.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
