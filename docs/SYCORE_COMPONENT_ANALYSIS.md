@@ -19,7 +19,6 @@ SY.CORE is a professional-grade, local-first web application designed for live e
 - **Low-latency Audio**: Web Audio API
 - **MIDI Communication**: Web MIDI API + WebMIDI.js 3.1.16
 - **Audio Export**: lamejs 1.2.7 (client-side MP3 encoding)
-- **AI Integration**: Google GenAI SDK 1.52.0 (for preset generation)
 
 ### Data Persistence
 - **Primary Storage**: IndexedDB (for presets, audio files, large datasets)

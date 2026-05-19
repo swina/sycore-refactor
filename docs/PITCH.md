@@ -1,12 +1,12 @@
-# Your Roland S-1 Has a New Brain. Meet S1CORE.
+# Your Roland S-1 Has a New Brain. Meet SY.CORE.
 
 Are you ready to unlock the true potential hidden inside your Roland S-1 synthesizer? Move beyond the front panel and discover a new universe of sound design, sequencing, and performance power.
 
-S1CORE is an advanced, offline-first web application that acts as the ultimate editor and performance brain for your S-1. It's not just a utility; it's a complete ecosystem designed to inspire you.
+SY.CORE is an advanced, offline-first web application that acts as the ultimate editor and performance brain for your S-1. It's not just a utility; it's a complete ecosystem designed to inspire you.
 
 ## For the Synth Lover & Sound Designer
 
-Tired of menu-diving? Craving total control? S1CORE is your dream come true.
+Tired of menu-diving? Craving total control? SY.CORE is your dream come true.
 
 *   **Go Deeper Than Ever:** Access every parameter with a dynamic, intuitive UI of sliders and switches. Sculpt your sound with surgical precision using full support for high-resolution NRPN messages.
 *   **Your Co-Pilot is the Engine:** Hit a creative wall? Our experimental **Local Adaptive Sound Engine** generates completely new, production-ready patches tailored to your sound category. It's an endless source of inspiration that understands your synth's architecture.
@@ -14,7 +14,7 @@ Tired of menu-diving? Craving total control? S1CORE is your dream come true.
 
 ## For the Synth Tester & Content Creator
 
-Your audience wants to see what the S-1 can *really* do. S1CORE is the ultimate tool for creating next-level content.
+Your audience wants to see what the S-1 can *really* do. SY.CORE is the ultimate tool for creating next-level content.
 
 *   **Create Stunning Demos:** Use the built-in **Audio Visualizer** and **Audio Capture** to make your videos more engaging and professional, showing the sound in motion.
 *   **Endless Content, Zero Effort:** Use the **Local Adaptive Sound Engine** to create a "100 New Patches for the S-1" video in minutes. The powerful **64-step sequencer** with parameter locks lets you build incredibly complex, evolving patterns that will showcase the synth's full rhythmic capabilities.
@@ -22,14 +22,14 @@ Your audience wants to see what the S-1 can *really* do. S1CORE is the ultimate 
 
 ## For the Dawless Performer
 
-Looking for the perfect centerpiece for your hardware-only setup? S1CORE was built for you.
+Looking for the perfect centerpiece for your hardware-only setup? SY.CORE was built for you.
 
-*   **Truly Dawless:** S1CORE is **offline-first** and runs in a browser, giving you the power of a DAW without the computer. It's the missing link between your controller and your synth.
+*   **Truly Dawless:** SY.CORE is **offline-first** and runs in a browser, giving you the power of a DAW without the computer. It's the missing link between your controller and your synth.
 *   **The Brain of Your Jam:** Build entire tracks with the powerful **Step Sequencer** and a fully-featured **Arpeggiator**. Perform alongside your own loops with the **Backing Track Player**.
-*   **Command Central:** A dedicated **Live Set Mode** puts your sounds and sequences at your fingertips for performance. The experimental **MIDI Hub/Thru** feature lets you route and filter signals from other gear, making S1CORE the nerve center of your entire rig.
+*   **Command Central:** A dedicated **Live Set Mode** puts your sounds and sequences at your fingertips for performance. The experimental **MIDI Hub/Thru** feature lets you route and filter signals from other gear, making SY.CORE the nerve center of your entire rig.
 
 ---
 
 Stop just *using* your Roland S-1. **Start mastering it.**
 
-**S1CORE is the supercharger you've been waiting for.**
+**SY.CORE is the supercharger you've been waiting for.**
