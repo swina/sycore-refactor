@@ -37,6 +37,9 @@ const playbackStart       = ref(0)
 const loopCrossfadeDur    = ref(0.5)
 const currentPlaybackTime = ref(0)
 const waveformPeaks = ref([])
+const zoomX = ref(1.0)
+const zoomY = ref(1.0)
+const panOffset = ref(0.0)
 
 async function generateWaveformPeaks(blob) {
   try {
@@ -171,13 +174,22 @@ function stopAll(keepBlob = false) {
 
   cleanupWebAudio()
 
-  if (audioRef1.value) { audioRef1.value.pause(); audioRef1.value.src = '' }
-  if (audioRef2.value) { audioRef2.value.pause(); audioRef2.value.src = '' }
+  if (audioRef1.value) {
+    audioRef1.value.pause()
+    if (!keepBlob) audioRef1.value.src = ''
+  }
+  if (audioRef2.value) {
+    audioRef2.value.pause()
+    if (!keepBlob) audioRef2.value.src = ''
+  }
 
   if (!keepBlob) {
     recordedBlob.value = null
     recSecs.value = 0
     if (blobUrlRef) { URL.revokeObjectURL(blobUrlRef); blobUrlRef = null }
+    zoomX.value = 1.0
+    zoomY.value = 1.0
+    panOffset.value = 0.0
   }
   if (levelBarRef.value) levelBarRef.value.style.width = '0%'
 }
@@ -217,7 +229,7 @@ async function startMonitor(deviceId) {
 // ── Panel open / close ────────────────────────────────────────────────────────
 watch(() => uiStore.isAudioCaptureOpen, (open) => {
   if (open) startMonitor(selectedDeviceId.value)
-  else stopAll()
+  else stopAll(true)
 })
 
 // ── Device hot-swap ───────────────────────────────────────────────────────────
@@ -246,6 +258,9 @@ function startRecording() {
   loopStart.value = 0
   loopEnd.value = 0
   playbackStart.value = 0
+  zoomX.value = 1.0
+  zoomY.value = 1.0
+  panOffset.value = 0.0
 
   const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg']
     .find(t => MediaRecorder.isTypeSupported(t)) ?? ''
@@ -679,107 +694,132 @@ function togglePlay() {
 }
 
 // ── rAF draw loop ─────────────────────────────────────────────────────────────
-watch([isMonitoring, recordedBlob], async () => {
+watch([isMonitoring, recordedBlob, isPlaying, () => uiStore.isAudioCaptureOpen], async () => {
   await nextTick()
   startDrawLoop()
 }, { immediate: true })
 
-function startDrawLoop() {
-  if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
+watch([loopStart, loopEnd, playbackStart, currentPlaybackTime, isLooping, zoomX, zoomY, panOffset], () => {
+  if (!isPlaying.value && !isRecording.value && !isMonitoring.value) {
+    drawSingleFrame()
+  }
+})
+
+watch(zoomX, (newZoom) => {
+  const maxPan = 1 - 1 / newZoom
+  if (panOffset.value > maxPan) {
+    panOffset.value = Math.max(0, maxPan)
+  }
+})
+
+function drawSingleFrame() {
   const canvas = canvasRef.value
   if (!canvas) return
 
-  const draw = () => {
-    const monitoring = isMonitoring.value
-    const hasRecording = !!recordedBlob.value
+  const dpr = window.devicePixelRatio || 1
+  const W = canvas.offsetWidth * dpr
+  const H = canvas.offsetHeight * dpr
+  if (W <= 0 || H <= 0) return
 
-    if (!monitoring && !hasRecording) {
-      rafRef = null
-      return
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width = W
+    canvas.height = H
+  }
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  ctx.fillStyle = '#080808'
+  ctx.fillRect(0, 0, W, H)
+
+  const midY = H / 2
+  const monitoring = isMonitoring.value
+  const hasRecording = !!recordedBlob.value
+  const rec = isRecording.value
+
+  if (hasRecording && !rec && waveformPeaks.value.length > 0) {
+    const peaks = waveformPeaks.value
+    const len = peaks.length
+
+    // Draw middle grid line
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
+
+    // Calculate loop pixel points with Zoom H and Pan
+    const startPct = isLooping.value ? (loopStart.value / audioDuration.value) : 0
+    const endPct = isLooping.value ? (loopEnd.value / audioDuration.value) : 1
+    const startX = (startPct - panOffset.value) * zoomX.value * W
+    const endX = (endPct - panOffset.value) * zoomX.value * W
+
+    // Shade the loop area (clamped to visible range)
+    if (isLooping.value) {
+      ctx.fillStyle = 'rgba(0, 255, 157, 0.04)'
+      const renderStartX = Math.max(0, startX)
+      const renderEndX = Math.min(W, endX)
+      if (renderEndX > renderStartX) {
+        ctx.fillRect(renderStartX, 0, renderEndX - renderStartX, H)
+      }
     }
 
-    rafRef = requestAnimationFrame(draw)
+    // Draw waveform bars
+    const barWidth = Math.max(1.5, (W / len) * 0.6 * zoomX.value)
+    const gap = ((W / len) * zoomX.value) - barWidth
 
-    const dpr = window.devicePixelRatio || 1
-    const W = canvas.offsetWidth * dpr
-    const H = canvas.offsetHeight * dpr
-    if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H }
+    for (let i = 0; i < len; i++) {
+      const t = i / len
+      const x = (t - panOffset.value) * zoomX.value * W
+      
+      // Skip drawing if bar is completely out of visible canvas range
+      if (x < -barWidth || x > W) continue
 
-    const ctx = canvas.getContext('2d')
-    ctx.fillStyle = '#080808'
-    ctx.fillRect(0, 0, W, H)
-
-    const midY = H / 2
-
-    if (hasRecording && !isRecording.value && waveformPeaks.value.length > 0) {
-      const peaks = waveformPeaks.value
-      const len = peaks.length
-
-      // Draw middle grid line
-      ctx.strokeStyle = 'rgba(255,255,255,0.03)'
-      ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
-
-      // Calculate loop pixel points
-      const startPct = isLooping.value ? (loopStart.value / audioDuration.value) : 0
-      const endPct = isLooping.value ? (loopEnd.value / audioDuration.value) : 1
-      const startX = startPct * W
-      const endX = endPct * W
-
-      // Shade the loop area
-      if (isLooping.value) {
-        ctx.fillStyle = 'rgba(0, 255, 157, 0.04)'
-        ctx.fillRect(startX, 0, endX - startX, H)
+      const val = peaks[i]
+      const amplitude = Math.max(3 * dpr, val * (H * 0.75) * zoomY.value)
+      
+      // Highlight active loop area vs outside loop area
+      const inside = x >= startX && x <= endX
+      if (inside) {
+        ctx.fillStyle = '#00ff9d'
+        ctx.shadowColor = 'rgba(0, 255, 157, 0.5)'
+        ctx.shadowBlur = 1 * dpr
+      } else {
+        ctx.fillStyle = 'rgba(0, 255, 157, 0.22)'
+        ctx.shadowBlur = 0
       }
+      
+      ctx.fillRect(x, midY - amplitude / 2, barWidth, amplitude)
+    }
+    ctx.shadowBlur = 0
 
-      // Draw waveform bars
-      const barWidth = Math.max(1.5, (W / len) * 0.6)
-      const gap = (W / len) - barWidth
-
-      for (let i = 0; i < len; i++) {
-        const x = i * (barWidth + gap)
-        const val = peaks[i]
-        const amplitude = Math.max(3 * dpr, val * (H * 0.75))
-        
-        // Highlight active loop area vs outside loop area
-        const inside = x >= startX && x <= endX
-        if (inside) {
-          ctx.fillStyle = '#00ff9d'
-          ctx.shadowColor = 'rgba(0, 255, 157, 0.5)'
-          ctx.shadowBlur = 1 * dpr
-        } else {
-          ctx.fillStyle = 'rgba(0, 255, 157, 0.22)'
-          ctx.shadowBlur = 0
-        }
-        
-        ctx.fillRect(x, midY - amplitude / 2, barWidth, amplitude)
-      }
-      ctx.shadowBlur = 0
-
-      // Draw loop bounds vertical dashed lines
-      if (isLooping.value) {
-        ctx.lineWidth = 1 * dpr
-        ctx.setLineDash([4 * dpr, 3 * dpr])
-        
-        // Start bound (Green)
+    // Draw loop bounds vertical dashed lines
+    if (isLooping.value) {
+      ctx.lineWidth = 1 * dpr
+      ctx.setLineDash([4 * dpr, 3 * dpr])
+      
+      // Start bound (Green)
+      if (startX >= 0 && startX <= W) {
         ctx.strokeStyle = '#00ff9d'
         ctx.beginPath()
         ctx.moveTo(startX, 0); ctx.lineTo(startX, H)
         ctx.stroke()
+      }
 
-        // End bound (Red)
+      // End bound (Red)
+      if (endX >= 0 && endX <= W) {
         ctx.strokeStyle = '#ef4444'
         ctx.beginPath()
         ctx.moveTo(endX, 0); ctx.lineTo(endX, H)
         ctx.stroke()
-        
-        ctx.setLineDash([])
       }
+      
+      ctx.setLineDash([])
+    }
 
-      // Draw playstart marker (Cyan dashed line)
-      const playStartPct = playbackStart.value / audioDuration.value
-      const playStartX = playStartPct * W
+    // Draw playstart marker (Cyan dashed line)
+    const playStartPct = playbackStart.value / audioDuration.value
+    const playStartX = (playStartPct - panOffset.value) * zoomX.value * W
 
+    if (playStartX >= 0 && playStartX <= W) {
       ctx.strokeStyle = '#00e5ff'
       ctx.lineWidth = 1 * dpr
       ctx.setLineDash([4 * dpr, 4 * dpr])
@@ -787,11 +827,13 @@ function startDrawLoop() {
       ctx.moveTo(playStartX, 0); ctx.lineTo(playStartX, H)
       ctx.stroke()
       ctx.setLineDash([])
+    }
 
-      // Draw playhead vertical cursor (neon pink with glow)
-      const playPct = currentPlaybackTime.value / audioDuration.value
-      const playX = playPct * W
+    // Draw playhead vertical cursor (neon pink with glow)
+    const playPct = currentPlaybackTime.value / audioDuration.value
+    const playX = (playPct - panOffset.value) * zoomX.value * W
 
+    if (playX >= 0 && playX <= W) {
       ctx.strokeStyle = '#ff007f'
       ctx.lineWidth = 2 * dpr
       ctx.shadowColor = '#ff007f'
@@ -800,54 +842,73 @@ function startDrawLoop() {
       ctx.moveTo(playX, 0); ctx.lineTo(playX, H)
       ctx.stroke()
       ctx.shadowBlur = 0
-    } else if (monitoring) {
-      const analyser = analyserRef
-      if (!analyser) return
+    }
+  } else if (monitoring) {
+    const analyser = analyserRef
+    if (!analyser) return
 
-      const bufLen = analyser.frequencyBinCount
-      const data = new Uint8Array(bufLen)
-      analyser.getByteTimeDomainData(data)
+    const bufLen = analyser.frequencyBinCount
+    const data = new Uint8Array(bufLen)
+    analyser.getByteTimeDomainData(data)
 
-      let rms = 0
-      for (let i = 0; i < bufLen; i++) rms += ((data[i] / 128) - 1) ** 2
-      rms = Math.sqrt(rms / bufLen)
-      if (levelBarRef.value) {
-        const pct = Math.min(100, rms * 400)
-        levelBarRef.value.style.width = `${pct}%`
-        levelBarRef.value.style.background = pct > 85 ? '#ef4444' : pct > 55 ? '#fbbf24' : '#00ff9d'
-      }
+    let rms = 0
+    for (let i = 0; i < bufLen; i++) rms += ((data[i] / 128) - 1) ** 2
+    rms = Math.sqrt(rms / bufLen)
+    if (levelBarRef.value) {
+      const pct = Math.min(100, rms * 400)
+      levelBarRef.value.style.width = `${pct}%`
+      levelBarRef.value.style.background = pct > 85 ? '#ef4444' : pct > 55 ? '#fbbf24' : '#00ff9d'
+    }
 
-      const rec = isRecording.value
-      const color = rec ? '#ef4444' : '#00ff9d'
+    const color = rec ? '#ef4444' : '#00ff9d'
 
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)'
-      ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
 
+    ctx.beginPath()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.5 * dpr
+    ctx.shadowColor = color
+    ctx.shadowBlur = rec ? 7 * dpr : 3 * dpr
+    for (let i = 0; i < W; i++) {
+      const idx = Math.min(bufLen - 1, Math.floor((i / W) * bufLen))
+      const y = midY + ((data[idx] / 128) - 1) * midY * 2.2
+      i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y)
+    }
+    ctx.stroke()
+    ctx.shadowBlur = 0
+
+    if (rec) {
+      ctx.fillStyle = '#ef4444'
+      ctx.shadowColor = '#ef4444'
+      ctx.shadowBlur = 10 * dpr
       ctx.beginPath()
-      ctx.strokeStyle = color
-      ctx.lineWidth = 1.5 * dpr
-      ctx.shadowColor = color
-      ctx.shadowBlur = rec ? 7 * dpr : 3 * dpr
-      for (let i = 0; i < W; i++) {
-        const idx = Math.min(bufLen - 1, Math.floor((i / W) * bufLen))
-        const y = midY + ((data[idx] / 128) - 1) * midY * 2.2
-        i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y)
-      }
-      ctx.stroke()
+      ctx.arc(W - 11 * dpr, 11 * dpr, 4 * dpr, 0, Math.PI * 2)
+      ctx.fill()
       ctx.shadowBlur = 0
-
-      if (rec) {
-        ctx.fillStyle = '#ef4444'
-        ctx.shadowColor = '#ef4444'
-        ctx.shadowBlur = 10 * dpr
-        ctx.beginPath()
-        ctx.arc(W - 11 * dpr, 11 * dpr, 4 * dpr, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.shadowBlur = 0
-      }
     }
   }
+}
+
+function startDrawLoop() {
+  if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
+  
+  const draw = () => {
+    const monitoring = isMonitoring.value
+    const rec = isRecording.value
+    const playing = isPlaying.value
+    const needsAnimation = monitoring || rec || playing
+
+    drawSingleFrame()
+
+    if (needsAnimation) {
+      rafRef = requestAnimationFrame(draw)
+    } else {
+      rafRef = null
+    }
+  }
+  
   draw()
 }
 
@@ -857,6 +918,7 @@ function fmtTime(s) {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 let _recToggleHandler = null
+let resizeObserver = null
 
 onMounted(() => {
   navigator.mediaDevices?.addEventListener('devicechange', refreshDevices)
@@ -867,6 +929,18 @@ onMounted(() => {
     else startRecording()
   }
   window.addEventListener('capture-rec-toggle', _recToggleHandler)
+
+  if (canvasRef.value) {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        if (width > 0 && height > 0) {
+          drawSingleFrame()
+        }
+      }
+    })
+    resizeObserver.observe(canvasRef.value)
+  }
 })
 
 onUnmounted(() => {
@@ -876,6 +950,10 @@ onUnmounted(() => {
     cancelAnimationFrame(playbackRafRef)
     playbackRafRef = null
   }
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
 })
@@ -884,8 +962,8 @@ onUnmounted(() => {
 <template>
   <Transition name="capture">
     <div
-      v-if="uiStore.isAudioCaptureOpen"
-      class="fixed z-[1000] min-w-[680px] min-h-[500px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
+      v-show="uiStore.isAudioCaptureOpen"
+      class="fixed z-[1000] min-w-[892px] min-h-[420px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
       :style="{ left: x + 'px', top: y + 'px' }"
     >
       <!-- Header -->
@@ -1129,18 +1207,69 @@ onUnmounted(() => {
               <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopEnd) }}</span>
             </div>
 
-            <!-- Crossfade Slider -->
-            <div class="flex items-center gap-3">
-              <span class="text-[8px] font-mono text-neutral-400 w-16">CROSSFADE</span>
-              <input
-                v-model.number="loopCrossfadeDur"
-                type="range"
-                min="0"
-                max="5"
-                step="0.05"
-                class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
-              />
-              <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopCrossfadeDur) }}</span>
+            <!-- Zoom and Pan controls -->
+            <div class="grid grid-cols-2 gap-4 mt-2 border-t border-neutral-900/60 pt-2 shrink-0">
+              <!-- Left col: Zoom H / Pan -->
+              <div class="flex flex-col gap-1.5">
+                <!-- Zoom H -->
+                <div class="flex items-center gap-3">
+                  <span class="text-[8px] font-mono text-neutral-400 w-12">ZOOM H</span>
+                  <input
+                    v-model.number="zoomX"
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.1"
+                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                  />
+                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ zoomX.toFixed(1) }}x</span>
+                </div>
+                
+                <!-- Pan -->
+                <div class="flex items-center gap-3" :class="{ 'opacity-30 pointer-events-none': zoomX <= 1 }">
+                  <span class="text-[8px] font-mono text-neutral-400 w-12">PAN</span>
+                  <input
+                    v-model.number="panOffset"
+                    type="range"
+                    min="0"
+                    :max="Math.max(0, 1 - 1 / zoomX)"
+                    step="0.001"
+                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                  />
+                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ (panOffset * 100).toFixed(0) }}%</span>
+                </div>
+              </div>
+              
+              <!-- Right col: Zoom V / Crossfade -->
+              <div class="flex flex-col gap-1.5">
+                <!-- Zoom V -->
+                <div class="flex items-center gap-3">
+                  <span class="text-[8px] font-mono text-neutral-400 w-12">ZOOM V</span>
+                  <input
+                    v-model.number="zoomY"
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.1"
+                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                  />
+                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ zoomY.toFixed(1) }}x</span>
+                </div>
+
+                <!-- Crossfade Slider -->
+                <div class="flex items-center gap-3" :class="{ 'opacity-30 pointer-events-none': !isLooping }">
+                  <span class="text-[8px] font-mono text-neutral-400 w-12">CROSSFADE</span>
+                  <input
+                    v-model.number="loopCrossfadeDur"
+                    type="range"
+                    min="0"
+                    max="5"
+                    step="0.05"
+                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                  />
+                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ formatTimeSecs(loopCrossfadeDur) }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
