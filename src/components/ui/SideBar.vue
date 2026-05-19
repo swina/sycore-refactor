@@ -74,7 +74,7 @@ const toggle = () => uiStore.toggleSideMenu()
 </script>
 
 <template>
-  <div class="fixed bottom-20 right-3 z-[700] flex flex-col items-center gap-3">
+  <div class="fixed bottom-10 right-3 z-[700] flex flex-col items-center gap-3">
     
     <!-- Action Buttons -->
     <TransitionGroup 

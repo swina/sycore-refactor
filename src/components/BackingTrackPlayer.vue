@@ -3,7 +3,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Play, Pause, Volume2, Upload, Music, X, ListMusic,
   Plus, Trash2, Edit2, Repeat, ListPlus, ChevronUp, ChevronDown,
-  Save, FolderOpen, GripVertical, SkipBack, SkipForward, Link
+  Save, FolderOpen, GripVertical, SkipBack, SkipForward, Link,
+  Minimize2, Maximize2
 } from 'lucide-vue-next'
 import { useDraggable } from '@/composables/useDraggable'
 import {
@@ -67,6 +68,10 @@ const crossfadeSec        = ref(3)
 const loopPlaylist        = ref(true)
 const syncInternalSequencer = ref(localStorage.getItem('S1_SYNC_TRACK') === 'true')
 watch(syncInternalSequencer, v => localStorage.setItem('S1_SYNC_TRACK', v ? 'true' : 'false'))
+
+const isMinimized = ref(localStorage.getItem('S1_BT_MINIMIZED') === 'true')
+watch(isMinimized, v => localStorage.setItem('S1_BT_MINIMIZED', v ? 'true' : 'false'))
+const isDialOpen = ref(false)
 
 
 const { x: barX, y: barY, startDrag: startBarDrag } = useDraggable(
@@ -756,6 +761,7 @@ onUnmounted(() => {
           
           <!-- 1. Controls Bar & Info -->
           <div 
+            v-show="!isMinimized"
             class="fixed z-[700] flex flex-col items-center gap-1 pointer-events-none"
             :style="{ left: barX + 'px', top: barY + 'px' }"
           >
@@ -862,6 +868,81 @@ onUnmounted(() => {
 
 
         </div>
+
+        <!-- Overlay backdrop when dial open -->
+        <div 
+          v-if="isDialOpen" 
+          @click="isDialOpen = false"
+          class="fixed inset-0 bg-black/10 backdrop-blur-[1px] z-[690]"
+        ></div>
+
+        <!-- Speedy-Dial in the bottom-left -->
+        <div class="fixed bottom-10 left-[76px] z-[700] flex flex-col items-center gap-2 pointer-events-auto">
+          <!-- Action buttons -->
+          <TransitionGroup 
+            name="speed-dial"
+            tag="div"
+            class="flex flex-col items-center gap-2 mb-1"
+          >
+            <div v-if="isDialOpen" class="flex flex-col items-center gap-2">
+              <!-- Minimize / Maximize -->
+              <button
+                @click="isMinimized = !isMinimized; isDialOpen = false"
+                class="w-10 h-10 rounded-full border border-white/10 bg-black/80 backdrop-blur-md flex items-center justify-center text-synth-neon hover:text-white hover:border-synth-neon/50 shadow-lg active:scale-95 transition-all duration-300"
+                :title="isMinimized ? 'Visualizza controlli player' : 'Minimizza controlli player'"
+              >
+                <Maximize2 v-if="isMinimized" class="w-4 h-4" />
+                <Minimize2 v-else class="w-4 h-4" />
+              </button>
+
+              <!-- Play / Pause -->
+              <button
+                v-if="src"
+                @click="togglePlay"
+                class="w-10 h-10 rounded-full border border-white/10 bg-black/80 backdrop-blur-md flex items-center justify-center text-synth-neon hover:text-white hover:border-synth-neon/50 shadow-lg active:scale-95 transition-all duration-300"
+                :title="isPlaying ? 'Pausa' : 'Riproduci'"
+              >
+                <Pause v-if="isPlaying" class="w-4 h-4 fill-current" />
+                <Play v-else class="w-4 h-4 fill-current ml-0.5" />
+              </button>
+
+              <!-- Library / Playlist Panel -->
+              <button
+                @click="isOpen = !isOpen; isDialOpen = false"
+                class="w-10 h-10 rounded-full border border-white/10 bg-black/80 backdrop-blur-md flex items-center justify-center text-synth-neon hover:text-white hover:border-synth-neon/50 shadow-lg active:scale-95 transition-all duration-300"
+                title="Sorgente Traccia"
+              >
+                <Music class="w-4 h-4" />
+              </button>
+            </div>
+          </TransitionGroup>
+
+          <!-- Main Dial Toggle Button -->
+          <button
+            @click="isDialOpen = !isDialOpen"
+            :class="[
+              'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl border-2 z-10 active:scale-95',
+              isDialOpen 
+                ? 'bg-white text-black border-white' 
+                : 'bg-neutral-900 text-synth-neon border-synth-neon/30 hover:border-synth-neon hover:scale-105'
+            ]"
+            :title="isDialOpen ? 'Chiudi controlli rapidi' : 'Controlli Rapidi Player'"
+          >
+            <X v-if="isDialOpen" class="w-5 h-5" />
+            <Music v-else :class="['w-5 h-5', isPlaying && !isMinimized ? 'animate-pulse' : '']" />
+          </button>
+          
+          <!-- Dial Indicator (Small neon dot if minimized) -->
+          <div 
+            v-if="isMinimized && !isDialOpen" 
+            class="absolute -top-1 -right-1 w-3 h-3 bg-synth-neon rounded-full border-2 border-neutral-950 animate-ping"
+          />
+          <div 
+            v-if="isMinimized && !isDialOpen" 
+            class="absolute -top-1 -right-1 w-3 h-3 bg-synth-neon rounded-full border-2 border-neutral-950"
+          />
+        </div>
+
       </div>
 
       </Transition>
@@ -1139,5 +1220,24 @@ onUnmounted(() => {
 .panel-up-enter-from,
 .panel-up-leave-to {
   opacity: 0;
+}
+
+/* Speed Dial Transition */
+.speed-dial-enter-active,
+.speed-dial-leave-active {
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.speed-dial-enter-from,
+.speed-dial-leave-to {
+  opacity: 0;
+  transform: translateY(20px) scale(0.5);
+}
+
+button:not(.bg-white) {
+  box-shadow: 0 0 15px rgba(0, 255, 204, 0.1);
+}
+button:not(.bg-white):hover {
+  box-shadow: 0 0 25px rgba(0, 255, 204, 0.3);
 }
 </style>
