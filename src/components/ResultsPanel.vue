@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
+import { ref, computed, watch, onUnmounted, onMounted, nextTick } from 'vue'
 import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical} from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/MidiService'
 import { usePresetStore } from '@/stores/usePresetStore'
@@ -270,6 +270,28 @@ function toggleVelocityMod() {
 
 function startEditingName() { tempName.value = presetStore.currentName; isEditingName.value = true }
 function saveName() { if (tempName.value.trim()) presetStore.currentName = tempName.value.trim(); isEditingName.value = false }
+
+const isEditingNotes = ref(false)
+const tempNotes = ref('')
+const notesTextarea = ref(null)
+
+function startEditingNotes() {
+  tempNotes.value = presetStore.currentPatchNotes || presetStore.lastPreset?.patchNotes || ''
+  isEditingNotes.value = true
+  nextTick(() => {
+    if (notesTextarea.value) {
+      const el = Array.isArray(notesTextarea.value) ? notesTextarea.value[0] : notesTextarea.value
+      if (el && typeof el.focus === 'function') {
+        el.focus()
+      }
+    }
+  })
+}
+
+function saveNotes() {
+  presetStore.updatePatchNotes(tempNotes.value.trim())
+  isEditingNotes.value = false
+}
 
 async function handleCopyToClipboard() {
   try {
@@ -594,14 +616,14 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <div v-if="!presetStore.hasUnsavedChanges" class="flex items-center gap-1.5 shrink-0">
               <button
                 @click="presetStore.navigateHistory('prev')"
-                :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) <= 0"
+                :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) >= presetStore.filteredHistory.length - 1"
                 class="w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
               >
                 <ChevronLeft class="w-4 h-4" />
               </button>
               <button
                 @click="presetStore.navigateHistory('next')"
-                :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) >= presetStore.filteredHistory.length - 1"
+                :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) <= 0"
                 class="w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
               >
                 <ChevronRight class="w-4 h-4" />
@@ -732,16 +754,38 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 Primary controls defining this sound's architecture are listed on the right.
               </p>
               
-              <!-- Patch Notes Display -->
-              <div v-if="presetStore.currentPatchNotes || presetStore.lastPreset?.patchNotes" class="mt-2 p-2 rounded-lg bg-neutral-900/50 border border-white/5 max-h-[120px] flex flex-col">
-                <div class="flex items-center gap-2 mb-2 opacity-40 shrink-0">
-                  <BookOpen class="w-3 h-3 text-white" />
-                  <span class="text-[8px] font-black uppercase tracking-[0.2em]">Engineering Notes</span>
+              <!-- Patch Notes Display & Edit -->
+              <div class="mt-2 p-2 rounded-lg bg-neutral-900/50 border border-white/5 max-h-[120px] flex flex-col relative group">
+                <div class="flex items-center justify-between mb-2 shrink-0">
+                  <div class="flex items-center gap-2 opacity-40">
+                    <BookOpen class="w-3 h-3 text-white" />
+                    <span class="text-[8px] font-black uppercase tracking-[0.2em]">Engineering Notes</span>
+                  </div>
+                  <button
+                    v-if="!isEditingNotes"
+                    @click="startEditingNotes"
+                    class="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity text-[8px] font-bold text-synth-neon uppercase tracking-wider"
+                  >
+                    Edit
+                  </button>
                 </div>
                 <div class="flex-1 overflow-y-auto custom-scrollbar pr-1">
-                  <p class="text-[9px] font-mono text-light-blue leading-relaxed uppercase tracking-wide">
-                    "{{ presetStore.currentPatchNotes || presetStore.lastPreset?.patchNotes }}"
-                  </p>
+                  <div v-if="!isEditingNotes" @click="startEditingNotes" class="cursor-pointer min-h-[40px]">
+                    <p class="text-[9px] font-mono text-light-blue leading-relaxed uppercase tracking-wide">
+                      {{ presetStore.currentPatchNotes || presetStore.lastPreset?.patchNotes || 'No engineering notes yet. Click to add...' }}
+                    </p>
+                  </div>
+                  <textarea
+                    v-else
+                    ref="notesTextarea"
+                    v-model="tempNotes"
+                    @blur="saveNotes"
+                    @keydown.esc="isEditingNotes = false"
+                    @keydown.ctrl.enter="saveNotes"
+                    @keydown.meta.enter="saveNotes"
+                    class="w-full h-[60px] bg-neutral-950 text-[9px] font-mono text-light-blue leading-relaxed uppercase tracking-wide p-1.5 rounded border border-synth-neon/50 outline-none resize-none"
+                    placeholder="Enter notes... (Ctrl+Enter to save)"
+                  ></textarea>
                 </div>
               </div>
             </div>
@@ -1059,7 +1103,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
       </div>
 
     <!-- ── COLLAPSED VIEW: BIG GENERATE BUTTON ── -->
-      <div v-else class="flex-1 flex flex-col items-center justify-center bg-grid-neon p-8 overflow-hidden">
+      <div v-else class="flex-1 flex flex-col items-center justify-center p-8 overflow-hidden">
         <div class="relative p-12 rounded-full border-4 border-dashed border-neutral-900 flex items-center justify-center">
           <div class="absolute inset-0 rounded-full border-2 border-t-synth-neon border-r-transparent border-l-transparent border-b-transparent opacity-30 animate-spin-slow"></div>
           

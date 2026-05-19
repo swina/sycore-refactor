@@ -566,6 +566,20 @@ export const usePresetStore = defineStore('preset', () => {
     }, 1500)
   }
 
+  function updatePatchNotes(text) {
+    currentPatchNotes.value = text
+    if (lastPreset.value) {
+      lastPreset.value.patchNotes = text
+      const activeVariant = useAlternativeEngine.value ? lastPreset.value.bVariant : lastPreset.value.aVariant
+      if (activeVariant) {
+        activeVariant.patchNotes = text
+      }
+
+      // Update session cache
+      localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
+    }
+  }
+
   function clearSessionCache() {
     sessionGeneratedIds.value = []
     engineCacheA.value = null
@@ -795,7 +809,7 @@ export const usePresetStore = defineStore('preset', () => {
     remainingGens, limitReached,
     loadHistory, recallPreset, applyPresetCCs, selectEngine, savePreset, importPreset,
     deletePreset, deleteAllPresets, toggleFavorite, setCategory,
-    updateFieldValue, clearSessionCache, generate, navigateHistory, init,
+    updateFieldValue, updatePatchNotes, clearSessionCache, generate, navigateHistory, init,
     seedDefaultBank
   }
 })
