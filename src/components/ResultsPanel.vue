@@ -30,7 +30,10 @@ const lfoStore = useLfoStore()
 
 const isEditingName = ref(false)
 const tempName = ref('')
-const isPanelCollapsed = ref(false)
+const isPanelCollapsed = computed({
+  get: () => uiStore.isPanelCollapsed,
+  set: (val) => { uiStore.isPanelCollapsed = val }
+})
 const showCopyFeedback = ref(false)
 const showSaveFeedback = ref(false)
 const liveSetFeedback = ref('')

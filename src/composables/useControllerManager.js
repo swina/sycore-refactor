@@ -54,6 +54,16 @@ export function useControllerManager() {
           case 'toggle_midi_performance': return uiStore.isMidiPerformanceOpen
           case 'toggle_midi_capture': return uiStore.isCaptureOpen
           case 'toggle_panel':      return !uiStore.isPanelCollapsed
+          case 'panel_tab_grid':      return uiStore.activeVisualizerCategory === null && !uiStore.isPanelCollapsed
+          case 'panel_tab_flow':      return uiStore.activeVisualizerCategory === 'FLOW' && !uiStore.isPanelCollapsed
+          case 'panel_tab_lfo':       return uiStore.activeVisualizerCategory === 'LFO' && !uiStore.isPanelCollapsed
+          case 'panel_tab_osc':       return uiStore.activeVisualizerCategory === 'OSCILLATOR' && !uiStore.isPanelCollapsed
+          case 'panel_tab_env':       return uiStore.activeVisualizerCategory === 'ENV' && !uiStore.isPanelCollapsed
+          case 'panel_tab_filter':    return uiStore.activeVisualizerCategory === 'FILTER' && !uiStore.isPanelCollapsed
+          case 'panel_tab_efx':       return uiStore.activeVisualizerCategory === 'EFX' && !uiStore.isPanelCollapsed
+          case 'panel_tab_poly':      return uiStore.activeVisualizerCategory === 'POLY' && !uiStore.isPanelCollapsed
+          case 'panel_tab_advanced':  return uiStore.activeVisualizerCategory === 'ADVANCED' && !uiStore.isPanelCollapsed
+          case 'panel_tab_dynamic':   return uiStore.activeVisualizerCategory === 'DYNAMIC' && !uiStore.isPanelCollapsed
           case 'toggle_types':      return uiStore.isTypesOpen
           case 'toggle_history':    return uiStore.isHistoryOpen
           case 'toggle_keyboard':   return uiStore.isKeyboardOpen
@@ -229,7 +239,8 @@ export function useControllerManager() {
         () => uiStore.isCaptureOpen,
         () => uiStore.isLooperOpen,
         () => uiStore.isPanelCollapsed,
-        () => livePadStore.activePadIndex
+        () => livePadStore.activePadIndex,
+        () => uiStore.activeVisualizerCategory
       ],
       ([ready, inputsLen]) => {
         if (!ready) return

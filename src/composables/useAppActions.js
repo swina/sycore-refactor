@@ -7,6 +7,7 @@ import { useLfoStore } from '@/stores/useLfoStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { useConfigStore } from '@/stores/useConfigStore'
 
 /**
  * Dispatches AppAction strings to the appropriate store calls.
@@ -183,6 +184,66 @@ export function useAppActions() {
       case 'toggle_midi_capture': if (ccVal > 63) uiStore.isCaptureOpen = !uiStore.isCaptureOpen; break
       case 'toggle_liveset': if (ccVal > 63) uiStore.isLiveSetOpen = !uiStore.isLiveSetOpen; break
       case 'toggle_panel': if (ccVal > 63) uiStore.isPanelCollapsed = !uiStore.isPanelCollapsed; break
+      case 'panel_category_cc': {
+        const configStore = useConfigStore()
+        const base = configStore.categories
+          .map(cat => ({
+            id: cat.id,
+            controllersCount: configStore.midiConfig.filter(cfg => cfg.category === cat.id).length
+          }))
+          .filter(cat => cat.controllersCount > 0)
+          .map(cat => cat.id)
+
+        const categories = [null, 'FLOW', ...base]
+        const idx = Math.min(categories.length - 1, Math.floor((ccVal / 127.1) * categories.length))
+        uiStore.activeVisualizerCategory = categories[idx]
+        uiStore.isPanelCollapsed = false
+
+        if (window.SY_LOG) {
+          window.SY_LOG(`[AppActions] panel_category_cc: ccVal=${ccVal}, idx=${idx}/${categories.length}, category=${categories[idx]}, list=${JSON.stringify(categories)}`)
+        }
+        break
+      }
+      case 'panel_tab_grid':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_grid: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = null; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_flow':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_flow: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'FLOW'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_lfo':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_lfo: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'LFO'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_osc':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_osc: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'OSCILLATOR'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_env':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_env: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'ENV'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_filter':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_filter: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'FILTER'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_efx':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_efx: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'EFX'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_poly':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_poly: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'POLY'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_advanced':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_advanced: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'ADVANCED'; uiStore.isPanelCollapsed = false
+        break
+      case 'panel_tab_dynamic':
+        if (window.SY_LOG) window.SY_LOG(`[AppActions] panel_tab_dynamic: ccVal=${ccVal}`);
+        uiStore.activeVisualizerCategory = 'DYNAMIC'; uiStore.isPanelCollapsed = false
+        break
       case 'toggle_looper': if (ccVal > 63) uiStore.isLooperOpen = !uiStore.isLooperOpen; break
       case 'toggle_audio_capture':
         if (window.SY_LOG) window.SY_LOG(`[AppActions] AUDIO CAPTURE: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);

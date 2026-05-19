@@ -34,6 +34,17 @@ export type AppAction =
   | 'liveset_pad_13' | 'liveset_pad_14' | 'liveset_pad_15' | 'liveset_pad_16'
   | 'toggle_liveset'
   | 'toggle_panel'
+  | 'panel_category_cc'
+  | 'panel_tab_grid'
+  | 'panel_tab_flow'
+  | 'panel_tab_lfo'
+  | 'panel_tab_osc'
+  | 'panel_tab_env'
+  | 'panel_tab_filter'
+  | 'panel_tab_efx'
+  | 'panel_tab_poly'
+  | 'panel_tab_advanced'
+  | 'panel_tab_dynamic'
   | 'open_sound_types'
   | 'open_sound_history'
   | 'transpose_cc'
@@ -146,6 +157,17 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   liveset_pad_16:       'Live Set Pad 16',
   toggle_liveset:       'Toggle Live Set Layer',
   toggle_panel:         'Expand Control Panel',
+  panel_category_cc:    'Select Control Category via CC',
+  panel_tab_grid:       'Select Controls Grid Tab',
+  panel_tab_flow:       'Select Signal Flow Tab',
+  panel_tab_lfo:        'Select LFO Tab',
+  panel_tab_osc:        'Select Oscillator Tab',
+  panel_tab_env:        'Select Envelope Tab',
+  panel_tab_filter:     'Select Filter Tab',
+  panel_tab_efx:        'Select EFX Tab',
+  panel_tab_poly:       'Select Poly Tab',
+  panel_tab_advanced:    'Select Advanced Tab',
+  panel_tab_dynamic:     'Select Dynamic Tab',
   open_sound_types:    'Open Sound Types',
   open_sound_history:  'Open Sound History',
   transpose_cc:        'Global Transpose via CC  (−24…+24)',
@@ -225,7 +247,10 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
   ],
   'UI & Panels': [
     'toggle_panel', 'toggle_visualizer', 'toggle_liveset', 'open_sound_types',
-    'open_sound_history', 'open_midi_matrix'
+    'open_sound_history', 'open_midi_matrix', 'panel_category_cc',
+    'panel_tab_grid', 'panel_tab_flow', 'panel_tab_lfo', 'panel_tab_osc',
+    'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
+    'panel_tab_advanced', 'panel_tab_dynamic'
   ],
   'Transport & Performance': [
     'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
@@ -242,6 +267,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
 
 // Actions where the CC value (0–127) is mapped to a range (not just trigger on >63)
 export const CONTINUOUS_ACTIONS = new Set<AppAction>([
+  'panel_category_cc',
   'seq_bpm_cc', 
   'transpose_cc', 
   'playlist_volume_cc', 

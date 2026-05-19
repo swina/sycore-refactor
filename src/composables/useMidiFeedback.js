@@ -25,6 +25,16 @@ export function useMidiFeedback() {
     'toggle_panel':        () => !uiStore.isPanelCollapsed,
     'open_midi_matrix':    () => uiStore.isMidiMatrixOpen,
     'toggle_looper':       () => uiStore.isLooperOpen,
+    'panel_tab_grid':      () => uiStore.activeVisualizerCategory === null && !uiStore.isPanelCollapsed,
+    'panel_tab_flow':      () => uiStore.activeVisualizerCategory === 'FLOW' && !uiStore.isPanelCollapsed,
+    'panel_tab_lfo':       () => uiStore.activeVisualizerCategory === 'LFO' && !uiStore.isPanelCollapsed,
+    'panel_tab_osc':       () => uiStore.activeVisualizerCategory === 'OSCILLATOR' && !uiStore.isPanelCollapsed,
+    'panel_tab_env':       () => uiStore.activeVisualizerCategory === 'ENV' && !uiStore.isPanelCollapsed,
+    'panel_tab_filter':    () => uiStore.activeVisualizerCategory === 'FILTER' && !uiStore.isPanelCollapsed,
+    'panel_tab_efx':       () => uiStore.activeVisualizerCategory === 'EFX' && !uiStore.isPanelCollapsed,
+    'panel_tab_poly':      () => uiStore.activeVisualizerCategory === 'POLY' && !uiStore.isPanelCollapsed,
+    'panel_tab_advanced':  () => uiStore.activeVisualizerCategory === 'ADVANCED' && !uiStore.isPanelCollapsed,
+    'panel_tab_dynamic':   () => uiStore.activeVisualizerCategory === 'DYNAMIC' && !uiStore.isPanelCollapsed,
   }
 
   function testFeedback(mapping) {
@@ -78,6 +88,7 @@ export function useMidiFeedback() {
         () => uiStore.isPanelCollapsed,
         () => uiStore.isMidiMatrixOpen,
         () => uiStore.isLooperOpen,
+        () => uiStore.activeVisualizerCategory,
         () => midiStore.outputs.length // In case devices are connected/reconnected
       ],
       () => {
