@@ -36,6 +36,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 0],
     polyMode: [2, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   lead: {
     attack: [0, 20],
@@ -70,6 +71,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 1],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   key: {
     attack: [0, 10],
@@ -104,6 +106,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [2, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   bass: {
     attack: [0, 15],
@@ -138,6 +141,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 1],
     transpose: [40, 52],
+    oscRange: [3, 3],
   },
   drone: {
     attack: [80, 127],
@@ -172,6 +176,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 0],
     polyMode: [0, 1],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   ambient: {
     attack: [60, 110],
@@ -206,6 +211,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 0],
     polyMode: [1, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   texture: {
     attack: [90, 127],
@@ -240,6 +246,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 0],
     polyMode: [1, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   bell: {
     attack: [0, 2],
@@ -274,6 +281,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [2, 3],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   arp: {
     attack: [0, 15],
@@ -308,6 +316,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 1],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   percussion: {
     attack: [0, 0],
@@ -342,6 +351,7 @@ export const S1_TYPES = {
     btnKeyTrig: [1, 1],
     polyMode: [0, 0],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   strings: {
     attack: [10, 45],
@@ -376,6 +386,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 1],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   orchestra: {
     attack: [30, 80],
@@ -410,6 +421,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 0],
     polyMode: [2, 3],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   organ: {
     attack: [0, 3],
@@ -443,6 +455,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [2, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   brass: {
     attack: [10, 40],
@@ -477,6 +490,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [1, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   piano: {
     attack: [0, 5],
@@ -511,6 +525,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [2, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   synth: {
     attack: [5, 40],
@@ -545,6 +560,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   pluck: {
     attack: [0, 3],
@@ -579,6 +595,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [1, 2],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   padchord: {
     attack: [70, 120],
@@ -612,6 +629,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [3, 3],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   acid: {
     attack: [0, 5],
@@ -645,6 +663,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 1],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   experimental: {
     attack: [0, 127],
@@ -679,6 +698,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 3],
     transpose: [64, 64],
+    oscRange: [3, 3],
   },
   ai: {
     attack: [0, 127],
@@ -712,6 +732,7 @@ export const S1_TYPES = {
     btnKeyTrig: [0, 1],
     polyMode: [0, 3],
     transpose: [64, 64],
+    oscRange: [3, 3],
   }
 } as const;
 
@@ -722,6 +743,7 @@ export const S1_CC_MAP = {
   11: "expression",
   12: "lfoWave",
   13: "oscLFO",
+  14: "oscRange",
   15: "pwWidth",
   16: "pwmSrc",
   17: "lfoMod",
