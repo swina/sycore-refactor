@@ -166,7 +166,7 @@ const isPlaying = ref(false)
 const isRecording = ref(false)
 const currentStep = ref(0)
 const transportPosition = ref('1:1:1')
-const selectedStepIdx = ref(null)
+const selectedStepIdx = ref(0)
 const syncTrack = ref(syncTrackStorage.value ?? false)
 const genDensity = ref(75)
 const swingAmount = ref(0)
@@ -690,6 +690,11 @@ function updateStep(idx, updates) {
   steps.value = [...steps.value]
 }
 
+function clearStep(idx) {
+  steps.value[idx] = { ...DEFAULT_STEP }
+  steps.value = [...steps.value]
+}
+
 function applyToAll(field, value) {
   steps.value = steps.value.map(s => ({ ...s, [field]: value }))
 }
@@ -1122,12 +1127,14 @@ onMounted(() => {
       updateStep(selectedStepIdx.value, updates)
     } 
     else if (isNoteOff) {
-      currentlyHeldNotes.value.delete(note)
-      
-      // Once ALL notes are released, advance to the next step
-      if (currentlyHeldNotes.value.size === 0 && selectedStepIdx.value !== null) {
-        selectedStepIdx.value = (selectedStepIdx.value + 1) % numSteps.value
-        recordedNotesForCurrentStep.value = []
+      if (currentlyHeldNotes.value.has(note)) {
+        currentlyHeldNotes.value.delete(note)
+        
+        // Once ALL notes are released, advance to the next step
+        if (currentlyHeldNotes.value.size === 0 && selectedStepIdx.value !== null) {
+          selectedStepIdx.value = (selectedStepIdx.value + 1) % numSteps.value
+          recordedNotesForCurrentStep.value = []
+        }
       }
     }
   }
@@ -1737,12 +1744,19 @@ function handleClear() {
 
       <!-- ── CONTEXTUAL STEP TOOLBAR ── -->
       <Transition name="toolbar">
-        <div v-if="selectedStepIdx !== null" class="shrink-0 bg-neutral-800 border-b border-synth-neon/20 p-2 px-4 flex items-center gap-6 overflow-x-auto no-scrollbar">
+        <div class="shrink-0 bg-neutral-800 border-b border-synth-neon/20 p-2 px-4 flex items-center gap-6 overflow-x-auto no-scrollbar">
           <div class="flex items-center gap-3 shrink-0">
             <span class="text-[10px] font-black text-synth-neon uppercase tracking-tighter">Step {{ selectedStepIdx + 1 }}</span>
             <button @click="updateStep(selectedStepIdx, { active: !steps[selectedStepIdx].active })"
               :class="['px-2 py-1 rounded text-[9px] font-black', steps[selectedStepIdx]?.active ? 'bg-synth-neon text-black' : 'bg-neutral-900 text-neutral-500']">
               {{ steps[selectedStepIdx]?.active ? 'ACTIVE' : 'OFF' }}
+            </button>
+            <button 
+              v-if="!steps[selectedStepIdx]?.active" 
+              @click="clearStep(selectedStepIdx)"
+              class="px-2 py-1 rounded text-[9px] font-black bg-red-600/30 hover:bg-red-600 text-red-400 hover:text-white transition-colors"
+            >
+              CLEAR
             </button>
           </div>
 
@@ -1842,9 +1856,6 @@ function handleClear() {
             </div>
           </template>
 
-          <button @click="selectedStepIdx = null" class="ml-auto text-neutral-500 hover:text-white shrink-0">
-            <X class="w-4 h-4" />
-          </button>
         </div>
       </Transition>
 
