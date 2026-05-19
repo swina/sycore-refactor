@@ -1032,10 +1032,18 @@ onMounted(() => {
   }
 
   const handleIncomingNote = (type, note, velocity, chan, inputId) => {
+    if (window.SY_LOG) {
+      window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, isOpen=${props.isOpen}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
+    }
     if (!props.isOpen) return
 
     // MIDI Performance routing matrix checks
-    if (!isMidiDeviceAllowed(chan, inputId)) return
+    if (!isMidiDeviceAllowed(chan, inputId)) {
+      if (window.SY_LOG) {
+        window.SY_LOG(`[Seq Ingress] Note blocked: isMidiDeviceAllowed returned false`)
+      }
+      return
+    }
     
     // Live overdub recording during PLAY + RECORD mode
     if (isPlaying.value && isRecording.value) {
@@ -1744,7 +1752,7 @@ function handleClear() {
 
       <!-- ── CONTEXTUAL STEP TOOLBAR ── -->
       <Transition name="toolbar">
-        <div class="shrink-0 bg-neutral-800 border-b border-synth-neon/20 p-2 px-4 flex items-center gap-6 overflow-x-auto no-scrollbar">
+        <div class="shrink-0 bg-neutral-800 border-b border-synth-neon/20 p-2 px-4 flex items-center gap-6 overflow-x-auto no-scrollbar h-12">
           <div class="flex items-center gap-3 shrink-0">
             <span class="text-[10px] font-black text-synth-neon uppercase tracking-tighter">Step {{ selectedStepIdx + 1 }}</span>
             <button @click="updateStep(selectedStepIdx, { active: !steps[selectedStepIdx].active })"
