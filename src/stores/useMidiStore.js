@@ -244,9 +244,9 @@ export const useMidiStore = defineStore('midi', () => {
     broadcastMode.value = midiService.getBroadcastMode()
   }
 
-  function sendCC(cc, value, channel = null, source = MidiSource.UI) {
+  function sendCC(cc, value, channel = null, source = MidiSource.UI, skipDeviceId = null) {
     const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
-    midiService.sendCC(cc, value, targetChannel, source)
+    midiService.sendCC(cc, value, targetChannel, source, skipDeviceId)
   }
 
   function sendNRPN(param, value, channel = null, source = MidiSource.UI) {

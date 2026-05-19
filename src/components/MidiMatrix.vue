@@ -293,7 +293,7 @@ async function toggleAppSetting(field) {
                           :value="reg.outChannel"
                           @change="e => midiStore.updateRegistration(reg.name, 'outChannel', parseInt(e.target.value))"
                           class="bg-transparent text-emerald-400 text-[9px] font-bold outline-none cursor-pointer text-center uppercase">
-                          <option :value="-1">FIXED CH 1</option>
+                          <option :value="-1">OMNI</option>
                           <option v-for="ch in 16" :key="ch" :value="ch - 1">FIXED CH {{ ch }}</option>
                         </select>
                         <div v-else-if="reg.outEnabled && reg.isMulti && configStore.enablePartSelector" class="text-[9px] font-black text-purple-400 uppercase tracking-tighter">

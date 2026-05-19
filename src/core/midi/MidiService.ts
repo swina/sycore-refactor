@@ -628,7 +628,13 @@ export class MidiService {
           else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
           if (targetCh !== -1) {
             const newStatus = (status & 0xf0) | (targetCh & 0x0f);
-            bytes = new Uint8Array([newStatus, data[1], data[2]]);
+            if (data.length === 2) {
+              bytes = new Uint8Array([newStatus, data[1]]);
+            } else if (data.length === 3) {
+              bytes = new Uint8Array([newStatus, data[1], data[2]]);
+            } else {
+              bytes = new Uint8Array([newStatus, ...data.slice(1)]);
+            }
           }
         }
         this.globalSentHashes.set(bytes.join(','), now);

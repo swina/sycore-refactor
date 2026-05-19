@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted } from 'vue'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -64,7 +64,7 @@ export function useMidiCCListener() {
          console.log(`[MIDI Listener] Filtered CC ${cc} from ${deviceName || 'Unknown'} (CH ${chan+1}). Active PART: CH ${midiCh+1}, Input: ${inputCh === -1 ? 'OMNI' : inputCh+1}`)
        }
        return
-    }
+     }
 
     let effectiveCC = cc
     
@@ -113,6 +113,11 @@ export function useMidiCCListener() {
   function applyParam(fieldName, val) {
     if (!presetStore.lastPreset) return
     presetStore.updateFieldValue(fieldName, val)
+    
+    const cc = FIELD_TO_CC[fieldName] ?? configStore.midiConfig.find(m => m.name === fieldName)?.cc
+    if (cc !== undefined) {
+      midiStore.sendCC(cc, val, null, MidiSource.UI)
+    }
   }
 
   let unsubCC, unsubNote, unsubPitch
