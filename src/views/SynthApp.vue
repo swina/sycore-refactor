@@ -450,6 +450,7 @@ onMounted(() => {
             <AlertTriangle class="w-3.5 h-3.5" />
           </button>
 
+
           <!-- Global BPM -->
           <div v-if="authStore.user" class="flex items-center gap-2 relative group">
             <span class="text-neutral-500 text-[10px]">GLOBAL BPM:</span>
