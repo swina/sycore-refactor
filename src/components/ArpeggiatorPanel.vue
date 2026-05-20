@@ -277,17 +277,17 @@ onMounted(() => {
     if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
 
     if (type === 'on' && velocity > 0) {
-      if (arpStore.arpEnabled) {
-        if (arpStore.arpHold && physicalKeysHeld.value === 0) arpStore.clearHeldNotes()
-        physicalKeysHeld.value++
-        arpStore.pressNote(note)
+      if (arpStore.arpHold && physicalKeysHeld.value === 0) {
+        arpStore.clearHeldNotes()
       }
+      physicalKeysHeld.value++
+      arpStore.pressNote(note)
     } else {
-      if (arpStore.arpEnabled) {
-        physicalKeysHeld.value = Math.max(0, physicalKeysHeld.value - 1)
-        if (!arpStore.arpHold || (physicalKeysHeld.value === 0 && arpStore.heldNoteCount <= 1)) {
+      physicalKeysHeld.value = Math.max(0, physicalKeysHeld.value - 1)
+      if (!arpStore.arpHold || physicalKeysHeld.value === 0) {
+        if (!arpStore.arpHold) {
           arpStore.releaseNote(note)
-          if (arpStore.arpHold && physicalKeysHeld.value === 0 && arpStore.heldNoteCount <= 1) {
+          if (physicalKeysHeld.value === 0) {
             arpStore.clearHeldNotes()
           }
         }
@@ -303,7 +303,18 @@ onUnmounted(() => {
 
 watch(() => arpStore.arpEnabled, (enabled) => {
   if (enabled) startArpEngine()
-  else stopArpEngine()
+  else {
+    stopArpEngine()
+    if (!arpStore.arpHold) {
+      arpStore.clearHeldNotes()
+    }
+  }
+})
+
+watch(() => arpStore.arpHold, (held) => {
+  if (!held && physicalKeysHeld.value === 0) {
+    arpStore.clearHeldNotes()
+  }
 })
 
 watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {

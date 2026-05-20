@@ -2,8 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const ARP_SUBDIVISIONS = [
-  '1/1', '1/1d', '1/1t', '1/2', '1/2d', '1/2t', '1/4', '1/4d', '1/4t', '1/8', '1/8d', '1/8t',
-  '1/16', '1/16d', '1/16t', '1/32', '1/32d', '1/32t', '1/64', '1/64d', '1/64t'
+  '1/1d', '1/1', '1/2d', '1/1t', '1/2', '1/4d', '1/2t', '1/4', '1/8d', '1/4t', '1/8', '1/16d', '1/8t', '1/16', '1/32d', '1/16t', '1/32', '1/64d', '1/32t', '1/64', '1/64t'
 ]
 
 export const useArpStore = defineStore('arp', () => {
