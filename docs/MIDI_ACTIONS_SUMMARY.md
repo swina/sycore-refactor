@@ -61,6 +61,9 @@ Controls step sequence playback, generative parameters, density, styles, and sca
 | `seq_skip_step` | Seq: Skip Step (+2) | Trigger (Toggle / Push) |
 | `seq_octave_cc` | Seq: Gen Base Octave | Continuous (0–127) |
 | `seq_range_cc` | Seq: Gen Octave Range | Continuous (0–127) |
+| `seq_step_select_cc` | Seq: Select Step via CC | Continuous (0–127) |
+| `seq_select_1` | Select Seq 1 | Trigger (Toggle / Push) |
+| `seq_select_2` | Select Seq 2 | Trigger (Toggle / Push) |
 
 ---
 
@@ -115,6 +118,20 @@ Provides remote MIDI control for showing, hiding, and switching various layout t
 | `open_sound_types` | Open Sound Types | Trigger (Toggle / Push) |
 | `open_sound_history` | Open Sound History | Trigger (Toggle / Push) |
 | `open_midi_matrix` | Open MIDI MATRIX | Trigger (Toggle / Push) |
+| `panel_category_cc` | Select Control Category via CC | Continuous (0–127) |
+| `panel_tab_grid` | Select Controls Grid Tab | Trigger (Toggle / Push) |
+| `panel_tab_flow` | Select Signal Flow Tab | Trigger (Toggle / Push) |
+| `panel_tab_lfo` | Select LFO Tab | Trigger (Toggle / Push) |
+| `panel_tab_osc` | Select Oscillator Tab | Trigger (Toggle / Push) |
+| `panel_tab_env` | Select Envelope Tab | Trigger (Toggle / Push) |
+| `panel_tab_filter` | Select Filter Tab | Trigger (Toggle / Push) |
+| `panel_tab_efx` | Select EFX Tab | Trigger (Toggle / Push) |
+| `panel_tab_poly` | Select Poly Tab | Trigger (Toggle / Push) |
+| `panel_tab_advanced` | Select Advanced Tab | Trigger (Toggle / Push) |
+| `panel_tab_dynamic` | Select Dynamic Tab | Trigger (Toggle / Push) |
+| `toggle_main_menu` | Toggle Main Menu (Speed Dial) | Trigger (Toggle / Push) |
+| `main_menu_scroll_cc` | Scroll Main Menu via CC | Continuous (0–127) |
+| `main_menu_select` | Select Main Menu Item (Click) | Trigger (Toggle / Push) |
 
 ---
 
