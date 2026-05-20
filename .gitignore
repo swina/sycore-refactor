@@ -26,3 +26,4 @@ dist-ssr
 *.mp4
 *.webm
 *.wav
+.agent
