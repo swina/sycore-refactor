@@ -22,6 +22,7 @@ const sections = [
       { icon: LayoutGrid, title: 'Sound Types', description: 'Browse and generate AI sound categories', uiFlag: 'isTypesOpen' },
       { icon: Layers,     title: 'Preset Library', description: 'History and saved patches', uiFlag: 'isHistoryOpen' },
       { icon: Heart,      title: 'Favorites', description: 'Your starred presets', uiFlag: 'isFavoritesOpen' },
+      { icon: Zap,        title: 'Generate', description: 'Generate a new preset', uiFlag: 'isTypesOpen'}
     ],
   },
   {

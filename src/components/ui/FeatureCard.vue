@@ -3,6 +3,7 @@ import { nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { usePresetStore } from '@/stores/usePresetStore'
 
 const props = defineProps({
   icon: { type: [Object, Function], required: true },
@@ -15,6 +16,7 @@ const props = defineProps({
 const router = useRouter()
 const authStore = useAuthStore()
 const uiStore = useUiStore()
+const presetStore = usePresetStore()
 
 async function handleClick() {
   if (!authStore.user) {
@@ -44,6 +46,7 @@ async function handleClick() {
       <span class="text-[11px] font-black uppercase tracking-[0.18em] text-neutral-100 group-hover:text-synth-neon transition-colors truncate">
         {{ title }}
       </span>
+      <span v-if="title == 'Sound Types'" class="text-mono uppercase text-[9px] text-cyan-700">{{ presetStore.currentCategory }}</span>
       <!-- <span v-if="description" class="text-[10px] font-mono text-neutral-500 leading-relaxed line-clamp-2">
         {{ description }}
       </span> -->

@@ -682,7 +682,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
       <div
         v-if="!isPanelCollapsed"
         class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-6 pb-32"
-        :class = "activeCategory ? 'bg-black border border-black/50 rounded-lg': 'bg-transparent'"
+        :class = "activeCategory ? 'bg-transparent border border-black/50 rounded-lg': 'bg-transparent'"
       >
         <div v-if="activeCategory" class="h-full">
           <div v-for="cat in categoriesWithCtrls.filter(c => c.id === activeCategory)" :key="cat.id" class="h-full flex flex-col md:flex-row gap-8 items-start">
