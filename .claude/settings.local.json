@@ -3,7 +3,7 @@
         "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
         "ANTHROPIC_AUTH_TOKEN": "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",
         "ANTHROPIC_API_KEY": "",
-        "ANTHROPIC_MODEL": "nvidia/nemotron-3-super-120b-a12b:free",
+        "ANTHROPIC_MODEL": "minimax/minimax-m2.5:free",
         "ANTHROPIC_DEFAULT_SONNET_MODEL": "google/gemini-3-flash-preview",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek/deepseek-v4-flash"
     }
