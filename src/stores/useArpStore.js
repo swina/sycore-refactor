@@ -11,6 +11,7 @@ export const useArpStore = defineStore('arp', () => {
   const arpBpm         = ref(120)
   const arpSubdivision = ref('1/8')       // ArpSubdivisionValue
   const arpHold        = ref(false)
+  const arpOctave      = ref(0)           // -3 to +3 octaves
 
   // Plain Set — not reactive to avoid thrashing during rapid MIDI note events.
   // Components that need the held notes read heldNoteCount for display.
@@ -37,7 +38,7 @@ export const useArpStore = defineStore('arp', () => {
   }
 
   return {
-    arpEnabled, arpMode, arpBpm, arpSubdivision, arpHold,
+    arpEnabled, arpMode, arpBpm, arpSubdivision, arpHold, arpOctave,
     heldNoteCount,
     pressNote, releaseNote, getHeldNotes, clearHeldNotes,
   }

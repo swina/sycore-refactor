@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { X, Play, Square, Settings, ChevronUp, ChevronDown, ListMusic } from 'lucide-vue-next'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore, ARP_SUBDIVISIONS } from '@/stores/useArpStore'
@@ -32,6 +32,36 @@ const arpModes = ref([
   'random',
   'random-other',
 ])
+
+/**
+ * Check if the given input device ID is routed to the arpeggiator
+ * @param {string} inputId - The MIDI input device ID
+ * @returns {boolean} True if the device is routed to arpeggiator
+ */
+function isInputDeviceRoutedToArpeggiator(inputId) {
+  // If no inputId, we can't verify routing - allow by default for backward compatibility
+  if (!inputId) return true
+
+  try {
+    // Get the MIDI access to look up the device name by ID
+    const midiAccess = midiService.midiAccess
+    if (!midiAccess) return true
+    const inputDevice = midiAccess.inputs.get(inputId)
+    if (!inputDevice) return true
+    
+    const inputName = inputDevice.name
+    if (!inputName) return true
+    
+    // Check if this input device is configured to route to the arpeggiator
+    const routingMatrix = midiStore.routingMatrix
+    const targetArray = routingMatrix[inputName]
+    return targetArray.some( t => routingMatrix[MidiSource.ARP].includes(t))  
+  } catch (error) {
+    // If anything goes wrong, allow the note through to avoid blocking all input
+    console.warn('[Arpeggiator] Error checking input routing:', error)
+    return true
+  }
+}
 
 function calculateStepMs(bpm, subdivision) {
   const beatMs = 60000 / bpm
@@ -117,7 +147,27 @@ function startArpEngine() {
   let subIndex = 0 
 
   arpTimer = setInterval(() => {
-    const notesArray = Array.from(arpStore.getHeldNotes()).sort((a, b) => a - b)
+    // Build expanded note array based on octave setting
+    const baseNotes = Array.from(arpStore.getHeldNotes())
+    const octave = arpStore.arpOctave
+    let expandedNotes = []
+    if (octave === 0) {
+      expandedNotes = [...baseNotes]
+    } else if (octave > 0) {
+      for (const note of baseNotes) {
+        for (let k = 0; k <= octave; k++) {
+          expandedNotes.push(note + k * 12)
+        }
+      }
+    } else { // octave < 0
+      for (const note of baseNotes) {
+        for (let k = octave; k <= 0; k++) {
+          expandedNotes.push(note + k * 12)
+        }
+      }
+    }
+    // Remove duplicates and sort
+    const notesArray = [...new Set(expandedNotes)].sort((a, b) => a - b)
 
     if (notesArray.length === 0) {
       if (lastArpNote !== null) {
@@ -126,22 +176,6 @@ function startArpEngine() {
       }
       currentArpIndex = 0
       subIndex = 0
-      return
-    }
-
-    // Se c'è solo una nota, la suoniamo a tempo ad ogni tick (comportamento standard Arp)
-    if (notesArray.length === 1) {
-      const note = notesArray[0]
-      if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
-      midiStore.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
-      lastArpNote = note
-
-      setTimeout(() => {
-        if (lastArpNote === note) {
-          midiStore.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
-          lastArpNote = null
-        }
-      }, stepMs * 0.5)
       return
     }
 
@@ -273,8 +307,12 @@ function stopArpEngine() {
 let _unsubNote = null
 
 onMounted(() => {
-  _unsubNote = midiService.addNoteListener((type, note, velocity, chan) => {
+  _unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
+    // Filter by input channel if specified
     if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
+
+    // Filter by input device routing to arpeggiator
+    if (!isInputDeviceRoutedToArpeggiator(inputId)) return
 
     if (type === 'on' && velocity > 0) {
       if (arpStore.arpHold && physicalKeysHeld.value === 0) {
@@ -401,9 +439,22 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
             <span class="text-[8px] font-mono text-neutral-500 uppercase">Arp BPM</span>
             <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpBpm }}</span>
           </div>
-          <input 
-            v-model.number="arpStore.arpBpm" 
-            type="range" min="40" max="250" 
+          <input
+            v-model.number="arpStore.arpBpm"
+            type="range" min="40" max="250"
+            class="h-1 accent-synth-neon bg-neutral-800 rounded-full appearance-none cursor-pointer"
+          />
+        </div>
+
+        <!-- Octave Control -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <span class="text-[8px] font-mono text-neutral-500 uppercase">Octave</span>
+            <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpOctave }}</span>
+          </div>
+          <input
+            v-model.number="arpStore.arpOctave"
+            type="range" min="-3" max="3"
             class="h-1 accent-synth-neon bg-neutral-800 rounded-full appearance-none cursor-pointer"
           />
         </div>
