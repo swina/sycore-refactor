@@ -7,6 +7,7 @@ import { useUiStore } from './stores/useUiStore'
 import './assets/main.css'
 import App from './App.vue'
 import SynthApp from './views/SynthApp.vue'
+import HomeView from './views/HomeView.vue'
 
 // Bridge for internal service logs to reach the UI Logger Panel
 window.SY_LOG = (msg) => {
@@ -15,7 +16,10 @@ window.SY_LOG = (msg) => {
 
 const router = createRouter({
   history: createWebHistory(),
-  routes: [{ path: '/', component: SynthApp }]
+  routes: [
+    { path: '/', component: SynthApp },
+    { path: '/home', component: HomeView }
+  ]
 })
 
 const pinia = createPinia()

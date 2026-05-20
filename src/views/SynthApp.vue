@@ -1,10 +1,13 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
   LayoutGrid, Layers, Heart, ListMusic, User, BookOpen, Workflow,
-  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network
+  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network, Home
 } from 'lucide-vue-next'
+
+const router = useRouter()
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
@@ -197,6 +200,15 @@ onMounted(() => {
         {{ configStore.appName }}
       </h1>
     </div>
+
+    <!-- Home Button -->
+    <button
+      @click="router.push('/home')"
+      title="Home"
+      class="fixed top-4 left-4 z-[100] w-9 h-9 rounded-lg bg-neutral-900/70 border border-neutral-800 hover:border-synth-neon/60 hover:bg-neutral-900 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
+    >
+      <Home class="w-4 h-4" />
+    </button>
 
     <!-- STARTUP SPLASH -->
     <Transition name="fade">

@@ -189,7 +189,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[120] max-h-[calc(100vh-40px)] pb-[30px] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-hidden p-4 md:p-8">
+  <div class="fixed inset-0 z-[120] max-h-[92vh] pb-[30px] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-hidden p-4 md:p-8">
     <div class="bg-neutral-950 border border-neutral-900 rounded-3xl max-w-4xl overflow-hidden shadow-2xl pb-[24px]">
 
       <!-- Hidden file input -->
@@ -287,7 +287,7 @@ onMounted(() => {
       </div>
 
       <!-- ── PRESET GRID ── -->
-      <div class="p-6 md:p-2 pt-0 overflow-y-auto custom-scrollbar max-h-[660px]">
+      <div class="p-6 md:p-2 pt-0 overflow-y-auto custom-scrollbar max-h-[70vh]">
 
         <!-- Empty state -->
         <div v-if="filteredPresets.length === 0" class="py-20 text-center">
