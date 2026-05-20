@@ -17,25 +17,45 @@ At the core of SY.CORE lies the **Adaptive Sound Engine**, a proprietary synthes
 
 ## 🚀 Key Platform Pillars
 
-### 1. Adaptive Sound Engine for a better sound design workflow
+### 1. The Power of the Web: Why SY.CORE?
+SY.CORE leverages the latest evolution of web technologies (Web MIDI & Web Audio APIs) to offer a lightweight, flexible, and potent alternative to traditional desktop software.
+- **Zero Installation**: Launch immediately via a URL with no tedious setup or heavy installers.
+- **Always Up-to-Date**: Updates occur server-side, ensuring you always run the latest version.
+- **Driverless Plug & Play**: Communicates directly with native OS frameworks (Windows MIDI Services, CoreMIDI), eliminating driver conflicts.
+- **Universal Portability (PWA)**: Runs identically across Windows, macOS, Linux, and Android with full-screen mode and system integration.
+
+### 2. Adaptive Sound Engine for a better sound design workflow
 SY.CORE doesn't create sounds based on random values, it uses logic algorithms based on the electronic synthesis theory and the Roland S-1 architecture. This means that every sound can be unique and mathematically balanced, and possibly ready for the stage.
 
-### 2. Professional Live Orchestration
+### 3. Professional Live Orchestration
 SY.CORE is built for live jamming and performances. The **Live Pad Grid** provides a high-density, touch-optimized interface for instant recall of complex multi-device configurations. Switch sounds across your Roland S-1 with a single tap.
 
-### 3. Local-First Reliability
-Performance environments are unpredictable. SY.CORE utilizes a **Local-First Architecture** (IndexedDB), ensuring that all your presets, backing tracks, and configurations are stored directly in the browser.
-- **Zero Internet Dependency**: Load your project once and play offline.
+### 4. Local-First Reliability & Offline Power
+Performance environments are unpredictable. SY.CORE utilizes a **Local-First Architecture** (IndexedDB) combined with **Service Workers (PWA)**, ensuring that all your presets, backing tracks, and configurations are stored directly in the browser.
+- **Zero Internet Dependency**: Once saved to your device, the PWA launches and functions entirely offline.
 - **Instant Boot**: No cloud loading screens; your music is ready as fast as your hardware.
+- **Data Persistence**: All customizations and session data remain safe on your device.
 
-### 4. Integrated Creativity Suite
+### 5. Integrated Creativity Suite
 SY.CORE replaces a rack of gear with a single, streamlined interface:
 - **Backing Track Player Pro**: A dual-slot engine with automatic crossfading, gapless playback, and MIDI transport synchronization.
-- **8-Track Audio Looper**: Capture live inspiration and instantly integrate it into your playlist.
+- **Audio Capture**: advanced audio capture with loop functionality (start,loop start/end point, crossfade duration, fade in/out duration,export to MP3 files in high quality 320kbps,add to backing track player playlist)
 - **Advanced Step Sequencer**: Precision pattern creation with parameter automation and per-step MIDI routing.
+- **8-Track Audio Looper**: Capture live inspiration and instantly integrate it into your playlist.
 - **Live MIDI Performance Matrix**: Real-time cross-routing engine with visual Grid/Flow layouts and multi-source merging.
 - **Smart Latch**: An intelligent, generative Note Hold engine with per-output assignment and circular FIFO buffering.
 - **Real-Time Audio Visualizer**: Professional spectral analysis and waveform visualization for immersive performance monitoring.
+
+---
+
+## 🛠 Technological Foundation
+
+| Technology | Main Role | Key Advantage |
+| :--- | :--- | :--- |
+| **Web MIDI API** | Manages musical device data | Direct hardware routing with near-zero latency. |
+| **Web Audio API** | Handles synthesis and processing | Modular, high-performance node-based engine. |
+| **Service Workers (PWA)**| Resource & Asset management | Persistent offline functionality and instant loading. |
+| **IndexedDB** | Local Data Storage | Professional-grade state management and persistence. |
 
 ---
 

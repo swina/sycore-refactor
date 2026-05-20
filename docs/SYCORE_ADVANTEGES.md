@@ -22,7 +22,15 @@ The evolution of web technologies now allows for the creation of powerful musica
 * **Advanced filtering:** Precise management of MIDI channels, Control Change (CC) messages, Clock, and Program Changes.
 * **Complex scenarios:** Create keyboard splits or layer multiple hardware instruments directly from the web interface.
 
-### 4. Native Cross-Platform and Portability (PWA)
+### 4. MIDI ACTIONS for hardware control
+* **Flexible matrix:** Easily route any MIDI input (e.g., keyboard) to any app features functions (e.g. arpeggiator, sequencer, looper, etc.) with a few clicks. Supports both continuous (0–127) and trigger (Push) control.
+* **Use the app as a hardware controller:** Map your MIDI controllers to any app feature, and control the app with your controller. (this works as a bridge for the app to be a dedicated hardware controller). 
+
+### 5. DATA MANAGEMENT
+* **Persistency:** All your data including MIDI mappings, patterns, presets, etc. are saved locally and automatically recalled when the app is launched.
+* **Export/Import:** Load and save your complete session including patterns, presets,mappings, etc.
+
+### 6. Native Cross-Platform and Portability (PWA)
 * **Universal compatibility:** Runs identically across Windows, macOS, Linux, and Android.
 * **Offline capability (PWA):** Once saved to the device, the PWA launches and functions without an internet connection.
 * **System integration:** Adds an icon to the desktop or mobile home screen, launches in full-screen mode, and utilizes optimized performance.
