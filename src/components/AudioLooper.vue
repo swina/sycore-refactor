@@ -43,8 +43,9 @@ async function refreshDevices() {
 
 async function startMonitor(deviceId) {
   error.value = null
+  let stream = null
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: deviceId !== 'default' ? { exact: deviceId } : undefined,
         echoCancellation: false,
@@ -52,6 +53,30 @@ async function startMonitor(deviceId) {
         autoGainControl: false,
       }
     })
+  } catch (e) {
+    if (deviceId !== 'default') {
+      console.warn('[Looper] Selected audio device failed, falling back to default...', e)
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        })
+        selectedDeviceId.value = 'default'
+        localStorage.setItem('S1_LOOPER_DEVICE', 'default')
+      } catch (fallbackErr) {
+        handleMonitorError(fallbackErr)
+        return
+      }
+    } else {
+      handleMonitorError(e)
+      return
+    }
+  }
+
+  try {
     streamRef = stream
     
     await looperEngine.init(stream)
@@ -65,9 +90,14 @@ async function startMonitor(deviceId) {
     isMonitoring.value = true
     await refreshDevices()
   } catch (e) {
-    console.error('[Looper] Audio Init Error:', e)
-    error.value = "Audio access denied or device not found."
+    handleMonitorError(e)
   }
+}
+
+function handleMonitorError(e) {
+  console.error('[Looper] Audio Init Error:', e)
+  error.value = "Audio access denied or device not found."
+  refreshDevices()
 }
 
 function syncEngineParams() {
@@ -89,6 +119,9 @@ async function handleDeviceChange(id) {
 let midiCleanup = null
 
 onMounted(async () => {
+  await refreshDevices()
+  navigator.mediaDevices?.addEventListener('devicechange', refreshDevices)
+  
   midiService.reScanInputs()
   if (!midiService.isReady) {
     setTimeout(() => midiService.reScanInputs(), 1000)
@@ -131,6 +164,7 @@ onUnmounted(() => {
   if (streamRef) {
     streamRef.getTracks().forEach(t => t.stop())
   }
+  navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
 })
 
 async function handleStartRecording() {

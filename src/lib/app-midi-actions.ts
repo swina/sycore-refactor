@@ -94,7 +94,10 @@ export type AppAction =
   | 'velocity_amount_cc'
   | 'velocity_curve_cc'
   | 'arp_rate_cc'
-  | 'arp_hold_cc';
+  | 'arp_hold_cc'
+  | 'toggle_main_menu'
+  | 'main_menu_scroll_cc'
+  | 'main_menu_select';
 
 export interface AppMidiMapping {
   id: string;
@@ -218,6 +221,9 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   velocity_curve_cc:    'Velocity Map: Response Curve via CC',
   arp_rate_cc:          'Arp: Rate/Subdivision via CC',
   arp_hold_cc:          'Arp: Hold Toggle/State via CC',
+  toggle_main_menu:     'Toggle Main Menu (Speed Dial)',
+  main_menu_scroll_cc:  'Scroll Main Menu via CC',
+  main_menu_select:     'Select Main Menu Item (Click)',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -250,7 +256,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'open_sound_history', 'open_midi_matrix', 'panel_category_cc',
     'panel_tab_grid', 'panel_tab_flow', 'panel_tab_lfo', 'panel_tab_osc',
     'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
-    'panel_tab_advanced', 'panel_tab_dynamic'
+    'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select'
   ],
   'Transport & Performance': [
     'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
@@ -300,5 +306,6 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'velocity_amount_cc',
   'velocity_curve_cc',
   'arp_rate_cc',
-  'arp_hold_cc'
+  'arp_hold_cc',
+  'main_menu_scroll_cc'
 ]);

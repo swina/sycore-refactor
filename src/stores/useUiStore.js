@@ -34,6 +34,7 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiActionsOpen  = ref(false)
   const isPanicOpen        = ref(false)
   const isMainMenuOpen     = ref(false)
+  const mainMenuSelectedIndex = ref(-1)
   const isSideMenuOpen     = ref(false)
   const isSessionOpen      = ref(false)
   const isLooperOpen       = ref(false)
@@ -91,6 +92,7 @@ export const useUiStore = defineStore('ui', () => {
     isMidiActionsOpen.value  = false
     isPanicOpen.value        = false
     isMainMenuOpen.value     = false
+    mainMenuSelectedIndex.value = -1
     isSideMenuOpen.value     = false
     isSessionOpen.value      = false
     isMidiMatrixOpen.value   = false
@@ -100,8 +102,19 @@ export const useUiStore = defineStore('ui', () => {
 
   function toggleMainMenu() {
     isMainMenuOpen.value = !isMainMenuOpen.value
-    if (isMainMenuOpen.value) isSideMenuOpen.value = false
+    if (isMainMenuOpen.value) {
+      isSideMenuOpen.value = false
+      mainMenuSelectedIndex.value = -1
+    } else {
+      mainMenuSelectedIndex.value = -1
+    }
   }
+
+  watch(isMainMenuOpen, (isOpen) => {
+    if (!isOpen) {
+      mainMenuSelectedIndex.value = -1
+    }
+  })
 
   function toggleSideMenu() {
     isSideMenuOpen.value = !isSideMenuOpen.value
@@ -121,7 +134,7 @@ export const useUiStore = defineStore('ui', () => {
     isBackingTrackOpen, isLiveSetOpen, isAppMidiMapperOpen,
     isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
-    isMainMenuOpen, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
+    isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen, 
     isPlayingPreview, isPlayingBacking, isAudioPlaying, lastPlaylistName,

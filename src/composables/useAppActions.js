@@ -254,6 +254,20 @@ export function useAppActions() {
       case 'open_midi_matrix': if (ccVal > 63) uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
       case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
+      case 'toggle_main_menu':
+        if (ccVal > 63) {
+          window.dispatchEvent(new CustomEvent('midi-main-menu', { detail: { action: 'toggle', val: ccVal } }))
+        }
+        break
+      case 'main_menu_scroll_cc':
+        window.dispatchEvent(new CustomEvent('midi-main-menu', { detail: { action: 'scroll', val: ccVal } }))
+        break
+      case 'main_menu_select':
+        if (ccVal > 63) {
+          window.dispatchEvent(new CustomEvent('midi-main-menu', { detail: { action: 'select', val: ccVal } }))
+        }
+        break
+
       case 'midi_panic':
         if (ccVal > 63) midiStore.panic(); break
 

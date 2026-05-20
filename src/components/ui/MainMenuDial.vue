@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import * as lucideIcons from 'lucide-vue-next'
 import { Menu, X } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
@@ -59,6 +59,59 @@ const filteredActions = computed(() => {
 })
 
 const toggle = () => uiStore.toggleMainMenu()
+
+const handleMidiMainMenu = (e) => {
+  const { action, val } = e.detail
+  if (action === 'toggle') {
+    if (val > 63) {
+      if (uiStore.isMainMenuOpen && uiStore.mainMenuSelectedIndex !== -1) {
+        const currentActions = filteredActions.value
+        const selectedAction = currentActions[uiStore.mainMenuSelectedIndex]
+        if (selectedAction) {
+          selectedAction.onClick()
+          uiStore.isMainMenuOpen = false
+        }
+      } else {
+        uiStore.toggleMainMenu()
+      }
+    }
+  } else if (action === 'select') {
+    if (val > 63 && uiStore.isMainMenuOpen && uiStore.mainMenuSelectedIndex !== -1) {
+      const currentActions = filteredActions.value
+      const selectedAction = currentActions[uiStore.mainMenuSelectedIndex]
+      if (selectedAction) {
+        selectedAction.onClick()
+        uiStore.isMainMenuOpen = false
+      }
+    }
+  } else if (action === 'scroll') {
+    if (uiStore.isMainMenuOpen) {
+      const currentActions = filteredActions.value
+      if (currentActions.length > 0) {
+        const idx = Math.min(
+          currentActions.length - 1,
+          Math.floor((val / 127.1) * currentActions.length)
+        )
+        uiStore.mainMenuSelectedIndex = idx
+      }
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('midi-main-menu', handleMidiMainMenu)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('midi-main-menu', handleMidiMainMenu)
+})
+
+const activeLabel = computed(() => {
+  if (!uiStore.isMainMenuOpen || uiStore.mainMenuSelectedIndex === -1) return ''
+  const currentActions = filteredActions.value
+  const selectedAction = currentActions[uiStore.mainMenuSelectedIndex]
+  return selectedAction ? selectedAction.label : ''
+})
 </script>
 
 <template>
@@ -79,7 +132,10 @@ const toggle = () => uiStore.toggleMainMenu()
         <button
           @click="action.onClick(); uiStore.isMainMenuOpen = false"
           :class="[
-            'w-16 h-16 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 hover:border-white/30 shadow-xl group',
+            'w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all shadow-xl group',
+            uiStore.mainMenuSelectedIndex === index
+              ? 'border-2 border-synth-neon scale-110 ring-2 ring-synth-neon/50 bg-neutral-900/90 shadow-[0_0_20px_rgba(0,255,204,0.6)] animate-pulse'
+              : 'border border-white/10 bg-black/60 backdrop-blur-md hover:scale-105 hover:border-white/30',
             action.color
           ]"
           :style="{ transitionDelay: `${(filteredActions.length - index) * 50}ms` }"
@@ -106,6 +162,20 @@ const toggle = () => uiStore.toggleMainMenu()
       <Menu v-else class="w-6 h-6" />
     </button>
 
+    <!-- Centered Menu Name Indicator (positioned over the footer) -->
+    <Transition name="fade">
+      <div 
+        v-if="uiStore.isMainMenuOpen && activeLabel"
+        class="fixed bottom-0 left-1/2 -translate-x-1/2 h-10 pointer-events-none flex items-center justify-center gap-2 z-[710]"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-synth-neon animate-pulse"></span>
+        <span class="text-synth-neon font-black text-[10px] tracking-widest font-mono uppercase">
+          MENU: {{ activeLabel }}
+        </span>
+        <span class="w-1.5 h-1.5 rounded-full bg-synth-neon animate-pulse"></span>
+      </div>
+    </Transition>
+
     <!-- Overlay backdrop when open -->
     <div 
       v-if="uiStore.isMainMenuOpen" 
@@ -126,6 +196,17 @@ const toggle = () => uiStore.toggleMainMenu()
 .speed-dial-leave-to {
   opacity: 0;
   transform: translateY(20px) scale(0.5);
+}
+
+/* Fade Transition */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 button:not(.bg-white) {

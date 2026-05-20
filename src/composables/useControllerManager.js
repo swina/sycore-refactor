@@ -50,6 +50,7 @@ export function useControllerManager() {
           case 'toggle_arp':        return arpStore.arpEnabled
           case 'toggle_liveset':    return uiStore.isLiveSetOpen
           case 'toggle_looper':     return uiStore.isLooperOpen
+          case 'toggle_main_menu':  return uiStore.isMainMenuOpen
           case 'open_midi_matrix':  return uiStore.isMidiMatrixOpen
           case 'toggle_midi_performance': return uiStore.isMidiPerformanceOpen
           case 'toggle_midi_capture': return uiStore.isCaptureOpen

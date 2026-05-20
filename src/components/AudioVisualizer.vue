@@ -94,13 +94,35 @@ function stop() {
 async function connectStream(deviceId) {
   if (sourceRef) { sourceRef.disconnect(); sourceRef = null }
   if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: deviceId !== 'default' ? { exact: deviceId } : undefined,
-      echoCancellation: false, noiseSuppression: false, autoGainControl: false,
-    },
-    video: false,
-  })
+  
+  let stream = null
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: deviceId !== 'default' ? { exact: deviceId } : undefined,
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+      },
+      video: false,
+    })
+  } catch (e) {
+    if (deviceId !== 'default') {
+      console.warn('[AudioVisualizer] Selected audio device failed, falling back to default...', e)
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+          },
+          video: false,
+        })
+        selectedDeviceId.value = 'default'
+      } catch (fallbackErr) {
+        throw fallbackErr
+      }
+    } else {
+      throw e
+    }
+  }
+
   streamRef = stream
   const src = ctxRef.createMediaStreamSource(stream)
   sourceRef = src
@@ -146,6 +168,7 @@ async function start() {
     error.value = e?.message?.includes('denied')
       ? 'Microphone access denied.'
       : (e?.message ?? 'Audio capture failed.')
+    refreshDevices()
   }
 }
 
@@ -347,11 +370,11 @@ watch(() => uiStore.isVisualizerOpen, async (open) => {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  await refreshDevices()
   navigator.mediaDevices?.addEventListener('devicechange', refreshDevices)
   
   // If it's already open at mount (e.g. page refresh), try to refresh and auto-start
   if (uiStore.isVisualizerOpen) {
-    await refreshDevices()
     const exists = selectedDeviceId.value === 'default' || devices.value.some(d => d.deviceId === selectedDeviceId.value)
     if (exists && !isActive.value) {
       start()

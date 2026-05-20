@@ -197,8 +197,9 @@ function stopAll(keepBlob = false) {
 // ── Start monitoring ──────────────────────────────────────────────────────────
 async function startMonitor(deviceId) {
   error.value = null
+  let stream = null
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: deviceId !== 'default' ? { exact: deviceId } : undefined,
         echoCancellation: false,
@@ -207,6 +208,31 @@ async function startMonitor(deviceId) {
       },
       video: false,
     })
+  } catch (e) {
+    if (deviceId !== 'default') {
+      console.warn('[AudioCapture] Selected audio device failed, falling back to default...', e)
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+          video: false,
+        })
+        selectedDeviceId.value = 'default'
+        localStorage.setItem('S1_CAPTURE_DEVICE', 'default')
+      } catch (fallbackErr) {
+        handleMonitorError(fallbackErr)
+        return
+      }
+    } else {
+      handleMonitorError(e)
+      return
+    }
+  }
+
+  try {
     streamRef = stream
     const actx = new AudioContext()
     ctxRef = actx
@@ -219,11 +245,16 @@ async function startMonitor(deviceId) {
     await refreshDevices()
     isMonitoring.value = true
   } catch (e) {
-    const msg = e?.message ?? ''
-    error.value = msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('permission')
-      ? 'Microphone access denied.'
-      : msg || 'Audio input failed.'
+    handleMonitorError(e)
   }
+}
+
+function handleMonitorError(e) {
+  const msg = e?.message ?? ''
+  error.value = msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('permission')
+    ? 'Microphone access denied.'
+    : msg || 'Audio input failed.'
+  refreshDevices()
 }
 
 // ── Panel open / close ────────────────────────────────────────────────────────
@@ -920,7 +951,8 @@ function fmtTime(s) {
 let _recToggleHandler = null
 let resizeObserver = null
 
-onMounted(() => {
+onMounted(async () => {
+  await refreshDevices()
   navigator.mediaDevices?.addEventListener('devicechange', refreshDevices)
   if (uiStore.isAudioCaptureOpen) startMonitor(selectedDeviceId.value)
   
