@@ -20,6 +20,18 @@ let lastArpNote = null
 let currentArpIndex = -1
 let arpDirection = 1
 const physicalKeysHeld = ref(0)
+const arpModes = ref([
+  'up',
+  'down',
+  'up-down',
+  'down-up',
+  'converge',
+  'diverge',
+  'pinky-up',
+  'thumb-up',
+  'random',
+  'random-other',
+])
 
 function calculateStepMs(bpm, subdivision) {
   const beatMs = 60000 / bpm
@@ -37,10 +49,73 @@ function calculateStepMs(bpm, subdivision) {
   return beatMs * 4 * ratio
 }
 
+// function startArpEngine() {
+//   if (arpTimer) clearInterval(arpTimer)
+
+//   const stepMs = calculateStepMs(arpStore.arpBpm, arpStore.arpSubdivision)
+//   arpTimer = setInterval(() => {
+//     const notesArray = Array.from(arpStore.getHeldNotes()).sort((a, b) => a - b)
+
+//     if (notesArray.length === 0) {
+//       if (lastArpNote !== null) {
+//         midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+//         lastArpNote = null
+//       }
+//       return
+//     }
+
+//     if (notesArray.length === 1) {
+//       if (lastArpNote !== notesArray[0]) {
+//         if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+//         midiStore.sendNoteOn(notesArray[0], 100, props.channel, MidiSource.ARP)
+//         lastArpNote = notesArray[0]
+//       }
+//       return
+//     }
+
+//     let nextIndex = 0
+//     if (arpStore.arpMode === 'up') {
+//       nextIndex = (currentArpIndex + 1) % notesArray.length
+//     } else if (arpStore.arpMode === 'down') {
+//       nextIndex = currentArpIndex - 1
+//       if (nextIndex < 0) nextIndex = notesArray.length - 1
+//     } else if (arpStore.arpMode === 'up-down') {
+//       nextIndex = currentArpIndex + arpDirection
+//       if (nextIndex >= notesArray.length) {
+//         nextIndex = Math.max(0, notesArray.length - 2)
+//         arpDirection = -1
+//       } else if (nextIndex < 0) {
+//         nextIndex = Math.min(1, notesArray.length - 1)
+//         arpDirection = 1
+//       }
+//     } else if (arpStore.arpMode === 'random') {
+//       nextIndex = Math.floor(Math.random() * notesArray.length)
+//     }
+
+//     currentArpIndex = nextIndex
+//     const note = notesArray[nextIndex]
+
+//     if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+//     midiStore.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
+//     lastArpNote = note
+
+//     setTimeout(() => {
+//       if (lastArpNote === note) {
+//         midiStore.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
+//         lastArpNote = null
+//       }
+//     }, stepMs * 0.5)
+//   }, stepMs)
+// }
+
 function startArpEngine() {
   if (arpTimer) clearInterval(arpTimer)
 
   const stepMs = calculateStepMs(arpStore.arpBpm, arpStore.arpSubdivision)
+  
+  // Teniamo traccia della direzione per stili complessi (up-down, down-up, converge, diverge)
+  let subIndex = 0 
+
   arpTimer = setInterval(() => {
     const notesArray = Array.from(arpStore.getHeldNotes()).sort((a, b) => a - b)
 
@@ -49,44 +124,131 @@ function startArpEngine() {
         midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
         lastArpNote = null
       }
+      currentArpIndex = 0
+      subIndex = 0
       return
     }
 
+    // Se c'è solo una nota, la suoniamo a tempo ad ogni tick (comportamento standard Arp)
     if (notesArray.length === 1) {
-      if (lastArpNote !== notesArray[0]) {
-        if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
-        midiStore.sendNoteOn(notesArray[0], 100, props.channel, MidiSource.ARP)
-        lastArpNote = notesArray[0]
-      }
+      const note = notesArray[0]
+      if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+      midiStore.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
+      lastArpNote = note
+
+      setTimeout(() => {
+        if (lastArpNote === note) {
+          midiStore.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
+          lastArpNote = null
+        }
+      }, stepMs * 0.5)
       return
+    }
+
+    // Se l'indice memorizzato è fuori dai limiti (es. sono state rilasciate delle note), resetta
+    if (currentArpIndex >= notesArray.length) {
+      currentArpIndex = 0
+      subIndex = 0
     }
 
     let nextIndex = 0
+    const len = notesArray.length
+
+    // --- LOGICA DEGLI STILI DI ABLETON LIVE ---
     if (arpStore.arpMode === 'up') {
-      nextIndex = (currentArpIndex + 1) % notesArray.length
+      nextIndex = (currentArpIndex + 1) % len
+
     } else if (arpStore.arpMode === 'down') {
       nextIndex = currentArpIndex - 1
-      if (nextIndex < 0) nextIndex = notesArray.length - 1
+      if (nextIndex < 0) nextIndex = len - 1
+
     } else if (arpStore.arpMode === 'up-down') {
+      // Ableton ripete la prima e l'ultima nota nel ciclo completo
       nextIndex = currentArpIndex + arpDirection
-      if (nextIndex >= notesArray.length) {
-        nextIndex = Math.max(0, notesArray.length - 2)
+      if (nextIndex >= len) {
+        nextIndex = len - 1
         arpDirection = -1
       } else if (nextIndex < 0) {
-        nextIndex = Math.min(1, notesArray.length - 1)
+        nextIndex = 0
         arpDirection = 1
       }
+
+    } else if (arpStore.arpMode === 'down-up') {
+      nextIndex = currentArpIndex + arpDirection
+      if (nextIndex >= len) {
+        nextIndex = len - 1
+        arpDirection = 1
+      } else if (nextIndex < 0) {
+        nextIndex = 0
+        arpDirection = -1
+      }
+
+    } else if (arpStore.arpMode === 'converge') {
+      // Alterna estremo basso ed estremo alto stringendo verso il centro
+      // subIndex tiene traccia del progresso [0, 1, 2, 3...]
+      subIndex = (subIndex + 1) % len
+      const step = Math.floor(subIndex / 2)
+      if (subIndex % 2 === 0) {
+        nextIndex = step // Basso sale
+      } else {
+        nextIndex = (len - 1) - step // Alto scende
+      }
+
+    } else if (arpStore.arpMode === 'diverge') {
+      // Parte dal centro e si allarga verso gli estremi
+      subIndex = (subIndex + 1) % len
+      const mid = Math.floor((len - 1) / 2)
+      const step = Math.floor((subIndex + 1) / 2)
+      if (subIndex === 0) {
+        nextIndex = mid
+      } else if (subIndex % 2 === 1) {
+        nextIndex = mid + step
+        if (nextIndex >= len) nextIndex = len - 1
+      } else {
+        nextIndex = mid - step
+        if (nextIndex < 0) nextIndex = 0
+      }
+
+    } else if (arpStore.arpMode === 'pinky-up') {
+      // Alterna la nota più alta (len-1) con le altre note che salgono
+      if (currentArpIndex === len - 1) {
+        nextIndex = subIndex
+        subIndex = (subIndex + 1) % (len - 1)
+      } else {
+        nextIndex = len - 1
+      }
+
+    } else if (arpStore.arpMode === 'thumb-up') {
+      // Alterna la nota più bassa (0) con le altre note che salgono
+      if (currentArpIndex === 0) {
+        nextIndex = subIndex
+        if (subIndex === 0) subIndex = 1
+        subIndex = (subIndex + 1) % len
+        if (subIndex === 0) subIndex = 1
+      } else {
+        nextIndex = 0
+      }
+
     } else if (arpStore.arpMode === 'random') {
-      nextIndex = Math.floor(Math.random() * notesArray.length)
+      nextIndex = Math.floor(Math.random() * len)
+
+    } else if (arpStore.arpMode === 'random-other') {
+      // Evita di ripetere la stessa nota consecutivamente
+      do {
+        nextIndex = Math.floor(Math.random() * len)
+      } while (nextIndex === currentArpIndex)
     }
 
+    // Aggiorna lo stato degli indici
     currentArpIndex = nextIndex
     const note = notesArray[nextIndex]
 
+    // Riproduzione della nota MIDI
     if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
     midiStore.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
     lastArpNote = note
 
+    // Note-Off basata sulla durata del Gate (0.5 = 50% di stepMs)
     setTimeout(() => {
       if (lastArpNote === note) {
         midiStore.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
@@ -95,6 +257,7 @@ function startArpEngine() {
     }, stepMs * 0.5)
   }, stepMs)
 }
+
 
 function stopArpEngine() {
   if (arpTimer) {
@@ -185,10 +348,7 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
           <div class="flex flex-col gap-2">
             <span class="text-[8px] font-mono text-neutral-500 uppercase">Mode</span>
             <select v-model="arpStore.arpMode" class="bg-black border border-neutral-800 text-[10px] text-white rounded-lg px-2 py-2 outline-none focus:border-synth-neon">
-              <option value="up">Up</option>
-              <option value="down">Down</option>
-              <option value="up-down">Up/Down</option>
-              <option value="random">Random</option>
+              <option v-for="mode in arpModes" :key="mode" :value="mode">{{ mode }}</option>
             </select>
           </div>
           <div class="flex flex-col gap-2">

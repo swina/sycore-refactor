@@ -4,7 +4,7 @@ import {
   X, Settings, Settings2, Save, Download, Database, Trash2,
   ChevronUp, ChevronDown, Plus, Search, Palette, LayoutGrid, Loader2, AlertCircle
 } from 'lucide-vue-next'
-import * as lucideIcons from 'lucide-vue-next'
+import { lucideIcons } from '@/lib/lucide-icons'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { db, doc, setDoc, getDoc, serverTimestamp } from '@/lib/idb'

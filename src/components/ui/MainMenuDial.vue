@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import * as lucideIcons from 'lucide-vue-next'
-import { Menu, X } from 'lucide-vue-next'
+import { lucideIcons } from '@/lib/lucide-icons'
+const { Menu, X } = lucideIcons
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useAuthStore } from '@/stores/useAuthStore'
