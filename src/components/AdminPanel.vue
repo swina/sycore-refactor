@@ -20,7 +20,8 @@ const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail
 
 const {
   isSubscribed, permissionState, isSupported,
-  subscribe, unsubscribe, sendPush,
+  subscribers, subscribe, unsubscribe, sendPush,
+  fetchSubscribers, removeSubscriber,
 } = usePushNotifications()
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -390,6 +391,10 @@ onMounted(async () => {
 watch(() => props.isOpen, (open) => {
   if (open && authStore.isAdmin && controllers.value.length === 0) loadConfigData()
 })
+
+watch(openSections, (sections) => {
+  if (sections.has('push')) fetchSubscribers()
+}, { deep: true })
 </script>
 
 <template>
@@ -896,6 +901,40 @@ watch(() => props.isOpen, (open) => {
                 >
                   Send
                 </button>
+              </div>
+
+              <!-- Subscribers list -->
+              <div class="bg-black/40 border border-neutral-800 rounded-xl p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-neutral-300">Subscribers ({{ subscribers.length }})</span>
+                  <button
+                    @click="fetchSubscribers"
+                    class="text-[9px] font-mono text-neutral-500 hover:text-synth-neon uppercase tracking-wider transition-colors"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                <div v-if="subscribers.length === 0" class="text-[10px] font-mono text-neutral-600 text-center py-4">
+                  No subscribers yet
+                </div>
+                <div v-else class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                  <div
+                    v-for="sub in subscribers" :key="sub.hash"
+                    class="flex items-center justify-between bg-neutral-900/50 border border-neutral-800/50 rounded-lg px-3 py-2"
+                  >
+                    <div class="flex flex-col min-w-0">
+                      <span class="text-[11px] font-bold text-neutral-300 truncate">{{ sub.email }}</span>
+                      <span class="text-[8px] font-mono text-neutral-600 truncate">{{ sub.subscribedAt ? new Date(sub.subscribedAt).toLocaleString() : '' }}</span>
+                    </div>
+                    <button
+                      @click="removeSubscriber(sub.hash)"
+                      class="text-neutral-700 hover:text-red-500 transition-colors shrink-0 ml-2"
+                      title="Remove subscriber"
+                    >
+                      <X class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

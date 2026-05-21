@@ -2,7 +2,7 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { db, doc, setDoc, getDoc, deleteDoc } from '@/lib/idb'
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BIC-PE0mIhodHQqGluQofRa_RHUgQtWMoaEC2v49ufghBXUDF7cQVTxLHtfi3-eAJPx8C4Dia4kqRit3KTSWUJg'
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BLrViOUVhA5fTRfb4j0p06WeYdfYIbfuRV7_M5QQwgc652QNBHCDPcZD4xFuAiFL2EJHFe9A6D5dEjfIcRtlsao'
 
 const isSubscribed = ref(false)
 const subscription = ref(null)
@@ -98,12 +98,39 @@ async function restoreSubscription() {
   }
 }
 
+const subscribers = ref([])
+
+async function fetchSubscribers() {
+  try {
+    const res = await fetch('/api/send-push')
+    if (res.ok) {
+      subscribers.value = await res.json()
+    }
+  } catch (e) {
+    console.error('[PushNotifications] Fetch subscribers failed', e)
+  }
+}
+
+async function removeSubscriber(hash) {
+  try {
+    await fetch('/api/send-push', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash }),
+    })
+    subscribers.value = subscribers.value.filter((s) => s.hash !== hash)
+  } catch (e) {
+    console.error('[PushNotifications] Remove subscriber failed', e)
+  }
+}
+
 async function sendPush({ title, body, tag, data, actions } = {}) {
   if (!isSubscribed.value || !isSuperAdmin.value) {
     console.warn('[PushNotifications] Not subscribed or not superadmin')
     return
   }
 
+  const auth = useAuthStore()
   const sub = subscription.value.toJSON()
   const payload = { title: title || 'SY.CORE', body: body || '', tag, data, actions }
 
@@ -111,7 +138,12 @@ async function sendPush({ title, body, tag, data, actions } = {}) {
     const res = await fetch('/api/send-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub, payload }),
+      body: JSON.stringify({
+        subscription: sub,
+        payload,
+        email: auth.user?.email || 'unknown',
+        userAgent: navigator.userAgent,
+      }),
     })
     if (!res.ok) {
       const err = await res.text()
@@ -135,9 +167,12 @@ export function usePushNotifications() {
     isSubscribed,
     permissionState,
     isSuperAdmin,
+    subscribers,
     subscribe,
     unsubscribe,
     restoreSubscription,
     sendPush,
+    fetchSubscribers,
+    removeSubscriber,
   }
 }
