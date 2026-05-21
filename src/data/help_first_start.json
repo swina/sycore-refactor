@@ -1,0 +1,34 @@
+[
+    {
+        "title": "SETTINGS",
+        "slide": "./public/help/slides/01_MIDI_MATRIX.png"
+    },
+    {
+        "title": "MIDI MATRIX",
+        "slide": "./public/help/slides/02_MIDI_MATRIX.png"
+    },
+    {
+        "title": "REGISTER YOUR S-1",
+        "slide": "./public/help/slides/03_MIDI_MATRIX.png"
+    },
+    {
+        "title": "REGISTER YOUR MASTER KEYBOARD",
+        "slide": "./public/help/slides/04_MIDI_MATRIX_MASTER_KEYBOARD.png"
+    },
+    {
+        "title": "MIDI PERFORMANCE",
+        "slide": "./public/help/slides/05_MIDI_PERFORMANCE.png"
+    },
+    {
+        "title": "MAP INPUT TO S-1",
+        "slide": "./public/help/slides/06_MIDI_PERFORMANCE.png"
+    },
+    {
+        "title": "GENERATE YOUR FIRST SOUND",
+        "slide": "./public/help/slides/07_GENERATE_FIRST_SOUND.png"
+    },
+    {
+        "title": "SOUND IS READY",
+        "slide": "./public/help/slides/08_SOUND_GENERATED.png"
+    }
+]

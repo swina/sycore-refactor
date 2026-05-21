@@ -59,6 +59,7 @@ import SideBar from '@/components/ui/SideBar.vue'
 import MainMenuDial from '@/components/ui/MainMenuDial.vue'
 import MidiMatrix from '@/components/MidiMatrix.vue'
 import AboutModal from '@/components/AboutModal.vue'
+import SlideshowModal from '@/components/SlideshowModal.vue'
 import VelocityMappingDialog from '@/components/VelocityMappingDialog.vue'
 import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
 
@@ -90,8 +91,9 @@ onMounted(async () => {
 })
 
 // Local state
-const globalTranspose     = ref(0)
-const sessionBpmOverride  = ref(false)
+const globalTranspose       = ref(0)
+const sessionBpmOverride    = ref(false)
+const isHelpSlideshowOpen   = ref(false)
 
 const isAdmin = computed(() => authStore.isAdmin)
 
@@ -190,6 +192,10 @@ onMounted(() => {
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') {
       closeAllPanels()
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+      e.preventDefault()
+      isHelpSlideshowOpen.value = !isHelpSlideshowOpen.value
     }
   }
   window.addEventListener('keydown', handleKeyDown)
@@ -385,6 +391,8 @@ onMounted(() => {
       <Transition name="modal">
         <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
       </Transition>
+      <!-- Help Slideshow -->
+      <SlideshowModal :isOpen="isHelpSlideshowOpen" source="help" @close="isHelpSlideshowOpen = false" />
 
       <!-- Velocity Mapping Dialog -->
       <VelocityMappingDialog v-if="uiStore.isVelocityMapOpen" />

@@ -1,18 +1,32 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { X, ChevronLeft, ChevronRight, Play, Pause, Maximize2, Minimize2 } from 'lucide-vue-next'
 import slidesData from '@/data/slides.json'
+import helpSlidesData from '@/data/help_first_start.json'
 
 const props = defineProps({
-  isOpen: {
-    type: Boolean,
-    required: true
-  }
+  isOpen: { type: Boolean, required: true },
+  source: { type: String, default: 'default' },
 })
 
 const emit = defineEmits(['close'])
 
-const slides = ref(slidesData.slides || [])
+const rawData = computed(() => {
+  if (props.source === 'help') return helpSlidesData
+  return slidesData.slides || []
+})
+
+const slides = computed(() => {
+  const data = rawData.value
+  if (props.source === 'help') {
+    return data.map((item) => ({
+      src: item.slide.replace('./public/', '/'),
+      title: item.title,
+    }))
+  }
+  return data.map((src) => ({ src, title: '' }))
+})
+
 const currentIndex = ref(0)
 const isPlaying = ref(false)
 const isFullscreen = ref(false)
@@ -35,18 +49,13 @@ function goToSlide(index) {
 
 function togglePlay() {
   isPlaying.value = !isPlaying.value
-  if (isPlaying.value) {
-    startAutoplay()
-  } else {
-    stopAutoplay()
-  }
+  if (isPlaying.value) startAutoplay()
+  else stopAutoplay()
 }
 
 function startAutoplay() {
   stopAutoplay()
-  slideshowInterval.value = setInterval(() => {
-    nextSlide()
-  }, 4000) // Change slide every 4 seconds
+  slideshowInterval.value = setInterval(() => nextSlide(), 4000)
 }
 
 function stopAutoplay() {
@@ -58,58 +67,37 @@ function stopAutoplay() {
 
 function toggleFullscreen() {
   if (!slideshowRef.value) return
-  
   if (!document.fullscreenElement) {
-    slideshowRef.value.requestFullscreen().then(() => {
-      isFullscreen.value = true
-    }).catch(err => {
-      console.error(`Error attempting to enable fullscreen: ${err.message}`)
-    })
+    slideshowRef.value.requestFullscreen().then(() => { isFullscreen.value = true }).catch(() => {})
   } else {
     document.exitFullscreen()
     isFullscreen.value = false
   }
 }
 
-// Handle fullscreen change via escape or native controls
 function handleFullscreenChange() {
   isFullscreen.value = !!document.fullscreenElement
 }
 
-// Keyboard Navigation
+const currentSlide = computed(() => slides.value[currentIndex.value])
+
 function handleKeyDown(e) {
   if (!props.isOpen) return
-  
-  if (e.key === 'ArrowRight') {
-    nextSlide()
-    stopAutoplay()
-    isPlaying.value = false
-  } else if (e.key === 'ArrowLeft') {
-    prevSlide()
-    stopAutoplay()
-    isPlaying.value = false
-  } else if (e.key === 'Escape') {
-    if (document.fullscreenElement) {
-      document.exitFullscreen()
-    } else {
-      emit('close')
-    }
-  } else if (e.key === ' ') {
-    e.preventDefault()
-    togglePlay()
+  if (e.key === 'ArrowRight') { nextSlide(); stopAutoplay(); isPlaying.value = false }
+  else if (e.key === 'ArrowLeft') { prevSlide(); stopAutoplay(); isPlaying.value = false }
+  else if (e.key === 'Escape') {
+    if (document.fullscreenElement) document.exitFullscreen()
+    else emit('close')
   }
+  else if (e.key === ' ') { e.preventDefault(); togglePlay() }
 }
 
-// Preload Images
 function preloadImages() {
-  slides.value.forEach((src) => {
-    const img = new Image()
-    img.src = src
-  })
+  slides.value.forEach((s) => { const img = new Image(); img.src = s.src })
 }
 
-watch(() => props.isOpen, (newVal) => {
-  if (newVal) {
+watch(() => props.isOpen, (open) => {
+  if (open) {
     currentIndex.value = 0
     isPlaying.value = false
     document.addEventListener('keydown', handleKeyDown)
@@ -140,10 +128,10 @@ onUnmounted(() => {
 <template>
   <Transition name="fade">
     <div v-if="isOpen" class="fixed inset-0 z-[800] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 md:p-8">
-      
+
       <!-- Close Button -->
-      <button 
-        @click="emit('close')" 
+      <button
+        @click="emit('close')"
         class="absolute top-4 right-4 z-[110] p-3 text-neutral-400 hover:text-white bg-neutral-900/80 hover:bg-neutral-800 rounded-full border border-neutral-800 transition-all shadow-lg"
         title="Close (Esc)"
       >
@@ -151,22 +139,30 @@ onUnmounted(() => {
       </button>
 
       <!-- Slideshow Container -->
-      <div 
+      <div
         ref="slideshowRef"
         class="relative w-full max-w-5xl aspect-[16/9] bg-neutral-950 rounded-2xl border border-neutral-800 overflow-hidden shadow-2xl flex items-center justify-center group"
       >
-        <!-- Slide Image -->
-        <Transition name="slide-fade" mode="out-in">
-          <img 
-            :key="currentIndex"
-            :src="slides[currentIndex]" 
-            alt="Slideshow Slide" 
-            class="w-full h-full object-contain select-none"
-          />
-        </Transition>
+        <!-- Slide Image with Title -->
+        <div class="relative w-full h-full">
+          <Transition name="slide-fade" mode="out-in">
+            <div :key="currentIndex" class="w-full h-full">
+              <img
+                :src="currentSlide?.src"
+                :alt="currentSlide?.title || 'Slideshow Slide'"
+                class="w-full h-full object-contain select-none"
+              />
+              <div v-if="currentSlide?.title" class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-12 pb-6 px-8">
+                <h2 class="text-lg md:text-xl font-black uppercase tracking-widest text-synth-neon drop-shadow-lg">
+                  {{ currentSlide.title }}
+                </h2>
+              </div>
+            </div>
+          </Transition>
+        </div>
 
         <!-- Left navigation arrow -->
-        <button 
+        <button
           @click="prevSlide(); stopAutoplay(); isPlaying = false"
           class="absolute left-4 p-3 rounded-full bg-black/60 hover:bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-md backdrop-blur-sm"
           title="Previous Slide"
@@ -175,7 +171,7 @@ onUnmounted(() => {
         </button>
 
         <!-- Right navigation arrow -->
-        <button 
+        <button
           @click="nextSlide(); stopAutoplay(); isPlaying = false"
           class="absolute right-4 p-3 rounded-full bg-black/60 hover:bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-md backdrop-blur-sm"
           title="Next Slide"
@@ -185,14 +181,11 @@ onUnmounted(() => {
 
         <!-- Top Panel: Slide Info & Control Buttons -->
         <div class="absolute top-4 left-4 right-4 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-          <!-- Slide Counter -->
           <div class="px-4 py-1.5 rounded-full bg-black/60 border border-neutral-800 text-xs font-mono text-neutral-300 backdrop-blur-sm">
             {{ currentIndex + 1 }} / {{ slides.length }}
           </div>
-
-          <!-- Controls (Play/Pause, Fullscreen) -->
           <div class="flex items-center gap-2">
-            <button 
+            <button
               @click="togglePlay"
               class="p-2 rounded-lg bg-black/60 hover:bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white transition-all backdrop-blur-sm"
               :title="isPlaying ? 'Pause Autoplay (Space)' : 'Start Autoplay (Space)'"
@@ -200,7 +193,7 @@ onUnmounted(() => {
               <Pause v-if="isPlaying" class="w-4 h-4" />
               <Play v-else class="w-4 h-4" />
             </button>
-            <button 
+            <button
               @click="toggleFullscreen"
               class="p-2 rounded-lg bg-black/60 hover:bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white transition-all backdrop-blur-sm"
               :title="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
@@ -212,16 +205,16 @@ onUnmounted(() => {
         </div>
 
         <!-- Progress Bar (Autoplay) -->
-        <div 
-          v-if="isPlaying" 
+        <div
+          v-if="isPlaying"
           :key="`progress-${currentIndex}`"
           class="absolute bottom-0 left-0 h-1 bg-synth-neon animate-progress"
         />
 
         <!-- Dots indicators -->
         <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-black/40 border border-neutral-800/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-          <button 
-            v-for="(slide, idx) in slides" 
+          <button
+            v-for="(slide, idx) in slides"
             :key="idx"
             @click="goToSlide(idx); stopAutoplay(); isPlaying = false"
             class="w-2.5 h-2.5 rounded-full transition-all duration-300"
