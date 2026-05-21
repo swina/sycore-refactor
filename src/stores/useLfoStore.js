@@ -125,8 +125,10 @@ export const useLfoStore = defineStore('lfo', () => {
     lfo._lastP = p
 
     // Apply Depth and Offset
+    const activeVariant = presetStore.useAlternativeEngine ? presetStore.lastPreset?.bVariant : presetStore.lastPreset?.aVariant
+    const baseValue = activeVariant?.data?.[lfo.targetParameter] ?? lfo.offset ?? 64
     const scaledVal = val * (lfo.depth / 100) * 63.5
-    let finalVal = Math.round(lfo.offset + scaledVal)
+    let finalVal = Math.round(baseValue + scaledVal)
     
     // Clamp
     finalVal = Math.max(0, Math.min(127, finalVal))
@@ -138,12 +140,13 @@ export const useLfoStore = defineStore('lfo', () => {
     }
   }
 
-  // Restore parameter to its original value with staggering
-  async function restoreParameter(lfo) {
-    const cc = PARAM_TO_CC[lfo.targetParameter]
+  // Helper to restore parameter to its original preset value with staggering
+  async function restoreParameterValue(param, offsetFallback = 64) {
+    const cc = PARAM_TO_CC[param]
     if (cc === undefined) return
 
-    const originalValue = lfo.offset // We assume offset is the original value
+    const activeVariant = presetStore.useAlternativeEngine ? presetStore.lastPreset?.bVariant : presetStore.lastPreset?.aVariant
+    const originalValue = activeVariant?.data?.[param] ?? offsetFallback
     
     // Staggered recovery: 3 messages over 150ms
     for (let i = 0; i < 3; i++) {
@@ -152,10 +155,19 @@ export const useLfoStore = defineStore('lfo', () => {
     }
   }
 
-  // Auto-center when enabled
+  // Restore parameter when LFO stops
+  function restoreParameter(lfo) {
+    if (lfo.targetParameter) {
+      restoreParameterValue(lfo.targetParameter, lfo.offset)
+    }
+    lfo.lastSentValue = null
+  }
+
+  // Auto-center when enabled or restore when stopped
   watch(() => lfo1.active, (active) => {
     if (active) {
-      const val = presetStore.lastPreset?.data?.[lfo1.targetParameter]
+      const activeVariant = presetStore.useAlternativeEngine ? presetStore.lastPreset?.bVariant : presetStore.lastPreset?.aVariant
+      const val = activeVariant?.data?.[lfo1.targetParameter]
       if (val !== undefined) lfo1.offset = val
     } else {
       restoreParameter(lfo1)
@@ -164,10 +176,34 @@ export const useLfoStore = defineStore('lfo', () => {
 
   watch(() => lfo2.active, (active) => {
     if (active) {
-      const val = presetStore.lastPreset?.data?.[lfo2.targetParameter]
+      const activeVariant = presetStore.useAlternativeEngine ? presetStore.lastPreset?.bVariant : presetStore.lastPreset?.aVariant
+      const val = activeVariant?.data?.[lfo2.targetParameter]
       if (val !== undefined) lfo2.offset = val
     } else {
       restoreParameter(lfo2)
+    }
+  })
+
+  // Watch target parameter changes while active to restore old and init new
+  watch(() => lfo1.targetParameter, (newParam, oldParam) => {
+    if (lfo1.active) {
+      if (oldParam) {
+        restoreParameterValue(oldParam, lfo1.offset)
+      }
+      const activeVariant = presetStore.useAlternativeEngine ? presetStore.lastPreset?.bVariant : presetStore.lastPreset?.aVariant
+      const val = activeVariant?.data?.[newParam]
+      if (val !== undefined) lfo1.offset = val
+    }
+  })
+
+  watch(() => lfo2.targetParameter, (newParam, oldParam) => {
+    if (lfo2.active) {
+      if (oldParam) {
+        restoreParameterValue(oldParam, lfo2.offset)
+      }
+      const activeVariant = presetStore.useAlternativeEngine ? presetStore.lastPreset?.bVariant : presetStore.lastPreset?.aVariant
+      const val = activeVariant?.data?.[newParam]
+      if (val !== undefined) lfo2.offset = val
     }
   })
 

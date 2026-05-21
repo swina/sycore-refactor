@@ -7,6 +7,12 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 
+function isS1Device(name) {
+  if (!name) return false
+  const upper = name.toUpperCase()
+  return upper.includes('S-1') || upper.includes('ROLAND S-1')
+}
+
 export function useMidiCCListener() {
   const midiStore = useMidiStore()
   const mappingStore = useMappingStore()
@@ -47,6 +53,18 @@ export function useMidiCCListener() {
       const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
       console.log(`[MIDI Listener] Mapped input: ${deviceName || 'Unknown'} CH${chan+1} CC${cc} -> ${paramName} (${val})`)
       applyParam(paramName, val)
+      return
+    }
+
+    // Filter out messages that do not come from S-1 or a device mapped to S-1
+    const isS1 = isS1Device(deviceName)
+    const targets = deviceName ? (midiService.getRouting(deviceName) || []) : []
+    const isMappedToS1 = targets.some(target => isS1Device(target))
+
+    if (!isS1 && !isMappedToS1) {
+      if (cc !== undefined) {
+        console.log(`[MIDI Listener] Filtered CC ${cc} from ${deviceName || 'Unknown'} (CH ${chan+1}): Device is not S-1 and not mapped to S-1.`)
+      }
       return
     }
 
