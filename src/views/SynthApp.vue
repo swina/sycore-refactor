@@ -28,6 +28,7 @@ import { useMidiInit } from '@/composables/useMidiInit'
 import { useMidiCCListener } from '@/composables/useMidiCCListener'
 import { useMidiCapture } from '@/composables/useMidiCapture'
 import { useControllerManager } from '@/composables/useControllerManager'
+import { usePushNotifications } from '@/composables/usePushNotifications'
 
 // Components
 import GlobalTooltip from '@/components/GlobalTooltip.vue'
@@ -78,6 +79,15 @@ useMidiInit()
 useMidiCCListener()
 useControllerManager()
 const { captureNotesRef, captureNoteCount } = useMidiCapture()
+const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
+
+// Init push notifications for superadmin
+onMounted(async () => {
+  if (authStore.user?.email === 'swina.allen@gmail.com') {
+    await restoreSubscription()
+    if (!isSubscribed.value) await subscribe()
+  }
+})
 
 // Local state
 const globalTranspose     = ref(0)

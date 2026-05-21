@@ -17,6 +17,7 @@
     "tone": "^15.1.22",
     "vue": "^3.5.32",
     "vue-router": "^4.6.4",
+    "web-push": "^3.6.7",
     "webmidi": "^3.1.16"
   },
   "devDependencies": {

@@ -28,6 +28,7 @@ dist-ssr
 *.wav
 .agent
 .vercel
+.env
 .env*.local
 .claude
 .agents

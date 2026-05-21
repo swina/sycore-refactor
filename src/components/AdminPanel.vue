@@ -2,11 +2,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import {
   X, Settings, Settings2, Save, Download, Database, Trash2,
-  ChevronUp, ChevronDown, Plus, Search, Palette, LayoutGrid, Loader2, AlertCircle
+  ChevronUp, ChevronDown, Plus, Search, Palette, LayoutGrid, Loader2, AlertCircle, Bell
 } from 'lucide-vue-next'
 import { lucideIcons } from '@/lib/lucide-icons'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { usePushNotifications } from '@/composables/usePushNotifications'
 import { db, doc, setDoc, getDoc, serverTimestamp } from '@/lib/idb'
 
 const props = defineProps({ isOpen: Boolean })
@@ -16,6 +17,11 @@ const configStore = useConfigStore()
 const authStore   = useAuthStore()
 
 const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail.com')
+
+const {
+  isSubscribed, permissionState, isSupported,
+  subscribe, unsubscribe, sendPush,
+} = usePushNotifications()
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +49,8 @@ const rolesConfig  = ref({
 })
 
 const searchQuery      = ref('')
+const pushTitle        = ref('')
+const pushBody         = ref('')
 const editingId        = ref(null)
 const editingOptionsId = ref(null)
 const optionEdit       = ref({ label: '', value: 0 })
@@ -826,6 +834,68 @@ watch(() => props.isOpen, (open) => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── PUSH NOTIFICATIONS ── -->
+          <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
+            <button @click="toggleSection('push')" class="w-full flex items-center justify-between px-6 py-4 hover:bg-neutral-800/30 transition-colors">
+              <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
+                <Bell class="w-4 h-4" /> Push Notifications
+              </span>
+              <ChevronDown :class="['w-4 h-4 text-neutral-600 transition-transform duration-200', openSections.has('push') ? 'rotate-180' : '']" />
+            </button>
+            <div v-if="openSections.has('push')" class="px-6 pb-6 border-t border-neutral-800/50 pt-5 space-y-4">
+              <div class="flex items-center justify-between bg-black/40 border border-neutral-800 rounded-xl p-4">
+                <div class="flex flex-col gap-1">
+                  <span class="text-xs font-bold text-neutral-300">Browser Push</span>
+                  <span class="text-[10px] font-mono text-neutral-500">
+                    Status:
+                    <span v-if="!isSupported" class="text-red-400">Not supported</span>
+                    <span v-else-if="isSubscribed" class="text-synth-neon">Subscribed</span>
+                    <span v-else-if="permissionState === 'denied'" class="text-red-400">Permission denied</span>
+                    <span v-else class="text-yellow-400">Not subscribed</span>
+                  </span>
+                </div>
+                <button
+                  v-if="isSupported && !isSubscribed"
+                  @click="subscribe"
+                  class="bg-synth-neon/10 border border-synth-neon/20 hover:bg-synth-neon/20 text-synth-neon text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
+                >
+                  Subscribe
+                </button>
+                <button
+                  v-if="isSubscribed"
+                  @click="unsubscribe"
+                  class="bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
+                >
+                  Unsubscribe
+                </button>
+              </div>
+
+              <div v-if="isSubscribed" class="bg-black/40 border border-neutral-800 rounded-xl p-4 space-y-3">
+                <span class="text-xs font-bold text-neutral-300 block">Send Test Push</span>
+                <div class="flex gap-3">
+                  <input
+                    v-model="pushTitle"
+                    type="text"
+                    placeholder="Notification title…"
+                    class="flex-1 bg-black border border-neutral-800 rounded-lg px-3 py-2 text-xs focus:border-synth-neon outline-none"
+                  />
+                  <input
+                    v-model="pushBody"
+                    type="text"
+                    placeholder="Notification body…"
+                    class="flex-1 bg-black border border-neutral-800 rounded-lg px-3 py-2 text-xs focus:border-synth-neon outline-none"
+                  />
+                </div>
+                <button
+                  @click="sendPush({ title: pushTitle || 'SY.CORE', body: pushBody || 'Test notification from Admin Panel' })"
+                  class="w-full bg-synth-neon/10 border border-synth-neon/20 hover:bg-synth-neon/20 text-synth-neon text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
+                >
+                  Send
+                </button>
               </div>
             </div>
           </div>
