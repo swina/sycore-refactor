@@ -212,8 +212,8 @@ onMounted(() => {
   <div class="w-full h-screen bg-neutral-950 text-white overflow-hidden flex flex-col">
     <!-- Floating Vertical Logo -->
     <div class="fixed top-[150px] left-4 z-[100] origin-left -rotate-90 pointer-events-auto cursor-pointer group" @click="uiStore.isAboutOpen = true">
-      <h1 class="text-4xl font-black uppercase text-synth-neon/60 mix-blend-screen whitespace-nowrap group-hover:text-synth-neon transition-colors duration-500">
-        {{ configStore.appName }}
+      <h1 class="text-4xl mt-8 font-black uppercase text-synth-neon/60 mix-blend-screen whitespace-nowrap group-hover:text-synth-neon transition-colors duration-500">
+        <span class="text-white">{{ configStore.appName.split('.')[0] }}.</span>{{ configStore.appName.split('.')[1] }}
       </h1>
     </div>
 
@@ -221,7 +221,7 @@ onMounted(() => {
     <button
       @click="router.push('/home')"
       title="Home"
-      class="fixed top-4 left-4 z-[100] w-9 h-9 rounded-lg bg-neutral-900/70 border border-neutral-800 hover:border-synth-neon/60 hover:bg-neutral-900 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
+      class="fixed top-4 right-4 z-[100] w-9 h-9 rounded-lg bg-neutral-900/70 border border-neutral-800 hover:border-synth-neon/60 hover:bg-neutral-900 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
     >
       <Home class="w-4 h-4" />
     </button>

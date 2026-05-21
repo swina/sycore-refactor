@@ -399,7 +399,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
     <template v-else>
 
       <!-- ── NEW THREE-COLUMN HEADER ── -->
-      <div class="shrink-0 px-6 py-4 pb-2 border-b border-neutral-900 bg-neutral-900/90 backdrop-blur-2xl flex flex-col lg:grid lg:grid-cols-[1.2fr_auto_1.5fr] items-start gap-4">
+      <div class="shrink-0 px-6 py-4 pb-2 border-b border-neutral-900 border-t-2 border-t-synth-neon/30 bg-neutral-900/90 backdrop-blur-2xl flex flex-col lg:grid lg:grid-cols-[1.2fr_auto_1.5fr] items-start gap-4">
         
         <!-- COLUMN 1: IDENTITY & NAV -->
         <div class="flex flex-col gap-3 min-w-0 w-full">
