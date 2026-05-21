@@ -27,3 +27,5 @@ dist-ssr
 *.webm
 *.wav
 .agent
+.vercel
+.env*.local
