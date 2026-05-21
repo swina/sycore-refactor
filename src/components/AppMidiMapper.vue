@@ -1,16 +1,18 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { X, Gamepad2, Radio, CircleDashed, CheckCircle2, AlertTriangle, Trash2, FolderTree, ChevronUp } from 'lucide-vue-next'
+import { X, Gamepad2, Radio, CircleDashed, CheckCircle2, AlertTriangle, Trash2, FolderTree, ChevronUp, Sliders, Send } from 'lucide-vue-next'
 import { APP_ACTION_LABELS, CONTINUOUS_ACTIONS, MIDI_ACTION_GROUPS } from '@/lib/app-midi-actions'
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiFeedback } from '@/composables/useMidiFeedback'
+import { useUiStore } from '@/stores/useUiStore'
 
 const emit = defineEmits(['close'])
 
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
+const uiStore      = useUiStore()
 const { testFeedback } = useMidiFeedback()
 
 const learnDevice     = ref('')
@@ -25,6 +27,90 @@ const exactValue      = ref(127)
 const selectedCategory = ref('')
 const selectedAction   = ref('')
 const collapsedCategories = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))
+
+// Program Change State
+const selectedChannel = ref(1)
+const sendMsb = ref(false)
+const msbValue = ref(0)
+const sendLsb = ref(false)
+const lsbValue = ref(0)
+const programValue = ref(1)
+
+const registeredOutputs = computed(() => {
+  if (!midiStore.routingConfig?.registrations) return []
+  return Object.values(midiStore.routingConfig.registrations)
+    .filter(r => r.outEnabled)
+    .map(r => ({
+      ...r,
+      isOnline: midiStore.outputs.some(o => o.name === r.name)
+    }))
+})
+
+const isDeviceOffline = computed(() => {
+  const deviceName = uiStore.midiActionsSelectedDevice
+  if (!deviceName) return false
+  return !midiStore.outputs.some(o => o.name === deviceName)
+})
+
+watch(() => uiStore.midiActionsSelectedDevice, (newDevice) => {
+  if (newDevice && midiStore.routingConfig?.registrations[newDevice]) {
+    const reg = midiStore.routingConfig.registrations[newDevice]
+    if (reg.outChannel !== -1) {
+      selectedChannel.value = reg.outChannel + 1
+    } else {
+      selectedChannel.value = midiStore.midiChannel
+    }
+  } else {
+    selectedChannel.value = midiStore.midiChannel
+  }
+}, { immediate: true })
+
+watch(programValue, () => {
+  if (uiStore.midiActionsActiveTab === 'program') {
+    sendProgramChangeMessage()
+  }
+})
+
+function sendProgramChangeMessage() {
+  const deviceName = uiStore.midiActionsSelectedDevice
+  if (!deviceName) return
+
+  const port = midiStore.outputs.find(o => o.name === deviceName)
+  if (!port) return
+
+  const targetChannel = selectedChannel.value
+  const statusCh = targetChannel - 1
+
+  if (sendMsb.value) {
+    port.send([0xB0 | statusCh, 0, msbValue.value])
+  }
+  if (sendLsb.value) {
+    port.send([0xB0 | statusCh, 32, lsbValue.value])
+  }
+  port.send([0xC0 | statusCh, programValue.value - 1])
+
+  const msbStr = sendMsb.value ? `MSB:${msbValue.value}` : 'MSB:OFF'
+  const lsbStr = sendLsb.value ? `LSB:${lsbValue.value}` : 'LSB:OFF'
+  const logMsg = `[MIDI PC] Sent to ${deviceName} (Ch ${targetChannel}): ${msbStr}, ${lsbStr}, Program:${programValue.value}`
+  if (window.SY_LOG) {
+    window.SY_LOG(logMsg)
+  } else {
+    console.log(logMsg)
+  }
+
+  // After sending Program Change, send the current tempo/clock if clock is active to restore sync
+  if (midiStore.sendClock) {
+    setTimeout(() => {
+      midiStore.startClock()
+      const clockMsg = `[MIDI PC] Clock restarted to send current tempo: ${midiStore.currentBpm} BPM`
+      if (window.SY_LOG) {
+        window.SY_LOG(clockMsg)
+      } else {
+        console.log(clockMsg)
+      }
+    }, 100)
+  }
+}
 
 const categories = Object.keys(MIDI_ACTION_GROUPS)
 
@@ -221,7 +307,33 @@ onUnmounted(() => cancelLearn())
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-5">
+      <!-- Tabs -->
+      <div class="flex gap-2 mb-4 bg-black/40 p-1 rounded-lg border border-neutral-800 shrink-0">
+        <button
+          @click="uiStore.midiActionsActiveTab = 'mapper'"
+          :class="[
+            'flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all',
+            uiStore.midiActionsActiveTab === 'mapper'
+              ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+              : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
+          ]"
+        >
+          App Mapper
+        </button>
+        <button
+          @click="uiStore.midiActionsActiveTab = 'program'"
+          :class="[
+            'flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all',
+            uiStore.midiActionsActiveTab === 'program'
+              ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+              : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
+          ]"
+        >
+          Program Change
+        </button>
+      </div>
+
+      <div v-if="uiStore.midiActionsActiveTab === 'mapper'" class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-5">
 
         <!-- Add Mapping -->
         <div class="bg-neutral-800/50 rounded-xl p-4 space-y-3">
@@ -562,6 +674,126 @@ onUnmounted(() => cancelLearn())
           </div>
         </details>
 
+      </div>
+
+      <!-- Program Change Tab Content -->
+      <div v-else-if="uiStore.midiActionsActiveTab === 'program'" class="flex-1 flex flex-col justify-between overflow-y-auto custom-scrollbar pr-1 space-y-5">
+        <div class="space-y-4">
+          <p class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Send Bank / Program Change</p>
+
+          <!-- Device Selector -->
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-1">Target MIDI Device</label>
+            <select
+              v-model="uiStore.midiActionsSelectedDevice"
+              class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none"
+            >
+              <option value="">— select registered device —</option>
+              <option v-for="d in registeredOutputs" :key="d.name" :value="d.name">
+                {{ d.name }} {{ d.isOnline ? '(Online)' : '(Offline)' }}
+              </option>
+            </select>
+            <p v-if="registeredOutputs.length === 0" class="text-[10px] font-mono text-neutral-600 mt-1">
+              No registered output devices found in MIDI Matrix.
+            </p>
+          </div>
+
+          <!-- MIDI Channel Selector -->
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-1">MIDI Channel</label>
+            <select
+              v-model.number="selectedChannel"
+              class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none"
+            >
+              <option v-for="ch in 16" :key="ch" :value="ch">Channel {{ ch }}</option>
+            </select>
+          </div>
+
+          <!-- Bank Select MSB / LSB Grid -->
+          <div class="grid grid-cols-2 gap-4">
+            <!-- MSB -->
+            <div class="bg-neutral-800/40 border border-neutral-800 rounded-xl p-3.5 space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-2 cursor-pointer group select-none">
+                  <input type="checkbox" v-model="sendMsb" class="w-4 h-4 accent-violet-500 rounded" />
+                  <span class="text-[10px] font-black uppercase text-neutral-300 group-hover:text-white transition-colors">Bank MSB (CC 0)</span>
+                </label>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="127"
+                v-model.number="msbValue"
+                :disabled="!sendMsb"
+                class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none disabled:opacity-30 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            <!-- LSB -->
+            <div class="bg-neutral-800/40 border border-neutral-800 rounded-xl p-3.5 space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-2 cursor-pointer group select-none">
+                  <input type="checkbox" v-model="sendLsb" class="w-4 h-4 accent-violet-500 rounded" />
+                  <span class="text-[10px] font-black uppercase text-neutral-300 group-hover:text-white transition-colors">Bank LSB (CC 32)</span>
+                </label>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="127"
+                v-model.number="lsbValue"
+                :disabled="!sendLsb"
+                class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none disabled:opacity-30 disabled:cursor-not-allowed"
+              />
+            </div>
+          </div>
+
+          <!-- Program Change Slider / Input -->
+          <div class="bg-neutral-800/40 border border-neutral-800 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Program Number (1-128)</label>
+              <input
+                type="number"
+                min="1"
+                max="128"
+                v-model.number="programValue"
+                class="w-16 bg-black border border-neutral-700 rounded px-2 py-0.5 text-center text-violet-300 font-mono text-xs focus:border-violet-400 outline-none"
+              />
+            </div>
+            <div class="flex items-center gap-4">
+              <input
+                type="range"
+                min="1"
+                max="128"
+                v-model.number="programValue"
+                class="flex-1 accent-violet-500 h-1 bg-black rounded-lg cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <!-- Device status alert if offline -->
+          <div v-if="isDeviceOffline" class="bg-amber-900/20 border border-amber-500/30 rounded-xl p-3.5 flex gap-2 items-start animate-pulse">
+            <AlertTriangle class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p class="text-amber-400 text-xs font-bold uppercase tracking-wider">Device Offline</p>
+              <p class="text-neutral-400 text-[10px] mt-0.5 font-mono">
+                The target device "{{ uiStore.midiActionsSelectedDevice }}" is registered but currently offline. Messages will not be transmitted.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Send Action Button -->
+        <div class="pt-4 border-t border-neutral-800 shrink-0">
+          <button
+            @click="sendProgramChangeMessage"
+            :disabled="!uiStore.midiActionsSelectedDevice || isDeviceOffline"
+            class="w-full bg-violet-500 text-white rounded-lg py-3.5 font-black tracking-widest uppercase text-xs flex items-center justify-center gap-2 hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-violet-500/20"
+          >
+            <Send class="w-4 h-4" />
+            Send Program Change
+          </button>
+        </div>
       </div>
     </div>
   </div>

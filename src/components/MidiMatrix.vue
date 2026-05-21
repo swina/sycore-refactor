@@ -1,13 +1,15 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import { X, Usb, Activity, Zap, Cpu, Bell, Power, ArrowRightLeft, Music, Plus, Trash2, ShieldCheck, Settings, Layers } from 'lucide-vue-next'
+import { X, Usb, Activity, Zap, Cpu, Bell, Power, ArrowRightLeft, Music, Plus, Trash2, ShieldCheck, Settings, Layers, Sliders } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { midiService } from '@/core/midi/MidiService'
 
 const emit = defineEmits(['close'])
 const midiStore = useMidiStore()
 const configStore = useConfigStore()
+const uiStore = useUiStore()
 const viewMode = ref('matrix') // 'matrix' | 'flow'
 
 const showAddMenu = ref(false)
@@ -104,6 +106,18 @@ async function toggleAppSetting(field) {
   configStore[field] = !configStore[field]
   await configStore.saveAppSettings()
 }
+
+function openProgramChangeHeader() {
+  uiStore.midiActionsActiveTab = 'program'
+  uiStore.midiActionsSelectedDevice = ''
+  uiStore.isMidiActionsOpen = true
+}
+
+function openProgramChangeForDevice(deviceName) {
+  uiStore.midiActionsActiveTab = 'program'
+  uiStore.midiActionsSelectedDevice = deviceName
+  uiStore.isMidiActionsOpen = true
+}
 </script>
 
 <template>
@@ -151,6 +165,11 @@ async function toggleAppSetting(field) {
               <button @click="midiStore.clearRegistrations()"
                 class="px-4 py-1.5 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-400 text-[9px] font-black uppercase tracking-widest hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-all">
                 Reset Matrix
+              </button>
+
+              <button @click="openProgramChangeHeader"
+                class="px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-400 text-[9px] font-black uppercase tracking-widest hover:bg-violet-500 hover:text-white transition-all">
+                Program Change
               </button>
 
               <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
@@ -338,12 +357,19 @@ async function toggleAppSetting(field) {
                       </button>
                     </td>
 
-                    <!-- DELETE -->
+                    <!-- ACTIONS / DELETE -->
                     <td class="px-5 py-4 text-right">
-                      <button @click="midiStore.removeRegistration(reg.name)"
-                        class="p-2 text-neutral-700 hover:text-red-500 transition-colors rounded-lg hover:bg-red-500/10">
-                        <Trash2 class="w-4 h-4" />
-                      </button>
+                      <div class="flex items-center justify-end gap-1.5">
+                        <button v-if="reg.outEnabled" @click="openProgramChangeForDevice(reg.name)"
+                          title="Program Change"
+                          class="p-2 text-neutral-500 hover:text-violet-400 transition-colors rounded-lg hover:bg-violet-500/10">
+                          <Sliders class="w-4 h-4" />
+                        </button>
+                        <button @click="midiStore.removeRegistration(reg.name)"
+                          class="p-2 text-neutral-700 hover:text-red-500 transition-colors rounded-lg hover:bg-red-500/10">
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
