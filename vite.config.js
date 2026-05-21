@@ -38,6 +38,21 @@ export default defineConfig({
         display: 'standalone',
         scope: '/',
         start_url: '/',
+        screenshots: [
+          {
+            src: '/screenshot-wide.png',
+            sizes: '1280x720',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'SY.CORE Desktop View',
+          },
+          {
+            src: '/screenshot-narrow.png',
+            sizes: '720x1280',
+            type: 'image/png',
+            label: 'SY.CORE Mobile View',
+          },
+        ],
         icons: [
           {
             src: '/icons/pwa-192x192.png',

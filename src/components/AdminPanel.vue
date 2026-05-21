@@ -15,6 +15,8 @@ const emit  = defineEmits(['close'])
 const configStore = useConfigStore()
 const authStore   = useAuthStore()
 
+const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail.com')
+
 // ─── State ───────────────────────────────────────────────────────────────────
 
 const isLoading  = ref(false)
@@ -420,7 +422,7 @@ watch(() => props.isOpen, (open) => {
         <template v-else>
 
           <!-- ── SYSTEM SETTINGS ── -->
-          <div class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
+          <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
             <button @click="toggleSection('system')" class="w-full flex items-center justify-between px-6 py-4 hover:bg-neutral-800/30 transition-colors">
               <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
                 <Settings class="w-4 h-4" /> System Settings
@@ -454,7 +456,7 @@ watch(() => props.isOpen, (open) => {
           </div>
 
           <!-- ── ROLES CONFIG ── -->
-          <div class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
+          <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
             <button @click="toggleSection('roles')" class="w-full flex items-center justify-between px-6 py-4 hover:bg-neutral-800/30 transition-colors">
               <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
                 <Database class="w-4 h-4" /> Roles Configuration
@@ -508,7 +510,7 @@ watch(() => props.isOpen, (open) => {
           </div>
 
           <!-- ── SOUND TYPES ── -->
-          <div class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
+          <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
             <button @click="toggleSection('soundtypes')" class="w-full flex items-center justify-between px-6 py-4 hover:bg-neutral-800/30 transition-colors">
               <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
                 <Palette class="w-4 h-4" /> Sound Types Configuration
@@ -573,7 +575,7 @@ watch(() => props.isOpen, (open) => {
           </div>
 
           <!-- ── CATEGORIES ── -->
-          <div class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
+          <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
             <button @click="toggleSection('categories')" class="w-full flex items-center justify-between px-6 py-4 hover:bg-neutral-800/30 transition-colors">
               <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
                 <Settings2 class="w-4 h-4" /> Controllers Category Definition
@@ -829,7 +831,7 @@ watch(() => props.isOpen, (open) => {
           </div>
 
           <!-- ── TOOLBAR CONFIG ── -->
-          <div class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
+          <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
             <button @click="toggleSection('toolbar')" class="w-full flex items-center justify-between px-6 py-4 hover:bg-neutral-800/30 transition-colors">
               <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
                 <LayoutGrid class="w-4 h-4" /> Toolbar Settings
