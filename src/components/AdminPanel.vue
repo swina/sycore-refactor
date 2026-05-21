@@ -285,19 +285,26 @@ function handleLoadDefaults() {
 }
 
 function handleExportConfig() {
-  const data = {
+  const settings = {
     appVersion: appVersion.value, appEngine: appEngine.value, appOsTarget: appOsTarget.value,
     toolbarIconSize: toolbarIconSize.value, appName: appName.value, appSubtitle: appSubtitle.value,
-    syncMidiTransportFromLivePad: syncMidiTransportFromLivePad.value,
-    enablePartSelector: enablePartSelector.value,
-    rolesConfig: rolesConfig.value, categories: categories.value,
-    appSoundTypes: appSoundTypes.value, soundTypeBg: soundTypeBg.value, controllers: controllers.value,
+    toolbar: toolbarButtons.value,
+    syncMidiTransportFromLivePad: configStore.syncMidiTransportFromLivePad,
+    enablePartSelector: configStore.enablePartSelector,
   }
+  const data = [
+    { key: 'app_settings',     value: settings },
+    { key: 'categories_config', value: { list: categories.value } },
+    { key: 'midi_config',       value: { controllers: controllers.value } },
+    { key: 'roles_config',      value: { ...rolesConfig.value } },
+    { key: 'sound_type_bg',     value: { ...soundTypeBg.value } },
+    { key: 'sound_types_config',value: { list: appSoundTypes.value } },
+  ]
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `system_core_admin_config_${new Date().toISOString().split('T')[0]}.json`
+  a.download = `system_config_${new Date().toISOString().split('T')[0]}.json`
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
