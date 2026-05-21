@@ -174,5 +174,31 @@ export function usePushNotifications() {
     sendPush,
     fetchSubscribers,
     removeSubscriber,
+    exportSubscribers,
   }
+}
+
+export function exportSubscribers() {
+  if (!subscribers.value.length) return
+  const rows = subscribers.value.map((s) => ({
+    email: s.email,
+    subscribedAt: s.subscribedAt || '',
+    endpoint: s.endpoint,
+    userAgent: s.userAgent || '',
+  }))
+  const csv = [
+    'email,subscribedAt,endpoint,userAgent',
+    ...rows.map((r) =>
+      `"${r.email}","${r.subscribedAt}","${r.endpoint}","${r.userAgent.replace(/"/g, '""')}"`
+    ),
+  ].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `push_subscribers_${new Date().toISOString().split('T')[0]}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }

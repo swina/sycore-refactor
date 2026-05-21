@@ -21,7 +21,7 @@ const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail
 const {
   isSubscribed, permissionState, isSupported,
   subscribers, subscribe, unsubscribe, sendPush,
-  fetchSubscribers, removeSubscriber,
+  fetchSubscribers, removeSubscriber, exportSubscribers,
 } = usePushNotifications()
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -907,12 +907,21 @@ watch(openSections, (sections) => {
               <div class="bg-black/40 border border-neutral-800 rounded-xl p-4 space-y-3">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-bold text-neutral-300">Subscribers ({{ subscribers.length }})</span>
-                  <button
-                    @click="fetchSubscribers"
-                    class="text-[9px] font-mono text-neutral-500 hover:text-synth-neon uppercase tracking-wider transition-colors"
-                  >
-                    Refresh
-                  </button>
+                  <div class="flex items-center gap-2">
+                    <button
+                      v-if="subscribers.length > 0"
+                      @click="exportSubscribers"
+                      class="text-[9px] font-mono text-neutral-500 hover:text-synth-neon uppercase tracking-wider transition-colors"
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      @click="fetchSubscribers"
+                      class="text-[9px] font-mono text-neutral-500 hover:text-synth-neon uppercase tracking-wider transition-colors"
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 </div>
                 <div v-if="subscribers.length === 0" class="text-[10px] font-mono text-neutral-600 text-center py-4">
                   No subscribers yet
