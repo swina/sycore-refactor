@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical, Repeat } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical, Repeat, Zap, Upload } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDraggable } from '@/composables/useDraggable'
 import { Mp3Encoder } from '@breezystack/lamejs'
@@ -26,6 +26,10 @@ const recSecs          = ref(0)
 const recordedBlob     = ref(null)
 const isPlaying        = ref(false)
 const isExportingMp3   = ref(false)
+const isNormalizing    = ref(false)
+const normalizeDbLimit = ref(-0.5)
+const normalizeGateDb  = ref(-60)
+const isImporting      = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const error            = ref(null)
 
@@ -89,6 +93,7 @@ const canvasRef   = ref(null)
 const levelBarRef = ref(null)
 const audioRef1   = ref(null)
 const audioRef2   = ref(null)
+const fileInputRef = ref(null)
 
 // ── Plain mutable (Web Audio nodes) ──────────────────────────────────────────
 let streamRef      = null
@@ -464,6 +469,124 @@ async function handleDownload() {
   } else {
     const ext = recordedBlob.value.type.includes('ogg') ? 'ogg' : 'webm'
     triggerDownload(recordedBlob.value, `s1-audio-${getTimestamp()}.${ext}`)
+  }
+}
+
+function handleImportClick() {
+  fileInputRef.value?.click()
+}
+
+async function handleFileImport(e) {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  isImporting.value = true
+  try {
+    // Read the file into a Blob
+    const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/wav' })
+
+    // Stop any current playback and monitoring
+    stopAll(true)
+
+    recordedBlob.value = blob
+    recSecs.value = 0
+
+    // Set up preview
+    if (blobUrlRef) URL.revokeObjectURL(blobUrlRef)
+    blobUrlRef = URL.createObjectURL(blob)
+    if (audioRef1.value && audioRef2.value) {
+      audioRef1.value.src = blobUrlRef
+      audioRef2.value.src = blobUrlRef
+      audioRef1.value.load()
+      audioRef2.value.load()
+    }
+
+    // Decode to get actual duration
+    try {
+      const arrayBuffer = await blob.arrayBuffer()
+      const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
+      const tempCtx = new audioCtxClass(1, 1, 44100)
+      const decoded = await new Promise((resolve, reject) => {
+        tempCtx.decodeAudioData(arrayBuffer, b => resolve(b), e => reject(e))
+      })
+      audioDuration.value = decoded.duration
+      loopStart.value = 0
+      loopEnd.value = decoded.duration
+      playbackStart.value = 0
+    } catch (decodeErr) {
+      console.warn('Could not decode imported file for duration', decodeErr)
+    }
+
+    // Reset zoom/pan
+    zoomX.value = 1.0
+    zoomY.value = 1.0
+    panOffset.value = 0.0
+  } catch (err) {
+    console.error('Import failed', err)
+  } finally {
+    isImporting.value = false
+    // Reset the file input so the same file can be re-imported
+    e.target.value = ''
+  }
+}
+
+async function handleNormalize() {
+  if (!recordedBlob.value || isNormalizing.value) return
+  isNormalizing.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const audioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new audioCtxClass()
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+
+    // Apply noise gate: silence samples below the gate threshold
+    const gateLinear = Math.pow(10, normalizeGateDb.value / 20)
+    for (let c = 0; c < decoded.numberOfChannels; c++) {
+      const data = decoded.getChannelData(c)
+      for (let i = 0; i < data.length; i++) {
+        if (Math.abs(data[i]) < gateLinear) {
+          data[i] = 0
+        }
+      }
+    }
+
+    // Find max peak across all channels (after gating)
+    let maxPeak = 0
+    for (let c = 0; c < decoded.numberOfChannels; c++) {
+      const data = decoded.getChannelData(c)
+      for (let i = 0; i < data.length; i++) {
+        const abs = Math.abs(data[i])
+        if (abs > maxPeak) maxPeak = abs
+      }
+    }
+
+    if (maxPeak > 0) {
+      const linearLimit = Math.pow(10, normalizeDbLimit.value / 20)
+      const gain = linearLimit / maxPeak
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        const data = decoded.getChannelData(c)
+        for (let i = 0; i < data.length; i++) {
+          data[i] *= gain
+        }
+      }
+
+      const normalizedWav = audioBufferToWav(decoded)
+      recordedBlob.value = normalizedWav
+
+      // Refresh preview URLs
+      if (blobUrlRef) URL.revokeObjectURL(blobUrlRef)
+      blobUrlRef = URL.createObjectURL(normalizedWav)
+      if (audioRef1.value && audioRef2.value) {
+        audioRef1.value.src = blobUrlRef
+        audioRef2.value.src = blobUrlRef
+        audioRef1.value.load()
+        audioRef2.value.load()
+      }
+    }
+  } catch (e) {
+    console.error('Normalization failed', e)
+  } finally {
+    isNormalizing.value = false
   }
 }
 
@@ -1048,30 +1171,130 @@ onUnmounted(() => {
           PL
         </button>
       </div>
+      <div class="flex">
+        <!--- Controls Left Column -->
+        <div class="w-[120px] flex flex-col p-2 gap-2 border-r border-neutral-900">
+          <!-- Record / Stop -->
+          <button
+            v-if="!isRecording"
+            @click="startRecording"
+            title="Start recording"
+            :disabled="!isMonitoring"
+            :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+              isMonitoring
+                ? 'text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10'
+                : 'text-neutral-700 border-neutral-800 cursor-default']"
+          >
+            <Circle class="w-3 h-3 fill-current" />
+            {{ hasBackingTrack ? 'Rec + Play' : 'Rec' }}
+          </button>
+          <button
+            v-else
+            @click="stopRecording"
+            title="Stop recording"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+          >
+            <Square class="w-3 h-3 fill-current" />
+            Stop
+          </button>
 
-      <!-- Waveform canvas -->
-      <div class="relative bg-[#080808] flex-1 min-h-[60px]">
-        <canvas ref="canvasRef" class="w-full h-full block" />
-        
-        <!-- Playback Time overlay in bottom-left corner of the canvas -->
-        <div v-if="recordedBlob" class="absolute bottom-2 left-2 bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">
-          {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
+          <!-- Playback preview -->
+          <button
+            v-if="recordedBlob && !isRecording"
+            @click="togglePlay"
+            title="Play/Pause recording"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon transition-colors"
+          >
+            <Pause v-if="isPlaying" class="w-3 h-3" />
+            <Play v-else class="w-3 h-3" />
+            {{ isPlaying ? 'Pause' : 'Play' }}
+          </button>
+
+          <!-- Export MP3 -->
+          <button
+            @click="handleExportMp3"
+            :disabled="!recordedBlob || isExportingMp3"
+            title="Export as MP3 (192kbps)"
+            :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+              recordedBlob && !isExportingMp3
+                ? 'text-synth-neon border-synth-neon/30 hover:border-synth-neon/50 hover:text-white'
+                : 'text-neutral-700 border-neutral-800 cursor-default']"
+          >
+            <FileAudio class="w-3 h-3" />
+            {{ isExportingMp3 ? 'MP3…' : 'MP3' }}
+          </button>
+
+          <!-- Add to Playlist manually -->
+          <button
+            v-if="recordedBlob && !isRecording"
+            @click="handleAddToPlaylist"
+            title="Send cropped audio to Playlist"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon transition-colors"
+          >
+            <ListPlus class="w-3 h-3" />
+            +PL
+          </button>
+
+          <!-- Save (original format / WAV cropped) -->
+          <button
+            @click="handleDownload"
+            :disabled="!recordedBlob"
+            title="Save recording (WAV if cropped, WebM if full)"
+            :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+              recordedBlob
+                ? 'text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon'
+                : 'text-neutral-700 border-neutral-800 cursor-default']"
+          >
+            <Download class="w-3 h-3" />
+            Save
+          </button>  
+
+           <!-- Import -->
+          <button
+            v-if="!isRecording"
+            @click="handleImportClick"
+            :disabled="isImporting"
+            title="Import MP3/OGG/WAV file"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-500 border-neutral-700 hover:text-synth-neon hover:border-synth-neon/30 transition-colors"
+          >
+            <Upload class="w-3 h-3" />
+            {{ isImporting ? '…' : 'Import' }}
+          </button>
+
+          <!-- Reset -->
+          <button
+            v-if="!isRecording"
+            @click="handleReset"
+            title="Reset capture"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-500 border-neutral-700 hover:text-synth-neon hover:border-synth-neon/30 transition-colors"
+          >
+            <RotateCcw class="w-3 h-3" />
+            Reset
+          </button>
         </div>
+        <!-- Waveform canvas -->
+        <div class="relative bg-[#080808] flex-1 min-h-[60px]">
+          <canvas ref="canvasRef" class="w-full h-full block" />
+          
+          <!-- Playback Time overlay in bottom-left corner of the canvas -->
+          <!-- <div v-if="recordedBlob" class="absolute bottom-2 left-2 bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">
+            {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
+          </div> -->
 
-        <div v-if="!isMonitoring" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
-          <template v-if="error">
-            <p class="text-red-400 text-[10px] font-mono px-6 text-center">{{ error }}</p>
-            <button
-              @click="startMonitor(selectedDeviceId)"
-              class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10 transition-colors"
-            >
-              <Mic class="w-3 h-3" /> Retry
-            </button>
-          </template>
-          <p v-else class="text-neutral-700 text-[10px] font-mono">Requesting audio access…</p>
+          <div v-if="!isMonitoring" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <template v-if="error">
+              <p class="text-red-400 text-[10px] font-mono px-6 text-center">{{ error }}</p>
+              <button
+                @click="startMonitor(selectedDeviceId)"
+                class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10 transition-colors"
+              >
+                <Mic class="w-3 h-3" /> Retry
+              </button>
+            </template>
+            <p v-else class="text-neutral-700 text-[10px] font-mono">Requesting audio access…</p>
+          </div>
         </div>
       </div>
-
       <!-- Footer controls -->
       <div class="flex items-center gap-2 px-4 py-2 bg-neutral-900/60 border-t border-neutral-800 shrink-0">
         <!-- Level meter -->
@@ -1085,11 +1308,69 @@ onUnmounted(() => {
             />
           </div>
         </div>
+        <!-- Normalize -->
+        <button
+          @click="handleNormalize"
+          :disabled="!recordedBlob || isNormalizing"
+          title="Normalize audio ceiling dBFS"
+          :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+            recordedBlob && !isNormalizing
+              ? 'text-synth-neon border-synth-neon/30 hover:border-synth-neon/50 hover:text-white'
+              : 'text-neutral-700 border-neutral-800 cursor-default']"
+        >
+          <Zap class="w-3 h-3" />
+          {{ isNormalizing ? 'Norm…' : 'Norm' }}
+        </button>
+        <!-- dBFS Ceiling + Gate sliders -->
+        <div v-if="recordedBlob" class="flex items-center justify-between w-full">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[8px] font-mono text-neutral-500">CEIL</span>
+            <input
+              v-model.number="normalizeDbLimit"
+              title="dB Limit"
+              type="range"
+              min="-12"
+              max="0"
+              step="0.1"
+              class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+            />
+            <span class="text-[9px] font-mono text-synth-neon w-8 text-right">{{ normalizeDbLimit.toFixed(1) }}dB</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[8px] font-mono text-neutral-500">GATE</span>
+            <input
+              v-model.number="normalizeGateDb"
+              title="Gate treshold"
+              type="range"
+              min="-96"
+              max="-12"
+              step="1"
+              class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+            />
+            <span class="text-[9px] font-mono text-synth-neon w-8 text-right">{{ normalizeGateDb }}dB</span>
+          </div>
+          <!-- Playback Time overlay in bottom-left corner of the canvas -->
+          <div v-if="recordedBlob" class="bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">
+            {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
+          </div>
+        </div>
 
         <div class="flex-1" />
 
+        <!-- Import -->
+        <!-- <button
+          v-if="!isRecording"
+          @click="handleImportClick"
+          :disabled="isImporting"
+          title="Import MP3/OGG/WAV file"
+          class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-500 border-neutral-700 hover:text-synth-neon hover:border-synth-neon/30 transition-colors"
+        >
+          <Upload class="w-3 h-3" />
+          {{ isImporting ? '…' : 'Import' }}
+        </button> -->
+
         <!-- Reset -->
-        <button
+        <!-- <button
           v-if="!isRecording"
           @click="handleReset"
           title="Reset capture"
@@ -1097,10 +1378,10 @@ onUnmounted(() => {
         >
           <RotateCcw class="w-3 h-3" />
           Reset
-        </button>
+        </button> -->
 
         <!-- Record / Stop -->
-        <button
+        <!-- <button
           v-if="!isRecording"
           @click="startRecording"
           :disabled="!isMonitoring"
@@ -1119,10 +1400,10 @@ onUnmounted(() => {
         >
           <Square class="w-3 h-3 fill-current" />
           Stop
-        </button>
+        </button> -->
 
         <!-- Playback preview -->
-        <button
+        <!-- <button
           v-if="recordedBlob && !isRecording"
           @click="togglePlay"
           class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon transition-colors"
@@ -1130,10 +1411,24 @@ onUnmounted(() => {
           <Pause v-if="isPlaying" class="w-3 h-3" />
           <Play v-else class="w-3 h-3" />
           {{ isPlaying ? 'Pause' : 'Play' }}
-        </button>
+        </button> -->
+
+        <!-- Normalize -->
+        <!-- <button
+          @click="handleNormalize"
+          :disabled="!recordedBlob || isNormalizing"
+          title="Normalize audio ceiling dBFS"
+          :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+            recordedBlob && !isNormalizing
+              ? 'text-synth-neon border-synth-neon/30 hover:border-synth-neon/50 hover:text-white'
+              : 'text-neutral-700 border-neutral-800 cursor-default']"
+        >
+          <Zap class="w-3 h-3" />
+          {{ isNormalizing ? 'Norm…' : 'Norm' }}
+        </button> -->
 
         <!-- Export MP3 -->
-        <button
+        <!-- <button
           @click="handleExportMp3"
           :disabled="!recordedBlob || isExportingMp3"
           title="Export as MP3 (192kbps)"
@@ -1144,10 +1439,10 @@ onUnmounted(() => {
         >
           <FileAudio class="w-3 h-3" />
           {{ isExportingMp3 ? 'MP3…' : 'MP3' }}
-        </button>
+        </button> -->
 
         <!-- Add to Playlist manually -->
-        <button
+        <!-- <button
           v-if="recordedBlob && !isRecording"
           @click="handleAddToPlaylist"
           title="Send cropped audio to Playlist"
@@ -1155,10 +1450,10 @@ onUnmounted(() => {
         >
           <ListPlus class="w-3 h-3" />
           +PL
-        </button>
+        </button> -->
 
         <!-- Save (original format / WAV cropped) -->
-        <button
+        <!-- <button
           @click="handleDownload"
           :disabled="!recordedBlob"
           title="Save recording (WAV if cropped, WebM if full)"
@@ -1169,7 +1464,7 @@ onUnmounted(() => {
         >
           <Download class="w-3 h-3" />
           Save
-        </button>
+        </button> -->
       </div>
 
       <!-- Loop settings area -->
@@ -1198,7 +1493,7 @@ onUnmounted(() => {
         <div class="flex flex-col gap-1.5 mt-1">
           <!-- Play Start Slider -->
           <div class="flex items-center gap-3">
-            <span class="text-[8px] font-mono text-synth-neon w-16">PLAY START</span>
+            <span class="text-[8px] font-mono text-cyan-700 w-16">PLAY START</span>
             <input
               v-model.number="playbackStart"
               type="range"
@@ -1210,10 +1505,10 @@ onUnmounted(() => {
             <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(playbackStart) }}</span>
           </div>
 
-          <div v-if="isLooping" class="flex flex-col gap-1.5 mt-1">
+          <div v-if="isLooping" class="flex flex-row gap-3 mt-1">
             <!-- Loop Start Slider -->
-            <div class="flex items-center gap-3">
-              <span class="text-[8px] font-mono text-neutral-400 w-16">LOOP START</span>
+            <div class="flex items-center gap-3 w-1/2">
+              <span class="text-[8px] font-mono text-synth-neon w-16">LOOP START</span>
               <input
                 v-model.number="loopStart"
                 type="range"
@@ -1226,8 +1521,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Loop End Slider -->
-            <div class="flex items-center gap-3">
-              <span class="text-[8px] font-mono text-neutral-400 w-16">LOOP END</span>
+            <div class="flex items-center gap-3 w-1/2">
+              <span class="text-[8px] font-mono text-red-400 w-16">LOOP END</span>
               <input
                 v-model.number="loopEnd"
                 type="range"
@@ -1238,7 +1533,8 @@ onUnmounted(() => {
               />
               <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopEnd) }}</span>
             </div>
-
+          </div>
+          <div class="flex flex-col">
             <!-- Zoom and Pan controls -->
             <div class="grid grid-cols-2 gap-4 mt-2 border-t border-neutral-900/60 pt-2 shrink-0">
               <!-- Left col: Zoom H / Pan -->
@@ -1312,6 +1608,7 @@ onUnmounted(() => {
   <!-- Hidden audio elements for playback preview with crossfade -->
   <audio ref="audioRef1" @loadedmetadata="handleLoadedMetadata" class="hidden" />
   <audio ref="audioRef2" class="hidden" />
+  <input ref="fileInputRef" type="file" accept=".mp3,.ogg,.wav,audio/*" @change="handleFileImport" class="hidden" />
 </template>
 
 <style scoped>
