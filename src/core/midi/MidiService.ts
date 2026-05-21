@@ -550,10 +550,6 @@ export class MidiService {
         }
       }
 
-      const normIn = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
-      const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
-      if (normIn && normOut && normIn === normOut) return;
-
       // MIDI Performance Matrix routing:
       // If a mapping exists in the performance matrix, use it strictly.
       // Otherwise, only fallback to broadcastMode if no mapping is specified.
@@ -562,6 +558,13 @@ export class MidiService {
       const isRouted = hasMappings ? isRoutedByMatrix : (isRoutedByMatrix || this.broadcastMode);
 
       if (!isRouted) return;
+
+      // Loop prevention check:
+      // Prevent routing feedback loops if the normalized input and output names match,
+      // EXCEPT when the user explicitly mapped them in the MIDI Performance Matrix.
+      const normIn = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+      const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+      if (normIn && normOut && normIn === normOut && !isRoutedByMatrix) return;
 
       if (isNote && !outConfig.notes) return;
       if (isCC && !outConfig.cc) return;
