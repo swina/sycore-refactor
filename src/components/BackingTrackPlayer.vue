@@ -69,6 +69,9 @@ const loopPlaylist        = ref(true)
 const syncInternalSequencer = ref(localStorage.getItem('S1_SYNC_TRACK') === 'true')
 watch(syncInternalSequencer, v => localStorage.setItem('S1_SYNC_TRACK', v ? 'true' : 'false'))
 
+const syncRecordAudioCapture = ref(localStorage.getItem('S1_SYNC_REC_CAPTURE') === 'true')
+watch(syncRecordAudioCapture, v => localStorage.setItem('S1_SYNC_REC_CAPTURE', v ? 'true' : 'false'))
+
 const isMinimized = ref(localStorage.getItem('S1_BT_MINIMIZED') === 'true')
 watch(isMinimized, v => localStorage.setItem('S1_BT_MINIMIZED', v ? 'true' : 'false'))
 const isDialOpen = ref(false)
@@ -211,6 +214,9 @@ function fadeStop() {
     if (syncInternalSequencer.value) {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false, source: 'backing-track' } }))
     }
+    if (syncRecordAudioCapture.value) {
+      window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+    }
     return
   }
 
@@ -237,6 +243,9 @@ function fadeStop() {
       isCrossfadingRef = false
       if (syncInternalSequencer.value) {
         window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false, source: 'backing-track' } }))
+      }
+      if (syncRecordAudioCapture.value) {
+        window.dispatchEvent(new CustomEvent('capture-stop-rec'))
       }
     }
   }
@@ -275,6 +284,9 @@ function handlePrimaryEnded(slot) {
     } else {
       isPlaying.value = false
       playlistIdx.value = -1
+      if (syncRecordAudioCapture.value) {
+        window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+      }
     }
   } else {
     isPlaying.value = false
@@ -301,12 +313,11 @@ function handlePrimaryTimeUpdate(slot, ct, dur) {
 
 // ── Load helpers ──────────────────────────────────────────────────────────────
 function loadDirect(url, track, label, autoPlay = false) {
-  if (isCrossfadingRef) {
-    if (crossfadeTimerRef) clearTimeout(crossfadeTimerRef)
-    isCrossfadingRef = false
-    audioRefA.value?.pause()
-    audioRefB.value?.pause()
-  }
+  if (crossfadeTimerRef) clearTimeout(crossfadeTimerRef)
+  isCrossfadingRef = false
+  audioRefA.value?.pause()
+  audioRefB.value?.pause()
+  
   activeSlot = 'a'
   const audio = audioRefA.value
   if (!audio) return
@@ -341,14 +352,17 @@ function playTrack(track) {
 
 function playFromPlaylist(idx, source = 'manual') {
   triggerSource.value = source
+  if (playlistIdx.value === idx && src.value) {
+    togglePlay()
+    return
+  }
+  if (crossfadeTimerRef) clearTimeout(crossfadeTimerRef)
+  isCrossfadingRef = false
+  audioRefA.value?.pause()
+  audioRefB.value?.pause()
+  
   const track = playlist.value[idx]
   if (!track) return
-  if (isCrossfadingRef) {
-    if (crossfadeTimerRef) clearTimeout(crossfadeTimerRef)
-    isCrossfadingRef = false
-    audioRefA.value?.pause()
-    audioRefB.value?.pause()
-  }
   activeSlot = 'a'
   const audio = audioRefA.value
   if (!audio) return
@@ -362,6 +376,10 @@ function playFromPlaylist(idx, source = 'manual') {
   playlistCurrentRepeat.value = 1
   isPlaying.value = true
   currentTime.value = 0
+  
+  if (syncRecordAudioCapture.value) {
+    window.dispatchEvent(new CustomEvent('capture-start-rec'))
+  }
   
   if (track.bpm) {
     detectedBpm.value = track.bpm
@@ -438,6 +456,9 @@ function togglePlay() {
     if (syncInternalSequencer.value) {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true, source: 'backing-track' } }))
     }
+    if (syncRecordAudioCapture.value && isPlaylistMode.value) {
+      window.dispatchEvent(new CustomEvent('capture-start-rec'))
+    }
   }
 }
 
@@ -461,7 +482,7 @@ function seekToPos(pos) {
 // ── Playlist management ───────────────────────────────────────────────────────
 function addToPlaylist(track) {
   playlist.value = [...playlist.value, track]
-  playlistRepeats.value = [...playlistRepeats.value, 1]
+  playlistRepeats.value = [...playlistRepeats.value, track.repeats || 1]
 }
 
 function clearPlaylist() {
@@ -640,12 +661,20 @@ onMounted(() => {
     if (restart) { audio.currentTime = 0; currentTime.value = 0 }
     const play = e.detail?.play
     if (play === undefined) {
-      if (isPlaying.value) audio.pause(); else audio.play()
+      if (isPlaying.value) {
+        audio.pause()
+        if (syncRecordAudioCapture.value) window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+      } else {
+        audio.play()
+        if (syncRecordAudioCapture.value && isPlaylistMode.value) window.dispatchEvent(new CustomEvent('capture-start-rec'))
+      }
       isPlaying.value = !isPlaying.value
     } else if (play && !isPlaying.value) {
       audio.play(); isPlaying.value = true
+      if (syncRecordAudioCapture.value && isPlaylistMode.value) window.dispatchEvent(new CustomEvent('capture-start-rec'))
     } else if (!play && isPlaying.value) {
       audio.pause(); isPlaying.value = false
+      if (syncRecordAudioCapture.value) window.dispatchEvent(new CustomEvent('capture-stop-rec'))
     }
   }
 
@@ -663,6 +692,9 @@ onMounted(() => {
       if (syncInternalSequencer.value) {
         window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true, source: 'backing-track' } }))
       }
+      if (syncRecordAudioCapture.value && isPlaylistMode.value) {
+        window.dispatchEvent(new CustomEvent('capture-start-rec'))
+      }
     }
   }
 
@@ -676,9 +708,9 @@ onMounted(() => {
   }
 
   const handleAddFromCapture = (e) => {
-    const { url, label, duration } = e.detail || {}
+    const { url, label, duration, bpm, repeats } = e.detail || {}
     if (!url) return
-    addToPlaylist({ id: `rec_${Date.now()}`, url, label, genre: 'Recording', duration })
+    addToPlaylist({ id: `rec_${Date.now()}`, url, label, genre: 'Recording', duration, bpm, repeats })
     inputType.value = 'playlist'; isOpen.value = true
   }
   
@@ -1018,6 +1050,21 @@ onUnmounted(() => {
               <div class="flex flex-col">
                 <span :class="['text-[9px] font-black uppercase tracking-widest transition-colors', syncInternalSequencer ? 'text-synth-neon' : 'text-neutral-400 group-hover:text-neutral-300']">Internal Sync</span>
                 <span class="text-[7px] text-neutral-600 uppercase font-bold tracking-tighter">Link with System Sequencer</span>
+              </div>
+            </div>
+
+            <div class="w-px h-6 bg-white/5 hidden md:block" />
+
+            <!-- Sync Record Audio Capture -->
+            <div class="flex items-center gap-3 group cursor-pointer" @click="syncRecordAudioCapture = !syncRecordAudioCapture">
+              <div 
+                :class="['w-8 h-4 rounded-full relative transition-all duration-300', syncRecordAudioCapture ? 'bg-synth-neon shadow-[0_0_10px_rgba(0,163,112,0.4)]' : 'bg-neutral-800']"
+              >
+                <div :class="['absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-all duration-300', syncRecordAudioCapture ? 'left-4.5' : 'left-0.5']" />
+              </div>
+              <div class="flex flex-col">
+                <span :class="['text-[9px] font-black uppercase tracking-widest transition-colors', syncRecordAudioCapture ? 'text-synth-neon' : 'text-neutral-400 group-hover:text-neutral-300']">Sync Record</span>
+                <span class="text-[7px] text-neutral-600 uppercase font-bold tracking-tighter">Auto Capture Playlist Play</span>
               </div>
             </div>
           </div>

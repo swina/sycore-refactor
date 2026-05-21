@@ -1,15 +1,18 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical, Repeat, Zap, Upload } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical, Repeat, Zap, Upload, Magnet } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMidiStore } from '@/stores/useMidiStore'
 import { useDraggable } from '@/composables/useDraggable'
 import { Mp3Encoder } from '@breezystack/lamejs'
+import { midiService } from '@/core/midi/MidiService'
 
 const props = defineProps({
   hasBackingTrack: { type: Boolean, default: false },
 })
 
 const uiStore = useUiStore()
+const midiStore = useMidiStore()
 
 const { x, y, startDrag } = useDraggable(
   Math.max(8, (window.innerWidth - 480) / 2),
@@ -44,6 +47,139 @@ const waveformPeaks = ref([])
 const zoomX = ref(1.0)
 const zoomY = ref(1.0)
 const panOffset = ref(0.0)
+
+// ── Timeline State & Loop ──────────────────────────────────────────────────
+const timelineMeasures = ref(parseInt(localStorage.getItem('S1_CAPTURE_TIMELINE_MEASURES') || '4', 10))
+const timelineMode     = ref(localStorage.getItem('S1_CAPTURE_TIMELINE_MODE') || 'synced')
+const timelineProgress = ref(0)
+const timelineActive   = ref(false)
+
+watch(timelineMeasures, (val) => {
+  localStorage.setItem('S1_CAPTURE_TIMELINE_MEASURES', val.toString())
+})
+
+watch(timelineMode, (val) => {
+  localStorage.setItem('S1_CAPTURE_TIMELINE_MODE', val)
+})
+
+// ── Snap to Grid State & Functions ───────────────────────────────────────────
+const snapEnabled = ref(localStorage.getItem('S1_CAPTURE_SNAP_GRID') === '1')
+
+watch(snapEnabled, (val) => {
+  localStorage.setItem('S1_CAPTURE_SNAP_GRID', val ? '1' : '0')
+  if (val) {
+    snapToBarDivisions()
+  }
+})
+
+// ── MIDI Sync Recording State ────────────────────────────────────────────────
+const midiTriggerEnabled = ref(localStorage.getItem('S1_CAPTURE_MIDI_TRIGGER') === '1')
+const isArmed = ref(false)
+const midiPulse = ref(false)
+let midiCleanup = null
+
+watch(midiTriggerEnabled, (val) => {
+  localStorage.setItem('S1_CAPTURE_MIDI_TRIGGER', val ? '1' : '0')
+  if (!val) {
+    isArmed.value = false
+  }
+})
+
+const playlistRepeat = ref(1)
+
+function snapValue(val, barSecs, anchor = 0) {
+  if (barSecs <= 0) return val
+  const snapped = anchor + Math.round((val - anchor) / barSecs) * barSecs
+  return Math.max(0, Math.min(audioDuration.value, snapped))
+}
+
+function snapToBarDivisions() {
+  const bpm = midiStore.currentBpm || 120
+  const barSecs = 4 * (60 / bpm)
+  if (barSecs <= 0 || audioDuration.value <= 0) return
+
+  const anchor = playbackStart.value
+  loopStart.value = snapValue(loopStart.value, barSecs, anchor)
+  
+  let snappedEnd = snapValue(loopEnd.value, barSecs, anchor)
+  if (snappedEnd <= loopStart.value) {
+    snappedEnd = Math.min(audioDuration.value, loopStart.value + barSecs)
+  }
+  loopEnd.value = snappedEnd
+}
+
+let timelineRaf = null
+let timelineStartTime = 0
+
+function startTimelineLoop() {
+  if (timelineRaf) cancelAnimationFrame(timelineRaf)
+  timelineStartTime = performance.now()
+  
+  const tick = () => {
+    if (!timelineActive.value) {
+      timelineProgress.value = 0
+      return
+    }
+    const bpm = midiStore.currentBpm || 120
+    const totalSeconds = timelineMeasures.value * 4 * (60 / bpm)
+    if (totalSeconds > 0) {
+      if (timelineMode.value === 'synced' && isPlaying.value) {
+        // Sync timeline sweep progress directly with playhead relative to playbackStart
+        const elapsedSecs = currentPlaybackTime.value - playbackStart.value
+        timelineProgress.value = (((elapsedSecs % totalSeconds) + totalSeconds) % totalSeconds) / totalSeconds * 100
+      } else {
+        const elapsedMs = performance.now() - timelineStartTime
+        const elapsedSecs = elapsedMs / 1000
+        timelineProgress.value = ((elapsedSecs % totalSeconds) / totalSeconds) * 100
+      }
+    } else {
+      timelineProgress.value = 0
+    }
+    timelineRaf = requestAnimationFrame(tick)
+  }
+  timelineRaf = requestAnimationFrame(tick)
+}
+
+function stopTimelineLoop() {
+  if (timelineRaf) {
+    cancelAnimationFrame(timelineRaf)
+    timelineRaf = null
+  }
+  timelineProgress.value = 0
+}
+
+watch(timelineActive, (active) => {
+  if (active) {
+    startTimelineLoop()
+  } else {
+    stopTimelineLoop()
+  }
+})
+
+watch([isRecording, isPlaying, timelineMode], ([rec, play, mode]) => {
+  if (mode === 'synced') {
+    timelineActive.value = !!(rec || play)
+  } else {
+    timelineActive.value = false
+  }
+})
+
+function getBarProgress(idx) {
+  const pctPerBar = 100 / timelineMeasures.value
+  const barStart = idx * pctPerBar
+  const progress = timelineProgress.value
+  if (progress <= barStart) return 0
+  if (progress >= barStart + pctPerBar) return 100
+  return ((progress - barStart) / pctPerBar) * 100
+}
+
+function isBarActive(idx) {
+  if (!timelineActive.value) return false
+  const pctPerBar = 100 / timelineMeasures.value
+  const barStart = idx * pctPerBar
+  if (idx === 0 && timelineProgress.value === 0) return true
+  return timelineProgress.value >= barStart && timelineProgress.value < barStart + pctPerBar
+}
 
 async function generateWaveformPeaks(blob) {
   try {
@@ -113,14 +249,42 @@ watch(toPlaylist, v => {
 })
 
 watch(loopStart, (ns) => {
+  if (snapEnabled.value) {
+    const bpm = midiStore.currentBpm || 120
+    const barSecs = 4 * (60 / bpm)
+    const anchor = playbackStart.value
+    const snapped = snapValue(ns, barSecs, anchor)
+    if (Math.abs(loopStart.value - snapped) > 0.001) {
+      loopStart.value = snapped
+      return
+    }
+  }
+
   if (ns >= loopEnd.value) {
-    loopEnd.value = Math.min(audioDuration.value, ns + 0.05)
+    const bpm = midiStore.currentBpm || 120
+    const barSecs = 4 * (60 / bpm)
+    const offset = snapEnabled.value ? barSecs : 0.05
+    loopEnd.value = Math.min(audioDuration.value, ns + offset)
   }
 })
 
 watch(loopEnd, (ne) => {
+  if (snapEnabled.value) {
+    const bpm = midiStore.currentBpm || 120
+    const barSecs = 4 * (60 / bpm)
+    const anchor = playbackStart.value
+    const snapped = snapValue(ne, barSecs, anchor)
+    if (Math.abs(loopEnd.value - snapped) > 0.001) {
+      loopEnd.value = snapped
+      return
+    }
+  }
+
   if (ne <= loopStart.value) {
-    loopStart.value = Math.max(0, ne - 0.05)
+    const bpm = midiStore.currentBpm || 120
+    const barSecs = 4 * (60 / bpm)
+    const offset = snapEnabled.value ? barSecs : 0.05
+    loopStart.value = Math.max(0, ne - offset)
   }
 })
 
@@ -129,6 +293,10 @@ watch(playbackStart, (ns) => {
     playbackStart.value = audioDuration.value
   } else if (ns < 0) {
     playbackStart.value = 0
+  }
+  
+  if (snapEnabled.value) {
+    snapToBarDivisions()
   }
 })
 
@@ -176,6 +344,7 @@ function stopAll(keepBlob = false) {
   isMonitoring.value = false
   isRecording.value = false
   isPlaying.value = false
+  isArmed.value = false
 
   cleanupWebAudio()
 
@@ -326,7 +495,14 @@ function startRecording() {
       const pad = n => String(n).padStart(2, '0')
       const ts = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
       const playlistUrl = URL.createObjectURL(blob)
-      window.dispatchEvent(new CustomEvent('playlist-add-from-capture', { detail: { url: playlistUrl, label: `REC ${ts}`, duration: recSecs.value } }))
+      window.dispatchEvent(new CustomEvent('playlist-add-from-capture', { 
+        detail: { 
+          url: playlistUrl, 
+          label: `REC ${ts}`, 
+          duration: recSecs.value,
+          bpm: midiStore.currentBpm
+        } 
+      }))
     }
   }
   recorder.start(100)
@@ -345,6 +521,20 @@ function stopRecording() {
   if (recorderRef && recorderRef.state !== 'inactive') recorderRef.stop()
   isRecordingRef = false
   isRecording.value = false
+}
+
+function handleRecordClick() {
+  if (!isRecording.value && !isArmed.value) {
+    if (midiTriggerEnabled.value) {
+      isArmed.value = true
+    } else {
+      startRecording()
+    }
+  } else if (isArmed.value) {
+    isArmed.value = false
+  } else {
+    stopRecording()
+  }
 }
 
 function handleReset() {
@@ -681,7 +871,9 @@ async function handleAddToPlaylist() {
       detail: {
         url: playlistUrl,
         label: `CROP ${ts}`,
-        duration: duration
+        duration: duration,
+        bpm: midiStore.currentBpm,
+        repeats: playlistRepeat.value
       }
     }))
   } catch (e) {
@@ -853,7 +1045,7 @@ watch([isMonitoring, recordedBlob, isPlaying, () => uiStore.isAudioCaptureOpen],
   startDrawLoop()
 }, { immediate: true })
 
-watch([loopStart, loopEnd, playbackStart, currentPlaybackTime, isLooping, zoomX, zoomY, panOffset], () => {
+watch([loopStart, loopEnd, playbackStart, currentPlaybackTime, isLooping, zoomX, zoomY, panOffset, () => midiStore.currentBpm], () => {
   if (!isPlaying.value && !isRecording.value && !isMonitoring.value) {
     drawSingleFrame()
   }
@@ -899,6 +1091,38 @@ function drawSingleFrame() {
     ctx.strokeStyle = 'rgba(255,255,255,0.03)'
     ctx.lineWidth = 1
     ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
+
+    // Draw vertical bar divisions according to BPM/Tempo (light yellow dashed lines)
+    const bpm = midiStore.currentBpm || 120
+    const barSecs = 4 * (60 / bpm)
+    if (barSecs > 0 && audioDuration.value > 0) {
+      ctx.lineWidth = 1 * dpr
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.35)' // Light yellow with transparency (yellow-300)
+      ctx.setLineDash([4 * dpr, 4 * dpr])
+      
+      const gridAnchor = playbackStart.value
+      const minI = Math.ceil((0 - gridAnchor) / barSecs)
+      const maxI = Math.floor((audioDuration.value - gridAnchor) / barSecs)
+      
+      for (let i = minI; i <= maxI; i++) {
+        const barTime = gridAnchor + i * barSecs
+        // Skip drawing exactly at the playback start to avoid overlapping with play start marker
+        if (playbackStart.value > 0 && Math.abs(barTime - playbackStart.value) < 0.001) continue
+        // Skip t = 0 if it's the anchor to keep it clean
+        if (Math.abs(barTime) < 0.001) continue
+        
+        const barPct = barTime / audioDuration.value
+        const barX = (barPct - panOffset.value) * zoomX.value * W
+        
+        if (barX >= 0 && barX <= W) {
+          ctx.beginPath()
+          ctx.moveTo(barX, 0)
+          ctx.lineTo(barX, H)
+          ctx.stroke()
+        }
+      }
+      ctx.setLineDash([])
+    }
 
     // Calculate loop pixel points with Zoom H and Pan
     const startPct = isLooping.value ? (loopStart.value / audioDuration.value) : 0
@@ -1072,6 +1296,8 @@ function fmtTime(s) {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 let _recToggleHandler = null
+let _startRecHandler = null
+let _stopRecHandler = null
 let resizeObserver = null
 
 onMounted(async () => {
@@ -1080,10 +1306,52 @@ onMounted(async () => {
   if (uiStore.isAudioCaptureOpen) startMonitor(selectedDeviceId.value)
   
   _recToggleHandler = () => {
-    if (isRecording.value) stopRecording()
-    else startRecording()
+    handleRecordClick()
   }
   window.addEventListener('capture-rec-toggle', _recToggleHandler)
+
+  _startRecHandler = () => {
+    if (!uiStore.isAudioCaptureOpen) {
+      uiStore.isAudioCaptureOpen = true
+    }
+    let retries = 0
+    const checkAndStart = () => {
+      if (isMonitoring.value && streamRef) {
+        if (!isRecording.value) {
+          isArmed.value = false
+          startRecording()
+        }
+      } else if (retries < 50 && uiStore.isAudioCaptureOpen) {
+        retries++
+        setTimeout(checkAndStart, 100)
+      }
+    }
+    checkAndStart()
+  }
+
+  _stopRecHandler = () => {
+    if (isRecording.value) {
+      stopRecording()
+    }
+  }
+
+  window.addEventListener('capture-start-rec', _startRecHandler)
+  window.addEventListener('capture-stop-rec', _stopRecHandler)
+
+  midiService.reScanInputs()
+  if (!midiService.isReady) {
+    setTimeout(() => midiService.reScanInputs(), 1000)
+  }
+
+  midiCleanup = midiService.addGlobalNoteOnListener((note, velocity) => {
+    midiPulse.value = true
+    setTimeout(() => midiPulse.value = false, 100)
+
+    if (midiTriggerEnabled.value && isArmed.value && !isRecording.value) {
+      isArmed.value = false
+      startRecording()
+    }
+  })
 
   if (canvasRef.value) {
     resizeObserver = new ResizeObserver((entries) => {
@@ -1101,9 +1369,17 @@ onMounted(async () => {
 onUnmounted(() => {
   stopAll()
   destroyWebAudio()
+  if (midiCleanup) {
+    midiCleanup()
+    midiCleanup = null
+  }
   if (playbackRafRef) {
     cancelAnimationFrame(playbackRafRef)
     playbackRafRef = null
+  }
+  if (timelineRaf) {
+    cancelAnimationFrame(timelineRaf)
+    timelineRaf = null
   }
   if (resizeObserver) {
     resizeObserver.disconnect()
@@ -1111,6 +1387,8 @@ onUnmounted(() => {
   }
   navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
+  window.removeEventListener('capture-start-rec', _startRecHandler)
+  window.removeEventListener('capture-stop-rec', _stopRecHandler)
 })
 </script>
 
@@ -1174,10 +1452,10 @@ onUnmounted(() => {
       <div class="flex">
         <!--- Controls Left Column -->
         <div class="w-[120px] flex flex-col p-2 gap-2 border-r border-neutral-900">
-          <!-- Record / Stop -->
+          <!-- Record / Stop / Armed -->
           <button
-            v-if="!isRecording"
-            @click="startRecording"
+            v-if="!isRecording && !isArmed"
+            @click="handleRecordClick"
             title="Start recording"
             :disabled="!isMonitoring"
             :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
@@ -1189,13 +1467,41 @@ onUnmounted(() => {
             {{ hasBackingTrack ? 'Rec + Play' : 'Rec' }}
           </button>
           <button
+            v-else-if="isArmed"
+            @click="handleRecordClick"
+            title="Armed: Waiting for MIDI note. Click to cancel."
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 animate-pulse transition-colors"
+          >
+            <Zap class="w-3 h-3 fill-current" />
+            Armed...
+          </button>
+          <button
             v-else
-            @click="stopRecording"
+            @click="handleRecordClick"
             title="Stop recording"
             class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
           >
             <Square class="w-3 h-3 fill-current" />
             Stop
+          </button>
+
+          <!-- MIDI Sync Toggle -->
+          <button
+            @click="midiTriggerEnabled = !midiTriggerEnabled"
+            :class="['flex items-center justify-between gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors w-full text-left',
+              midiTriggerEnabled 
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/40' 
+                : 'text-neutral-500 border-neutral-800 hover:text-neutral-400 hover:border-neutral-700']"
+            title="Sync recording start with first incoming MIDI note"
+          >
+            <span class="flex items-center gap-1">
+              <Zap class="w-3 h-3" />
+              MIDI Sync
+            </span>
+            <div 
+              class="w-1.5 h-1.5 rounded-full transition-all" 
+              :class="midiPulse ? 'bg-white shadow-[0_0_8px_white]' : (midiTriggerEnabled ? 'bg-amber-500/50' : 'bg-neutral-800')"
+            ></div>
           </button>
 
           <!-- Playback preview -->
@@ -1225,15 +1531,26 @@ onUnmounted(() => {
           </button>
 
           <!-- Add to Playlist manually -->
-          <button
-            v-if="recordedBlob && !isRecording"
-            @click="handleAddToPlaylist"
-            title="Send cropped audio to Playlist"
-            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon transition-colors"
-          >
-            <ListPlus class="w-3 h-3" />
-            +PL
-          </button>
+          <div v-if="recordedBlob && !isRecording" class="flex items-center border border-neutral-700 rounded overflow-hidden">
+            <button
+              @click="handleAddToPlaylist"
+              title="Send cropped audio to Playlist"
+              class="flex-1 flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-1.5 py-1.5 text-neutral-300 hover:text-synth-neon transition-colors min-w-0"
+            >
+              <ListPlus class="w-3.5 h-3.5 shrink-0" />
+              +PL ({{ playlistRepeat }}x)
+            </button>
+            <div class="flex flex-col border-l border-neutral-700 bg-neutral-900/50 shrink-0">
+              <button 
+                @click="playlistRepeat = Math.min(99, playlistRepeat + 1)"
+                class="px-1 text-[7px] font-bold text-neutral-500 hover:text-white leading-none border-b border-neutral-800"
+              >+</button>
+              <button 
+                @click="playlistRepeat = Math.max(1, playlistRepeat - 1)"
+                class="px-1 text-[7px] font-bold text-neutral-500 hover:text-white leading-none"
+              >-</button>
+            </div>
+          </div>
 
           <!-- Save (original format / WAV cropped) -->
           <button
@@ -1272,26 +1589,94 @@ onUnmounted(() => {
             Reset
           </button>
         </div>
-        <!-- Waveform canvas -->
-        <div class="relative bg-[#080808] flex-1 min-h-[60px]">
-          <canvas ref="canvasRef" class="w-full h-full block" />
-          
-          <!-- Playback Time overlay in bottom-left corner of the canvas -->
-          <!-- <div v-if="recordedBlob" class="absolute bottom-2 left-2 bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">
-            {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
-          </div> -->
-
-          <div v-if="!isMonitoring" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <template v-if="error">
-              <p class="text-red-400 text-[10px] font-mono px-6 text-center">{{ error }}</p>
+        <!-- Right Column: Timeline & Waveform canvas -->
+        <div class="flex-1 flex flex-col min-h-0 bg-[#080808]">
+          <!-- Timeline Control Bar -->
+          <div class="flex items-center justify-between px-3 py-1.5 border-b border-neutral-900 bg-neutral-950/80 gap-4 select-none shrink-0">
+            <!-- Left part: Mode + Play/Stop (if manual) -->
+            <div class="flex items-center gap-2">
+              <span class="text-[8px] font-black uppercase text-neutral-500 tracking-wider">Timeline</span>
+              <div class="flex p-0.5 bg-neutral-900 border border-neutral-800 rounded-lg h-6">
+                <button
+                  @click="timelineMode = 'synced'"
+                  :class="['px-2 text-[8px] font-black uppercase tracking-wider rounded transition-all', timelineMode === 'synced' ? 'bg-synth-neon/20 text-synth-neon shadow-sm' : 'text-neutral-500 hover:text-white']"
+                >
+                  Sync
+                </button>
+                <button
+                  @click="timelineMode = 'manual'"
+                  :class="['px-2 text-[8px] font-black uppercase tracking-wider rounded transition-all', timelineMode === 'manual' ? 'bg-synth-neon/20 text-synth-neon shadow-sm' : 'text-neutral-500 hover:text-white']"
+                >
+                  Manual
+                </button>
+              </div>
+              
+              <!-- Play/Stop button for Manual mode -->
               <button
-                @click="startMonitor(selectedDeviceId)"
-                class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10 transition-colors"
+                v-if="timelineMode === 'manual'"
+                @click="timelineActive = !timelineActive"
+                class="flex items-center justify-center w-6 h-6 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-colors"
+                :title="timelineActive ? 'Stop Timeline' : 'Start Timeline'"
               >
-                <Mic class="w-3 h-3" /> Retry
+                <Square v-if="timelineActive" class="w-2.5 h-2.5 fill-current text-red-500" />
+                <Play v-else class="w-2.5 h-2.5 fill-current text-emerald-500" />
               </button>
-            </template>
-            <p v-else class="text-neutral-700 text-[10px] font-mono">Requesting audio access…</p>
+            </div>
+
+            <!-- Middle part: Bar Sweep Progress -->
+            <div class="flex-1 flex flex-col justify-center px-1">
+              <div class="flex justify-between px-0.5 mb-1">
+                <span v-for="m in timelineMeasures" :key="m" class="text-[7px] font-black text-neutral-600 uppercase">Bar {{ m }}</span>
+              </div>
+              <div class="flex gap-1.5 w-full">
+                <div v-for="idx in timelineMeasures" :key="idx"
+                  class="h-3 flex-1 bg-black/60 rounded border border-neutral-900/80 p-0.5 relative overflow-hidden shadow-inner flex items-center">
+                  <div class="h-full bg-gradient-to-r from-violet-600 via-cyan-500 to-emerald-400 rounded-sm transition-all duration-75 ease-linear"
+                    :style="{ width: getBarProgress(idx - 1) + '%' }"></div>
+                  <div v-if="isBarActive(idx - 1)" 
+                    class="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_5px_white] z-10"
+                    :style="{ left: `calc(${getBarProgress(idx - 1)}% - 0.25px)` }"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right part: Measures selector -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="text-[8px] font-black uppercase text-neutral-500 tracking-wider">Bars</span>
+              <div class="flex p-0.5 bg-neutral-900 border border-neutral-800 rounded-lg h-6">
+                <button
+                  v-for="m in [1, 2, 4, 8, 16]"
+                  :key="m"
+                  @click="timelineMeasures = m"
+                  :class="['px-1.5 text-[8px] font-mono font-bold rounded transition-all', timelineMeasures === m ? 'bg-synth-neon/20 text-synth-neon shadow-sm' : 'text-neutral-500 hover:text-white']"
+                >
+                  {{ m }}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Canvas container -->
+          <div class="relative flex-1 min-h-[60px]">
+            <canvas ref="canvasRef" class="w-full h-full block" />
+            
+            <!-- Playback Time overlay in bottom-left corner of the canvas -->
+            <!-- <div v-if="recordedBlob" class="absolute bottom-2 left-2 bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">
+              {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
+            </div> -->
+
+            <div v-if="!isMonitoring" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <template v-if="error">
+                <p class="text-red-400 text-[10px] font-mono px-6 text-center">{{ error }}</p>
+                <button
+                  @click="startMonitor(selectedDeviceId)"
+                  class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10 transition-colors"
+                >
+                  <Mic class="w-3 h-3" /> Retry
+                </button>
+              </template>
+              <p v-else class="text-neutral-700 text-[10px] font-mono">Requesting audio access…</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1480,6 +1865,17 @@ onUnmounted(() => {
             >
               <Repeat class="w-3 h-3" />
               Loop {{ isLooping ? 'ON' : 'OFF' }}
+            </button>
+            <button
+              @click="snapEnabled = !snapEnabled"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                snapEnabled 
+                  ? 'bg-synth-neon/15 text-synth-neon border-synth-neon/40' 
+                  : 'text-neutral-500 border-neutral-800 hover:text-neutral-400 hover:border-neutral-700']"
+              title="Snap playback start, loop start, and loop end to bar divisions"
+            >
+              <Magnet class="w-3 h-3" />
+              Snap {{ snapEnabled ? 'ON' : 'OFF' }}
             </button>
             <span class="text-[12px] font-mono text-neutral-500">
               Range: {{ formatTimeSecs(loopStart) }} - {{ formatTimeSecs(loopEnd) }} / {{ formatTimeSecs(audioDuration) }}
