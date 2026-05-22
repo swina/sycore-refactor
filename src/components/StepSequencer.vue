@@ -2084,13 +2084,6 @@ function handleClear() {
 </template>
 
 <style scoped>
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #262626; border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #404040; }
 
 .toolbar-enter-active, .toolbar-leave-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .toolbar-enter-from, .toolbar-leave-to { opacity: 0; transform: translateY(-10px); height: 0; padding-top: 0; padding-bottom: 0; }

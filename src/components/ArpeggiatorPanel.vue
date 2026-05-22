@@ -361,7 +361,7 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
 </script>
 
 <template>
-  <Transition name="panel">
+  <Transition name="sy-modal">
     <div v-if="isOpen" class="fixed top-20 right-4 w-80 z-[600] bg-neutral-950/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl p-4">
       <div class="flex flex-col gap-6">
         

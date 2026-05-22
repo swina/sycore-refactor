@@ -255,7 +255,7 @@ onMounted(() => {
       <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />
 
       <!-- Sound Types -->
-      <Transition name="panel">
+      <Transition name="sy-modal">
         <SoundTypesPanel
           v-if="uiStore.isTypesOpen"
           @close="uiStore.isTypesOpen = false; uiStore.isHistoryOpen = false"
@@ -263,7 +263,7 @@ onMounted(() => {
       </Transition>
 
       <!-- Preset History -->
-      <Transition name="panel">
+      <Transition name="sy-modal">
         <PresetHistoryPanel
           v-if="uiStore.isHistoryOpen"
           @close="uiStore.isHistoryOpen = false"
@@ -271,7 +271,7 @@ onMounted(() => {
       </Transition>
 
       <!-- MIDI MATRIX -->
-      <Transition name="panel">
+      <Transition name="sy-modal">
         <MidiMatrix
           v-if="uiStore.isMidiMatrixOpen"
           @close="uiStore.isMidiMatrixOpen = false"
@@ -285,7 +285,7 @@ onMounted(() => {
       />
 
       <!-- MIDI Mapping -->
-      <Transition name="panel">
+      <Transition name="sy-modal">
         <MidiMappingPanel
           v-if="uiStore.isMidiMappingOpen"
           @close="uiStore.isMidiMappingOpen = false"
@@ -296,7 +296,7 @@ onMounted(() => {
       <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" />
 
       <!-- PROGRAM CHANGE BROWSER -->
-      <Transition name="panel">
+      <Transition name="sy-drawer">
         <div
           v-if="uiStore.isProgramChangeBrowserOpen"
           class="fixed top-0 right-0 h-full w-full max-w-sm bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[440] flex flex-col overflow-hidden"
@@ -325,7 +325,7 @@ onMounted(() => {
       />
 
       <!-- Virtual Keyboard -->
-      <Transition name="panel">
+      <Transition name="sy-modal">
         <VirtualKeyboard
           v-if="uiStore.isKeyboardOpen"
           :channel="midiStore.midiChannel"
@@ -335,7 +335,7 @@ onMounted(() => {
       </Transition>
 
       <!-- Live Set -->
-      <Transition name="panel">
+      <Transition name="sy-modal">
         <LiveSet
           v-if="uiStore.isLiveSetOpen"
           :isOpen="uiStore.isLiveSetOpen"
@@ -345,7 +345,7 @@ onMounted(() => {
       </Transition>
 
       <!-- MIDI Capture -->
-      <Transition name="modal">
+      <Transition name="sy-modal">
         <MidiCapture
           v-if="uiStore.isCaptureOpen"
           :isOpen="uiStore.isCaptureOpen"
@@ -401,19 +401,15 @@ onMounted(() => {
       />
 
       <!-- User Profile Modal -->
-      <Transition name="modal">
-        <UserProfileModal v-if="uiStore.isProfileOpen" @close="uiStore.isProfileOpen = false" />
-      </Transition>
+      <UserProfileModal v-if="uiStore.isProfileOpen" @close="uiStore.isProfileOpen = false" />
 
       <!-- Admin Panel -->
-      <Transition name="panel">
+      <Transition name="sy-drawer">
         <AdminPanel v-if="uiStore.isAdminPanelOpen" :isOpen="uiStore.isAdminPanelOpen" @close="uiStore.isAdminPanelOpen = false" />
       </Transition>
 
       <!-- About Modal -->
-      <Transition name="modal">
-        <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
-      </Transition>
+      <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
       <!-- Help Slideshow -->
       <SlideshowModal :isOpen="isHelpSlideshowOpen" source="help" @close="isHelpSlideshowOpen = false" />
 
@@ -428,7 +424,7 @@ onMounted(() => {
       <SessionManager />
 
       <!-- Audio Looper -->
-      <Transition name="panel">
+      <Transition name="sy-modal">
         <AudioLooper v-if="uiStore.isLooperOpen" @close="uiStore.isLooperOpen = false" />
       </Transition>
 
@@ -525,10 +521,6 @@ onMounted(() => {
 
 <style scoped>
 
-.glow-neon {
-  text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
-  box-shadow: 0 0 20px rgba(0, 255, 204, 0.2), inset 0 0 20px rgba(0, 255, 204, 0.1);
-}
 .fade-enter-active, .fade-leave-active { transition: opacity 0.5s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

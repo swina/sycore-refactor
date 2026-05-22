@@ -18,7 +18,7 @@ const uniqueDevices = (devices) => {
 
 <template>
   <div class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-    <Transition name="panel" appear>
+    <Transition name="sy-modal" appear>
       <div class="bg-neutral-950 border border-synth-neon/30 glow-neon rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
 
         <!-- Header -->

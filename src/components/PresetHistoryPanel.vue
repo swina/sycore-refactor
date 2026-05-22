@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { X, Layers, Heart, Trash2, Download, Ghost, ChevronDown } from 'lucide-vue-next'
+import SyButton from '@/components/ui/SyButton.vue'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -378,18 +379,8 @@ onMounted(() => {
             This will permanently delete all {{ presetStore.history.length }} sounds. This action cannot be undone.
           </p>
           <div class="flex flex-col gap-3">
-            <button
-              @click="confirmDeleteAll"
-              class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl uppercase tracking-widest text-xs transition-all active:scale-95"
-            >
-              Yes, Delete Everything
-            </button>
-            <button
-              @click="cancelDeleteAll"
-              class="w-full bg-neutral-900 hover:bg-neutral-800 text-neutral-400 font-black py-4 rounded-xl uppercase tracking-widest text-xs border border-neutral-800 transition-all active:scale-95"
-            >
-              Cancel / Undo
-            </button>
+            <SyButton variant="danger" size="lg" class="w-full" @click="confirmDeleteAll">Yes, Delete Everything</SyButton>
+            <SyButton variant="ghost" size="lg" class="w-full" @click="cancelDeleteAll">Cancel / Undo</SyButton>
           </div>
         </div>
       </div>

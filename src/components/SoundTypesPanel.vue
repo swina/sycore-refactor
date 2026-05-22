@@ -76,7 +76,7 @@ function discardAndGenerate() {
 
 <template>
   <div class="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-    <Transition name="panel" appear>
+    <Transition name="sy-modal" appear>
       <div class="bg-neutral-950/90 border border-synth-neon/30 glow-neon rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] relative">
 
         <!-- Header -->
@@ -125,7 +125,7 @@ function discardAndGenerate() {
           </div>
 
           <!-- Variations / Keywords -->
-          <Transition name="panel">
+          <Transition name="sy-modal">
             <div v-if="categoryVariations.length > 0" class="mt-8">
               <div class="flex items-center gap-3 mb-4">
                 <div class="h-[1px] flex-1 bg-neutral-900"></div>
@@ -155,7 +155,7 @@ function discardAndGenerate() {
         <!-- Footer -->
         <div class="p-6 border-t border-neutral-900 bg-neutral-950 flex flex-col md:flex-row items-center justify-between gap-4 sticky bottom-0 z-20 mt-auto">
           <div class="flex-1">
-            <Transition name="panel" mode="out-in">
+            <Transition name="sy-modal" mode="out-in">
               <div v-if="showPrompt" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <span class="text-xs font-bold text-neutral-400 uppercase tracking-widest mr-2">Unsaved preset!</span>
                 <div class="flex items-center gap-2">
@@ -189,7 +189,7 @@ function discardAndGenerate() {
         </div>
 
         <!-- AI overlay -->
-        <Transition name="modal">
+        <Transition name="sy-modal">
           <div v-if="presetStore.currentCategory === 'ai'"
             class="absolute inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 rounded-3xl"
           >

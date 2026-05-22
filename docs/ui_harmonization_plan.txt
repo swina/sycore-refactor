@@ -1,0 +1,107 @@
+● Good picture of the codebase. Here's a concrete plan:
+
+  ---
+  UI Harmonization Plan — sy.core-app
+
+  1. Design Token Consolidation (Foundation)
+
+  Goal: Replace scattered hardcoded colors and glow effects with named tokens.
+
+  - Add missing color variants to tailwind.config.js: synth-cyan (LFO = #00f3ff), synth-lime (Velocity = #00ff9d), synth-amber, etc.
+  - Define glow utilities in main.css:
+  .glow-neon   { box-shadow: 0 0 20px #00ffcc66; }
+  .glow-cyan   { box-shadow: 0 0 20px #00f3ff66; }
+  .glow-lime   { box-shadow: 0 0 20px #00ff9d66; }
+  - Replace ~15 files that use inline boxShadow strings with these classes.
+
+  ---
+  2. Scrollbar Utility (Quick Win)
+
+  Goal: Single source of truth for scrollbar styling (currently duplicated in 6+ <style scoped> blocks).
+
+  - Add .sy-scrollbar to main.css with standard dark thumb/track.
+  - Remove scoped scrollbar blocks from AboutModal, StepSequencer, LiveSet, MidiMatrix, MidiPerformancePanel, ProgramChangeBrowser.
+
+  ---
+  3. Z-Index Tier System
+
+  Goal: Legible, maintainable layer stack.
+
+  Current state is mostly fine but opaque — z-values are raw numbers sprinkled in classes. Propose a semantic tier:
+
+  ┌──────────┬─────────┬────────────────────────────────┐
+  │   Tier   │  Range  │              Use               │
+  ├──────────┼─────────┼────────────────────────────────┤
+  │ panel    │ 100–199 │ Docked panels, session manager │
+  ├──────────┼─────────┼────────────────────────────────┤
+  │ drawer   │ 400–499 │ Side drawers, slideout panels  │
+  ├──────────┼─────────┼────────────────────────────────┤
+  │ dialog   │ 500–599 │ Small dialogs (LFO, Velocity)  │
+  ├──────────┼─────────┼────────────────────────────────┤
+  │ modal    │ 600–699 │ Full-screen / centered modals  │
+  ├──────────┼─────────┼────────────────────────────────┤
+  │ floating │ 700–799 │ Keyboard, sidebar, dials       │
+  ├──────────┼─────────┼────────────────────────────────┤
+  │ critical │ 1000+   │ Auth, audio capture            │
+  ├──────────┼─────────┼────────────────────────────────┤
+  │ tooltip  │ 99999   │ GlobalTooltip always-on-top    │
+  └──────────┴─────────┴────────────────────────────────┘
+
+  Action items:
+  - Fix UserProfileModal (currently z-[180], gets buried under z-[600] modals) → move to z-[640].
+  - Add a Tailwind theme extension with named z-index values (z-panel, z-modal, etc.) so layers are self-documenting.
+
+  ---
+  4. Modal Transition Unification
+
+  Goal: Consistent enter/leave animations across all modals.
+
+  Currently: modal, panel, modal-card — three names, similar behavior.
+
+  - Consolidate to two transitions in main.css:
+    - sy-modal — fade + scale, for centered modals
+    - sy-drawer — slide-in from side, for drawers/panels
+  - Update all <Transition name="..."> usage across components.
+
+  ---
+  5. Shared Modal Shell Component
+
+  Goal: Remove structural duplication (backdrop + card + close button) repeated in ~10 modals.
+
+  - Create src/components/ui/ModalShell.vue with slots:
+    - #header, #default (body), #footer
+    - Props: title, size (sm|md|lg|full), z-class
+    - Emits: close
+    - Handles: <Teleport>, backdrop click, Escape key, transition
+  - Migrate AboutModal, UserProfileModal, LfoMappingDialog, VelocityMappingDialog to use it first as a pilot, then roll out to others.
+
+  ---
+  6. Button Component
+
+  Goal: Replace 20+ ad-hoc button patterns with a consistent SyButton.vue.
+
+  Currently buttons use the same Tailwind string repeated inline everywhere. Variants needed:
+  - primary (neon bg), ghost (border only), danger (red), icon (square, icon-only)
+  - Props: variant, size (sm|md|lg), loading, disabled
+
+  ---
+  Priority Order
+
+  ┌─────┬───────────────────────────────────────┬────────┬──────────────────────────────┐
+  │  #  │                 Item                  │ Effort │            Impact            │
+  ├─────┼───────────────────────────────────────┼────────┼──────────────────────────────┤
+  │ 1   │ Scrollbar utility                     │ 1h     │ Immediate visual consistency │
+  ├─────┼───────────────────────────────────────┼────────┼──────────────────────────────┤
+  │ 2   │ Glow utilities + token cleanup        │ 2h     │ Removes inline styles        │
+  ├─────┼───────────────────────────────────────┼────────┼──────────────────────────────┤
+  │ 3   │ Z-index tier system + UserProfile fix │ 1h     │ Fixes real stacking bug      │
+  ├─────┼───────────────────────────────────────┼────────┼──────────────────────────────┤
+  │ 4   │ Modal transitions unified             │ 1h     │ Consistent feel              │
+  ├─────┼───────────────────────────────────────┼────────┼──────────────────────────────┤
+  │ 5   │ ModalShell.vue                        │ 3–4h   │ Long-term maintainability    │
+  ├─────┼───────────────────────────────────────┼────────┼──────────────────────────────┤
+  │ 6   │ SyButton.vue                          │ 2–3h   │ Consistency across all CTAs  │
+  └─────┴───────────────────────────────────────┴────────┴──────────────────────────────┘
+
+  ---
+  Want me to start with any specific item, or tackle them in order?

@@ -59,12 +59,12 @@ async function handleGoogleLogin() {
 <template>
   <div class="fixed inset-0 z-[1000] flex items-center justify-center p-4">
     <!-- Backdrop -->
-    <Transition name="modal">
+    <Transition name="sy-modal">
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="emit('close')" />
     </Transition>
 
     <!-- Card -->
-    <Transition name="modal-card" appear>
+    <Transition name="sy-modal" appear>
       <div class="relative w-full max-w-sm bg-neutral-900 border border-neutral-800 p-6 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10">
         <button @click="emit('close')" class="absolute top-4 right-4 text-neutral-500 hover:text-white transition-colors">
           <X class="w-5 h-5" />
@@ -110,7 +110,7 @@ async function handleGoogleLogin() {
             </div>
           </div>
 
-          <Transition name="modal-card">
+          <Transition name="sy-modal">
             <div v-if="!isLogin" class="flex flex-col gap-1.5">
               <label for="confirmPassword" class="text-[10px] font-bold text-neutral-500 uppercase tracking-widest px-1">Confirm Password</label>
               <div class="relative">

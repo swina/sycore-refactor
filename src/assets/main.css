@@ -7,6 +7,9 @@
     /* --color-synth-neon: rgba(0, 255, 204, 1); */
     --color-synth-neon: rgba(0, 163, 112, 1);
     --color-synth-neon-dark: rgba(0, 200, 160, 1);
+    --color-synth-cyan: #00f3ff;
+    --color-synth-lime: #00ff9d;
+    --color-synth-amber: #F59E0B;
     --color-aira: rgba(0, 163, 112, 1);
     --color-aira-dark: rgba(0, 120, 80, 1);
 }
@@ -29,7 +32,15 @@
 
     /* Glow effects */
     .glow-neon {
-        box-shadow: 0 0 15px rgba(0, 255, 204, 0.3), 0 0 30px rgba(0, 255, 204, 0.1);
+        box-shadow: 0 0 20px #00ffcc66;
+    }
+
+    .glow-cyan {
+        box-shadow: 0 0 20px #00f3ff66;
+    }
+
+    .glow-lime {
+        box-shadow: 0 0 20px #00ff9d66;
     }
 
     .text-glow-neon {
@@ -41,25 +52,27 @@
     }
 
     /* Custom Scrollbar */
+    .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: #262626 transparent;
+    }
+
     .custom-scrollbar::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
+        width: 4px;
+        height: 4px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 10px;
+        background: transparent;
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: rgba(0, 255, 204, 0.2);
+        background: #262626;
         border-radius: 10px;
-        border: 1px solid rgba(0, 255, 204, 0.1);
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: rgba(0, 255, 204, 0.5);
-        box-shadow: 0 0 10px rgba(0, 255, 204, 0.3);
+        background: #404040;
     }
 
     .no-scrollbar::-webkit-scrollbar {
@@ -135,38 +148,28 @@ input[type='range']::-webkit-slider-thumb {
     -webkit-appearance: none;
 }
 
-/* Panel open/close transitions */
-.panel-enter-active,
-.panel-leave-active {
+/* Centered modal/panel transitions — fade + scale */
+.sy-modal-enter-active,
+.sy-modal-leave-active {
     transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-.panel-enter-from,
-.panel-leave-to {
+.sy-modal-enter-from,
+.sy-modal-leave-to {
     opacity: 0;
-    transform: scale(0.96) translateY(-8px);
+    transform: scale(0.95) translateY(10px);
 }
 
-/* Modal backdrop + card transitions */
-.modal-enter-active,
-.modal-leave-active {
-    transition: opacity 0.15s ease;
+/* Drawer/side-panel transitions — slide from right */
+.sy-drawer-enter-active,
+.sy-drawer-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.modal-enter-from,
-.modal-leave-to {
+.sy-drawer-enter-from,
+.sy-drawer-leave-to {
     opacity: 0;
-}
-
-.modal-card-enter-active,
-.modal-card-leave-active {
-    transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.modal-card-enter-from,
-.modal-card-leave-to {
-    opacity: 0;
-    transform: scale(0.95) translateY(12px);
+    transform: translateX(100%);
 }
 
 /* Tooltip fade */

@@ -581,20 +581,6 @@ function openProgramChangeForDevice(deviceName) {
   transform: translateY(30px) scale(0.95);
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #404040;
-}
-
 @keyframes dash {
   to {
     stroke-dashoffset: -20;

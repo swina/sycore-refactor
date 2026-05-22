@@ -406,7 +406,7 @@ watch(openSections, (sections) => {
 </script>
 
 <template>
-  <Transition name="panel">
+  <Transition name="sy-drawer">
     <div
       v-if="isOpen && authStore.isAdmin"
       class="fixed top-0 right-0 h-full w-full max-w-3xl bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[450] overflow-hidden flex flex-col"

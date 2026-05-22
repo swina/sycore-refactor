@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import SlideshowModal from '@/components/SlideshowModal.vue'
+import SyButton from '@/components/ui/SyButton.vue'
 
 const authStore = useAuthStore()
 const presetStore = usePresetStore()
@@ -77,9 +78,7 @@ const isSlideshowOpen = ref(false)
             You've reached your free daily quota. Upgrade to PRO for unlimited generation.
           </p>
         </div>
-        <button class="bg-synth-neon text-black px-6 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all shadow-lg">
-          Upgrade to PRO Core
-        </button>
+        <SyButton>Upgrade to PRO Core</SyButton>
       </div>
     </div>
 

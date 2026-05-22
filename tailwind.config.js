@@ -42,6 +42,9 @@ export default {
             'gray-800': '#1f2937',
             // Synth custom colors
             'synth-neon': '#00ffcc',
+            'synth-cyan': '#00f3ff',
+            'synth-lime': '#00ff9d',
+            'synth-amber': '#F59E0B',
             'synth-acid': '#dfff00',
             'synth-dark': '#3d0066',
             'synth-black': '#0a0a0a',
@@ -56,7 +59,19 @@ export default {
             },
             backgroundSize: {
                 'grid-neon': '50px 50px',
-            }
+            },
+            // Z-index tier system — use these names for new code; raw z-[N] is fine within a tier
+            // panel 100–199 | drawer 400–499 | dialog 500–599 | modal 600–699
+            // floating 700–799 | critical 1000+ | tooltip 99999
+            zIndex: {
+                'panel':    '100',
+                'drawer':   '400',
+                'dialog':   '500',
+                'modal':    '600',
+                'floating': '700',
+                'critical': '1000',
+                'tooltip':  '99999',
+            },
         },
     },
     plugins: [],

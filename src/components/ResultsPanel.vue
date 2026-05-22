@@ -18,6 +18,7 @@ import OscMixerVisualizer from '@/components/OscMixerVisualizer.vue'
 import EfxMixerVisualizer from '@/components/EfxMixerVisualizer.vue'
 import SignalFlowVisualizer from '@/components/SignalFlowVisualizer.vue'
 import VisualizerPanel from '@/components/ui/VisualizerPanel.vue'
+import SyButton from '@/components/ui/SyButton.vue'
 
 const presetStore = usePresetStore()
 const midiStore = useMidiStore()
@@ -377,14 +378,15 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <button
+          <SyButton
+            size="lg"
+            :loading="presetStore.isGenerating"
+            :disabled="presetStore.limitReached"
             @click="presetStore.generate()"
-            :disabled="presetStore.isGenerating || presetStore.limitReached"
-            class="flex items-center gap-2 bg-synth-neon text-black px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
           >
             <Zap class="w-4 h-4" />
             {{ presetStore.isGenerating ? 'Generating...' : 'Generate Sound' }}
-          </button>
+          </SyButton>
           <button
             @click="uiStore.isHistoryOpen = false"
             class="flex items-center gap-2 bg-neutral-800 text-neutral-300 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-neutral-700 transition-colors border border-neutral-700 active:scale-95"
@@ -555,12 +557,12 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <div class="flex items-center">
               <button @click="lfoStore.toggleLfo(1)"
                 :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
-                  lfoStore.lfo1.active ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                  lfoStore.lfo1.active ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
                 LFO 1
               </button>
               <button @click="uiStore.isLfo1Open = !uiStore.isLfo1Open"
                 :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
-                  uiStore.isLfo1Open ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
+                  uiStore.isLfo1Open ? 'bg-neutral-800 text-synth-cyan border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
             </div>
@@ -568,12 +570,12 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <div class="flex items-center ml-1">
               <button @click="lfoStore.toggleLfo(2)"
                 :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
-                  lfoStore.lfo2.active ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                  lfoStore.lfo2.active ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
                 LFO 2
               </button>
               <button @click="uiStore.isLfo2Open = !uiStore.isLfo2Open"
                 :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
-                  uiStore.isLfo2Open ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
+                  uiStore.isLfo2Open ? 'bg-neutral-800 text-synth-cyan border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
             </div>
@@ -584,12 +586,12 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <div class="flex items-center">
               <button @click="toggleVelocityMod"
                 :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
-                  mappingStore.velocityConfig?.active ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                  mappingStore.velocityConfig?.active ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
                 VEL
               </button>
               <button @click="uiStore.isVelocityMapOpen = !uiStore.isVelocityMapOpen"
                 :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
-                  uiStore.isVelocityMapOpen ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
+                  uiStore.isVelocityMapOpen ? 'bg-neutral-800 text-synth-cyan border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
             </div>
@@ -598,11 +600,11 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           <!-- Arp Toggle -->
           <div class="flex items-center">
             <button @click="arpStore.arpEnabled = !arpStore.arpEnabled"
-              :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', arpStore.arpEnabled ? 'bg-[#00f3ff] text-black border-[#00f3ff] shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+              :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', arpStore.arpEnabled ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
               ARP
             </button>
             <button @click="uiStore.isArpOpen = !uiStore.isArpOpen"
-              :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', uiStore.isArpOpen ? 'bg-neutral-800 text-[#00f3ff] border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
+              :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', uiStore.isArpOpen ? 'bg-neutral-800 text-synth-cyan border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
               <Settings2 class="w-4 h-4" />
             </button>
           </div>
