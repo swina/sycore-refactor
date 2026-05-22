@@ -32,3 +32,4 @@ dist-ssr
 .env*.local
 .claude
 .agents
+src/data/program_change/junk*

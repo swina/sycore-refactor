@@ -7,6 +7,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiFeedback } from '@/composables/useMidiFeedback'
 import { useUiStore } from '@/stores/useUiStore'
+import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 
 const emit = defineEmits(['close'])
 
@@ -677,123 +678,8 @@ onUnmounted(() => cancelLearn())
       </div>
 
       <!-- Program Change Tab Content -->
-      <div v-else-if="uiStore.midiActionsActiveTab === 'program'" class="flex-1 flex flex-col justify-between overflow-y-auto custom-scrollbar pr-1 space-y-5">
-        <div class="space-y-4">
-          <p class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Send Bank / Program Change</p>
-
-          <!-- Device Selector -->
-          <div>
-            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-1">Target MIDI Device</label>
-            <select
-              v-model="uiStore.midiActionsSelectedDevice"
-              class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none"
-            >
-              <option value="">— select registered device —</option>
-              <option v-for="d in registeredOutputs" :key="d.name" :value="d.name">
-                {{ d.name }} {{ d.isOnline ? '(Online)' : '(Offline)' }}
-              </option>
-            </select>
-            <p v-if="registeredOutputs.length === 0" class="text-[10px] font-mono text-neutral-600 mt-1">
-              No registered output devices found in MIDI Matrix.
-            </p>
-          </div>
-
-          <!-- MIDI Channel Selector -->
-          <div>
-            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-1">MIDI Channel</label>
-            <select
-              v-model.number="selectedChannel"
-              class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none"
-            >
-              <option v-for="ch in 16" :key="ch" :value="ch">Channel {{ ch }}</option>
-            </select>
-          </div>
-
-          <!-- Bank Select MSB / LSB Grid -->
-          <div class="grid grid-cols-2 gap-4">
-            <!-- MSB -->
-            <div class="bg-neutral-800/40 border border-neutral-800 rounded-xl p-3.5 space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="flex items-center gap-2 cursor-pointer group select-none">
-                  <input type="checkbox" v-model="sendMsb" class="w-4 h-4 accent-violet-500 rounded" />
-                  <span class="text-[10px] font-black uppercase text-neutral-300 group-hover:text-white transition-colors">Bank MSB (CC 0)</span>
-                </label>
-              </div>
-              <input
-                type="number"
-                min="0"
-                max="127"
-                v-model.number="msbValue"
-                :disabled="!sendMsb"
-                class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none disabled:opacity-30 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <!-- LSB -->
-            <div class="bg-neutral-800/40 border border-neutral-800 rounded-xl p-3.5 space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="flex items-center gap-2 cursor-pointer group select-none">
-                  <input type="checkbox" v-model="sendLsb" class="w-4 h-4 accent-violet-500 rounded" />
-                  <span class="text-[10px] font-black uppercase text-neutral-300 group-hover:text-white transition-colors">Bank LSB (CC 32)</span>
-                </label>
-              </div>
-              <input
-                type="number"
-                min="0"
-                max="127"
-                v-model.number="lsbValue"
-                :disabled="!sendLsb"
-                class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-violet-400 outline-none disabled:opacity-30 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
-
-          <!-- Program Change Slider / Input -->
-          <div class="bg-neutral-800/40 border border-neutral-800 rounded-xl p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <label class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Program Number (1-128)</label>
-              <input
-                type="number"
-                min="1"
-                max="128"
-                v-model.number="programValue"
-                class="w-16 bg-black border border-neutral-700 rounded px-2 py-0.5 text-center text-violet-300 font-mono text-xs focus:border-violet-400 outline-none"
-              />
-            </div>
-            <div class="flex items-center gap-4">
-              <input
-                type="range"
-                min="1"
-                max="128"
-                v-model.number="programValue"
-                class="flex-1 accent-violet-500 h-1 bg-black rounded-lg cursor-pointer"
-              />
-            </div>
-          </div>
-
-          <!-- Device status alert if offline -->
-          <div v-if="isDeviceOffline" class="bg-amber-900/20 border border-amber-500/30 rounded-xl p-3.5 flex gap-2 items-start animate-pulse">
-            <AlertTriangle class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <p class="text-amber-400 text-xs font-bold uppercase tracking-wider">Device Offline</p>
-              <p class="text-neutral-400 text-[10px] mt-0.5 font-mono">
-                The target device "{{ uiStore.midiActionsSelectedDevice }}" is registered but currently offline. Messages will not be transmitted.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Send Action Button -->
-        <div class="pt-4 border-t border-neutral-800 shrink-0">
-          <button
-            @click="sendProgramChangeMessage"
-            :disabled="!uiStore.midiActionsSelectedDevice || isDeviceOffline"
-            class="w-full bg-violet-500 text-white rounded-lg py-3.5 font-black tracking-widest uppercase text-xs flex items-center justify-center gap-2 hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-violet-500/20"
-          >
-            <Send class="w-4 h-4" />
-            Send Program Change
-          </button>
-        </div>
+      <div v-else-if="uiStore.midiActionsActiveTab === 'program'" class="flex-1 pr-1">
+        <ProgramChangeBrowser />
       </div>
     </div>
   </div>

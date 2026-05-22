@@ -1,0 +1,66 @@
+{
+    "Arturia MicroFreak": {
+        "Factory Bank 6": {
+            "data": "./microfreak/microfreak_sounds.json",
+            "msb": false,
+            "lsb": false,
+            "category_field": "category",
+            "program_field": "program",
+            "program_base": -1,
+            "offset": 0,
+            "bank_size": 128
+        },
+        "New Presets 4": {
+            "data": "./microfreak/microfreak_sounds.json",
+            "msb": false,
+            "lsb": false,
+            "category_field": "category",
+            "program_field": "program",
+            "program_base": -1,
+            "offset": 385,
+            "bank_size": 128
+        }
+    },
+    "SEQTRAK-1": {
+        "AWM2": {
+            "data": "./seqtrak/awm2_flat.json",
+            "msb": true,
+            "lsb": true,
+            "category_field": "category",
+            "program_field": "program",
+            "program_base": 0,
+            "offset": false,
+            "bank_size": false
+        },
+        "DX": {
+            "data": "./seqtrak/dx_flat.json",
+            "msb": true,
+            "lsb": true,
+            "category_field": "category",
+            "program_field": "program",
+            "program_base": 0,
+            "offset": false,
+            "bank_size": false
+        },
+        "Drums": {
+            "data": "./seqtrak/drums_flat.json",
+            "msb": true,
+            "lsb": true,
+            "category_field": "category",
+            "program_field": "program",
+            "program_base": 0,
+            "offset": false,
+            "bank_size": false
+        },
+        "Sampler": {
+            "data": "./seqtrak/sampler_flat.json",
+            "msb": true,
+            "lsb": true,
+            "category_field": "category",
+            "program_field": "program",
+            "program_base": 0,
+            "offset": false,
+            "bank_size": false
+        }
+    }
+}

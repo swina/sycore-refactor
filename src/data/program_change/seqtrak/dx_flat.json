@@ -1,0 +1,848 @@
+﻿[
+    {
+        "category":  "SFX",
+        "no":  2030,
+        "name":  "D\u0027n Beats",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  110
+    },
+    {
+        "category":  "SFX",
+        "no":  2031,
+        "name":  "Buzz Siren",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  111
+    },
+    {
+        "category":  "SFX",
+        "no":  2032,
+        "name":  "Chopper",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  112
+    },
+    {
+        "category":  "Bass",
+        "no":  1933,
+        "name":  "FM Lo-Fi Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  13
+    },
+    {
+        "category":  "Bass",
+        "no":  1934,
+        "name":  "FM Up Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  14
+    },
+    {
+        "category":  "Bass",
+        "no":  1935,
+        "name":  "FM Ducking Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  15
+    },
+    {
+        "category":  "Bass",
+        "no":  1936,
+        "name":  "FM Amp Sub",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  16
+    },
+    {
+        "category":  "Bass",
+        "no":  1937,
+        "name":  "FM Decay Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  17
+    },
+    {
+        "category":  "Bass",
+        "no":  1938,
+        "name":  "Wobble Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  18
+    },
+    {
+        "category":  "Bass",
+        "no":  1939,
+        "name":  "FM Dark Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  19
+    },
+    {
+        "category":  "Bass",
+        "no":  1940,
+        "name":  "Beep Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  20
+    },
+    {
+        "category":  "Bass",
+        "no":  1941,
+        "name":  "Feel It",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  21
+    },
+    {
+        "category":  "Bass",
+        "no":  1942,
+        "name":  "Attack Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  22
+    },
+    {
+        "category":  "Bass",
+        "no":  1943,
+        "name":  "FM Jet Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  23
+    },
+    {
+        "category":  "Bass",
+        "no":  1944,
+        "name":  "FM Bold Bass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  24
+    },
+    {
+        "category":  "Bass",
+        "no":  1945,
+        "name":  "FM Metal Dissonant",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  25
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1946,
+        "name":  "FM Metallic Lead",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  26
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1947,
+        "name":  "FM Square and 5th Saw",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  27
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1948,
+        "name":  "Dyna Lead",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  28
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1949,
+        "name":  "Mo Dem Lead",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  29
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1950,
+        "name":  "Bit Tune",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  30
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1951,
+        "name":  "Bleep Clv",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  31
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1952,
+        "name":  "Uni Lead",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  32
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1953,
+        "name":  "FM Chorus 5th Lead",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  33
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1954,
+        "name":  "FM Square Module",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  34
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1955,
+        "name":  "FM Lil Dist Airy",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  35
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1956,
+        "name":  "FM Ring Lead",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  36
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1957,
+        "name":  "FM Pan Trem Lead",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  37
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1958,
+        "name":  "FM Saw Bright",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  38
+    },
+    {
+        "category":  "Synth Lead",
+        "no":  1959,
+        "name":  "FM Crush Computer",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  39
+    },
+    {
+        "category":  "Piano",
+        "no":  1960,
+        "name":  "FM Simple Piano",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  40
+    },
+    {
+        "category":  "Piano",
+        "no":  1961,
+        "name":  "FM B Piano",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  41
+    },
+    {
+        "category":  "Piano",
+        "no":  1962,
+        "name":  "FM B Piano [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  42
+    },
+    {
+        "category":  "Piano",
+        "no":  1963,
+        "name":  "FM Clavi Piano",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  43
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1964,
+        "name":  "Legend EP",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  44
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1965,
+        "name":  "Legend EP [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  45
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1966,
+        "name":  "Wood EP",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  46
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1967,
+        "name":  "Wood EP [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  47
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1968,
+        "name":  "Wood EP Tremolo",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  48
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1969,
+        "name":  "Crystal EP",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  49
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1970,
+        "name":  "FM Chorus Jazz EP",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  50
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1971,
+        "name":  "FM Clear EP",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  51
+    },
+    {
+        "category":  "Keyboard",
+        "no":  1972,
+        "name":  "DigiChord",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  52
+    },
+    {
+        "category":  "Organ",
+        "no":  1973,
+        "name":  "Cheez Organ",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  53
+    },
+    {
+        "category":  "Organ",
+        "no":  1974,
+        "name":  "FM Rotate Organ",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  54
+    },
+    {
+        "category":  "Organ",
+        "no":  1975,
+        "name":  "FM Pipe A",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  55
+    },
+    {
+        "category":  "Pad",
+        "no":  1976,
+        "name":  "FM 5th Atmosphere",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  56
+    },
+    {
+        "category":  "Pad",
+        "no":  1977,
+        "name":  "FM Glass Dream",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  57
+    },
+    {
+        "category":  "Pad",
+        "no":  1978,
+        "name":  "FM Glass Dream [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  58
+    },
+    {
+        "category":  "Pad",
+        "no":  1979,
+        "name":  "Motion Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  59
+    },
+    {
+        "category":  "Pad",
+        "no":  1980,
+        "name":  "Begin Sweep",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  60
+    },
+    {
+        "category":  "Pad",
+        "no":  1981,
+        "name":  "Cloud Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  61
+    },
+    {
+        "category":  "Pad",
+        "no":  1982,
+        "name":  "Sol Phase",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  62
+    },
+    {
+        "category":  "Pad",
+        "no":  1983,
+        "name":  "Flying Kode",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  63
+    },
+    {
+        "category":  "Pad",
+        "no":  1984,
+        "name":  "AlTi Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  64
+    },
+    {
+        "category":  "Pad",
+        "no":  1985,
+        "name":  "Star Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  65
+    },
+    {
+        "category":  "Pad",
+        "no":  1986,
+        "name":  "FM Warm Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  66
+    },
+    {
+        "category":  "Pad",
+        "no":  1987,
+        "name":  "FM Warm Pad [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  67
+    },
+    {
+        "category":  "Pad",
+        "no":  1988,
+        "name":  "FM Glass Harp",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  68
+    },
+    {
+        "category":  "Pad",
+        "no":  1989,
+        "name":  "FM Slow Phaser Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  69
+    },
+    {
+        "category":  "Pad",
+        "no":  1990,
+        "name":  "FM Ambient Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  70
+    },
+    {
+        "category":  "Pad",
+        "no":  1991,
+        "name":  "FM Strings Pad",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  71
+    },
+    {
+        "category":  "Strings",
+        "no":  1992,
+        "name":  "FM Strings",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  72
+    },
+    {
+        "category":  "Strings",
+        "no":  1993,
+        "name":  "FM Cold Strings",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  73
+    },
+    {
+        "category":  "Brass",
+        "no":  1994,
+        "name":  "FM Soft Brass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  74
+    },
+    {
+        "category":  "Brass",
+        "no":  1995,
+        "name":  "FM Digital Brass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  75
+    },
+    {
+        "category":  "Brass",
+        "no":  1996,
+        "name":  "FM Brass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  76
+    },
+    {
+        "category":  "Brass",
+        "no":  1997,
+        "name":  "FM Hit Brass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  77
+    },
+    {
+        "category":  "Brass",
+        "no":  1998,
+        "name":  "FM Hit Brass [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  78
+    },
+    {
+        "category":  "Brass",
+        "no":  1999,
+        "name":  "FM Fun Brass",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  79
+    },
+    {
+        "category":  "Woodwind",
+        "no":  2000,
+        "name":  "FM Chorus Flute",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  80
+    },
+    {
+        "category":  "Woodwind",
+        "no":  2001,
+        "name":  "FM Sax",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  81
+    },
+    {
+        "category":  "Guitar",
+        "no":  2002,
+        "name":  "FM Chorus Guitar",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  82
+    },
+    {
+        "category":  "Guitar",
+        "no":  2003,
+        "name":  "FM Chorus Guitar [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  83
+    },
+    {
+        "category":  "Guitar",
+        "no":  2004,
+        "name":  "FM Wah Guitar",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  84
+    },
+    {
+        "category":  "Guitar",
+        "no":  2005,
+        "name":  "FM Dist Guitar",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  85
+    },
+    {
+        "category":  "Guitar",
+        "no":  2006,
+        "name":  "Ambi Pluck",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  86
+    },
+    {
+        "category":  "Mallet",
+        "no":  2010,
+        "name":  "FM Echo Mallet",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  90
+    },
+    {
+        "category":  "Mallet",
+        "no":  2011,
+        "name":  "Tin Perc",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  91
+    },
+    {
+        "category":  "Mallet",
+        "no":  2012,
+        "name":  "FM Marimba",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  92
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2016,
+        "name":  "FM Decay Bass [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  96
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2017,
+        "name":  "FM Dark Bass [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  97
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2018,
+        "name":  "Mo Dem Lead [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  98
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2019,
+        "name":  "Bit Tune [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  99
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2020,
+        "name":  "Uni Lead [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  100
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2021,
+        "name":  "FM Simple Piano [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  101
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2022,
+        "name":  "Legend EP [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  102
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2023,
+        "name":  "Wood EP [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  103
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2024,
+        "name":  "Star Pad [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  104
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2025,
+        "name":  "FM Brass [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  105
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2026,
+        "name":  "Ambi Pluck [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  106
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2027,
+        "name":  "FM Echo Mallet [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  107
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2028,
+        "name":  "Tin Perc [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  108
+    },
+    {
+        "category":  "Rhythmic",
+        "no":  2029,
+        "name":  "FM Marimba [Arp]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  109
+    }
+]

@@ -10,7 +10,8 @@
   "permissions": {
     "allow": [
       "Bash(node -e \"import\\('web-push'\\).then\\(m => console.log\\(Object.keys\\(m\\).join\\(', '\\)\\)\\).catch\\(e => console.error\\('ESM import failed:', e.message\\)\\)\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(file /tmp/factory6/Factory6.0/01-factory_6-A/*.mbp)"
     ]
   }
 }
