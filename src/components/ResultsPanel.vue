@@ -797,7 +797,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <!-- RIGHT: CONTROLS (List) -->
             <div class="flex-1 w-full space-y-6 md:max-h-[500px] overflow-y-auto px-6 pb-20 custom-scrollbar">
               <div class="flex items-center gap-3 mb-2">
-                <h4 class="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Module Controls</h4>
+                <h4 class="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Parameters Controls</h4>
                 <div class="h-px flex-1 bg-neutral-900"></div>
               </div>
               
@@ -805,10 +805,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 
                 <!-- COLUMN 1: SLIDERS -->
                 <div v-if="hasSliders(cat.controllers)" class="space-y-2">
-                  <div class="flex items-center gap-2 mb-2">
+                  <!-- <div class="flex items-center gap-2 mb-2">
                     <span class="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Parameters</span>
                     <div class="h-px flex-1 bg-neutral-900/50"></div>
-                  </div>
+                  </div> -->
                   <template v-for="cfg in cat.controllers" :key="'sl-' + (cfg.id || cfg.cc)">
                     <div
                       v-if="isSlider(cfg)"
@@ -830,10 +830,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
                 <!-- COLUMN 2: SWITCHES & MULTI -->
                 <div v-if="hasSettings(cat.controllers)" class="space-y-6">
-                  <div class="flex items-center gap-2 mb-2">
+                  <!-- <div class="flex items-center gap-2 mb-2">
                     <span class="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Settings</span>
                     <div class="h-px flex-1 bg-neutral-900/50"></div>
-                  </div>
+                  </div> -->
                   <template v-for="cfg in cat.controllers" :key="cfg.id || cfg.cc">
                     <!-- SWITCH -->
                     <div

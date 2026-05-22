@@ -97,7 +97,13 @@ export type AppAction =
   | 'arp_hold_cc'
   | 'toggle_main_menu'
   | 'main_menu_scroll_cc'
-  | 'main_menu_select';
+  | 'main_menu_select'
+  | 'pc_device_cc'
+  | 'pc_bank_cc'
+  | 'pc_category_cc'
+  | 'pc_preset_cc'
+  | 'pc_pad_a1' | 'pc_pad_a2' | 'pc_pad_a3' | 'pc_pad_a4'
+  | 'pc_pad_b1' | 'pc_pad_b2' | 'pc_pad_b3' | 'pc_pad_b4';
 
 export interface AppMidiMapping {
   id: string;
@@ -224,6 +230,18 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   toggle_main_menu:     'Toggle Main Menu (Speed Dial)',
   main_menu_scroll_cc:  'Scroll Main Menu via CC',
   main_menu_select:     'Select Main Menu Item (Click)',
+  pc_device_cc:         'PC Browser: Select Target Device via CC',
+  pc_bank_cc:           'PC Browser: Select Bank via CC',
+  pc_category_cc:       'PC Browser: Select Category via CC',
+  pc_preset_cc:         'PC Browser: Select & Send Preset via CC',
+  pc_pad_a1:            'PC Pad A — Slot 1',
+  pc_pad_a2:            'PC Pad A — Slot 2',
+  pc_pad_a3:            'PC Pad A — Slot 3',
+  pc_pad_a4:            'PC Pad A — Slot 4',
+  pc_pad_b1:            'PC Pad B — Slot 1',
+  pc_pad_b2:            'PC Pad B — Slot 2',
+  pc_pad_b3:            'PC Pad B — Slot 3',
+  pc_pad_b4:            'PC Pad B — Slot 4',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -261,6 +279,11 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
   'Transport & Performance': [
     'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
     'playlist_volume_cc', 'transpose_cc', 'pass_thru', 'capture_rec_toggle'
+  ],
+  'Program Change Browser': [
+    'pc_device_cc', 'pc_bank_cc', 'pc_category_cc', 'pc_preset_cc',
+    'pc_pad_a1', 'pc_pad_a2', 'pc_pad_a3', 'pc_pad_a4',
+    'pc_pad_b1', 'pc_pad_b2', 'pc_pad_b3', 'pc_pad_b4',
   ],
   'Live Set': [
     'liveset_up', 'liveset_down',
@@ -307,5 +330,9 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'velocity_curve_cc',
   'arp_rate_cc',
   'arp_hold_cc',
-  'main_menu_scroll_cc'
+  'main_menu_scroll_cc',
+  'pc_device_cc',
+  'pc_bank_cc',
+  'pc_category_cc',
+  'pc_preset_cc',
 ]);

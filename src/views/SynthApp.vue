@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
   LayoutGrid, Layers, Heart, ListMusic, User, BookOpen, Workflow,
-  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network, Home
+  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network, Home, Music2, X
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -20,8 +20,8 @@ import { useLfoStore } from '@/stores/useLfoStore'
 // Icon Map for dynamic resolution
 const iconMap = {
   LayoutGrid, Layers, Heart, Keyboard: KeyboardMusic, ListMusic, User, BookOpen, 
-  Workflow, RotateCw, HelpCircle, Cable, Settings2, Zap, Gamepad2, Activity, 
-  Save, AlertTriangle, Settings, Cpu, Play, Square, Mic, History, Network
+  Workflow, RotateCw, HelpCircle, Cable, Settings2, Zap, Gamepad2, Activity,
+  Save, AlertTriangle, Settings, Cpu, Play, Square, Mic, History, Network, Music2
 }
 
 import { useMidiInit } from '@/composables/useMidiInit'
@@ -62,6 +62,7 @@ import AboutModal from '@/components/AboutModal.vue'
 import SlideshowModal from '@/components/SlideshowModal.vue'
 import VelocityMappingDialog from '@/components/VelocityMappingDialog.vue'
 import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
+import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 
 
 // Stores
@@ -120,7 +121,8 @@ const toolbarButtonMap = {
   session:       { state: 'isSessionOpen',      icon: Save,       label: 'Session' },
   looper:        { state: 'isLooperOpen',       icon: RotateCw,   label: 'Looper' },
   midi_matrix:   { state: 'isMidiMatrixOpen',   icon: Cpu,        label: 'MIDI Matrix' },
-  'midi-performance': { state: 'isMidiPerformanceOpen', icon: Network, label: 'MIDI Performance Grid' },
+  'midi-performance':   { state: 'isMidiPerformanceOpen',       icon: Network, label: 'MIDI Performance Grid'    },
+  'program-change':    { state: 'isProgramChangeBrowserOpen', icon: Music2,  label: 'Program Change Browser' },
 }
 
 function handleToolbarButtonClick(button) {
@@ -291,7 +293,28 @@ onMounted(() => {
       </Transition>
       
       <!-- MIDI APP ACTION MAPPING -->
-      <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" /> 
+      <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" />
+
+      <!-- PROGRAM CHANGE BROWSER -->
+      <Transition name="panel">
+        <div
+          v-if="uiStore.isProgramChangeBrowserOpen"
+          class="fixed top-0 right-0 h-full w-full max-w-sm bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[440] flex flex-col overflow-hidden"
+        >
+          <div class="px-5 py-4 border-b border-neutral-900 flex items-center justify-between bg-black/50 backdrop-blur-xl shrink-0">
+            <div class="flex items-center gap-2.5">
+              <Music2 class="w-4 h-4 text-violet-400" />
+              <span class="text-xs font-black uppercase tracking-[0.2em] text-neutral-300">Program Change</span>
+            </div>
+            <button @click="uiStore.isProgramChangeBrowserOpen = false" class="p-1.5 hover:bg-neutral-900 rounded-lg text-neutral-500 hover:text-white transition-colors">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto p-4">
+            <ProgramChangeBrowser />
+          </div>
+        </div>
+      </Transition>
 
       <!-- Arpeggiator -->
       <ArpeggiatorPanel

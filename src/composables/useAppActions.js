@@ -348,7 +348,42 @@ export function useAppActions() {
         window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
 
       default:
-        if (action.startsWith('liveset_pad_')) {
+        if (action.startsWith('pc_pad_')) {
+          // pc_pad_a1 → series 'A', pad 0  |  pc_pad_b3 → series 'B', pad 2
+          const m = action.match(/^pc_pad_([ab])(\d)$/i)
+          if (m && ccVal > 63) {
+            const seriesIdx = m[1].toLowerCase() === 'a' ? 0 : 1
+            const padIdx    = parseInt(m[2], 10) - 1
+            try {
+              const stored = localStorage.getItem('SY_PC_PADS')
+              if (stored) {
+                const allSeries = JSON.parse(stored)
+                const series    = allSeries[seriesIdx]
+                const pad       = series?.pads[padIdx]
+                if (pad && series.deviceName) {
+                  const port = midiStore.outputs.find(o => o.name === series.deviceName)
+                  if (port) {
+                    const ch = (series.channel ?? 1) - 1
+                    port.send([0xB0 | ch, 0,  pad.msb])
+                    port.send([0xB0 | ch, 32, pad.lsb])
+                    port.send([0xC0 | ch,     pad.pc])
+                    const msg = `[PC Pad ${series.id}${padIdx + 1}] → ${series.deviceName} ch${series.channel}: MSB=${pad.msb} LSB=${pad.lsb} PC=${pad.pc} | ${pad.name}`
+                    if (window.SY_LOG) window.SY_LOG(msg); else console.log(msg)
+                    if (midiStore.sendClock) {
+                      setTimeout(() => {
+                        midiStore.startClock()
+                        const clockMsg = `[MIDI PC] Clock restarted to send current tempo: ${midiStore.currentBpm} BPM`
+                        if (window.SY_LOG) window.SY_LOG(clockMsg); else console.log(clockMsg)
+                      }, 100)
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[useAppActions] pc_pad error:', e)
+            }
+          }
+        } else if (action.startsWith('liveset_pad_')) {
           const idx = parseInt(action.replace('liveset_pad_', ''), 10) - 1
           window.dispatchEvent(new CustomEvent('liveset-select-pad', { detail: { idx } }))
         } else if (action === 'grid_pad_press') {

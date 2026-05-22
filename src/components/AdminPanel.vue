@@ -82,7 +82,7 @@ const ALL_AVAILABLE_ICONS = [
   'Activity','Sliders','Menu','MoreVertical','Plus','Minus','ChevronDown','ChevronUp',
   'Clock','Music','Volume2','Pause','Play','Square','Circle','Triangle',
   'Eye','EyeOff','Lock','Unlock','Trash2','Save','Download','Upload','Search','Filter',
-  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','GitCompareArrows','Grid3x3','RotateCw','RotateCcw','Network','ListTree',
+  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','GitCompareArrows','Grid3x3','RotateCw','RotateCcw','Network','ListTree','Music2',
 ]
 const AVAILABLE_ICONS = ALL_AVAILABLE_ICONS.sort()
 
@@ -111,7 +111,8 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'portal',         label: 'Portal',           icon: 'BookOpen'     },
   { id: 'panic',          label: 'PANIC',            icon: 'AlertTriangle'},
   { id: 'midi_matrix',    label: 'MIDI Matrix',      icon: 'Network'      },
-  { id: 'midilogger',     label: 'MIDI Logger',      icon: 'GitCompareArrows'    },
+  { id: 'midilogger',      label: 'MIDI Logger',           icon: 'GitCompareArrows' },
+  { id: 'program-change', label: 'Program Change Browser', icon: 'Music2'           },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

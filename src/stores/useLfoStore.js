@@ -10,7 +10,7 @@ const PARAM_TO_CC = FIELD_TO_CC
 
 const WAVEFORMS = ['sine', 'triangle', 'square', 'saw', 'sh']
 const SYNC_DIVISIONS = [
-  '8/1', '4/1', '2/1', 
+  '8/1', '4/1', '2/1',
   '1/1d', '1/1', '1/1t',
   '1/2d', '1/2', '1/2t',
   '1/4d', '1/4', '1/4t',
@@ -22,12 +22,12 @@ const SYNC_DIVISIONS = [
 
 const SYNC_MULTIPLIERS = {
   '8/1': 32, '4/1': 16, '2/1': 8,
-  '1/1d': 4 * 1.5, '1/1': 4, '1/1t': 4 * (2/3),
-  '1/2d': 2 * 1.5, '1/2': 2, '1/2t': 2 * (2/3),
-  '1/4d': 1 * 1.5, '1/4': 1, '1/4t': 1 * (2/3),
-  '1/8d': 0.5 * 1.5, '1/8': 0.5, '1/8t': 0.5 * (2/3),
-  '1/16d': 0.25 * 1.5, '1/16': 0.25, '1/16t': 0.25 * (2/3),
-  '1/32d': 0.125 * 1.5, '1/32': 0.125, '1/32t': 0.125 * (2/3),
+  '1/1d': 4 * 1.5, '1/1': 4, '1/1t': 4 * (2 / 3),
+  '1/2d': 2 * 1.5, '1/2': 2, '1/2t': 2 * (2 / 3),
+  '1/4d': 1 * 1.5, '1/4': 1, '1/4t': 1 * (2 / 3),
+  '1/8d': 0.5 * 1.5, '1/8': 0.5, '1/8t': 0.5 * (2 / 3),
+  '1/16d': 0.25 * 1.5, '1/16': 0.25, '1/16t': 0.25 * (2 / 3),
+  '1/32d': 0.125 * 1.5, '1/32': 0.125, '1/32t': 0.125 * (2 / 3),
   '1/64': 0.0625
 }
 
@@ -35,7 +35,7 @@ const createDefaultLfo = () => ({
   active: false,
   targetParameter: 'cutoff',
   waveform: 'sine',
-  mode: 'free',
+  mode: 'sync',
   rate: 0.5, // Hz
   syncDivision: '1/4',
   depth: 30,
@@ -129,7 +129,7 @@ export const useLfoStore = defineStore('lfo', () => {
     const baseValue = activeVariant?.data?.[lfo.targetParameter] ?? lfo.offset ?? 64
     const scaledVal = val * (lfo.depth / 100) * 63.5
     let finalVal = Math.round(baseValue + scaledVal)
-    
+
     // Clamp
     finalVal = Math.max(0, Math.min(127, finalVal))
 
@@ -147,7 +147,7 @@ export const useLfoStore = defineStore('lfo', () => {
 
     const activeVariant = presetStore.useAlternativeEngine ? presetStore.lastPreset?.bVariant : presetStore.lastPreset?.aVariant
     const originalValue = activeVariant?.data?.[param] ?? offsetFallback
-    
+
     // Staggered recovery: 3 messages over 150ms
     for (let i = 0; i < 3; i++) {
       midiStore.sendCC(cc, originalValue)
