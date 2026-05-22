@@ -103,7 +103,11 @@ export type AppAction =
   | 'pc_category_cc'
   | 'pc_preset_cc'
   | 'pc_pad_a1' | 'pc_pad_a2' | 'pc_pad_a3' | 'pc_pad_a4'
-  | 'pc_pad_b1' | 'pc_pad_b2' | 'pc_pad_b3' | 'pc_pad_b4';
+  | 'pc_pad_b1' | 'pc_pad_b2' | 'pc_pad_b3' | 'pc_pad_b4'
+  | 'backing_track_pad_1'  | 'backing_track_pad_2'  | 'backing_track_pad_3'  | 'backing_track_pad_4'
+  | 'backing_track_pad_5'  | 'backing_track_pad_6'  | 'backing_track_pad_7'  | 'backing_track_pad_8'
+  | 'backing_track_pad_9'  | 'backing_track_pad_10' | 'backing_track_pad_11' | 'backing_track_pad_12'
+  | 'backing_track_pad_13' | 'backing_track_pad_14' | 'backing_track_pad_15' | 'backing_track_pad_16';
 
 export interface AppMidiMapping {
   id: string;
@@ -242,6 +246,22 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   pc_pad_b2:            'PC Pad B — Slot 2',
   pc_pad_b3:            'PC Pad B — Slot 3',
   pc_pad_b4:            'PC Pad B — Slot 4',
+  backing_track_pad_1:  'Backing Track Pad 1',
+  backing_track_pad_2:  'Backing Track Pad 2',
+  backing_track_pad_3:  'Backing Track Pad 3',
+  backing_track_pad_4:  'Backing Track Pad 4',
+  backing_track_pad_5:  'Backing Track Pad 5',
+  backing_track_pad_6:  'Backing Track Pad 6',
+  backing_track_pad_7:  'Backing Track Pad 7',
+  backing_track_pad_8:  'Backing Track Pad 8',
+  backing_track_pad_9:  'Backing Track Pad 9',
+  backing_track_pad_10: 'Backing Track Pad 10',
+  backing_track_pad_11: 'Backing Track Pad 11',
+  backing_track_pad_12: 'Backing Track Pad 12',
+  backing_track_pad_13: 'Backing Track Pad 13',
+  backing_track_pad_14: 'Backing Track Pad 14',
+  backing_track_pad_15: 'Backing Track Pad 15',
+  backing_track_pad_16: 'Backing Track Pad 16',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -291,7 +311,13 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'liveset_pad_5', 'liveset_pad_6', 'liveset_pad_7', 'liveset_pad_8',
     'liveset_pad_9', 'liveset_pad_10', 'liveset_pad_11', 'liveset_pad_12',
     'liveset_pad_13', 'liveset_pad_14', 'liveset_pad_15', 'liveset_pad_16'
-  ]
+  ],
+  'Backing Tracks': [
+    'backing_track_pad_1',  'backing_track_pad_2',  'backing_track_pad_3',  'backing_track_pad_4',
+    'backing_track_pad_5',  'backing_track_pad_6',  'backing_track_pad_7',  'backing_track_pad_8',
+    'backing_track_pad_9',  'backing_track_pad_10', 'backing_track_pad_11', 'backing_track_pad_12',
+    'backing_track_pad_13', 'backing_track_pad_14', 'backing_track_pad_15', 'backing_track_pad_16',
+  ],
 };
 
 // Actions where the CC value (0–127) is mapped to a range (not just trigger on >63)

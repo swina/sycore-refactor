@@ -1139,7 +1139,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             </span>
           </button>
         </div>
-        <p class="text-[12px] font-mono text-neutral-600 uppercase tracking-[0.4em] mt-12">
+        <p @click="uiStore.isTypesOpen = !uiStore.isTypesOpen" class="text-[12px] font-mono text-neutral-600 uppercase tracking-[0.4em] mt-12 cursor-pointer">
           Current Type <span class="text-[20px] text-synth-neon border border-synth-neon rounded-lg px-2 py-1">{{ presetStore.currentCategory }}</span>
         </p>
         <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-[0.4em] mt-4 animate-pulse">

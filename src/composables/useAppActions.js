@@ -386,6 +386,15 @@ export function useAppActions() {
         } else if (action.startsWith('liveset_pad_')) {
           const idx = parseInt(action.replace('liveset_pad_', ''), 10) - 1
           window.dispatchEvent(new CustomEvent('liveset-select-pad', { detail: { idx } }))
+        } else if (action.startsWith('backing_track_pad_')) {
+          if (ccVal > 63) {
+            const idx = parseInt(action.replace('backing_track_pad_', ''), 10) - 1
+            if (livePadStore.playlistIdx === idx) {
+              window.dispatchEvent(new CustomEvent('playlist-play-stop'))
+            } else {
+              window.dispatchEvent(new CustomEvent('playlist-play', { detail: { idx } }))
+            }
+          }
         } else if (action === 'grid_pad_press') {
           // Generic grid pad press, can be used by other components
           window.dispatchEvent(new CustomEvent('grid-pad-press', { detail: ccVal }))

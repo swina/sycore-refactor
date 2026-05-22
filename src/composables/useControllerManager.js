@@ -176,7 +176,9 @@ export function useControllerManager() {
 
       log(`User Override: Executing Custom Action ${action}`)
       if (action !== 'pass_thru') {
-        dispatchAction(action, data[2])
+        // Note mappings: normalize velocity so any press passes the >63 threshold
+        const effectiveVal = matchedMapping.note !== undefined ? Math.max(data[2], 64) : data[2]
+        dispatchAction(action, effectiveVal)
       }
       updateFeedback()
       return matchedMapping.consume !== false
