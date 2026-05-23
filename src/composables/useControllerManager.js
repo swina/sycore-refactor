@@ -42,6 +42,12 @@ export function useControllerManager() {
       arp: arpStore,
       livePad: livePadStore,
       mappings: mappingStore.appMidiMappings,
+      midiMappings: mappingStore.midiMappings,
+      lpp: {
+        activePerfSetIdx:  livePadStore.activePerfSetIdx,
+        activeDevicePcIdx: livePadStore.activeDevicePcIdx,
+        playlistIdx:       livePadStore.playlistIdx,
+      },
       getActionStatus: (action) => {
         // Map action string to boolean state
         switch(action) {
@@ -74,10 +80,22 @@ export function useControllerManager() {
           case 'toggle_support':   return uiStore.isSupportOpen
           case 'toggle_profile':   return uiStore.isProfileOpen
           case 'toggle_admin':     return uiStore.isAdminPanelOpen
-          default: 
+          default:
             if (action.startsWith('liveset_pad_')) {
               const idx = parseInt(action.replace('liveset_pad_', ''), 10) - 1
               return livePadStore.activePadIndex === idx
+            }
+            if (action.startsWith('lpp_set_')) {
+              const idx = parseInt(action.slice('lpp_set_'.length), 10)
+              return livePadStore.activePerfSetIdx === idx
+            }
+            if (action.startsWith('lpp_devpc_')) {
+              const idx = parseInt(action.slice('lpp_devpc_'.length), 10)
+              return livePadStore.activeDevicePcIdx === idx
+            }
+            if (action.startsWith('lpp_bt_')) {
+              const idx = parseInt(action.slice('lpp_bt_'.length), 10)
+              return livePadStore.playlistIdx === idx
             }
             return false
         }
@@ -243,6 +261,9 @@ export function useControllerManager() {
         () => uiStore.isLooperOpen,
         () => uiStore.isPanelCollapsed,
         () => livePadStore.activePadIndex,
+        () => livePadStore.activePerfSetIdx,
+        () => livePadStore.activeDevicePcIdx,
+        () => livePadStore.playlistIdx,
         () => uiStore.activeVisualizerCategory
       ],
       ([ready, inputsLen]) => {

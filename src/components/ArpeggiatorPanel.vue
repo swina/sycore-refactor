@@ -4,6 +4,8 @@ import { X, Play, Square, Settings, ChevronUp, ChevronDown, ListMusic } from 'lu
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore, ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 
 const props = defineProps({
   isOpen:       { type: Boolean, default: false },
@@ -14,6 +16,8 @@ const emit = defineEmits(['close'])
 
 const arpStore  = useArpStore()
 const midiStore = useMidiStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 let arpTimer = null
 let lastArpNote = null
@@ -384,32 +388,36 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
         <!-- Master Switch -->
         <div class="flex items-center justify-between p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
           <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Active</span>
-          <button 
+          <button
             @click="arpStore.arpEnabled = !arpStore.arpEnabled"
-            :class="['w-12 h-6 rounded-full transition-all relative', arpStore.arpEnabled ? 'bg-synth-neon' : 'bg-neutral-800']"
+            @contextmenu.prevent="openMenu($event, { name: 'arp_active', label: 'Arp Active' })"
+            :class="['relative w-12 h-6 rounded-full transition-all', arpStore.arpEnabled ? 'bg-synth-neon' : 'bg-neutral-800']"
           >
+            <span v-if="mappingStore.learningParamName === 'arp_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             <div :class="['absolute top-1 w-4 h-4 rounded-full bg-white transition-all', arpStore.arpEnabled ? 'left-7' : 'left-1']" />
           </button>
         </div>
 
         <!-- Mode & Subdivision Grid -->
         <div class="grid grid-cols-2 gap-4">
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-2 relative" @contextmenu.prevent="openMenu($event, { name: 'arp_mode', label: 'Arp Mode' })">
+            <span v-if="mappingStore.learningParamName === 'arp_mode'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             <span class="text-[8px] font-mono text-neutral-500 uppercase">Mode</span>
             <select v-model="arpStore.arpMode" class="bg-black border border-neutral-800 text-[10px] text-white rounded-lg px-2 py-2 outline-none focus:border-synth-neon">
               <option v-for="mode in arpModes" :key="mode" :value="mode">{{ mode }}</option>
             </select>
           </div>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-2 relative" @contextmenu.prevent="openMenu($event, { name: 'arp_rate', label: 'Arp Rate' })">
+            <span v-if="mappingStore.learningParamName === 'arp_rate'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             <div class="flex justify-between items-center">
               <span class="text-[8px] font-mono text-neutral-500 uppercase">Rate</span>
               <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpSubdivision }}</span>
             </div>
             <div class="px-1 relative group/slider">
-              <input 
-                type="range" 
-                :min="0" 
-                :max="ARP_SUBDIVISIONS.length - 1" 
+              <input
+                type="range"
+                :min="0"
+                :max="ARP_SUBDIVISIONS.length - 1"
                 :value="ARP_SUBDIVISIONS.indexOf(arpStore.arpSubdivision)"
                 @input="arpStore.arpSubdivision = ARP_SUBDIVISIONS[$event.target.value]"
                 class="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-synth-neon hover:accent-synth-neon/80 transition-all"
@@ -425,16 +433,19 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
         <!-- Hold Switch -->
         <div class="flex items-center justify-between p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
           <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Hold</span>
-          <button 
+          <button
             @click="arpStore.arpHold = !arpStore.arpHold"
-            :class="['px-4 py-1 rounded-lg text-[10px] font-black transition-all border', arpStore.arpHold ? 'bg-synth-neon text-black border-synth-neon' : 'bg-black text-neutral-500 border-neutral-800']"
+            @contextmenu.prevent="openMenu($event, { name: 'arp_hold', label: 'Arp Hold' })"
+            :class="['relative px-4 py-1 rounded-lg text-[10px] font-black transition-all border', arpStore.arpHold ? 'bg-synth-neon text-black border-synth-neon' : 'bg-black text-neutral-500 border-neutral-800']"
           >
+            <span v-if="mappingStore.learningParamName === 'arp_hold'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             {{ arpStore.arpHold ? 'ON' : 'OFF' }}
           </button>
         </div>
 
         <!-- BPM Control -->
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-2 relative" @contextmenu.prevent="openMenu($event, { name: 'arp_bpm', label: 'Arp BPM' })">
+          <span v-if="mappingStore.learningParamName === 'arp_bpm'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           <div class="flex justify-between items-center">
             <span class="text-[8px] font-mono text-neutral-500 uppercase">Arp BPM</span>
             <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpBpm }}</span>
@@ -447,7 +458,8 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
         </div>
 
         <!-- Octave Control -->
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-2 relative" @contextmenu.prevent="openMenu($event, { name: 'arp_octave', label: 'Arp Octave' })">
+          <span v-if="mappingStore.learningParamName === 'arp_octave'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           <div class="flex justify-between items-center">
             <span class="text-[8px] font-mono text-neutral-500 uppercase">Octave</span>
             <span class="text-[10px] font-mono text-synth-neon">{{ arpStore.arpOctave }}</span>

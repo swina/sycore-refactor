@@ -32,6 +32,7 @@ export const useMappingStore = defineStore('mapping', () => {
   const appMidiMappings = ref([])
   const isMidiLearning  = ref(false)
   const learnedCC       = ref(null)
+  const learnedNote     = ref(null)   // MIDI note number when learned via Note On
   const learnedNRPN     = ref(null)   // { msb, lsb } when learning NRPN, else null
   const learnedDevice   = ref(null)
   const learnedChannel  = ref(null)
@@ -149,11 +150,20 @@ export const useMappingStore = defineStore('mapping', () => {
     }, 500)
   }, { deep: true })
 
-  const lastMappedParam = ref(null)   // param name, set for 1 s after confirmLearn
+  const lastMappedParam    = ref(null)   // param name, set for 1 s after confirmLearn
+  const learningParamName  = ref(null)   // set when learn is triggered from context menu
   let _learnTimer = null
+
+  // Context-menu shortcut: arms learn pre-targeted to a specific param.
+  // The next incoming CC/NRPN auto-confirms to this param with no user action.
+  function learnForParam(name) {
+    learningParamName.value = name
+    startLearn()
+  }
 
   function startLearn() {
     learnedCC.value      = null
+    learnedNote.value    = null
     learnedNRPN.value    = null
     learnedDevice.value  = null
     learnedChannel.value = null
@@ -173,11 +183,13 @@ export const useMappingStore = defineStore('mapping', () => {
 
   function cancelLearn() {
     clearTimeout(_learnTimer)
-    learnedCC.value      = null
-    learnedNRPN.value    = null
-    learnedDevice.value  = null
-    learnedChannel.value = null
-    isMidiLearning.value = false
+    learnedCC.value        = null
+    learnedNote.value      = null
+    learnedNRPN.value      = null
+    learnedDevice.value    = null
+    learnedChannel.value   = null
+    isMidiLearning.value   = false
+    learningParamName.value = null
     if (typeof document !== 'undefined') document.body.classList.remove('sy-midi-learn')
   }
 
@@ -208,8 +220,21 @@ export const useMappingStore = defineStore('mapping', () => {
         [key]: { cc: learnedCC.value, device: learnedDevice.value, channel: learnedChannel.value, paramName }
       }
       saveMidiMappings()
+    } else if (learnedNote.value !== null) {
+      // Note mapping — key format: Device:CH#:NOTE#
+      const keyParts = []
+      if (learnedDevice.value) keyParts.push(learnedDevice.value)
+      if (learnedChannel.value !== null) keyParts.push(`CH${learnedChannel.value + 1}`)
+      keyParts.push(`NOTE${learnedNote.value}`)
+      const key = keyParts.join(':')
+      midiMappings.value = {
+        ...midiMappings.value,
+        [key]: { note: learnedNote.value, device: learnedDevice.value, channel: learnedChannel.value, paramName }
+      }
+      saveMidiMappings()
     }
     learnedCC.value      = null
+    learnedNote.value    = null
     learnedNRPN.value    = null
     learnedDevice.value  = null
     learnedChannel.value = null
@@ -224,8 +249,14 @@ export const useMappingStore = defineStore('mapping', () => {
     if (!isMidiLearning.value) return
     learnedNRPN.value    = { msb, lsb }
     learnedCC.value      = null
+    learnedNote.value    = null
     learnedDevice.value  = device
     learnedChannel.value = channel
+    if (learningParamName.value) {
+      const name = learningParamName.value
+      learningParamName.value = null
+      confirmLearn(name)
+    }
   }
 
   function removeMapping(key) {
@@ -236,10 +267,29 @@ export const useMappingStore = defineStore('mapping', () => {
   }
 
   function incomingCC(cc, device = null, channel = null) {
-    if (isMidiLearning.value) {
-      learnedCC.value = cc
-      learnedDevice.value = device
-      learnedChannel.value = channel
+    if (!isMidiLearning.value) return
+    learnedCC.value      = cc
+    learnedNote.value    = null
+    learnedDevice.value  = device
+    learnedChannel.value = channel
+    if (learningParamName.value) {
+      const name = learningParamName.value
+      learningParamName.value = null
+      confirmLearn(name)
+    }
+  }
+
+  function incomingNote(note, device = null, channel = null) {
+    if (!isMidiLearning.value) return
+    learnedNote.value    = note
+    learnedCC.value      = null
+    learnedNRPN.value    = null
+    learnedDevice.value  = device
+    learnedChannel.value = channel
+    if (learningParamName.value) {
+      const name = learningParamName.value
+      learningParamName.value = null
+      confirmLearn(name)
     }
   }
 
@@ -358,9 +408,9 @@ export const useMappingStore = defineStore('mapping', () => {
 
   return {
     midiMappings, appMidiMappings,
-    isMidiLearning, learnedCC, learnedNRPN, learnedDevice, learnedChannel,
-    mappingCount, mappedParams, lastMappedParam,
-    startLearn, cancelLearn, confirmLearn, removeMapping, incomingCC, incomingNRPN,
+    isMidiLearning, learnedCC, learnedNote, learnedNRPN, learnedDevice, learnedChannel,
+    mappingCount, mappedParams, lastMappedParam, learningParamName,
+    startLearn, cancelLearn, confirmLearn, learnForParam, removeMapping, incomingCC, incomingNote, incomingNRPN,
     loadAppMidiMappings, saveAppMidiMappings,
     velocityConfig, handleVelocity, restoreOriginalValues, toggleVelocityMapping,
     presets, activePresetId,

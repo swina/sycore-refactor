@@ -7,6 +7,9 @@ import {
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { usePresetStore }  from '@/stores/usePresetStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { midiService }    from '@/core/midi/MidiService'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
 import PlayList        from '@/components/PlayList.vue'
 
@@ -16,6 +19,8 @@ const emit  = defineEmits(['close'])
 const midiStore    = useMidiStore()
 const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 // ── localStorage ─────────────────────────────────────────────────
 const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
@@ -40,9 +45,9 @@ const setPads = ref(Array(8).fill(null).map(emptySetPad))
 // ── Row 2: Device PC pads (8) ────────────────────────────────────
 const devicePcPads = ref(Array(8).fill(null).map(emptyDevPad))
 
-// ── Active visual state ───────────────────────────────────────────
-const activePerfSetIdx  = ref(-1)
-const activeDevicePcIdx = ref(-1)
+// ── Active visual state (in store for controller LED feedback) ────
+const activePerfSetIdx  = computed({ get: () => livePadStore.activePerfSetIdx,  set: v => { livePadStore.activePerfSetIdx  = v } })
+const activeDevicePcIdx = computed({ get: () => livePadStore.activeDevicePcIdx, set: v => { livePadStore.activeDevicePcIdx = v } })
 
 // ── Live Performance Snapshots ────────────────────────────────────
 const lppSnapshots        = ref([])
@@ -262,14 +267,62 @@ function loadState() {
   if (Array.isArray(savedDevPc) && savedDevPc.length === 8) devicePcPads.value = savedDevPc
 }
 
+// ── MIDI trigger listener for lpp_* mapped pads ───────────────────
+let _unsubLppMidi = null
+
+function _startLppMidiListener() {
+  _unsubLppMidi = midiService.addRawListener((event) => {
+    if (!event.data || event.data.length < 3) return
+    const status = event.data[0]
+    const type   = status & 0xF0
+    const channel = status & 0x0F
+    const byte1  = event.data[1]
+    const byte2  = event.data[2]
+
+    // Accept CC (any value > 0) or Note On (velocity > 0)
+    const isCC   = type === 0xB0 && byte2 > 0
+    const isNote = type === 0x90 && byte2 > 0
+    if (!isCC && !isNote) return
+
+    const inputId   = event.target?.id
+    const inputPort = midiService.getInputs().find(i => i.id === inputId)
+    const device    = inputPort?.name || null
+
+    // Build lookup key matching the format used in confirmLearn
+    const keyParts = []
+    if (device) keyParts.push(device)
+    keyParts.push(`CH${channel + 1}`)
+    keyParts.push(isNote ? `NOTE${byte1}` : `CC${byte1}`)
+    const key = keyParts.join(':')
+
+    const mapping = mappingStore.midiMappings[key]
+    if (!mapping) return
+    const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+    if (!paramName?.startsWith('lpp_')) return
+
+    if (paramName.startsWith('lpp_set_')) {
+      const idx = parseInt(paramName.slice('lpp_set_'.length))
+      if (!isNaN(idx)) triggerSetPad(idx)
+    } else if (paramName.startsWith('lpp_devpc_')) {
+      const idx = parseInt(paramName.slice('lpp_devpc_'.length))
+      if (!isNaN(idx)) triggerDevicePcPad(idx)
+    } else if (paramName.startsWith('lpp_bt_')) {
+      const idx = parseInt(paramName.slice('lpp_bt_'.length))
+      if (!isNaN(idx)) playFromPlaylist(idx)
+    }
+  })
+}
+
 onMounted(() => {
   loadState()
   window.addEventListener('player-state-sync', handleStateUpdate)
   window.dispatchEvent(new CustomEvent('player-state-request'))
+  _startLppMidiListener()
 })
 
 onUnmounted(() => {
   window.removeEventListener('player-state-sync', handleStateUpdate)
+  if (_unsubLppMidi) _unsubLppMidi()
 })
 
 // Refresh PC sets list and sync pad names when panel opens
@@ -292,9 +345,8 @@ function formatTime(t) {
 </script>
 
 <template>
-  <div v-if="isOpen"
-    class="fixed z-[500] bg-neutral-950 border border-neutral-900 rounded-2xl top-[100px] bottom-[60px] left-1/2 -translate-x-1/2 w-full max-w-4xl flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
-  >
+  <div v-if="isOpen" class="fixed inset-x-0 top-0 bottom-10 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl w-full max-w-5xl overflow-hidden flex flex-col h-[90vh] shadow-[0_0_50px_rgba(0,0,0,0.8)]">
 
     <!-- ── Header ── -->
     <div class="px-6 py-2 border-b border-neutral-900 flex items-center shrink-0 bg-black/40 backdrop-blur-md">
@@ -404,16 +456,18 @@ function formatTime(t) {
           <button
             v-for="(pad, idx) in setPads" :key="'ps-' + idx"
             @click="triggerSetPad(idx)"
+            @contextmenu.prevent="openMenu($event, { name: 'lpp_set_' + idx, label: pad.setName || 'Set Pad ' + (idx + 1) })"
             :class="[
               'h-16 rounded-xl border-2 flex flex-col items-center justify-center p-2 gap-0.5 transition-all relative overflow-hidden',
               pad.setId
                 ? activePerfSetIdx === idx
                   ? 'bg-violet-500 border-violet-400 text-black shadow-[0_0_15px_rgba(139,92,246,0.6)]'
                   : 'border-violet-500/50 text-violet-300 hover:bg-violet-500/20 hover:border-violet-400/70'
-                : 'border-dashed border-neutral-800 text-neutral-700 cursor-default hover:border-neutral-700'
+                : 'border border-neutral-800 text-neutral-700 cursor-default hover:border-neutral-700'
             ]"
             :title="pad.setId ? `Recall: ${pad.setName}` : 'Assign in Setup → Performance Sets'"
           >
+            <span v-if="mappingStore.learningParamName === 'lpp_set_' + idx" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             <div v-if="activePerfSetIdx === idx" class="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
             <span class="text-[10px] font-black uppercase tracking-tight leading-none text-center truncate w-full px-1 z-10">
               {{ pad.setName || `— ${idx + 1} —` }}
@@ -434,16 +488,18 @@ function formatTime(t) {
           <button
             v-for="(pad, idx) in devicePcPads" :key="'dp-' + idx"
             @click="triggerDevicePcPad(idx)"
+            @contextmenu.prevent="openMenu($event, { name: 'lpp_devpc_' + idx, label: pad.soundName || 'Device PC ' + (idx + 1) })"
             :class="[
               'h-16 rounded-xl border-2 flex flex-col items-center justify-center p-2 gap-0.5 transition-all relative overflow-hidden',
               pad.deviceName
                 ? activeDevicePcIdx === idx
                   ? 'bg-sky-500 border-sky-400 text-black shadow-[0_0_15px_rgba(14,165,233,0.6)]'
                   : 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20 hover:border-sky-400/70'
-                : 'border-dashed border-neutral-800 text-neutral-700 cursor-default hover:border-neutral-700'
+                : 'border border-neutral-800 text-neutral-700 cursor-default hover:border-neutral-700'
             ]"
             :title="pad.deviceName ? `${pad.deviceName} · CH${pad.channel + 1} · PC${pad.program}` : 'Assign in Setup → Device PC'"
           >
+            <span v-if="mappingStore.learningParamName === 'lpp_devpc_' + idx" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             <div v-if="activeDevicePcIdx === idx" class="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
             <span class="text-[10px] font-black uppercase tracking-tight leading-none text-center truncate w-full px-1 z-10">
               {{ pad.soundName || (pad.deviceName ? `PC ${pad.program}` : `— ${idx + 1} —`) }}
@@ -468,6 +524,7 @@ function formatTime(t) {
           :playlist-idx="playlistIdx"
           :is-playing="isPlaying"
           :current-time="currentTime"
+          midiMapPrefix="lpp_bt"
           @play="playFromPlaylist"
           @prev="prevTrack"
           @next="nextTrack"
@@ -714,6 +771,7 @@ function formatTime(t) {
 
     </div>
 
+    </div>
   </div>
 </template>
 

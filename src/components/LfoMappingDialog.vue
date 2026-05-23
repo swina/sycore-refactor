@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { Activity, Zap } from 'lucide-vue-next'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import ModalShell from '@/components/ui/ModalShell.vue'
 
 const props = defineProps({
@@ -14,6 +16,8 @@ const props = defineProps({
 
 const lfoStore = useLfoStore()
 const uiStore = useUiStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 const config = computed(() => props.lfoId === 1 ? lfoStore.lfo1 : lfoStore.lfo2)
 
@@ -69,18 +73,21 @@ function updateField(field, value) {
         </div>
         <button
           @click="toggleStatus"
-          :class="['px-6 py-2 text-xs font-mono font-bold uppercase tracking-widest rounded transition-all duration-300',
+          @contextmenu.prevent="openMenu($event, { name: 'lfo' + lfoId + '_active', label: 'LFO ' + lfoId + ' Active' })"
+          :class="['relative px-6 py-2 text-xs font-mono font-bold uppercase tracking-widest rounded transition-all duration-300',
             config.active
               ? 'bg-synth-cyan text-black glow-cyan scale-105'
               : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700']"
         >
+          <span v-if="mappingStore.learningParamName === 'lfo' + lfoId + '_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           {{ config.active ? 'ACTIVE' : 'START' }}
         </button>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <!-- Waveform -->
-        <div class="space-y-2">
+        <div class="space-y-2 relative" @contextmenu.prevent="openMenu($event, { name: 'lfo' + lfoId + '_waveform', label: 'LFO ' + lfoId + ' Waveform' })">
+          <span v-if="mappingStore.learningParamName === 'lfo' + lfoId + '_waveform'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           <label class="text-[10px] font-mono text-neutral-500 font-bold uppercase tracking-widest">WAVEFORM</label>
           <div class="relative">
             <select
@@ -114,7 +121,8 @@ function updateField(field, value) {
       </div>
 
       <!-- Target Parameter -->
-      <div class="space-y-2">
+      <div class="space-y-2 relative" @contextmenu.prevent="openMenu($event, { name: 'lfo' + lfoId + '_target', label: 'LFO ' + lfoId + ' Target' })">
+        <span v-if="mappingStore.learningParamName === 'lfo' + lfoId + '_target'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
         <label class="text-[10px] font-mono text-neutral-500 font-bold uppercase tracking-widest">MODULATION TARGET</label>
         <div class="relative group">
           <select
@@ -132,7 +140,8 @@ function updateField(field, value) {
 
       <div class="grid grid-cols-2 gap-6">
         <!-- Rate / Division -->
-        <div class="space-y-2">
+        <div class="space-y-2 relative" @contextmenu.prevent="openMenu($event, { name: 'lfo' + lfoId + '_rate', label: 'LFO ' + lfoId + ' Rate' })">
+          <span v-if="mappingStore.learningParamName === 'lfo' + lfoId + '_rate'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           <div class="flex justify-between items-center text-[10px] font-mono text-neutral-500 font-bold uppercase tracking-widest">
             <label>{{ config.mode === 'free' ? 'RATE' : 'DIVISION' }}</label>
             <span class="text-synth-cyan">
@@ -158,7 +167,8 @@ function updateField(field, value) {
         </div>
 
         <!-- Depth -->
-        <div class="space-y-2">
+        <div class="space-y-2 relative" @contextmenu.prevent="openMenu($event, { name: 'lfo' + lfoId + '_depth', label: 'LFO ' + lfoId + ' Depth' })">
+          <span v-if="mappingStore.learningParamName === 'lfo' + lfoId + '_depth'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           <div class="flex justify-between items-center text-[10px] font-mono text-neutral-500 font-bold uppercase tracking-widest">
             <label>DEPTH</label>
             <span class="text-synth-cyan">{{ config.depth }}%</span>

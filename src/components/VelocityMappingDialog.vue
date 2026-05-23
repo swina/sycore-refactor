@@ -2,11 +2,13 @@
 import { computed } from 'vue'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { FIELD_TO_CC } from '@/constants/s1-config'
 import ModalShell from '@/components/ui/ModalShell.vue'
 
 const mappingStore = useMappingStore()
 const uiStore = useUiStore()
+const { openMenu } = useMidiContextMenu()
 
 const MODULATABLE_FIELDS = [
   'cutoff', 'res', 'attack', 'decay', 'sustain', 'release',
@@ -54,15 +56,18 @@ function updateTarget(field) {
         <span class="text-xs font-mono text-neutral-400 font-bold uppercase tracking-widest">STATUS</span>
         <button
           @click="toggleStatus"
-          :class="['px-4 py-2 text-xs font-mono font-bold uppercase tracking-widest rounded transition-colors',
+          @contextmenu.prevent="openMenu($event, { name: 'vel_active', label: 'Velocity Active' })"
+          :class="['relative px-4 py-2 text-xs font-mono font-bold uppercase tracking-widest rounded transition-colors',
             config.active ? 'bg-synth-lime text-black glow-lime' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700']"
         >
+          <span v-if="mappingStore.learningParamName === 'vel_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           {{ config.active ? 'ACTIVE' : 'OFF' }}
         </button>
       </div>
 
       <!-- Target Parameter -->
-      <div class="space-y-2">
+      <div class="space-y-2 relative" @contextmenu.prevent="openMenu($event, { name: 'vel_target', label: 'Velocity Target' })">
+        <span v-if="mappingStore.learningParamName === 'vel_target'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
         <label class="text-xs font-mono text-neutral-400 font-bold uppercase tracking-widest">TARGET PARAMETER</label>
         <div class="relative group">
           <select
@@ -79,7 +84,8 @@ function updateTarget(field) {
       </div>
 
       <!-- Amount -->
-      <div class="space-y-2">
+      <div class="space-y-2 relative" @contextmenu.prevent="openMenu($event, { name: 'vel_amount', label: 'Velocity Amount' })">
+        <span v-if="mappingStore.learningParamName === 'vel_amount'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
         <div class="flex justify-between items-center text-xs font-mono text-neutral-400 font-bold uppercase tracking-widest">
           <label>AMOUNT</label>
           <span :class="config.amount === 0 ? 'text-neutral-600' : 'text-synth-lime'">
@@ -99,7 +105,8 @@ function updateTarget(field) {
       </div>
 
       <!-- Response Curve -->
-      <div class="space-y-2">
+      <div class="space-y-2 relative" @contextmenu.prevent="openMenu($event, { name: 'vel_curve', label: 'Velocity Curve' })">
+        <span v-if="mappingStore.learningParamName === 'vel_curve'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
         <label class="text-xs font-mono text-neutral-400 font-bold uppercase tracking-widest">RESPONSE CURVE</label>
         <div class="grid grid-cols-3 gap-2">
           <button

@@ -5,6 +5,8 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { useLfoStore } from '@/stores/useLfoStore'
+import { useArpStore } from '@/stores/useArpStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 
 function isS1Device(name) {
@@ -19,6 +21,8 @@ export function useMidiCCListener() {
   const uiStore = useUiStore()
   const presetStore = usePresetStore()
   const configStore = useConfigStore()
+  const lfoStore = useLfoStore()
+  const arpStore = useArpStore()
 
   const originalModValueMap = {}
 
@@ -173,10 +177,56 @@ export function useMidiCCListener() {
     }
   }
 
-  function applyParam(fieldName, val) {
+  // fromNote=true: Note On trigger → toggle semantics (flip state)
+  // fromNote=false: CC trigger → CC >= 64 = on, CC < 64 = off
+  function applyParam(fieldName, val, fromNote = false) {
+    const on = fromNote ? null : val >= 64
+
+    if (fieldName === 'lfo1_active') {
+      const target = fromNote ? !lfoStore.lfo1.active : on
+      if (target !== lfoStore.lfo1.active) lfoStore.toggleLfo(1)
+      return
+    }
+    if (fieldName === 'lfo2_active') {
+      const target = fromNote ? !lfoStore.lfo2.active : on
+      if (target !== lfoStore.lfo2.active) lfoStore.toggleLfo(2)
+      return
+    }
+    if (fieldName === 'vel_active') {
+      const target = fromNote ? !mappingStore.velocityConfig.active : on
+      mappingStore.velocityConfig.active = target
+      if (!target) mappingStore.restoreOriginalValues()
+      return
+    }
+    if (fieldName === 'arp_active') {
+      arpStore.arpEnabled = fromNote ? !arpStore.arpEnabled : on
+      return
+    }
+    if (fieldName === 'arp_hold') {
+      arpStore.arpHold = fromNote ? !arpStore.arpHold : on
+      return
+    }
+    if (fieldName === 'engine_ab') {
+      const useB = fromNote ? !presetStore.useAlternativeEngine : on
+      presetStore.selectEngine(useB ? 'B' : 'A')
+      return
+    }
+    if (fieldName === 'ui_panel_collapse') {
+      uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on
+      return
+    }
+    if (fieldName === 'ui_cat_grid') {
+      if (fromNote || on) uiStore.activeVisualizerCategory = null
+      return
+    }
+    if (fieldName.startsWith('ui_cat_')) {
+      if (fromNote || on) uiStore.activeVisualizerCategory = fieldName.slice(7)
+      return
+    }
+
     if (!presetStore.lastPreset) return
     presetStore.updateFieldValue(fieldName, val)
-    
+
     const cc = FIELD_TO_CC[fieldName] ?? configStore.midiConfig.find(m => m.name === fieldName)?.cc
     if (cc !== undefined) {
       midiStore.sendCC(cc, val, null, MidiSource.UI)
@@ -202,14 +252,31 @@ export function useMidiCCListener() {
     const inputCh = midiStore.midiInputChannel
     const isControl = chan === midiCh
     const isInput = inputCh === -1 || chan === inputCh
-    
-    if (!isControl && !isInput) {
-      // console.log(`[MIDI Debug] Ignoring note from ch ${chan+1} (Target Input Ch: ${inputCh === -1 ? 'OMNI' : inputCh+1})`)
-      return
-    }
+
+    if (!isControl && !isInput) return
+
+    if (mappingStore.isMidiLearning) return // raw listener in MidiMapContextMenu handles this
 
     if (type === 'on' && velocity > 0) {
-      // Note logic (already handled by thru in MidiService if enabled)
+      const inputs = midiService.getInputs()
+      const inputDevice = inputs.find(i => i.id === inputId)
+      const deviceName = inputDevice?.name || null
+
+      const noteFragment = `NOTE${note}`
+      const preciseKey = deviceName
+        ? `${deviceName}:CH${chan + 1}:${noteFragment}`
+        : `CH${chan + 1}:${noteFragment}`
+      const deviceKey = deviceName ? `${deviceName}:${noteFragment}` : null
+
+      const mapping =
+        mappingStore.midiMappings[preciseKey] ||
+        (deviceKey ? mappingStore.midiMappings[deviceKey] : null) ||
+        mappingStore.midiMappings[noteFragment]
+
+      if (mapping) {
+        const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+        applyParam(paramName, velocity, true)
+      }
     }
   }
 

@@ -10,6 +10,7 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useLfoStore } from '@/stores/useLfoStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { S1_CC_MAP, FIELD_TO_CC } from '@/constants/s1-config'
 import AdsrEnvelope from '@/components/AdsrEnvelope.vue'
 import FilterEnvelope from '@/components/FilterEnvelope.vue'
@@ -28,6 +29,7 @@ const arpStore = useArpStore()
 const uiStore = useUiStore()
 const mappingStore = useMappingStore()
 const lfoStore = useLfoStore()
+const { openMenu } = useMidiContextMenu()
 
 const isEditingName = ref(false)
 const tempName = ref('')
@@ -463,17 +465,19 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           <div class="flex flex-col w-full items-end gap-2">
           <div class="flex items-center gap-2">
             <!-- A/B Switch (Circular) -->
-          <button 
+          <button
             @click="toggleAB"
+            @contextmenu.prevent="openMenu($event, { name: 'engine_ab', label: 'Engine A/B' })"
             :disabled="!presetStore.lastPreset?.bVariant"
             :class="[
-              'w-10 h-10 rounded-full border flex items-center justify-center text-[10px] font-black transition-all shadow-lg active:scale-90 disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed disabled:border-neutral-800',
-              presetStore.useAlternativeEngine 
-                ? 'bg-violet-500/10 border-violet-500 text-violet-400 shadow-violet-500/20' 
+              'relative w-10 h-10 rounded-full border flex items-center justify-center text-[10px] font-black transition-all shadow-lg active:scale-90 disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed disabled:border-neutral-800',
+              presetStore.useAlternativeEngine
+                ? 'bg-violet-500/10 border-violet-500 text-violet-400 shadow-violet-500/20'
                 : 'bg-synth-neon/10 border-synth-neon text-synth-neon shadow-synth-neon/20'
             ]"
             :title="presetStore.lastPreset?.bVariant ? 'Toggle Engine A/B' : 'A/B Variant Not Available'"
           >
+            <span v-if="mappingStore.learningParamName === 'engine_ab'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             {{ presetStore.useAlternativeEngine ? 'B' : 'A' }}
           </button>
 
@@ -556,12 +560,14 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           <div class="flex items-center gap-1 ">
             <div class="flex items-center">
               <button @click="lfoStore.toggleLfo(1)"
-                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
+                @contextmenu.prevent="openMenu($event, { name: 'lfo1_active', label: 'LFO 1 Active' })"
+                :class="['relative px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l',
                   lfoStore.lfo1.active ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                <span v-if="mappingStore.learningParamName === 'lfo1_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 LFO 1
               </button>
               <button @click="uiStore.isLfo1Open = !uiStore.isLfo1Open"
-                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
+                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r',
                   uiStore.isLfo1Open ? 'bg-neutral-800 text-synth-cyan border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
@@ -569,12 +575,14 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
             <div class="flex items-center ml-1">
               <button @click="lfoStore.toggleLfo(2)"
-                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
+                @contextmenu.prevent="openMenu($event, { name: 'lfo2_active', label: 'LFO 2 Active' })"
+                :class="['relative px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l',
                   lfoStore.lfo2.active ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                <span v-if="mappingStore.learningParamName === 'lfo2_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 LFO 2
               </button>
               <button @click="uiStore.isLfo2Open = !uiStore.isLfo2Open"
-                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
+                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r',
                   uiStore.isLfo2Open ? 'bg-neutral-800 text-synth-cyan border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
@@ -585,12 +593,14 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           <div class="flex items-center ml-1">
             <div class="flex items-center">
               <button @click="toggleVelocityMod"
-                :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', 
+                @contextmenu.prevent="openMenu($event, { name: 'vel_active', label: 'Velocity Active' })"
+                :class="['relative px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l',
                   mappingStore.velocityConfig?.active ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+                <span v-if="mappingStore.learningParamName === 'vel_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 VEL
               </button>
               <button @click="uiStore.isVelocityMapOpen = !uiStore.isVelocityMapOpen"
-                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r', 
+                :class="['px-1.5 h-10 rounded-r-full text-[10px] transition-all border border-y border-r',
                   uiStore.isVelocityMapOpen ? 'bg-neutral-800 text-synth-cyan border-neutral-700' : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']">
                 <Settings2 class="w-4 h-4" />
               </button>
@@ -600,7 +610,9 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           <!-- Arp Toggle -->
           <div class="flex items-center">
             <button @click="arpStore.arpEnabled = !arpStore.arpEnabled"
-              :class="['px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', arpStore.arpEnabled ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+              @contextmenu.prevent="openMenu($event, { name: 'arp_active', label: 'Arp Active' })"
+              :class="['relative px-2.5 h-10 rounded-l-full text-[10px] font-black uppercase tracking-widest transition-all border-y border-l', arpStore.arpEnabled ? 'bg-synth-cyan text-black border-synth-cyan shadow-[0_0_8px_#00f3ff66]' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300']">
+              <span v-if="mappingStore.learningParamName === 'arp_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
               ARP
             </button>
             <button @click="uiStore.isArpOpen = !uiStore.isArpOpen"
@@ -648,8 +660,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
               </button>
               <button
                 @click="activeCategory = null"
-                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !activeCategory ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
+                @contextmenu.prevent="openMenu($event, { name: 'ui_cat_grid', label: 'Grid Tab' })"
+                :class="['relative px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !activeCategory ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
               >
+                <span v-if="mappingStore.learningParamName === 'ui_cat_grid'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 <LayoutGrid class="w-3 h-3" />
                 Grid
               </button>
@@ -658,9 +672,11 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 v-for="cat in categoriesWithCtrls"
                 :key="cat.id"
                 @click="setActiveCategory(cat.id)"
-                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 flex items-center gap-2', activeCategory === cat.id ? 'text-black shadow-md' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
+                @contextmenu.prevent="openMenu($event, { name: 'ui_cat_' + cat.id, label: (cat.name === 'SIGNAL_FLOW' ? 'FLOW' : cat.name) + ' Tab' })"
+                :class="['relative px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 flex items-center gap-2', activeCategory === cat.id ? 'text-black shadow-md' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
                 :style="activeCategory === cat.id ? { backgroundColor: cat.color, boxShadow: `0 0 12px ${cat.color}66` } : {}"
               >
+                <span v-if="mappingStore.learningParamName === 'ui_cat_' + cat.id" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 <Network v-if="cat.id === 'FLOW'" class="w-3 h-3" />
                 {{ cat.name === 'SIGNAL_FLOW' ? 'FLOW' : cat.name }}
               </button>
@@ -817,8 +833,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                       tabindex="0"
                       @mousedown="startHDrag(cfg, $event)"
                       @keydown="handleKeyNudge(cfg, $event)"
+                      @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
                       :class="['bg-black/60 border border-neutral-900 rounded-sm p-2 flex flex-col gap-2 cursor-ew-resize hover:border-neutral-700 transition-all group/sl', getHighlightClass(cfg)]"
                     >
+                      <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                       <div class="flex justify-between items-center">
                         <span class="text-sm font-mono font-bold text-white uppercase tracking-tight">{{ cfg.label }}</span>
                         <span class="text-sm font-mono font-bold" :style="{ color: cat.color }">{{ Math.round(getVal(cfg)) }}</span>
@@ -843,8 +861,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                       tabindex="0"
                       @click="handleValueUpdate(cfg, getVal(cfg) >= 1 ? 0 : 1)"
                       @keydown="handleKeyNudge(cfg, $event)"
+                      @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
                       :class="['bg-black/60 border border-neutral-900 rounded-sm p-1 flex items-center justify-between cursor-pointer hover:border-neutral-700 transition-all group/sw', getHighlightClass(cfg)]"
                     >
+                      <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                       <span class="text-sm font-mono font-bold text-white uppercase tracking-tight">{{ cfg.label }}</span>
                       <div
                         :class="['px-1 py-1.5 rounded-sm border text-[10px] font-black uppercase transition-all', getVal(cfg) >= 1 ? 'text-black' : 'bg-neutral-900 border-neutral-800 text-neutral-500']"
@@ -855,8 +875,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                     <!-- MULTI -->
                     <div
                       v-else-if="cfg.type === 'MULTI'"
+                      @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
                       :class="['bg-black/60 border border-neutral-900 rounded-sm p-2 space-y-2 transition-all', getHighlightClass(cfg)]"
                     >
+                      <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                       <div class="flex justify-between items-center">
                         <span class="text-sm font-mono font-bold text-white uppercase tracking-tight">{{ cfg.label }}</span>
                         <span class="text-[10px] font-mono font-bold px-1 py-0.5 rounded-sm uppercase"
@@ -970,9 +992,11 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                   tabindex="0"
                   @click="handleValueUpdate(cfg, getVal(cfg) >= 1 ? 0 : 1)"
                   @keydown="handleKeyNudge(cfg, $event)"
+                  @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
                   :class="['bg-black/60 border border-neutral-900 rounded-xl p-3 flex items-center justify-between cursor-pointer outline-none focus:ring-1 select-none transition-all', getHighlightClass(cfg)]"
                   :style="{ '--tw-ring-color': cat.color }"
                 >
+                  <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                   <span class="text-[12px] font-mono font-bold text-white uppercase truncate pr-2">{{ cfg.label }}</span>
                   <div
                     :class="['px-2 py-0.5 rounded border text-[8px] font-black uppercase transition-all', getVal(cfg) >= 1 ? 'text-black' : 'bg-neutral-900 border-neutral-800 text-white']"
@@ -985,9 +1009,11 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                   v-else-if="cfg.type === 'MULTI'"
                   tabindex="0"
                   @keydown="handleKeyNudge(cfg, $event)"
+                  @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
                   :class="['bg-black/60 border border-neutral-900 rounded-xl p-3 space-y-2.5 outline-none focus:ring-1 select-none transition-all', getHighlightClass(cfg)]"
                   :style="{ '--tw-ring-color': cat.color }"
                 >
+                  <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                   <div class="flex justify-between items-center">
                     <span class="text-[12px] font-mono font-bold text-white uppercase truncate pr-2">{{ cfg.label }}</span>
                     <span class="text-[12px] font-mono font-bold px-1 rounded uppercase"
@@ -1020,9 +1046,11 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                   v-else-if="cfg.type === 'SLIDER_V'"
                   tabindex="0"
                   @keydown="handleKeyNudge(cfg, $event)"
+                  @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
                   :class="['bg-black/60 border border-neutral-900 rounded-xl p-3 flex flex-col items-center gap-3 outline-none focus:ring-1 select-none transition-all', getHighlightClass(cfg)]"
                   :style="{ '--tw-ring-color': cat.color }"
                 >
+                  <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                   <div class="w-full flex justify-between items-center bg-neutral-900/40 rounded px-1.5 py-0.5">
                     <span class="text-[12px] font-mono font-bold text-white uppercase truncate pr-2">{{ cfg.label }}</span>
                     <span class="text-[12px] font-mono font-bold" :style="{ color: cat.color }">{{ Math.round(getVal(cfg)) }}</span>
@@ -1049,9 +1077,11 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                   tabindex="0"
                   @mousedown="startHDrag(cfg, $event)"
                   @keydown="handleKeyNudge(cfg, $event)"
+                  @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
                   :class="['bg-black/60 border border-neutral-900 rounded-xl p-3 flex flex-col gap-2 outline-none focus:ring-1 cursor-ew-resize select-none transition-all', getHighlightClass(cfg)]"
                   :style="{ '--tw-ring-color': cat.color }"
                 >
+                  <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                   <div class="flex justify-between items-center">
                     <span class="text-[12px] font-mono font-bold text-white uppercase truncate pr-2">{{ cfg.label }}</span>
                     <span class="text-[12px] font-mono font-bold" :style="{ color: cat.color }">{{ Math.round(getVal(cfg)) }}</span>
@@ -1084,8 +1114,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
               tabindex="0"
               @mousedown="startHDrag(cfg, $event)"
               @keydown="handleKeyNudge(cfg, $event)"
+              @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
               :class="['bg-black/40 border border-neutral-900 rounded-xl p-3 space-y-2 cursor-ew-resize select-none outline-none focus:ring-1 focus:ring-neutral-700 transition-all', getHighlightClass(cfg)]"
             >
+              <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
               <div class="flex justify-between items-center">
                 <span class="text-[12px] font-black text-white uppercase truncate pr-2">{{ cfg.label }}</span>
                 <span class="text-[12px] font-mono font-bold text-neutral-400">{{ Math.round(getVal(cfg)) }}</span>

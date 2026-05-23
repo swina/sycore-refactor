@@ -34,6 +34,9 @@ export const useLivePadStore = defineStore('livePad', () => {
   const playlist = ref(getItem('sycore_live_playlist', []))
   const playlistIdx = ref(-1)
   const activePadIndex = ref(-1)
+  // Live Performance Pad active row indices (for LED feedback)
+  const activePerfSetIdx  = ref(-1)
+  const activeDevicePcIdx = ref(-1)
   
   // Load settings from storage
   const savedSettings = getItem('sycore_live_settings', {})
@@ -155,6 +158,8 @@ export const useLivePadStore = defineStore('livePad', () => {
     playlist,
     playlistIdx,
     activePadIndex,
+    activePerfSetIdx,
+    activeDevicePcIdx,
     playlistRepeats,
     playlistCurrentRepeat,
     crossfadeSec,

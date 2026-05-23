@@ -91,5 +91,20 @@ export const LaunchpadMiniMK1: ControllerProfile = {
                 }
             });
         }
+
+        // 3. MIDI-Learn note mappings for lpp_* pads (lpp_set_, lpp_devpc_, lpp_bt_)
+        // amber (51) = active, off (0) = inactive
+        if (state.midiMappings) {
+            Object.values(state.midiMappings).forEach((m: any) => {
+                if (
+                    typeof m !== 'object' ||
+                    m.note == null ||
+                    !m.paramName?.startsWith('lpp_') ||
+                    !m.device?.toLowerCase().includes('launchpad')
+                ) return;
+                const isActive = state.getActionStatus(m.paramName);
+                send([noteOnStatus, m.note, isActive ? 51 : 0]);
+            });
+        }
     }
 }

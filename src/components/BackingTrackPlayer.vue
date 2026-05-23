@@ -376,7 +376,11 @@ function playFromPlaylist(idx, source = 'manual') {
   playlistCurrentRepeat.value = 1
   isPlaying.value = true
   currentTime.value = 0
-  
+  duration.value = track.duration || 0
+  window.dispatchEvent(new CustomEvent('player-state-sync', {
+    detail: { currentTime: 0, duration: track.duration || 0, playlistIdx: idx }
+  }))
+
   if (syncRecordAudioCapture.value) {
     window.dispatchEvent(new CustomEvent('capture-start-rec'))
   }
@@ -584,8 +588,18 @@ async function deleteTrack(id, e) {
 
 function onLoadedMeta(slot, d) {
   if (activeSlot !== slot) return
-  duration.value = isFinite(d) ? d : (playingTrack.value?.duration || 0)
+  const resolvedDur = isFinite(d) && d > 0 ? d : (playingTrack.value?.duration || 0)
+  duration.value = resolvedDur
   currentTime.value = 0
+  if (isFinite(d) && d > 0 && playlistIdx.value >= 0 && playlistIdx.value < playlist.value.length) {
+    const item = playlist.value[playlistIdx.value]
+    if (!item.duration) {
+      playlist.value = playlist.value.map((t, i) => i === playlistIdx.value ? { ...t, duration: d } : t)
+    }
+  }
+  window.dispatchEvent(new CustomEvent('player-state-sync', {
+    detail: { currentTime: 0, duration: resolvedDur }
+  }))
   if (isAdmin.value && playingTrack.value && !playingTrack.value.duration && d && isFinite(d)) {
     updateDoc(doc(db, 'backing_tracks', playingTrack.value.id), { duration: d }).catch(console.error)
   }

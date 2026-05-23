@@ -67,6 +67,7 @@ import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
 import LivePerformancePad from '@/components/LivePerformancePad.vue'
 import AppFooter from '@/components/AppFooter.vue'
+import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 
 
 // Stores
@@ -458,6 +459,9 @@ onMounted(() => {
 
       <!-- Global Tooltip -->
       <GlobalTooltip />
+
+      <!-- Global MIDI Map context menu (always mounted, Teleports to body) -->
+      <MidiMapContextMenu />
     </Teleport>
 
     <!-- Tooltip Wrapper -->
