@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import {
-  X, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings
+  X, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2
 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -12,6 +12,7 @@ import MidiMappingPanel     from './MidiMappingPanel.vue'
 import MidiMonitorPanel     from './MidiMonitorPanel.vue'
 import AppMidiMapper        from './AppMidiMapper.vue'
 import MidiSettingsPanel    from './MidiSettingsPanel.vue'
+import MidiSyncMatrix       from './MidiSyncMatrix.vue'
 
 const uiStore = useUiStore()
 
@@ -20,8 +21,9 @@ const TABS = [
   { id: 'routing',     label: 'Routing',     icon: GitFork },
   { id: 'performance', label: 'Performance', icon: Zap     },
   { id: 'mapping',     label: 'Mapping',     icon: Radio   },
-  { id: 'actions',     label: 'App Actions', icon: Sliders },
+  { id: 'actions',     label: 'Actions',     icon: Sliders },
   { id: 'monitor',     label: 'Monitor',     icon: Activity },
+  { id: 'sync',        label: 'Sync',        icon: Link2   },
   { id: 'settings',    label: 'Settings',    icon: Settings },
 ]
 
@@ -114,6 +116,11 @@ function close() {
           <AppMidiMapper
             v-else-if="activeTab === 'actions'"
             :embedded="true"
+            class="h-full"
+          />
+
+          <MidiSyncMatrix
+            v-else-if="activeTab === 'sync'"
             class="h-full"
           />
 

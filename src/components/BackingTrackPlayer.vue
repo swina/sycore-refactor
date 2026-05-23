@@ -17,11 +17,13 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { useSyncStore } from '@/stores/useSyncStore'
 
 const uiStore = useUiStore()
 const midiStore = useMidiStore()
 const authStore = useAuthStore()
 const configStore = useConfigStore()
+const syncStore = useSyncStore()
 
 
 const props = defineProps({})
@@ -66,11 +68,15 @@ const playlistIdx         = ref(-1)
 const playlistCurrentRepeat = ref(1)
 const crossfadeSec        = ref(3)
 const loopPlaylist        = ref(true)
-const syncInternalSequencer = ref(localStorage.getItem('S1_SYNC_TRACK') === 'true')
-watch(syncInternalSequencer, v => localStorage.setItem('S1_SYNC_TRACK', v ? 'true' : 'false'))
+const syncInternalSequencer = computed({
+  get: () => syncStore.syncTrack,
+  set: (v) => { syncStore.syncTrack = v },
+})
 
-const syncRecordAudioCapture = ref(localStorage.getItem('S1_SYNC_REC_CAPTURE') === 'true')
-watch(syncRecordAudioCapture, v => localStorage.setItem('S1_SYNC_REC_CAPTURE', v ? 'true' : 'false'))
+const syncRecordAudioCapture = computed({
+  get: () => syncStore.syncRecordAudioCapture,
+  set: (v) => { syncStore.syncRecordAudioCapture = v },
+})
 
 const isMinimized = ref(localStorage.getItem('S1_BT_MINIMIZED') === 'true')
 watch(isMinimized, v => localStorage.setItem('S1_BT_MINIMIZED', v ? 'true' : 'false'))

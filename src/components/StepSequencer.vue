@@ -10,6 +10,7 @@ import { useLocalStorage } from '@/composables/useLocalStorage'
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useSyncStore } from '@/stores/useSyncStore'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -36,6 +37,7 @@ const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', '
 const midiStore = useMidiStore()
 const presetStore = usePresetStore()
 const authStore = useAuthStore()
+const syncStore = useSyncStore()
 
 const showSaveLibraryModal = ref(false)
 const showLoadLibraryModal = ref(false)
@@ -154,7 +156,6 @@ function buildChordNotes(scaleDegree, scaleIntervals, keyMidi, octave, voices) {
 
 // Local state
 const { state: seqStateStorage } = useLocalStorage('S1_SEQUENCER_BETA_STATE', {})
-const { state: syncTrackStorage } = useLocalStorage('S1_SYNC_TRACK', false)
 
 const selectedStyle = ref('House')
 const selectedKey = ref('C')
@@ -167,7 +168,10 @@ const isRecording = ref(false)
 const currentStep = ref(0)
 const transportPosition = ref('1:1:1')
 const selectedStepIdx = ref(0)
-const syncTrack = ref(syncTrackStorage.value ?? false)
+const syncTrack = computed({
+  get: () => syncStore.syncTrack,
+  set: (v) => { syncStore.syncTrack = v },
+})
 const genDensity = ref(75)
 const swingAmount = ref(0)
 const basePatternLength = ref(16)
@@ -263,9 +267,6 @@ watch([isRecording, isPlaying, selectedStepIdx], () => {
 
 const skipBackingTrackSync = ref(false)
 
-watch(syncTrack, (val) => {
-  syncTrackStorage.value = val
-}, { deep: true })
 
 function openSaveLibraryModal() {
   if (!authStore.user) return
@@ -950,8 +951,10 @@ onMounted(() => {
       isPlaying.value = play
     }
     
-    if (isPlaying.value) midiStore.sendStart()
-    else midiStore.sendStop()
+    if (midiStore.syncSequencerTransport) {
+      if (isPlaying.value) midiStore.sendStart()
+      else midiStore.sendStop()
+    }
   }
   window.addEventListener('toggle-sequencer', handleToggle)
 
@@ -1261,7 +1264,7 @@ watch(isPlaying, (playing) => {
     })
     activeMidiNotes.value.clear()
 
-    midiStore.sendStop()
+    if (midiStore.syncSequencerTransport) midiStore.sendStop()
     midiStore.allNotesOff(props.channel)
 
     // Ensure Expression CC#11 is fully open at 127 immediately
@@ -1281,7 +1284,7 @@ watch(isPlaying, (playing) => {
     toneStart().then(() => {
       getTransport().bpm.value = props.bpm
       midiStore.setBpm(props.bpm)
-      midiStore.sendStart()
+      if (midiStore.syncSequencerTransport) midiStore.sendStart()
 
       repeatEventIdRef.value = getTransport().scheduleRepeat((time) => {
         const state = playStateRef.current
