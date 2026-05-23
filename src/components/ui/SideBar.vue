@@ -34,7 +34,8 @@ const ACTION_MAP = {
   admin:          () => uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen,
   midi_matrix:    () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
   'midi-performance': () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
-  'program-change':   () => uiStore.isProgramChangeBrowserOpen = !uiStore.isProgramChangeBrowserOpen,
+  'program-change':         () => uiStore.isProgramChangeBrowserOpen = !uiStore.isProgramChangeBrowserOpen,
+  'device-program-change':  () => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
   'midi-manager': () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
 }
 

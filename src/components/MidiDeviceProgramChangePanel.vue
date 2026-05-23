@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { MidiSource } from '@/core/midi/MidiService'
@@ -25,6 +25,7 @@ const selectedDeviceName = ref('')
 onMounted(() => {
   const first = devices.value.find(d => d.pcEnabled && d.isOnline) ?? devices.value[0]
   if (first) selectedDeviceName.value = first.name
+  loadSets()
 })
 
 const selectedReg = computed(() =>
@@ -235,12 +236,106 @@ function sendManual() {
 function setChannel(ch) {
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannel', ch - 1)
 }
+
+// ── Performance Sets ────────────────────────────────────────────
+const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
+const pcSets         = ref([])
+const showSaveDialog = ref(false)
+const newSetName     = ref('')
+const newSetNameInput = ref(null)
+
+function loadSets() {
+  try {
+    const raw = localStorage.getItem(LS_PC_SETS)
+    if (raw) pcSets.value = JSON.parse(raw)
+  } catch { pcSets.value = [] }
+}
+
+function persistSets() {
+  localStorage.setItem(LS_PC_SETS, JSON.stringify(pcSets.value))
+}
+
+function openSaveDialog() {
+  newSetName.value = ''
+  showSaveDialog.value = true
+  nextTick(() => newSetNameInput.value?.focus())
+}
+
+function saveCurrentSet() {
+  const name = newSetName.value.trim()
+  if (!name) return
+
+  const snapshot = devices.value.map(dev => {
+    const reg  = midiStore.routingConfig.registrations[dev.name]
+    const isUi = (midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)
+    return {
+      deviceName:     dev.name,
+      pcChannel:      reg?.pcChannel ?? 0,
+      pcBank:         reg?.pcBank    ?? '',
+      pcProgram:      reg?.pcProgram ?? 0,
+      pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
+      isUiDevice:     isUi,
+      lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
+      lastPresetName: isUi ? (presetStore.lastPreset?.name ?? null) : null,
+    }
+  })
+
+  pcSets.value = [{
+    id:        Date.now().toString(),
+    name,
+    createdAt: new Date().toISOString(),
+    devices:   snapshot,
+  }, ...pcSets.value]
+
+  persistSets()
+  showSaveDialog.value = false
+}
+
+function recallSet(set) {
+  set.devices.forEach(entry => {
+    if (!midiStore.routingConfig.registrations[entry.deviceName]) return
+
+    midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
+    midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
+    midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
+    midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
+
+    if (entry.isUiDevice) {
+      if (entry.lastPresetId) {
+        const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
+        if (preset) presetStore.recallPreset(preset, false)
+      }
+    } else {
+      const port = midiStore.outputs.find(o => o.name === entry.deviceName)
+      if (!port) return
+      const multiEntries = Object.entries(entry.pcChannels)
+      if (multiEntries.length > 0) {
+        multiEntries.forEach(([chStr, info]) => {
+          const ch = parseInt(chStr)
+          port.send([0xB0 | ch, 0,  0])
+          port.send([0xB0 | ch, 32, 0])
+          port.send([0xC0 | ch, info.program ?? 0])
+        })
+      } else {
+        const ch = entry.pcChannel ?? 0
+        port.send([0xB0 | ch, 0,  0])
+        port.send([0xB0 | ch, 32, 0])
+        port.send([0xC0 | ch, entry.pcProgram ?? 0])
+      }
+    }
+  })
+}
+
+function deleteSet(id) {
+  pcSets.value = pcSets.value.filter(s => s.id !== id)
+  persistSets()
+}
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[650] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+  <div class="fixed inset-x-0 top-0 bottom-10 z-[650] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
     <Transition name="performance" appear>
-      <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col max-h-[90vh]">
+      <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col h-[90vh]">
 
         <!-- Header -->
         <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0">
@@ -261,57 +356,135 @@ function setChannel(ch) {
         <!-- Body: two columns -->
         <div class="flex flex-1 overflow-hidden">
 
-          <!-- ── LEFT: PC-enabled device list ── -->
-          <div class="w-64 shrink-0 border-r border-neutral-900 flex flex-col overflow-y-auto custom-scrollbar">
-            <div class="px-4 py-3 border-b border-neutral-900">
-              <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">PC Devices</span>
-            </div>
+          <!-- ── LEFT: PC-enabled device list + Performance Sets ── -->
+          <div class="w-64 shrink-0 border-r border-neutral-900 flex flex-col overflow-hidden">
 
-            <div v-if="devices.length === 0" class="flex-1 flex flex-col items-center justify-center p-6 text-center gap-2">
-              <p class="text-[10px] font-mono text-neutral-600 italic">No devices with PC enabled.</p>
-              <p class="text-[9px] font-mono text-neutral-700">Enable PC on devices in MIDI Matrix.</p>
-            </div>
+            <!-- Device list (scrollable) -->
+            <div class="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+              <div class="px-4 py-3 border-b border-neutral-900 shrink-0">
+                <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">PC Devices</span>
+              </div>
 
-            <button
-              v-for="dev in devices"
-              :key="dev.name"
-              @click="selectedDeviceName = dev.name"
-              :class="[
-                'w-full text-left px-4 py-3 border-b border-neutral-900/60 transition-all',
-                selectedDeviceName === dev.name
-                  ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
-                  : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'
-              ]"
-            >
-              <div class="flex items-center gap-2.5">
-                <div :class="['w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', dev.isOnline ? 'bg-emerald-500' : 'bg-neutral-700']" />
-                <div class="flex flex-col min-w-0 flex-1">
-                  <span class="text-[11px] font-bold text-white truncate leading-tight">{{ dev.name }}</span>
-                  <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <!-- UI/Preview primary instrument -->
-                    <template v-if="(midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)">
-                      <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-0.5">
-                        <Layers class="w-2 h-2" />UI
-                      </span>
-                      <span class="text-[7px] font-mono text-neutral-500">{{ presetStore.lastPreset?.name ?? '—' }}</span>
-                    </template>
-                    <!-- Multi-timbral: assigned channel count -->
-                    <template v-else-if="dev.isMulti">
-                      <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">Multi</span>
-                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">
-                        {{ Object.keys(dev.pcChannels).length }} ch set
-                      </span>
-                    </template>
-                    <!-- Mono: CH + last PC -->
-                    <template v-else>
-                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">CH{{ (dev.pcChannel ?? 0) + 1 }}</span>
-                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-black font-mono text-violet-400/70">PC{{ dev.pcProgram }}</span>
-                    </template>
-                    <span v-if="!dev.isOnline" class="text-[7px] font-mono text-neutral-700 uppercase">offline</span>
+              <div v-if="devices.length === 0" class="flex-1 flex flex-col items-center justify-center p-6 text-center gap-2">
+                <p class="text-[10px] font-mono text-neutral-600 italic">No devices with PC enabled.</p>
+                <p class="text-[9px] font-mono text-neutral-700">Enable PC on devices in MIDI Matrix.</p>
+              </div>
+
+              <button
+                v-for="dev in devices"
+                :key="dev.name"
+                @click="selectedDeviceName = dev.name"
+                :class="[
+                  'w-full text-left px-4 py-3 border-b border-neutral-900/60 transition-all',
+                  selectedDeviceName === dev.name
+                    ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
+                    : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'
+                ]"
+              >
+                <div class="flex items-center gap-2.5">
+                  <div :class="['w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', dev.isOnline ? 'bg-emerald-500' : 'bg-neutral-700']" />
+                  <div class="flex flex-col min-w-0 flex-1">
+                    <span class="text-[11px] font-bold text-white truncate leading-tight">{{ dev.name }}</span>
+                    <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <template v-if="(midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)">
+                        <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-0.5">
+                          <Layers class="w-2 h-2" />UI
+                        </span>
+                        <span class="text-[7px] font-mono text-neutral-500">{{ presetStore.lastPreset?.name ?? '—' }}</span>
+                      </template>
+                      <template v-else-if="dev.isMulti">
+                        <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">Multi</span>
+                        <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">
+                          {{ Object.keys(dev.pcChannels).length }} ch set
+                        </span>
+                      </template>
+                      <template v-else>
+                        <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">CH{{ (dev.pcChannel ?? 0) + 1 }}</span>
+                        <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-black font-mono text-violet-400/70">PC{{ dev.pcProgram }}</span>
+                      </template>
+                      <span v-if="!dev.isOnline" class="text-[7px] font-mono text-neutral-700 uppercase">offline</span>
+                    </div>
                   </div>
                 </div>
+              </button>
+            </div>
+
+            <!-- ── Performance Sets section ── -->
+            <div class="shrink-0 border-t border-neutral-900 flex flex-col max-h-[40%]">
+
+              <!-- Sets header + save button -->
+              <div class="px-4 py-2.5 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-1.5">
+                  <BookOpen class="w-3 h-3 text-violet-400/60" />
+                  <span class="text-[8px] font-mono text-violet-400/60 uppercase tracking-widest">Performance Sets</span>
+                  <span v-if="pcSets.length > 0" class="text-[7px] font-black px-1 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20">{{ pcSets.length }}</span>
+                </div>
+                <button
+                  @click="openSaveDialog"
+                  title="Save current configuration as a new set"
+                  class="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500/20 hover:border-violet-500/40 transition-all text-[8px] font-black uppercase tracking-wider"
+                >
+                  <Plus class="w-2.5 h-2.5" />Save
+                </button>
               </div>
-            </button>
+
+              <!-- Inline save dialog -->
+              <div v-if="showSaveDialog" class="shrink-0 px-3 pb-2.5 flex gap-2 items-center">
+                <input
+                  ref="newSetNameInput"
+                  v-model="newSetName"
+                  type="text"
+                  placeholder="Set name…"
+                  maxlength="40"
+                  @keydown.enter="saveCurrentSet"
+                  @keydown.esc="showSaveDialog = false"
+                  class="flex-1 min-w-0 bg-black/60 border border-violet-500/40 rounded-lg px-2.5 py-1.5 text-[11px] text-white font-mono outline-none focus:border-violet-400 placeholder:text-neutral-700"
+                />
+                <button
+                  @click="saveCurrentSet"
+                  :disabled="!newSetName.trim()"
+                  class="shrink-0 px-2 py-1.5 rounded-lg bg-violet-500 text-black text-[8px] font-black uppercase tracking-widest hover:bg-violet-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Save class="w-3 h-3" />
+                </button>
+                <button @click="showSaveDialog = false" class="shrink-0 p-1.5 rounded-lg text-neutral-600 hover:text-neutral-400 transition-colors">
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+
+              <!-- Saved sets list -->
+              <div v-if="pcSets.length > 0" class="overflow-y-auto custom-scrollbar">
+                <div
+                  v-for="set in pcSets"
+                  :key="set.id"
+                  class="group flex items-center gap-2 px-3 py-2 border-t border-neutral-900/60 hover:bg-white/[0.02] transition-colors"
+                >
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[10px] font-bold text-neutral-300 truncate leading-none mb-0.5">{{ set.name }}</p>
+                    <p class="text-[8px] font-mono text-neutral-700">{{ set.devices.length }} device{{ set.devices.length !== 1 ? 's' : '' }}</p>
+                  </div>
+                  <button
+                    @click="recallSet(set)"
+                    title="Recall this set"
+                    class="shrink-0 p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500 hover:text-black hover:border-violet-500 transition-all"
+                  >
+                    <RotateCcw class="w-2.5 h-2.5" />
+                  </button>
+                  <button
+                    @click="deleteSet(set.id)"
+                    title="Delete this set"
+                    class="shrink-0 p-1.5 rounded-lg text-neutral-700 hover:bg-red-500/10 hover:text-red-400 hover:border hover:border-red-500/20 transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    <Trash2 class="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div v-else-if="!showSaveDialog" class="px-4 py-3 text-[9px] font-mono text-neutral-700 italic">
+                No sets saved yet
+              </div>
+
+            </div>
           </div>
 
           <!-- ── RIGHT: browser ── -->

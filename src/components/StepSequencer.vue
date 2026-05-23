@@ -1496,7 +1496,7 @@ function handleClear() {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-[600] flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-neon overflow-hidden">
+  <div v-if="isOpen" class="fixed inset-x-0 top-0 bottom-10 z-[600] flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-neon overflow-hidden">
     <div class="w-full max-w-[1024px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
       
       <!-- ── HEADER: Compact & Responsive ── -->

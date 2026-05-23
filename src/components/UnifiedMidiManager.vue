@@ -39,7 +39,7 @@ function close() {
   <Transition name="umm">
     <div
       v-if="uiStore.showUnifiedMidiManager"
-      class="fixed inset-0 z-[900] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      class="fixed inset-x-0 top-0 bottom-10 z-[900] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
       @click.self="close"
     >
       <div class="bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"

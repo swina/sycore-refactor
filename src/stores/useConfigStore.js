@@ -163,6 +163,24 @@ export const useConfigStore = defineStore('config', () => {
               updatedAt: new Date().toISOString()
             }).catch(err => console.error('[ConfigStore] Migration add failed', err))
           }
+
+          // Migration: Add device-program-change button
+          if (!toolbarConfig.value.find(b => b.id === 'device-program-change')) {
+            console.log('[ConfigStore] Migration: Adding device-program-change button to toolbar')
+            toolbarConfig.value.push({
+              id: 'device-program-change',
+              label: 'Device Program Change',
+              icon: 'Disc3',
+              enabled: false,
+              fab: 'settings',
+              toolbar: 'main'
+            })
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData,
+              toolbar: toolbarConfig.value,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.error('[ConfigStore] Migration device-program-change failed', err))
+          }
         }
         if (appData.toolbarIconSize) {
           toolbarIconSize.value = appData.toolbarIconSize

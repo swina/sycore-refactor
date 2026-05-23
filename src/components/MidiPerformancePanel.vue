@@ -96,7 +96,7 @@ const activeOutputs = computed(() => {
 </script>
 
 <template>
-  <div :class="embedded ? '' : 'fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4'">
+  <div :class="embedded ? '' : 'fixed inset-x-0 top-0 bottom-10 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4'">
     <Transition name="performance" :appear="!embedded">
       <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-synth-neon/30 rounded-3xl w-full max-w-4xl overflow-hidden shadow-[0_0_50px_rgba(0,255,204,0.15)] flex flex-col max-h-[90vh]'">
         

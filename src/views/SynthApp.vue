@@ -21,7 +21,7 @@ import { useLfoStore } from '@/stores/useLfoStore'
 const iconMap = {
   LayoutGrid, Layers, Heart, Keyboard: KeyboardMusic, ListMusic, User, BookOpen, 
   Workflow, RotateCw, HelpCircle, Cable, Settings2, Zap, Gamepad2, Activity,
-  Save, AlertTriangle, Settings, Cpu, Play, Square, Mic, History, Network, Music2
+  Save, AlertTriangle, Settings, Cpu, Play, Square, Mic, History, Network, Music2, Disc3
 }
 
 import { useMidiInit } from '@/composables/useMidiInit'
@@ -65,6 +65,7 @@ import VelocityMappingDialog from '@/components/VelocityMappingDialog.vue'
 import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
 import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
+import AppFooter from '@/components/AppFooter.vue'
 
 
 // Stores
@@ -124,7 +125,8 @@ const toolbarButtonMap = {
   looper:        { state: 'isLooperOpen',       icon: RotateCw,   label: 'Looper' },
   midi_matrix:   { state: 'isMidiMatrixOpen',   icon: Cpu,        label: 'MIDI Matrix' },
   'midi-performance':   { state: 'isMidiPerformanceOpen',       icon: Network, label: 'MIDI Performance Grid'    },
-  'program-change':    { state: 'isProgramChangeBrowserOpen', icon: Music2,  label: 'Program Change Browser' },
+  'program-change':         { state: 'isProgramChangeBrowserOpen',       icon: Music2, label: 'Program Change Browser' },
+  'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,  label: 'Device Program Change' },
 }
 
 function handleToolbarButtonClick(button) {
@@ -312,7 +314,7 @@ onMounted(() => {
       <Transition name="sy-drawer">
         <div
           v-if="uiStore.isProgramChangeBrowserOpen"
-          class="fixed top-0 right-0 h-full w-full max-w-sm bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[440] flex flex-col overflow-hidden"
+          class="fixed top-0 right-0 bottom-10 w-full max-w-sm bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[440] flex flex-col overflow-hidden"
         >
           <div class="px-5 py-4 border-b border-neutral-900 flex items-center justify-between bg-black/50 backdrop-blur-xl shrink-0">
             <div class="flex items-center gap-2.5">
@@ -451,81 +453,7 @@ onMounted(() => {
     <!-- Tooltip Wrapper -->
     <Tooltip content="" />
 
-    <!-- ── System Footer ── -->
-    <footer class="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-md border-t border-neutral-900/80 z-[210] text-[10px] font-mono tracking-widest text-neutral-500 uppercase h-10">
-      <div class="h-full px-4 md:px-6 flex flex-row justify-between items-center gap-2">
-
-        <!-- Left: app meta -->
-        <div class="flex-none flex items-center gap-2">
-          <!-- Auth User Badge -->
-          <Tooltip v-if="authStore.user" :content="`${authStore.user.email} (${authStore.profile?.role || 'demo'})`" :disabled="false" position="top">
-            <button
-              @click="uiStore.isProfileOpen = true"
-              class="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase bg-neutral-900/50 border border-neutral-800 text-neutral-400 hover:text-synth-neon hover:border-synth-neon transition-colors"
-            >
-              <User class="w-3 h-3" />
-              <span class="max-w-[100px] truncate">
-                {{ authStore.profile?.name || authStore.user.email.split('@')[0] }}
-              </span>
-            </button>
-          </Tooltip>
-          <Tooltip content="MIDI Status" :disabled="false" position="top">
-            <div :class="['px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1.5 transition-colors', midiStore.midiReady ? 'bg-synth-neon/10 text-synth-neon' : 'bg-red-950/30 text-red-400']">
-              <Radio class="w-3 h-3" />
-              {{ midiStore.midiReady ? 'READY' : 'WAITING S-1' }}
-            </div>
-          </Tooltip>
-        </div>
-
-        <!-- Right: controls -->
-        <div class="flex-1 flex items-center justify-end gap-3 md:gap-5">
-          <!-- Quick Channel Selector -->
-          <QuickChannelSelector v-if="showPartSelector" />
-
-          <!-- Global MIDI Transport -->
-          <div v-if="authStore.user" class="flex items-center gap-2">
-            <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 border border-neutral-800/60 rounded-full group">
-              <button 
-                @click="midiStore.toggleGlobalTransport()"
-                :class="[
-                  'flex items-center gap-2 px-2 py-1 rounded-full transition-all active:scale-95 font-black text-[8px] border',
-                  midiStore.isTransportPlaying 
-                    ? 'text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500 hover:text-white' 
-                    : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500 hover:text-black'
-                ]"
-              >
-                <div class="flex items-center gap-1.5">
-                  <span class="opacity-50 text-[7px] border border-current px-1 rounded-sm tracking-tighter">MIDI</span>
-                  <component :is="midiStore.isTransportPlaying ? Square : Play" class="w-3 h-3 fill-current" />
-                  <span>{{ midiStore.isTransportPlaying ? 'STOP' : 'START' }}</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <!-- MIDI Panic Button -->
-          <button 
-            v-if="authStore.user"
-            @click="midiStore.panic()"
-            class="w-8 h-8 flex items-center justify-center rounded-full bg-red-950/30 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-90"
-          >
-            <AlertTriangle class="w-3.5 h-3.5" />
-          </button>
-
-
-          <!-- Global BPM -->
-          <div v-if="authStore.user" class="flex items-center gap-2 relative group">
-            <span class="text-neutral-500 text-[10px]">GLOBAL BPM:</span>
-            <input
-              type="number" min="20" max="300"
-              :value="arpStore.arpBpm"
-              @change="e => { const v = parseInt(e.target.value); if (!isNaN(v)) { arpStore.arpBpm = v; sessionBpmOverride = true } }"
-              class="w-24 bg-neutral-900 border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-lg focus:outline-none focus:border-synth-neon transition-colors"
-            />
-          </div>
-        </div>
-      </div>
-    </footer>
+    <AppFooter @bpm-override="sessionBpmOverride = true" />
     <SideBar />
     <MainMenuDial />
     <BackingTrackPlayer />

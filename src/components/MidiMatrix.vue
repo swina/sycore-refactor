@@ -114,7 +114,7 @@ function openProgramChangePanel() {
 </script>
 
 <template>
-  <div :class="embedded ? '' : 'fixed inset-0 z-[600] flex items-center justify-center bg-black/80 backdrop-blur-md p-4'">
+  <div :class="embedded ? '' : 'fixed inset-x-0 top-0 bottom-10 z-[600] flex items-center justify-center bg-black/80 backdrop-blur-md p-4'">
     <Transition name="hub" :appear="!embedded">
       <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-emerald-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col max-h-[90vh]'">
 
