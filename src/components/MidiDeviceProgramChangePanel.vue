@@ -240,6 +240,7 @@ function setChannel(ch) {
 // ── Performance Sets ────────────────────────────────────────────
 const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
 const pcSets         = ref([])
+const activeSetId    = ref(null)
 const showSaveDialog = ref(false)
 const newSetName     = ref('')
 const newSetNameInput = ref(null)
@@ -281,10 +282,11 @@ function saveCurrentSet() {
   })
 
   pcSets.value = [{
-    id:        Date.now().toString(),
+    id:          Date.now().toString(),
     name,
-    createdAt: new Date().toISOString(),
-    devices:   snapshot,
+    createdAt:   new Date().toISOString(),
+    midiChannel: midiStore.midiChannel,
+    devices:     snapshot,
   }, ...pcSets.value]
 
   persistSets()
@@ -292,6 +294,8 @@ function saveCurrentSet() {
 }
 
 function recallSet(set) {
+  activeSetId.value = set.id
+  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
   set.devices.forEach(entry => {
     if (!midiStore.routingConfig.registrations[entry.deviceName]) return
 
@@ -324,6 +328,27 @@ function recallSet(set) {
       }
     }
   })
+}
+
+function updateSet(id) {
+  const snapshot = devices.value.map(dev => {
+    const reg  = midiStore.routingConfig.registrations[dev.name]
+    const isUi = (midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)
+    return {
+      deviceName:     dev.name,
+      pcChannel:      reg?.pcChannel ?? 0,
+      pcBank:         reg?.pcBank    ?? '',
+      pcProgram:      reg?.pcProgram ?? 0,
+      pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
+      isUiDevice:     isUi,
+      lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
+      lastPresetName: isUi ? (presetStore.lastPreset?.name ?? null) : null,
+    }
+  })
+  pcSets.value = pcSets.value.map(s =>
+    s.id === id ? { ...s, devices: snapshot, midiChannel: midiStore.midiChannel, updatedAt: new Date().toISOString() } : s
+  )
+  persistSets()
 }
 
 function deleteSet(id) {
@@ -457,10 +482,15 @@ function deleteSet(id) {
                 <div
                   v-for="set in pcSets"
                   :key="set.id"
-                  class="group flex items-center gap-2 px-3 py-2 border-t border-neutral-900/60 hover:bg-white/[0.02] transition-colors"
+                  :class="[
+                    'group flex items-center gap-2 px-3 py-2 border-t border-neutral-900/60 transition-colors',
+                    activeSetId === set.id
+                      ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
+                      : 'hover:bg-white/[0.02] border-l-2 border-l-transparent'
+                  ]"
                 >
                   <div class="flex-1 min-w-0">
-                    <p class="text-[10px] font-bold text-neutral-300 truncate leading-none mb-0.5">{{ set.name }}</p>
+                    <p :class="['text-[10px] font-bold truncate leading-none mb-0.5', activeSetId === set.id ? 'text-violet-300' : 'text-neutral-300']">{{ set.name }}</p>
                     <p class="text-[8px] font-mono text-neutral-700">{{ set.devices.length }} device{{ set.devices.length !== 1 ? 's' : '' }}</p>
                   </div>
                   <button
@@ -469,6 +499,13 @@ function deleteSet(id) {
                     class="shrink-0 p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500 hover:text-black hover:border-violet-500 transition-all"
                   >
                     <RotateCcw class="w-2.5 h-2.5" />
+                  </button>
+                  <button
+                    @click="updateSet(set.id)"
+                    title="Update this set with current state"
+                    class="shrink-0 p-1.5 rounded-lg text-neutral-600 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border hover:border-emerald-500/20 transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    <Save class="w-2.5 h-2.5" />
                   </button>
                   <button
                     @click="deleteSet(set.id)"

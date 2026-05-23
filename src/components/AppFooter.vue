@@ -4,20 +4,53 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
-import { computed } from 'vue'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { User, Radio, AlertTriangle, Play, Square } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import Tooltip from '@/components/Tooltip.vue'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { midiService } from '@/core/midi/MidiService'
 
 const emit = defineEmits(['bpm-override'])
 
-const authStore   = useAuthStore()
-const midiStore   = useMidiStore()
-const arpStore    = useArpStore()
-const uiStore     = useUiStore()
-const configStore = useConfigStore()
+const authStore    = useAuthStore()
+const midiStore    = useMidiStore()
+const arpStore     = useArpStore()
+const uiStore      = useUiStore()
+const configStore  = useConfigStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 const showPartSelector = computed(() => configStore.enablePartSelector)
+
+let _unsubFooterMidi = null
+
+onMounted(() => {
+  _unsubFooterMidi = midiService.addRawListener((event) => {
+    if (!event.data || event.data.length < 3) return
+    const status  = event.data[0]
+    const type    = status & 0xF0
+    const channel = status & 0x0F
+    const byte1   = event.data[1]
+    const byte2   = event.data[2]
+    const isCC    = type === 0xB0 && byte2 > 0
+    const isNote  = type === 0x90 && byte2 > 0
+    if (!isCC && !isNote) return
+    const inputPort = midiService.getInputs().find(i => i.id === event.target?.id)
+    const device    = inputPort?.name || null
+    const keyParts  = []
+    if (device) keyParts.push(device)
+    keyParts.push(`CH${channel + 1}`)
+    keyParts.push(isNote ? `NOTE${byte1}` : `CC${byte1}`)
+    const mapping   = mappingStore.midiMappings[keyParts.join(':')]
+    if (!mapping) return
+    const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+    if (paramName === 'globalTransport') midiStore.toggleGlobalTransport()
+  })
+})
+
+onUnmounted(() => { if (_unsubFooterMidi) _unsubFooterMidi() })
 
 function handleBpmChange(e) {
   const v = parseInt(e.target.value)
@@ -61,6 +94,7 @@ function handleBpmChange(e) {
           <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 border border-neutral-800/60 rounded-full group">
             <button
               @click="midiStore.toggleGlobalTransport()"
+              @contextmenu.prevent="openMenu($event, { name: 'globalTransport', label: 'Global Transport' })"
               :class="[
                 'flex items-center gap-2 px-2 py-1 rounded-full transition-all active:scale-95 font-black text-[8px] border',
                 midiStore.isTransportPlaying

@@ -3,6 +3,8 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical, Repeat, Zap, Upload, Magnet } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggable } from '@/composables/useDraggable'
 import { Mp3Encoder } from '@breezystack/lamejs'
 import { midiService } from '@/core/midi/MidiService'
@@ -11,8 +13,10 @@ const props = defineProps({
   hasBackingTrack: { type: Boolean, default: false },
 })
 
-const uiStore = useUiStore()
-const midiStore = useMidiStore()
+const uiStore      = useUiStore()
+const midiStore    = useMidiStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 const { x, y, startDrag } = useDraggable(
   Math.max(8, (window.innerWidth - 480) / 2),
@@ -1298,6 +1302,7 @@ function fmtTime(s) {
 let _recToggleHandler = null
 let _startRecHandler = null
 let _stopRecHandler = null
+let _recMidiUnsub = null
 let resizeObserver = null
 
 onMounted(async () => {
@@ -1343,6 +1348,27 @@ onMounted(async () => {
     setTimeout(() => midiService.reScanInputs(), 1000)
   }
 
+  _recMidiUnsub = midiService.addRawListener((event) => {
+    if (!event.data || event.data.length < 3) return
+    const status  = event.data[0]
+    const type    = status & 0xF0
+    const channel = status & 0x0F
+    const byte1   = event.data[1]
+    const byte2   = event.data[2]
+    const isCC    = type === 0xB0 && byte2 > 0
+    const isNote  = type === 0x90 && byte2 > 0
+    if (!isCC && !isNote) return
+    const inputPort = midiService.getInputs().find(i => i.id === event.target?.id)
+    const device    = inputPort?.name || null
+    const keyParts  = []
+    if (device) keyParts.push(device)
+    keyParts.push(`CH${channel + 1}`)
+    keyParts.push(isNote ? `NOTE${byte1}` : `CC${byte1}`)
+    const mapping   = mappingStore.midiMappings[keyParts.join(':')]
+    if (!mapping) return
+    const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+    if (paramName === 'audioCapture_record') handleRecordClick()
+  })
   midiCleanup = midiService.addGlobalNoteOnListener((note, velocity) => {
     midiPulse.value = true
     setTimeout(() => midiPulse.value = false, 100)
@@ -1389,6 +1415,7 @@ onUnmounted(() => {
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
   window.removeEventListener('capture-start-rec', _startRecHandler)
   window.removeEventListener('capture-stop-rec', _stopRecHandler)
+  if (_recMidiUnsub) _recMidiUnsub()
 })
 </script>
 
@@ -1453,37 +1480,46 @@ onUnmounted(() => {
         <!--- Controls Left Column -->
         <div class="w-[120px] flex flex-col p-2 gap-2 border-r border-neutral-900">
           <!-- Record / Stop / Armed -->
-          <button
-            v-if="!isRecording && !isArmed"
-            @click="handleRecordClick"
-            title="Start recording"
-            :disabled="!isMonitoring"
-            :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
-              isMonitoring
-                ? 'text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10'
-                : 'text-neutral-700 border-neutral-800 cursor-default']"
-          >
-            <Circle class="w-3 h-3 fill-current" />
-            {{ hasBackingTrack ? 'Rec + Play' : 'Rec' }}
-          </button>
-          <button
-            v-else-if="isArmed"
-            @click="handleRecordClick"
-            title="Armed: Waiting for MIDI note. Click to cancel."
-            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 animate-pulse transition-colors"
-          >
-            <Zap class="w-3 h-3 fill-current" />
-            Armed...
-          </button>
-          <button
-            v-else
-            @click="handleRecordClick"
-            title="Stop recording"
-            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
-          >
-            <Square class="w-3 h-3 fill-current" />
-            Stop
-          </button>
+          <div class="relative">
+            <span
+              v-if="mappingStore.learningParamName === 'audioCapture_record'"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-10 pointer-events-none"
+            />
+            <button
+              v-if="!isRecording && !isArmed"
+              @click="handleRecordClick"
+              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
+              title="Start recording (right-click to MIDI map)"
+              :disabled="!isMonitoring"
+              :class="['w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+                isMonitoring
+                  ? 'text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+            >
+              <Circle class="w-3 h-3 fill-current" />
+              {{ hasBackingTrack ? 'Rec + Play' : 'Rec' }}
+            </button>
+            <button
+              v-else-if="isArmed"
+              @click="handleRecordClick"
+              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
+              title="Armed: Waiting for MIDI note. Click to cancel. Right-click to MIDI map."
+              class="w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 animate-pulse transition-colors"
+            >
+              <Zap class="w-3 h-3 fill-current" />
+              Armed...
+            </button>
+            <button
+              v-else
+              @click="handleRecordClick"
+              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
+              title="Stop recording (right-click to MIDI map)"
+              class="w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+            >
+              <Square class="w-3 h-3 fill-current" />
+              Stop
+            </button>
+          </div>
 
           <!-- MIDI Sync Toggle -->
           <button

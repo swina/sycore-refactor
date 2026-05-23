@@ -145,6 +145,7 @@ const outputDevices = computed(() => midiStore.outputs?.map(o => o.name) ?? [])
 // ── Recall Performance Set ────────────────────────────────────────
 function recallSet(set) {
   if (!set) return
+  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
   set.devices.forEach(entry => {
     if (!midiStore.routingConfig?.registrations?.[entry.deviceName]) return
     midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
@@ -183,6 +184,9 @@ function triggerSetPad(idx) {
   if (!pad?.setId) return
   const set = pcSets.value.find(s => s.id === pad.setId)
   if (!set) return
+  midiStore.outputs.forEach(port => {
+    for (let ch = 0; ch < 16; ch++) port.send([0xB0 | ch, 123, 0])
+  })
   activePerfSetIdx.value = idx
   recallSet(set)
 }

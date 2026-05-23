@@ -94,7 +94,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <!-- Click-outside backdrop — blocked during learning to avoid accidental close -->
     <div
       v-if="menu.visible.value"
-      class="fixed inset-0 z-[979]"
+      class="fixed inset-0 z-[1090]"
       @click="isLearningThis ? null : menu.closeMenu()"
       @contextmenu.prevent="isLearningThis ? null : menu.closeMenu()"
     />
@@ -103,7 +103,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <Transition name="ctx-menu">
       <div
         v-if="menu.visible.value"
-        class="fixed z-[980] w-56 bg-neutral-950 border border-neutral-800 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden"
+        class="fixed z-[1091] w-56 bg-neutral-950 border border-neutral-800 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden"
         :style="{ left: menu.x.value + 'px', top: menu.y.value + 'px' }"
       >
         <!-- Header -->
