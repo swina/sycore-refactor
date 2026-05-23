@@ -80,9 +80,10 @@ export function useMidiInit() {
       }
     }
 
-    // Start MIDI clock at the current BPM
+    // Broadcast tempo to all devices via clock pulses, then stop after 5ms
     midiService.setBpm(arpStore.arpBpm)
-    midiStore.startClock()
+    midiService.startClock()
+    setTimeout(() => midiService.sendStop(), 5)
   }
 
   const handleClickInit = () => {

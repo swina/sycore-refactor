@@ -2,14 +2,16 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   X, Trash2, Play, Pause, SkipBack, SkipForward,
-  BookOpen, Disc3, ListMusic, Layers, Save, FolderOpen, Check
+  BookOpen, ListMusic, Save, FolderOpen, Check,
+  Volume2, VolumeX, Cpu, Music
 } from 'lucide-vue-next'
-import { useMidiStore }    from '@/stores/useMidiStore'
-import { usePresetStore }  from '@/stores/usePresetStore'
-import { useLivePadStore } from '@/stores/useLivePadStore'
-import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiStore }       from '@/stores/useMidiStore'
+import { usePresetStore }     from '@/stores/usePresetStore'
+import { useLivePadStore }    from '@/stores/useLivePadStore'
+import { useMappingStore }    from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { midiService }    from '@/core/midi/MidiService'
+import { useDeviceRegistry }  from '@/composables/useDeviceRegistry'
+import { midiService }        from '@/core/midi/MidiService'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
 import PlayList        from '@/components/PlayList.vue'
 
@@ -21,12 +23,13 @@ const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
+const { devices: registeredDevices } = useDeviceRegistry()
 
 // ── localStorage ─────────────────────────────────────────────────
 const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
 const LS_LPP_SETS       = 'SYCORE_LPP_SETS'
-const LS_LPP_DEVPC      = 'SYCORE_LPP_DEVICE_PC'
 const LS_LPP_SNAPSHOTS  = 'SYCORE_LPP_SNAPSHOTS'
+const LS_LPP_MIX        = 'SYCORE_LPP_MIX'
 
 function getLS(key, def) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def } catch { return def }
@@ -37,17 +40,15 @@ function setLS(key, val) { try { localStorage.setItem(key, JSON.stringify(val)) 
 const pcSets = ref([])
 
 const emptySetPad = () => ({ setId: null, setName: null })
-const emptyDevPad = () => ({ deviceName: null, channel: 0, program: 0, soundName: '' })
 
-// ── Row 1: Performance Set pads (8) ──────────────────────────────
-const setPads = ref(Array(8).fill(null).map(emptySetPad))
-
-// ── Row 2: Device PC pads (8) ────────────────────────────────────
-const devicePcPads = ref(Array(8).fill(null).map(emptyDevPad))
+// ── 16 Performance Set pads (two rows of 8) ───────────────────────
+const setPads = ref(Array(16).fill(null).map(emptySetPad))
 
 // ── Active visual state (in store for controller LED feedback) ────
-const activePerfSetIdx  = computed({ get: () => livePadStore.activePerfSetIdx,  set: v => { livePadStore.activePerfSetIdx  = v } })
-const activeDevicePcIdx = computed({ get: () => livePadStore.activeDevicePcIdx, set: v => { livePadStore.activeDevicePcIdx = v } })
+const activePerfSetIdx = computed({
+  get: () => livePadStore.activePerfSetIdx,
+  set: v => { livePadStore.activePerfSetIdx = v }
+})
 
 // ── Live Performance Snapshots ────────────────────────────────────
 const lppSnapshots        = ref([])
@@ -63,8 +64,7 @@ function saveSnapshot() {
     id: Date.now().toString(),
     name,
     savedAt: new Date().toISOString(),
-    setPads:      JSON.parse(JSON.stringify(setPads.value)),
-    devicePcPads: JSON.parse(JSON.stringify(devicePcPads.value)),
+    setPads: JSON.parse(JSON.stringify(setPads.value)),
   }
   lppSnapshots.value = [entry, ...lppSnapshots.value]
   setLS(LS_LPP_SNAPSHOTS, lppSnapshots.value)
@@ -74,8 +74,10 @@ function saveSnapshot() {
 }
 
 function recallSnapshot(snap) {
-  setPads.value      = JSON.parse(JSON.stringify(snap.setPads))
-  devicePcPads.value = JSON.parse(JSON.stringify(snap.devicePcPads))
+  const pads = JSON.parse(JSON.stringify(snap.setPads ?? []))
+  // migrate old 8-item snapshots to 16
+  while (pads.length < 16) pads.push(emptySetPad())
+  setPads.value = pads.slice(0, 16)
   activeSnapshotId.value = snap.id
   persistPads()
 }
@@ -96,9 +98,8 @@ function updateSnapshot() {
   if (idx === -1) return
   lppSnapshots.value[idx] = {
     ...lppSnapshots.value[idx],
-    setPads:      JSON.parse(JSON.stringify(setPads.value)),
-    devicePcPads: JSON.parse(JSON.stringify(devicePcPads.value)),
-    updatedAt:    new Date().toISOString(),
+    setPads:   JSON.parse(JSON.stringify(setPads.value)),
+    updatedAt: new Date().toISOString(),
   }
   setLS(LS_LPP_SNAPSHOTS, lppSnapshots.value)
 }
@@ -138,9 +139,6 @@ const totalProgressPct = computed(() =>
     ? Math.min(100, (totalCurrentTime.value / totalPlaylistDuration.value) * 100)
     : 0
 )
-
-// ── Output devices ────────────────────────────────────────────────
-const outputDevices = computed(() => midiStore.outputs?.map(o => o.name) ?? [])
 
 // ── Recall Performance Set ────────────────────────────────────────
 function recallSet(set) {
@@ -191,27 +189,10 @@ function triggerSetPad(idx) {
   recallSet(set)
 }
 
-function triggerDevicePcPad(idx) {
-  const pad = devicePcPads.value[idx]
-  if (!pad?.deviceName) return
-  const port = midiStore.outputs.find(o => o.name === pad.deviceName)
-  if (!port) return
-  const ch = pad.channel ?? 0
-  port.send([0xB0 | ch, 0,  0])
-  port.send([0xB0 | ch, 32, 0])
-  port.send([0xC0 | ch, Math.max(0, Math.min(127, pad.program ?? 0))])
-  activeDevicePcIdx.value = idx
-}
-
 // ── Assignment helpers ────────────────────────────────────────────
 function assignSetPad(idx, setId) {
   const set = setId ? pcSets.value.find(s => s.id === setId) : null
   setPads.value[idx] = set ? { setId: set.id, setName: set.name } : emptySetPad()
-  persistPads()
-}
-
-function updateDevicePcPad(idx, field, value) {
-  devicePcPads.value[idx] = { ...devicePcPads.value[idx], [field]: value }
   persistPads()
 }
 
@@ -221,15 +202,8 @@ function clearSetPad(idx) {
   persistPads()
 }
 
-function clearDevicePcPad(idx) {
-  devicePcPads.value[idx] = emptyDevPad()
-  if (activeDevicePcIdx.value === idx) activeDevicePcIdx.value = -1
-  persistPads()
-}
-
 function persistPads() {
-  setLS(LS_LPP_SETS,   setPads.value)
-  setLS(LS_LPP_DEVPC,  devicePcPads.value)
+  setLS(LS_LPP_SETS, setPads.value)
 }
 
 // ── Playlist controls (same event bus as LiveSet/BackingTrackPlayer) ──
@@ -261,14 +235,104 @@ function handleStateUpdate(e) {
   if (d.totalPlaylistDuration !== undefined) totalPlaylistDuration.value = d.totalPlaylistDuration
 }
 
+// ── Volume Mix ────────────────────────────────────────────────────
+// Only devices that are in the routing config AND are not controllers
+const volumeDevices = computed(() => {
+  const regs = midiStore.routingConfig?.registrations ?? {}
+  return registeredDevices.value.filter(d =>
+    (d.type === 'audio-interface' ||
+     d.type === 'instrument-single' ||
+     d.type === 'instrument-multi') &&
+    !!regs[d.name]
+  )
+})
+
+// Storage key: for multitimbral devices it includes the current channel so each
+// part stores its own vol/cc independently. Single/audio-interface: just the name.
+function mixKey(name) {
+  const dev = registeredDevices.value.find(d => d.name === name)
+  return dev?.type === 'instrument-multi'
+    ? `${name}:${midiStore.midiChannel}`
+    : name
+}
+
+// { mixKey: { vol: 0–127, cc: 0–127 } }
+const mixState = ref(getLS(LS_LPP_MIX, {}))
+
+function getMix(name) {
+  return mixState.value[mixKey(name)] ?? { vol: 100, cc: 7, mute: false }
+}
+
+// ── Mute — wraps port.send to block Note On/Off while muted ──────
+const _mutedPorts = new Map() // deviceName → original send fn
+
+function _applyMuteWrap(name) {
+  const port = midiStore.outputs.find(o => o.name === name)
+  if (!port || _mutedPorts.has(name)) return
+  const orig = port.send.bind(port)
+  _mutedPorts.set(name, { port, orig })
+  port.send = (data, ts) => {
+    const type = data[0] & 0xF0
+    if (type === 0x90 || type === 0x80) return
+    orig(data, ts)
+  }
+}
+
+function _removeMuteWrap(name) {
+  const entry = _mutedPorts.get(name)
+  if (!entry) return
+  entry.port.send = entry.orig
+  _mutedPorts.delete(name)
+}
+
+function toggleMute(name) {
+  const next = !getMix(name).mute
+  setMixField(name, 'mute', next)
+  if (next) {
+    // Silence device immediately across all channels
+    const port = midiStore.outputs.find(o => o.name === name)
+    if (port) {
+      for (let ch = 0; ch < 16; ch++) port.send([0xB0 | ch, 123, 0])
+    }
+    _applyMuteWrap(name)
+  } else {
+    _removeMuteWrap(name)
+  }
+}
+
+function setMixField(name, field, value) {
+  const key = mixKey(name)
+  mixState.value = { ...mixState.value, [key]: { ...getMix(name), [field]: value } }
+  setLS(LS_LPP_MIX, mixState.value)
+  if (field === 'vol') sendMixCC(name)
+}
+
+function sendMixCC(name) {
+  const port = midiStore.outputs.find(o => o.name === name)
+  if (!port) return
+  const reg = midiStore.routingConfig?.registrations?.[name]
+  const dev = registeredDevices.value.find(d => d.name === name)
+  const ch  = dev?.type === 'instrument-multi'
+    ? midiStore.midiChannel - 1
+    : (reg?.outChannel != null && reg.outChannel >= 0) ? reg.outChannel : 0
+  const { vol, cc } = getMix(name)
+  const ccVal  = Math.min(127, cc)
+  const volVal = Math.min(127, Math.round(vol))
+  console.log(`[LPP Mix] ${name} | MIDI CH${ch + 1} (byte=${ch}) | CC${ccVal} = ${volVal}`)
+  port.send([0xB0 | ch, ccVal, volVal])
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 function loadState() {
-  pcSets.value      = getLS(LS_PC_SETS, [])
+  pcSets.value       = getLS(LS_PC_SETS, [])
   lppSnapshots.value = getLS(LS_LPP_SNAPSHOTS, [])
-  const savedSets  = getLS(LS_LPP_SETS,  null)
-  const savedDevPc = getLS(LS_LPP_DEVPC, null)
-  if (Array.isArray(savedSets)  && savedSets.length  === 8) setPads.value      = savedSets
-  if (Array.isArray(savedDevPc) && savedDevPc.length === 8) devicePcPads.value = savedDevPc
+  const saved = getLS(LS_LPP_SETS, null)
+  if (Array.isArray(saved)) {
+    // migrate old 8-item saves to 16
+    const pads = [...saved]
+    while (pads.length < 16) pads.push(emptySetPad())
+    setPads.value = pads.slice(0, 16)
+  }
 }
 
 // ── MIDI trigger listener for lpp_* mapped pads ───────────────────
@@ -277,14 +341,13 @@ let _unsubLppMidi = null
 function _startLppMidiListener() {
   _unsubLppMidi = midiService.addRawListener((event) => {
     if (!event.data || event.data.length < 3) return
-    const status = event.data[0]
-    const type   = status & 0xF0
+    const status  = event.data[0]
+    const type    = status & 0xF0
     const channel = status & 0x0F
-    const byte1  = event.data[1]
-    const byte2  = event.data[2]
+    const byte1   = event.data[1]
+    const byte2   = event.data[2]
 
-    // Accept CC (any value > 0) or Note On (velocity > 0)
-    const isCC   = type === 0xB0 && byte2 > 0
+    const isCC   = type === 0xB0
     const isNote = type === 0x90 && byte2 > 0
     if (!isCC && !isNote) return
 
@@ -292,7 +355,6 @@ function _startLppMidiListener() {
     const inputPort = midiService.getInputs().find(i => i.id === inputId)
     const device    = inputPort?.name || null
 
-    // Build lookup key matching the format used in confirmLearn
     const keyParts = []
     if (device) keyParts.push(device)
     keyParts.push(`CH${channel + 1}`)
@@ -305,14 +367,17 @@ function _startLppMidiListener() {
     if (!paramName?.startsWith('lpp_')) return
 
     if (paramName.startsWith('lpp_set_')) {
+      if (isCC && byte2 === 0) return
       const idx = parseInt(paramName.slice('lpp_set_'.length))
       if (!isNaN(idx)) triggerSetPad(idx)
-    } else if (paramName.startsWith('lpp_devpc_')) {
-      const idx = parseInt(paramName.slice('lpp_devpc_'.length))
-      if (!isNaN(idx)) triggerDevicePcPad(idx)
     } else if (paramName.startsWith('lpp_bt_')) {
+      if (isCC && byte2 === 0) return
       const idx = parseInt(paramName.slice('lpp_bt_'.length))
       if (!isNaN(idx)) playFromPlaylist(idx)
+    } else if (paramName.startsWith('lpp_mix_')) {
+      if (!isCC) return
+      const devName = paramName.slice('lpp_mix_'.length)
+      setMixField(devName, 'vol', byte2)
     }
   })
 }
@@ -322,12 +387,26 @@ onMounted(() => {
   window.addEventListener('player-state-sync', handleStateUpdate)
   window.dispatchEvent(new CustomEvent('player-state-request'))
   _startLppMidiListener()
+  // Reapply any mutes that were persisted from a previous session
+  volumeDevices.value.forEach(dev => {
+    if (getMix(dev.name).mute) _applyMuteWrap(dev.name)
+  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('player-state-sync', handleStateUpdate)
   if (_unsubLppMidi) _unsubLppMidi()
+  // Restore all wrapped ports so mute doesn't outlive the component
+  _mutedPorts.forEach(({ port, orig }) => { port.send = orig })
+  _mutedPorts.clear()
 })
+
+// Reapply mutes when outputs come online (e.g. device reconnect)
+watch(() => midiStore.outputs, () => {
+  volumeDevices.value.forEach(dev => {
+    if (getMix(dev.name).mute) _applyMuteWrap(dev.name)
+  })
+}, { deep: false })
 
 // Refresh PC sets list and sync pad names when panel opens
 watch(() => props.isOpen, (open) => {
@@ -357,7 +436,7 @@ function formatTime(t) {
       <div class="flex items-center gap-8">
         <div class="flex flex-col">
           <h2 class="text-sm font-black uppercase tracking-[0.3em] text-violet-400">Live Performance</h2>
-          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">PC Sets · Device PC · Backing Tracks</span>
+          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">PC Sets · Backing Tracks</span>
         </div>
         <nav class="flex items-center gap-6 ml-4">
           <button @click="tab = 'perf'"
@@ -448,7 +527,7 @@ function formatTime(t) {
     <!-- ══ PERFORMANCE TAB ══ -->
     <div v-if="tab === 'perf'" class="flex-1 flex flex-col min-h-0 px-5 pt-4 pb-2 gap-4 overflow-y-auto custom-scrollbar">
 
-      <!-- Row 1: Performance Sets -->
+      <!-- Row 1: Performance Sets (pads 1–8) -->
       <div class="shrink-0">
         <div class="flex items-center gap-3 mb-2">
           <BookOpen class="w-3.5 h-3.5 text-violet-400/50 shrink-0" />
@@ -458,7 +537,7 @@ function formatTime(t) {
         </div>
         <div class="grid grid-cols-8 gap-2">
           <button
-            v-for="(pad, idx) in setPads" :key="'ps-' + idx"
+            v-for="(pad, idx) in setPads.slice(0, 8)" :key="'ps-' + idx"
             @click="triggerSetPad(idx)"
             @contextmenu.prevent="openMenu($event, { name: 'lpp_set_' + idx, label: pad.setName || 'Set Pad ' + (idx + 1) })"
             :class="[
@@ -481,36 +560,34 @@ function formatTime(t) {
         </div>
       </div>
 
-      <!-- Row 2: Device PC -->
+      <!-- Row 2: Performance Sets (pads 9–16) -->
       <div class="shrink-0">
         <div class="flex items-center gap-3 mb-2">
-          <Disc3 class="w-3.5 h-3.5 text-sky-400/50 shrink-0" />
-          <span class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono whitespace-nowrap">Device Program Change</span>
+          <BookOpen class="w-3.5 h-3.5 text-violet-400/30 shrink-0" />
+          <span class="text-[10px] font-black text-neutral-600 uppercase tracking-[0.25em] font-mono whitespace-nowrap">Performance Sets B</span>
           <div class="h-px flex-1 bg-neutral-900" />
         </div>
         <div class="grid grid-cols-8 gap-2">
           <button
-            v-for="(pad, idx) in devicePcPads" :key="'dp-' + idx"
-            @click="triggerDevicePcPad(idx)"
-            @contextmenu.prevent="openMenu($event, { name: 'lpp_devpc_' + idx, label: pad.soundName || 'Device PC ' + (idx + 1) })"
+            v-for="(pad, i) in setPads.slice(8, 16)" :key="'ps-' + (i + 8)"
+            @click="triggerSetPad(i + 8)"
+            @contextmenu.prevent="openMenu($event, { name: 'lpp_set_' + (i + 8), label: pad.setName || 'Set Pad ' + (i + 9) })"
             :class="[
               'h-16 rounded-xl border-2 flex flex-col items-center justify-center p-2 gap-0.5 transition-all relative overflow-hidden',
-              pad.deviceName
-                ? activeDevicePcIdx === idx
-                  ? 'bg-sky-500 border-sky-400 text-black shadow-[0_0_15px_rgba(14,165,233,0.6)]'
-                  : 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20 hover:border-sky-400/70'
+              pad.setId
+                ? activePerfSetIdx === (i + 8)
+                  ? 'bg-violet-500 border-violet-400 text-black shadow-[0_0_15px_rgba(139,92,246,0.6)]'
+                  : 'border-violet-500/50 text-violet-300 hover:bg-violet-500/20 hover:border-violet-400/70'
                 : 'border border-neutral-800 text-neutral-700 cursor-default hover:border-neutral-700'
             ]"
-            :title="pad.deviceName ? `${pad.deviceName} · CH${pad.channel + 1} · PC${pad.program}` : 'Assign in Setup → Device PC'"
+            :title="pad.setId ? `Recall: ${pad.setName}` : 'Assign in Setup → Performance Sets'"
           >
-            <span v-if="mappingStore.learningParamName === 'lpp_devpc_' + idx" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
-            <div v-if="activeDevicePcIdx === idx" class="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
+            <span v-if="mappingStore.learningParamName === 'lpp_set_' + (i + 8)" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
+            <div v-if="activePerfSetIdx === (i + 8)" class="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
             <span class="text-[10px] font-black uppercase tracking-tight leading-none text-center truncate w-full px-1 z-10">
-              {{ pad.soundName || (pad.deviceName ? `PC ${pad.program}` : `— ${idx + 1} —`) }}
+              {{ pad.setName || `— ${i + 9} —` }}
             </span>
-            <span v-if="pad.deviceName" class="text-[7px] font-mono uppercase tracking-widest opacity-50 truncate w-full text-center z-10">
-              {{ pad.deviceName.split(' ').slice(0, 2).join(' ') }}
-            </span>
+            <span v-if="pad.setId" class="text-[7px] font-mono uppercase tracking-widest opacity-50 z-10">SET</span>
           </button>
         </div>
       </div>
@@ -534,6 +611,89 @@ function formatTime(t) {
           @next="nextTrack"
           @togglePlay="handlePlaylistToggle"
         />
+      </div>
+
+      <!-- Volume Mix -->
+      <div v-if="volumeDevices.length > 0" class="shrink-0">
+        <div class="flex items-center gap-3 mb-2">
+          <Volume2 class="w-3.5 h-3.5 text-emerald-500/50 shrink-0" />
+          <span class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono whitespace-nowrap">Volume Mix</span>
+          <div class="h-px flex-1 bg-neutral-900" />
+          <span class="text-[8px] font-mono text-neutral-700 shrink-0">right-click to MIDI map</span>
+        </div>
+        <div class="grid gap-1.5">
+          <div
+            v-for="dev in volumeDevices"
+            :key="dev.id"
+            @contextmenu.prevent="openMenu($event, { name: 'lpp_mix_' + dev.name, label: dev.name + ' Volume' })"
+            class="flex items-center gap-3 bg-neutral-900/40 border border-neutral-800/40 rounded-xl px-3 py-2 relative cursor-context-menu"
+          >
+            <!-- MIDI learn orange dot -->
+            <span
+              v-if="mappingStore.learningParamName === 'lpp_mix_' + dev.name"
+              class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none"
+            />
+            <!-- Mute button -->
+            <button
+              @click.stop="toggleMute(dev.name)"
+              :class="[
+                'shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center transition-all',
+                getMix(dev.name).mute
+                  ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30'
+                  : 'border-neutral-700 text-neutral-600 hover:border-neutral-500 hover:text-neutral-400'
+              ]"
+              :title="getMix(dev.name).mute ? 'Unmute — click to re-enable MIDI notes' : 'Mute — block MIDI notes to this device'"
+            >
+              <VolumeX v-if="getMix(dev.name).mute" class="w-3.5 h-3.5" />
+              <Volume2 v-else class="w-3.5 h-3.5" />
+            </button>
+            <!-- Online dot + type icon -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <div :class="['w-1.5 h-1.5 rounded-full', dev.online ? 'bg-emerald-500' : 'bg-neutral-700']" />
+              <component
+                :is="dev.type === 'audio-interface' ? Cpu : Music"
+                :class="['w-3 h-3', dev.type === 'audio-interface' ? 'text-amber-400/70' : 'text-emerald-400/70']"
+              />
+            </div>
+            <!-- Name + part badge for multitimbral -->
+            <div class="flex items-center gap-1.5 w-28 shrink-0 min-w-0">
+              <span class="text-[10px] font-bold text-neutral-300 truncate" :title="dev.name">{{ dev.name }}</span>
+              <span
+                v-if="dev.type === 'instrument-multi'"
+                class="shrink-0 text-[7px] font-black px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 leading-none"
+              >CH{{ midiStore.midiChannel }}</span>
+            </div>
+            <!-- Slider -->
+            <input
+              type="range"
+              min="0"
+              max="127"
+              :value="getMix(dev.name).vol"
+              @input="e => setMixField(dev.name, 'vol', parseInt(e.target.value))"
+              :disabled="!dev.online || getMix(dev.name).mute"
+              :class="[
+                'flex-1 h-1 rounded appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed',
+                getMix(dev.name).mute ? 'accent-red-500 bg-red-900/30' : 'accent-emerald-500 bg-neutral-800'
+              ]"
+            />
+            <!-- Volume value -->
+            <span :class="['text-[9px] font-mono w-7 text-right shrink-0', getMix(dev.name).mute ? 'text-red-500/50 line-through' : 'text-emerald-400']">
+              {{ getMix(dev.name).vol }}
+            </span>
+            <!-- CC# picker -->
+            <div class="flex items-center gap-1 shrink-0 ml-1 border-l border-neutral-800 pl-2">
+              <span class="text-[8px] font-mono text-neutral-600 uppercase">CC</span>
+              <input
+                type="number"
+                min="0"
+                max="127"
+                :value="getMix(dev.name).cc"
+                @change="e => setMixField(dev.name, 'cc', Math.min(127, Math.max(0, parseInt(e.target.value) || 0)))"
+                class="w-9 bg-black border border-neutral-700 rounded px-1 py-0.5 text-center text-[9px] font-mono text-violet-300 outline-none focus:border-violet-500"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -578,7 +738,6 @@ function formatTime(t) {
         <button
           v-for="t in [
             { id: 'sets',      label: 'Performance Sets', icon: BookOpen },
-            { id: 'device-pc', label: 'Device PC',        icon: Disc3 },
             { id: 'playlist',  label: 'Playlist',         icon: ListMusic },
             { id: 'snapshots', label: 'Snapshots',        icon: FolderOpen },
           ]"
@@ -594,10 +753,10 @@ function formatTime(t) {
         </button>
       </div>
 
-      <!-- Performance Sets assignment -->
+      <!-- Performance Sets assignment (16 pads) -->
       <div v-if="setupTab === 'sets'" class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-2">
         <p class="text-[9px] font-mono text-neutral-600 mb-4 leading-relaxed">
-          Assign a saved Performance Set to each of the 8 pads. Click the pad in Performance mode to instantly recall all device PC states in that set.
+          Assign a saved Performance Set to each of the 16 pads. Click the pad in Performance mode to instantly recall all device PC states in that set.
         </p>
         <div
           v-for="(pad, idx) in setPads" :key="'su-ps-' + idx"
@@ -625,68 +784,11 @@ function formatTime(t) {
         </p>
       </div>
 
-      <!-- Device PC assignment -->
-      <div v-if="setupTab === 'device-pc'" class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-2">
-        <p class="text-[9px] font-mono text-neutral-600 mb-4 leading-relaxed">
-          Assign a device, MIDI channel, and program number to each pad. Clicking the pad in Performance mode immediately sends the Program Change.
-        </p>
-        <div
-          v-for="(pad, idx) in devicePcPads" :key="'su-dp-' + idx"
-          class="flex items-center gap-2 bg-neutral-900/40 rounded-xl px-4 py-3 border border-neutral-800/40"
-        >
-          <span class="text-[11px] font-black font-mono text-sky-400/50 w-5 shrink-0">{{ idx + 1 }}</span>
-
-          <!-- Label -->
-          <input
-            :value="pad.soundName"
-            @input="e => updateDevicePcPad(idx, 'soundName', e.target.value)"
-            type="text" placeholder="Label…" maxlength="20"
-            class="w-24 shrink-0 bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[11px] text-white font-mono outline-none focus:border-sky-500/50 placeholder:text-neutral-700"
-          />
-
-          <!-- Device -->
-          <select
-            :value="pad.deviceName || ''"
-            @change="e => updateDevicePcPad(idx, 'deviceName', e.target.value || null)"
-            class="flex-1 min-w-0 appearance-none bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[11px] text-neutral-300 font-mono outline-none focus:border-sky-500/50 cursor-pointer"
-          >
-            <option value="" class="bg-black">— Device —</option>
-            <option v-for="d in outputDevices" :key="d" :value="d" class="bg-black">{{ d }}</option>
-          </select>
-
-          <!-- Channel -->
-          <select
-            :value="pad.channel"
-            @change="e => updateDevicePcPad(idx, 'channel', parseInt(e.target.value))"
-            class="w-[72px] shrink-0 appearance-none bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[11px] text-neutral-300 font-mono outline-none focus:border-sky-500/50 cursor-pointer"
-          >
-            <option v-for="ch in 16" :key="ch" :value="ch - 1" class="bg-black">CH {{ ch }}</option>
-          </select>
-
-          <!-- Program -->
-          <div class="flex items-center gap-1 shrink-0">
-            <span class="text-[8px] font-mono text-neutral-600 uppercase">PC</span>
-            <input
-              :value="pad.program"
-              @input="e => updateDevicePcPad(idx, 'program', Math.max(0, Math.min(127, parseInt(e.target.value) || 0)))"
-              type="number" min="0" max="127"
-              class="w-12 bg-black border border-neutral-700 rounded-lg px-2 py-1.5 text-[11px] text-center text-sky-300 font-mono outline-none focus:border-sky-500/50"
-            />
-          </div>
-
-          <!-- Clear -->
-          <button v-if="pad.deviceName" @click="clearDevicePcPad(idx)"
-            class="shrink-0 p-1.5 rounded-lg text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
-            <Trash2 class="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
       <!-- Snapshots list -->
       <div v-if="setupTab === 'snapshots'" class="flex-1 overflow-y-auto custom-scrollbar p-6">
         <div class="flex items-center justify-between mb-4">
           <p class="text-[9px] font-mono text-neutral-600 leading-relaxed">
-            Save and recall complete pad layouts — both Performance Sets and Device PC assignments.
+            Save and recall complete pad layouts — all 16 Performance Set assignments.
           </p>
           <button
             @click="openSnapshotDialog"
@@ -723,8 +825,7 @@ function formatTime(t) {
               </p>
             </div>
             <span class="text-[8px] font-mono text-neutral-600 shrink-0">
-              {{ snap.setPads?.filter(p => p.setId).length ?? 0 }}S
-              · {{ snap.devicePcPads?.filter(p => p.deviceName).length ?? 0 }}D
+              {{ snap.setPads?.filter(p => p.setId).length ?? 0 }} sets
             </span>
             <button
               @click="recallSnapshot(snap)"
