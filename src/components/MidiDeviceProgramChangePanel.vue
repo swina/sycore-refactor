@@ -115,6 +115,26 @@ const lastSent    = ref(null)
 
 watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null })
 
+// ── pcChannels persistence helper ──────────────────────────────
+function recordChannelState(ch, program, bank, soundName) {
+  const reg = selectedReg.value
+  if (!reg) return
+  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName } }
+  midiStore.updateRegistration(selectedDeviceName.value, 'pcChannels', updated)
+  midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', program)
+  midiStore.updateRegistration(selectedDeviceName.value, 'pcBank', bank)
+}
+
+// ── Current PC state (for display) ─────────────────────────────
+const currentPcState = computed(() => {
+  const reg = selectedReg.value
+  if (!reg) return []
+  const channels = reg.pcChannels ?? {}
+  return Object.entries(channels)
+    .map(([ch, info]) => ({ ch: parseInt(ch), ...info }))
+    .sort((a, b) => a.ch - b.ch)
+})
+
 // ── Send from catalog ───────────────────────────────────────────
 function selectSound(sound) {
   activeSound.value = sound
@@ -141,10 +161,7 @@ function sendCatalogSound(sound) {
   port.send([0xC0 | ch, progNum])
 
   lastSent.value = sound
-
-  // Persist last-used state into registration
-  midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', progNum)
-  midiStore.updateRegistration(selectedDeviceName.value, 'pcBank', selectedBank.value)
+  recordChannelState(ch, progNum, selectedBank.value, sound.name)
 
   const msg = `[Device PC] → ${selectedDeviceName.value} ch${ch + 1}: MSB=${msb} LSB=${lsb} PC=${progNum} | ${sound.name}`
   if (window.SY_LOG) window.SY_LOG(msg); else console.log(msg)
@@ -171,7 +188,7 @@ function sendManual() {
   if (sendLsb.value) port.send([0xB0 | ch, 32, manualLsb.value])
   const prog = Math.max(0, Math.min(127, manualProg.value - 1))
   port.send([0xC0 | ch, prog])
-  midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', prog)
+  recordChannelState(ch, prog, '', `PC ${manualProg.value}`)
   lastSent.value = { name: `PC ${manualProg.value}` }
 }
 
@@ -230,10 +247,21 @@ function setChannel(ch) {
                 <div :class="['w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', dev.isOnline ? 'bg-emerald-500' : 'bg-neutral-700']" />
                 <div class="flex flex-col min-w-0 flex-1">
                   <span class="text-[11px] font-bold text-white truncate leading-tight">{{ dev.name }}</span>
-                  <div class="flex items-center gap-1.5 mt-0.5">
+                  <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span v-if="dev.pcEnabled" class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">PC ON</span>
                     <span v-else class="text-[7px] font-mono text-neutral-700 uppercase">PC off</span>
-                    <span v-if="dev.pcEnabled" class="text-[7px] font-mono text-neutral-500">CH{{ (dev.pcChannel ?? 0) + 1 }}</span>
+                    <!-- Multi-timbral: show count of assigned channels -->
+                    <template v-if="dev.pcEnabled && dev.isMulti">
+                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0"
+                        class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                        {{ Object.keys(dev.pcChannels).length }} ch
+                      </span>
+                    </template>
+                    <!-- Mono: show CH + PC number -->
+                    <template v-else-if="dev.pcEnabled && Object.keys(dev.pcChannels ?? {}).length > 0">
+                      <span class="text-[7px] font-mono text-neutral-500">CH{{ (dev.pcChannel ?? 0) + 1 }}</span>
+                      <span class="text-[7px] font-black font-mono text-violet-400/70">PC{{ dev.pcProgram }}</span>
+                    </template>
                   </div>
                 </div>
                 <!-- PC toggle -->
@@ -289,6 +317,54 @@ function setChannel(ch) {
               <div v-if="isDeviceOffline" class="bg-amber-950/30 border border-amber-500/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
                 <AlertTriangle class="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span class="text-[9px] font-mono text-amber-400">Device offline — messages will not transmit</span>
+              </div>
+
+              <!-- ── Current Program Change state ── -->
+              <div v-if="currentPcState.length > 0" class="bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
+                <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
+                  <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
+                  <span v-if="selectedReg?.isMulti" class="text-[7px] font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 uppercase tracking-tighter">Multi-Timbral</span>
+                </div>
+
+                <!-- Multi-timbral: one row per channel -->
+                <template v-if="selectedReg?.isMulti">
+                  <div class="divide-y divide-neutral-900/60">
+                    <div
+                      v-for="entry in currentPcState"
+                      :key="entry.ch"
+                      :class="[
+                        'flex items-center gap-3 px-4 py-2.5 transition-colors',
+                        entry.ch === (selectedReg?.pcChannel ?? 0) ? 'bg-violet-500/10' : 'hover:bg-white/[0.02]'
+                      ]"
+                    >
+                      <span :class="[
+                        'shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border',
+                        entry.ch === (selectedReg?.pcChannel ?? 0)
+                          ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                          : 'bg-neutral-900 text-neutral-500 border-neutral-800'
+                      ]">CH {{ entry.ch + 1 }}</span>
+                      <span class="text-[10px] font-bold text-white truncate flex-1">{{ entry.soundName }}</span>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
+                        <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ entry.program }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Mono: single compact row -->
+                <template v-else>
+                  <div class="flex items-center gap-3 px-4 py-2.5">
+                    <span class="shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border bg-violet-500/20 text-violet-300 border-violet-500/40">
+                      CH {{ (currentPcState[0]?.ch ?? 0) + 1 }}
+                    </span>
+                    <span class="text-[10px] font-bold text-white truncate flex-1">{{ currentPcState[0]?.soundName }}</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <span v-if="currentPcState[0]?.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ currentPcState[0].bank }}</span>
+                      <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ currentPcState[0]?.program }}</span>
+                    </div>
+                  </div>
+                </template>
               </div>
 
               <!-- ── Catalog browser ── -->

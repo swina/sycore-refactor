@@ -88,7 +88,8 @@ export const useMidiStore = defineStore('midi', () => {
     pcEnabled: false,
     pcChannel: 0,
     pcProgram: 0,
-    pcBank: ''
+    pcBank: '',
+    pcChannels: {}  // { [ch: 0-15]: { program, bank, soundName } }
   })
 
   let initialConfig = { 
