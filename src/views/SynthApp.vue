@@ -65,6 +65,7 @@ import VelocityMappingDialog from '@/components/VelocityMappingDialog.vue'
 import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
 import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
+import LivePerformancePad from '@/components/LivePerformancePad.vue'
 import AppFooter from '@/components/AppFooter.vue'
 
 
@@ -126,7 +127,8 @@ const toolbarButtonMap = {
   midi_matrix:   { state: 'isMidiMatrixOpen',   icon: Cpu,        label: 'MIDI Matrix' },
   'midi-performance':   { state: 'isMidiPerformanceOpen',       icon: Network, label: 'MIDI Performance Grid'    },
   'program-change':         { state: 'isProgramChangeBrowserOpen',       icon: Music2, label: 'Program Change Browser' },
-  'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,  label: 'Device Program Change' },
+  'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,   label: 'Device Program Change' },
+  'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
 }
 
 function handleToolbarButtonClick(button) {
@@ -356,6 +358,14 @@ onMounted(() => {
           :isOpen="uiStore.isLiveSetOpen"
           :isAdmin="isAdmin"
           @close="uiStore.isLiveSetOpen = false"
+        />
+      </Transition>
+
+      <Transition name="sy-modal">
+        <LivePerformancePad
+          v-if="uiStore.isLivePerformancePadOpen"
+          :isOpen="uiStore.isLivePerformancePadOpen"
+          @close="uiStore.isLivePerformancePadOpen = false"
         />
       </Transition>
 

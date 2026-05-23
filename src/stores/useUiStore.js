@@ -43,6 +43,7 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiPerformanceOpen = ref(false)
   const isProgramChangeBrowserOpen = ref(false)
   const isDeviceProgramChangePanelOpen = ref(false)
+  const isLivePerformancePadOpen = ref(false)
   const isMidiMonitorOpen        = ref(false)
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
@@ -107,6 +108,7 @@ export const useUiStore = defineStore('ui', () => {
     isMidiPerformanceOpen.value = false
     isProgramChangeBrowserOpen.value = false
     isDeviceProgramChangePanelOpen.value = false
+    isLivePerformancePadOpen.value = false
     midiActionsActiveTab.value = 'mapper'
     midiActionsSelectedDevice.value = ''
   }
@@ -147,6 +149,7 @@ export const useUiStore = defineStore('ui', () => {
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen,
+    isLivePerformancePadOpen,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen, 

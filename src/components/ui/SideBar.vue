@@ -36,6 +36,7 @@ const ACTION_MAP = {
   'midi-performance': () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
   'program-change':         () => uiStore.isProgramChangeBrowserOpen = !uiStore.isProgramChangeBrowserOpen,
   'device-program-change':  () => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
+  'live-performance-pad':   () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
   'midi-manager': () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
 }
 
