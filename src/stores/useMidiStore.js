@@ -83,7 +83,12 @@ export const useMidiStore = defineStore('midi', () => {
     velocityMin: 0,
     velocityMax: 127,
     velocityMap: 'linear',
-    receiveSyncIn: false
+    receiveSyncIn: false,
+    // Device Program Change
+    pcEnabled: false,
+    pcChannel: 0,
+    pcProgram: 0,
+    pcBank: ''
   })
 
   let initialConfig = { 

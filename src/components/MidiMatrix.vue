@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import { X, Usb, Activity, Zap, Cpu, Bell, Power, ArrowRightLeft, Music, Plus, Trash2, ShieldCheck, Settings, Layers, Sliders } from 'lucide-vue-next'
+import { X, Usb, Activity, Zap, Cpu, Bell, Power, ArrowRightLeft, Music, Plus, Trash2, ShieldCheck, Settings, Layers } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -108,16 +108,8 @@ async function toggleAppSetting(field) {
   await configStore.saveAppSettings()
 }
 
-function openProgramChangeHeader() {
-  uiStore.midiActionsActiveTab = 'program'
-  uiStore.midiActionsSelectedDevice = ''
-  uiStore.isMidiActionsOpen = true
-}
-
-function openProgramChangeForDevice(deviceName) {
-  uiStore.midiActionsActiveTab = 'program'
-  uiStore.midiActionsSelectedDevice = deviceName
-  uiStore.isMidiActionsOpen = true
+function openProgramChangePanel() {
+  uiStore.isDeviceProgramChangePanelOpen = true
 }
 </script>
 
@@ -168,7 +160,7 @@ function openProgramChangeForDevice(deviceName) {
                 Reset Matrix
               </button>
 
-              <button @click="openProgramChangeHeader"
+              <button @click="openProgramChangePanel"
                 class="px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-400 text-[9px] font-black uppercase tracking-widest hover:bg-violet-500 hover:text-white transition-all">
                 Program Change
               </button>
@@ -248,6 +240,7 @@ function openProgramChangeForDevice(deviceName) {
                     <th class="px-2 py-4 text-[9px] font-black text-neutral-500 uppercase tracking-widest text-center">Trsp</th>
                     <th class="px-2 py-4 text-[9px] font-black text-neutral-500 uppercase tracking-widest text-center">Note</th>
                     <th class="px-2 py-4 text-[9px] font-black text-neutral-500 uppercase tracking-widest text-center">CC</th>
+                    <th class="px-2 py-4 text-[9px] font-black text-neutral-500 uppercase tracking-widest text-center">PC</th>
                     <th class="px-5 py-4 text-[9px] font-black text-neutral-500 uppercase tracking-widest text-right">Action</th>
                   </tr>
                 </thead>
@@ -358,19 +351,21 @@ function openProgramChangeForDevice(deviceName) {
                       </button>
                     </td>
 
+                    <!-- PC TOGGLE -->
+                    <td class="px-2 py-4 text-center">
+                      <button v-if="reg.outEnabled" @click="toggleSetting(reg.name, 'pcEnabled')"
+                        :class="['w-8 h-6 rounded-md text-[8px] font-black transition-all border uppercase tracking-tighter',
+                          reg.pcEnabled ? 'bg-violet-500/20 text-violet-400 border-violet-500/30' : 'text-neutral-700 border-transparent']">
+                        PC
+                      </button>
+                    </td>
+
                     <!-- ACTIONS / DELETE -->
                     <td class="px-5 py-4 text-right">
-                      <div class="flex items-center justify-end gap-1.5">
-                        <button v-if="reg.outEnabled" @click="openProgramChangeForDevice(reg.name)"
-                          title="Program Change"
-                          class="p-2 text-neutral-500 hover:text-violet-400 transition-colors rounded-lg hover:bg-violet-500/10">
-                          <Sliders class="w-4 h-4" />
-                        </button>
-                        <button @click="midiStore.removeRegistration(reg.name)"
-                          class="p-2 text-neutral-700 hover:text-red-500 transition-colors rounded-lg hover:bg-red-500/10">
-                          <Trash2 class="w-4 h-4" />
-                        </button>
-                      </div>
+                      <button @click="midiStore.removeRegistration(reg.name)"
+                        class="p-2 text-neutral-700 hover:text-red-500 transition-colors rounded-lg hover:bg-red-500/10">
+                        <Trash2 class="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 </tbody>

@@ -64,6 +64,7 @@ import SlideshowModal from '@/components/SlideshowModal.vue'
 import VelocityMappingDialog from '@/components/VelocityMappingDialog.vue'
 import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
 import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
+import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
 
 
 // Stores
@@ -276,6 +277,14 @@ onMounted(() => {
         <MidiMatrix
           v-if="uiStore.isMidiMatrixOpen"
           @close="uiStore.isMidiMatrixOpen = false"
+        />
+      </Transition>
+
+      <!-- DEVICE PROGRAM CHANGE PANEL -->
+      <Transition name="sy-modal">
+        <MidiDeviceProgramChangePanel
+          v-if="uiStore.isDeviceProgramChangePanelOpen"
+          @close="uiStore.isDeviceProgramChangePanelOpen = false"
         />
       </Transition>
 
