@@ -1,11 +1,14 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap } from 'lucide-vue-next'
+import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { usePresetStore } from '@/stores/usePresetStore'
+import { MidiSource } from '@/core/midi/MidiService'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
-const midiStore = useMidiStore()
+const midiStore   = useMidiStore()
+const presetStore = usePresetStore()
 
 // ── Device list (left column) — only PC-enabled devices ────────
 const devices = computed(() => {
@@ -31,6 +34,42 @@ const selectedReg = computed(() =>
 const isDeviceOffline = computed(() =>
   selectedDeviceName.value && !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
 )
+
+// ── UI/Preview instrument detection ────────────────────────────
+// A device routed from MidiSource.UI is the app's primary instrument.
+// For these, we show the app Sound Library instead of a catalog.
+const isUiDevice = computed(() => {
+  if (!selectedDeviceName.value) return false
+  const uiRoutes = midiStore.routingMatrix?.[MidiSource.UI] ?? []
+  return uiRoutes.includes(selectedDeviceName.value)
+})
+
+// ── UI-mode: history preset browser ────────────────────────────
+const uiSearchQuery    = ref('')
+const uiCategoryFilter = ref('')
+
+const uiCategories = computed(() =>
+  [...new Set(presetStore.history.map(p => p.category).filter(Boolean))].sort()
+)
+
+const uiFilteredPresets = computed(() => {
+  let list = presetStore.history
+  if (uiCategoryFilter.value) list = list.filter(p => p.category === uiCategoryFilter.value)
+  if (uiSearchQuery.value.trim()) {
+    const q = uiSearchQuery.value.toLowerCase()
+    list = list.filter(p => p.name?.toLowerCase().includes(q))
+  }
+  return list
+})
+
+watch(selectedDeviceName, () => {
+  uiSearchQuery.value = ''
+  uiCategoryFilter.value = ''
+})
+
+function selectHistoryPreset(preset) {
+  presetStore.recallPreset(preset, false)
+}
 
 // ── Catalog match ───────────────────────────────────────────────
 const catalogDevice = computed(() => {
@@ -249,8 +288,15 @@ function setChannel(ch) {
                 <div class="flex flex-col min-w-0 flex-1">
                   <span class="text-[11px] font-bold text-white truncate leading-tight">{{ dev.name }}</span>
                   <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <!-- UI/Preview primary instrument -->
+                    <template v-if="(midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)">
+                      <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-0.5">
+                        <Layers class="w-2 h-2" />UI
+                      </span>
+                      <span class="text-[7px] font-mono text-neutral-500">{{ presetStore.lastPreset?.name ?? '—' }}</span>
+                    </template>
                     <!-- Multi-timbral: assigned channel count -->
-                    <template v-if="dev.isMulti">
+                    <template v-else-if="dev.isMulti">
                       <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">Multi</span>
                       <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">
                         {{ Object.keys(dev.pcChannels).length }} ch set
@@ -307,203 +353,303 @@ function setChannel(ch) {
                 <span class="text-[9px] font-mono text-amber-400">Device offline — messages will not transmit</span>
               </div>
 
-              <!-- ── 3. Current Program Change ── -->
-              <div v-if="currentPcState.length > 0" class="shrink-0 mx-6 mt-3 bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
-                <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
-                  <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
-                  <span v-if="selectedReg?.isMulti" class="text-[7px] font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 uppercase tracking-tighter">Multi-Timbral</span>
-                </div>
-                <!-- Multi-timbral: capped height with own scroll -->
-                <div v-if="selectedReg?.isMulti" class="overflow-y-auto custom-scrollbar divide-y divide-neutral-900/60" style="max-height: 30vh">
-                  <div
-                    v-for="entry in currentPcState"
-                    :key="entry.ch"
-                    :class="[
-                      'flex items-center gap-3 px-4 py-2.5 transition-colors',
-                      entry.ch === (selectedReg?.pcChannel ?? 0) ? 'bg-violet-500/10' : 'hover:bg-white/[0.02]'
-                    ]"
-                  >
-                    <span :class="[
-                      'shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border',
-                      entry.ch === (selectedReg?.pcChannel ?? 0)
-                        ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
-                        : 'bg-neutral-900 text-neutral-500 border-neutral-800'
-                    ]">CH {{ entry.ch + 1 }}</span>
-                    <span class="text-[10px] font-bold text-white truncate flex-1">{{ entry.soundName }}</span>
-                    <div class="flex items-center gap-2 shrink-0">
-                      <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
-                      <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ entry.program }}</span>
-                    </div>
-                  </div>
-                </div>
-                <!-- Mono: single row, no scroll needed -->
-                <div v-else class="flex items-center gap-3 px-4 py-2.5">
-                  <span class="shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border bg-violet-500/20 text-violet-300 border-violet-500/40">
-                    CH {{ (currentPcState[0]?.ch ?? 0) + 1 }}
-                  </span>
-                  <span class="text-[10px] font-bold text-white truncate flex-1">{{ currentPcState[0]?.soundName }}</span>
-                  <div class="flex items-center gap-2 shrink-0">
-                    <span v-if="currentPcState[0]?.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ currentPcState[0].bank }}</span>
-                    <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ currentPcState[0]?.program }}</span>
-                  </div>
-                </div>
-              </div>
+              <!-- ══ UI DEVICE MODE (primary instrument via MidiSource.UI) ══ -->
+              <template v-if="isUiDevice">
 
-              <!-- ── 4. Bank selector (catalog only) ── -->
-              <template v-if="catalogDevice">
-                <div class="shrink-0 px-6 mt-4">
-                  <label class="block text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-2">Bank</label>
-                  <div class="flex gap-2 flex-wrap">
-                    <button
-                      v-for="bank in availableBanks"
-                      :key="bank"
-                      @click="selectedBank = bank"
-                      :class="[
-                        'px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border',
-                        selectedBank === bank
-                          ? 'bg-violet-500/20 border-violet-500/40 text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.15)]'
-                          : 'bg-black/40 border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300'
-                      ]"
-                    >
-                      {{ bank }}
-                    </button>
+                <!-- 3-UI. Currently loaded preset -->
+                <div class="shrink-0 mx-6 mt-3 bg-black/30 border border-sky-500/20 rounded-2xl overflow-hidden">
+                  <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
+                    <span class="text-[8px] font-mono text-sky-400/70 uppercase tracking-widest">Currently Loaded</span>
+                    <span class="text-[7px] font-black px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 uppercase tracking-tighter flex items-center gap-0.5">
+                      <Layers class="w-2 h-2" />Sound Library
+                    </span>
+                  </div>
+                  <div v-if="presetStore.lastPreset" class="flex items-center gap-3 px-4 py-2.5">
+                    <Star class="w-3 h-3 text-sky-400 shrink-0" />
+                    <span class="text-[11px] font-bold text-white truncate flex-1">{{ presetStore.lastPreset.name }}</span>
+                    <span v-if="presetStore.lastPreset.category" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 border border-sky-500/25">
+                      {{ presetStore.lastPreset.category }}
+                    </span>
+                  </div>
+                  <div v-else class="flex items-center gap-2 px-4 py-2.5">
+                    <span class="text-[10px] font-mono text-neutral-600">No preset loaded</span>
                   </div>
                 </div>
 
-                <!-- ── 5. Search + Category ── -->
-                <div v-if="selectedBank" class="shrink-0 px-6 mt-3 pb-3 flex gap-2 items-center border-b border-neutral-900">
+                <!-- 4-UI. Sound Library header -->
+                <div class="shrink-0 px-6 mt-4 flex items-center justify-between">
+                  <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Sound Library</span>
+                  <span class="text-[8px] font-mono text-neutral-600">{{ presetStore.history.length }} presets</span>
+                </div>
+
+                <!-- 5-UI. Search + Category -->
+                <div class="shrink-0 px-6 mt-2 pb-3 flex gap-2 items-center border-b border-neutral-900">
                   <div class="relative flex-1">
                     <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600" />
                     <input
-                      v-model="searchQuery"
+                      v-model="uiSearchQuery"
                       type="text"
-                      placeholder="Search presets…"
-                      class="w-full bg-black/50 border border-neutral-800 rounded-xl pl-7 pr-3 py-1.5 text-[11px] text-neutral-300 font-mono outline-none focus:border-violet-500/50 placeholder:text-neutral-700"
+                      placeholder="Search sound library…"
+                      class="w-full bg-black/50 border border-neutral-800 rounded-xl pl-7 pr-3 py-1.5 text-[11px] text-neutral-300 font-mono outline-none focus:border-sky-500/50 placeholder:text-neutral-700"
                     />
-                    <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-white">
+                    <button v-if="uiSearchQuery" @click="uiSearchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-white">
                       <X class="w-3 h-3" />
                     </button>
                   </div>
                   <div class="relative">
                     <select
-                      v-model="selectedCategory"
-                      class="appearance-none bg-black/50 border border-neutral-800 rounded-xl px-3 py-1.5 text-[10px] text-neutral-400 font-mono outline-none focus:border-violet-500/50 pr-6 cursor-pointer"
+                      v-model="uiCategoryFilter"
+                      class="appearance-none bg-black/50 border border-neutral-800 rounded-xl px-3 py-1.5 text-[10px] text-neutral-400 font-mono outline-none focus:border-sky-500/50 pr-6 cursor-pointer"
                     >
                       <option value="" class="bg-black">All categories</option>
-                      <option v-for="cat in categories" :key="cat" :value="cat" class="bg-black">{{ cat }}</option>
+                      <option v-for="cat in uiCategories" :key="cat" :value="cat" class="bg-black">{{ cat }}</option>
                     </select>
                     <ChevronDown class="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
                   </div>
                 </div>
-              </template>
 
-              <!-- ── 6. Scrollable preset list ── -->
-              <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
-
-                <!-- Catalog: loading -->
-                <div v-if="catalogDevice && selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
-                  <Loader2 class="w-5 h-5 text-violet-400 animate-spin" />
-                  <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Loading catalog…</span>
-                </div>
-
-                <!-- Catalog: preset list -->
-                <template v-else-if="catalogDevice && selectedBank && filteredSounds.length > 0">
-                  <div class="flex items-center justify-between mb-2 px-1">
-                    <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
-                    <span v-if="lastSent" class="flex items-center gap-1 text-[8px] font-mono text-violet-400 uppercase tracking-widest">
-                      <Zap class="w-2.5 h-2.5" />
-                      {{ lastSent.name }}
-                    </span>
+                <!-- 6-UI. Sound Library preset list -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
+                  <div v-if="uiFilteredPresets.length === 0" class="flex flex-col items-center justify-center py-12 gap-2">
+                    <Music2 class="w-6 h-6 text-neutral-700" />
+                    <span class="text-[10px] font-mono text-neutral-600">No presets found</span>
                   </div>
-                  <div class="space-y-0.5">
+                  <div v-else class="space-y-0.5">
                     <button
-                      v-for="sound in filteredSounds"
-                      :key="sound.no ?? sound.name"
-                      @click="selectSound(sound)"
+                      v-for="preset in uiFilteredPresets"
+                      :key="preset.id ?? preset.name"
+                      @click="selectHistoryPreset(preset)"
                       :class="[
                         'w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all group text-left',
-                        activeSound?.no === sound.no && activeSound?.name === sound.name
-                          ? 'bg-violet-500/15 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.1)]'
+                        presetStore.lastPreset?.id === preset.id
+                          ? 'bg-sky-500/15 border-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.1)]'
                           : 'bg-black/20 border-transparent hover:border-neutral-800 hover:bg-white/[0.03]'
                       ]"
                     >
                       <div class="flex items-center gap-2.5 min-w-0">
-                        <span :class="[
-                          'shrink-0 w-7 text-center text-[8px] font-black font-mono rounded px-1 py-0.5',
-                          activeSound?.no === sound.no && activeSound?.name === sound.name
-                            ? 'bg-violet-500 text-black'
-                            : 'bg-neutral-900 text-neutral-600 group-hover:bg-neutral-800 group-hover:text-neutral-400'
-                        ]">
-                          {{ sound[bankConfig?.program_field ?? 'program'] ?? 0 }}
-                        </span>
+                        <Star :class="[
+                          'shrink-0 w-3 h-3 transition-colors',
+                          preset.isFavorite ? 'text-amber-400' : 'text-neutral-800 group-hover:text-neutral-600'
+                        ]" />
                         <span :class="[
                           'text-[11px] font-medium truncate',
-                          activeSound?.no === sound.no && activeSound?.name === sound.name
-                            ? 'text-violet-200'
-                            : 'text-neutral-400 group-hover:text-neutral-200'
-                        ]">
-                          {{ sound.name }}
-                        </span>
+                          presetStore.lastPreset?.id === preset.id ? 'text-sky-200' : 'text-neutral-400 group-hover:text-neutral-200'
+                        ]">{{ preset.name }}</span>
                       </div>
                       <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                        <span
-                          v-if="sound[bankConfig?.category_field ?? 'category']"
-                          class="text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/50"
-                        >
-                          {{ sound[bankConfig?.category_field ?? 'category'] }}
+                        <span v-if="preset.category" class="text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/50">
+                          {{ preset.category }}
                         </span>
-                        <Send v-if="activeSound?.no === sound.no && activeSound?.name === sound.name" class="w-2.5 h-2.5 text-violet-400" />
+                        <Zap v-if="presetStore.lastPreset?.id === preset.id" class="w-2.5 h-2.5 text-sky-400" />
                       </div>
                     </button>
                   </div>
+                </div>
+
+              </template>
+
+              <!-- ══ CATALOG / MANUAL MODE ══ -->
+              <template v-else>
+
+                <!-- ── 3. Current Program Change ── -->
+                <div v-if="currentPcState.length > 0" class="shrink-0 mx-6 mt-3 bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
+                  <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
+                    <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
+                    <span v-if="selectedReg?.isMulti" class="text-[7px] font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 uppercase tracking-tighter">Multi-Timbral</span>
+                  </div>
+                  <!-- Multi-timbral: capped height with own scroll -->
+                  <div v-if="selectedReg?.isMulti" class="overflow-y-auto custom-scrollbar divide-y divide-neutral-900/60" style="max-height: 30vh">
+                    <div
+                      v-for="entry in currentPcState"
+                      :key="entry.ch"
+                      :class="[
+                        'flex items-center gap-3 px-4 py-2.5 transition-colors',
+                        entry.ch === (selectedReg?.pcChannel ?? 0) ? 'bg-violet-500/10' : 'hover:bg-white/[0.02]'
+                      ]"
+                    >
+                      <span :class="[
+                        'shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border',
+                        entry.ch === (selectedReg?.pcChannel ?? 0)
+                          ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                          : 'bg-neutral-900 text-neutral-500 border-neutral-800'
+                      ]">CH {{ entry.ch + 1 }}</span>
+                      <span class="text-[10px] font-bold text-white truncate flex-1">{{ entry.soundName }}</span>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
+                        <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ entry.program }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Mono: single row, no scroll needed -->
+                  <div v-else class="flex items-center gap-3 px-4 py-2.5">
+                    <span class="shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border bg-violet-500/20 text-violet-300 border-violet-500/40">
+                      CH {{ (currentPcState[0]?.ch ?? 0) + 1 }}
+                    </span>
+                    <span class="text-[10px] font-bold text-white truncate flex-1">{{ currentPcState[0]?.soundName }}</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <span v-if="currentPcState[0]?.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ currentPcState[0].bank }}</span>
+                      <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ currentPcState[0]?.program }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ── 4. Bank selector (catalog only) ── -->
+                <template v-if="catalogDevice">
+                  <div class="shrink-0 px-6 mt-4">
+                    <label class="block text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-2">Bank</label>
+                    <div class="flex gap-2 flex-wrap">
+                      <button
+                        v-for="bank in availableBanks"
+                        :key="bank"
+                        @click="selectedBank = bank"
+                        :class="[
+                          'px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border',
+                          selectedBank === bank
+                            ? 'bg-violet-500/20 border-violet-500/40 text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.15)]'
+                            : 'bg-black/40 border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300'
+                        ]"
+                      >
+                        {{ bank }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- ── 5. Search + Category ── -->
+                  <div v-if="selectedBank" class="shrink-0 px-6 mt-3 pb-3 flex gap-2 items-center border-b border-neutral-900">
+                    <div class="relative flex-1">
+                      <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600" />
+                      <input
+                        v-model="searchQuery"
+                        type="text"
+                        placeholder="Search presets…"
+                        class="w-full bg-black/50 border border-neutral-800 rounded-xl pl-7 pr-3 py-1.5 text-[11px] text-neutral-300 font-mono outline-none focus:border-violet-500/50 placeholder:text-neutral-700"
+                      />
+                      <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-white">
+                        <X class="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div class="relative">
+                      <select
+                        v-model="selectedCategory"
+                        class="appearance-none bg-black/50 border border-neutral-800 rounded-xl px-3 py-1.5 text-[10px] text-neutral-400 font-mono outline-none focus:border-violet-500/50 pr-6 cursor-pointer"
+                      >
+                        <option value="" class="bg-black">All categories</option>
+                        <option v-for="cat in categories" :key="cat" :value="cat" class="bg-black">{{ cat }}</option>
+                      </select>
+                      <ChevronDown class="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
+                    </div>
+                  </div>
                 </template>
 
-                <!-- Catalog: empty results -->
-                <div v-else-if="catalogDevice && selectedBank && !isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
-                  <Music2 class="w-6 h-6 text-neutral-700" />
-                  <span class="text-[10px] font-mono text-neutral-600">No presets found</span>
+                <!-- ── 6. Scrollable preset list ── -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
+
+                  <!-- Catalog: loading -->
+                  <div v-if="catalogDevice && selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
+                    <Loader2 class="w-5 h-5 text-violet-400 animate-spin" />
+                    <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Loading catalog…</span>
+                  </div>
+
+                  <!-- Catalog: preset list -->
+                  <template v-else-if="catalogDevice && selectedBank && filteredSounds.length > 0">
+                    <div class="flex items-center justify-between mb-2 px-1">
+                      <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
+                      <span v-if="lastSent" class="flex items-center gap-1 text-[8px] font-mono text-violet-400 uppercase tracking-widest">
+                        <Zap class="w-2.5 h-2.5" />
+                        {{ lastSent.name }}
+                      </span>
+                    </div>
+                    <div class="space-y-0.5">
+                      <button
+                        v-for="sound in filteredSounds"
+                        :key="sound.no ?? sound.name"
+                        @click="selectSound(sound)"
+                        :class="[
+                          'w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all group text-left',
+                          activeSound?.no === sound.no && activeSound?.name === sound.name
+                            ? 'bg-violet-500/15 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.1)]'
+                            : 'bg-black/20 border-transparent hover:border-neutral-800 hover:bg-white/[0.03]'
+                        ]"
+                      >
+                        <div class="flex items-center gap-2.5 min-w-0">
+                          <span :class="[
+                            'shrink-0 w-7 text-center text-[8px] font-black font-mono rounded px-1 py-0.5',
+                            activeSound?.no === sound.no && activeSound?.name === sound.name
+                              ? 'bg-violet-500 text-black'
+                              : 'bg-neutral-900 text-neutral-600 group-hover:bg-neutral-800 group-hover:text-neutral-400'
+                          ]">
+                            {{ sound[bankConfig?.program_field ?? 'program'] ?? 0 }}
+                          </span>
+                          <span :class="[
+                            'text-[11px] font-medium truncate',
+                            activeSound?.no === sound.no && activeSound?.name === sound.name
+                              ? 'text-violet-200'
+                              : 'text-neutral-400 group-hover:text-neutral-200'
+                          ]">
+                            {{ sound.name }}
+                          </span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0 ml-2">
+                          <span
+                            v-if="sound[bankConfig?.category_field ?? 'category']"
+                            class="text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/50"
+                          >
+                            {{ sound[bankConfig?.category_field ?? 'category'] }}
+                          </span>
+                          <Send v-if="activeSound?.no === sound.no && activeSound?.name === sound.name" class="w-2.5 h-2.5 text-violet-400" />
+                        </div>
+                      </button>
+                    </div>
+                  </template>
+
+                  <!-- Catalog: empty results -->
+                  <div v-else-if="catalogDevice && selectedBank && !isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
+                    <Music2 class="w-6 h-6 text-neutral-700" />
+                    <span class="text-[10px] font-mono text-neutral-600">No presets found</span>
+                  </div>
+
+                  <!-- Manual fallback (no catalog match) -->
+                  <div v-else-if="!catalogDevice" class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
+                    <p class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Manual Bank / Program Change</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                          <input type="checkbox" v-model="sendMsb" class="w-3.5 h-3.5 accent-violet-500" />
+                          <span class="text-[9px] font-black uppercase text-neutral-400">Bank MSB (CC 0)</span>
+                        </label>
+                        <input type="number" min="0" max="127" v-model.number="manualMsb" :disabled="!sendMsb"
+                          class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center" />
+                      </div>
+                      <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                          <input type="checkbox" v-model="sendLsb" class="w-3.5 h-3.5 accent-violet-500" />
+                          <span class="text-[9px] font-black uppercase text-neutral-400">Bank LSB (CC 32)</span>
+                        </label>
+                        <input type="number" min="0" max="127" v-model.number="manualLsb" :disabled="!sendLsb"
+                          class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center" />
+                      </div>
+                    </div>
+                    <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Program (1–128)</span>
+                        <input type="number" min="1" max="128" v-model.number="manualProg"
+                          class="w-14 bg-black border border-neutral-700 rounded px-2 py-0.5 text-center text-violet-300 font-mono text-[11px] focus:border-violet-400 outline-none" />
+                      </div>
+                      <input type="range" min="1" max="128" v-model.number="manualProg" class="w-full accent-violet-500 h-1 bg-black rounded-lg cursor-pointer" />
+                    </div>
+                    <button
+                      @click="sendManual"
+                      :disabled="!selectedDeviceName || isDeviceOffline"
+                      class="w-full bg-violet-500 text-black rounded-xl py-3 font-black tracking-widest uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-violet-500/20"
+                    >
+                      <Send class="w-3.5 h-3.5" />
+                      Send Program Change
+                    </button>
+                  </div>
+
                 </div>
 
-                <!-- Manual fallback (no catalog match) -->
-                <div v-else-if="!catalogDevice" class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
-                  <p class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Manual Bank / Program Change</p>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
-                      <label class="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" v-model="sendMsb" class="w-3.5 h-3.5 accent-violet-500" />
-                        <span class="text-[9px] font-black uppercase text-neutral-400">Bank MSB (CC 0)</span>
-                      </label>
-                      <input type="number" min="0" max="127" v-model.number="manualMsb" :disabled="!sendMsb"
-                        class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center" />
-                    </div>
-                    <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
-                      <label class="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" v-model="sendLsb" class="w-3.5 h-3.5 accent-violet-500" />
-                        <span class="text-[9px] font-black uppercase text-neutral-400">Bank LSB (CC 32)</span>
-                      </label>
-                      <input type="number" min="0" max="127" v-model.number="manualLsb" :disabled="!sendLsb"
-                        class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center" />
-                    </div>
-                  </div>
-                  <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Program (1–128)</span>
-                      <input type="number" min="1" max="128" v-model.number="manualProg"
-                        class="w-14 bg-black border border-neutral-700 rounded px-2 py-0.5 text-center text-violet-300 font-mono text-[11px] focus:border-violet-400 outline-none" />
-                    </div>
-                    <input type="range" min="1" max="128" v-model.number="manualProg" class="w-full accent-violet-500 h-1 bg-black rounded-lg cursor-pointer" />
-                  </div>
-                  <button
-                    @click="sendManual"
-                    :disabled="!selectedDeviceName || isDeviceOffline"
-                    class="w-full bg-violet-500 text-black rounded-xl py-3 font-black tracking-widest uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-violet-500/20"
-                  >
-                    <Send class="w-3.5 h-3.5" />
-                    Send Program Change
-                  </button>
-                </div>
-
-              </div>
+              </template>
             </template>
           </div>
         </div>
