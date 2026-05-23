@@ -107,7 +107,10 @@ export type AppAction =
   | 'backing_track_pad_1'  | 'backing_track_pad_2'  | 'backing_track_pad_3'  | 'backing_track_pad_4'
   | 'backing_track_pad_5'  | 'backing_track_pad_6'  | 'backing_track_pad_7'  | 'backing_track_pad_8'
   | 'backing_track_pad_9'  | 'backing_track_pad_10' | 'backing_track_pad_11' | 'backing_track_pad_12'
-  | 'backing_track_pad_13' | 'backing_track_pad_14' | 'backing_track_pad_15' | 'backing_track_pad_16';
+  | 'backing_track_pad_13' | 'backing_track_pad_14' | 'backing_track_pad_15' | 'backing_track_pad_16'
+  | 'midi_config_preset_1' | 'midi_config_preset_2' | 'midi_config_preset_3' | 'midi_config_preset_4'
+  | 'midi_config_preset_5' | 'midi_config_preset_6' | 'midi_config_preset_7' | 'midi_config_preset_8'
+  | 'sysex_send';
 
 export interface AppMidiMapping {
   id: string;
@@ -262,6 +265,15 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   backing_track_pad_14: 'Backing Track Pad 14',
   backing_track_pad_15: 'Backing Track Pad 15',
   backing_track_pad_16: 'Backing Track Pad 16',
+  midi_config_preset_1: 'MIDI Config Preset 1',
+  midi_config_preset_2: 'MIDI Config Preset 2',
+  midi_config_preset_3: 'MIDI Config Preset 3',
+  midi_config_preset_4: 'MIDI Config Preset 4',
+  midi_config_preset_5: 'MIDI Config Preset 5',
+  midi_config_preset_6: 'MIDI Config Preset 6',
+  midi_config_preset_7: 'MIDI Config Preset 7',
+  midi_config_preset_8: 'MIDI Config Preset 8',
+  sysex_send: 'Send SysEx (requires payload config)',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -317,6 +329,11 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'backing_track_pad_5',  'backing_track_pad_6',  'backing_track_pad_7',  'backing_track_pad_8',
     'backing_track_pad_9',  'backing_track_pad_10', 'backing_track_pad_11', 'backing_track_pad_12',
     'backing_track_pad_13', 'backing_track_pad_14', 'backing_track_pad_15', 'backing_track_pad_16',
+  ],
+  'MIDI Config': [
+    'midi_config_preset_1', 'midi_config_preset_2', 'midi_config_preset_3', 'midi_config_preset_4',
+    'midi_config_preset_5', 'midi_config_preset_6', 'midi_config_preset_7', 'midi_config_preset_8',
+    'sysex_send',
   ],
 };
 

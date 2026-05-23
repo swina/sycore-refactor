@@ -4,7 +4,8 @@ import { X, Network, Music, Keyboard, ListMusic, Zap, Radio, Globe, Layers, Usb,
 import { useMidiStore } from '@/stores/useMidiStore'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 
-const emit = defineEmits(['close'])
+const props = defineProps({ embedded: { type: Boolean, default: false } })
+const emit  = defineEmits(['close'])
 const midiStore = useMidiStore()
 
 const coreSources = [
@@ -95,9 +96,9 @@ const activeOutputs = computed(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-    <Transition name="performance" appear>
-      <div class="bg-neutral-950 border border-synth-neon/30 rounded-3xl w-full max-w-4xl overflow-hidden shadow-[0_0_50px_rgba(0,255,204,0.15)] flex flex-col max-h-[90vh]">
+  <div :class="embedded ? '' : 'fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4'">
+    <Transition name="performance" :appear="!embedded">
+      <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-synth-neon/30 rounded-3xl w-full max-w-4xl overflow-hidden shadow-[0_0_50px_rgba(0,255,204,0.15)] flex flex-col max-h-[90vh]'">
         
         <!-- Header -->
         <div class="p-6 border-b border-neutral-900 flex items-center justify-between bg-synth-neon/5">
@@ -127,7 +128,7 @@ const activeOutputs = computed(() => {
               </button>
             </div>
             
-            <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors bg-neutral-900 rounded-xl">
+            <button v-if="!props.embedded" @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors bg-neutral-900 rounded-xl">
               <X class="w-6 h-6" />
             </button>
           </div>

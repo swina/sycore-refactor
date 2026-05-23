@@ -398,6 +398,13 @@ export function useAppActions() {
         } else if (action === 'grid_pad_press') {
           // Generic grid pad press, can be used by other components
           window.dispatchEvent(new CustomEvent('grid-pad-press', { detail: ccVal }))
+        } else if (action.startsWith('midi_config_preset_')) {
+          if (ccVal > 63) {
+            const slotIdx = parseInt(action.replace('midi_config_preset_', ''), 10) - 1
+            const namedPresets = midiStore.configPresets.filter(p => p.id !== '__autosave__')
+            const preset = namedPresets[slotIdx]
+            if (preset) midiStore.loadConfigPreset(preset.id)
+          }
         } else {
           console.warn('Unknown AppAction:', action)
         }

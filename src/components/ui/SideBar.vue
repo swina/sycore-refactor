@@ -35,6 +35,7 @@ const ACTION_MAP = {
   midi_matrix:    () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
   'midi-performance': () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
   'program-change':   () => uiStore.isProgramChangeBrowserOpen = !uiStore.isProgramChangeBrowserOpen,
+  'midi-manager': () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
 }
 
 const COLORS = [

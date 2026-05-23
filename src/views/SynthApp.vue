@@ -58,6 +58,7 @@ import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import SideBar from '@/components/ui/SideBar.vue'
 import MainMenuDial from '@/components/ui/MainMenuDial.vue'
 import MidiMatrix from '@/components/MidiMatrix.vue'
+import UnifiedMidiManager from '@/components/UnifiedMidiManager.vue'
 import AboutModal from '@/components/AboutModal.vue'
 import SlideshowModal from '@/components/SlideshowModal.vue'
 import VelocityMappingDialog from '@/components/VelocityMappingDialog.vue'
@@ -294,6 +295,9 @@ onMounted(() => {
       
       <!-- MIDI APP ACTION MAPPING -->
       <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" />
+
+      <!-- UNIFIED MIDI MANAGER -->
+      <UnifiedMidiManager />
 
       <!-- PROGRAM CHANGE BROWSER -->
       <Transition name="sy-drawer">

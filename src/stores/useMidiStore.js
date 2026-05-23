@@ -1,10 +1,19 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { deviceRegistry } from '@/core/midi/DeviceRegistry'
+// SplitConfig shape mirrors the TS interface — JS store does not import types
 import { FIELD_TO_CC } from '@/constants/s1-config'
 import { useMappingStore } from './useMappingStore'
+import {
+  loadConfigPresets as fetchConfigPresets,
+  persistConfigPresets,
+  createConfigPreset,
+  AUTOSAVE_CONFIG_ID,
+} from '@/lib/midi-config-presets'
 
 const LS_CHANNEL = 'midiChannel'
+const LS_ACTIVE_CONFIG_PRESET = 'SYCORE_ACTIVE_CONFIG_PRESET'
 const LS_IN_CHANNEL = 'midiInputChannel'
 const LS_SEND_CLOCK = 'midiSendClock'
 const LS_SYNC_TRANSPORT = 'midiSyncTransport'
@@ -14,6 +23,8 @@ export const useMidiStore = defineStore('midi', () => {
   const midiReady = ref(false)
   const outputs = ref([])
   const inputs = ref([])
+  const incomingBpm  = ref(0)
+  const sysexEnabled = ref(midiService.isSysExEnabled())
   const midiChannel = ref(parseInt(localStorage.getItem(LS_CHANNEL) || '1'))
   const midiInputChannel = ref(parseInt(localStorage.getItem(LS_IN_CHANNEL) || '-1'))
   const sendClock = ref(localStorage.getItem(LS_SEND_CLOCK) === 'true')
@@ -28,6 +39,31 @@ export const useMidiStore = defineStore('midi', () => {
   const smartLatchReplaceMode = ref(localStorage.getItem('SYCORE_SMARTLATCH_REPLACE') !== 'false')
   const smartLatchFadeTime = ref(parseInt(localStorage.getItem('SYCORE_SMARTLATCH_FADE') || '0'))
 
+  // Keyboard Split Config
+  const defaultSplit = () => ({
+    enabled: false,
+    splitNote: 60,
+    lowDevice: '',
+    highDevice: '',
+    lowTranspose: 0,
+    highTranspose: 0
+  })
+  let initialSplit = defaultSplit()
+  try {
+    const raw = localStorage.getItem('SYCORE_KEYBOARD_SPLIT')
+    if (raw) initialSplit = { ...defaultSplit(), ...JSON.parse(raw) }
+  } catch (e) {}
+  const splitConfig = ref(initialSplit)
+
+  watch(splitConfig, (val) => {
+    localStorage.setItem('SYCORE_KEYBOARD_SPLIT', JSON.stringify(val))
+    midiService.setSplitConfig(val.enabled ? val : null)
+  }, { deep: true, immediate: true })
+
+  function setSplitConfig(patch) {
+    splitConfig.value = { ...splitConfig.value, ...patch }
+  }
+
   // Advanced Routing Config (Per-Device Registration)
   const defaultRegistration = (name = '') => ({
     name,
@@ -41,7 +77,13 @@ export const useMidiStore = defineStore('midi', () => {
     cc: true,
     pc: true,
     isMulti: false,
-    smartLatch: false
+    smartLatch: false,
+    // Phase 2 additions
+    midiThru: true,
+    velocityMin: 0,
+    velocityMax: 127,
+    velocityMap: 'linear',
+    receiveSyncIn: false
   })
 
   let initialConfig = { 
@@ -154,7 +196,10 @@ export const useMidiStore = defineStore('midi', () => {
   function refreshDevices() {
     outputs.value = midiService.getOutputs()
     inputs.value = midiService.getInputs()
-    
+
+    // Sync device registry with current live ports
+    deviceRegistry.sync(inputs.value, outputs.value)
+
     // Sync Matrix State from service (case devices were refreshed)
     broadcastMode.value = midiService.getBroadcastMode()
     Object.keys(routingMatrix.value).forEach(source => {
@@ -170,6 +215,11 @@ export const useMidiStore = defineStore('midi', () => {
     refreshDevices()
 
     midiService.addStateChangeListener(() => refreshDevices())
+
+    // Incoming clock BPM — update reactive ref from service listener
+    midiService.addClockBpmListener(bpm => {
+      incomingBpm.value = Math.round(bpm * 10) / 10
+    })
 
     // Listen for incoming Note On for Velocity Modulation
     midiService.addNoteListener((type, note, velocity, chan) => {
@@ -304,6 +354,145 @@ export const useMidiStore = defineStore('midi', () => {
   
   function panic() { midiService.panic() }
 
+  async function toggleSysEx() {
+    if (sysexEnabled.value) {
+      midiService.disableSysEx()
+      sysexEnabled.value = false
+    } else {
+      const ok = await midiService.enableSysEx()
+      sysexEnabled.value = ok
+    }
+  }
+
+  // ─── Config Presets (Phase 6) ───────────────────────────────────────────────
+
+  const configPresets = ref([])
+  const activeConfigPresetId = ref(localStorage.getItem(LS_ACTIVE_CONFIG_PRESET) || null)
+
+  async function loadConfigPresets() {
+    configPresets.value = await fetchConfigPresets()
+  }
+
+  function _snapshotState() {
+    const mappingStore = useMappingStore()
+    return {
+      routingMatrix: Object.fromEntries(
+        Object.entries(routingMatrix.value).map(([k, v]) => [k, [...(v || [])]])
+      ),
+      registrations: JSON.parse(JSON.stringify(routingConfig.value.registrations || {})),
+      broadcastMode: broadcastMode.value,
+      smartLatch: {
+        active:      isSmartLatchActive.value,
+        maxNotes:    smartLatchMaxNotes.value,
+        replaceMode: smartLatchReplaceMode.value,
+        fadeTime:    smartLatchFadeTime.value,
+      },
+      activeMappingPresetId: mappingStore.activePresetId ?? null,
+      splitConfig: JSON.parse(JSON.stringify(splitConfig.value)),
+      midiChannel:             midiChannel.value,
+      midiInputChannel:        midiInputChannel.value,
+      sendClock:               sendClock.value,
+      syncMidiTransport:       syncMidiTransport.value,
+      syncSequencerTransport:  syncSequencerTransport.value,
+    }
+  }
+
+  async function saveConfigPreset(name) {
+    const isAutosave = name === AUTOSAVE_CONFIG_ID
+    const existingIdx = isAutosave
+      ? configPresets.value.findIndex(p => p.id === AUTOSAVE_CONFIG_ID)
+      : -1
+
+    const snapshot = createConfigPreset(name, {
+      id: isAutosave ? AUTOSAVE_CONFIG_ID : undefined,
+      ..._snapshotState(),
+      updatedAt: Date.now(),
+    })
+
+    if (existingIdx >= 0) {
+      configPresets.value = configPresets.value.map((p, i) => i === existingIdx ? snapshot : p)
+    } else {
+      configPresets.value = [...configPresets.value, snapshot]
+    }
+
+    activeConfigPresetId.value = snapshot.id
+    localStorage.setItem(LS_ACTIVE_CONFIG_PRESET, snapshot.id)
+    await persistConfigPresets(configPresets.value)
+    return snapshot.id
+  }
+
+  async function loadConfigPreset(id) {
+    const preset = configPresets.value.find(p => p.id === id)
+    if (!preset) return
+
+    if (preset.midiChannel !== undefined) setMidiChannel(preset.midiChannel)
+    if (preset.midiInputChannel !== undefined) setMidiInputChannel(preset.midiInputChannel)
+    if (preset.sendClock !== undefined) setSendClock(preset.sendClock)
+    if (preset.syncMidiTransport !== undefined) setSyncMidiTransport(preset.syncMidiTransport)
+    if (preset.syncSequencerTransport !== undefined) setSyncSequencerTransport(preset.syncSequencerTransport)
+
+    if (preset.smartLatch) {
+      isSmartLatchActive.value  = preset.smartLatch.active
+      smartLatchMaxNotes.value  = preset.smartLatch.maxNotes
+      smartLatchReplaceMode.value = preset.smartLatch.replaceMode
+      smartLatchFadeTime.value  = preset.smartLatch.fadeTime
+    }
+
+    if (preset.splitConfig) {
+      splitConfig.value = { ...splitConfig.value, ...preset.splitConfig }
+    }
+
+    if (preset.routingMatrix) {
+      Object.entries(preset.routingMatrix).forEach(([source, targets]) => {
+        setRouting(source, targets)
+      })
+    }
+
+    if (preset.registrations) {
+      routingConfig.value = {
+        ...routingConfig.value,
+        registrations: JSON.parse(JSON.stringify(preset.registrations)),
+      }
+    }
+
+    if (preset.activeMappingPresetId) {
+      const mappingStore = useMappingStore()
+      await mappingStore.loadPreset(preset.activeMappingPresetId)
+    }
+
+    activeConfigPresetId.value = id
+    localStorage.setItem(LS_ACTIVE_CONFIG_PRESET, id)
+  }
+
+  async function deleteConfigPreset(id) {
+    configPresets.value = configPresets.value.filter(p => p.id !== id)
+    if (activeConfigPresetId.value === id) {
+      activeConfigPresetId.value = null
+      localStorage.removeItem(LS_ACTIVE_CONFIG_PRESET)
+    }
+    await persistConfigPresets(configPresets.value)
+  }
+
+  // Debounced auto-save: only runs if there's an active named preset (not autosave)
+  let _cfgAutoSaveTimer = null
+  function _scheduleConfigAutoSave() {
+    clearTimeout(_cfgAutoSaveTimer)
+    _cfgAutoSaveTimer = setTimeout(async () => {
+      if (!activeConfigPresetId.value || activeConfigPresetId.value === AUTOSAVE_CONFIG_ID) return
+      const idx = configPresets.value.findIndex(p => p.id === activeConfigPresetId.value)
+      if (idx < 0) return
+      const updated = { ...configPresets.value[idx], ..._snapshotState(), updatedAt: Date.now() }
+      configPresets.value = configPresets.value.map((p, i) => i === idx ? updated : p)
+      await persistConfigPresets(configPresets.value)
+    }, 1000)
+  }
+
+  watch(
+    [routingConfig, splitConfig, isSmartLatchActive, smartLatchMaxNotes, smartLatchFadeTime],
+    _scheduleConfigAutoSave,
+    { deep: true }
+  )
+
   return {
     midiReady, outputs, inputs,
     midiChannel, midiInputChannel,
@@ -314,6 +503,7 @@ export const useMidiStore = defineStore('midi', () => {
     sendProgramChange, sendCC, sendNRPN, sendAllCCs, sendControlValue,
     sendNoteOn, sendNoteOff, sendPitchBend,
     allNotesOff, panic, startClock, stopClock, setBpm, sendStart, sendStop,
+    incomingBpm, sysexEnabled, toggleSysEx,
     sendClock, setSendClock, currentBpm,
     syncMidiTransport, setSyncMidiTransport,
     syncSequencerTransport, setSyncSequencerTransport,
@@ -330,6 +520,14 @@ export const useMidiStore = defineStore('midi', () => {
     smartLatchFadeTime,
     toggleSmartLatch,
     toggleDeviceLatch,
+    splitConfig,
+    setSplitConfig,
+    configPresets,
+    activeConfigPresetId,
+    loadConfigPresets,
+    saveConfigPreset,
+    loadConfigPreset,
+    deleteConfigPreset,
     MidiSource
   }
 })

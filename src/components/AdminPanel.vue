@@ -113,6 +113,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'midi_matrix',    label: 'MIDI Matrix',      icon: 'Network'      },
   { id: 'midilogger',      label: 'MIDI Logger',           icon: 'GitCompareArrows' },
   { id: 'program-change', label: 'Program Change Browser', icon: 'Music2'           },
+  { id: 'midi-manager',   label: 'MIDI Manager',    icon: 'Cpu' }
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

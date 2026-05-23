@@ -6,7 +6,8 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { midiService } from '@/core/midi/MidiService'
 
-const emit = defineEmits(['close'])
+const props = defineProps({ embedded: { type: Boolean, default: false } })
+const emit  = defineEmits(['close'])
 const midiStore = useMidiStore()
 const configStore = useConfigStore()
 const uiStore = useUiStore()
@@ -121,9 +122,9 @@ function openProgramChangeForDevice(deviceName) {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-    <Transition name="hub" appear>
-      <div class="bg-neutral-950 border border-emerald-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col max-h-[90vh]">
+  <div :class="embedded ? '' : 'fixed inset-0 z-[600] flex items-center justify-center bg-black/80 backdrop-blur-md p-4'">
+    <Transition name="hub" :appear="!embedded">
+      <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-emerald-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col max-h-[90vh]'">
 
         <!-- ── HEADER ── -->
         <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 to-transparent">
@@ -172,7 +173,7 @@ function openProgramChangeForDevice(deviceName) {
                 Program Change
               </button>
 
-              <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
+              <button v-if="!props.embedded" @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
                 <X class="w-5 h-5" />
               </button>
             </div>

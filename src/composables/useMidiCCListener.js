@@ -22,6 +22,9 @@ export function useMidiCCListener() {
 
   const originalModValueMap = {}
 
+  // NRPN assembly state keyed by "deviceName:channel"
+  const nrpnState = {}
+
   function onCC(cc, val, chan, inputId) {
     const midiCh = midiStore.midiChannel - 1
     const inputCh = midiStore.midiInputChannel
@@ -30,6 +33,48 @@ export function useMidiCCListener() {
     const inputDevice = inputs.find(i => i.id === inputId)
     const deviceName = inputDevice?.name || null
 
+    // ── NRPN assembly (CC 99 / 98 / 6) ──────────────────────────────────────
+    const nrpnKey = `${deviceName ?? ''}:${chan}`
+    if (cc === 99) { // NRPN Parameter Number MSB
+      nrpnState[nrpnKey] = { msb: val, lsb: null }
+      return
+    }
+    if (cc === 98) { // NRPN Parameter Number LSB
+      if (nrpnState[nrpnKey]) nrpnState[nrpnKey].lsb = val
+      return
+    }
+    if (cc === 6) { // Data Entry MSB — completes an assembled NRPN
+      const nrpn = nrpnState[nrpnKey]
+      if (nrpn && nrpn.msb !== null && nrpn.lsb !== null) {
+        const nrpnFragment = `NRPN:${nrpn.msb}:${nrpn.lsb}`
+        delete nrpnState[nrpnKey]
+
+        if (mappingStore.isMidiLearning) {
+          mappingStore.incomingNRPN(nrpn.msb, nrpn.lsb, deviceName, chan)
+          return
+        }
+
+        // Lookup: Device:CH:NRPN:MSB:LSB → Device:NRPN:MSB:LSB → NRPN:MSB:LSB
+        const preciseNrpnKey = deviceName
+          ? `${deviceName}:CH${chan + 1}:${nrpnFragment}`
+          : `CH${chan + 1}:${nrpnFragment}`
+        const deviceNrpnKey = deviceName ? `${deviceName}:${nrpnFragment}` : null
+        const nrpnMapping =
+          mappingStore.midiMappings[preciseNrpnKey] ||
+          (deviceNrpnKey ? mappingStore.midiMappings[deviceNrpnKey] : null) ||
+          mappingStore.midiMappings[nrpnFragment]
+
+        if (nrpnMapping) {
+          const paramName = typeof nrpnMapping === 'object' ? nrpnMapping.paramName : nrpnMapping
+          console.log(`[MIDI Listener] NRPN mapped: ${nrpnFragment} -> ${paramName} (${val})`)
+          applyParam(paramName, val)
+          return
+        }
+        // No NRPN mapping found — fall through to let CC 6 be handled as a regular CC
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     if (mappingStore.isMidiLearning) {
       mappingStore.incomingCC(cc, deviceName, chan)
       return
@@ -37,18 +82,18 @@ export function useMidiCCListener() {
 
     // 1. Check for User Mapping with high specificity (Device + Channel + CC)
     // New format: "Device:CH#:CC#"
-    const preciseKey = deviceName 
+    const preciseKey = deviceName
       ? `${deviceName}:CH${chan + 1}:CC${cc}`
       : `CH${chan + 1}:CC${cc}`
-    
+
     // Fallback formats for backward compatibility
     const deviceCCKey = deviceName ? `${deviceName}:${cc}` : null
     const plainCCKey  = `${cc}`
 
-    const mapping = mappingStore.midiMappings[preciseKey] || 
+    const mapping = mappingStore.midiMappings[preciseKey] ||
                     (deviceCCKey ? mappingStore.midiMappings[deviceCCKey] : null) ||
                     mappingStore.midiMappings[plainCCKey]
-    
+
     if (mapping) {
       const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
       console.log(`[MIDI Listener] Mapped input: ${deviceName || 'Unknown'} CH${chan+1} CC${cc} -> ${paramName} (${val})`)

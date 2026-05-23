@@ -9,7 +9,8 @@ import { useMidiFeedback } from '@/composables/useMidiFeedback'
 import { useUiStore } from '@/stores/useUiStore'
 import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 
-const emit = defineEmits(['close'])
+const props = defineProps({ embedded: { type: Boolean, default: false } })
+const emit  = defineEmits(['close'])
 
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
@@ -294,8 +295,8 @@ onUnmounted(() => cancelLearn())
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[170] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-    <div class="bg-neutral-900 border border-violet-500/30 rounded-2xl p-6 max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl">
+  <div :class="embedded ? '' : 'fixed inset-0 z-[170] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4'">
+    <div :class="embedded ? 'flex flex-col h-full overflow-hidden p-4' : 'bg-neutral-900 border border-violet-500/30 rounded-2xl p-6 max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl'">
 
       <!-- Header -->
       <div class="flex justify-between items-center mb-4 border-b border-neutral-800 pb-4 shrink-0">
@@ -303,7 +304,7 @@ onUnmounted(() => cancelLearn())
           <Gamepad2 class="w-6 h-6 text-violet-400" />
           MIDI ACTIONS
         </h2>
-        <button @click="emit('close')" class="text-neutral-500 hover:text-rose-500 transition-colors p-2">
+        <button v-if="!props.embedded" @click="emit('close')" class="text-neutral-500 hover:text-rose-500 transition-colors p-2">
           <X class="w-5 h-5" />
         </button>
       </div>

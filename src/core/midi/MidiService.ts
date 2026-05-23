@@ -15,12 +15,41 @@ export interface DeviceRegistration {
   pc: boolean;
   isMulti: boolean;
   smartLatch: boolean;
+  midiThru: boolean;                               // receive THRU'd messages
+  velocityMin: number;                             // 0–127 gate low bound
+  velocityMax: number;                             // 0–127 gate high bound
+  velocityMap: 'linear' | 'log' | 'exp' | 'fixed';
+  receiveSyncIn: boolean;                          // accept clock/transport from this input
 }
 
 export interface RoutingConfig {
   registrations: Record<string, DeviceRegistration>;
   globalThruEnabled: boolean;
   thruFilters: { notes: boolean; cc: boolean };
+}
+
+export interface SplitConfig {
+  enabled: boolean;
+  splitNote: number;      // notes below this go to lowDevice
+  lowDevice: string;
+  highDevice: string;
+  lowTranspose: number;   // semitones
+  highTranspose: number;
+}
+
+export type MidiMessageType =
+  | 'noteon' | 'noteoff' | 'cc' | 'pc' | 'pitchbend'
+  | 'clock' | 'start' | 'stop' | 'sysex' | 'other'
+
+export interface MidiMonitorEntry {
+  id: number
+  timestamp: number
+  direction: 'in' | 'out'
+  device: string         // IN: input device name; OUT: MidiSource tag
+  channel: number        // 1–16 for voice messages, 0 for system
+  type: MidiMessageType
+  data: number[]
+  decoded: string
 }
 
 export enum MidiSource {
@@ -86,6 +115,22 @@ export class MidiService {
   private lastIngressReset = Date.now();
   private isThruThrottled = false;
   private globalChannel: number = 0;
+  private splitConfig: SplitConfig | null = null;
+
+  // Monitor log — plain array (not reactive), max 500 entries
+  private _monitorSeq = 0;
+  private _monitorBuffer: MidiMonitorEntry[] = [];
+  private _monitorListeners: ((entry: MidiMonitorEntry) => void)[] = [];
+
+  // Incoming clock BPM detection — ring buffer of up to 24 pulse timestamps
+  private _incomingClockRing: number[] = [];
+  private _smoothedIncomingBpm: number = 0;
+  private _clockBpmListeners: ((bpm: number) => void)[] = [];
+
+  // SysEx — requires re-requesting MIDI access with { sysex: true }
+  private sysexEnabled = false;
+
+  private static NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
   private broadcast(
     type: 'noteon' | 'noteoff' | 'cc' | 'pc' | 'pitchbend' | 'clock' | 'start' | 'stop' | 'allnotesoff',
@@ -98,6 +143,21 @@ export class MidiService {
 
     if (this.isSequencerPlaying && (type === 'noteon' || type === 'noteoff') && source === MidiSource.KEYBOARD) {
       return;
+    }
+
+    // Log outgoing message to monitor (one entry per broadcast call)
+    if (type !== 'clock') {  // clock floods at 48+/sec — skip from monitor
+      const { type: mType, decoded } = this._decodeOut(type, data, channel);
+      this._appendMonitor({
+        id: ++this._monitorSeq,
+        timestamp: Date.now(),
+        direction: 'out',
+        device: source,
+        channel: channel + 1,
+        type: mType,
+        data: [],
+        decoded,
+      });
     }
 
     // Use a Set of IDs to avoid duplicate sends if multiple name matches occur
@@ -223,6 +283,26 @@ export class MidiService {
       if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Access Failed: ${e.message}`);
       return false;
     }
+  }
+
+  public isSysExEnabled(): boolean { return this.sysexEnabled; }
+
+  public async enableSysEx(): Promise<boolean> {
+    try {
+      this.midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+      this.sysexEnabled = true;
+      this.reScanInputs();
+      if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] SysEx access granted.');
+      return true;
+    } catch (e: any) {
+      if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] SysEx access denied: ${e?.message ?? e}`);
+      return false;
+    }
+  }
+
+  public disableSysEx(): void {
+    this.sysexEnabled = false;
+    if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] SysEx disabled.');
   }
 
   reScanInputs() {
@@ -469,21 +549,62 @@ export class MidiService {
 
     if (this.isThruThrottled) return;
 
+    // Block SysEx unless explicitly enabled (WebMIDI won't deliver it anyway without { sysex: true })
+    if (status === 0xF0 && !this.sysexEnabled) return;
+
+    // Hoist input-device lookup so it is available for all downstream checks
+    const inputDevice = this.midiAccess?.inputs.get(inputId);
+    const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
+
     if (this.routingConfig) {
-      const inputDevice = this.midiAccess?.inputs.get(inputId);
-      const config = inputDevice ? this.routingConfig.registrations[inputDevice.name] : null;
       if (status < 0xF0) {
         const msgChannel = status & 0x0f;
-        if (config && config.inChannel !== -1 && config.inChannel !== msgChannel) return;
+        if (inConfig && inConfig.inChannel !== -1 && inConfig.inChannel !== msgChannel) return;
       }
     }
 
-    const msgHash = event.data.join(',');
-    const globalSentTime = this.globalSentHashes.get(msgHash);
+    // Velocity gating and curve transform for incoming Note On messages
+    let processedData: number[] | Uint8Array = event.data;
+    const isNoteOn = (status & 0xf0) === 0x90;
+    const isNoteOff = (status & 0xf0) === 0x80;
+    if ((isNoteOn || isNoteOff) && event.data.length >= 3 && inConfig) {
+      const rawVelocity = event.data[2];
+      if (isNoteOn && rawVelocity > 0) {
+        const min = inConfig.velocityMin ?? 0;
+        const max = inConfig.velocityMax ?? 127;
+        if (rawVelocity < min || rawVelocity > max) return;
+        const mapped = this.applyVelocityCurve(rawVelocity, inConfig.velocityMap ?? 'linear');
+        if (mapped !== rawVelocity) {
+          const copy = new Uint8Array(event.data);
+          copy[2] = mapped;
+          processedData = copy;
+        }
+      }
+    }
+
+    // Echo suppression uses raw bytes (echoed message matches what was sent)
+    const rawHash = event.data.join(',');
+    const globalSentTime = this.globalSentHashes.get(rawHash);
     if (globalSentTime && now - globalSentTime < 300) return;
 
     const recent = this.lastSentMessages.get(inputId);
-    if (recent && recent.data === `${inputId}:${msgHash}` && now - recent.time < 50) return;
+    if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
+
+    // Log to monitor (after echo suppression, before routing)
+    {
+      const deviceName = inputDevice?.name ?? 'Unknown';
+      const { type: mType, channel: mCh, decoded } = this._decodeRaw(processedData as Uint8Array);
+      this._appendMonitor({
+        id: ++this._monitorSeq,
+        timestamp: now,
+        direction: 'in',
+        device: deviceName,
+        channel: mCh,
+        type: mType,
+        data: Array.from(processedData as Uint8Array),
+        decoded,
+      });
+    }
 
     if (this.routingConfig && this.routingConfig.globalThruEnabled) {
       const type = status & 0xf0;
@@ -498,19 +619,50 @@ export class MidiService {
         (!isNote && !isCC && !isSystem);
 
       if (passGlobal) {
-        this.routeMessageToOutputs(event.data, inputId, now);
+        this.routeMessageToOutputs(processedData as Uint8Array, inputId, now);
       }
     }
 
-    if (status === 0xFA) this.onTransportListeners.forEach(l => l('start'));
-    else if (status === 0xFC) this.onTransportListeners.forEach(l => l('stop'));
-    else if (status === 0xF8) this.onTransportListeners.forEach(l => l('clock'));
+    // receiveSyncIn: gate clock and transport from this input device
+    const syncBlocked = inConfig && inConfig.receiveSyncIn === false;
+
+    if (status === 0xFA) { if (!syncBlocked) this.onTransportListeners.forEach(l => l('start')); }
+    else if (status === 0xFC) {
+      if (!syncBlocked) this.onTransportListeners.forEach(l => l('stop'));
+      // Reset ring buffer on transport stop so stale pulses don't corrupt next BPM reading
+      this._incomingClockRing = [];
+    }
+    else if (status === 0xF8) {
+      if (!syncBlocked) this.onTransportListeners.forEach(l => l('clock'));
+      // Incoming BPM detection via ring buffer
+      const ts = performance.now();
+      // Reset if last pulse was more than 2 s ago (clock stopped and restarted)
+      if (this._incomingClockRing.length > 0 &&
+          ts - this._incomingClockRing[this._incomingClockRing.length - 1] > 2000) {
+        this._incomingClockRing = [];
+      }
+      this._incomingClockRing.push(ts);
+      if (this._incomingClockRing.length > 24) this._incomingClockRing.shift();
+      if (this._incomingClockRing.length >= 4) {
+        const n = this._incomingClockRing.length;
+        const elapsed = this._incomingClockRing[n - 1] - this._incomingClockRing[0];
+        const avgIntervalMs = elapsed / (n - 1);
+        const rawBpm = 60000 / (avgIntervalMs * 24);
+        if (rawBpm > 20 && rawBpm < 350) {
+          const alpha = 0.1;
+          this._smoothedIncomingBpm = this._smoothedIncomingBpm === 0
+            ? rawBpm
+            : alpha * rawBpm + (1 - alpha) * this._smoothedIncomingBpm;
+          this._clockBpmListeners.forEach(l => l(this._smoothedIncomingBpm));
+        }
+      }
+    }
     else if (status < 0xF0) {
       const type = status & 0xf0;
       const channel = status & 0x0f;
       if (type === 0x90 || type === 0x80) {
-        const note = event.data[1];
-        const velocity = event.data[2];
+        const note = (processedData as any)[1];
+        const velocity = (processedData as any)[2];
         this.onNoteListeners.forEach(l => l(type === 0x90 ? 'on' : 'off', note, velocity, channel, inputId));
         if (type === 0x90) this.globalNoteOnListeners.forEach(l => l(note, velocity));
       } else if (type === 0xb0) {
@@ -538,6 +690,8 @@ export class MidiService {
 
       // Both input and output devices must be registered and enabled in the general MIDI matrix
       if (!outConfig || !outConfig.outEnabled || outDevice.id === inputId) return;
+      // Per-device MIDI Thru gate (undefined treated as true for backward compat)
+      if (outConfig.midiThru === false) return;
       if (!inConfig || !inConfig.inEnabled) return;
 
       // If the sequencer is playing, block notes only if the target is also the sequencer's target
@@ -646,6 +800,148 @@ export class MidiService {
     });
   }
 
+  // ── Monitor public API ─────────────────────────────────────────────────────
+
+  public addMonitorListener(cb: (entry: MidiMonitorEntry) => void): () => void {
+    this._monitorListeners.push(cb);
+    return () => { this._monitorListeners = this._monitorListeners.filter(l => l !== cb); };
+  }
+
+  public getMonitorBuffer(): MidiMonitorEntry[] {
+    return this._monitorBuffer;
+  }
+
+  public clearMonitorBuffer(): void {
+    this._monitorBuffer = [];
+  }
+
+  // ── Incoming clock BPM public API ──────────────────────────────────────────
+
+  public addClockBpmListener(cb: (bpm: number) => void): () => void {
+    this._clockBpmListeners.push(cb);
+    return () => { this._clockBpmListeners = this._clockBpmListeners.filter(l => l !== cb); };
+  }
+
+  public getIncomingBpm(): number {
+    return this._smoothedIncomingBpm;
+  }
+
+  // ── Monitor internals ──────────────────────────────────────────────────────
+
+  private _noteName(n: number): string {
+    return MidiService.NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1);
+  }
+
+  private _decodeRaw(data: Uint8Array | number[]): { type: MidiMessageType; channel: number; decoded: string } {
+    const status = data[0];
+    const msgType = status & 0xf0;
+    const ch = status & 0x0f;
+
+    if (status === 0xF8) return { type: 'clock', channel: 0, decoded: 'Clock' };
+    if (status === 0xFA) return { type: 'start', channel: 0, decoded: 'Transport START' };
+    if (status === 0xFC) return { type: 'stop', channel: 0, decoded: 'Transport STOP' };
+    if (status === 0xF0) {
+      const hex = Array.from(data as Uint8Array).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+      const preview = hex.length > 48 ? hex.substring(0, 48) + '…' : hex;
+      return { type: 'sysex', channel: 0, decoded: `SysEx [${data.length}B]: ${preview}` };
+    }
+
+    switch (msgType) {
+      case 0x90: {
+        const vel = data[2], note = data[1];
+        return vel > 0
+          ? { type: 'noteon', channel: ch + 1, decoded: `Note ON  ${this._noteName(note)} (${note}) vel=${vel} ch=${ch + 1}` }
+          : { type: 'noteoff', channel: ch + 1, decoded: `Note OFF ${this._noteName(note)} (${note}) ch=${ch + 1}` };
+      }
+      case 0x80:
+        return { type: 'noteoff', channel: ch + 1, decoded: `Note OFF ${this._noteName(data[1])} (${data[1]}) ch=${ch + 1}` };
+      case 0xb0:
+        return { type: 'cc', channel: ch + 1, decoded: `CC ${data[1]} = ${data[2]} ch=${ch + 1}` };
+      case 0xc0:
+        return { type: 'pc', channel: ch + 1, decoded: `PC ${data[1] + 1} ch=${ch + 1}` };
+      case 0xe0: {
+        const pb = ((data[2] << 7) | data[1]) - 8192;
+        return { type: 'pitchbend', channel: ch + 1, decoded: `Pitch Bend ${pb >= 0 ? '+' : ''}${pb} ch=${ch + 1}` };
+      }
+      default:
+        return { type: 'other', channel: 0, decoded: `0x${status.toString(16).toUpperCase()}` };
+    }
+  }
+
+  private _decodeOut(
+    type: string, data: any, channel: number
+  ): { type: MidiMessageType; decoded: string } {
+    const ch = channel + 1;
+    switch (type) {
+      case 'noteon':     return { type: 'noteon',    decoded: `Note ON  ${this._noteName(data.note)} (${data.note}) vel=${data.velocity} ch=${ch}` };
+      case 'noteoff':    return { type: 'noteoff',   decoded: `Note OFF ${this._noteName(data.note)} (${data.note}) ch=${ch}` };
+      case 'cc':         return { type: 'cc',        decoded: `CC ${data.cc} = ${data.value} ch=${ch}` };
+      case 'pc':         return { type: 'pc',        decoded: `PC ${data.program + 1} ch=${ch}` };
+      case 'pitchbend':  return { type: 'pitchbend', decoded: `Pitch Bend ch=${ch}` };
+      case 'clock':      return { type: 'clock',     decoded: 'Clock' };
+      case 'start':      return { type: 'start',     decoded: 'Transport START' };
+      case 'stop':       return { type: 'stop',      decoded: 'Transport STOP' };
+      case 'allnotesoff':return { type: 'cc',        decoded: `All Notes OFF ch=${ch}` };
+      default:           return { type: 'other',     decoded: type };
+    }
+  }
+
+  private _appendMonitor(entry: MidiMonitorEntry): void {
+    if (this._monitorBuffer.length >= 500) this._monitorBuffer.shift();
+    this._monitorBuffer.push(entry);
+    this._monitorListeners.forEach(l => l(entry));
+  }
+
+  // ── Split config ───────────────────────────────────────────────────────────
+
+  public setSplitConfig(config: SplitConfig | null): void {
+    this.splitConfig = config;
+    if ((window as any).SY_LOG) (window as any).SY_LOG(
+      config?.enabled
+        ? `[MIDI] Keyboard Split ON at note ${config.splitNote} (${config.lowDevice} / ${config.highDevice})`
+        : '[MIDI] Keyboard Split OFF'
+    );
+  }
+
+  private applyVelocityCurve(velocity: number, map: string): number {
+    if (map === 'fixed') return 64;
+    let x = velocity / 127;
+    if (map === 'exp') x = x * x;
+    else if (map === 'log') x = Math.sqrt(x);
+    return Math.max(1, Math.min(127, Math.round(x * 127)));
+  }
+
+  private sendDirectToOutputByName(
+    deviceName: string,
+    type: 'noteon' | 'noteoff',
+    note: number,
+    velocity: number,
+    channel: number
+  ): void {
+    if (!this.midiAccess) return;
+    const now = Date.now();
+    this.midiAccess.outputs.forEach(out => {
+      if (out.name !== deviceName) return;
+      const config = this.routingConfig?.registrations[out.name];
+      let targetCh = channel;
+      if (config && !config.isMulti && config.outChannel !== -1) targetCh = config.outChannel;
+      const statusCh = targetCh % 16;
+      const status = type === 'noteon' ? 0x90 + statusCh : 0x80 + statusCh;
+      const msg = [status, note & 0x7f, velocity & 0x7f];
+      this.globalSentHashes.set(msg.join(','), now);
+      try { out.send(msg); } catch (e) { }
+    });
+  }
+
+  private sendNoteSplit(type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number): void {
+    const split = this.splitConfig!;
+    const isLow = note < split.splitNote;
+    const deviceName = isLow ? split.lowDevice : split.highDevice;
+    const semitones = isLow ? split.lowTranspose : split.highTranspose;
+    const transposedNote = Math.max(0, Math.min(127, note + semitones));
+    this.sendDirectToOutputByName(deviceName, type, transposedNote, velocity, channel);
+  }
+
   private handleIngressBound = this.handleIngress.bind(this);
 
   addRawListener(callback: (event: MIDIMessageEvent) => void) {
@@ -706,10 +1002,18 @@ export class MidiService {
   }
 
   sendNoteOn(note: number, velocity: number = 100, channel: number = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null) {
+    if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
+      this.sendNoteSplit('noteon', note, velocity, channel);
+      return;
+    }
     this.broadcast('noteon', { note, velocity }, channel, source, skipDeviceId);
   }
 
   sendNoteOff(note: number, velocity: number = 0, channel: number = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null) {
+    if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
+      this.sendNoteSplit('noteoff', note, velocity, channel);
+      return;
+    }
     this.broadcast('noteoff', { note, velocity }, channel, source, skipDeviceId);
   }
 

@@ -27,9 +27,13 @@ export function useMidiInit() {
 
     if (window.SY_LOG) window.SY_LOG('Starting MIDI Init Sequence...')
     
-    // Load app actions mappings first
+    // Load app actions mappings, mapping presets, and MIDI config presets
     if (window.SY_LOG) window.SY_LOG('Loading App Mappings...')
-    await mappingStore.loadAppMidiMappings()
+    await Promise.all([
+      mappingStore.loadAppMidiMappings(),
+      mappingStore.loadPresets(),
+      midiStore.loadConfigPresets(),
+    ])
     if (window.SY_LOG) window.SY_LOG('App Mappings Loaded.')
  
     if (window.SY_LOG) window.SY_LOG('Initializing MIDI Store...')

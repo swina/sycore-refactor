@@ -35,5 +35,6 @@ export const DEFAULT_TOOLBAR: ToolbarButtonConfig[] = [
   { id: 'settings', label: 'S1CORE SETTINGS', icon: 'Settings', enabled: true, toolbar: 'main' },
   { id: 'midi_matrix', label: 'MIDI Matrix', icon: 'Network', enabled: true, toolbar: 'main' },
   { id: 'liveset', label: 'Live Set', icon: 'Music', enabled: true, toolbar: 'main' },
-  { id: 'midiactions', label: 'MIDI Actions', icon: 'Workflow', enabled: true, toolbar: 'main' }
+  { id: 'midiactions', label: 'MIDI Actions', icon: 'Workflow', enabled: true, toolbar: 'main' },
+  { id: 'midi-manager', label: 'MIDI MANAGER', icon: 'Cpu', enabled: true, toolbar: 'main' }
 ];
