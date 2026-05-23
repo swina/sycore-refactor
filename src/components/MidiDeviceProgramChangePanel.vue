@@ -7,11 +7,11 @@ import catalogIndex from '@/data/program_change/program_change.json'
 const emit = defineEmits(['close'])
 const midiStore = useMidiStore()
 
-// ── Device list (left column) ───────────────────────────────────
+// ── Device list (left column) — only PC-enabled devices ────────
 const devices = computed(() => {
   if (!midiStore.routingConfig?.registrations) return []
   return Object.values(midiStore.routingConfig.registrations)
-    .filter(r => r.outEnabled)
+    .filter(r => r.outEnabled && r.pcEnabled)
     .map(r => ({ ...r, isOnline: midiStore.outputs.some(o => o.name === r.name) }))
     .sort((a, b) => b.isOnline - a.isOnline || a.name.localeCompare(b.name))
 })
@@ -222,14 +222,15 @@ function setChannel(ch) {
         <!-- Body: two columns -->
         <div class="flex flex-1 overflow-hidden">
 
-          <!-- ── LEFT: device list ── -->
+          <!-- ── LEFT: PC-enabled device list ── -->
           <div class="w-64 shrink-0 border-r border-neutral-900 flex flex-col overflow-y-auto custom-scrollbar">
             <div class="px-4 py-3 border-b border-neutral-900">
-              <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">Output Devices</span>
+              <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">PC Devices</span>
             </div>
 
-            <div v-if="devices.length === 0" class="flex-1 flex items-center justify-center p-6 text-center">
-              <p class="text-[10px] font-mono text-neutral-600 italic">No output devices registered</p>
+            <div v-if="devices.length === 0" class="flex-1 flex flex-col items-center justify-center p-6 text-center gap-2">
+              <p class="text-[10px] font-mono text-neutral-600 italic">No devices with PC enabled.</p>
+              <p class="text-[9px] font-mono text-neutral-700">Enable PC on devices in MIDI Matrix.</p>
             </div>
 
             <button
@@ -237,7 +238,7 @@ function setChannel(ch) {
               :key="dev.name"
               @click="selectedDeviceName = dev.name"
               :class="[
-                'w-full text-left px-4 py-3 border-b border-neutral-900/60 transition-all group',
+                'w-full text-left px-4 py-3 border-b border-neutral-900/60 transition-all',
                 selectedDeviceName === dev.name
                   ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
                   : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'
@@ -248,151 +249,89 @@ function setChannel(ch) {
                 <div class="flex flex-col min-w-0 flex-1">
                   <span class="text-[11px] font-bold text-white truncate leading-tight">{{ dev.name }}</span>
                   <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <span v-if="dev.pcEnabled" class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">PC ON</span>
-                    <span v-else class="text-[7px] font-mono text-neutral-700 uppercase">PC off</span>
-                    <!-- Multi-timbral: show count of assigned channels -->
-                    <template v-if="dev.pcEnabled && dev.isMulti">
-                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0"
-                        class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                        {{ Object.keys(dev.pcChannels).length }} ch
+                    <!-- Multi-timbral: assigned channel count -->
+                    <template v-if="dev.isMulti">
+                      <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">Multi</span>
+                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">
+                        {{ Object.keys(dev.pcChannels).length }} ch set
                       </span>
                     </template>
-                    <!-- Mono: show CH + PC number -->
-                    <template v-else-if="dev.pcEnabled && Object.keys(dev.pcChannels ?? {}).length > 0">
-                      <span class="text-[7px] font-mono text-neutral-500">CH{{ (dev.pcChannel ?? 0) + 1 }}</span>
-                      <span class="text-[7px] font-black font-mono text-violet-400/70">PC{{ dev.pcProgram }}</span>
+                    <!-- Mono: CH + last PC -->
+                    <template v-else>
+                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">CH{{ (dev.pcChannel ?? 0) + 1 }}</span>
+                      <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-black font-mono text-violet-400/70">PC{{ dev.pcProgram }}</span>
                     </template>
+                    <span v-if="!dev.isOnline" class="text-[7px] font-mono text-neutral-700 uppercase">offline</span>
                   </div>
                 </div>
-                <!-- PC toggle -->
-                <button
-                  @click.stop="midiStore.updateRegistration(dev.name, 'pcEnabled', !dev.pcEnabled)"
-                  :class="[
-                    'w-6 h-4 rounded-full relative transition-all shrink-0',
-                    dev.pcEnabled ? 'bg-violet-500' : 'bg-neutral-800'
-                  ]"
-                  title="Toggle Program Change"
-                >
-                  <div :class="['absolute top-0.5 bottom-0.5 w-3 bg-white rounded-full transition-transform', dev.pcEnabled ? 'translate-x-2.5' : 'translate-x-0.5']" />
-                </button>
               </div>
             </button>
           </div>
 
           <!-- ── RIGHT: browser ── -->
-          <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
+          <div class="flex-1 flex flex-col overflow-hidden">
 
             <!-- No device selected -->
-            <div v-if="!selectedDeviceName" class="h-full flex flex-col items-center justify-center gap-3 min-h-[300px]">
+            <div v-if="!selectedDeviceName" class="flex-1 flex flex-col items-center justify-center gap-3">
               <Music2 class="w-10 h-10 text-neutral-700" />
               <p class="text-[10px] font-mono text-neutral-600 text-center">Select a device on the left<br>to browse its preset catalog</p>
             </div>
 
             <template v-else>
-              <!-- Device + Channel row -->
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <div :class="['w-2 h-2 rounded-full', isDeviceOffline ? 'bg-neutral-700' : 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]']" />
-                  <span class="text-sm font-black text-white uppercase tracking-wider">{{ selectedDeviceName }}</span>
-                  <span v-if="isDeviceOffline" class="text-[8px] font-black bg-amber-950/40 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase">Offline</span>
-                </div>
+              <!-- ── Static controls (no scroll) ── -->
+              <div class="shrink-0 px-6 pt-5 pb-0 space-y-4">
 
-                <!-- Channel selector -->
-                <div class="flex items-center gap-2">
-                  <span class="text-[9px] font-mono text-neutral-500 uppercase">Channel</span>
-                  <div class="relative">
-                    <select
-                      :value="(selectedReg?.pcChannel ?? 0) + 1"
-                      @change="e => setChannel(parseInt(e.target.value))"
-                      class="appearance-none bg-black/60 border border-neutral-800 rounded-lg px-3 py-1.5 text-violet-300 font-mono text-[11px] outline-none focus:border-violet-500/50 pr-7 cursor-pointer"
-                    >
-                      <option v-for="ch in 16" :key="ch" :value="ch" class="bg-black">CH {{ ch }}</option>
-                    </select>
-                    <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
+                <!-- Device + Channel row -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div :class="['w-2 h-2 rounded-full', isDeviceOffline ? 'bg-neutral-700' : 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]']" />
+                    <span class="text-sm font-black text-white uppercase tracking-wider">{{ selectedDeviceName }}</span>
+                    <span v-if="isDeviceOffline" class="text-[8px] font-black bg-amber-950/40 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase">Offline</span>
                   </div>
-                </div>
-              </div>
-
-              <!-- Offline warning -->
-              <div v-if="isDeviceOffline" class="bg-amber-950/30 border border-amber-500/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
-                <AlertTriangle class="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span class="text-[9px] font-mono text-amber-400">Device offline — messages will not transmit</span>
-              </div>
-
-              <!-- ── Current Program Change state ── -->
-              <div v-if="currentPcState.length > 0" class="bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
-                <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
-                  <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
-                  <span v-if="selectedReg?.isMulti" class="text-[7px] font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 uppercase tracking-tighter">Multi-Timbral</span>
-                </div>
-
-                <!-- Multi-timbral: one row per channel -->
-                <template v-if="selectedReg?.isMulti">
-                  <div class="divide-y divide-neutral-900/60">
-                    <div
-                      v-for="entry in currentPcState"
-                      :key="entry.ch"
-                      :class="[
-                        'flex items-center gap-3 px-4 py-2.5 transition-colors',
-                        entry.ch === (selectedReg?.pcChannel ?? 0) ? 'bg-violet-500/10' : 'hover:bg-white/[0.02]'
-                      ]"
-                    >
-                      <span :class="[
-                        'shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border',
-                        entry.ch === (selectedReg?.pcChannel ?? 0)
-                          ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
-                          : 'bg-neutral-900 text-neutral-500 border-neutral-800'
-                      ]">CH {{ entry.ch + 1 }}</span>
-                      <span class="text-[10px] font-bold text-white truncate flex-1">{{ entry.soundName }}</span>
-                      <div class="flex items-center gap-2 shrink-0">
-                        <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
-                        <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ entry.program }}</span>
-                      </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[9px] font-mono text-neutral-500 uppercase">Channel</span>
+                    <div class="relative">
+                      <select
+                        :value="(selectedReg?.pcChannel ?? 0) + 1"
+                        @change="e => setChannel(parseInt(e.target.value))"
+                        class="appearance-none bg-black/60 border border-neutral-800 rounded-lg px-3 py-1.5 text-violet-300 font-mono text-[11px] outline-none focus:border-violet-500/50 pr-7 cursor-pointer"
+                      >
+                        <option v-for="ch in 16" :key="ch" :value="ch" class="bg-black">CH {{ ch }}</option>
+                      </select>
+                      <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
                     </div>
                   </div>
-                </template>
-
-                <!-- Mono: single compact row -->
-                <template v-else>
-                  <div class="flex items-center gap-3 px-4 py-2.5">
-                    <span class="shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border bg-violet-500/20 text-violet-300 border-violet-500/40">
-                      CH {{ (currentPcState[0]?.ch ?? 0) + 1 }}
-                    </span>
-                    <span class="text-[10px] font-bold text-white truncate flex-1">{{ currentPcState[0]?.soundName }}</span>
-                    <div class="flex items-center gap-2 shrink-0">
-                      <span v-if="currentPcState[0]?.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ currentPcState[0].bank }}</span>
-                      <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ currentPcState[0]?.program }}</span>
-                    </div>
-                  </div>
-                </template>
-              </div>
-
-              <!-- ── Catalog browser ── -->
-              <template v-if="catalogDevice">
-
-                <!-- Bank selector -->
-                <div>
-                  <label class="block text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-2">Bank</label>
-                  <div class="flex gap-2 flex-wrap">
-                    <button
-                      v-for="bank in availableBanks"
-                      :key="bank"
-                      @click="selectedBank = bank"
-                      :class="[
-                        'px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border',
-                        selectedBank === bank
-                          ? 'bg-violet-500/20 border-violet-500/40 text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.15)]'
-                          : 'bg-black/40 border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300'
-                      ]"
-                    >
-                      {{ bank }}
-                    </button>
-                  </div>
                 </div>
 
-                <template v-if="selectedBank">
+                <!-- Offline warning -->
+                <div v-if="isDeviceOffline" class="bg-amber-950/30 border border-amber-500/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                  <AlertTriangle class="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span class="text-[9px] font-mono text-amber-400">Device offline — messages will not transmit</span>
+                </div>
+
+                <!-- Bank selector (catalog only) -->
+                <template v-if="catalogDevice">
+                  <div>
+                    <label class="block text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-2">Bank</label>
+                    <div class="flex gap-2 flex-wrap">
+                      <button
+                        v-for="bank in availableBanks"
+                        :key="bank"
+                        @click="selectedBank = bank"
+                        :class="[
+                          'px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border',
+                          selectedBank === bank
+                            ? 'bg-violet-500/20 border-violet-500/40 text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.15)]'
+                            : 'bg-black/40 border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300'
+                        ]"
+                      >
+                        {{ bank }}
+                      </button>
+                    </div>
+                  </div>
+
                   <!-- Search + Category -->
-                  <div class="flex gap-2 items-center">
+                  <div v-if="selectedBank" class="flex gap-2 items-center pb-3 border-b border-neutral-900">
                     <div class="relative flex-1">
                       <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600" />
                       <input
@@ -416,16 +355,70 @@ function setChannel(ch) {
                       <ChevronDown class="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
                     </div>
                   </div>
+                </template>
+              </div>
 
+              <!-- ── Scrollable area: current PC state + preset list / manual form ── -->
+              <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4 space-y-4">
+
+                <!-- Current Program Change state -->
+                <div v-if="currentPcState.length > 0" class="bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
+                  <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
+                    <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
+                    <span v-if="selectedReg?.isMulti" class="text-[7px] font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 uppercase tracking-tighter">Multi-Timbral</span>
+                  </div>
+
+                  <!-- Multi-timbral: one row per channel -->
+                  <template v-if="selectedReg?.isMulti">
+                    <div class="divide-y divide-neutral-900/60">
+                      <div
+                        v-for="entry in currentPcState"
+                        :key="entry.ch"
+                        :class="[
+                          'flex items-center gap-3 px-4 py-2.5 transition-colors',
+                          entry.ch === (selectedReg?.pcChannel ?? 0) ? 'bg-violet-500/10' : 'hover:bg-white/[0.02]'
+                        ]"
+                      >
+                        <span :class="[
+                          'shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border',
+                          entry.ch === (selectedReg?.pcChannel ?? 0)
+                            ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                            : 'bg-neutral-900 text-neutral-500 border-neutral-800'
+                        ]">CH {{ entry.ch + 1 }}</span>
+                        <span class="text-[10px] font-bold text-white truncate flex-1">{{ entry.soundName }}</span>
+                        <div class="flex items-center gap-2 shrink-0">
+                          <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
+                          <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ entry.program }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- Mono: single compact row -->
+                  <template v-else>
+                    <div class="flex items-center gap-3 px-4 py-2.5">
+                      <span class="shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border bg-violet-500/20 text-violet-300 border-violet-500/40">
+                        CH {{ (currentPcState[0]?.ch ?? 0) + 1 }}
+                      </span>
+                      <span class="text-[10px] font-bold text-white truncate flex-1">{{ currentPcState[0]?.soundName }}</span>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <span v-if="currentPcState[0]?.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ currentPcState[0].bank }}</span>
+                        <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ currentPcState[0]?.program }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- ── Catalog preset list ── -->
+                <template v-if="catalogDevice && selectedBank">
                   <!-- Loading -->
                   <div v-if="isLoading" class="flex items-center justify-center py-12 gap-2">
                     <Loader2 class="w-5 h-5 text-violet-400 animate-spin" />
                     <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Loading catalog…</span>
                   </div>
 
-                  <!-- Preset list -->
-                  <div v-else-if="filteredSounds.length > 0" class="space-y-0.5">
-                    <div class="flex items-center justify-between mb-2 px-1">
+                  <template v-else-if="filteredSounds.length > 0">
+                    <div class="flex items-center justify-between px-1">
                       <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
                       <span v-if="lastSent" class="flex items-center gap-1 text-[8px] font-mono text-violet-400 uppercase tracking-widest">
                         <Zap class="w-2.5 h-2.5" />
@@ -433,106 +426,107 @@ function setChannel(ch) {
                       </span>
                     </div>
 
-                    <button
-                      v-for="sound in filteredSounds"
-                      :key="sound.no ?? sound.name"
-                      @click="selectSound(sound)"
-                      :class="[
-                        'w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all group text-left',
-                        activeSound?.no === sound.no && activeSound?.name === sound.name
-                          ? 'bg-violet-500/15 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.1)]'
-                          : 'bg-black/20 border-transparent hover:border-neutral-800 hover:bg-white/[0.03]'
-                      ]"
-                    >
-                      <div class="flex items-center gap-2.5 min-w-0">
-                        <span :class="[
-                          'shrink-0 w-7 text-center text-[8px] font-black font-mono rounded px-1 py-0.5',
+                    <div class="space-y-0.5">
+                      <button
+                        v-for="sound in filteredSounds"
+                        :key="sound.no ?? sound.name"
+                        @click="selectSound(sound)"
+                        :class="[
+                          'w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all group text-left',
                           activeSound?.no === sound.no && activeSound?.name === sound.name
-                            ? 'bg-violet-500 text-black'
-                            : 'bg-neutral-900 text-neutral-600 group-hover:bg-neutral-800 group-hover:text-neutral-400'
-                        ]">
-                          {{ sound[bankConfig?.program_field ?? 'program'] ?? 0 }}
-                        </span>
-                        <span :class="[
-                          'text-[11px] font-medium truncate',
-                          activeSound?.no === sound.no && activeSound?.name === sound.name
-                            ? 'text-violet-200'
-                            : 'text-neutral-400 group-hover:text-neutral-200'
-                        ]">
-                          {{ sound.name }}
-                        </span>
-                      </div>
-                      <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                        <span
-                          v-if="sound[bankConfig?.category_field ?? 'category']"
-                          class="text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/50"
-                        >
-                          {{ sound[bankConfig?.category_field ?? 'category'] }}
-                        </span>
-                        <Send v-if="activeSound?.no === sound.no && activeSound?.name === sound.name" class="w-2.5 h-2.5 text-violet-400" />
-                      </div>
-                    </button>
-                  </div>
+                            ? 'bg-violet-500/15 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.1)]'
+                            : 'bg-black/20 border-transparent hover:border-neutral-800 hover:bg-white/[0.03]'
+                        ]"
+                      >
+                        <div class="flex items-center gap-2.5 min-w-0">
+                          <span :class="[
+                            'shrink-0 w-7 text-center text-[8px] font-black font-mono rounded px-1 py-0.5',
+                            activeSound?.no === sound.no && activeSound?.name === sound.name
+                              ? 'bg-violet-500 text-black'
+                              : 'bg-neutral-900 text-neutral-600 group-hover:bg-neutral-800 group-hover:text-neutral-400'
+                          ]">
+                            {{ sound[bankConfig?.program_field ?? 'program'] ?? 0 }}
+                          </span>
+                          <span :class="[
+                            'text-[11px] font-medium truncate',
+                            activeSound?.no === sound.no && activeSound?.name === sound.name
+                              ? 'text-violet-200'
+                              : 'text-neutral-400 group-hover:text-neutral-200'
+                          ]">
+                            {{ sound.name }}
+                          </span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0 ml-2">
+                          <span
+                            v-if="sound[bankConfig?.category_field ?? 'category']"
+                            class="text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/50"
+                          >
+                            {{ sound[bankConfig?.category_field ?? 'category'] }}
+                          </span>
+                          <Send v-if="activeSound?.no === sound.no && activeSound?.name === sound.name" class="w-2.5 h-2.5 text-violet-400" />
+                        </div>
+                      </button>
+                    </div>
+                  </template>
 
                   <!-- Empty -->
-                  <div v-else-if="!isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
+                  <div v-else class="flex flex-col items-center justify-center py-12 gap-2">
                     <Music2 class="w-6 h-6 text-neutral-700" />
                     <span class="text-[10px] font-mono text-neutral-600">No presets found</span>
                   </div>
                 </template>
 
-              </template>
+                <!-- ── Manual fallback (no catalog) ── -->
+                <template v-else-if="!catalogDevice">
+                  <div class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
+                    <p class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Manual Bank / Program Change</p>
 
-              <!-- ── Manual fallback (no catalog) ── -->
-              <template v-else>
-                <div class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
-                  <p class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Manual Bank / Program Change</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                          <input type="checkbox" v-model="sendMsb" class="w-3.5 h-3.5 accent-violet-500" />
+                          <span class="text-[9px] font-black uppercase text-neutral-400">Bank MSB (CC 0)</span>
+                        </label>
+                        <input
+                          type="number" min="0" max="127" v-model.number="manualMsb" :disabled="!sendMsb"
+                          class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center"
+                        />
+                      </div>
+                      <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                          <input type="checkbox" v-model="sendLsb" class="w-3.5 h-3.5 accent-violet-500" />
+                          <span class="text-[9px] font-black uppercase text-neutral-400">Bank LSB (CC 32)</span>
+                        </label>
+                        <input
+                          type="number" min="0" max="127" v-model.number="manualLsb" :disabled="!sendLsb"
+                          class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center"
+                        />
+                      </div>
+                    </div>
 
-                  <div class="grid grid-cols-2 gap-3">
                     <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
-                      <label class="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" v-model="sendMsb" class="w-3.5 h-3.5 accent-violet-500" />
-                        <span class="text-[9px] font-black uppercase text-neutral-400">Bank MSB (CC 0)</span>
-                      </label>
-                      <input
-                        type="number" min="0" max="127" v-model.number="manualMsb" :disabled="!sendMsb"
-                        class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center"
-                      />
+                      <div class="flex items-center justify-between">
+                        <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Program (1–128)</span>
+                        <input
+                          type="number" min="1" max="128" v-model.number="manualProg"
+                          class="w-14 bg-black border border-neutral-700 rounded px-2 py-0.5 text-center text-violet-300 font-mono text-[11px] focus:border-violet-400 outline-none"
+                        />
+                      </div>
+                      <input type="range" min="1" max="128" v-model.number="manualProg" class="w-full accent-violet-500 h-1 bg-black rounded-lg cursor-pointer" />
                     </div>
-                    <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
-                      <label class="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" v-model="sendLsb" class="w-3.5 h-3.5 accent-violet-500" />
-                        <span class="text-[9px] font-black uppercase text-neutral-400">Bank LSB (CC 32)</span>
-                      </label>
-                      <input
-                        type="number" min="0" max="127" v-model.number="manualLsb" :disabled="!sendLsb"
-                        class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-neutral-300 font-mono text-[11px] outline-none focus:border-violet-500 disabled:opacity-30 text-center"
-                      />
-                    </div>
+
+                    <button
+                      @click="sendManual"
+                      :disabled="!selectedDeviceName || isDeviceOffline"
+                      class="w-full bg-violet-500 text-black rounded-xl py-3 font-black tracking-widest uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-violet-500/20"
+                    >
+                      <Send class="w-3.5 h-3.5" />
+                      Send Program Change
+                    </button>
                   </div>
+                </template>
 
-                  <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Program (1–128)</span>
-                      <input
-                        type="number" min="1" max="128" v-model.number="manualProg"
-                        class="w-14 bg-black border border-neutral-700 rounded px-2 py-0.5 text-center text-violet-300 font-mono text-[11px] focus:border-violet-400 outline-none"
-                      />
-                    </div>
-                    <input type="range" min="1" max="128" v-model.number="manualProg" class="w-full accent-violet-500 h-1 bg-black rounded-lg cursor-pointer" />
-                  </div>
-
-                  <button
-                    @click="sendManual"
-                    :disabled="!selectedDeviceName || isDeviceOffline"
-                    class="w-full bg-violet-500 text-black rounded-xl py-3 font-black tracking-widest uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-violet-500/20"
-                  >
-                    <Send class="w-3.5 h-3.5" />
-                    Send Program Change
-                  </button>
-                </div>
-              </template>
-
+              </div>
             </template>
           </div>
         </div>
