@@ -718,7 +718,26 @@ onMounted(() => {
     const d = e.detail || {}
     if (d.playlist) playlist.value = d.playlist
     if (d.repeats) playlistRepeats.value = d.repeats
-    if (d.idx !== undefined) playFromPlaylist(d.idx, 'livepad')
+    if (d.idx === undefined) return
+
+    const useCrossfade = d.crossfade
+      && isPlaying.value
+      && playlistIdx.value !== d.idx
+      && !isCrossfadingRef
+
+    if (useCrossfade) {
+      const nextTrack = playlist.value[d.idx]
+      if (nextTrack) {
+        triggerSource.value = 'livepad'
+        const audio = getPrimary()
+        const timeLeft = audio && isFinite(audio.duration)
+          ? Math.max(0.5, audio.duration - audio.currentTime)
+          : crossfadeSec.value
+        startCrossfade(nextTrack, d.idx, Math.min(crossfadeSec.value, timeLeft))
+      }
+    } else {
+      playFromPlaylist(d.idx, 'livepad')
+    }
   }
   const handlePrev = () => playlistPrev()
   const handleSeek = (e) => { if (e.detail !== undefined) seekToPos(e.detail) }

@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   X, Trash2, Play, Pause, SkipBack, SkipForward,
-  BookOpen, Disc3, ListMusic, Layers
+  BookOpen, Disc3, ListMusic, Layers, Save, FolderOpen, Check
 } from 'lucide-vue-next'
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { usePresetStore }  from '@/stores/usePresetStore'
@@ -18,9 +18,10 @@ const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
 
 // ── localStorage ─────────────────────────────────────────────────
-const LS_PC_SETS   = 'SYCORE_PC_PERFORMANCE_SETS'
-const LS_LPP_SETS  = 'SYCORE_LPP_SETS'
-const LS_LPP_DEVPC = 'SYCORE_LPP_DEVICE_PC'
+const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
+const LS_LPP_SETS       = 'SYCORE_LPP_SETS'
+const LS_LPP_DEVPC      = 'SYCORE_LPP_DEVICE_PC'
+const LS_LPP_SNAPSHOTS  = 'SYCORE_LPP_SNAPSHOTS'
 
 function getLS(key, def) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def } catch { return def }
@@ -42,6 +43,66 @@ const devicePcPads = ref(Array(8).fill(null).map(emptyDevPad))
 // ── Active visual state ───────────────────────────────────────────
 const activePerfSetIdx  = ref(-1)
 const activeDevicePcIdx = ref(-1)
+
+// ── Live Performance Snapshots ────────────────────────────────────
+const lppSnapshots        = ref([])
+const showSnapshotDialog  = ref(false)
+const newSnapshotName     = ref('')
+const snapshotNameInput   = ref(null)
+const activeSnapshotId    = ref(null)
+
+function saveSnapshot() {
+  const name = newSnapshotName.value.trim()
+  if (!name) return
+  const entry = {
+    id: Date.now().toString(),
+    name,
+    savedAt: new Date().toISOString(),
+    setPads:      JSON.parse(JSON.stringify(setPads.value)),
+    devicePcPads: JSON.parse(JSON.stringify(devicePcPads.value)),
+  }
+  lppSnapshots.value = [entry, ...lppSnapshots.value]
+  setLS(LS_LPP_SNAPSHOTS, lppSnapshots.value)
+  activeSnapshotId.value = entry.id
+  newSnapshotName.value = ''
+  showSnapshotDialog.value = false
+}
+
+function recallSnapshot(snap) {
+  setPads.value      = JSON.parse(JSON.stringify(snap.setPads))
+  devicePcPads.value = JSON.parse(JSON.stringify(snap.devicePcPads))
+  activeSnapshotId.value = snap.id
+  persistPads()
+}
+
+function deleteSnapshot(id) {
+  lppSnapshots.value = lppSnapshots.value.filter(s => s.id !== id)
+  if (activeSnapshotId.value === id) activeSnapshotId.value = null
+  setLS(LS_LPP_SNAPSHOTS, lppSnapshots.value)
+}
+
+const activeSnapshot = computed(() =>
+  lppSnapshots.value.find(s => s.id === activeSnapshotId.value) ?? null
+)
+
+function updateSnapshot() {
+  if (!activeSnapshot.value) return
+  const idx = lppSnapshots.value.findIndex(s => s.id === activeSnapshotId.value)
+  if (idx === -1) return
+  lppSnapshots.value[idx] = {
+    ...lppSnapshots.value[idx],
+    setPads:      JSON.parse(JSON.stringify(setPads.value)),
+    devicePcPads: JSON.parse(JSON.stringify(devicePcPads.value)),
+    updatedAt:    new Date().toISOString(),
+  }
+  setLS(LS_LPP_SNAPSHOTS, lppSnapshots.value)
+}
+
+function openSnapshotDialog() {
+  showSnapshotDialog.value = true
+  newSnapshotName.value = ''
+  nextTick(() => snapshotNameInput.value?.focus())
+}
 
 // ── Tabs ──────────────────────────────────────────────────────────
 const tab      = ref('perf')
@@ -163,7 +224,7 @@ function persistPads() {
 }
 
 // ── Playlist controls (same event bus as LiveSet/BackingTrackPlayer) ──
-function playFromPlaylist(idx) { window.dispatchEvent(new CustomEvent('playlist-play',  { detail: { idx } })) }
+function playFromPlaylist(idx) { window.dispatchEvent(new CustomEvent('playlist-play',  { detail: { idx, crossfade: true } })) }
 function clearPlaylist()        { window.dispatchEvent(new CustomEvent('playlist-clear')) }
 function mutatePlaylist(k, v)   { window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key: k, value: v } })) }
 function prevTrack()            { window.dispatchEvent(new CustomEvent('playlist-prev')) }
@@ -193,7 +254,8 @@ function handleStateUpdate(e) {
 
 // ── Init ──────────────────────────────────────────────────────────
 function loadState() {
-  pcSets.value = getLS(LS_PC_SETS, [])
+  pcSets.value      = getLS(LS_PC_SETS, [])
+  lppSnapshots.value = getLS(LS_LPP_SNAPSHOTS, [])
   const savedSets  = getLS(LS_LPP_SETS,  null)
   const savedDevPc = getLS(LS_LPP_DEVPC, null)
   if (Array.isArray(savedSets)  && savedSets.length  === 8) setPads.value      = savedSets
@@ -257,10 +319,75 @@ function formatTime(t) {
         </nav>
       </div>
       <div class="flex-1" />
+      <!-- Save buttons — context-aware -->
+      <div class="flex items-center gap-2 mr-3">
+        <!-- Update active snapshot -->
+        <button
+          v-if="activeSnapshot"
+          @click="updateSnapshot"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-violet-500/50 bg-violet-500/10 text-violet-300 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/20 hover:border-violet-400 transition-all"
+          :title="`Update snapshot: ${activeSnapshot.name}`"
+        >
+          <Save class="w-3.5 h-3.5" />
+          Save
+        </button>
+        <!-- Save new snapshot -->
+        <button
+          @click="openSnapshotDialog"
+          :class="[
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all',
+            activeSnapshot
+              ? 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300'
+              : 'border-violet-500/30 text-violet-400 hover:bg-violet-500/10 hover:border-violet-400/50'
+          ]"
+          title="Save current pad layout as a new snapshot"
+        >
+          <Save class="w-3.5 h-3.5" />
+          {{ activeSnapshot ? 'Save New' : 'Save' }}
+        </button>
+        <!-- Active snapshot label -->
+        <span v-if="activeSnapshot" class="text-[9px] font-mono text-violet-500/70 max-w-[100px] truncate" :title="activeSnapshot.name">
+          {{ activeSnapshot.name }}
+        </span>
+      </div>
       <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors">
         <X class="w-5 h-5" />
       </button>
     </div>
+
+    <!-- Snapshot save dialog -->
+    <Transition name="fade-down">
+      <div v-if="showSnapshotDialog"
+        class="absolute top-[60px] right-4 z-20 bg-neutral-900 border border-violet-500/40 rounded-2xl p-4 shadow-2xl w-72"
+      >
+        <p class="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-3">New Snapshot</p>
+        <input
+          ref="snapshotNameInput"
+          v-model="newSnapshotName"
+          type="text"
+          placeholder="Snapshot name…"
+          maxlength="30"
+          @keydown.enter="saveSnapshot"
+          @keydown.esc="showSnapshotDialog = false"
+          class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white font-mono outline-none focus:border-violet-500/70 placeholder:text-neutral-700 mb-3"
+        />
+        <div class="flex gap-2">
+          <button
+            @click="saveSnapshot"
+            :disabled="!newSnapshotName.trim()"
+            class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest transition-all"
+          >
+            <Check class="w-3.5 h-3.5" /> Save
+          </button>
+          <button
+            @click="showSnapshotDialog = false"
+            class="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-xs font-bold transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Transition>
 
     <!-- ══ PERFORMANCE TAB ══ -->
     <div v-if="tab === 'perf'" class="flex-1 flex flex-col min-h-0 px-5 pt-4 pb-2 gap-4 overflow-y-auto custom-scrollbar">
@@ -392,6 +519,7 @@ function formatTime(t) {
             { id: 'sets',      label: 'Performance Sets', icon: BookOpen },
             { id: 'device-pc', label: 'Device PC',        icon: Disc3 },
             { id: 'playlist',  label: 'Playlist',         icon: ListMusic },
+            { id: 'snapshots', label: 'Snapshots',        icon: FolderOpen },
           ]"
           :key="t.id"
           @click="setupTab = t.id"
@@ -493,6 +621,66 @@ function formatTime(t) {
         </div>
       </div>
 
+      <!-- Snapshots list -->
+      <div v-if="setupTab === 'snapshots'" class="flex-1 overflow-y-auto custom-scrollbar p-6">
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-[9px] font-mono text-neutral-600 leading-relaxed">
+            Save and recall complete pad layouts — both Performance Sets and Device PC assignments.
+          </p>
+          <button
+            @click="openSnapshotDialog"
+            class="shrink-0 flex items-center gap-1.5 ml-4 px-3 py-1.5 rounded-lg border border-violet-500/30 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/10 hover:border-violet-400/50 transition-all"
+          >
+            <Save class="w-3 h-3" /> Save current
+          </button>
+        </div>
+        <p v-if="lppSnapshots.length === 0"
+          class="text-[10px] font-mono text-neutral-700 italic text-center py-8"
+        >
+          No snapshots saved yet. Click "Save current" to create one.
+        </p>
+        <div v-else class="space-y-2">
+          <div
+            v-for="snap in lppSnapshots"
+            :key="snap.id"
+            :class="[
+              'flex items-center gap-3 rounded-xl px-4 py-3 border transition-all',
+              activeSnapshotId === snap.id
+                ? 'bg-violet-500/10 border-violet-500/40'
+                : 'bg-neutral-900/40 border-neutral-800/40 hover:border-neutral-700/60'
+            ]"
+          >
+            <FolderOpen
+              :class="['w-4 h-4 shrink-0', activeSnapshotId === snap.id ? 'text-violet-400' : 'text-neutral-600']"
+            />
+            <div class="flex-1 min-w-0">
+              <p :class="['text-[11px] font-black truncate', activeSnapshotId === snap.id ? 'text-violet-300' : 'text-neutral-300']">
+                {{ snap.name }}
+              </p>
+              <p class="text-[8px] font-mono text-neutral-700 mt-0.5">
+                {{ new Date(snap.savedAt).toLocaleString() }}
+              </p>
+            </div>
+            <span class="text-[8px] font-mono text-neutral-600 shrink-0">
+              {{ snap.setPads?.filter(p => p.setId).length ?? 0 }}S
+              · {{ snap.devicePcPads?.filter(p => p.deviceName).length ?? 0 }}D
+            </span>
+            <button
+              @click="recallSnapshot(snap)"
+              class="shrink-0 px-3 py-1 rounded-lg bg-violet-600/20 hover:bg-violet-600/40 text-violet-300 text-[10px] font-black uppercase tracking-wider transition-all"
+            >
+              Load
+            </button>
+            <button
+              @click="deleteSnapshot(snap.id)"
+              class="shrink-0 p-1.5 rounded-lg text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Playlist setup (reuses PlayList component exactly as LiveSet does) -->
       <div v-if="setupTab === 'playlist'" class="flex-1 overflow-y-auto custom-scrollbar p-4">
         <PlayList
@@ -528,3 +716,13 @@ function formatTime(t) {
 
   </div>
 </template>
+
+<style scoped>
+.fade-down-enter-active, .fade-down-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.fade-down-enter-from, .fade-down-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+</style>

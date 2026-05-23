@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, shallowRef, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import {
-  Activity, Pause, Play, Trash2, Download, X, ChevronDown, ChevronUp
+  Activity, Pause, Play, Square, Trash2, Download, X, ChevronDown, ChevronUp
 } from 'lucide-vue-next'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })
@@ -14,7 +14,8 @@ const mappingStore  = useMappingStore()
 
 // ─── Filter state ─────────────────────────────────────────────────────────────
 const direction      = ref('both')   // 'in' | 'out' | 'both'
-const paused         = ref(false)
+const monitoring     = ref(false)    // false = stopped (default); true = listener attached
+const paused         = ref(false)    // display-only pause while monitoring
 const searchText     = ref('')
 const showFilters    = ref(false)
 const filterDevice   = ref('all')
@@ -43,7 +44,7 @@ const logEndRef  = ref(null)
 const knownDevices = ref([])
 
 function _appendEntry(entry) {
-  if (paused.value) return
+  if (!monitoring.value || paused.value) return
   knownDevices.value = knownDevices.value.includes(entry.device)
     ? knownDevices.value
     : [...knownDevices.value, entry.device]
@@ -54,7 +55,7 @@ function _appendEntry(entry) {
 
 // ─── System log integration ───────────────────────────────────────────────────
 function _handleSystemLog(e) {
-  if (!uiStore.isMidiMonitorOpen) return
+  if (!uiStore.isMidiMonitorOpen || !monitoring.value) return
   _appendEntry({
     id: Date.now(),
     timestamp: Date.now(),
@@ -142,10 +143,19 @@ function fmtTime(ts) {
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 let _unsub = null
 
+// Attach / detach listener based on monitoring state
+watch(monitoring, (active) => {
+  if (active) {
+    _unsub = midiService.addMonitorListener(_appendEntry)
+  } else {
+    _unsub?.()
+    _unsub = null
+    paused.value = false
+  }
+})
+
 onMounted(() => {
-  // Replay existing buffer from service
-  midiService.getMonitorBuffer().forEach(_appendEntry)
-  _unsub = midiService.addMonitorListener(_appendEntry)
+  // Listener is NOT attached on mount — user must press Start
   window.addEventListener('app-system-log', _handleSystemLog)
 })
 
@@ -203,11 +213,23 @@ onUnmounted(() => {
 
           <span class="w-px h-4 bg-neutral-700 shrink-0" />
 
-          <!-- Pause / Resume -->
-          <button @click="paused = !paused"
+          <!-- Start / Stop monitoring -->
+          <button @click="monitoring = !monitoring"
+            :class="['px-2 py-1 rounded border text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors',
+              monitoring
+                ? 'border-rose-500/40 text-rose-400 hover:bg-rose-500/10'
+                : 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10']"
+            :title="monitoring ? 'Stop monitoring' : 'Start monitoring'"
+          >
+            <component :is="monitoring ? Square : Play" class="w-2.5 h-2.5 fill-current" />
+            {{ monitoring ? 'Stop' : 'Start' }}
+          </button>
+
+          <!-- Pause / Resume display (only while monitoring) -->
+          <button v-if="monitoring" @click="paused = !paused"
             :class="['p-1 rounded border transition-colors',
               paused ? 'border-amber-500/40 text-amber-400' : 'border-neutral-700 text-neutral-500 hover:text-amber-400']"
-            :title="paused ? 'Resume' : 'Pause'"
+            :title="paused ? 'Resume display' : 'Pause display'"
           >
             <component :is="paused ? Play : Pause" class="w-3 h-3" />
           </button>
@@ -284,10 +306,16 @@ onUnmounted(() => {
         </div>
       </Transition>
 
+      <!-- ── Stopped banner ────────────────────────────────────────────── -->
+      <div v-if="!monitoring" class="px-3 py-1.5 bg-neutral-900/60 border-b border-neutral-800 flex items-center gap-2">
+        <Play class="w-3 h-3 text-emerald-400 shrink-0" />
+        <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Monitoring stopped — press <span class="text-emerald-400 font-black">Start</span> to begin capturing MIDI messages</span>
+      </div>
+
       <!-- ── Pause banner ────────────────────────────────────────────────── -->
-      <div v-if="paused" class="px-3 py-1 bg-amber-950/20 border-b border-amber-900/30 flex items-center gap-1.5">
+      <div v-else-if="paused" class="px-3 py-1 bg-amber-950/20 border-b border-amber-900/30 flex items-center gap-1.5">
         <span class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-        <span class="text-[9px] font-mono text-amber-400 uppercase tracking-widest">Paused — new messages not displayed</span>
+        <span class="text-[9px] font-mono text-amber-400 uppercase tracking-widest">Display paused — messages are still captured</span>
       </div>
 
       <!-- ── Log rows ────────────────────────────────────────────────────── -->
@@ -314,7 +342,7 @@ onUnmounted(() => {
         </div>
 
         <span v-if="filteredEntries.length === 0" class="text-neutral-600 italic px-1">
-          {{ paused ? 'Paused.' : 'Waiting for MIDI messages…' }}
+          {{ !monitoring ? 'Press Start to begin logging.' : paused ? 'Display paused.' : 'Waiting for MIDI messages…' }}
         </span>
 
         <div ref="logEndRef" />
@@ -326,12 +354,12 @@ onUnmounted(() => {
           {{ filteredEntries.length }} / {{ entryCount }} entries
         </span>
         <span class="flex items-center gap-1 text-[9px] font-mono"
-          :class="paused ? 'text-amber-500' : 'text-cyan-500'"
+          :class="!monitoring ? 'text-neutral-600' : paused ? 'text-amber-500' : 'text-cyan-500'"
         >
           <span class="w-1.5 h-1.5 rounded-full shrink-0"
-            :class="paused ? 'bg-amber-500' : 'bg-cyan-500 animate-pulse'"
+            :class="!monitoring ? 'bg-neutral-700' : paused ? 'bg-amber-500' : 'bg-cyan-500 animate-pulse'"
           />
-          {{ paused ? 'PAUSED' : 'LIVE' }}
+          {{ !monitoring ? 'STOPPED' : paused ? 'PAUSED' : 'LIVE' }}
         </span>
       </div>
     </div>
