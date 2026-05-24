@@ -59,7 +59,8 @@ function isInputDeviceRoutedToArpeggiator(inputId) {
     // Check if this input device is configured to route to the arpeggiator
     const routingMatrix = midiStore.routingMatrix
     const targetArray = routingMatrix[inputName]
-    return targetArray.some( t => routingMatrix[MidiSource.ARP].includes(t))  
+    if (!targetArray) return true
+    return targetArray.some(t => routingMatrix[MidiSource.ARP]?.includes(t))  
   } catch (error) {
     // If anything goes wrong, allow the note through to avoid blocking all input
     console.warn('[Arpeggiator] Error checking input routing:', error)

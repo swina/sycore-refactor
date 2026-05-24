@@ -8,6 +8,8 @@ import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggable } from '@/composables/useDraggable'
 import { Mp3Encoder } from '@breezystack/lamejs'
 import { midiService } from '@/core/midi/MidiService'
+import { looperEngine } from '@/lib/looper-engine'
+import { useLooperStore } from '@/stores/useLooperStore'
 
 const props = defineProps({
   hasBackingTrack: { type: Boolean, default: false },
@@ -16,6 +18,7 @@ const props = defineProps({
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
+const looperStore  = useLooperStore()
 const { openMenu } = useMidiContextMenu()
 
 const { x, y, startDrag } = useDraggable(
@@ -39,6 +42,9 @@ const normalizeGateDb  = ref(-60)
 const isImporting      = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const error            = ref(null)
+
+const selectedLooperTrack = ref(1)
+const isSendingToLooper   = ref(false)
 
 const isLooping           = ref(false)
 const audioDuration       = ref(0)
@@ -885,6 +891,44 @@ async function handleAddToPlaylist() {
   }
 }
 
+async function handleSendToLooper() {
+  if (!recordedBlob.value || isSendingToLooper.value) return
+  isSendingToLooper.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const audioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new audioCtxClass()
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+
+    const sampleRate = decoded.sampleRate
+    const startSample = Math.floor(loopStart.value * sampleRate)
+    const endSample = Math.floor(loopEnd.value * sampleRate)
+    const croppedLength = endSample - startSample
+    if (croppedLength <= 0) return
+
+    const croppedBuffer = new AudioBuffer({
+      numberOfChannels: decoded.numberOfChannels,
+      length: croppedLength,
+      sampleRate
+    })
+    for (let chan = 0; chan < decoded.numberOfChannels; chan++) {
+      croppedBuffer.copyToChannel(decoded.getChannelData(chan).subarray(startSample, endSample), chan)
+    }
+
+    const croppedWav = audioBufferToWav(croppedBuffer)
+    const trackIndex = selectedLooperTrack.value - 1
+    const ok = await looperEngine.loadAudioBlob(trackIndex, croppedWav)
+    if (ok && looperStore.takes[trackIndex]) {
+      looperStore.takes[trackIndex].isEmpty = false
+    }
+  } catch (e) {
+    console.error('Failed to send to looper', e)
+  } finally {
+    isSendingToLooper.value = false
+  }
+}
+
 // ── Playback & Crossfading ────────────────────────────────────────────────────
 let audioCtx = null
 let sourceNode1 = null
@@ -1586,6 +1630,31 @@ onUnmounted(() => {
                 class="px-1 text-[7px] font-bold text-neutral-500 hover:text-white leading-none"
               >-</button>
             </div>
+          </div>
+
+          <!-- Send to Looper Track -->
+          <div v-if="recordedBlob && !isRecording" class="flex flex-col gap-1 border border-neutral-700 rounded p-1.5">
+            <span class="text-[7px] font-black uppercase tracking-widest text-neutral-500">→ Looper</span>
+            <div class="flex items-center gap-1">
+              <div class="flex gap-0.5 flex-wrap">
+                <button
+                  v-for="t in 8"
+                  :key="t"
+                  @click="selectedLooperTrack = t"
+                  :class="['w-5 h-5 text-[7px] font-bold rounded border transition-colors',
+                    selectedLooperTrack === t
+                      ? 'bg-violet-500/30 text-violet-300 border-violet-500/50'
+                      : 'text-neutral-600 border-neutral-800 hover:text-neutral-400']"
+                >{{ t }}</button>
+              </div>
+            </div>
+            <button
+              @click="handleSendToLooper"
+              :disabled="isSendingToLooper"
+              class="flex items-center justify-center gap-1 text-[8px] font-bold uppercase px-2 py-1 rounded border text-violet-300 border-violet-500/40 hover:bg-violet-500/15 transition-colors"
+            >
+              {{ isSendingToLooper ? '…' : `T${selectedLooperTrack}` }}
+            </button>
           </div>
 
           <!-- Save (original format / WAV cropped) -->

@@ -193,6 +193,26 @@ export class LooperEngine {
     return x;
   }
 
+  async loadAudioBlob(index, blob) {
+    if (index < 0 || index >= 8) return false
+    try {
+      const decodeCtx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)()
+      const arrayBuffer = await blob.arrayBuffer()
+      const decoded = await decodeCtx.decodeAudioData(arrayBuffer)
+      if (!this.audioCtx) decodeCtx.close().catch(() => {})
+      const targetSamples = this.maxSamples > 0 ? this.maxSamples : decoded.length
+      const result = new Float32Array(targetSamples)
+      const src = decoded.getChannelData(0)
+      result.set(src.subarray(0, Math.min(src.length, targetSamples)))
+      this.buffers[index] = result
+      if (this.maxSamples <= 0) this.maxSamples = targetSamples
+      return true
+    } catch (e) {
+      console.error('[LooperEngine] loadAudioBlob failed', e)
+      return false
+    }
+  }
+
   async renderMixdown() {
     if (!this.maxSamples || this.buffers.every(b => !b)) return null;
 

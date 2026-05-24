@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Link2, Clock, Play, Mic, Music2, Zap, ArrowRight } from 'lucide-vue-next'
+import { Link2, Clock, Play, Mic, Music2, Zap, ArrowRight, Layers } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -22,6 +22,7 @@ const COLS = [
   { id: 'midi-transport', label: 'MIDI START/STOP', icon: Zap,    desc: 'Sends 0xFA / 0xFC'       },
   { id: 'sequencer',      label: 'Step Sequencer',  icon: Play,   desc: 'Starts/stops sequencer'   },
   { id: 'backing-track',  label: 'Backing Track',   icon: Music2, desc: 'Starts/stops backing track'},
+  { id: 'audio-looper',   label: 'Audio Looper',    icon: Layers, desc: 'Starts/stops looper'      },
   { id: 'audio-capture',  label: 'Audio Capture',   icon: Mic,    desc: 'Starts/stops recording'   },
 ]
 
@@ -40,6 +41,10 @@ const ROWS = computed(() => [
         set: (v) => { syncStore.syncTrack = v },
       },
       'backing-track': null,
+      'audio-looper': {
+        get: () => syncStore.syncBackingTrackToLooper,
+        set: (v) => { syncStore.syncBackingTrackToLooper = v },
+      },
       'audio-capture': {
         get: () => syncStore.syncRecordAudioCapture,
         set: (v) => { syncStore.syncRecordAudioCapture = v },
@@ -60,6 +65,10 @@ const ROWS = computed(() => [
         get: () => syncStore.syncTrack,
         set: (v) => { syncStore.syncTrack = v },
       },
+      'audio-looper': {
+        get: () => syncStore.syncSequencerToLooper,
+        set: (v) => { syncStore.syncSequencerToLooper = v },
+      },
       'audio-capture': null,
     },
   },
@@ -74,6 +83,55 @@ const ROWS = computed(() => [
       },
       'sequencer': null,
       'backing-track': null,
+      'audio-looper': null,
+      'audio-capture': null,
+    },
+  },
+  {
+    id: 'audio-looper',
+    label: 'Audio Looper',
+    icon: Layers,
+    cells: {
+      'midi-transport': {
+        get: () => syncStore.syncLooperToMidi,
+        set: (v) => { syncStore.syncLooperToMidi = v },
+      },
+      'sequencer': {
+        get: () => syncStore.syncLooperToSequencer,
+        set: (v) => { syncStore.syncLooperToSequencer = v },
+      },
+      'backing-track': {
+        get: () => syncStore.syncLooperToBackingTrack,
+        set: (v) => { syncStore.syncLooperToBackingTrack = v },
+      },
+      'audio-looper': null,
+      'audio-capture': {
+        get: () => syncStore.syncLooperToAudioCapture,
+        set: (v) => { syncStore.syncLooperToAudioCapture = v },
+      },
+    },
+  },
+  {
+    id: 'audio-capture',
+    label: 'Audio Capture',
+    icon: Mic,
+    cells: {
+      'midi-transport': {
+        get: () => syncStore.syncAudioCaptureToMidi,
+        set: (v) => { syncStore.syncAudioCaptureToMidi = v },
+      },
+      'sequencer': {
+        get: () => syncStore.syncAudioCaptureToSequencer,
+        set: (v) => { syncStore.syncAudioCaptureToSequencer = v },
+      },
+      'backing-track': {
+        get: () => syncStore.syncAudioCaptureToBackingTrack,
+        set: (v) => { syncStore.syncAudioCaptureToBackingTrack = v },
+      },
+      'audio-looper': {
+        get: () => syncStore.syncAudioCaptureToLooper,
+        set: (v) => { syncStore.syncAudioCaptureToLooper = v },
+      },
       'audio-capture': null,
     },
   },
@@ -248,6 +306,12 @@ const ROWS = computed(() => [
           <li>
             <span class="text-neutral-500 font-semibold">Live Performance Pad → MIDI START/STOP</span>
             is a global guard — disable it to prevent double-firing when both Live Performance Pad and Backing Track are active.
+          </li>
+          <li>
+            <span class="text-neutral-500 font-semibold">Audio Looper</span>
+            and
+            <span class="text-neutral-500 font-semibold">Audio Capture</span>
+            sync flags are stored in the matrix but require the consuming components to read them from the sync store and act accordingly.
           </li>
         </ul>
       </section>
