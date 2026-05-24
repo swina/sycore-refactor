@@ -85,7 +85,7 @@ const showPartSelector = computed(() => configStore.enablePartSelector)
 useMidiInit()
 useMidiCCListener()
 useControllerManager()
-const { captureNotesRef, captureNoteCount } = useMidiCapture()
+const { captureNotesRef, captureNoteCount, captureEnabled, resetCapture } = useMidiCapture()
 const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
 
 // Init push notifications for superadmin
@@ -167,6 +167,20 @@ async function handleStepSequencerSave(config) {
 
 function handleStepSequencerTranspose(val) {
   globalTranspose.value = val
+}
+
+function setCaptureEnabled(val) {
+  captureEnabled.value = val
+}
+
+function handleSendToSequencer(config) {
+  if (uiStore.seqActiveSlot === 2) {
+    uiStore.seqCurrentConfig2 = config
+  } else {
+    uiStore.seqCurrentConfig = config
+  }
+  uiStore.isSequencerOpen = true
+  uiStore.isCaptureOpen = false
 }
 
 onMounted(() => {
@@ -371,16 +385,18 @@ onMounted(() => {
       </Transition>
 
       <!-- MIDI Capture -->
-      <Transition name="sy-modal">
-        <MidiCapture
-          v-if="uiStore.isCaptureOpen"
-          :isOpen="uiStore.isCaptureOpen"
-          :notesRef="captureNotesRef"
-          :noteCount="captureNoteCount"
-          @close="uiStore.isCaptureOpen = false"
-          @reset="captureNotesRef.current = []"
-        />
-      </Transition>
+      <MidiCapture
+        v-if="uiStore.isCaptureOpen"
+        :isOpen="uiStore.isCaptureOpen"
+        :notesRef="captureNotesRef"
+        :noteCount="captureNoteCount"
+        :captureEnabled="captureEnabled"
+        :bpm="midiStore.currentBpm || 120"
+        @close="uiStore.isCaptureOpen = false"
+        @reset="resetCapture"
+        @update:captureEnabled="setCaptureEnabled"
+        @sendToSequencer="handleSendToSequencer"
+      />
 
       <!-- Audio Capture -->
       <AudioCapture />

@@ -1017,6 +1017,17 @@ export class MidiService {
     this.broadcast('noteoff', { note, velocity }, channel, source, skipDeviceId);
   }
 
+  /** Send a raw note directly to a specific output (or all outputs) bypassing routing matrix. */
+  sendRawNote(outputId: string | null, type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number): void {
+    if (!this.midiAccess) return;
+    const status = (type === 'noteon' ? 0x90 : 0x80) | (channel & 0xF);
+    const msg = [status, note & 0x7F, velocity & 0x7F];
+    const targets = outputId
+      ? [this.midiAccess.outputs.get(outputId)].filter(Boolean) as MIDIOutput[]
+      : Array.from(this.midiAccess.outputs.values());
+    targets.forEach(out => { try { out.send(msg); } catch (e) {} });
+  }
+
   allNotesOff(channel: number = 0) {
     this.broadcast('allnotesoff', {}, channel, MidiSource.UI);
     this.sendCC(120, 0, channel, MidiSource.UI);

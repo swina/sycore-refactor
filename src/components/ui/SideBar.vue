@@ -16,6 +16,7 @@ const ACTION_MAP = {
   liveset:        () => uiStore.isLiveSetOpen = !uiStore.isLiveSetOpen,
   tracks:         () => uiStore.isBackingTrackOpen = !uiStore.isBackingTrackOpen,
   sequencer:      () => uiStore.isSequencerOpen = !uiStore.isSequencerOpen,
+  capture:        () => uiStore.isCaptureOpen = !uiStore.isCaptureOpen,
   'audio-capture':() => uiStore.isAudioCaptureOpen = !uiStore.isAudioCaptureOpen,
   visualizer:     () => uiStore.isVisualizerOpen = !uiStore.isVisualizerOpen,
   keyboard:       () => uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen,
