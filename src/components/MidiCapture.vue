@@ -23,6 +23,8 @@ const captureStore = useCaptureStore()
 const { frozenNotes, phase, rangeStartMs, rangeEndMs } = storeToRefs(captureStore)
 
 const canvasRef = ref(null)
+const rulerCanvasRef = ref(null)
+const noteLabelsRef = ref(null)
 const scrollWrapRef = ref(null)
 let animFrameId = null
 
@@ -293,6 +295,15 @@ const durationDivisions = computed(() => {
   ])
 })
 
+const velocitySliderStyle = computed(() => {
+  const v = inlineEdit.value?.velocity ?? 64
+  const pct = ((v - 1) / 126) * 100
+  const color = `hsl(${v * 2}, 80%, 55%)`
+  return {
+    background: `linear-gradient(to right, ${color} ${pct}%, #2a2a2a ${pct}%)`,
+  }
+})
+
 function isDivisionSelected(ms) {
   if (!inlineEdit.value) return false
   return Math.abs(inlineEdit.value.duration - ms) <= 5
@@ -372,6 +383,95 @@ function drawRuler(ctx, W, xOfBeat, pxPerBeat) {
       const label = `${measure}.${beat}`
       ctx.fillStyle = isMeasureStart ? '#888' : '#444'
       ctx.fillText(label, x + 2, RULER_H / 2)
+    }
+  }
+}
+
+function drawFixedRuler(pxPerBeat) {
+  const ruler = rulerCanvasRef.value
+  if (!ruler) return
+  const scrollLeft = scrollWrapRef.value?.scrollLeft ?? 0
+  const cw = Math.round(ruler.getBoundingClientRect().width) || scrollWrapRef.value?.clientWidth || 800
+  ruler.width = cw
+  ruler.height = RULER_H
+  const ctx = ruler.getContext('2d')
+
+  ctx.fillStyle = '#0d0d0d'
+  ctx.fillRect(0, 0, cw, RULER_H)
+  ctx.strokeStyle = '#2a2a2a'
+  ctx.lineWidth = 0.5
+  ctx.beginPath(); ctx.moveTo(0, RULER_H); ctx.lineTo(cw, RULER_H); ctx.stroke()
+
+  const showBeats = pxPerBeat >= 28
+  const firstBeat = Math.floor(scrollLeft / pxPerBeat)
+  const lastBeat  = Math.ceil((scrollLeft + cw) / pxPerBeat) + 1
+
+  ctx.textBaseline = 'middle'
+  ctx.font = 'bold 8px monospace'
+
+  for (let b = firstBeat; b <= lastBeat; b++) {
+    const sx = b * pxPerBeat - scrollLeft
+    if (sx < -20 || sx > cw + 20) continue
+
+    const measure = Math.floor(b / 4) + 1
+    const beat    = (b % 4) + 1
+    const isMeasureStart = beat === 1
+
+    ctx.strokeStyle = isMeasureStart ? '#555' : '#2e2e2e'
+    ctx.lineWidth = isMeasureStart ? 1 : 0.5
+    const tickTop = RULER_H - (isMeasureStart ? 10 : 6)
+    ctx.beginPath(); ctx.moveTo(sx, tickTop); ctx.lineTo(sx, RULER_H); ctx.stroke()
+
+    if (isMeasureStart || showBeats) {
+      ctx.fillStyle = isMeasureStart ? '#888' : '#444'
+      ctx.fillText(`${measure}.${beat}`, sx + 2, RULER_H / 2)
+    }
+  }
+}
+
+function drawNoteLabels(pMin, pMax) {
+  const labels = noteLabelsRef.value
+  if (!labels || phase.value === 'idle') return
+  const scrollTop = scrollWrapRef.value?.scrollTop ?? 0
+  const clientH   = scrollWrapRef.value?.clientHeight ?? 390
+  const visH      = Math.max(1, clientH - RULER_H)
+
+  labels.width  = 36
+  labels.height = visH
+  labels.style.height = visH + 'px'
+
+  const ctx = labels.getContext('2d')
+  const noteH = NOTE_H
+
+  ctx.fillStyle = '#0a0a0a'
+  ctx.fillRect(0, 0, 36, visH)
+  ctx.strokeStyle = '#252525'
+  ctx.lineWidth = 1
+  ctx.beginPath(); ctx.moveTo(35.5, 0); ctx.lineTo(35.5, visH); ctx.stroke()
+
+  ctx.font = 'bold 9px monospace'
+  ctx.textBaseline = 'middle'
+
+  for (let p = pMax; p >= pMin; p--) {
+    const canvasY = (pMax - p) * noteH + RULER_H
+    const screenY = canvasY - scrollTop - RULER_H
+    if (screenY + noteH <= 0 || screenY >= visH) continue
+
+    const isBlack = [1, 3, 6, 8, 10].includes(p % 12)
+    const isC     = p % 12 === 0
+
+    ctx.fillStyle = isBlack ? '#0c0c0c' : '#111'
+    ctx.fillRect(0, screenY, 35, noteH)
+
+    if (isC || noteH >= 14) {
+      ctx.fillStyle = isC ? '#999' : '#3a3a3a'
+      ctx.fillText(noteName(p), 2, screenY + noteH / 2)
+    }
+
+    if (isC) {
+      ctx.strokeStyle = '#2a2a2a'
+      ctx.lineWidth = 0.5
+      ctx.beginPath(); ctx.moveTo(0, screenY); ctx.lineTo(35, screenY); ctx.stroke()
     }
   }
 }
@@ -460,9 +560,9 @@ function drawLivePianoRoll() {
   ctx.beginPath(); ctx.moveTo(playheadX, RULER_H); ctx.lineTo(playheadX, H); ctx.stroke()
   ctx.shadowBlur = 0
 
-  // Ruler (drawn last so it sits on top)
   const pxPerBeat = pxPerMs * sixteenth * 4
-  drawRuler(ctx, W, b => b * pxPerBeat, pxPerBeat)
+  drawFixedRuler(pxPerBeat)
+  drawNoteLabels(livePMin, livePMax)
 
   // Auto-scroll to follow playhead (keep it at ~80% from left)
   if (scrollWrapRef.value) {
@@ -548,7 +648,7 @@ function drawReviewPianoRoll() {
   // Notes
   frozenNotes.value.forEach((note, i) => {
     const x = msToX(note.startTime)
-    const w = Math.max(2, (Math.max(note.duration, 50) / totalMs) * W)
+    const w = Math.max(2, Math.max(note.duration, 50) * pxPerMs)
     const y = pitchToY(note.pitch)
     const inRange = note.startTime >= abs0 + rangeStartMs.value && note.startTime < abs0 + rangeEndMs.value
     const isSelected = i === selectedNoteIdx.value
@@ -627,9 +727,9 @@ function drawReviewPianoRoll() {
     }
   }
 
-  // Ruler (drawn last so it overlays grid lines and handles)
   const pxPerBeat = pxPerMs * sixteenthMs.value * 4
-  drawRuler(ctx, W, b => b * pxPerBeat, pxPerBeat)
+  drawFixedRuler(pxPerBeat)
+  drawNoteLabels(pitchMin.value, pitchMax.value)
 }
 
 // ── Mouse helpers ─────────────────────────────────────────────────
@@ -659,12 +759,39 @@ function getNoteAtPos(x, y) {
   return -1
 }
 
+function addNoteAtPos(x, y) {
+  const pxPerMs  = reviewPxPerMs.value
+  const sixteenth = sixteenthMs.value
+  // Snap x to nearest 1/16 grid
+  const rawMs    = x / pxPerMs
+  const snappedMs = Math.round(rawMs / sixteenth) * sixteenth
+  const startTime = t0.value + Math.max(0, snappedMs)
+  const pitch     = Math.max(0, Math.min(127, pitchMax.value - Math.floor((y - RULER_H) / NOTE_H)))
+  const duration  = inlineEdit.value?.duration ?? sixteenth * 4
+  const velocity  = inlineEdit.value?.velocity ?? 100
+
+  const notes = [...frozenNotes.value, { pitch, velocity, duration, startTime, channel: 1 }]
+  notes.sort((a, b) => a.startTime - b.startTime)
+  frozenNotes.value = notes
+
+  const newIdx = notes.findIndex(n => n.startTime === startTime && n.pitch === pitch && n.velocity === velocity)
+  nextTick(() => {
+    drawReviewPianoRoll()
+    if (newIdx >= 0) selectNote(newIdx)
+  })
+}
+
 function onCanvasMouseDown(event) {
   if (phase.value !== 'review') return
   ctxMenu.value = null
   const canvas = canvasRef.value
   const { x, y } = getMousePos(canvas, event)
   const pxPerMs = reviewPxPerMs.value
+
+  if (event.ctrlKey && event.button === 0) {
+    addNoteAtPos(x, y)
+    return
+  }
 
   const rxStart = rangeStartMs.value * pxPerMs
   const rxEnd   = rangeEndMs.value   * pxPerMs
@@ -941,6 +1068,14 @@ function doReset() {
   emit('reset')
 }
 
+function onScrollWrap() {
+  if (phase.value === 'review') {
+    const pxPerBeat = reviewPxPerMs.value * sixteenthMs.value * 4
+    drawFixedRuler(pxPerBeat)
+    drawNoteLabels(pitchMin.value, pitchMax.value)
+  }
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────
 
 watch(reviewCanvasWidth, () => {
@@ -985,7 +1120,7 @@ onUnmounted(() => {
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-x-0 top-0 bottom-10 z-[140] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+    class="fixed inset-x-0 top-0 bottom-10 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
     @click.self="ctxMenu = null"
   >
       <div class="bg-neutral-950 border border-neutral-800 rounded-3xl w-full max-w-5xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,255,204,0.15)] h-[90vh]">
@@ -1103,7 +1238,7 @@ onUnmounted(() => {
         <div
           class="flex-1 bg-black relative select-none flex flex-col overflow-hidden"
           :class="phase === 'review' ? 'cursor-crosshair' : ''"
-          style="min-height:480px"
+          style="min-height:390px"
         >
           <!-- Idle placeholder -->
           <div v-if="phase === 'idle'" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-neutral-700">
@@ -1112,7 +1247,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Zoom controls -->
-          <div v-if="phase !== 'idle'" class="absolute top-1 right-1 z-10 flex items-center gap-1 bg-black/70 border border-neutral-800 rounded px-1.5 py-0.5 pointer-events-auto">
+          <div v-if="phase !== 'idle'" class="absolute top-4 right-2 z-10 flex items-center gap-1 bg-black/70 border border-neutral-800 rounded px-1.5 py-0.5 pointer-events-auto">
             <span class="text-[7px] font-black uppercase text-neutral-600 tracking-wider">Zoom</span>
             <button @click="zoomX = Math.max(0.25, parseFloat((zoomX - 0.25).toFixed(2)))"
               class="w-4 h-4 flex items-center justify-center text-neutral-500 hover:text-white text-[10px] font-bold rounded hover:bg-neutral-800 transition-colors">−</button>
@@ -1121,16 +1256,36 @@ onUnmounted(() => {
               class="w-4 h-4 flex items-center justify-center text-neutral-500 hover:text-white text-[10px] font-bold rounded hover:bg-neutral-800 transition-colors">+</button>
           </div>
 
+          <!-- Fixed ruler overlay (never scrolls) -->
+          <canvas
+            v-show="phase !== 'idle'"
+            ref="rulerCanvasRef"
+            height="16"
+            class="absolute top-0 left-0 w-full pointer-events-none z-10 block"
+            style="height:16px"
+          />
+
+          <!-- Fixed note-name labels (scrolls vertically in sync, never horizontally) -->
+          <canvas
+            v-show="phase !== 'idle'"
+            ref="noteLabelsRef"
+            width="36"
+            height="374"
+            class="absolute left-0 pointer-events-none z-10 block"
+            style="top:16px"
+          />
+
           <!-- Scrollable piano roll -->
           <div
             ref="scrollWrapRef"
             class="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar"
+            @scroll="onScrollWrap"
           >
             <canvas
               v-show="phase !== 'idle'"
               ref="canvasRef"
               width="800"
-              height="480"
+              height="390"
               class="block"
               @mousedown="onCanvasMouseDown"
               @mousemove="onCanvasMouseMove"
@@ -1143,7 +1298,7 @@ onUnmounted(() => {
           <!-- Review mode hint overlay -->
           <div v-if="phase === 'review'" class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
             <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">
-              Click to select · Drag to move · Right-click to delete · Drag handles to set range
+              Ctrl+Click to add · Click to select · Drag to move · Right-click to delete · Drag handles to set range
             </span>
           </div>
         </div>
@@ -1153,94 +1308,105 @@ onUnmounted(() => {
           v-if="phase === 'review' && selectedNoteIdx !== null && inlineEdit"
           class="px-5 py-2.5 border-t border-red-900/40 bg-red-950/10 flex-shrink-0"
         >
-          <!-- Row 1: Pitch + Velocity + Delete/Deselect -->
-          <div class="flex items-center gap-4 mb-2">
-            <div class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] shrink-0" />
+          <div class="flex gap-4 items-stretch">
 
-            <!-- Pitch -->
-            <div class="flex items-center gap-2 flex-1 min-w-0">
-              <span class="text-[9px] font-black uppercase tracking-widest text-red-400/70 shrink-0">Pitch</span>
-              <span class="text-[10px] font-mono font-bold text-red-300 w-8 shrink-0">{{ noteName(inlineEdit.pitch) }}</span>
-              <input type="range" min="0" max="127" v-model.number="inlineEdit.pitch"
-                class="flex-1 accent-red-500 min-w-0 h-1" />
+            <!-- Left column: Pitch + Velocity sliders -->
+            <div class="flex flex-col gap-2 flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <div class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] shrink-0" />
+                <span class="text-[8px] font-black uppercase tracking-widest text-neutral-600">Note</span>
+              </div>
+
+              <!-- Pitch -->
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-[9px] font-black uppercase tracking-widest text-red-400/70 shrink-0 w-7">Pitch</span>
+                <span class="text-[10px] font-mono font-bold text-red-300 w-8 shrink-0">{{ noteName(inlineEdit.pitch) }}</span>
+                <input type="range" min="0" max="127" v-model.number="inlineEdit.pitch"
+                  class="flex-1 accent-red-500 min-w-0 h-1" />
+              </div>
+
+              <!-- Velocity -->
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0 w-7">Vel</span>
+                <span class="text-[10px] font-mono font-bold w-8 shrink-0"
+                  :style="{ color: `hsl(${inlineEdit.velocity * 2}, 80%, 65%)` }">{{ inlineEdit.velocity }}</span>
+                <input type="range" min="1" max="127" v-model.number="inlineEdit.velocity"
+                  class="vel-slider flex-1 min-w-0"
+                  :style="velocitySliderStyle" />
+              </div>
             </div>
 
-            <!-- Velocity -->
-            <div class="flex items-center gap-2 flex-1 min-w-0">
-              <span class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">Vel</span>
-              <span class="text-[10px] font-mono font-bold text-white w-6 shrink-0 text-right">{{ inlineEdit.velocity }}</span>
-              <input type="range" min="1" max="127" v-model.number="inlineEdit.velocity"
-                class="flex-1 accent-synth-neon min-w-0 h-1" />
-            </div>
+            <!-- Divider -->
+            <div class="w-px bg-neutral-800 self-stretch shrink-0" />
 
-            <!-- Delete -->
-            <button @click="deleteNote(selectedNoteIdx)"
-              class="p-1.5 text-red-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-all shrink-0" title="Delete note">
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
-            <!-- Deselect -->
-            <button @click="deselectNote"
-              class="p-1.5 text-neutral-600 hover:text-neutral-400 rounded transition-all shrink-0" title="Deselect">
-              <X class="w-3 h-3" />
-            </button>
-          </div>
+            <!-- Right column: Duration divisions -->
+            <div class="flex flex-col gap-1.5 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-[8px] font-black uppercase tracking-widest text-neutral-600 shrink-0">Dur</span>
+                <div class="flex items-center gap-1 ml-auto">
+                  <input type="number" min="10" max="60000" step="1"
+                    v-model.number="inlineEdit.duration"
+                    class="w-16 bg-neutral-900 border border-neutral-700 text-white text-[10px] font-mono px-2 py-0.5 rounded text-right focus:outline-none focus:border-synth-neon" />
+                  <span class="text-[9px] text-neutral-600 font-mono">ms</span>
+                </div>
+              </div>
 
-          <!-- Row 2: Duration divisions -->
-          <div class="flex items-center gap-3">
-            <span class="text-[9px] font-black uppercase tracking-widest text-neutral-600 shrink-0">Dur</span>
-
-            <!-- Horizontal scrollable division grid (columns = base division, rows = normal/dot/triplet) -->
-            <div class="flex-1 overflow-x-auto custom-scrollbar pb-1">
-              <div class="flex gap-1" style="min-width: max-content">
-                <div v-for="(row, ri) in durationDivisions" :key="ri" class="flex flex-col gap-0.5">
-                  <button
-                    v-for="(div, ci) in row" :key="div.label"
-                    @click="inlineEdit.duration = div.ms"
-                    :class="[
-                      'w-10 py-0.5 rounded text-[8px] font-mono font-bold border transition-all',
-                      isDivisionSelected(div.ms)
-                        ? ci === 0 ? 'bg-synth-neon/20 border-synth-neon/60 text-synth-neon'
-                          : ci === 1 ? 'bg-yellow-500/20 border-yellow-500/60 text-yellow-400'
-                          : 'bg-purple-500/20 border-purple-500/60 text-purple-400'
-                        : 'border-neutral-800 text-neutral-600 hover:border-neutral-600 hover:text-neutral-300 bg-transparent'
-                    ]"
-                  >{{ div.label }}</button>
+              <!-- Division grid -->
+              <div class="overflow-x-auto custom-scrollbar pb-0.5">
+                <div class="flex gap-1" style="min-width: max-content">
+                  <div v-for="(row, ri) in durationDivisions" :key="ri" class="flex flex-col gap-0.5">
+                    <button
+                      v-for="(div, ci) in row" :key="div.label"
+                      @click="inlineEdit.duration = div.ms"
+                      :class="[
+                        'w-10 py-0.5 rounded text-[8px] font-mono font-bold border transition-all',
+                        isDivisionSelected(div.ms)
+                          ? ci === 0 ? 'bg-synth-neon/20 border-synth-neon/60 text-synth-neon'
+                            : ci === 1 ? 'bg-yellow-500/20 border-yellow-500/60 text-yellow-400'
+                            : 'bg-purple-500/20 border-purple-500/60 text-purple-400'
+                          : 'border-neutral-800 text-neutral-600 hover:border-neutral-600 hover:text-neutral-300 bg-transparent'
+                      ]"
+                    >{{ div.label }}</button>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <!-- ms input -->
-            <div class="flex items-center gap-1 shrink-0">
-              <input type="number" min="10" max="60000" step="1"
-                v-model.number="inlineEdit.duration"
-                class="w-16 bg-neutral-900 border border-neutral-700 text-white text-[10px] font-mono px-2 py-1 rounded text-right focus:outline-none focus:border-synth-neon" />
-              <span class="text-[9px] text-neutral-600 font-mono">ms</span>
+            <!-- Actions -->
+            <div class="flex flex-col justify-start gap-1 shrink-0">
+              <button @click="deleteNote(selectedNoteIdx)"
+                class="p-1.5 text-red-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-all" title="Delete note">
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+              <button @click="deselectNote"
+                class="p-1.5 text-neutral-600 hover:text-neutral-400 rounded transition-all" title="Deselect">
+                <X class="w-3 h-3" />
+              </button>
             </div>
-          </div>
-        </div>
 
-        <!-- Range controls (review only) -->
-        <div v-if="phase === 'review'" class="px-5 py-2.5 border-t border-neutral-900 bg-neutral-900/30 flex items-center gap-4 flex-shrink-0">
-          <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Range</span>
-          <div class="flex items-center gap-2 flex-1">
-            <span class="text-[10px] font-mono text-yellow-500/80">IN: beat {{ rangeStartLabel }}</span>
-            <div class="flex-1 h-0.5 bg-neutral-800 rounded" />
-            <span class="text-[10px] font-mono text-orange-500/80">OUT: beat {{ rangeEndLabel }}</span>
           </div>
-          <button
-            @click="cropToRange"
-            :disabled="croppedNotes.length === 0"
-            class="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 text-neutral-400 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-700 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Scissors class="w-3 h-3" /> Crop
-          </button>
         </div>
 
         <!-- Bottom action bar -->
         <div class="px-5 py-2.5 border-t border-neutral-900 bg-neutral-900/50 flex justify-between items-center gap-2 flex-shrink-0">
-          <div class="text-[10px] font-mono text-neutral-500">
-            <template v-if="phase === 'review'">{{ frozenNotes.length }} total / {{ croppedNotes.length }} in range</template>
-            <template v-else-if="phase === 'capturing'">{{ noteCount }} captured</template>
+          <div class="flex items-center gap-3">
+            <div class="text-[10px] font-mono text-neutral-500">
+              <template v-if="phase === 'review'">{{ frozenNotes.length }} total / {{ croppedNotes.length }} in range</template>
+              <template v-else-if="phase === 'capturing'">{{ noteCount }} captured</template>
+            </div>
+            <!-- Range + Crop (review only) -->
+            <template v-if="phase === 'review'">
+              <div class="w-px h-4 bg-neutral-700 shrink-0" />
+              <span class="text-[10px] font-mono text-yellow-500/80">IN: beat {{ rangeStartLabel }}</span>
+              <span class="text-[10px] font-mono text-orange-500/80">OUT: beat {{ rangeEndLabel }}</span>
+              <button
+                @click="cropToRange"
+                :disabled="croppedNotes.length === 0"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 text-neutral-400 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-700 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Scissors class="w-3 h-3" /> Crop
+              </button>
+            </template>
           </div>
 
           <div class="flex gap-2 flex-wrap justify-end">
@@ -1337,3 +1503,32 @@ onUnmounted(() => {
   </Teleport>
 
 </template>
+
+<style scoped>
+.vel-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.vel-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+}
+.vel-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+}
+</style>
