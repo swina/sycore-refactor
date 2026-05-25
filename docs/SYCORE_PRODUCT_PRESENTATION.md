@@ -1,9 +1,14 @@
 # SY.CORE: The Future of Live Electronic Performance
 
 ## Executive Summary
-SY.CORE is a professional-grade, local-first ecosystem designed to bridge the gap between algorithmic sound design and live hardware performance. Developed by **SY.CORE Labs**, the platform serves as a high-performance hub for musicians who demand reliability, creative spontaneity, and cutting-edge sound synthesis in a unified, zero-latency environment.
+SY.CORE is a professional-grade, local-first ecosystem designed to bridge the gap between algorithmic sound design and live hardware performance. Developed by **SY.CORE Lab**, the platform serves as a high-performance hub for musicians who demand reliability, creative spontaneity, and cutting-edge sound synthesis in a unified, zero-latency environment.
 
 ---
+## 2 Modus Operandi
+
+**SY.CORE** has 2 main workflows designed to meet 2 typical musician scenario:
+- sound design: when you need to explore your hardware capabilities and try to create unique sounds over
+- performance: when you need to combine your hardware from a easy way to create, manage and control your performance
 
 ## 💎 The Heart of the Innovation: Adaptive Sound Engine
 At the core of SY.CORE lies the **Adaptive Sound Engine**, a proprietary synthesis and orchestration algorithm designed by SY.CORE Labs.

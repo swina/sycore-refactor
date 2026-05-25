@@ -1,0 +1,92 @@
+[
+    {
+        "category": "Strings",
+        "no": 1,
+        "name": "Revert to Iron",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 1,
+        "sysex": null
+    },
+    {
+        "category": "Sequence",
+        "no": 2,
+        "name": "Leftovers",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 2,
+        "sysex": null
+    },
+    {
+        "category": "Pad",
+        "no": 3,
+        "name": "Far Away",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 3,
+        "sysex": null
+    },
+    {
+        "category": "Strings",
+        "no": 4,
+        "name": "Into Reverse",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 4,
+        "sysex": null
+    },
+    {
+        "category": "Lead",
+        "no": 5,
+        "name": "Tactile Techno",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 5,
+        "sysex": null
+    },
+    {
+        "category": "Percussion",
+        "no": 6,
+        "name": "Xoo0Ooo",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 6,
+        "sysex": null
+    },
+    {
+        "category": "Sequence",
+        "no": 7,
+        "name": "Traditon",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 7,
+        "sysex": null
+    },
+    {
+        "category": "SFX",
+        "no": 8,
+        "name": "Juliet Fries",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 8,
+        "sysex": null
+    },
+    {
+        "category": "Bass",
+        "no": 9,
+        "name": "Vanarx",
+        "msb": 0,
+        "lsb": 0,
+        "bank": 0,
+        "program": 9,
+        "sysex": null
+    }
+]

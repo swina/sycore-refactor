@@ -1,14 +1,17 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio } from 'lucide-vue-next'
+import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
+import { useUserBanksStore } from '@/stores/useUserBanksStore'
+import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { MidiSource, midiService } from '@/core/midi/MidiService'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
-const midiStore   = useMidiStore()
-const presetStore = usePresetStore()
+const midiStore      = useMidiStore()
+const presetStore    = usePresetStore()
+const userBanksStore = useUserBanksStore()
 
 // ── Device list (left column) — only PC-enabled devices ────────
 const devices = computed(() => {
@@ -81,10 +84,70 @@ const catalogDevice = computed(() => {
   ) ?? null
 })
 
-const availableBanks = computed(() => {
+const catalogBanks = computed(() => {
   if (!catalogDevice.value) return []
   return Object.keys(catalogIndex[catalogDevice.value])
 })
+
+const userBanks = computed(() =>
+  userBanksStore.getBanksForDevice(selectedDeviceName.value).map(b => b.name)
+)
+
+const availableBanks = computed(() => [...catalogBanks.value, ...userBanks.value])
+
+function isUserBank(bankName) {
+  return userBanksStore.hasBank(selectedDeviceName.value, bankName)
+}
+
+// ── .mfprojz import ────────────────────────────────────────────
+const importInput      = ref(null)   // hidden <input type="file">
+const isImporting      = ref(false)
+const importError      = ref('')
+const showImportRename = ref(false)
+const pendingPresets   = ref([])
+const pendingBankName  = ref('')
+
+function triggerImport() {
+  importError.value = ''
+  importInput.value?.click()
+}
+
+async function onImportFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  isImporting.value = true
+  importError.value = ''
+  try {
+    const presets = await parseMfprojz(file)
+    // Default bank name = filename without extension
+    pendingBankName.value = file.name.replace(/\.mfprojz$/i, '')
+    pendingPresets.value  = presets
+    showImportRename.value = true
+  } catch (e) {
+    importError.value = e.message ?? 'Failed to parse file.'
+  } finally {
+    isImporting.value = false
+    event.target.value = ''
+  }
+}
+
+function confirmImport() {
+  const name = pendingBankName.value.trim() || 'Imported Bank'
+  userBanksStore.addBank(selectedDeviceName.value, name, pendingPresets.value)
+  selectedBank.value = name
+  showImportRename.value = false
+  pendingPresets.value   = []
+}
+
+function cancelImport() {
+  showImportRename.value = false
+  pendingPresets.value   = []
+}
+
+function deleteUserBank(bankName) {
+  if (selectedBank.value === bankName) { selectedBank.value = ''; sounds.value = [] }
+  userBanksStore.removeBank(selectedDeviceName.value, bankName)
+}
 
 const selectedBank = ref('')
 watch([catalogDevice, selectedDeviceName], () => {
@@ -100,6 +163,10 @@ watch([catalogDevice, selectedDeviceName], () => {
 
 const bankConfig = computed(() => {
   if (!catalogDevice.value || !selectedBank.value) return null
+  if (isUserBank(selectedBank.value)) return {
+    msb: false, lsb: false, category_field: 'category',
+    program_field: 'program', program_base: -1,
+  }
   return catalogIndex[catalogDevice.value][selectedBank.value]
 })
 
@@ -108,7 +175,15 @@ const sounds    = ref([])
 const isLoading = ref(false)
 
 watch(selectedBank, async (bank) => {
-  if (!bank || !bankConfig.value) { sounds.value = []; return }
+  if (!bank) { sounds.value = []; return }
+
+  // User-imported bank: load directly from store
+  if (isUserBank(bank)) {
+    sounds.value = userBanksStore.getPresets(selectedDeviceName.value, bank)
+    return
+  }
+
+  if (!bankConfig.value) { sounds.value = []; return }
   isLoading.value = true
   try {
     const match = bankConfig.value.data.match(/^\.\/([^/]+)\/(.+)$/)
@@ -790,23 +865,86 @@ function deleteSet(id) {
                   </div>
                 </div>
 
-                <!-- ── 4. Bank selector (catalog only) ── -->
-                <template v-if="catalogDevice">
+                <!-- ── 4. Bank selector ── -->
+                <template v-if="catalogDevice || userBanks.length > 0">
+                  <!-- Hidden file input for .mfprojz import -->
+                  <input
+                    ref="importInput"
+                    type="file"
+                    accept=".mfprojz"
+                    class="hidden"
+                    @change="onImportFile"
+                  />
+
                   <div class="shrink-0 px-6 mt-4">
-                    <label class="block text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-2">Bank</label>
+                    <div class="flex items-center justify-between mb-2">
+                      <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Bank</label>
+                      <!-- Import button -->
+                      <button
+                        @click="triggerImport"
+                        :disabled="isImporting"
+                        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                        title="Import a .mfprojz bank from Arturia MIDI Control Center"
+                      >
+                        <Loader2 v-if="isImporting" class="w-2.5 h-2.5 animate-spin" />
+                        <Upload v-else class="w-2.5 h-2.5" />
+                        Import .mfprojz
+                      </button>
+                    </div>
+
+                    <!-- Import error -->
+                    <div v-if="importError" class="mb-2 flex items-center gap-2 bg-red-950/40 border border-red-500/30 rounded-lg px-3 py-1.5">
+                      <AlertTriangle class="w-3 h-3 text-red-400 shrink-0" />
+                      <span class="text-[9px] font-mono text-red-400">{{ importError }}</span>
+                    </div>
+
+                    <!-- Rename dialog shown after file is parsed -->
+                    <div v-if="showImportRename" class="mb-3 bg-teal-950/30 border border-teal-500/25 rounded-xl px-3 py-2.5 flex flex-col gap-2">
+                      <span class="text-[8px] font-mono text-teal-400/70 uppercase tracking-widest">
+                        {{ pendingPresets.length }} presets parsed — name this bank:
+                      </span>
+                      <div class="flex gap-2 items-center">
+                        <input
+                          v-model="pendingBankName"
+                          type="text"
+                          placeholder="Bank name…"
+                          @keydown.enter="confirmImport"
+                          @keydown.escape="cancelImport"
+                          class="flex-1 bg-black/60 border border-teal-500/30 rounded-lg px-2.5 py-1.5 text-[11px] text-teal-200 font-mono outline-none focus:border-teal-500/60 placeholder:text-neutral-700"
+                        />
+                        <button @click="confirmImport" class="px-2.5 py-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:bg-teal-500/30 transition-all text-[9px] font-black uppercase">Add</button>
+                        <button @click="cancelImport" class="p-1.5 rounded-lg text-neutral-600 hover:text-neutral-400 transition-colors">
+                          <X class="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Bank buttons -->
                     <div class="flex gap-2 flex-wrap">
                       <button
                         v-for="bank in availableBanks"
                         :key="bank"
                         @click="selectedBank = bank"
                         :class="[
-                          'px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border',
+                          'group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border',
                           selectedBank === bank
-                            ? 'bg-violet-500/20 border-violet-500/40 text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.15)]'
+                            ? isUserBank(bank)
+                              ? 'bg-teal-500/20 border-teal-500/40 text-teal-300 shadow-[0_0_8px_rgba(20,184,166,0.15)]'
+                              : 'bg-violet-500/20 border-violet-500/40 text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.15)]'
                             : 'bg-black/40 border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300'
                         ]"
                       >
+                        <FolderOpen v-if="isUserBank(bank)" class="w-2.5 h-2.5 shrink-0" />
                         {{ bank }}
+                        <!-- Delete user bank -->
+                        <span
+                          v-if="isUserBank(bank)"
+                          @click.stop="deleteUserBank(bank)"
+                          class="opacity-0 group-hover:opacity-100 ml-0.5 text-neutral-600 hover:text-red-400 transition-all"
+                          title="Delete this bank"
+                        >
+                          <X class="w-2.5 h-2.5" />
+                        </span>
                       </button>
                     </div>
                   </div>
