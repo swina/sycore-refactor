@@ -5,7 +5,7 @@ import {
 } from 'lucide-vue-next'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })
-import { midiService } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -43,11 +43,22 @@ const logEndRef  = ref(null)
 // Devices seen — for the filter dropdown
 const knownDevices = ref([])
 
+const MIDI_SOURCE_LABELS = Object.values(MidiSource)
+
+function refreshKnownDevices() {
+  const names = new Set(knownDevices.value)
+  midiService.getInputs().forEach(i => names.add(i.name))
+  midiService.getOutputs().forEach(o => names.add(o.name))
+  MIDI_SOURCE_LABELS.forEach(s => names.add(s))
+  names.add('SYSTEM')
+  knownDevices.value = Array.from(names)
+}
+
 function _appendEntry(entry) {
   if (!monitoring.value || paused.value) return
-  knownDevices.value = knownDevices.value.includes(entry.device)
-    ? knownDevices.value
-    : [...knownDevices.value, entry.device]
+  if (!knownDevices.value.includes(entry.device)) {
+    knownDevices.value = [...knownDevices.value, entry.device]
+  }
   _log = _log.length >= 500 ? [..._log.slice(-499), entry] : [..._log, entry]
   entries.value  = _log
   entryCount.value = _log.length
@@ -146,6 +157,7 @@ let _unsub = null
 // Attach / detach listener based on monitoring state
 watch(monitoring, (active) => {
   if (active) {
+    refreshKnownDevices()
     _unsub = midiService.addMonitorListener(_appendEntry)
   } else {
     _unsub?.()
@@ -155,7 +167,7 @@ watch(monitoring, (active) => {
 })
 
 onMounted(() => {
-  // Listener is NOT attached on mount — user must press Start
+  refreshKnownDevices()
   window.addEventListener('app-system-log', _handleSystemLog)
 })
 

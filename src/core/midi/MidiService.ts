@@ -106,6 +106,7 @@ export class MidiService {
   private clockExpectedTime: number = 0;
   private currentBpm: number = 120;
   private isPlayingClock: boolean = false;
+  private _nextClockScheduleTime: number = 0;
   // @ts-ignore - pulse count for potential future sync features
   private clockPulseCount: number = 0;
 
@@ -1124,30 +1125,33 @@ export class MidiService {
     this.stopClock();
     if (!this.currentBpm || this.currentBpm < 1) return;
     this.isPlayingClock = true;
-    const intervalMs = 60000 / (this.currentBpm * 24);
 
-    const sendPulse = () => {
-      this.broadcast('clock', {}, 0, MidiSource.TRANSPORT);
-    };
+    // Lookahead scheduler: pre-schedule pulses 100ms ahead using WebMIDI timestamps
+    // so clock messages fire on time even when the JS thread is busy (e.g. preset changes).
+    this._nextClockScheduleTime = performance.now();
 
-    sendPulse();
-
-    this.clockExpectedTime = performance.now() + intervalMs;
-
-    const tick = () => {
+    const scheduler = () => {
       if (!this.isPlayingClock) return;
+      const intervalMs = 60000 / (this.currentBpm * 24);
+      const until = performance.now() + 100;
 
-      sendPulse();
+      while (this._nextClockScheduleTime < until) {
+        const t = this._nextClockScheduleTime;
+        if (this.midiAccess) {
+          this.midiAccess.outputs.forEach(outPort => {
+            const config = this.routingConfig?.registrations[outPort.name];
+            if (config?.outEnabled && config?.clock) {
+              try { outPort.send([0xF8], t); } catch (e) {}
+            }
+          });
+        }
+        this._nextClockScheduleTime += intervalMs;
+      }
 
-      const now = performance.now();
-      const drift = now - this.clockExpectedTime;
-
-      this.clockExpectedTime += intervalMs;
-      const nextDelay = Math.max(0, intervalMs - drift);
-      this.clockInterval = window.setTimeout(tick, nextDelay);
+      this.clockInterval = window.setTimeout(scheduler, 50);
     };
 
-    this.clockInterval = window.setTimeout(tick, intervalMs);
+    scheduler();
   }
 
   stopClock() {
@@ -1156,6 +1160,12 @@ export class MidiService {
       this.clockInterval = null;
     }
     this.isPlayingClock = false;
+    // Cancel any pre-scheduled clock pulses still in the hardware output queue
+    if (this.midiAccess) {
+      this.midiAccess.outputs.forEach(outPort => {
+        try { outPort.clear?.(); } catch (e) {}
+      });
+    }
   }
 
   sendStart() {

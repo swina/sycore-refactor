@@ -192,6 +192,26 @@ export function useMidiCCListener() {
       if (target !== lfoStore.lfo2.active) lfoStore.toggleLfo(2)
       return
     }
+    if (fieldName === 'lfo1_rate') {
+      lfoStore.lfo1.rate = parseFloat((0.01 + (val / 127) * (20 - 0.01)).toFixed(2))
+      return
+    }
+    if (fieldName === 'lfo2_rate') {
+      lfoStore.lfo2.rate = parseFloat((0.01 + (val / 127) * (20 - 0.01)).toFixed(2))
+      return
+    }
+    if (fieldName === 'lfo1_depth') {
+      lfoStore.lfo1.depth = Math.round((val / 127) * 100)
+      return
+    }
+    if (fieldName === 'lfo2_depth') {
+      lfoStore.lfo2.depth = Math.round((val / 127) * 100)
+      return
+    }
+    if (fieldName === 'vel_amount') {
+      mappingStore.velocityConfig.amount = Math.round((val / 127) * 200 - 100)
+      return
+    }
     if (fieldName === 'vel_active') {
       const target = fromNote ? !mappingStore.velocityConfig.active : on
       mappingStore.velocityConfig.active = target
