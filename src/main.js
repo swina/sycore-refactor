@@ -8,6 +8,7 @@ import './assets/main.css'
 import App from './App.vue'
 import SynthApp from './views/SynthApp.vue'
 import HomeView from './views/HomeView.vue'
+import MainPage from './views/MainPage.vue'
 
 // Bridge for internal service logs to reach the UI Logger Panel
 window.SY_LOG = (msg) => {
@@ -18,7 +19,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: SynthApp },
-    { path: '/home', component: HomeView }
+    { path: '/home', component: HomeView },
+    { path: '/main', component: MainPage }
   ]
 })
 

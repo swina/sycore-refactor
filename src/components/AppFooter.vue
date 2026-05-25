@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted } from 'vue'
 import { User, Radio, AlertTriangle, Play, Square } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import Tooltip from '@/components/Tooltip.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -14,6 +15,7 @@ import { midiService } from '@/core/midi/MidiService'
 
 const emit = defineEmits(['bpm-override'])
 
+const router       = useRouter()
 const authStore    = useAuthStore()
 const midiStore    = useMidiStore()
 const arpStore     = useArpStore()
@@ -78,11 +80,14 @@ function handleBpmChange(e) {
             </span>
           </button>
         </Tooltip>
-        <Tooltip content="MIDI Status" :disabled="false" position="top">
-          <div :class="['px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1.5 transition-colors', midiStore.midiReady ? 'bg-synth-neon/10 text-synth-neon' : 'bg-red-950/30 text-red-400']">
+        <Tooltip content="MIDI Status — click to open Main Page" :disabled="false" position="top">
+          <button
+            @click="router.push('/main')"
+            :class="['px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1.5 transition-colors cursor-pointer hover:brightness-125 active:scale-95', midiStore.midiReady ? 'bg-synth-neon/10 text-synth-neon' : 'bg-red-950/30 text-red-400']"
+          >
             <Radio class="w-3 h-3" />
             {{ midiStore.midiReady ? 'READY' : 'WAITING S-1' }}
-          </div>
+          </button>
         </Tooltip>
       </div>
 

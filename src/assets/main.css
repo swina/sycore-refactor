@@ -185,7 +185,49 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .bg-container {
-    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0.95)), url('/background-2.png');
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, .85), rgba(10, 10, 10, 0.95)), url('/background-2.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-sound-design {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, 0.1)), url('/bg-sound-design-2.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-performance {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.75), rgba(10, 10, 10, .85)), url('/background-2.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-settings {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, 0.1)), url('/bg-settings.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-midi-manager {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, 0.1)), url('/routing-flow.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-audio-capture {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, 0.1)), url('/audio-capture.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-live-performance {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, .1)), url('/live-performance-2.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

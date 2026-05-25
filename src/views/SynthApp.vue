@@ -242,7 +242,7 @@ onMounted(() => {
 
     <!-- Home Button -->
     <button
-      @click="router.push('/home')"
+      @click="router.push('/main')"
       title="Home"
       class="fixed top-4 right-4 z-[100] w-9 h-9 rounded-lg bg-neutral-900/70 border border-neutral-800 hover:border-synth-neon/60 hover:bg-neutral-900 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
     >
