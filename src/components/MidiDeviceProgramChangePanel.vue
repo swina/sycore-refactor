@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
-import { MidiSource } from '@/core/midi/MidiService'
+import { MidiSource, midiService } from '@/core/midi/MidiService'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
@@ -236,6 +236,93 @@ function sendManual() {
 function setChannel(ch) {
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannel', ch - 1)
 }
+
+// ── Preset list scroll (wheel + MIDI CC) ────────────────────────
+const LS_SCROLL_CC    = 'SYCORE_PC_SCROLL_CC'
+const presetListEl    = ref(null)
+const presetButtonsEl = ref(null)
+
+function loadScrollCC() {
+  try { return JSON.parse(localStorage.getItem(LS_SCROLL_CC)) ?? null } catch { return null }
+}
+
+const scrollCCMap         = ref(loadScrollCC()) // { cc, channel, device } | null
+const isLearningScrollCC  = ref(false)
+const lastScrollCCVal     = ref(null)
+
+function navigatePresetList(delta) {
+  const list = filteredSounds.value
+  if (!list.length) return
+  const cur = activeSound.value
+  const idx = cur ? list.findIndex(s => s.name === cur.name && (s.no ?? s.program) === (cur.no ?? cur.program)) : -1
+  const next = Math.max(0, Math.min(list.length - 1, (idx < 0 ? 0 : idx) + delta))
+  selectSound(list[next])
+  nextTick(() => {
+    presetButtonsEl.value?.querySelectorAll('button')[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+function onPresetListWheel(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  navigatePresetList(e.deltaY > 0 ? 1 : -1)
+}
+
+let _unsubScrollCC = null
+
+function startScrollCCListener() {
+  _unsubScrollCC?.()
+  _unsubScrollCC = midiService.addRawListener((event) => {
+    if (!event.data || event.data.length < 3) return
+    const status  = event.data[0]
+    const type    = status & 0xF0
+    const channel = status & 0x0F
+    if (type !== 0xB0) return
+    const cc  = event.data[1]
+    const val = event.data[2]
+
+    if (isLearningScrollCC.value) {
+      const inputId = event.target?.id
+      const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
+      scrollCCMap.value = { cc, channel, device }
+      localStorage.setItem(LS_SCROLL_CC, JSON.stringify(scrollCCMap.value))
+      isLearningScrollCC.value = false
+      lastScrollCCVal.value = val
+      return
+    }
+
+    const m = scrollCCMap.value
+    if (!m || cc !== m.cc) return
+    if (m.device) {
+      const inputId = event.target?.id
+      const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
+      if (device !== m.device) return
+    }
+    if (lastScrollCCVal.value !== null) {
+      const delta = val - lastScrollCCVal.value
+      if (delta !== 0) navigatePresetList(delta > 0 ? 1 : -1)
+    }
+    lastScrollCCVal.value = val
+  })
+}
+
+function startScrollLearn() {
+  isLearningScrollCC.value = true
+  lastScrollCCVal.value = null
+}
+
+function cancelScrollLearn() {
+  isLearningScrollCC.value = false
+}
+
+function clearScrollCC() {
+  scrollCCMap.value = null
+  lastScrollCCVal.value = null
+  localStorage.removeItem(LS_SCROLL_CC)
+}
+
+onMounted(() => startScrollCCListener())
+onUnmounted(() => _unsubScrollCC?.())
 
 // ── Performance Sets ────────────────────────────────────────────
 const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
@@ -752,7 +839,7 @@ function deleteSet(id) {
                 </template>
 
                 <!-- ── 6. Scrollable preset list ── -->
-                <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
+                <div ref="presetListEl" class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4" @wheel="onPresetListWheel">
 
                   <!-- Catalog: loading -->
                   <div v-if="catalogDevice && selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
@@ -763,13 +850,44 @@ function deleteSet(id) {
                   <!-- Catalog: preset list -->
                   <template v-else-if="catalogDevice && selectedBank && filteredSounds.length > 0">
                     <div class="flex items-center justify-between mb-2 px-1">
-                      <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
-                      <span v-if="lastSent" class="flex items-center gap-1 text-[8px] font-mono text-violet-400 uppercase tracking-widest">
-                        <Zap class="w-2.5 h-2.5" />
-                        {{ lastSent.name }}
-                      </span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
+                        <span class="text-[7px] font-mono text-neutral-700 uppercase tracking-widest">· scroll or ↕ CC</span>
+                      </div>
+                      <div class="flex items-center gap-1.5">
+                        <span v-if="lastSent" class="flex items-center gap-1 text-[8px] font-mono text-violet-400 uppercase tracking-widest">
+                          <Zap class="w-2.5 h-2.5" />{{ lastSent.name }}
+                        </span>
+                        <!-- MIDI Learn: learning state -->
+                        <template v-if="isLearningScrollCC">
+                          <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-400 text-[8px] font-black uppercase tracking-widest animate-pulse">
+                            <Radio class="w-2.5 h-2.5" />Move a CC…
+                          </div>
+                          <button @click="cancelScrollLearn" class="p-1 text-neutral-600 hover:text-neutral-400 transition-colors rounded">
+                            <X class="w-3 h-3" />
+                          </button>
+                        </template>
+                        <!-- MIDI Learn: mapped state -->
+                        <template v-else-if="scrollCCMap">
+                          <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 text-[8px] font-black font-mono uppercase tracking-widest">
+                            <Radio class="w-2.5 h-2.5" />CC{{ scrollCCMap.cc }} CH{{ scrollCCMap.channel + 1 }}
+                          </div>
+                          <button @click="clearScrollCC" title="Remove CC mapping" class="p-1 text-neutral-600 hover:text-red-400 transition-colors rounded">
+                            <X class="w-3 h-3" />
+                          </button>
+                        </template>
+                        <!-- MIDI Learn: idle state -->
+                        <button
+                          v-else
+                          @click="startScrollLearn"
+                          title="MIDI Learn: map a CC to scroll this list"
+                          class="flex items-center gap-1 px-2 py-1 rounded-lg bg-black/40 border border-neutral-800 text-neutral-600 hover:text-orange-400 hover:border-orange-500/30 hover:bg-orange-500/10 transition-all text-[8px] font-black uppercase tracking-widest"
+                        >
+                          <Radio class="w-2.5 h-2.5" />MIDI
+                        </button>
+                      </div>
                     </div>
-                    <div class="space-y-0.5">
+                    <div ref="presetButtonsEl" class="space-y-0.5">
                       <button
                         v-for="sound in filteredSounds"
                         :key="sound.no ?? sound.name"
