@@ -24,7 +24,8 @@ export const LaunchpadMiniMK1: ControllerProfile = {
         const note = data[1];
         const val = data[2];
 
-        if (val === 0) return true;
+        // Note-off / release — don't consume, let standard routing handle it
+        if (val === 0) return false;
 
         if (type === 0xB0) {
             switch (note) {
@@ -39,17 +40,11 @@ export const LaunchpadMiniMK1: ControllerProfile = {
             }
         }
 
-        if (type === 0x90) {
-            const row = Math.floor(note / 16);
-            const col = note % 16;
-            if (row < 8 && col < 8) {
-                const padIdx = (row * 8) + col;
-                dispatch('grid_pad_press', { index: padIdx, val });
-                return true;
-            }
-        }
+        // 8×8 pad grid — return false so pads can be MIDI-learned as custom
+        // app action mappings. The custom mapping check runs before this profile,
+        // so a mapped pad will already have been handled and consumed upstream.
 
-        return true;
+        return false;
     },
 
     updateFeedback: (send, state) => {
@@ -79,21 +74,30 @@ export const LaunchpadMiniMK1: ControllerProfile = {
             }
         });
 
-        // 2. Custom Mappings (Pads & Buttons)
+        // 2. Custom App Action Mappings
+        // Note pads: always switchpad behavior — green (60) = ON, amber (51) = OFF.
+        // Explicit feedbackOn/feedbackOff override the defaults when set.
+        // CC buttons: explicit config only (top row already handled in section 1).
         if (state.mappings && Array.isArray(state.mappings)) {
             state.mappings.forEach(m => {
-                if (m.device?.includes('Launchpad') && m.feedbackOn !== undefined) {
-                    const isActive = state.getActionStatus(m.action);
-                    const color = isActive ? m.feedbackOn : (m.feedbackOff ?? 0);
+                if (!m.device?.includes('Launchpad')) return;
+                const isActive = state.getActionStatus(m.action);
 
-                    if (m.note !== undefined) send([noteOnStatus, m.note, color]);
-                    if (m.cc !== undefined) send([ccStatus, m.cc, color]);
+                if (m.note !== undefined) {
+                    const onColor  = m.feedbackOn  ?? 60;  // green
+                    const offColor = m.feedbackOff ?? 51;  // amber / yellow
+                    send([noteOnStatus, m.note, isActive ? onColor : offColor]);
+                }
+
+                if (m.cc !== undefined && m.feedbackOn !== undefined) {
+                    const color = isActive ? m.feedbackOn : (m.feedbackOff ?? 0);
+                    send([ccStatus, m.cc, color]);
                 }
             });
         }
 
-        // 3. MIDI-Learn note mappings for lpp_* pads (lpp_set_, lpp_devpc_, lpp_bt_)
-        // amber (51) = active, off (0) = inactive
+        // 3. MIDI-Learn param mappings for lpp_* pads (lpp_set_, lpp_devpc_, lpp_bt_)
+        // green (60) = active / ON, amber (51) = inactive / OFF
         if (state.midiMappings) {
             Object.values(state.midiMappings).forEach((m: any) => {
                 if (
@@ -103,7 +107,7 @@ export const LaunchpadMiniMK1: ControllerProfile = {
                     !m.device?.toLowerCase().includes('launchpad')
                 ) return;
                 const isActive = state.getActionStatus(m.paramName);
-                send([noteOnStatus, m.note, isActive ? 51 : 0]);
+                send([noteOnStatus, m.note, isActive ? 60 : 51]);
             });
         }
     }

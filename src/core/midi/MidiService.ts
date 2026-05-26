@@ -531,6 +531,23 @@ export class MidiService {
 
     this.onRawListeners.forEach(l => l(event));
 
+    // Log ALL incoming messages to the monitor immediately — before the ingress filter
+    // so controller-consumed messages (e.g. Launchpad) are always visible.
+    {
+      const inputDevice = this.midiAccess?.inputs.get(inputId);
+      const { type: mType, channel: mCh, decoded } = this._decodeRaw(event.data as Uint8Array);
+      this._appendMonitor({
+        id: ++this._monitorSeq,
+        timestamp: now,
+        direction: 'in',
+        device: inputDevice?.name ?? 'Unknown',
+        channel: mCh,
+        type: mType,
+        data: Array.from(event.data as Uint8Array),
+        decoded,
+      });
+    }
+
     if (this.ingressFilter && this.ingressFilter(event)) return;
 
     this.ingressCount++;
@@ -590,22 +607,6 @@ export class MidiService {
 
     const recent = this.lastSentMessages.get(inputId);
     if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
-
-    // Log to monitor (after echo suppression, before routing)
-    {
-      const deviceName = inputDevice?.name ?? 'Unknown';
-      const { type: mType, channel: mCh, decoded } = this._decodeRaw(processedData as Uint8Array);
-      this._appendMonitor({
-        id: ++this._monitorSeq,
-        timestamp: now,
-        direction: 'in',
-        device: deviceName,
-        channel: mCh,
-        type: mType,
-        data: Array.from(processedData as Uint8Array),
-        decoded,
-      });
-    }
 
     if (this.routingConfig && this.routingConfig.globalThruEnabled) {
       const type = status & 0xf0;
