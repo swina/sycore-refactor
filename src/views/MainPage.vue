@@ -121,7 +121,7 @@ function goWorkspace() {
         </div>
 
         <!-- Box 1-B: bottom 50% -->
-        <div class="flex-1 rounded-xl border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden bg-performance">
+        <div class="flex-1 rounded-xl border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden bg-home-performance">
           <div class="flex items-end w-full h-full p-4"><h1 class="text-2xl font-bold w-full text-right text-synth-cyan">Performance</h1></div>
           <!-- <div class="flex-none px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2">
             <Network class="w-3.5 h-3.5 text-synth-neon" />
@@ -169,7 +169,7 @@ function goWorkspace() {
       <div class="flex-1 flex flex-col gap-3 min-w-0">
 
         <!-- Box 2-1 -->
-        <div @click="uiStore.showUnifiedMidiManager = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-midi-manager items-center">
+        <div @click="uiStore.showUnifiedMidiManager = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-midi-core items-center">
           <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
             <Cpu class="w-5 h-5 text-synth-neon" />
             <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">MIDI Manager</span>
@@ -186,7 +186,7 @@ function goWorkspace() {
         </div>
 
          <!-- Box 2-2 -->
-        <div @click="uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-program-change">
+        <div @click="uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-midi-knob">
           <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
             <Mic class="w-5 h-5 text-synth-neon" />
             <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Multi Sounds</span>
