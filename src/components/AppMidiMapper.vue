@@ -26,6 +26,7 @@ const detectedChannel = ref(null)
 const detectedValue   = ref(null)
 const triggerMode     = ref('any')
 const exactValue      = ref(127)
+const minValue        = ref(1)
 const selectedCategory = ref('')
 const selectedAction   = ref('')
 const collapsedCategories = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))
@@ -256,13 +257,14 @@ function handleConfirm() {
   const mappingValue  = isContinuous ? -1 : (triggerMode.value === 'exact' ? exactValue.value : -1)
 
   const newMapping = {
-    id:      `${learnDevice.value}:${detectedCC.value ?? 'NOTE' + detectedNote.value}:${detectedChannel.value ?? -1}:${Date.now()}`,
-    device:  learnDevice.value,
-    cc:      detectedCC.value ?? undefined,
-    note:    detectedNote.value ?? undefined,
-    channel: detectedChannel.value ?? -1,
-    value:   mappingValue,
-    action:  selectedAction.value,
+    id:       `${learnDevice.value}:${detectedCC.value ?? 'NOTE' + detectedNote.value}:${detectedChannel.value ?? -1}:${Date.now()}`,
+    device:   learnDevice.value,
+    cc:       detectedCC.value ?? undefined,
+    note:     detectedNote.value ?? undefined,
+    channel:  detectedChannel.value ?? -1,
+    value:    mappingValue,
+    minValue: (!isContinuous && triggerMode.value === 'min') ? minValue.value : undefined,
+    action:   selectedAction.value,
     feedbackOn:  hasFeedback.value ? fbOn.value : undefined,
     feedbackOff: hasFeedback.value ? fbOff.value : undefined,
     consume:     consume.value,
@@ -274,6 +276,7 @@ function handleConfirm() {
   detectedValue.value   = null
   selectedAction.value  = ''
   triggerMode.value     = 'any'
+  minValue.value        = 1
 }
 
 function handleRemove(id) {
@@ -283,12 +286,19 @@ function handleRemove(id) {
 function valueLabel(m) {
   if (CONTINUOUS_ACTIONS.has(m.action)) return 'range'
   if (m.note !== undefined) return 'Note On'
-  return m.value === -1 ? 'val > 63' : `val = ${m.value}`
+  if (m.value !== -1) return `val = ${m.value}`
+  if (m.minValue !== undefined) return `val ≥ ${m.minValue}`
+  return 'val > 63'
 }
 
 function onExactInput(e) {
   triggerMode.value = 'exact'
   exactValue.value  = Math.max(0, Math.min(127, parseInt(e.target.value) || 0))
+}
+
+function onMinInput(e) {
+  triggerMode.value = 'min'
+  minValue.value    = Math.max(1, Math.min(127, parseInt(e.target.value) || 1))
 }
 
 onUnmounted(() => cancelLearn())
@@ -437,9 +447,29 @@ onUnmounted(() => cancelLearn())
                     Any &gt; 63
                   </button>
                   <button
+                    @click="triggerMode = 'min'"
+                    :class="[
+                      'flex-1 py-2 px-2 rounded-lg text-[10px] font-black uppercase border transition-colors flex items-center justify-center gap-1.5',
+                      triggerMode === 'min'
+                        ? 'bg-violet-500/20 border-violet-500/50 text-violet-300'
+                        : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600'
+                    ]"
+                  >
+                    Min ≥
+                    <input
+                      type="number"
+                      min="1"
+                      max="127"
+                      :value="minValue"
+                      @click.stop="triggerMode = 'min'"
+                      @input="onMinInput"
+                      class="w-10 bg-black border border-neutral-600 rounded px-1 py-0.5 text-center text-violet-300 font-mono text-[10px] focus:outline-none focus:border-violet-400"
+                    />
+                  </button>
+                  <button
                     @click="triggerMode = 'exact'"
                     :class="[
-                      'flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase border transition-colors flex items-center justify-center gap-2',
+                      'flex-1 py-2 px-2 rounded-lg text-[10px] font-black uppercase border transition-colors flex items-center justify-center gap-1.5',
                       triggerMode === 'exact'
                         ? 'bg-violet-500/20 border-violet-500/50 text-violet-300'
                         : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600'

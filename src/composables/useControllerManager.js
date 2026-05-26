@@ -173,11 +173,12 @@ export function useControllerManager() {
       // For Notes: Only trigger on Press (Velocity > 0)
       if (m.note !== undefined && val === 0) return false
 
-      // For CCs: Check trigger mode (Exact value or Toggle > 63)
+      // For CCs: Check trigger mode (Exact, Min threshold, or default > 63)
       if (m.cc !== undefined && !CONTINUOUS_ACTIONS.has(m.action)) {
          const mv = m.value ?? -1
          if (mv !== -1 && val !== mv) return false
-         if (mv === -1 && val <= 63) return false
+         if (mv === -1 && m.minValue !== undefined && val < m.minValue) return false
+         if (mv === -1 && m.minValue === undefined && val <= 63) return false
       }
       return true
     })

@@ -122,7 +122,8 @@ export interface AppMidiMapping {
   cc?: number;      // CC# 0–127
   note?: number;    // MIDI Note# 0–127
   channel: number;  // -1 = any channel, 0–15 = specific
-  value: number;    // -1 = any (triggers when val > 63 or Note On), 0–127 = exact match
+  value: number;    // -1 = threshold/any, 0–127 = exact match
+  minValue?: number; // when set and value===-1: triggers when val >= minValue (default threshold is >63)
   action: AppAction;
   feedbackOn?: number;  // MIDI value to send back when state is ON
   feedbackOff?: number; // MIDI value to send back when state is OFF
