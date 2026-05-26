@@ -413,7 +413,7 @@ onMounted(() => {
       <div :style="focusStyle('livePerformancePad')">
         <Transition name="sy-modal">
           <LivePerformancePad
-            v-if="uiStore.isLivePerformancePadOpen"
+            v-show="uiStore.isLivePerformancePadOpen"
             :isOpen="uiStore.isLivePerformancePadOpen"
             @close="uiStore.isLivePerformancePadOpen = false"
           />

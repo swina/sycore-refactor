@@ -457,7 +457,7 @@ function formatTime(t) {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-0 bottom-20 z-[1000] max-w-[910px] m-auto flex items-center justify-center bg-transparent p-1">
+  <div v-show="isOpen" class="fixed inset-x-0 top-0 bottom-20 z-[1000] max-w-[910px] m-auto flex items-center justify-center bg-transparent p-1">
     <div class="bg-neutral-950 border border-neutral-900 rounded-2xl w-full max-w-5xl overflow-hidden flex flex-col h-[90vh] shadow-[0_0_50px_rgba(0,0,0,0.8)]">
 
     <!-- ── Header ── -->
