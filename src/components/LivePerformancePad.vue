@@ -13,11 +13,19 @@ import { useSyncStore }       from '@/stores/useSyncStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDeviceRegistry }  from '@/composables/useDeviceRegistry'
 import { midiService }        from '@/core/midi/MidiService'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
 import PlayList        from '@/components/PlayList.vue'
 
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
+
+const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+  storageKey: 'SYCORE_POS_LIVE_PERF',
+  initialWidth: 900,
+  initialHeight: 700,
+  zIndex: 1000,
+})
 
 const midiStore    = useMidiStore()
 const presetStore  = usePresetStore()
@@ -457,11 +465,11 @@ function formatTime(t) {
 </script>
 
 <template>
-  <div v-show="isOpen" class="fixed inset-x-0 top-0 bottom-20 z-[1000] max-w-[910px] m-auto flex items-center justify-center bg-transparent p-1">
-    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl w-full max-w-5xl overflow-hidden flex flex-col h-[90vh] shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+  <div v-show="isOpen">
+    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]" :style="panelStyle">
 
     <!-- ── Header ── -->
-    <div class="px-6 py-2 border-b border-violet-900 flex items-center shrink-0 bg-gradient-to-r from-violet-950/40 backdrop-blur-md">
+    <div class="px-6 py-2 border-b border-violet-900 flex items-center shrink-0 bg-gradient-to-r from-violet-950/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
       <div class="flex items-center gap-8">
         <div class="flex flex-col">
           
@@ -948,6 +956,15 @@ function formatTime(t) {
 
     </div>
 
+      <!-- resize handles -->
+      <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3 h-1   cursor-n-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3 h-1   cursor-s-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3 right-0  w-1   cursor-e-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3 left-0   w-1   cursor-w-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'ne')" class="absolute top-0    right-0  w-3 h-3 cursor-ne-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'nw')" class="absolute top-0    left-0   w-3 h-3 cursor-nw-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-3 h-3 cursor-sw-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-1 right-1  w-3 h-3 cursor-se-resize z-50 opacity-40 hover:opacity-80" style="background:radial-gradient(circle,#aaa 1px,transparent 1px) 0 0/3px 3px" />
     </div>
   </div>
 </template>

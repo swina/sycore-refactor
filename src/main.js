@@ -24,6 +24,15 @@ const router = createRouter({
   ]
 })
 
+let initialNavDone = false
+router.beforeEach((to, _from, next) => {
+  if (!initialNavDone) {
+    initialNavDone = true
+    if (to.path !== '/') return next('/')
+  }
+  next()
+})
+
 const pinia = createPinia()
 const app = createApp(App)
 app.use(pinia)

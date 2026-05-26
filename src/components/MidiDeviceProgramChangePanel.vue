@@ -5,10 +5,19 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { MidiSource, midiService } from '@/core/midi/MidiService'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
+
+const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+  storageKey: 'SYCORE_POS_DEVICE_PC',
+  initialWidth: 900,
+  initialHeight: 700,
+  zIndex: 650,
+})
+
 const midiStore      = useMidiStore()
 const presetStore    = usePresetStore()
 const userBanksStore = useUserBanksStore()
@@ -520,12 +529,12 @@ function deleteSet(id) {
 </script>
 
 <template>
-  <div class="fixed inset-x-0 top-0 bottom-20 z-[650] max-w-[920px] flex items-center justify-center m-auto p-4">
+  <div>
     <Transition name="performance" appear>
-      <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col h-[90vh]">
+      <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle">
 
         <!-- Header -->
-        <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0">
+        <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
           <div class="flex items-center gap-4">
             <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
               <Music2 class="w-5 h-5 text-violet-400" />
@@ -1131,6 +1140,15 @@ function deleteSet(id) {
           </span>
         </div>
 
+      <!-- resize handles -->
+      <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3 h-1   cursor-n-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3 h-1   cursor-s-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3 right-0  w-1   cursor-e-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3 left-0   w-1   cursor-w-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'ne')" class="absolute top-0    right-0  w-3 h-3 cursor-ne-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'nw')" class="absolute top-0    left-0   w-3 h-3 cursor-nw-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-3 h-3 cursor-sw-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-1 right-1  w-3 h-3 cursor-se-resize z-50 opacity-40 hover:opacity-80" style="background:radial-gradient(circle,#aaa 1px,transparent 1px) 0 0/3px 3px" />
       </div>
     </Transition>
   </div>

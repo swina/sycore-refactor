@@ -13,6 +13,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { looperEngine } from '@/lib/looper-engine'
 import { midiService } from '@/core/midi/MidiService'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
 
 const looperStore = useLooperStore()
 const uiStore = useUiStore()
@@ -33,6 +34,15 @@ const showDeviceSelector = ref(false)
 let streamRef = null
 
 const emit = defineEmits(['close'])
+
+const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+  storageKey: 'SYCORE_POS_AUDIO_LOOPER',
+  initialWidth: 1000,
+  initialHeight: 720,
+  minWidth: 600,
+  minHeight: 500,
+  zIndex: 160,
+})
 
 async function refreshDevices() {
   try {
@@ -390,11 +400,10 @@ const hasTakes = computed(() => looperStore.takes.some(t => !t.isEmpty))
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[160] flex items-center justify-center bg-black/85 backdrop-blur-xl p-2 sm:p-4">
-    <div class="bg-neutral-950 border border-white/10 rounded-[2.5rem] w-full max-w-5xl h-[90vh] shadow-2xl flex flex-col overflow-hidden relative">
+  <div class="bg-neutral-950 z-[1000]border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden relative" :style="panelStyle">
       
       <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-3 bg-gradient-to-b from-white/5 to-transparent shrink-0">
+      <div class="flex items-center justify-between px-6 py-3 bg-gradient-to-b from-white/5 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
         <div class="flex items-center gap-4">
           <div class="p-2 bg-violet-500/20 rounded-xl border border-violet-500/20">
             <RotateCw class="w-5 h-5 text-violet-400 animate-spin-slow" />
@@ -658,8 +667,16 @@ const hasTakes = computed(() => looperStore.takes.some(t => !t.isEmpty))
         </div>
       </div>
 
+      <!-- resize handles -->
+      <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3 h-1   cursor-n-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3 h-1   cursor-s-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3 right-0  w-1   cursor-e-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3 left-0   w-1   cursor-w-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'ne')" class="absolute top-0    right-0  w-3 h-3 cursor-ne-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'nw')" class="absolute top-0    left-0   w-3 h-3 cursor-nw-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-3 h-3 cursor-sw-resize z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-1 right-1  w-3 h-3 cursor-se-resize z-50 opacity-40 hover:opacity-80" style="background:radial-gradient(circle,#aaa 1px,transparent 1px) 0 0/3px 3px" />
     </div>
-  </div>
 </template>
 
 <style scoped>
