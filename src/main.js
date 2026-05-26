@@ -18,9 +18,9 @@ window.SY_LOG = (msg) => {
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: SynthApp },
+    { path: '/', component: MainPage },
+    { path: '/workspace', component: SynthApp },
     { path: '/home', component: HomeView },
-    { path: '/main', component: MainPage }
   ]
 })
 

@@ -296,11 +296,11 @@ onUnmounted(() => cancelLearn())
 
 <template>
   <div :class="embedded ? '' : 'fixed inset-0 z-[170] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4'">
-    <div :class="embedded ? 'flex flex-col h-full overflow-hidden p-4' : 'bg-neutral-900 border border-violet-500/30 rounded-2xl p-6 max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl'">
+    <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-900 border border-violet-500/30 rounded-2xl p-6 max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl'">
 
       <!-- Header -->
-      <div class="flex justify-between items-center mb-4 border-b border-neutral-800 pb-4 shrink-0">
-        <h2 class="text-xl font-black text-white tracking-widest uppercase flex items-center gap-2">
+      <div class="px-6 py-5 flex justify-between items-center border-b border-neutral-800 bg-gradient-to-r from-emerald-950/40 to-transparent pb-4 shrink-0">
+        <h2 class="text-sm font-black text-white tracking-widest uppercase flex items-center gap-2">
           <Gamepad2 class="w-6 h-6 text-violet-400" />
           MIDI ACTIONS
         </h2>
@@ -310,7 +310,7 @@ onUnmounted(() => cancelLearn())
       </div>
 
       <!-- Tabs -->
-      <div class="flex gap-2 mb-4 bg-black/40 p-1 rounded-lg border border-neutral-800 shrink-0">
+      <!-- <div class="flex gap-2 mb-4 bg-black/40 p-1 rounded-lg border border-neutral-800 shrink-0">
         <button
           @click="uiStore.midiActionsActiveTab = 'mapper'"
           :class="[
@@ -333,9 +333,9 @@ onUnmounted(() => cancelLearn())
         >
           Program Change
         </button>
-      </div>
+      </div> -->
 
-      <div v-if="uiStore.midiActionsActiveTab === 'mapper'" class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-5">
+      <div v-if="uiStore.midiActionsActiveTab === 'mapper'" class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-5 p-4">
 
         <!-- Add Mapping -->
         <div class="bg-neutral-800/50 rounded-xl p-4 space-y-3">

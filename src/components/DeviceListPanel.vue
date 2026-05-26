@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Gamepad2, Music, Layers, Cpu, Circle, Plus, Trash2, RefreshCw } from 'lucide-vue-next'
+import { Gamepad2, Music, Layers, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink } from 'lucide-vue-next'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
 
@@ -50,6 +50,15 @@ function toggleReg(name, field) {
   if (!reg) { midiStore.addRegistration(name); return }
   updateReg(name, field, !reg[field])
 }
+
+const sortedDevices = computed(() =>
+  [...devices.value].sort((a, b) => {
+    const aReg = isRegistered(a.name) ? 0 : 1
+    const bReg = isRegistered(b.name) ? 0 : 1
+    if (aReg !== bReg) return aReg - bReg
+    return a.name.localeCompare(b.name)
+  })
+)
 </script>
 
 <template>
@@ -82,13 +91,14 @@ function toggleReg(name, field) {
       </div>
 
       <div
-        v-for="d in devices"
+        v-for="d in sortedDevices"
         :key="d.id"
         :class="[
           'rounded-xl border p-4 flex flex-col gap-3 transition-colors',
           d.online
             ? 'bg-neutral-900 border-neutral-700'
-            : 'bg-neutral-950 border-neutral-800 opacity-60'
+            : 'bg-neutral-950 border-neutral-800 opacity-60',
+          isRegistered(d.name) ? 'ring-3 ring-cyan-300/70' : ''
         ]"
       >
         <!-- Card header -->
@@ -155,8 +165,8 @@ function toggleReg(name, field) {
             </div>
           </div>
 
-          <!-- Quick toggles -->
-          <div class="flex flex-wrap gap-1.5">
+          <!-- Quick toggles + unregister -->
+          <div class="flex flex-wrap gap-1.5 items-center">
             <label
               v-for="(label, field) in { notes: 'Notes', cc: 'CC', clock: 'Clock', transport: 'Transp', midiThru: 'Thru' }"
               :key="field"
@@ -170,6 +180,13 @@ function toggleReg(name, field) {
               <input type="checkbox" :checked="registration(d.name)?.[field]" class="sr-only" />
               {{ label }}
             </label>
+            <button
+              @click="midiStore.removeRegistration(d.name)"
+              title="Remove from routing matrix"
+              class="ml-auto flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-rose-900/40 text-rose-500/70 hover:text-rose-400 hover:border-rose-700 hover:bg-rose-900/20 transition-colors"
+            >
+              <Unlink class="w-3 h-3" /> Unregister
+            </button>
           </div>
         </template>
 

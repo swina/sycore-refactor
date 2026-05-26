@@ -45,6 +45,7 @@ export const useUiStore = defineStore('ui', () => {
   const isDeviceProgramChangePanelOpen = ref(false)
   const isLivePerformancePadOpen = ref(false)
   const isMidiMonitorOpen        = ref(false)
+  const isHelpSlideshowOpen      = ref(false)
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
   const midiActionsActiveTab = ref('mapper')
@@ -68,6 +69,64 @@ export const useUiStore = defineStore('ui', () => {
   // Global MIDI modifiers (shared between VirtualKeyboard and ArpeggiatorPanel)
   const globalModCC        = ref(1)   // CC number for mod wheel
   const globalTranspose    = ref(0)   // semitones, -24..+24
+
+  // --- Modal focus cycling (Ctrl+Tab) ---
+  const focusedModalKey = ref(null)
+
+  const MODAL_CYCLE_REGISTRY = {
+    auth:                () => isAuthModalOpen.value,
+    types:               () => isTypesOpen.value,
+    history:             () => isHistoryOpen.value,
+    keyboard:            () => isKeyboardOpen.value,
+    sequencer:           () => isSequencerOpen.value,
+    arp:                 () => isArpOpen.value,
+    midiMapping:         () => isMidiMappingOpen.value,
+    midiActions:         () => isMidiActionsOpen.value,
+    midiMatrix:          () => isMidiMatrixOpen.value,
+    midiPerformance:     () => isMidiPerformanceOpen.value,
+    deviceProgramChange: () => isDeviceProgramChangePanelOpen.value,
+    programChangeBrowser:() => isProgramChangeBrowserOpen.value,
+    liveSet:             () => isLiveSetOpen.value,
+    livePerformancePad:  () => isLivePerformancePadOpen.value,
+    capture:             () => isCaptureOpen.value,
+    audioCapture:        () => isAudioCaptureOpen.value,
+    visualizer:          () => isVisualizerOpen.value,
+    profile:             () => isProfileOpen.value,
+    adminPanel:          () => isAdminPanelOpen.value,
+    about:               () => isAboutOpen.value,
+    helpSlideshow:       () => isHelpSlideshowOpen.value,
+    velocityMap:         () => isVelocityMapOpen.value,
+    lfo1:                () => isLfo1Open.value,
+    lfo2:                () => isLfo2Open.value,
+    session:             () => isSessionOpen.value,
+    looper:              () => isLooperOpen.value,
+    adminLogger:         () => isAdminLoggerOpen.value,
+    midiMonitor:         () => isMidiMonitorOpen.value,
+    unifiedMidi:         () => showUnifiedMidiManager.value,
+  }
+
+  const openModalKeys = computed(() =>
+    Object.entries(MODAL_CYCLE_REGISTRY)
+      .filter(([, isOpen]) => isOpen())
+      .map(([key]) => key)
+  )
+
+  function cycleFocusedModal(reverse = false) {
+    const open = openModalKeys.value
+    if (open.length === 0) { focusedModalKey.value = null; return }
+    if (open.length === 1) { focusedModalKey.value = open[0]; return }
+    const idx = focusedModalKey.value ? open.indexOf(focusedModalKey.value) : -1
+    const next = reverse
+      ? (idx <= 0 ? open.length - 1 : idx - 1)
+      : (idx + 1) % open.length
+    focusedModalKey.value = open[next]
+  }
+
+  watch(openModalKeys, (open) => {
+    if (focusedModalKey.value && !open.includes(focusedModalKey.value)) {
+      focusedModalKey.value = open.length > 0 ? open[0] : null
+    }
+  })
 
   function closeAll() {
     isHistoryOpen.value      = false
@@ -109,8 +168,10 @@ export const useUiStore = defineStore('ui', () => {
     isProgramChangeBrowserOpen.value = false
     isDeviceProgramChangePanelOpen.value = false
     isLivePerformancePadOpen.value = false
+    isHelpSlideshowOpen.value      = false
     midiActionsActiveTab.value = 'mapper'
     midiActionsSelectedDevice.value = ''
+    focusedModalKey.value = null
   }
 
   function toggleMainMenu() {
@@ -149,13 +210,14 @@ export const useUiStore = defineStore('ui', () => {
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen,
-    isLivePerformancePadOpen,
+    isLivePerformancePadOpen, isHelpSlideshowOpen,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen, 
     isPlayingPreview, isPlayingBacking, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqActiveSlot,
     globalModCC, globalTranspose,
+    focusedModalKey, openModalKeys, cycleFocusedModal,
     closeAll, toggleMainMenu, toggleSideMenu
   }
 })

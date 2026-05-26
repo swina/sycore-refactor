@@ -82,7 +82,7 @@ function handleBpmChange(e) {
         </Tooltip>
         <Tooltip content="MIDI Status — click to open Main Page" :disabled="false" position="top">
           <button
-            @click="router.push('/main')"
+            @click="router.push('/')"
             :class="['px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1.5 transition-colors cursor-pointer hover:brightness-125 active:scale-95', midiStore.midiReady ? 'bg-synth-neon/10 text-synth-neon' : 'bg-red-950/30 text-red-400']"
           >
             <Radio class="w-3 h-3" />

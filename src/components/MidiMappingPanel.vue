@@ -110,11 +110,11 @@ function confirmLearn() {
 
 <template>
   <div :class="embedded ? '' : 'fixed inset-0 z-[160] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4'">
-    <div :class="embedded ? 'flex flex-col h-full overflow-hidden p-4' : 'bg-neutral-900 border border-synth-neon/30 rounded-2xl p-6 max-w-md w-full max-h-[80vh] flex flex-col shadow-2xl'">
+    <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-900 border border-synth-neon/30 rounded-2xl p-6 max-w-md w-full max-h-[80vh] flex flex-col shadow-2xl'">
 
       <!-- Header -->
-      <div class="flex justify-between items-center mb-4 border-b border-neutral-800 pb-4 shrink-0">
-        <h2 class="text-xl font-black text-white tracking-widest uppercase flex items-center gap-2">
+      <div class="px-6 py-5 flex justify-between items-center border-b border-neutral-800 pb-4 bg-gradient-to-r from-emerald-950/40 to-transparent">
+        <h2 class="text-xm font-black text-white tracking-widest uppercase flex items-center gap-2">
           <Radio class="w-6 h-6 text-synth-neon" /> MIDI MAPPING
         </h2>
         <button v-if="!props.embedded" @click="emit('close')" class="text-neutral-500 hover:text-rose-500 transition-colors p-2">
@@ -123,7 +123,7 @@ function confirmLearn() {
       </div>
 
       <!-- Preset Switcher -->
-      <div class="mb-4 shrink-0">
+      <div class="mb-4 p-4 shrink-0">
         <div class="flex items-center gap-2">
           <select
             :value="mappingStore.activePresetId || ''"
@@ -158,7 +158,7 @@ function confirmLearn() {
       </div>
 
       <!-- Learn area -->
-      <div class="flex-1 overflow-y-auto custom-scrollbar mb-6 pr-2">
+      <div class="flex-1 overflow-y-auto custom-scrollbar mb-6 p-4 pr-2">
 
         <!-- Unified Mapping Screen (Learning + Picking) -->
         <div v-if="mappingStore.isMidiLearning" class="bg-neutral-800 border border-neutral-700 rounded-xl p-5 mb-4">

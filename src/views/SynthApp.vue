@@ -99,7 +99,6 @@ onMounted(async () => {
 // Local state
 const globalTranspose       = ref(0)
 const sessionBpmOverride    = ref(false)
-const isHelpSlideshowOpen   = ref(false)
 
 const isAdmin = computed(() => authStore.isAdmin)
 
@@ -148,6 +147,11 @@ function handleToolbarButtonClick(button) {
 
 function closeAllPanels() {
   uiStore.closeAll()
+}
+
+function focusStyle(key) {
+  if (uiStore.focusedModalKey !== key) return {}
+  return { position: 'relative', zIndex: 9999, isolation: 'isolate' }
 }
 
 async function handleStepSequencerSave(config) {
@@ -218,7 +222,11 @@ onMounted(() => {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
       e.preventDefault()
-      isHelpSlideshowOpen.value = !isHelpSlideshowOpen.value
+      uiStore.isHelpSlideshowOpen = !uiStore.isHelpSlideshowOpen
+    }
+    if (e.ctrlKey && e.key === 'Tab') {
+      e.preventDefault()
+      uiStore.cycleFocusedModal(e.shiftKey)
     }
   }
   window.addEventListener('keydown', handleKeyDown)
@@ -242,7 +250,7 @@ onMounted(() => {
 
     <!-- Home Button -->
     <button
-      @click="router.push('/main')"
+      @click="router.push('/')"
       title="Home"
       class="fixed top-4 right-4 z-[100] w-9 h-9 rounded-lg bg-neutral-900/70 border border-neutral-800 hover:border-synth-neon/60 hover:bg-neutral-900 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
     >
@@ -273,138 +281,173 @@ onMounted(() => {
     <!-- Modals (Teleport to body) -->
     <Teleport to="body">
       <!-- Auth Modal -->
-      <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />
+      <div :style="focusStyle('auth')">
+        <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />
+      </div>
 
       <!-- Sound Types -->
-      <Transition name="sy-modal">
-        <SoundTypesPanel
-          v-if="uiStore.isTypesOpen"
-          @close="uiStore.isTypesOpen = false; uiStore.isHistoryOpen = false"
-        />
-      </Transition>
+      <div :style="focusStyle('types')">
+        <Transition name="sy-modal">
+          <SoundTypesPanel
+            v-if="uiStore.isTypesOpen"
+            @close="uiStore.isTypesOpen = false; uiStore.isHistoryOpen = false"
+          />
+        </Transition>
+      </div>
 
       <!-- Preset History -->
-      <Transition name="sy-modal">
-        <PresetHistoryPanel
-          v-if="uiStore.isHistoryOpen"
-          @close="uiStore.isHistoryOpen = false"
-        />
-      </Transition>
+      <div :style="focusStyle('history')">
+        <Transition name="sy-modal">
+          <PresetHistoryPanel
+            v-if="uiStore.isHistoryOpen"
+            @close="uiStore.isHistoryOpen = false"
+          />
+        </Transition>
+      </div>
 
       <!-- MIDI MATRIX -->
-      <Transition name="sy-modal">
-        <MidiMatrix
-          v-if="uiStore.isMidiMatrixOpen"
-          @close="uiStore.isMidiMatrixOpen = false"
-        />
-      </Transition>
+      <div :style="focusStyle('midiMatrix')">
+        <Transition name="sy-modal">
+          <MidiMatrix
+            v-if="uiStore.isMidiMatrixOpen"
+            @close="uiStore.isMidiMatrixOpen = false"
+          />
+        </Transition>
+      </div>
 
       <!-- DEVICE PROGRAM CHANGE PANEL -->
-      <Transition name="sy-modal">
-        <MidiDeviceProgramChangePanel
-          v-if="uiStore.isDeviceProgramChangePanelOpen"
-          @close="uiStore.isDeviceProgramChangePanelOpen = false"
-        />
-      </Transition>
+      <div :style="focusStyle('deviceProgramChange')">
+        <Transition name="sy-modal">
+          <MidiDeviceProgramChangePanel
+            v-if="uiStore.isDeviceProgramChangePanelOpen"
+            @close="uiStore.isDeviceProgramChangePanelOpen = false"
+          />
+        </Transition>
+      </div>
 
       <!-- MIDI PERFORMANCE GRID -->
-      <MidiPerformancePanel
-        v-if="uiStore.isMidiPerformanceOpen"
-        @close="uiStore.isMidiPerformanceOpen = false"
-      />
+      <div :style="focusStyle('midiPerformance')">
+        <MidiPerformancePanel
+          v-if="uiStore.isMidiPerformanceOpen"
+          @close="uiStore.isMidiPerformanceOpen = false"
+        />
+      </div>
 
       <!-- MIDI Mapping -->
-      <Transition name="sy-modal">
-        <MidiMappingPanel
-          v-if="uiStore.isMidiMappingOpen"
-          @close="uiStore.isMidiMappingOpen = false"
-        />
-      </Transition>
-      
+      <div :style="focusStyle('midiMapping')">
+        <Transition name="sy-modal">
+          <MidiMappingPanel
+            v-if="uiStore.isMidiMappingOpen"
+            @close="uiStore.isMidiMappingOpen = false"
+          />
+        </Transition>
+      </div>
+
       <!-- MIDI APP ACTION MAPPING -->
-      <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" />
+      <div :style="focusStyle('midiActions')">
+        <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" />
+      </div>
 
       <!-- UNIFIED MIDI MANAGER -->
-      <UnifiedMidiManager />
+      <div :style="focusStyle('unifiedMidi')">
+        <UnifiedMidiManager />
+      </div>
 
       <!-- PROGRAM CHANGE BROWSER -->
-      <Transition name="sy-drawer">
-        <div
-          v-if="uiStore.isProgramChangeBrowserOpen"
-          class="fixed top-0 right-0 bottom-10 w-full max-w-sm bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[440] flex flex-col overflow-hidden"
-        >
-          <div class="px-5 py-4 border-b border-neutral-900 flex items-center justify-between bg-black/50 backdrop-blur-xl shrink-0">
-            <div class="flex items-center gap-2.5">
-              <Music2 class="w-4 h-4 text-violet-400" />
-              <span class="text-xs font-black uppercase tracking-[0.2em] text-neutral-300">Program Change</span>
+      <div :style="focusStyle('programChangeBrowser')">
+        <Transition name="sy-drawer">
+          <div
+            v-if="uiStore.isProgramChangeBrowserOpen"
+            class="fixed top-0 right-0 bottom-10 w-full max-w-sm bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[440] flex flex-col overflow-hidden"
+          >
+            <div class="px-5 py-4 border-b border-neutral-900 flex items-center justify-between bg-black/50 backdrop-blur-xl shrink-0">
+              <div class="flex items-center gap-2.5">
+                <Music2 class="w-4 h-4 text-violet-400" />
+                <span class="text-xs font-black uppercase tracking-[0.2em] text-neutral-300">Program Change</span>
+              </div>
+              <button @click="uiStore.isProgramChangeBrowserOpen = false" class="p-1.5 hover:bg-neutral-900 rounded-lg text-neutral-500 hover:text-white transition-colors">
+                <X class="w-4 h-4" />
+              </button>
             </div>
-            <button @click="uiStore.isProgramChangeBrowserOpen = false" class="p-1.5 hover:bg-neutral-900 rounded-lg text-neutral-500 hover:text-white transition-colors">
-              <X class="w-4 h-4" />
-            </button>
+            <div class="flex-1 overflow-y-auto p-4">
+              <ProgramChangeBrowser />
+            </div>
           </div>
-          <div class="flex-1 overflow-y-auto p-4">
-            <ProgramChangeBrowser />
-          </div>
-        </div>
-      </Transition>
+        </Transition>
+      </div>
 
       <!-- Arpeggiator -->
-      <ArpeggiatorPanel
-        :isOpen="uiStore.isArpOpen"
-        :channel="midiStore.midiChannel - 1"
-        :inputChannel="midiStore.midiInputChannel"
-        @close="uiStore.isArpOpen = false"
-      />
+      <div :style="focusStyle('arp')">
+        <ArpeggiatorPanel
+          :isOpen="uiStore.isArpOpen"
+          :channel="midiStore.midiChannel - 1"
+          :inputChannel="midiStore.midiInputChannel"
+          @close="uiStore.isArpOpen = false"
+        />
+      </div>
 
       <!-- Virtual Keyboard -->
-      <Transition name="sy-modal">
-        <VirtualKeyboard
-          v-if="uiStore.isKeyboardOpen"
-          :channel="midiStore.midiChannel"
-          :inputChannel="midiStore.midiInputChannel"
-          @close="uiStore.isKeyboardOpen = false"
-        />
-      </Transition>
+      <div :style="focusStyle('keyboard')">
+        <Transition name="sy-modal">
+          <VirtualKeyboard
+            v-if="uiStore.isKeyboardOpen"
+            :channel="midiStore.midiChannel"
+            :inputChannel="midiStore.midiInputChannel"
+            @close="uiStore.isKeyboardOpen = false"
+          />
+        </Transition>
+      </div>
 
       <!-- Live Set -->
-      <Transition name="sy-modal">
-        <LiveSet
-          v-if="uiStore.isLiveSetOpen"
-          :isOpen="uiStore.isLiveSetOpen"
-          :isAdmin="isAdmin"
-          @close="uiStore.isLiveSetOpen = false"
-        />
-      </Transition>
+      <div :style="focusStyle('liveSet')">
+        <Transition name="sy-modal">
+          <LiveSet
+            v-if="uiStore.isLiveSetOpen"
+            :isOpen="uiStore.isLiveSetOpen"
+            :isAdmin="isAdmin"
+            @close="uiStore.isLiveSetOpen = false"
+          />
+        </Transition>
+      </div>
 
-      <Transition name="sy-modal">
-        <LivePerformancePad
-          v-if="uiStore.isLivePerformancePadOpen"
-          :isOpen="uiStore.isLivePerformancePadOpen"
-          @close="uiStore.isLivePerformancePadOpen = false"
-        />
-      </Transition>
+      <div :style="focusStyle('livePerformancePad')">
+        <Transition name="sy-modal">
+          <LivePerformancePad
+            v-if="uiStore.isLivePerformancePadOpen"
+            :isOpen="uiStore.isLivePerformancePadOpen"
+            @close="uiStore.isLivePerformancePadOpen = false"
+          />
+        </Transition>
+      </div>
 
       <!-- MIDI Capture -->
-      <MidiCapture
-        v-if="uiStore.isCaptureOpen"
-        :isOpen="uiStore.isCaptureOpen"
-        :notesRef="captureNotesRef"
-        :noteCount="captureNoteCount"
-        :captureEnabled="captureEnabled"
-        :bpm="midiStore.currentBpm || 120"
-        @close="uiStore.isCaptureOpen = false"
-        @reset="resetCapture"
-        @update:captureEnabled="setCaptureEnabled"
-        @sendToSequencer="handleSendToSequencer"
-      />
+      <div :style="focusStyle('capture')">
+        <MidiCapture
+          v-if="uiStore.isCaptureOpen"
+          :isOpen="uiStore.isCaptureOpen"
+          :notesRef="captureNotesRef"
+          :noteCount="captureNoteCount"
+          :captureEnabled="captureEnabled"
+          :bpm="midiStore.currentBpm || 120"
+          @close="uiStore.isCaptureOpen = false"
+          @reset="resetCapture"
+          @update:captureEnabled="setCaptureEnabled"
+          @sendToSequencer="handleSendToSequencer"
+        />
+      </div>
 
       <!-- Audio Capture -->
-      <AudioCapture />
+      <div :style="focusStyle('audioCapture')">
+        <AudioCapture />
+      </div>
 
       <!-- Audio Visualizer -->
-      <AudioVisualizer />
+      <div :style="focusStyle('visualizer')">
+        <AudioVisualizer />
+      </div>
 
       <!-- Step Sequencer -->
+      <div :style="focusStyle('sequencer')">
       <StepSequencer
         v-show="uiStore.isSequencerOpen"
         :isOpen="uiStore.isSequencerOpen"
@@ -441,37 +484,59 @@ onMounted(() => {
         @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
         @stop="() => {}"
       />
+      </div>
 
       <!-- User Profile Modal -->
-      <UserProfileModal v-if="uiStore.isProfileOpen" @close="uiStore.isProfileOpen = false" />
+      <div :style="focusStyle('profile')">
+        <UserProfileModal v-if="uiStore.isProfileOpen" @close="uiStore.isProfileOpen = false" />
+      </div>
 
       <!-- Admin Panel -->
-      <Transition name="sy-drawer">
-        <AdminPanel v-if="uiStore.isAdminPanelOpen" :isOpen="uiStore.isAdminPanelOpen" @close="uiStore.isAdminPanelOpen = false" />
-      </Transition>
+      <div :style="focusStyle('adminPanel')">
+        <Transition name="sy-drawer">
+          <AdminPanel v-if="uiStore.isAdminPanelOpen" :isOpen="uiStore.isAdminPanelOpen" @close="uiStore.isAdminPanelOpen = false" />
+        </Transition>
+      </div>
 
       <!-- About Modal -->
-      <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
+      <div :style="focusStyle('about')">
+        <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
+      </div>
+
       <!-- Help Slideshow -->
-      <SlideshowModal :isOpen="isHelpSlideshowOpen" source="help" @close="isHelpSlideshowOpen = false" />
+      <div :style="focusStyle('helpSlideshow')">
+        <SlideshowModal :isOpen="uiStore.isHelpSlideshowOpen" source="help" @close="uiStore.isHelpSlideshowOpen = false" />
+      </div>
 
       <!-- Velocity Mapping Dialog -->
-      <VelocityMappingDialog v-if="uiStore.isVelocityMapOpen" />
+      <div :style="focusStyle('velocityMap')">
+        <VelocityMappingDialog v-if="uiStore.isVelocityMapOpen" />
+      </div>
 
       <!-- LFO Mapping Dialogs -->
-      <LfoMappingDialog v-if="uiStore.isLfo1Open" :lfoId="1" />
-      <LfoMappingDialog v-if="uiStore.isLfo2Open" :lfoId="2" />
+      <div :style="focusStyle('lfo1')">
+        <LfoMappingDialog v-if="uiStore.isLfo1Open" :lfoId="1" />
+      </div>
+      <div :style="focusStyle('lfo2')">
+        <LfoMappingDialog v-if="uiStore.isLfo2Open" :lfoId="2" />
+      </div>
 
       <!-- Session Manager -->
-      <SessionManager />
+      <div :style="focusStyle('session')">
+        <SessionManager />
+      </div>
 
       <!-- Audio Looper -->
-      <Transition name="sy-modal">
-        <AudioLooper v-if="uiStore.isLooperOpen" @close="uiStore.isLooperOpen = false" />
-      </Transition>
+      <div :style="focusStyle('looper')">
+        <Transition name="sy-modal">
+          <AudioLooper v-if="uiStore.isLooperOpen" @close="uiStore.isLooperOpen = false" />
+        </Transition>
+      </div>
 
       <!-- MIDI Logger -->
-      <MidiLoggerPanel />
+      <div :style="focusStyle('adminLogger')">
+        <MidiLoggerPanel />
+      </div>
 
       <!-- Global Tooltip -->
       <GlobalTooltip />

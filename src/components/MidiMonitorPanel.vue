@@ -189,7 +189,7 @@ onUnmounted(() => {
       <div class="flex items-center justify-between border-b border-neutral-800 px-3 py-2 bg-cyan-900/10 gap-2 flex-wrap">
         <h3 class="text-cyan-400 text-[10px] font-black tracking-widest uppercase flex items-center gap-1.5 shrink-0">
           <Activity class="w-3 h-3" />
-          MIDI MONITOR
+          <h2 class="text-sm font-black text-white tracking-widest uppercase">MIDI MONITOR</h2>
         </h3>
 
         <div class="flex items-center gap-1.5 flex-wrap flex-1 justify-end">

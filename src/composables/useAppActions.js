@@ -320,6 +320,25 @@ export function useAppActions() {
       case 'liveset_down':
         window.dispatchEvent(new CustomEvent('liveset-navigate', { detail: { dir: 'down' } })); break
 
+      case 'focus_next_modal':
+        if (ccVal > 0) uiStore.cycleFocusedModal(); break
+
+      case 'channel_up':
+        if (ccVal > 63) {
+          const ch = midiStore.midiChannel
+          midiStore.setMidiChannel(ch >= 16 ? 1 : ch + 1)
+        }
+        break
+      case 'channel_down':
+        if (ccVal > 63) {
+          const ch = midiStore.midiChannel
+          midiStore.setMidiChannel(ch <= 1 ? 16 : ch - 1)
+        }
+        break
+      case 'channel_cc':
+        midiStore.setMidiChannel(Math.max(1, Math.round((ccVal / 127) * 15) + 1))
+        break
+
       case 'transpose_cc':
         // Map CC value 0-127 → transpose -24..+24
         uiStore.globalTranspose = Math.round((ccVal / 127) * 48) - 24; break

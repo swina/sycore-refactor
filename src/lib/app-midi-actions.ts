@@ -110,7 +110,11 @@ export type AppAction =
   | 'backing_track_pad_13' | 'backing_track_pad_14' | 'backing_track_pad_15' | 'backing_track_pad_16'
   | 'midi_config_preset_1' | 'midi_config_preset_2' | 'midi_config_preset_3' | 'midi_config_preset_4'
   | 'midi_config_preset_5' | 'midi_config_preset_6' | 'midi_config_preset_7' | 'midi_config_preset_8'
-  | 'sysex_send';
+  | 'sysex_send'
+  | 'focus_next_modal'
+  | 'channel_up'
+  | 'channel_down'
+  | 'channel_cc';
 
 export interface AppMidiMapping {
   id: string;
@@ -274,6 +278,10 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   midi_config_preset_7: 'MIDI Config Preset 7',
   midi_config_preset_8: 'MIDI Config Preset 8',
   sysex_send: 'Send SysEx (requires payload config)',
+  focus_next_modal: 'Focus Next Open Panel (any CC value)',
+  channel_up:   'MIDI Channel +1 (wraps 16→1)',
+  channel_down: 'MIDI Channel −1 (wraps 1→16)',
+  channel_cc:   'MIDI Channel via CC (0–127 → Ch 1–16)',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -306,11 +314,15 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'open_sound_history', 'open_midi_matrix', 'panel_category_cc',
     'panel_tab_grid', 'panel_tab_flow', 'panel_tab_lfo', 'panel_tab_osc',
     'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
-    'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select'
+    'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select',
+    'focus_next_modal'
   ],
   'Transport & Performance': [
     'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
     'playlist_volume_cc', 'transpose_cc', 'pass_thru', 'capture_rec_toggle'
+  ],
+  'MIDI Channel': [
+    'channel_up', 'channel_down', 'channel_cc'
   ],
   'Program Change Browser': [
     'pc_device_cc', 'pc_bank_cc', 'pc_category_cc', 'pc_preset_cc',
@@ -378,4 +390,5 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'pc_bank_cc',
   'pc_category_cc',
   'pc_preset_cc',
+  'channel_cc',
 ]);

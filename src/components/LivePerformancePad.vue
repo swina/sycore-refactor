@@ -9,6 +9,7 @@ import { useMidiStore }       from '@/stores/useMidiStore'
 import { usePresetStore }     from '@/stores/usePresetStore'
 import { useLivePadStore }    from '@/stores/useLivePadStore'
 import { useMappingStore }    from '@/stores/useMappingStore'
+import { useSyncStore }       from '@/stores/useSyncStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDeviceRegistry }  from '@/composables/useDeviceRegistry'
 import { midiService }        from '@/core/midi/MidiService'
@@ -22,8 +23,11 @@ const midiStore    = useMidiStore()
 const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
 const mappingStore = useMappingStore()
+const syncStore    = useSyncStore()
 const { openMenu } = useMidiContextMenu()
 const { devices: registeredDevices } = useDeviceRegistry()
+
+const syncRecordAudioCapture = computed(() => syncStore.syncRecordAudioCapture)
 
 // ── localStorage ─────────────────────────────────────────────────
 const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
@@ -207,15 +211,26 @@ function persistPads() {
 }
 
 // ── Playlist controls (same event bus as LiveSet/BackingTrackPlayer) ──
-function playFromPlaylist(idx) { window.dispatchEvent(new CustomEvent('playlist-play',  { detail: { idx, crossfade: true } })) }
+function playFromPlaylist(idx) {
+  const pl = livePadStore.playlist
+  window.dispatchEvent(new CustomEvent('playlist-play', {
+    detail: { idx, crossfade: true, ...(pl.length > 0 ? { playlist: pl } : {}) }
+  }))
+}
 function clearPlaylist()        { window.dispatchEvent(new CustomEvent('playlist-clear')) }
 function mutatePlaylist(k, v)   { window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key: k, value: v } })) }
 function prevTrack()            { window.dispatchEvent(new CustomEvent('playlist-prev')) }
 function nextTrack()            { window.dispatchEvent(new CustomEvent('playlist-next')) }
 function handlePlaylistToggle(idx) {
-  typeof idx === 'number'
-    ? playFromPlaylist(idx)
-    : window.dispatchEvent(new CustomEvent('playlist-play-stop'))
+  if (typeof idx === 'number') {
+    playFromPlaylist(idx)
+  } else {
+    // Ensure BTP has the playlist before toggling play
+    const pl = livePadStore.playlist
+    if (pl.length > 0 && !isPlaying.value)
+      window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key: 'playlist', value: pl } }))
+    window.dispatchEvent(new CustomEvent('playlist-play-stop'))
+  }
 }
 function seekTrack(pos)   { window.dispatchEvent(new CustomEvent('playlist-seek',   { detail: pos })) }
 function updateVolume(v)  { volume.value = v; window.dispatchEvent(new CustomEvent('playlist-volume', { detail: v })) }
@@ -227,8 +242,19 @@ function handleStateUpdate(e) {
   if (d.isPlaying     !== undefined) isPlaying.value     = d.isPlaying
   if (d.volume        !== undefined) volume.value        = d.volume
   if (d.playlistIdx   !== undefined) livePadStore.playlistIdx   = d.playlistIdx
-  if (d.playlist      !== undefined) livePadStore.playlist      = d.playlist
-  if (d.playlistRepeats !== undefined) livePadStore.playlistRepeats = d.playlistRepeats
+  if (d.playlist !== undefined) {
+    if (d.playlist.length > 0) {
+      livePadStore.playlist = d.playlist
+    } else if (livePadStore.playlist.length > 0) {
+      // BTP started empty (app restart); push persisted playlist back to it
+      nextTick(() => {
+        window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key: 'playlist', value: livePadStore.playlist } }))
+        if (livePadStore.playlistRepeats.length > 0)
+          window.dispatchEvent(new CustomEvent('playlist-mutate', { detail: { key: 'playlistRepeats', value: livePadStore.playlistRepeats } }))
+      })
+    }
+  }
+  if (d.playlistRepeats !== undefined && d.playlistRepeats.length > 0) livePadStore.playlistRepeats = d.playlistRepeats
   if (d.crossfadeSec  !== undefined) livePadStore.crossfadeSec  = d.crossfadeSec
   if (d.loopPlaylist  !== undefined) livePadStore.loopPlaylist   = d.loopPlaylist
   if (d.playlistCurrentRepeat !== undefined) livePadStore.playlistCurrentRepeat = d.playlistCurrentRepeat
@@ -378,6 +404,9 @@ function _startLppMidiListener() {
       if (!isCC) return
       const devName = paramName.slice('lpp_mix_'.length)
       setMixField(devName, 'vol', byte2)
+    } else if (paramName === 'lpp_playstop') {
+      if (isCC && byte2 === 0) return
+      handlePlaylistToggle()
     }
   })
 }
@@ -428,14 +457,17 @@ function formatTime(t) {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-0 bottom-10 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+  <div v-if="isOpen" class="fixed inset-x-0 top-0 bottom-20 z-[1000] max-w-[910px] m-auto flex items-center justify-center bg-transparent p-1">
     <div class="bg-neutral-950 border border-neutral-900 rounded-2xl w-full max-w-5xl overflow-hidden flex flex-col h-[90vh] shadow-[0_0_50px_rgba(0,0,0,0.8)]">
 
     <!-- ── Header ── -->
-    <div class="px-6 py-2 border-b border-neutral-900 flex items-center shrink-0 bg-black/40 backdrop-blur-md">
+    <div class="px-6 py-2 border-b border-violet-900 flex items-center shrink-0 bg-gradient-to-r from-violet-950/40 backdrop-blur-md">
       <div class="flex items-center gap-8">
         <div class="flex flex-col">
-          <h2 class="text-sm font-black uppercase tracking-[0.3em] text-violet-400">Live Performance</h2>
+          
+          <div class="flex">
+              <Music class="w-5 h-5 text-violet-400 mr-2" />
+              <h2 class="text-sm font-black uppercase tracking-[0.3em] text-violet-400">Live Performance</h2></div>
           <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">PC Sets · Backing Tracks</span>
         </div>
         <nav class="flex items-center gap-6 ml-4">
@@ -699,26 +731,66 @@ function formatTime(t) {
     </div>
 
     <!-- ── Performance footer player ── -->
-    <div v-if="tab === 'perf'" class="shrink-0 bg-black/60 border-t border-neutral-900 flex items-center justify-between px-8 py-2">
-      <div class="flex flex-col gap-0.5">
+    <div v-if="tab === 'perf'"
+      :class="[
+        'shrink-0 border-t border-neutral-900 flex items-center justify-between px-8 py-2 transition-all duration-500 relative overflow-hidden',
+        syncRecordAudioCapture && isPlaying
+          ? 'bg-red-950/60'
+          : syncRecordAudioCapture
+            ? 'bg-black/60'
+            : 'bg-black/60'
+      ]"
+    >
+      <!-- Audio capture sync background pulse -->
+      <div
+        v-if="syncRecordAudioCapture && isPlaying"
+        class="absolute inset-0 pointer-events-none"
+        style="background: radial-gradient(ellipse at center, rgba(239,68,68,0.08) 0%, transparent 70%); animation: rec-pulse 2s ease-in-out infinite;"
+      />
+
+      <div class="flex flex-col gap-0.5 relative z-10">
         <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">Total</span>
         <span class="text-xs font-black text-neutral-300 font-mono">{{ formatTime(totalPlaylistDuration) }}</span>
       </div>
-      <div class="flex items-center gap-6">
+      <div class="flex items-center gap-6 relative z-10">
         <button @click="prevTrack" class="p-2 text-neutral-500 hover:text-white transition-colors active:scale-90">
           <SkipBack class="w-5 h-5" />
         </button>
-        <button @click="handlePlaylistToggle"
-          class="w-10 h-10 rounded-full bg-violet-500 text-black flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:scale-105 active:scale-95 transition-all"
-        >
-          <Pause v-if="isPlaying" class="w-5 h-5 fill-current" />
-          <Play  v-else           class="w-5 h-5 fill-current translate-x-0.5" />
-        </button>
+        <!-- Play/Stop button with MIDI learn support -->
+        <div class="relative">
+          <span
+            v-if="mappingStore.learningParamName === 'lpp_playstop'"
+            class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none"
+          />
+          <button
+            @click="handlePlaylistToggle"
+            @contextmenu.prevent="openMenu($event, { name: 'lpp_playstop', label: 'Play / Stop' })"
+            :class="[
+              'w-10 h-10 rounded-full text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all',
+              syncRecordAudioCapture && isPlaying
+                ? 'bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.6)]'
+                : 'bg-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.3)]'
+            ]"
+          >
+            <Pause v-if="isPlaying" class="w-5 h-5 fill-current" />
+            <Play  v-else           class="w-5 h-5 fill-current translate-x-0.5" />
+          </button>
+        </div>
         <button @click="nextTrack" class="p-2 text-neutral-500 hover:text-white transition-colors active:scale-90">
           <SkipForward class="w-5 h-5" />
         </button>
       </div>
-      <div class="flex flex-col items-end gap-0.5">
+      <div class="flex flex-col items-end gap-0.5 relative z-10">
+        <!-- Audio capture sync indicator -->
+        <div v-if="syncRecordAudioCapture" class="flex items-center gap-1.5 mb-0.5">
+          <span
+            :class="[
+              'w-1.5 h-1.5 rounded-full',
+              isPlaying ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse' : 'bg-red-500/30'
+            ]"
+          />
+          <span :class="['text-[8px] font-mono uppercase tracking-widest', isPlaying ? 'text-red-400' : 'text-red-500/40']">REC SYNC</span>
+        </div>
         <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">Active</span>
         <span class="text-xs font-black text-violet-400 font-mono">{{ playlistIdx >= 0 ? `#${playlistIdx + 1}` : 'IDLE' }}</span>
       </div>
@@ -887,5 +959,9 @@ function formatTime(t) {
 .fade-down-enter-from, .fade-down-leave-to {
   opacity: 0;
   transform: translateY(-6px);
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
 }
 </style>

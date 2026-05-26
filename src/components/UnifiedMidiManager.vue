@@ -41,7 +41,7 @@ function close() {
   <Transition name="umm">
     <div
       v-if="uiStore.showUnifiedMidiManager"
-      class="fixed inset-x-0 top-0 bottom-10 z-[900] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      class="fixed inset-x-0 top-0 bottom-30 z-[900] max-w-[920px] m-auto flex items-center justify-center p-1"
       @click.self="close"
     >
       <div class="bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
@@ -49,10 +49,10 @@ function close() {
       >
 
         <!-- ── Header ──────────────────────────────────────────────────────── -->
-        <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-800 bg-black/30 shrink-0">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-800 bg-gradient-to-r from-cyan-950/40 to-transparent shrink-0">
           <h2 class="text-sm font-black uppercase tracking-widest text-neutral-200 flex items-center gap-2">
             <Cpu class="w-4 h-4 text-emerald-400" />
-            MIDI Manager
+            MIDI
           </h2>
 
           <!-- Tab bar -->

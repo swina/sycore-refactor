@@ -388,7 +388,7 @@ function playFromPlaylist(idx, source = 'manual') {
   }))
 
   if (syncRecordAudioCapture.value) {
-    window.dispatchEvent(new CustomEvent('capture-start-rec'))
+    window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
   }
   
   if (track.bpm) {
@@ -467,7 +467,7 @@ function togglePlay() {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true, source: 'backing-track' } }))
     }
     if (syncRecordAudioCapture.value && isPlaylistMode.value) {
-      window.dispatchEvent(new CustomEvent('capture-start-rec'))
+      window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
     }
   }
 }
@@ -686,12 +686,12 @@ onMounted(() => {
         if (syncRecordAudioCapture.value) window.dispatchEvent(new CustomEvent('capture-stop-rec'))
       } else {
         audio.play()
-        if (syncRecordAudioCapture.value && isPlaylistMode.value) window.dispatchEvent(new CustomEvent('capture-start-rec'))
+        if (syncRecordAudioCapture.value && isPlaylistMode.value) window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
       }
       isPlaying.value = !isPlaying.value
     } else if (play && !isPlaying.value) {
       audio.play(); isPlaying.value = true
-      if (syncRecordAudioCapture.value && isPlaylistMode.value) window.dispatchEvent(new CustomEvent('capture-start-rec'))
+      if (syncRecordAudioCapture.value && isPlaylistMode.value) window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
     } else if (!play && isPlaying.value) {
       audio.pause(); isPlaying.value = false
       if (syncRecordAudioCapture.value) window.dispatchEvent(new CustomEvent('capture-stop-rec'))
@@ -713,7 +713,7 @@ onMounted(() => {
         window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true, source: 'backing-track' } }))
       }
       if (syncRecordAudioCapture.value && isPlaylistMode.value) {
-        window.dispatchEvent(new CustomEvent('capture-start-rec'))
+        window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
       }
     }
   }

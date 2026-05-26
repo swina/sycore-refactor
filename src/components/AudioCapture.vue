@@ -1359,9 +1359,13 @@ onMounted(async () => {
   }
   window.addEventListener('capture-rec-toggle', _recToggleHandler)
 
-  _startRecHandler = () => {
-    if (!uiStore.isAudioCaptureOpen) {
+  _startRecHandler = (e) => {
+    const background = e?.detail?.background === true
+    if (!background && !uiStore.isAudioCaptureOpen) {
       uiStore.isAudioCaptureOpen = true
+    }
+    if (background && !isMonitoring.value) {
+      startMonitor(selectedDeviceId.value)
     }
     let retries = 0
     const checkAndStart = () => {
@@ -1370,7 +1374,7 @@ onMounted(async () => {
           isArmed.value = false
           startRecording()
         }
-      } else if (retries < 50 && uiStore.isAudioCaptureOpen) {
+      } else if (retries < 50 && (uiStore.isAudioCaptureOpen || background)) {
         retries++
         setTimeout(checkAndStart, 100)
       }

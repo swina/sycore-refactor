@@ -1120,14 +1120,15 @@ onUnmounted(() => {
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-x-0 top-0 bottom-10 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+    class="fixed inset-x-0 top-0 bottom-20 z-[1000] max-w-[920px] m-auto flex items-center justify-center p-4"
     @click.self="ctxMenu = null"
   >
-      <div class="bg-neutral-950 border border-neutral-800 rounded-3xl w-full max-w-5xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,255,204,0.15)] h-[90vh]">
+      <div class="bg-neutral-950 border border-neutral-800 rounded-3xl w-full max-w-5xl overflow-hidden flex flex-col shadow-[0_0_10px_rgba(0,255,204,0.15)] h-[90vh]">
 
         <!-- Header -->
-        <div class="px-5 py-3 border-b border-neutral-900 flex justify-between items-center flex-shrink-0">
+        <div class="px-5 py-3 border-b border-neutral-900 flex justify-between items-center bg-gradient-to-r from-cyan-950/40 to-transparent flex-shrink-0">
           <div class="flex items-center gap-3">
+            <Music class="w-5 h-5 text-neutral-500" />
             <h2 class="text-sm font-black uppercase tracking-widest text-white">MIDI Capture</h2>
             <span
               class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-widest"
@@ -1409,13 +1410,13 @@ onUnmounted(() => {
             </template>
           </div>
 
-          <div class="flex gap-2 flex-wrap justify-end">
+          <div class="flex gap-2 text-[9px] flex-wrap justify-end">
             <!-- Loop toggle -->
             <button
               v-if="phase === 'review'"
               @click="isLooping = !isLooping"
               :disabled="croppedNotes.length === 0"
-              :class="['p-2 rounded-lg border transition-all disabled:opacity-40 disabled:cursor-not-allowed',
+              :class="['p-2 text-sm rounded-lg border transition-all disabled:opacity-40 disabled:cursor-not-allowed',
                 isLooping
                   ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
                   : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-neutral-300']"
@@ -1429,7 +1430,7 @@ onUnmounted(() => {
               v-if="phase === 'review'"
               @click="togglePlayback"
               :disabled="croppedNotes.length === 0"
-              class="px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 rounded-lg font-bold text-[9px] uppercase tracking-widest flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               :class="isPlayingBack
                 ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30'
                 : 'bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700 hover:text-white'"
@@ -1444,7 +1445,7 @@ onUnmounted(() => {
               v-if="phase === 'review'"
               @click="quantizeNotes"
               :disabled="frozenNotes.length === 0"
-              class="px-3 py-1.5 bg-neutral-800 text-neutral-300 border border-neutral-700 rounded-lg hover:bg-neutral-700 hover:text-white transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 bg-neutral-800 text-[9px] text-neutral-300 border border-neutral-700 rounded-lg hover:bg-neutral-700 hover:text-white transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
               title="Snap all notes to nearest 1/16"
             >
               <Magnet class="w-3 h-3" /> 1/16
@@ -1455,7 +1456,7 @@ onUnmounted(() => {
               v-if="phase === 'review'"
               @click="sendToSequencer"
               :disabled="croppedNotes.length === 0"
-              class="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 bg-purple-600 text-[9px]text-white rounded-lg hover:bg-purple-500 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <SendHorizonal class="w-3 h-3" /> Sequencer
             </button>
@@ -1465,7 +1466,7 @@ onUnmounted(() => {
               v-if="phase === 'review'"
               @click="exportMidi"
               :disabled="croppedNotes.length === 0"
-              class="px-3 py-1.5 bg-synth-neon text-black rounded-lg hover:bg-white transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 bg-synth-neon text-[9px] text-black rounded-lg hover:bg-white transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Download class="w-3 h-3" /> MIDI
             </button>

@@ -1,13 +1,17 @@
 <script setup>
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import {
-  Radio, Cpu, Zap, LayoutGrid, Layers, Music2, Workflow,
-  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X
+  Radio, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music2, Workflow,
+  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation
 } from 'lucide-vue-next'
+import SlideshowModal from '@/components/SlideshowModal.vue'
+import AboutModal from '@/components/AboutModal.vue'
+import { useMidiInit } from '@/composables/useMidiInit'
 
 const router = useRouter()
 const configStore = useConfigStore()
@@ -15,8 +19,13 @@ const midiStore = useMidiStore()
 const authStore = useAuthStore()
 const uiStore = useUiStore()
 
+const isSlideshowOpen = ref(false)
+const isHelpSlideshowOpen = ref(false)
+
+useMidiInit()
+
 function goWorkspace() {
-  router.push('/')
+  router.push('/workspace')
 }
 </script>
 
@@ -41,6 +50,8 @@ function goWorkspace() {
           <Radio class="w-3 h-3" />
           {{ midiStore.midiReady ? 'MIDI READY' : 'MIDI WAITING' }}
         </div>
+        <!-- Presentation Link (Not logged in) -->
+      
         <button
           v-if="authStore.user"
           @click="goWorkspace"
@@ -175,10 +186,10 @@ function goWorkspace() {
         </div>
 
          <!-- Box 2-2 -->
-        <div @click="uiStore.isAudioCaptureOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-audio-capture">
+        <div @click="uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-program-change">
           <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
             <Mic class="w-5 h-5 text-synth-neon" />
-            <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Audio Capture</span>
+            <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Multi Sounds</span>
           </div>
           <!-- <div class="flex-1 flex flex-col items-end justify-center gap-2 p-3">
             <button
@@ -209,16 +220,44 @@ function goWorkspace() {
         </div>
 
         <!-- Box 2-4 -->
-        <div class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-settings">
-          <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
-            <Radio class="w-3 h-3 text-synth-neon" />
-            <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">MIDI Status</span>
-          </div>
-          <div class="flex-1 flex flex-col items-center justify-center gap-3 p-3">
-            <div :class="['w-3 h-3 rounded-full shadow-lg', midiStore.midiReady ? 'bg-synth-neon shadow-[0_0_10px_rgba(0,163,112,0.8)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)]']" />
-            <span :class="['text-[10px] font-black uppercase tracking-widest font-mono', midiStore.midiReady ? 'text-synth-neon' : 'text-red-400']">
-              {{ midiStore.midiReady ? 'Connected' : 'Waiting S-1' }}
-            </span>
+        <div class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/60 backdrop-blur-sm flex flex-col overflow-hidden bg-settings">
+          <div class="flex items-end w-full h-full p-2">
+            <div class="flex flex-col w-1/2 gap-1.5 items-center h-full">
+              <div class="flex flex-col bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 flex items-center gap-1.5">
+                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
+                  <Radio class="w-3 h-3 text-synth-neon" />
+                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">MIDI Status</span>
+                </div>
+                <span :class="['text-[10px] font-black uppercase tracking-widest font-mono', midiStore.midiReady ? 'text-synth-neon' : 'text-red-400']">
+                    {{ midiStore.midiReady ? 'Connected' : 'Waiting S-1' }}
+                </span>
+                
+              </div>
+              <div @click="isSlideshowOpen = true" class="flex flex-col bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 mb-3 flex items-center gap-1.5 cursor-pointer">
+                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
+                  <Presentation class="w-3 h-3 text-synth-cyan" />
+                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Quick Guide</span>
+                </div>
+                <span class="text-[10px] font-black text-synth-cyan uppercase tracking-widest font-mono">Before You Start</span>
+              </div>
+            </div>
+            <div class="flex flex-col w-1/2 gap-1.5 items-center h-full">
+              <div @click="isHelpSlideshowOpen = true" class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 flex items-center gap-1.5 cursor-pointer">
+                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
+                  <CircleQuestionMark class="w-3 h-3 text-synth-neon" />
+                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">HELP</span>
+                </div>
+                <span class="text-[10px] font-black text-synth-cyan uppercase tracking-widest font-mono">Manual</span>
+
+              </div>
+              <div @click="uiStore.isAboutOpen = true" class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 mb-3 flex items-center gap-1.5 cursor-pointer">
+                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
+                  <Info class="w-3 h-3 text-synth-cyan" />
+                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">About</span>
+                </div>
+                <span class="text-[10px] font-black text-synth-cyan uppercase tracking-widest font-mono">About SY.CORE</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -244,5 +283,8 @@ function goWorkspace() {
       </div>
     </div>
 
+    <SlideshowModal :isOpen="isSlideshowOpen" @close="isSlideshowOpen = false" />
+    <SlideshowModal :isOpen="isHelpSlideshowOpen" source="help" @close="isHelpSlideshowOpen = false" />
+    <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
   </div>
 </template>

@@ -233,6 +233,13 @@ input[type='range']::-webkit-slider-thumb {
     background-repeat: no-repeat;
 }
 
+.bg-program-change {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, 0.1)), url('/device-program-change.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
 /* ── MIDI Learn overlay — pulsing border on #app ──────────────────────── */
 @keyframes sy-midi-learn-pulse {
     0%, 100% { box-shadow: inset 0 0 0 2px rgba(0, 163, 112, 0.35); }

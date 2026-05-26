@@ -23,8 +23,8 @@ async function handleClick() {
     uiStore.isAuthModalOpen = true
     return
   }
-  if (router.currentRoute.value.path !== '/') {
-    await router.push('/')
+  if (router.currentRoute.value.path !== '/workspace') {
+    await router.push('/workspace')
   }
   await nextTick()
   if (props.uiFlag && props.uiFlag in uiStore) {

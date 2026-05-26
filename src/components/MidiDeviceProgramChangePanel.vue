@@ -520,7 +520,7 @@ function deleteSet(id) {
 </script>
 
 <template>
-  <div class="fixed inset-x-0 top-0 bottom-10 z-[650] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+  <div class="fixed inset-x-0 top-0 bottom-20 z-[650] max-w-[920px] flex items-center justify-center m-auto p-4">
     <Transition name="performance" appear>
       <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col h-[90vh]">
 

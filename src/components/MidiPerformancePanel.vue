@@ -101,13 +101,13 @@ const activeOutputs = computed(() => {
       <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-synth-neon/30 rounded-3xl w-full max-w-4xl overflow-hidden shadow-[0_0_50px_rgba(0,255,204,0.15)] flex flex-col max-h-[90vh]'">
         
         <!-- Header -->
-        <div class="p-6 border-b border-neutral-900 flex items-center justify-between bg-synth-neon/5">
+        <div class="p-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 to-transparent">
           <div class="flex items-center gap-4">
-            <div class="p-3 bg-synth-neon/10 rounded-2xl">
+            <div class="p-1 bg-synth-neon/10 rounded-2xl">
               <Network class="w-6 h-6 text-synth-neon" />
             </div>
             <div>
-              <h2 class="text-xl font-black uppercase tracking-widest text-white">MIDI Performance Grid</h2>
+              <h2 class="text-sm font-black uppercase tracking-widest text-white">MIDI Performance Grid</h2>
               <p class="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">Source-Based Output Routing</p>
             </div>
           </div>

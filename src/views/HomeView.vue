@@ -54,7 +54,7 @@ const sections = [
 ]
 
 function enterWorkspace() {
-  router.push('/')
+  router.push('/workspace')
 }
 </script>
 
