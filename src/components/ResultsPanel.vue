@@ -31,6 +31,13 @@ const mappingStore = useMappingStore()
 const lfoStore = useLfoStore()
 const { openMenu } = useMidiContextMenu()
 
+const hasLinkedSequence = computed(() => {
+  const preset = presetStore.lastPreset
+  if (!preset) return false
+  const variant = presetStore.useAlternativeEngine ? preset.bVariant : preset.aVariant
+  return !!(variant && variant.seqLinked && variant.seqConfig)
+})
+
 const isEditingName = ref(false)
 const tempName = ref('')
 const isPanelCollapsed = computed({
@@ -61,6 +68,10 @@ onMounted(() => {
 watch(() => presetStore.lastPreset?.id, () => {
   activeCategory.value = 'FLOW'
 })
+
+function toggleSequencerPlay() {
+  window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: !uiStore.isSequencerPlaying } }))
+}
 
 function stopPreview() {
   _previewTimeouts.forEach(id => clearTimeout(id))
@@ -450,6 +461,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                   <span v-else-if="getVal('polyMode') === 1" class="text-orange-400">Unison</span>
                   <span v-else class="text-neutral-400">Mono</span>
                 </span>
+                <span v-if="hasLinkedSequence" class="px-1.5 py-0.5 rounded border border-violet-500/40 text-[7px] font-black uppercase text-violet-400 bg-violet-500/10 backdrop-blur-sm">SEQ</span>
               </div>
             </div>
           </div>
@@ -538,18 +550,40 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
             <!-- Sequencer -->
             <button @click="uiStore.isSequencerOpen = !uiStore.isSequencerOpen"
-              :class="['w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 shadow-lg', uiStore.isSequencerOpen ? 'bg-amber-500/20 text-amber-400 border-amber-500 shadow-amber-500/20' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500']"
+              :class="['w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 shadow-lg',
+                uiStore.isSequencerOpen
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500 shadow-amber-500/20'
+                  : hasLinkedSequence
+                    ? 'bg-violet-600/20 text-violet-400 border-violet-500 shadow-violet-500/20'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500']"
               title="Toggle Sequencer">
               <ListMusic class="w-5 h-5" />
             </button>
 
-            <!-- Play/Preview -->
-            <button @click="uiStore.isPlayingPreview ? stopPreview() : playPreview()"
-              :class="['w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 shadow-lg', uiStore.isPlayingPreview ? 'bg-synth-neon/20 text-synth-neon border-synth-neon shadow-synth-neon/30' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-synth-neon']"
-              title="Play Sequencer">
-              <Square v-if="uiStore.isPlayingPreview" class="w-5 h-5 fill-current" />
-              <Play v-else class="w-5 h-5 fill-current ml-0.5" />
-            </button>
+            <!-- Play Sequence + Auto-start flag -->
+            <div class="flex items-center">
+              <button
+                @click="toggleSequencerPlay()"
+                @contextmenu.prevent="openMenu($event, { name: 'seq_play_stop', label: 'Play Sequence' })"
+                :class="['relative w-10 h-10 rounded-l-full border-y border-l flex items-center justify-center transition-all active:scale-90 shadow-lg',
+                  uiStore.isSequencerPlaying
+                    ? 'bg-synth-neon/20 text-synth-neon border-synth-neon shadow-synth-neon/30'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-synth-neon']"
+                :title="uiStore.isSequencerPlaying ? 'Stop Sequence' : 'Play Sequence'">
+                <span v-if="mappingStore.learningParamName === 'seq_play_stop'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
+                <Square v-if="uiStore.isSequencerPlaying" class="w-5 h-5 fill-current" />
+                <Play v-else class="w-5 h-5 fill-current ml-0.5" />
+              </button>
+              <button
+                @click="uiStore.seqAutoStart = !uiStore.seqAutoStart"
+                :class="['px-1.5 h-10 rounded-r-full border text-[8px] font-black uppercase tracking-widest transition-all',
+                  uiStore.seqAutoStart
+                    ? 'bg-violet-600/20 text-violet-400 border-violet-500 shadow-violet-500/20'
+                    : 'bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400']"
+                title="Toggle auto-start sequencer on note-on">
+                AUTO
+              </button>
+            </div>
           </div>
         </div>
 

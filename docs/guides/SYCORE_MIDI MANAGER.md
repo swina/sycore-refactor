@@ -1,4 +1,4 @@
-# UnifiedMidiManager — Technical & Commercial Reference
+# MIDI MANAGER — Technical & Commercial Reference
 
 **Component:** `src/components/UnifiedMidiManager.vue`  
 **Module:** SY.CORE — Unified MIDI Control Center  

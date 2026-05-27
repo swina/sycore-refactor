@@ -186,9 +186,7 @@ export const usePresetStore = defineStore('preset', () => {
         subdivision: useArpStore().arpSubdivision,
         hold: useArpStore().arpHold
       },
-      seqConfig: useUiStore().seqCurrentConfig || null,
-      seqConfig2: useUiStore().seqCurrentConfig2 || null,
-      seqActiveSlot: useUiStore().seqActiveSlot || 1,
+      // seqConfig is NOT auto-captured — only set explicitly via Link button in StepSequencer
       lfo1Config: { ...useLfoStore().lfo1, lastSentValue: null },
       lfo2Config: { ...useLfoStore().lfo2, lastSentValue: null },
       velocityConfig: {
@@ -206,9 +204,6 @@ export const usePresetStore = defineStore('preset', () => {
       data: data || {},
       patchNotes: patchNotes || '',
       arpConfig: meta.arpConfig,
-      seqConfig: meta.seqConfig,
-      seqConfig2: meta.seqConfig2,
-      seqActiveSlot: meta.seqActiveSlot,
       velocityConfig: meta.velocityConfig,
       lfo1Config: meta.lfo1Config,
       lfo2Config: meta.lfo2Config
@@ -255,20 +250,18 @@ export const usePresetStore = defineStore('preset', () => {
       mappingStore.velocityConfig.active = false
     }
 
-    // Sequencer
+    // Sequencer — only restore if explicitly linked
     const uiStore = useUiStore()
-    if (variant.seqConfig) {
+    if (variant.seqLinked && variant.seqConfig) {
       uiStore.seqCurrentConfig = JSON.parse(JSON.stringify(variant.seqConfig))
     } else {
       uiStore.seqCurrentConfig = null
     }
-
-    if (variant.seqConfig2) {
+    if (variant.seqLinked && variant.seqConfig2) {
       uiStore.seqCurrentConfig2 = JSON.parse(JSON.stringify(variant.seqConfig2))
     } else {
       uiStore.seqCurrentConfig2 = null
     }
-
     uiStore.seqActiveSlot = variant.seqActiveSlot || 1
   }
 

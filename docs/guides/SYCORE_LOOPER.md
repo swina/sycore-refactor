@@ -1,6 +1,8 @@
-# SY.CORE Audio Looper: Technical & Performance Overview
+# SY.CORE Audio Looper: Technical & Performance Overview (Beta)
 
 The SY.CORE Audio Looper is a high-fidelity, sample-accurate performance tool designed for seamless integration between live instrumental performance and digital production. 
+
+***This tool is still under development to fix stability issues***
 
 ## 🎸 For the Musician (Performance Features)
 

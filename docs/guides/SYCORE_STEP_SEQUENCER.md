@@ -1,4 +1,4 @@
-# SY.CORE // Step Sequencer Pro
+# SY.CORE // Step Sequencer 
 
 The **Step Sequencer Pro** is a powerful algorithmic composition and MIDI sequencing engine integrated into SY.CORE. It allows you to create complex patterns, chord progressions, and automations quickly and intuitively, with a particular focus on live performance and creative generation.
 
@@ -12,7 +12,6 @@ At the heart of the sequencer is its style- and scale-based generation engine, w
   - *Groove*: Funk, HipHop, Latin, Reggae.
   - *Atmospheric*: Jazz, Ambient.
 - **Scale & Key Engine**: Forces all generated notes within a selected musical scale (Major, Minor, Pentatonic, Dorian, Phrygian, Lydian, Mixolydian, etc.) and in a specific key.
-- **Chord Progression Generator**: When enabled, the sequencer automatically generates harmonic progressions consistent with the selected style, managing polyphony (up to 4 voices).
 
 ## 2. Sequencer Architecture
 - **16th Note Resolution**: Each pattern can extend up to 64 steps.

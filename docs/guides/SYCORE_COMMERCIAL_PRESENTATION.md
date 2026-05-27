@@ -1,5 +1,5 @@
 # SY.CORE
-### The Professional Performance & Sound Design Ecosystem for Electronic Musicians
+## Performance Tools & Sound Design Ecosystem for Electronic Musicians
 
 > *Where algorithmic intelligence meets hardware mastery. Zero latency. Offline-first. Stage-ready.*
 
@@ -33,22 +33,23 @@ SY.CORE is purpose-built around the two moments that matter most:
 
 ---
 
-## Sound Design: Powered by the Adaptive Sound Engine
+# Sound Design 
+### Powered by the Adaptive Sound Engine
 
-### The Heart of Innovation
+## The Heart of Innovation
 
 The **Adaptive Sound Engine** is SY.CORE's proprietary synthesis orchestration algorithm — purpose-built for the **Roland S-1** (with more hardware targets on the roadmap).
 
 This isn't a preset browser. It's a **generative intelligence layer** that computes mathematically balanced, stage-ready sounds on demand.
 
-#### What It Does
+### What It Does
 
 - **Generative Sound Creation** — Instantly synthesize Pads, Leads, Basses, Experimental, etc. (up to 18 different types) sounds with unique flavour variations. Every result is distinct, balanced, and performance-ready.
 - **Auto A/B Variations** — Every generated sound ships with an automatic variation for instant comparison.
 - **Sound Parameters Visualizer** — Understand your sound at a glance. Graphical visualizers for Flow, LFO, Oscillator, Filter, EFX, and more.
 - **Full Data Portability** — Export and import your custom sound banks. Your library travels with you.
 
-#### Extend Your Hardware
+### Extend Your Hardware
 
 SY.CORE doesn't just send notes — it **talks to your gear**:
 
@@ -60,9 +61,9 @@ SY.CORE doesn't just send notes — it **talks to your gear**:
 
 ---
 
-## Performance: Professional Orchestration at Your Fingertips
+# Performance: Professional Orchestration at Your Fingertips
 
-### MIDI — Granular, Stable, Intuitive
+## MIDI — Granular, Stable, Intuitive
 
 SY.CORE's MIDI engine handles setups from a single synth to complex multi-device rigs:
 
@@ -77,23 +78,33 @@ SY.CORE's MIDI engine handles setups from a single synth to complex multi-device
 | **MIDI Monitor** | Live MIDI traffic inspector for fast debugging |
 | **Config Export/Import** | Save and restore your entire MIDI setup |
 
-#### MIDI Capture — Advanced Piano Roll
+### MIDI Capture — Advanced Piano Roll
 Capture live input with a full Piano Roll editor. Edit notes, quantize, export as MIDI files, or send directly to the Step Sequencer.
 
-#### MIDI Step Sequencer
+### MIDI Step Sequencer
 Build advanced sequences using a generator based on key, octave, note ranges, and scale. Attach up to **2 parameters per step**, randomize values, and associate sequences directly to sounds. Up to 2 sequences per sound.
 
-#### Device Program Change Manager
+### Device Program Change Manager
 Manage presets across hardware devices via Program Change messages. Supported auto-populated preset libraries:
-- **Arturia MicroFreak** (firmware 5.0)
-- **Yamaha SEQTRACK** (Multitimbral)
+- **Arturia MicroFreak** (firmware 5.0): import .mfprojz presets automatically converted to Presets list (filter by category available)
+- **Yamaha SEQTRACK** (Multitimbral with MIDI Channel selector)
 
-#### Soundsets
-Bundle device presets into Soundsets and load your entire multi-device configuration in a single click.
+### Performance Sets
+Bundle device presets into Performance Sets (Soundsets) and load your entire multi-device configuration in a single click.
 
 ---
 
-### Live Performance Controls
+# Performance Tools
+
+## Live Timeline
+
+A visual arrangement timeline for live performance. 
+It sequences backing track segments, fires MIDI/UI events at specific time positions (markers), and controls MIDI transport sync independently of the
+Backing Track Player's own sync logic.
+
+
+## Live Performance 
+A virtual surface controller completely mappable to external controllers with a practical MIDI Learn function.
 
 | Control | Description |
 |---|---|
@@ -101,15 +112,19 @@ Bundle device presets into Soundsets and load your entire multi-device configura
 | **16 Track Pads** | Instant playlist track selection during live performance |
 | **Volume Mixer** | Per-device MIDI CC mixer for real-time level control (device-dependent) |
 
+
+## Looper *(Experimental)*
+An 8-track looper with autosync and autolimiting — built for the stage.
+
 ---
 
-### Audio Tools
+# Audio Tools
 
-#### Backing Tracks Player
+### Backing Tracks Player
 - Build and manage a library of mp3, ogg, and wav backing tracks
 - Full playlist engine: **autoplay, loop, crossfade, tempo sync, clock sync**
 
-#### Audio Capture
+### Audio Capture
 - Capture from any supported audio interface
 - Normalize with Gain/Gate controls
 - Crop audio with precise start/end markers
@@ -117,14 +132,10 @@ Bundle device presets into Soundsets and load your entire multi-device configura
 - Send captured clips directly to the Audio Looper / Backing Tracks Playlist
 - Import/Export in mp3 and wav formats
 
-#### Looper *(Experimental)*
-An 8-track looper with autosync and autolimiting — built for the stage.
 
----
+# Platform Architecture
 
-## Platform Architecture
-
-### Why Web-Native?
+## Why Web-Native?
 
 SY.CORE runs on the latest evolution of browser-based music technology — **Web MIDI API** and **Web Audio API** — delivering a lightweight, driver-free alternative to traditional desktop software.
 
@@ -133,7 +144,7 @@ SY.CORE runs on the latest evolution of browser-based music technology — **Web
 - **Driverless Hardware Communication** — Direct integration with Windows MIDI Services and CoreMIDI. No driver conflicts, ever.
 - **Universal via PWA** — Full-screen, system-integrated experience on Windows, macOS, Linux, and Android.
 
-### Local-First Reliability
+## Local-First Reliability
 
 Stage environments are unpredictable. SY.CORE's **Local-First Architecture** (IndexedDB + Service Workers) means your performance never depends on a network connection.
 
@@ -143,7 +154,7 @@ Stage environments are unpredictable. SY.CORE's **Local-First Architecture** (In
 
 ---
 
-## Technology Stack
+# Technology Stack
 
 | Technology | Role | Advantage |
 |:---|:---|:---|
@@ -154,7 +165,7 @@ Stage environments are unpredictable. SY.CORE's **Local-First Architecture** (In
 
 ---
 
-## Who SY.CORE Is For
+# Who SY.CORE Is For
 
 **Live Electronic Artists**
 Musicians who need a rock-solid, integrated alternative to fragile DAW setups on stage.

@@ -142,7 +142,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Quick Dropdown / Matrix (Optional Expansion) -->
-    <div class="hidden group-hover:flex items-center gap-1 pl-2 border-l border-neutral-800 animate-in fade-in slide-in-from-left-2 duration-300">
+    <!-- <div class="hidden group-hover:flex items-center gap-1 pl-2 border-l border-neutral-800 animate-in fade-in slide-in-from-left-2 duration-300">
       <button
         v-for="ch in [1, 2, 3, 4, 5, 6, 7,8,9,10,11,12,13,14,15,16]" :key="ch"
         @click="setChannel(ch)"
@@ -153,17 +153,17 @@ onUnmounted(() => {
         :title="`Switch to Ch ${ch}`"
       >
         {{ ch }}
-      </button>
+      </button> -->
 
       <!-- MIDI Learn hint -->
-      <button
+      <!-- <button
         @click.stop="openContextMenu($event)"
         class="ml-1 w-4 h-4 rounded-sm flex items-center justify-center text-neutral-700 hover:text-orange-400 hover:bg-orange-500/10 transition-all"
         title="MIDI Learn (right-click for options)"
       >
         <Radio class="w-2.5 h-2.5" />
       </button>
-    </div>
+    </div> -->
   </div>
 
   <!-- Context Menu (Teleported to body) -->

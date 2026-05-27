@@ -6,6 +6,7 @@ import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
@@ -38,6 +39,7 @@ const midiStore = useMidiStore()
 const presetStore = usePresetStore()
 const authStore = useAuthStore()
 const syncStore = useSyncStore()
+const uiStore = useUiStore()
 
 const showSaveLibraryModal = ref(false)
 const showLoadLibraryModal = ref(false)
@@ -1038,7 +1040,20 @@ onMounted(() => {
     if (window.SY_LOG) {
       window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, isOpen=${props.isOpen}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
     }
-    if (!props.isOpen) return
+    // When the panel is closed: only handle auto-start and transposition for linked sequences
+    if (!props.isOpen) {
+      if (hasSavedSeqConfig.value && !isRecording.value && isMidiDeviceAllowed(chan, inputId)) {
+        if (type === 'on' && velocity > 0) {
+          if (!isPlaying.value && uiStore.seqAutoStart) {
+            dynamicMidiTranspose.value = note - sequenceRootMidi.value
+            isPlaying.value = true
+          } else if (isPlaying.value) {
+            dynamicMidiTranspose.value = note - sequenceRootMidi.value
+          }
+        }
+      }
+      return
+    }
 
     // MIDI Performance routing matrix checks
     if (!isMidiDeviceAllowed(chan, inputId)) {
@@ -1047,7 +1062,7 @@ onMounted(() => {
       }
       return
     }
-    
+
     // Live overdub recording during PLAY + RECORD mode
     if (isPlaying.value && isRecording.value) {
       const isNoteOn = (type === 'on' && velocity > 0)
@@ -1102,7 +1117,16 @@ onMounted(() => {
       }
       return
     }
-    
+
+    // Auto-start for linked sequences when panel is open but sequencer not yet running
+    if (!isPlaying.value && hasSavedSeqConfig.value && !isRecording.value && uiStore.seqAutoStart) {
+      if (type === 'on' && velocity > 0) {
+        dynamicMidiTranspose.value = note - sequenceRootMidi.value
+        isPlaying.value = true
+      }
+      return
+    }
+
     // Step modification is strictly enabled only when in RECORD mode
     if (!isRecording.value) return
 
@@ -1222,6 +1246,7 @@ onMounted(() => {
 
 watch(isPlaying, (playing) => {
   midiService.isSequencerPlaying = playing
+  uiStore.isSequencerPlaying = playing
 
   if (syncTrack.value) {
     if (skipBackingTrackSync.value) {
@@ -1424,10 +1449,43 @@ const hasSavedSeqConfig = computed(() => {
   if (presetStore.lastPreset) {
     const isAlt = presetStore.useAlternativeEngine
     const variant = isAlt ? presetStore.lastPreset.bVariant : presetStore.lastPreset.aVariant
-    return !!(variant && variant.seqConfig)
+    return !!(variant && variant.seqLinked && variant.seqConfig)
   }
-  return !!props.initialConfig
+  return false
 })
+
+function linkSequence() {
+  const preset = presetStore.lastPreset
+  if (!preset) return
+  const isAlt = presetStore.useAlternativeEngine
+  const variant = isAlt ? preset.bVariant : preset.aVariant
+  if (!variant) return
+  variant.seqConfig = JSON.parse(JSON.stringify({
+    numSteps: numSteps.value,
+    steps: steps.value,
+    param1CC: param1CC.value,
+    param2CC: param2CC.value,
+    param1Variation: param1Variation.value,
+    param2Variation: param2Variation.value,
+    selectedOctave: selectedOctave.value,
+    octaveRange: octaveRange.value,
+    transpose: props.globalTranspose || 0,
+    selectedKey: selectedKey.value,
+    selectedScale: selectedScale.value,
+    selectedStyle: selectedStyle.value,
+  }))
+  variant.seqLinked = true
+}
+
+function unlinkSequence() {
+  const preset = presetStore.lastPreset
+  if (!preset) return
+  const isAlt = presetStore.useAlternativeEngine
+  const variant = isAlt ? preset.bVariant : preset.aVariant
+  if (!variant) return
+  variant.seqConfig = null
+  variant.seqLinked = false
+}
 
 function handleReload() {
   showReloadConfirm.value = true
@@ -1736,18 +1794,31 @@ function handleClear() {
         </div>
 
         <!-- Toolbar Actions -->
-        <div class="flex items-center gap-2 ml-auto">
-          <button 
+        <div class="flex items-center gap-1 ml-auto">
+          <!-- Link / Unlink sequence to current sound -->
+          <button
+            v-if="presetStore.lastPreset"
+            @click="hasSavedSeqConfig ? unlinkSequence() : linkSequence()"
+            :class="['h-8 px-2 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm flex items-center gap-1.5',
+              hasSavedSeqConfig
+                ? 'bg-violet-600/20 text-violet-400 border-violet-500 hover:bg-violet-600/30'
+                : 'bg-black text-neutral-500 border-neutral-800 hover:border-violet-500/50 hover:text-violet-400']"
+            :title="hasSavedSeqConfig ? 'Unlink sequence from this sound' : 'Link current sequence to this sound'"
+          >
+            {{ hasSavedSeqConfig ? 'UNLINK' : 'LINK' }}
+          </button>
+
+          <button
             v-if="hasSavedSeqConfig"
             @click="handleReload"
-            class="h-9 px-4 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm bg-black text-neutral-500 border-neutral-800 hover:border-synth-neon/50 hover:text-synth-neon flex items-center gap-1.5"
+            class="h-8 px-2 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm bg-black text-neutral-500 border-neutral-800 hover:border-synth-neon/50 hover:text-synth-neon flex items-center gap-1.5"
           >
             <RotateCcw class="w-3.5 h-3.5" />
             RELOAD
           </button>
           
           <button @click="handleClear"
-            :class="['h-9 px-4 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm', confirmClear ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-neutral-500 border-neutral-800 hover:border-neutral-700']">
+            :class="['h-8 px-2 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm', confirmClear ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-neutral-500 border-neutral-800 hover:border-neutral-700']">
             {{ confirmClear ? 'SURE?' : 'CLEAR' }}
           </button>
         </div>

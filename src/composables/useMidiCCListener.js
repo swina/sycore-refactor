@@ -231,6 +231,11 @@ export function useMidiCCListener() {
       presetStore.selectEngine(useB ? 'B' : 'A')
       return
     }
+    if (fieldName === 'seq_play_stop') {
+      const shouldPlay = fromNote ? !uiStore.isSequencerPlaying : on
+      window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: shouldPlay } }))
+      return
+    }
     if (fieldName === 'ui_panel_collapse') {
       uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on
       return

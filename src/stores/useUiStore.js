@@ -59,6 +59,8 @@ export const useUiStore = defineStore('ui', () => {
   const isFullscreen       = ref(false)
   const isPlayingPreview   = ref(false)
   const isPlayingBacking   = ref(false)
+  const isSequencerPlaying = ref(false)
+  const seqAutoStart       = ref(localStorage.getItem('SYCORE_SEQ_AUTOSTART') !== 'false')
 
   const isAudioPlaying     = computed(() => isPlayingPreview.value || isPlayingBacking.value)
   const lastPlaylistName   = ref(localStorage.getItem('S1_LAST_PLAYLIST') || '')
@@ -202,6 +204,10 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem('S1_LAST_PLAYLIST', v)
   })
 
+  watch(seqAutoStart, (v) => {
+    localStorage.setItem('SYCORE_SEQ_AUTOSTART', String(v))
+  })
+
   return {
     isAppInitializing,
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen,
@@ -216,8 +222,8 @@ export const useUiStore = defineStore('ui', () => {
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,
-    isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen, 
-    isPlayingPreview, isPlayingBacking, isAudioPlaying, lastPlaylistName,
+    isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
+    isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqActiveSlot,
     globalModCC, globalTranspose,
     focusedModalKey, openModalKeys, cycleFocusedModal,
