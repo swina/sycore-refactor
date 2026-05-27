@@ -16,6 +16,12 @@ export const useSyncStore = defineStore('sync', () => {
   const syncLooperToBackingTrack = ref(localStorage.getItem('S1_SYNC_LOOPER_TRACK') === 'true')
   const syncLooperToAudioCapture = ref(localStorage.getItem('S1_SYNC_LOOPER_CAPTURE') === 'true')
 
+  // Live Timeline source → targets
+  const syncTimelineToMidi          = ref(localStorage.getItem('S1_SYNC_TIMELINE_MIDI')    === 'true')
+  const syncTimelineToSequencer     = ref(localStorage.getItem('S1_SYNC_TIMELINE_SEQ')    === 'true')
+  const syncTimelineToBackingTrack  = ref(localStorage.getItem('S1_SYNC_TIMELINE_TRACK')  === 'true')
+  const syncTimelineToAudioCapture  = ref(localStorage.getItem('S1_SYNC_TIMELINE_CAPTURE') === 'true')
+
   // Audio Capture source → targets
   const syncAudioCaptureToMidi = ref(localStorage.getItem('S1_SYNC_CAPTURE_MIDI') === 'true')
   const syncAudioCaptureToSequencer = ref(localStorage.getItem('S1_SYNC_CAPTURE_SEQ') === 'true')
@@ -30,6 +36,10 @@ export const useSyncStore = defineStore('sync', () => {
   watch(syncLooperToSequencer, v => localStorage.setItem('S1_SYNC_LOOPER_SEQ', v ? 'true' : 'false'))
   watch(syncLooperToBackingTrack, v => localStorage.setItem('S1_SYNC_LOOPER_TRACK', v ? 'true' : 'false'))
   watch(syncLooperToAudioCapture, v => localStorage.setItem('S1_SYNC_LOOPER_CAPTURE', v ? 'true' : 'false'))
+  watch(syncTimelineToMidi,          v => localStorage.setItem('S1_SYNC_TIMELINE_MIDI',    v ? 'true' : 'false'))
+  watch(syncTimelineToSequencer,     v => localStorage.setItem('S1_SYNC_TIMELINE_SEQ',    v ? 'true' : 'false'))
+  watch(syncTimelineToBackingTrack,  v => localStorage.setItem('S1_SYNC_TIMELINE_TRACK',  v ? 'true' : 'false'))
+  watch(syncTimelineToAudioCapture,  v => localStorage.setItem('S1_SYNC_TIMELINE_CAPTURE', v ? 'true' : 'false'))
   watch(syncAudioCaptureToMidi, v => localStorage.setItem('S1_SYNC_CAPTURE_MIDI', v ? 'true' : 'false'))
   watch(syncAudioCaptureToSequencer, v => localStorage.setItem('S1_SYNC_CAPTURE_SEQ', v ? 'true' : 'false'))
   watch(syncAudioCaptureToBackingTrack, v => localStorage.setItem('S1_SYNC_CAPTURE_TRACK', v ? 'true' : 'false'))
@@ -37,6 +47,7 @@ export const useSyncStore = defineStore('sync', () => {
 
   return {
     syncTrack, syncRecordAudioCapture,
+    syncTimelineToMidi, syncTimelineToSequencer, syncTimelineToBackingTrack, syncTimelineToAudioCapture,
     syncBackingTrackToLooper, syncSequencerToLooper,
     syncLooperToMidi, syncLooperToSequencer, syncLooperToBackingTrack, syncLooperToAudioCapture,
     syncAudioCaptureToMidi, syncAudioCaptureToSequencer, syncAudioCaptureToBackingTrack, syncAudioCaptureToLooper,

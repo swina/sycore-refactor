@@ -9,6 +9,8 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useArpStore }     from '@/stores/useArpStore'
+import { useSyncStore }    from '@/stores/useSyncStore'
+import { useUiStore }      from '@/stores/useUiStore'
 import catalogIndex        from '@/data/program_change/program_change.json'
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc } from '@/lib/idb'
 import { db } from '@/lib/firebase'
@@ -28,12 +30,20 @@ const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
 const midiStore    = useMidiStore()
 const livePadStore = useLivePadStore()
 const arpStore     = useArpStore()
+const syncStore    = useSyncStore()
+const uiStore      = useUiStore()
+
+const syncTimelineToAudioCapture = computed({
+  get: () => syncStore.syncTimelineToAudioCapture,
+  set: (v) => { syncStore.syncTimelineToAudioCapture = v },
+})
 
 // ─── localStorage ──────────────────────────────────────────────────────────
 const LS_SEGS  = 'SYCORE_TIMELINE_SEGMENTS'
 const LS_MARKS = 'SYCORE_TIMELINE_MARKERS'
 const getLS = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d } catch { return d } }
 const setLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
+
 
 // ─── Data ──────────────────────────────────────────────────────────────────
 const segments = ref(getLS(LS_SEGS,  []))
@@ -303,6 +313,8 @@ function play() {
   segBounds.value.forEach((b, i) => { if (b.end <= timelinePos.value) _fired.add(`seg_${i}`) })
   // Restore transport when resuming from pause if it was playing before
   if (resumingFromPause && _lastTransportWasPlay) midiStore.sendStart()
+  if (syncStore.syncTimelineToAudioCapture)
+    window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
   _rafId = requestAnimationFrame(_tick)
 }
 
@@ -313,6 +325,8 @@ function pause() {
   isPlaying.value = false
   isPaused.value  = true
   window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
+  if (syncStore.syncTimelineToAudioCapture)
+    window.dispatchEvent(new CustomEvent('capture-stop-rec'))
   midiStore.sendStop()  // always send MIDI STOP on pause
 }
 
@@ -325,6 +339,10 @@ function stop() {
   _fired.clear()
   _lastTransportWasPlay = false  // reset — no auto-resume after a full stop
   window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
+  if (syncStore.syncTimelineToAudioCapture) {
+    window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+    uiStore.isAudioCaptureOpen = true
+  }
   midiStore.sendStop()  // always send MIDI STOP on stop
 }
 
@@ -795,86 +813,12 @@ onUnmounted(() => {
         </nav>
       </div>
 
-      <!-- Save / Load controls -->
-      <div class="flex items-center gap-1 ml-4 pointer-events-auto" @mousedown.stop>
-        <!-- Current set name chip -->
-        <div
-          class="flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900/60 border text-[9px] font-mono max-w-[120px] overflow-hidden"
-          :class="currentSetId ? 'border-synth-neon/20 text-synth-neon' : 'border-neutral-800 text-neutral-600'"
-          :title="currentSetName || 'No timeline saved'"
-        >
-          <span class="truncate">{{ currentSetName || 'Unsaved' }}</span>
-        </div>
-        <!-- Save (update) -->
-        <button
-          @click="saveUpdate"
-          :disabled="!currentSetId"
-          title="Save (update current)"
-          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90 disabled:opacity-25 disabled:cursor-not-allowed"
-        >
-          <Save class="w-3.5 h-3.5" />
-        </button>
-        <!-- Save As -->
-        <button
-          @click="openSaveAs"
-          title="Save as new timeline"
-          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
-        >
-          <FilePlus class="w-3.5 h-3.5" />
-        </button>
-        <!-- Load -->
-        <button
-          @click="showLoadSets = true; loadSets()"
-          title="Load saved timeline"
-          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
-        >
-          <FolderOpen class="w-3.5 h-3.5" />
-        </button>
-      </div>
-
+      
       <div class="flex-1" />
-
-      <!-- Transport + Info + Close (pointer-events separated from drag area) -->
-      <div class="flex items-center gap-4 pointer-events-auto" @mousedown.stop>
-        <!-- BPM -->
-        <div class="flex flex-col items-center">
-          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">BPM</span>
-          <span class="text-xs font-black text-synth-neon font-mono">{{ midiStore.currentBpm || 120 }}</span>
-        </div>
-
-        <!-- Active segment label -->
-        <div v-if="activeSegIdx >= 0" class="flex flex-col items-start max-w-[120px]">
-          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Playing</span>
-          <span class="text-[10px] font-bold text-white truncate">{{ segments[activeSegIdx]?.label }}</span>
-        </div>
-
-        <!-- Transport controls -->
-        <div class="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-xl px-2 py-1">
-          <button @click="stop" title="Stop" class="p-1.5 text-neutral-400 hover:text-white transition-colors active:scale-90">
-            <Square class="w-4 h-4" />
-          </button>
-          <button
-            @click="isPlaying ? pause() : play()"
-            :class="['p-1.5 transition-colors active:scale-90', isPlaying ? 'text-synth-neon' : 'text-neutral-400 hover:text-white']"
-            :title="isPlaying ? 'Pause' : (isPaused ? 'Resume' : 'Play')"
-          >
-            <Pause v-if="isPlaying" class="w-5 h-5" />
-            <Play  v-else class="w-5 h-5" />
-          </button>
-        </div>
-
-        <!-- Position -->
-        <div class="flex flex-col items-end">
-          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Position</span>
-          <span class="text-xs font-black text-neutral-200 font-mono">
-            {{ formatTime(timelinePos) }} / {{ formatTime(totalDuration) }}
-          </span>
-        </div>
-
-        <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors ml-2">
+      <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors ml-2">
           <X class="w-5 h-5" />
         </button>
-      </div>
+      
     </div>
 
     <!-- ── Timeline Tab ────────────────────────────────────────────────────── -->
@@ -1099,11 +1043,102 @@ onUnmounted(() => {
       <!-- Progress bar -->
       <div class="h-1 bg-neutral-900 shrink-0 relative">
         <div
-          class="absolute inset-y-0 left-0 bg-synth-neon/70 transition-none"
+          class="absolute inset-y-0 left-10 bg-synth-neon/70 transition-none"
           :style="{ width: progressPct + '%' }"
         />
       </div>
     </div>
+
+    <!--- footer -->
+    <div class="flex p-4 relative">
+      <div
+        v-if="syncTimelineToAudioCapture && isPlaying"
+        class="absolute inset-0 pointer-events-none"
+        style="background: radial-gradient(circle,rgba(251, 85, 63, 0.68) 0%, rgba(252, 70, 107, 0.49) 100%); animation: rec-pulse 2s ease-in-out infinite;"
+      />
+      
+      
+      <!-- Transport + Info + Close (pointer-events separated from drag area) -->
+      <div class="flex items-center gap-4 pointer-events-auto w-1/4" @mousedown.stop>
+        <!-- BPM -->
+        <div class="flex flex-col items-center">
+          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">BPM</span>
+          <span class="text-xs font-black text-synth-neon font-mono">{{ midiStore.currentBpm || 120 }}</span>
+        </div>
+
+        <!-- Active segment label -->
+        <div v-if="activeSegIdx >= 0" class="flex flex-col items-start max-w-[120px]">
+          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Playing</span>
+          <span class="text-[10px] font-bold text-white truncate">{{ segments[activeSegIdx]?.label }}</span>
+        </div>
+      </div>
+
+      <!-- Transport controls -->
+      <div class="flex items-center gap-4 pointer-events-auto w-1/2" @mousedown.stop>
+        <div class="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-xl px-2 py-1">
+          <button @click="stop" title="Stop" class="p-1.5 text-neutral-400 hover:text-white transition-colors active:scale-90">
+            <Square class="w-4 h-4" />
+          </button>
+          <button
+            @click="isPlaying ? pause() : play()"
+            :class="['p-1.5 transition-colors active:scale-90', isPlaying ? 'text-synth-neon' : 'text-neutral-400 hover:text-white']"
+            :title="isPlaying ? 'Pause' : (isPaused ? 'Resume' : 'Play')"
+          >
+            <Pause v-if="isPlaying" class="w-5 h-5" />
+            <Play  v-else class="w-5 h-5" />
+          </button>
+        </div>
+
+        <!-- Position -->
+        <div class="flex flex-col items-end">
+          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Position</span>
+          <span class="text-xs font-black text-neutral-200 font-mono">
+            {{ formatTime(timelinePos) }} / {{ formatTime(totalDuration) }}
+          </span>
+        </div>
+
+        <!-- <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors ml-2">
+          <X class="w-5 h-5" />
+        </button> -->
+      </div>
+
+      <!-- Save / Load controls -->
+      <div class="flex items-center gap-1 pointer-events-auto justify-end w-1/4" @mousedown.stop>
+        <!-- Current set name chip -->
+        <div
+          class="flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900/60 border text-[9px] font-mono max-w-[120px] overflow-hidden"
+          :class="currentSetId ? 'border-synth-neon/20 text-synth-neon' : 'border-neutral-800 text-neutral-600'"
+          :title="currentSetName || 'No timeline saved'"
+        >
+          <span class="truncate">{{ currentSetName || 'Unsaved' }}</span>
+        </div>
+        <!-- Save (update) -->
+        <button
+          @click="saveUpdate"
+          :disabled="!currentSetId"
+          title="Save (update current)"
+          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90 disabled:opacity-25 disabled:cursor-not-allowed"
+        >
+          <Save class="w-3.5 h-3.5" />
+        </button>
+        <!-- Save As -->
+        <button
+          @click="openSaveAs"
+          title="Save as new timeline"
+          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
+        >
+          <FilePlus class="w-3.5 h-3.5" />
+        </button>
+        <!-- Load -->
+        <button
+          @click="showLoadSets = true; loadSets()"
+          title="Load saved timeline"
+          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
+        >
+          <FolderOpen class="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div> 
 
     <!-- ── Arrange Tab ─────────────────────────────────────────────────────── -->
     <div v-if="tab === 'arrange'" class="flex-1 flex min-h-0 gap-0 overflow-hidden">

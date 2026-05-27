@@ -4,6 +4,7 @@ import { Link2, Clock, Play, Mic, Music2, Zap, ArrowRight, Layers } from 'lucide
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import LiveTimeline from '@/components/LiveTimeline.vue'
 
 const midiStore   = useMidiStore()
 const configStore = useConfigStore()
@@ -21,12 +22,37 @@ function toggle(getter, setter) {
 const COLS = [
   { id: 'midi-transport', label: 'MIDI START/STOP', icon: Zap,    desc: 'Sends 0xFA / 0xFC'       },
   { id: 'sequencer',      label: 'Step Sequencer',  icon: Play,   desc: 'Starts/stops sequencer'   },
-  { id: 'backing-track',  label: 'Backing Track',   icon: Music2, desc: 'Starts/stops backing track'},
+  { id: 'backing-track',  label: 'Backing Tracks',   icon: Music2, desc: 'Starts/stops backing track'},
+
   { id: 'audio-looper',   label: 'Audio Looper',    icon: Layers, desc: 'Starts/stops looper'      },
   { id: 'audio-capture',  label: 'Audio Capture',   icon: Mic,    desc: 'Starts/stops recording'   },
 ]
 
 const ROWS = computed(() => [
+  {
+    id: 'live-timeline',
+    label: 'Live Timeline',
+    icon: Clock,
+    cells: {
+      'midi-transport': {
+        get: () => syncStore.syncTimelineToMidi,
+        set: (v) => { syncStore.syncTimelineToMidi = v },
+      },
+      'sequencer': {
+        get: () => syncStore.syncTimelineToSequencer,
+        set: (v) => { syncStore.syncTimelineToSequencer = v },
+      },
+      'backing-track': {
+        get: () => syncStore.syncTimelineToBackingTrack,
+        set: (v) => { syncStore.syncTimelineToBackingTrack = v },
+      },
+      'audio-looper': null,
+      'audio-capture': {
+        get: () => syncStore.syncTimelineToAudioCapture,
+        set: (v) => { syncStore.syncTimelineToAudioCapture = v },
+      },
+    },
+  },
   {
     id: 'backing-track',
     label: 'Backing Track',

@@ -121,7 +121,7 @@ function goWorkspace() {
         </div>
 
         <!-- Box 1-B: bottom 50% -->
-        <div class="flex-1 rounded-xl border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden bg-home-performance">
+        <div @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden bg-home-performance">
           <div class="flex items-end w-full h-full p-4"><h1 class="text-2xl font-bold w-full text-right text-synth-cyan">Performance</h1></div>
           <!-- <div class="flex-none px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2">
             <Network class="w-3.5 h-3.5 text-synth-neon" />

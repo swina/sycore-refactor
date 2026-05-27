@@ -1,9 +1,12 @@
 <script setup>
 import { computed } from 'vue'
 import {
-  X, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2
+  X, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2, Download
 } from 'lucide-vue-next'
-import { useUiStore } from '@/stores/useUiStore'
+import { useUiStore }      from '@/stores/useUiStore'
+import { useMidiStore }    from '@/stores/useMidiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useSyncStore }    from '@/stores/useSyncStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 
 import DeviceListPanel      from './DeviceListPanel.vue'
@@ -15,7 +18,10 @@ import AppMidiMapper        from './AppMidiMapper.vue'
 import MidiSettingsPanel    from './MidiSettingsPanel.vue'
 import MidiSyncMatrix       from './MidiSyncMatrix.vue'
 
-const uiStore = useUiStore()
+const uiStore      = useUiStore()
+const midiStore    = useMidiStore()
+const mappingStore = useMappingStore()
+const syncStore    = useSyncStore()
 
 const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
   storageKey: 'SYCORE_POS_UNIFIED_MIDI',
@@ -30,8 +36,8 @@ const TABS = [
   { id: 'performance', label: 'Performance', icon: Zap     },
   { id: 'mapping',     label: 'Mapping',     icon: Radio   },
   { id: 'actions',     label: 'Actions',     icon: Sliders },
-  { id: 'monitor',     label: 'Monitor',     icon: Activity },
   { id: 'sync',        label: 'Sync',        icon: Link2   },
+  { id: 'monitor',     label: 'Monitor',     icon: Activity },
   { id: 'settings',    label: 'Settings',    icon: Settings },
 ]
 
@@ -42,6 +48,159 @@ const activeTab = computed({
 
 function close() {
   uiStore.showUnifiedMidiManager = false
+}
+
+// ── CSV report ────────────────────────────────────────────────────────────────
+function esc(v) {
+  const s = String(v ?? '')
+  return s.includes(',') || s.includes('"') || s.includes('\n')
+    ? `"${s.replace(/"/g, '""')}"`
+    : s
+}
+
+function row(...cells) { return cells.map(esc).join(',') }
+
+function section(title, headers, rows) {
+  const lines = [`\r\n${title}`, headers.join(',')]
+  for (const r of rows) lines.push(row(...r))
+  return lines.join('\r\n')
+}
+
+function downloadCsv() {
+  const parts = []
+  const ts = new Date().toISOString().replace('T', ' ').slice(0, 19)
+
+  // ── 1. General settings ──────────────────────────────────────────────────
+  parts.push(section(
+    'GENERAL SETTINGS',
+    ['Key', 'Value'],
+    [
+      ['Report Generated', ts],
+      ['BPM', midiStore.currentBpm],
+      ['MIDI Channel (out)', midiStore.midiChannel],
+      ['MIDI Input Channel', midiStore.midiInputChannel === -1 ? 'All' : midiStore.midiInputChannel],
+      ['Send MIDI Clock', midiStore.sendClock],
+      ['SysEx Enabled', midiStore.sysexEnabled],
+      ['Broadcast Mode', midiStore.broadcastMode],
+      ['Global MIDI Thru', midiStore.routingConfig?.globalThruEnabled ?? false],
+      ['Smart Latch Active', midiStore.isSmartLatchActive],
+      ['Smart Latch Max Notes', midiStore.smartLatchMaxNotes],
+      ['Smart Latch Replace Mode', midiStore.smartLatchReplaceMode],
+      ['Smart Latch Fade Time (ms)', midiStore.smartLatchFadeTime],
+    ],
+  ))
+
+  // ── 2. Device registrations ──────────────────────────────────────────────
+  const regs = Object.values(midiStore.routingConfig?.registrations ?? {})
+  parts.push(section(
+    'DEVICE REGISTRATIONS',
+    ['Device', 'In Enabled', 'In Channel', 'Out Enabled', 'Out Channel',
+     'Clock', 'Transport', 'Notes', 'CC', 'PC', 'MIDI Thru', 'Smart Latch',
+     'Receive Sync In', 'Velocity Min', 'Velocity Max'],
+    regs.map(d => [
+      d.name,
+      d.inEnabled,  d.inChannel  === -1 ? 'All' : d.inChannel,
+      d.outEnabled, d.outChannel === -1 ? 'All' : d.outChannel,
+      d.clock, d.transport, d.notes, d.cc, d.pc,
+      d.midiThru, d.smartLatch, d.receiveSyncIn,
+      d.velocityMin, d.velocityMax,
+    ]),
+  ))
+
+  // ── 3. Routing matrix ────────────────────────────────────────────────────
+  const matrix = midiStore.routingMatrix ?? {}
+  parts.push(section(
+    'ROUTING MATRIX',
+    ['Source', 'Output Devices'],
+    Object.entries(matrix).map(([src, outs]) => [src, (outs ?? []).join(' | ')]),
+  ))
+
+  // ── 4. Split config ──────────────────────────────────────────────────────
+  const sp = midiStore.splitConfig ?? {}
+  parts.push(section(
+    'KEYBOARD SPLIT',
+    ['Key', 'Value'],
+    [
+      ['Enabled', sp.enabled],
+      ['Split Note', sp.splitNote],
+      ['Low Device', sp.lowDevice],
+      ['High Device', sp.highDevice],
+      ['Low Transpose', sp.lowTranspose],
+      ['High Transpose', sp.highTranspose],
+    ],
+  ))
+
+  // ── 5. CC parameter mappings ─────────────────────────────────────────────
+  const ccMaps = Object.entries(mappingStore.midiMappings ?? {})
+  parts.push(section(
+    'CC PARAMETER MAPPINGS',
+    ['Parameter', 'Device', 'Channel', 'CC', 'NRPN MSB', 'NRPN LSB', 'Note'],
+    ccMaps.map(([key, m]) => [
+      m.paramName ?? key, m.device, m.channel, m.cc ?? '', m.nrpn?.msb ?? '', m.nrpn?.lsb ?? '', m.note ?? '',
+    ]),
+  ))
+
+  // ── 6. App action mappings ───────────────────────────────────────────────
+  const appMaps = mappingStore.appMidiMappings ?? []
+  parts.push(section(
+    'APP ACTION MAPPINGS',
+    ['Action', 'Device', 'Channel', 'CC', 'Note', 'Value Min', 'Value Max'],
+    appMaps.map(m => [
+      m.action ?? m.actionId ?? '', m.device ?? '', m.channel ?? '', m.cc ?? '', m.note ?? '',
+      m.valueMin ?? '', m.valueMax ?? '',
+    ]),
+  ))
+
+  // ── 7. Velocity modulation ───────────────────────────────────────────────
+  const vc = mappingStore.velocityConfig ?? {}
+  parts.push(section(
+    'VELOCITY MODULATION',
+    ['Key', 'Value'],
+    [
+      ['Active', vc.active],
+      ['Target Parameter', vc.targetParameter],
+      ['Amount', vc.amount],
+      ['Curve', vc.curve],
+    ],
+  ))
+
+  // ── 8. Sync matrix ───────────────────────────────────────────────────────
+  parts.push(section(
+    'SYNC MATRIX',
+    ['Source', 'Target', 'Enabled'],
+    [
+      ['Live Timeline',  'MIDI Transport',  syncStore.syncTimelineToMidi],
+      ['Live Timeline',  'Step Sequencer',  syncStore.syncTimelineToSequencer],
+      ['Live Timeline',  'Backing Track',   syncStore.syncTimelineToBackingTrack],
+      ['Live Timeline',  'Audio Capture',   syncStore.syncTimelineToAudioCapture],
+      ['Backing Track',  'MIDI Transport',  midiStore.syncMidiTransport],
+      ['Backing Track',  'Step Sequencer',  syncStore.syncTrack],
+      ['Backing Track',  'Audio Looper',    syncStore.syncBackingTrackToLooper],
+      ['Backing Track',  'Audio Capture',   syncStore.syncRecordAudioCapture],
+      ['Step Sequencer', 'MIDI Transport',  midiStore.syncSequencerTransport],
+      ['Step Sequencer', 'Backing Track',   syncStore.syncTrack],
+      ['Step Sequencer', 'Audio Looper',    syncStore.syncSequencerToLooper],
+      ['Audio Looper',   'MIDI Transport',  syncStore.syncLooperToMidi],
+      ['Audio Looper',   'Step Sequencer',  syncStore.syncLooperToSequencer],
+      ['Audio Looper',   'Backing Track',   syncStore.syncLooperToBackingTrack],
+      ['Audio Looper',   'Audio Capture',   syncStore.syncLooperToAudioCapture],
+      ['Audio Capture',  'MIDI Transport',  syncStore.syncAudioCaptureToMidi],
+      ['Audio Capture',  'Step Sequencer',  syncStore.syncAudioCaptureToSequencer],
+      ['Audio Capture',  'Backing Track',   syncStore.syncAudioCaptureToBackingTrack],
+      ['Audio Capture',  'Audio Looper',    syncStore.syncAudioCaptureToLooper],
+    ],
+  ))
+
+  const blob = new Blob([parts.join('')], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = Object.assign(document.createElement('a'), {
+    href: url,
+    download: `midi-config-${ts.replace(/[: ]/g, '-')}.csv`,
+  })
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -67,7 +226,7 @@ function close() {
               :key="tab.id"
               @click="activeTab = tab.id"
               :class="[
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors',
+                'flex items-center gap-1.5 px-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors',
                 activeTab === tab.id
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                   : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/60'
@@ -78,12 +237,20 @@ function close() {
             </button>
           </div>
 
-          <button @click="close"
-            class="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors shrink-0"
-            title="Close"
-          >
-            <X class="w-4 h-4" />
-          </button>
+          <div class="flex items-center gap-1 shrink-0">
+            <button @click="downloadCsv"
+              class="p-1.5 rounded-lg text-neutral-500 hover:text-cyan-400 hover:bg-neutral-800 transition-colors"
+              title="Download MIDI config report (CSV)"
+            >
+              <Download class="w-4 h-4" />
+            </button>
+            <button @click="close"
+              class="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
+              title="Close"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <!-- ── Tab content ─────────────────────────────────────────────────── -->
