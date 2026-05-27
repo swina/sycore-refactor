@@ -529,7 +529,7 @@ function deleteSet(id) {
 </script>
 
 <template>
-  <div>
+  <div class="overflow-hidden">
     <Transition name="performance" appear>
       <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle">
 

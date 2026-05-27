@@ -35,7 +35,7 @@ function goWorkspace() {
     <!-- Top bar -->
     <div class="flex-none flex items-center justify-between px-5 py-3 border-b border-neutral-900 bg-black/60">
       <div class="flex items-center gap-3">
-        <span class="text-synth-neon font-mono font-black text-xl uppercase drop-shadow-[0_0_8px_rgba(0,163,112,0.5)]">
+        <span class="text-synth-neon font-mono font-black text-[26px] uppercase drop-shadow-[0_0_8px_rgba(0,163,112,0.5)]">
           <span class="text-white">{{ configStore.appName.split('.')[0] }}.</span><span class="text-synth-neon">{{ configStore.appName.split('.')[1] }}</span>
         </span>
         <span class="text-neutral-600 font-mono text-[10px] uppercase tracking-widest hidden md:block">
@@ -52,16 +52,16 @@ function goWorkspace() {
         </div>
         <!-- Presentation Link (Not logged in) -->
       
-        <button
+        <!-- <button
           v-if="authStore.user"
           @click="goWorkspace"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-synth-neon text-black font-black uppercase tracking-[0.2em] text-[10px] hover:bg-white active:scale-95 transition-all shadow-[0_0_16px_rgba(0,163,112,0.3)]"
         >
           <Play class="w-3 h-3 fill-current" />
           Workspace
-        </button>
+        </button> -->
         <button
-          v-else
+          v-if="!authStore.user"
           @click="uiStore.isAuthModalOpen = true"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-synth-neon text-black font-black uppercase tracking-[0.2em] text-[10px] hover:bg-white active:scale-95 transition-all"
         >

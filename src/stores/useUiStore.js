@@ -53,7 +53,7 @@ export const useUiStore = defineStore('ui', () => {
   const midiActionsSelectedDevice = ref('')
 
   // UI state
-  const isPanelCollapsed   = ref(false)
+  const isPanelCollapsed   = ref(true)
   const showFavoritesOnly  = ref(false)
   const toolbarIconSize    = ref('md')   // 'sm' | 'md' | 'lg'
   const isFullscreen       = ref(false)

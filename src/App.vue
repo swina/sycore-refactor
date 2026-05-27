@@ -19,7 +19,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="tooSmall" class="min-viewport-overlay">
+  <div v-if="tooSmall" class="min-viewport-overlay overflow-hidden">
     <h1>SY.CORE</h1>
     <p>Minimum viewport size required: <strong>1024 &times; 768</strong> pixels.</p>
     <p style="margin-top:0.5rem;font-size:0.65rem;color:#525252">

@@ -16,7 +16,7 @@ Tired of menu-diving? Craving total control? SY.CORE is your dream come true.
 
 Your audience wants to see what the S-1 can *really* do. SY.CORE is the ultimate tool for creating next-level content.
 
-*   **Create Stunning Demos:** Use the built-in **Audio Visualizer** and **Audio Capture** to make your videos more engaging and professional, showing the sound in motion.
+*   **Create Stunning Demos:** Use the built-in **Midi Capture** and **Audio Capture** to make your videos more engaging and professional, showing the sound in motion.
 *   **Endless Content, Zero Effort:** Use the **Local Adaptive Sound Engine** to create a "100 New Patches for the S-1" video in minutes. The powerful **64-step sequencer** with parameter locks lets you build incredibly complex, evolving patterns that will showcase the synth's full rhythmic capabilities.
 *   **Stay Organized:** Manage entire banks of sounds for your demos with easy **Import/Export** functionality. Quickly find the perfect patch for your next segment with history and favorites.
 
@@ -25,8 +25,8 @@ Your audience wants to see what the S-1 can *really* do. SY.CORE is the ultimate
 Looking for the perfect centerpiece for your hardware-only setup? SY.CORE was built for you.
 
 *   **Truly Dawless:** SY.CORE is **offline-first** and runs in a browser, giving you the power of a DAW without the computer. It's the missing link between your controller and your synth.
-*   **The Brain of Your Jam:** Build entire tracks with the powerful **Step Sequencer** and a fully-featured **Arpeggiator**. Perform alongside your own loops with the **Backing Track Player**.
-*   **Command Central:** A dedicated **Live Set Mode** puts your sounds and sequences at your fingertips for performance. The experimental **MIDI Hub/Thru** feature lets you route and filter signals from other gear, making SY.CORE the nerve center of your entire rig.
+*   **The Brain of Your Jam:** Build entire tracks with the powerful **Step Sequencer** and a fully-featured **Arpeggiator**. Perform alongside your own loops with the **Backing Track Player** and the **Live Timeline** to manage audio/midi automations.
+*   **Command Central:** A dedicated **Live Performance** puts your sounds and sequences at your fingertips for performance. The experimental **MIDI Hub/Thru** feature lets you route and filter signals from other gear, making SY.CORE the nerve center of your entire rig.
 
 ---
 

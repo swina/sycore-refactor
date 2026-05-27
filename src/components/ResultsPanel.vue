@@ -686,11 +686,17 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <!-- CATEGORY TABS -->
             <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-1 min-w-0">
               <!---@click="isPanelCollapsed = !isPanelCollapsed"-->
-              <button
+              <button v-if="isPanelCollapsed"
                 @click="isPanelCollapsed = !isPanelCollapsed"
-                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Hide Controls':'Show Controls'"
+                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Generate':'Show Controls'"
               >
                 <SlidersHorizontal class="w-3 h-3" />
+              </button>
+              <button v-if="!isPanelCollapsed"
+                @click="isPanelCollapsed = !isPanelCollapsed"
+                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Generate':'Show Controls'"
+              >
+                <Zap class="w-3 h-3" />
               </button>
               <button
                 @click="activeCategory = null"

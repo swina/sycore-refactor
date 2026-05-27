@@ -11,13 +11,14 @@ Hey fellow Aira enthusiasts,
 
   🚀 Key Features for S-1 Owners:
 
-  - Adaptive Sound Engine: Uses logic-based synthesis theory (not just random values) to generate unique, stage-ready Pads, Leads, and Basses instantly.
+  - Adaptive Sound Engine: Uses logic-based synthesis theory (not just random values) to generate unique, stage-ready sounds instantly.
   - Bi-directional Feedback: 1:1 reflection of your hardware state. Tweak a knob on your S-1, and it moves in the UI. Change a parameter in the app, and the S-1 reacts instantly.
   - Infinite sounds and variation of sounds for a specific sound organized by category/type/flavour. (This means that you can generate infinite new sounds and recall immediately without destroying your hardware patterns) 
   - Professional Live Suite:
-    - Live Pad Grid: Instant recall of complex multi-device configurations.
+    - Live Performance: Instant recall of complex multi-device configurations.
+    - Live Timeline: to orchestrate audio and midi events.
     - Advanced Step Sequencer: Precision pattern creation with per-step MIDI routing.
-    - 8-Track Audio Looper & Backing Track Pro: Gapless playback with automatic crossfading.
+    - Backing Tracks Player: Gapless playback with automatic crossfading.
     - Smart Latch: An intelligent generative Note Hold engine with circular FIFO buffering.
     - Real-Time Visualizer: Professional spectral analysis for your live sets.
 
@@ -41,4 +42,4 @@ Hey fellow Aira enthusiasts,
 
   SY.CORE: Made with Precision & Neural Magic.
 
-SY.CORE PRESENTATION:  https://notebooklm.google.com/notebook/ced1f1a6-7469-45d1-a545-a605e44fd78c/artifact/42dbeb5f-feb2-4752-9ee0-ca7c4fc616af?utm_source=nlm_web_share&utm_medium=google_oo&utm_campaign=art_share_1&utm_content=&utm_smc=nlm_web_share_google_oo_art_share_1_
+SY.CORE PRESENTATION: https://notebooklm.google.com/notebook/0e97fab2-3fe2-43d2-b313-b98ec8e64465/artifact/8a16fddc-ee9e-4360-ad98-846509915dc9?utm_source=nlm_web_share&utm_medium=google_oo&utm_campaign=art_share_1&utm_content=&utm_smc=nlm_web_share_google_oo_art_share_1_ 
