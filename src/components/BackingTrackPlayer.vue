@@ -7,6 +7,7 @@ import {
   Minimize2, Maximize2
 } from 'lucide-vue-next'
 import { useDraggable } from '@/composables/useDraggable'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import {
   collection, onSnapshot, query, orderBy, addDoc,
   serverTimestamp, deleteDoc, doc, updateDoc, deleteField
@@ -89,11 +90,14 @@ const { x: barX, y: barY, startDrag: startBarDrag } = useDraggable(
   'S1_BT_BAR_POS'
 )
 
-const { x: panelX, y: panelY, startDrag: startPanelDrag } = useDraggable(
-  Math.max(8, (window.innerWidth  - 600) / 2),
-  Math.max(8,  window.innerHeight - 560),
-  'S1_BT_PANEL_POS'
-)
+const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize } = useDraggableResizable({
+  storageKey: 'S1_BT_PANEL_DR',
+  initialWidth: 904,
+  initialHeight: Math.min(500, window.innerHeight - 60),
+  minWidth: 904,
+  minHeight: 280,
+  zIndex: 220,
+})
 
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -134,11 +138,15 @@ watch(isPlaying, v => { uiStore.isPlayingBacking = v }, { immediate: true })
 // ── MIDI Transport Sync Watcher ───────────────────────────────────────────────
 watch(isPlaying, (val) => {
   if (midiStore.syncMidiTransport) {
-    const isFromLivePad = triggerSource.value === 'livepad'
-    const syncEnabled = isFromLivePad 
-      ? configStore.syncMidiTransportFromLivePad 
-      : true
-    
+    // Timeline manages its own transport via markers — never auto-sync from here
+    const isFromTimeline = triggerSource.value === 'timeline'
+    const isFromLivePad  = triggerSource.value === 'livepad'
+    const syncEnabled = isFromTimeline
+      ? false
+      : isFromLivePad
+        ? configStore.syncMidiTransportFromLivePad
+        : true
+
     if (syncEnabled) {
       if (val) midiStore.sendStart()
       else midiStore.sendStop()
@@ -740,6 +748,8 @@ onMounted(() => {
     if (d.repeats) playlistRepeats.value = d.repeats
     if (d.idx === undefined) return
 
+    const source = d.source || 'livepad'
+
     const useCrossfade = d.crossfade
       && isPlaying.value
       && playlistIdx.value !== d.idx
@@ -748,7 +758,7 @@ onMounted(() => {
     if (useCrossfade) {
       const nextTrack = playlist.value[d.idx]
       if (nextTrack) {
-        triggerSource.value = 'livepad'
+        triggerSource.value = source
         const audio = getPrimary()
         const timeLeft = audio && isFinite(audio.duration)
           ? Math.max(0.5, audio.duration - audio.currentTime)
@@ -756,7 +766,7 @@ onMounted(() => {
         startCrossfade(nextTrack, d.idx, Math.min(crossfadeSec.value, timeLeft))
       }
     } else {
-      playFromPlaylist(d.idx, 'livepad')
+      playFromPlaylist(d.idx, source)
     }
   }
   const handlePrev = () => playlistPrev()
@@ -833,7 +843,7 @@ onUnmounted(() => {
           <!-- 1. Controls Bar & Info -->
           <div 
             v-show="!isMinimized"
-            class="fixed z-[700] flex flex-col items-center gap-1 pointer-events-none"
+            class="fixed z-[700] min-w-[920px] flex flex-col items-center gap-1 pointer-events-none"
             :style="{ left: barX + 'px', top: barY + 'px' }"
           >
 
@@ -1024,8 +1034,8 @@ onUnmounted(() => {
       <Transition name="panel-up">
         <div
           v-if="isOpen"
-          :style="{ left: panelX + 'px', top: panelY + 'px' }"
-          class="fixed w-[90vw] md:w-[600px] max-h-[80vh] flex flex-col bg-black/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-[0_0_50px_rgba(0,163,112,0.15)] p-4 md:p-6 z-[220]"
+          :style="panelDRStyle"
+          class="flex flex-col bg-black/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-[0_0_50px_rgba(0,163,112,0.15)] p-4 md:p-6 relative overflow-hidden"
         >
           <!-- Header -->
           <div class="flex items-center mb-4 shrink-0">
@@ -1111,10 +1121,10 @@ onUnmounted(() => {
 
 
           <!-- Tab content -->
-          <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 min-h-0 pr-2">
+          <div class="flex-1 space-y-3 min-h-0 pr-2 overflow-y-auto custom-scrollbar">
 
             <!-- ── LIBRARY ── -->
-            <div v-if="inputType === 'list'" class="flex flex-col gap-2">
+            <div v-if="inputType === 'list'" class="flex flex-col gap-2 overflow-y-auto custom-scrollbar ">
               <button v-if="isAdmin && !isAdding" @click="isAdding = true"
                 class="w-full py-2 border border-dashed border-synth-neon text-synth-neon hover:bg-synth-neon/10 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors">
                 <Plus class="w-3 h-3" /> Add Backing Track
@@ -1136,7 +1146,7 @@ onUnmounted(() => {
               </form>
 
               <div v-if="tracks.length === 0" class="text-center text-xs text-neutral-500 py-4">No tracks available.</div>
-              <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div v-else class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 overflow-y-auto custom-scrollbar  gap-2">
                 <template v-for="track in tracks" :key="track.id">
                   <!-- Edit form for this track -->
                   <div v-if="editingTrackId === track.id" @click.stop>
@@ -1268,6 +1278,17 @@ onUnmounted(() => {
               </div>
             </div>
 
+          </div>
+
+          <!-- Resize handle -->
+          <div
+            @mousedown="e => startPanelResize(e, 'se')"
+            class="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize flex items-end justify-end p-1 text-neutral-600 hover:text-synth-neon transition-colors"
+            title="Resize"
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+              <path d="M8 8H6V6H8V8ZM8 4H6V2H8V4ZM4 8H2V6H4V8Z"/>
+            </svg>
           </div>
         </div>
       </Transition>

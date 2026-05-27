@@ -66,6 +66,7 @@ import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
 import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
 import LivePerformancePad from '@/components/LivePerformancePad.vue'
+import LiveTimeline       from '@/components/LiveTimeline.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 
@@ -129,6 +130,7 @@ const toolbarButtonMap = {
   'program-change':         { state: 'isProgramChangeBrowserOpen',       icon: Music2, label: 'Program Change Browser' },
   'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,   label: 'Device Program Change' },
   'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
+  'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic, label: 'Live Timeline' },
 }
 
 function handleToolbarButtonClick(button) {
@@ -416,6 +418,17 @@ onMounted(() => {
             v-show="uiStore.isLivePerformancePadOpen"
             :isOpen="uiStore.isLivePerformancePadOpen"
             @close="uiStore.isLivePerformancePadOpen = false"
+          />
+        </Transition>
+      </div>
+
+      <!-- Live Timeline -->
+      <div :style="focusStyle('liveTimeline')">
+        <Transition name="sy-modal">
+          <LiveTimeline
+            v-if="uiStore.isLiveTimelineOpen"
+            :isOpen="uiStore.isLiveTimelineOpen"
+            @close="uiStore.isLiveTimelineOpen = false"
           />
         </Transition>
       </div>

@@ -43,7 +43,7 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
@@ -55,6 +55,7 @@ const STORES: Record<string, string | null> = {
   settings: 'id',
   backing_tracks: 'id',
   support_tickets: 'id',
+  timeline_sets: 'id',
 };
 
 let _db: IDBDatabase | null = null;

@@ -35,7 +35,10 @@ const syncStore    = useSyncStore()
 const { openMenu } = useMidiContextMenu()
 const { devices: registeredDevices } = useDeviceRegistry()
 
-const syncRecordAudioCapture = computed(() => syncStore.syncRecordAudioCapture)
+const syncRecordAudioCapture = computed({
+  get: () => syncStore.syncRecordAudioCapture,
+  set: (v) => { syncStore.syncRecordAudioCapture = v },
+})
 
 // ── localStorage ─────────────────────────────────────────────────
 const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
@@ -419,9 +422,28 @@ function _startLppMidiListener() {
   })
 }
 
+function _onTimelinePerfSet(e) {
+  const idx = e.detail?.idx
+  if (typeof idx === 'number' && idx >= 0 && idx < 16) triggerSetPad(idx)
+}
+
+function _onTimelineLoadPerfSet(e) {
+  const setId = e.detail?.setId
+  if (!setId) return
+  // Refresh sets from storage to ensure latest data
+  pcSets.value = getLS(LS_PC_SETS, [])
+  const set = pcSets.value.find(s => s.id === setId)
+  if (set) {
+    activePerfSetIdx.value = -1
+    recallSet(set)
+  }
+}
+
 onMounted(() => {
   loadState()
   window.addEventListener('player-state-sync', handleStateUpdate)
+  window.addEventListener('timeline-trigger-perf-set', _onTimelinePerfSet)
+  window.addEventListener('timeline-load-perf-set', _onTimelineLoadPerfSet)
   window.dispatchEvent(new CustomEvent('player-state-request'))
   _startLppMidiListener()
   // Reapply any mutes that were persisted from a previous session
@@ -432,6 +454,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('player-state-sync', handleStateUpdate)
+  window.removeEventListener('timeline-trigger-perf-set', _onTimelinePerfSet)
+  window.removeEventListener('timeline-load-perf-set', _onTimelineLoadPerfSet)
   if (_unsubLppMidi) _unsubLppMidi()
   // Restore all wrapped ports so mute doesn't outlive the component
   _mutedPorts.forEach(({ port, orig }) => { port.send = orig })
@@ -789,18 +813,29 @@ function formatTime(t) {
         </button>
       </div>
       <div class="flex flex-col items-end gap-0.5 relative z-10">
-        <!-- Audio capture sync indicator -->
-        <div v-if="syncRecordAudioCapture" class="flex items-center gap-1.5 mb-0.5">
+        <!-- Audio capture sync toggle -->
+        <div
+          class="flex items-center gap-1.5 mb-0.5 cursor-pointer select-none"
+          @click="syncRecordAudioCapture = !syncRecordAudioCapture"
+        >
           <span
             :class="[
-              'w-1.5 h-1.5 rounded-full',
-              isPlaying ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse' : 'bg-red-500/30'
+              'w-1.5 h-1.5 rounded-full transition-all duration-300',
+              syncRecordAudioCapture && isPlaying ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse'
+              : syncRecordAudioCapture ? 'bg-red-500/60'
+              : 'bg-neutral-700'
             ]"
           />
-          <span :class="['text-[8px] font-mono uppercase tracking-widest', isPlaying ? 'text-red-400' : 'text-red-500/40']">REC SYNC</span>
+          <span :class="[
+            'text-[11px] font-mono uppercase tracking-widest transition-colors duration-300',
+            syncRecordAudioCapture && isPlaying ? 'text-red-400'
+            : syncRecordAudioCapture ? 'text-red-500/60 hover:text-red-400'
+            : 'text-neutral-600 hover:text-neutral-500'
+          ]">REC SYNC</span>
         </div>
-        <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">Active</span>
-        <span class="text-xs font-black text-violet-400 font-mono">{{ playlistIdx >= 0 ? `#${playlistIdx + 1}` : 'IDLE' }}</span>
+        <!-- <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest" :class="syncRecordAudioCapture?'text-red-500':''">{{ syncRecordAudioCapture ? 'ON' : 'OFF' }}  </span> -->
+
+        <span class="text-xs font-black text-violet-400 font-mono">{{ playlistIdx >= 0 ? `#${playlistIdx + 1} ${playlist[playlistIdx]?.label || ''}` : 'IDLE' }}</span>
       </div>
     </div>
 

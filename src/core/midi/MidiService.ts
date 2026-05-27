@@ -1169,17 +1169,28 @@ export class MidiService {
     }
   }
 
+  // Direct transport send — bypasses routing matrix / broadcastMode so that
+  // 0xFA / 0xFC always reach every registered output that has transport enabled.
+  private _sendTransportDirect(status: 0xFA | 0xFC) {
+    if (!this.midiAccess) return;
+    this.midiAccess.outputs.forEach(outPort => {
+      const config = this.routingConfig?.registrations[outPort.name];
+      if (!config?.outEnabled || !config?.transport) return;
+      outPort.send([status]);
+    });
+  }
+
   sendStart() {
-    this.broadcast('stop', {}, 0, MidiSource.TRANSPORT);
+    this._sendTransportDirect(0xFC); // STOP first — resets device position
     setTimeout(() => {
-      this.broadcast('start', {}, 0, MidiSource.TRANSPORT);
+      this._sendTransportDirect(0xFA); // START
       this.startClock();
     }, 10);
   }
 
   sendStop() {
     this.stopClock();
-    this.broadcast('stop', {}, 0, MidiSource.TRANSPORT);
+    this._sendTransportDirect(0xFC); // STOP
   }
 }
 

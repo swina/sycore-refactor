@@ -6,7 +6,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted } from 'vue'
-import { User, Radio, AlertTriangle, Play, Square } from 'lucide-vue-next'
+import { User, Radio, AlertTriangle, Play, Square, Clock } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import Tooltip from '@/components/Tooltip.vue'
@@ -122,6 +122,22 @@ function handleBpmChange(e) {
           class="w-8 h-8 flex items-center justify-center rounded-full bg-red-950/30 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-90"
         >
           <AlertTriangle class="w-3.5 h-3.5" />
+        </button>
+
+        <!-- Timeline button -->
+        <button
+          v-if="authStore.user"
+          @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen"
+          :class="[
+            'flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase border transition-all active:scale-95',
+            uiStore.isLiveTimelineOpen
+              ? 'bg-synth-neon/10 text-synth-neon border-synth-neon/40 hover:bg-synth-neon/20'
+              : 'bg-neutral-900/40 text-neutral-500 border-neutral-800/60 hover:text-synth-neon hover:border-synth-neon/30'
+          ]"
+          title="Live Timeline"
+        >
+          <Clock class="w-3 h-3" />
+          <span>Timeline</span>
         </button>
 
         <div v-if="authStore.user" class="flex items-center gap-2 relative group">
