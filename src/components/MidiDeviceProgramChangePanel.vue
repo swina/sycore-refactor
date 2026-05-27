@@ -198,7 +198,7 @@ watch(selectedBank, async (bank) => {
     const match = bankConfig.value.data.match(/^\.\/([^/]+)\/(.+)$/)
     if (!match) throw new Error('Bad data path')
     const [, folder, filename] = match
-    const res = await fetch(`/src/data/program_change/${folder}/${filename}`)
+    const res = await fetch(`/data/program_change/${folder}/${filename}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     sounds.value = await res.json()
   } catch (e) {

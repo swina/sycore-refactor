@@ -1,0 +1,7760 @@
+﻿[
+    {
+        "category":  "Kick",
+        "no":  1,
+        "name":  "Tight Punchy Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  1
+    },
+    {
+        "category":  "Kick",
+        "no":  2,
+        "name":  "Tight Punchy Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  2
+    },
+    {
+        "category":  "Kick",
+        "no":  3,
+        "name":  "Tight Punchy Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  3
+    },
+    {
+        "category":  "Kick",
+        "no":  4,
+        "name":  "Tight Punchy Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  4
+    },
+    {
+        "category":  "Kick",
+        "no":  5,
+        "name":  "Tight Punchy Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  5
+    },
+    {
+        "category":  "Kick",
+        "no":  6,
+        "name":  "Tight Punchy Kick 6",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  6
+    },
+    {
+        "category":  "Kick",
+        "no":  7,
+        "name":  "Tight Punchy Kick 7",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  7
+    },
+    {
+        "category":  "Kick",
+        "no":  8,
+        "name":  "Tight Punchy Kick 8",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  8
+    },
+    {
+        "category":  "Kick",
+        "no":  9,
+        "name":  "Soft Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  9
+    },
+    {
+        "category":  "Kick",
+        "no":  10,
+        "name":  "Tight Soft Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  10
+    },
+    {
+        "category":  "Kick",
+        "no":  11,
+        "name":  "Tight Soft Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  11
+    },
+    {
+        "category":  "Kick",
+        "no":  12,
+        "name":  "Tight Soft Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  12
+    },
+    {
+        "category":  "Kick",
+        "no":  13,
+        "name":  "Tight Soft Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  13
+    },
+    {
+        "category":  "Kick",
+        "no":  14,
+        "name":  "Tight Soft Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  14
+    },
+    {
+        "category":  "Kick",
+        "no":  15,
+        "name":  "Tight Soft Kick 6",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  15
+    },
+    {
+        "category":  "Kick",
+        "no":  16,
+        "name":  "Tight Soft Kick 7",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  16
+    },
+    {
+        "category":  "Kick",
+        "no":  17,
+        "name":  "Punchy Fat Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  17
+    },
+    {
+        "category":  "Kick",
+        "no":  18,
+        "name":  "Punchy Fat Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  18
+    },
+    {
+        "category":  "Kick",
+        "no":  19,
+        "name":  "Punchy Fat Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  19
+    },
+    {
+        "category":  "Kick",
+        "no":  20,
+        "name":  "Punchy Fat Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  20
+    },
+    {
+        "category":  "Kick",
+        "no":  21,
+        "name":  "Punchy Fat Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  21
+    },
+    {
+        "category":  "Kick",
+        "no":  22,
+        "name":  "Bitcrushed Punchy Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  22
+    },
+    {
+        "category":  "Kick",
+        "no":  23,
+        "name":  "Punchy Fat Kick 6",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  23
+    },
+    {
+        "category":  "Kick",
+        "no":  24,
+        "name":  "Punchy Fat Kick 7",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  24
+    },
+    {
+        "category":  "Kick",
+        "no":  25,
+        "name":  "Distorted Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  25
+    },
+    {
+        "category":  "Kick",
+        "no":  26,
+        "name":  "Distorted Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  26
+    },
+    {
+        "category":  "Kick",
+        "no":  27,
+        "name":  "Distorted Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  27
+    },
+    {
+        "category":  "Kick",
+        "no":  28,
+        "name":  "Distorted Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  28
+    },
+    {
+        "category":  "Kick",
+        "no":  29,
+        "name":  "Distorted Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  29
+    },
+    {
+        "category":  "Kick",
+        "no":  30,
+        "name":  "Distorted Kick 6",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  30
+    },
+    {
+        "category":  "Kick",
+        "no":  31,
+        "name":  "Distorted Kick 7",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  31
+    },
+    {
+        "category":  "Kick",
+        "no":  32,
+        "name":  "Distorted Kick 8",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  32
+    },
+    {
+        "category":  "Kick",
+        "no":  33,
+        "name":  "Saturated Tight Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  33
+    },
+    {
+        "category":  "Kick",
+        "no":  34,
+        "name":  "Saturated Fat Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  34
+    },
+    {
+        "category":  "Kick",
+        "no":  35,
+        "name":  "Saturated Tight Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  35
+    },
+    {
+        "category":  "Kick",
+        "no":  36,
+        "name":  "Saturated Fat Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  36
+    },
+    {
+        "category":  "Kick",
+        "no":  37,
+        "name":  "Saturated Fat Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  37
+    },
+    {
+        "category":  "Kick",
+        "no":  38,
+        "name":  "Saturated Fat Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  38
+    },
+    {
+        "category":  "Kick",
+        "no":  39,
+        "name":  "Saturated Fat Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  39
+    },
+    {
+        "category":  "Kick",
+        "no":  40,
+        "name":  "Saturated Fat Kick 6",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  40
+    },
+    {
+        "category":  "Kick",
+        "no":  41,
+        "name":  "Saturated Fat Kick 7",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  41
+    },
+    {
+        "category":  "Kick",
+        "no":  42,
+        "name":  "Punchy Saturated Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  42
+    },
+    {
+        "category":  "Kick",
+        "no":  43,
+        "name":  "Saturated Fat Kick 8",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  43
+    },
+    {
+        "category":  "Kick",
+        "no":  44,
+        "name":  "Saturated Fat Kick 9",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  44
+    },
+    {
+        "category":  "Kick",
+        "no":  45,
+        "name":  "Bitcrushed Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  45
+    },
+    {
+        "category":  "Kick",
+        "no":  46,
+        "name":  "Bitcrushed Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  46
+    },
+    {
+        "category":  "Kick",
+        "no":  47,
+        "name":  "Bitcrushed Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  47
+    },
+    {
+        "category":  "Kick",
+        "no":  48,
+        "name":  "Bitcrushed Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  48
+    },
+    {
+        "category":  "Kick",
+        "no":  49,
+        "name":  "Rumble Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  49
+    },
+    {
+        "category":  "Kick",
+        "no":  50,
+        "name":  "Rumble Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  50
+    },
+    {
+        "category":  "Kick",
+        "no":  51,
+        "name":  "Rumble Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  51
+    },
+    {
+        "category":  "Kick",
+        "no":  52,
+        "name":  "Rumble Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  52
+    },
+    {
+        "category":  "Kick",
+        "no":  53,
+        "name":  "Rumble Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  53
+    },
+    {
+        "category":  "Kick",
+        "no":  54,
+        "name":  "Punchy Kick + Reverb 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  54
+    },
+    {
+        "category":  "Kick",
+        "no":  55,
+        "name":  "Punchy Kick + Reverb 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  55
+    },
+    {
+        "category":  "Kick",
+        "no":  56,
+        "name":  "Punchy Kick + Reverb 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  56
+    },
+    {
+        "category":  "Kick",
+        "no":  57,
+        "name":  "Muffled Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  57
+    },
+    {
+        "category":  "Kick",
+        "no":  58,
+        "name":  "Muffled Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  58
+    },
+    {
+        "category":  "Kick",
+        "no":  59,
+        "name":  "Muffled Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  59
+    },
+    {
+        "category":  "Kick",
+        "no":  60,
+        "name":  "Muffled Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  60
+    },
+    {
+        "category":  "Kick",
+        "no":  61,
+        "name":  "Muffled Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  61
+    },
+    {
+        "category":  "Kick",
+        "no":  62,
+        "name":  "Muffled Kick 6",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  62
+    },
+    {
+        "category":  "Kick",
+        "no":  63,
+        "name":  "Lo-Fi Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  63
+    },
+    {
+        "category":  "Kick",
+        "no":  64,
+        "name":  "Lo-Fi Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  64
+    },
+    {
+        "category":  "Kick",
+        "no":  65,
+        "name":  "RX7 Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  65
+    },
+    {
+        "category":  "Kick",
+        "no":  66,
+        "name":  "RX5 Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  66
+    },
+    {
+        "category":  "Kick",
+        "no":  67,
+        "name":  "RX15 Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  67
+    },
+    {
+        "category":  "Kick",
+        "no":  68,
+        "name":  "RX7 Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  68
+    },
+    {
+        "category":  "Kick",
+        "no":  69,
+        "name":  "RX5 Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  69
+    },
+    {
+        "category":  "Kick",
+        "no":  70,
+        "name":  "RX7 Kick 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  70
+    },
+    {
+        "category":  "Kick",
+        "no":  71,
+        "name":  "RX7 Kick 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  71
+    },
+    {
+        "category":  "Kick",
+        "no":  72,
+        "name":  "RX7 Kick 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  72
+    },
+    {
+        "category":  "Kick",
+        "no":  73,
+        "name":  "Acoustic Kick - Standard 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  73
+    },
+    {
+        "category":  "Kick",
+        "no":  74,
+        "name":  "Acoustic Kick - Standard 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  74
+    },
+    {
+        "category":  "Kick",
+        "no":  75,
+        "name":  "Acoustic Kick - Standard 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  75
+    },
+    {
+        "category":  "Kick",
+        "no":  76,
+        "name":  "Acoustic Kick - Standard 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  76
+    },
+    {
+        "category":  "Kick",
+        "no":  77,
+        "name":  "Acoustic Kick - Rock 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  77
+    },
+    {
+        "category":  "Kick",
+        "no":  78,
+        "name":  "Acoustic Kick - Modern Rock 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  78
+    },
+    {
+        "category":  "Kick",
+        "no":  79,
+        "name":  "Acoustic Kick - Jazz 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  79
+    },
+    {
+        "category":  "Kick",
+        "no":  80,
+        "name":  "Acoustic Kick - Maple 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  80
+    },
+    {
+        "category":  "Kick",
+        "no":  81,
+        "name":  "Modulated Kick 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  81
+    },
+    {
+        "category":  "Kick",
+        "no":  82,
+        "name":  "Modulated Kick 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  82
+    },
+    {
+        "category":  "Kick",
+        "no":  83,
+        "name":  "Punchy Kick + Electronic Ping 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  83
+    },
+    {
+        "category":  "Kick",
+        "no":  84,
+        "name":  "Muffled Kick + Bell 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  84
+    },
+    {
+        "category":  "Kick",
+        "no":  85,
+        "name":  "Punchy Kick + Perc 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  85
+    },
+    {
+        "category":  "Kick",
+        "no":  86,
+        "name":  "Kick + Shaker 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  86
+    },
+    {
+        "category":  "Kick",
+        "no":  87,
+        "name":  "Kick + Open Hat 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  87
+    },
+    {
+        "category":  "Kick",
+        "no":  88,
+        "name":  "Kick + Open Hat 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  88
+    },
+    {
+        "category":  "Kick",
+        "no":  89,
+        "name":  "Tonal Kick C",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  89
+    },
+    {
+        "category":  "Kick",
+        "no":  90,
+        "name":  "Tonal Kick C#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  90
+    },
+    {
+        "category":  "Kick",
+        "no":  91,
+        "name":  "Tonal Kick D",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  91
+    },
+    {
+        "category":  "Kick",
+        "no":  92,
+        "name":  "Tonal Kick D#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  92
+    },
+    {
+        "category":  "Kick",
+        "no":  93,
+        "name":  "Tonal Kick E",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  93
+    },
+    {
+        "category":  "Kick",
+        "no":  94,
+        "name":  "Tonal Kick F",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  94
+    },
+    {
+        "category":  "Kick",
+        "no":  95,
+        "name":  "Tonal Kick F#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  95
+    },
+    {
+        "category":  "Kick",
+        "no":  96,
+        "name":  "Tonal Kick G",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  96
+    },
+    {
+        "category":  "Kick",
+        "no":  97,
+        "name":  "Tonal Kick G#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  97
+    },
+    {
+        "category":  "Kick",
+        "no":  98,
+        "name":  "Tonal Kick A",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  98
+    },
+    {
+        "category":  "Kick",
+        "no":  99,
+        "name":  "Tonal Kick A#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  99
+    },
+    {
+        "category":  "Kick",
+        "no":  100,
+        "name":  "Tonal Kick B",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  100
+    },
+    {
+        "category":  "Kick",
+        "no":  101,
+        "name":  "Distorted Tonal Kick C",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  101
+    },
+    {
+        "category":  "Kick",
+        "no":  102,
+        "name":  "Distorted Tonal Kick C#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  102
+    },
+    {
+        "category":  "Kick",
+        "no":  103,
+        "name":  "Distorted Tonal Kick D",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  103
+    },
+    {
+        "category":  "Kick",
+        "no":  104,
+        "name":  "Distorted Tonal Kick D#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  104
+    },
+    {
+        "category":  "Kick",
+        "no":  105,
+        "name":  "Distorted Tonal Kick E",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  105
+    },
+    {
+        "category":  "Kick",
+        "no":  106,
+        "name":  "Distorted Tonal Kick F",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  106
+    },
+    {
+        "category":  "Kick",
+        "no":  107,
+        "name":  "Distorted Tonal Kick F#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  107
+    },
+    {
+        "category":  "Kick",
+        "no":  108,
+        "name":  "Distorted Tonal Kick G",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  108
+    },
+    {
+        "category":  "Kick",
+        "no":  109,
+        "name":  "Distorted Tonal Kick G#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  109
+    },
+    {
+        "category":  "Kick",
+        "no":  110,
+        "name":  "Distorted Tonal Kick A",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  110
+    },
+    {
+        "category":  "Kick",
+        "no":  111,
+        "name":  "Distorted Tonal Kick A#",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  111
+    },
+    {
+        "category":  "Kick",
+        "no":  112,
+        "name":  "Distorted Tonal Kick B",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  112
+    },
+    {
+        "category":  "Snare",
+        "no":  113,
+        "name":  "Tight Snare 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  113
+    },
+    {
+        "category":  "Snare",
+        "no":  114,
+        "name":  "Tight Snare 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  114
+    },
+    {
+        "category":  "Snare",
+        "no":  115,
+        "name":  "Tight Snare 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  115
+    },
+    {
+        "category":  "Snare",
+        "no":  116,
+        "name":  "Short Pitched Snare 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  116
+    },
+    {
+        "category":  "Snare",
+        "no":  117,
+        "name":  "Tight Snare 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  117
+    },
+    {
+        "category":  "Snare",
+        "no":  118,
+        "name":  "Tight Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  118
+    },
+    {
+        "category":  "Snare",
+        "no":  119,
+        "name":  "Tight Punchy Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  119
+    },
+    {
+        "category":  "Snare",
+        "no":  120,
+        "name":  "Tight Snare 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  120
+    },
+    {
+        "category":  "Snare",
+        "no":  121,
+        "name":  "Pitched Snare 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  121
+    },
+    {
+        "category":  "Snare",
+        "no":  122,
+        "name":  "Tight Snare 6",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  122
+    },
+    {
+        "category":  "Snare",
+        "no":  123,
+        "name":  "Tight Snare + Reverb 2",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  123
+    },
+    {
+        "category":  "Snare",
+        "no":  124,
+        "name":  "Tight Snare + Reverb 3",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  124
+    },
+    {
+        "category":  "Snare",
+        "no":  125,
+        "name":  "Tight Snare + Reverb 4",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  125
+    },
+    {
+        "category":  "Snare",
+        "no":  126,
+        "name":  "Tight Snare + Reverb 5",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  126
+    },
+    {
+        "category":  "Snare",
+        "no":  127,
+        "name":  "Tight Punchy Snare 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  127
+    },
+    {
+        "category":  "Snare",
+        "no":  128,
+        "name":  "Punchy Fat Snare 1",
+        "msb":  63,
+        "lsb":  0,
+        "bank":  0,
+        "program":  128
+    },
+    {
+        "category":  "Snare",
+        "no":  129,
+        "name":  "Distorted Pitched Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  1
+    },
+    {
+        "category":  "Snare",
+        "no":  130,
+        "name":  "Distorted Punchy Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  2
+    },
+    {
+        "category":  "Snare",
+        "no":  131,
+        "name":  "Punchy Fat Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  3
+    },
+    {
+        "category":  "Snare",
+        "no":  132,
+        "name":  "Distorted Fat Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  4
+    },
+    {
+        "category":  "Snare",
+        "no":  133,
+        "name":  "Distorted Fat Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  5
+    },
+    {
+        "category":  "Snare",
+        "no":  134,
+        "name":  "Punchy Fat Snare 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  6
+    },
+    {
+        "category":  "Snare",
+        "no":  135,
+        "name":  "Punchy Fat Snare 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  7
+    },
+    {
+        "category":  "Snare",
+        "no":  136,
+        "name":  "Punchy Fat Snare 5",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  8
+    },
+    {
+        "category":  "Snare",
+        "no":  137,
+        "name":  "Distorted Low Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  9
+    },
+    {
+        "category":  "Snare",
+        "no":  138,
+        "name":  "Distorted Low Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  10
+    },
+    {
+        "category":  "Snare",
+        "no":  139,
+        "name":  "Punchy Long Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  11
+    },
+    {
+        "category":  "Snare",
+        "no":  140,
+        "name":  "Punchy Long Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  12
+    },
+    {
+        "category":  "Snare",
+        "no":  141,
+        "name":  "Click Wood Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  13
+    },
+    {
+        "category":  "Snare",
+        "no":  142,
+        "name":  "Double Click Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  14
+    },
+    {
+        "category":  "Snare",
+        "no":  143,
+        "name":  "Short Slow Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  15
+    },
+    {
+        "category":  "Snare",
+        "no":  144,
+        "name":  "Lo-Fi Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  16
+    },
+    {
+        "category":  "Snare",
+        "no":  145,
+        "name":  "Lo-Fi Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  17
+    },
+    {
+        "category":  "Snare",
+        "no":  146,
+        "name":  "Lo-Fi Snare 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  18
+    },
+    {
+        "category":  "Snare",
+        "no":  147,
+        "name":  "Lo-Fi Snare 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  19
+    },
+    {
+        "category":  "Snare",
+        "no":  148,
+        "name":  "Lo-Fi Snare 5",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  20
+    },
+    {
+        "category":  "Snare",
+        "no":  149,
+        "name":  "Short Can Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  21
+    },
+    {
+        "category":  "Snare",
+        "no":  150,
+        "name":  "Muffled Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  22
+    },
+    {
+        "category":  "Snare",
+        "no":  151,
+        "name":  "Tight Snare + Reverb 6",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  23
+    },
+    {
+        "category":  "Snare",
+        "no":  152,
+        "name":  "Tight Snare + Reverb 7",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  24
+    },
+    {
+        "category":  "Snare",
+        "no":  153,
+        "name":  "Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  25
+    },
+    {
+        "category":  "Snare",
+        "no":  154,
+        "name":  "Snare + Reverb 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  26
+    },
+    {
+        "category":  "Snare",
+        "no":  155,
+        "name":  "Muffled Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  27
+    },
+    {
+        "category":  "Snare",
+        "no":  156,
+        "name":  "Muffled Snare + Reverb 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  28
+    },
+    {
+        "category":  "Snare",
+        "no":  157,
+        "name":  "Pitched Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  29
+    },
+    {
+        "category":  "Snare",
+        "no":  158,
+        "name":  "Muffled Snare + Reverb 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  30
+    },
+    {
+        "category":  "Snare",
+        "no":  159,
+        "name":  "Muffled Snare + Reverb 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  31
+    },
+    {
+        "category":  "Snare",
+        "no":  160,
+        "name":  "Fat Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  32
+    },
+    {
+        "category":  "Snare",
+        "no":  161,
+        "name":  "Punchy Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  33
+    },
+    {
+        "category":  "Snare",
+        "no":  162,
+        "name":  "Distorted Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  34
+    },
+    {
+        "category":  "Snare",
+        "no":  163,
+        "name":  "Gated Reverb Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  35
+    },
+    {
+        "category":  "Snare",
+        "no":  164,
+        "name":  "Gated Reverb Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  36
+    },
+    {
+        "category":  "Snare",
+        "no":  165,
+        "name":  "Spring Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  37
+    },
+    {
+        "category":  "Snare",
+        "no":  166,
+        "name":  "Trash Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  38
+    },
+    {
+        "category":  "Snare",
+        "no":  167,
+        "name":  "Trash Snare + Reverb 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  39
+    },
+    {
+        "category":  "Snare",
+        "no":  168,
+        "name":  "Trash Snare + Reverb 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  40
+    },
+    {
+        "category":  "Snare",
+        "no":  169,
+        "name":  "Rx5 Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  41
+    },
+    {
+        "category":  "Snare",
+        "no":  170,
+        "name":  "Rx5 Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  42
+    },
+    {
+        "category":  "Snare",
+        "no":  171,
+        "name":  "RX7 Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  43
+    },
+    {
+        "category":  "Snare",
+        "no":  172,
+        "name":  "RX7 Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  44
+    },
+    {
+        "category":  "Snare",
+        "no":  173,
+        "name":  "RX7 Snare 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  45
+    },
+    {
+        "category":  "Snare",
+        "no":  174,
+        "name":  "RX7 Snare 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  46
+    },
+    {
+        "category":  "Snare",
+        "no":  175,
+        "name":  "RX7 Snare 5",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  47
+    },
+    {
+        "category":  "Snare",
+        "no":  176,
+        "name":  "RX7 Snare 6",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  48
+    },
+    {
+        "category":  "Snare",
+        "no":  177,
+        "name":  "Acoustic Snare - Standard 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  49
+    },
+    {
+        "category":  "Snare",
+        "no":  178,
+        "name":  "Acoustic Snare - Standard 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  50
+    },
+    {
+        "category":  "Snare",
+        "no":  179,
+        "name":  "Acoustic Snare - Soul 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  51
+    },
+    {
+        "category":  "Snare",
+        "no":  180,
+        "name":  "Acoustic Snare - Standard 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  52
+    },
+    {
+        "category":  "Snare",
+        "no":  181,
+        "name":  "Acoustic Snare - Standard 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  53
+    },
+    {
+        "category":  "Snare",
+        "no":  182,
+        "name":  "Acoustic Snare - Punchy 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  54
+    },
+    {
+        "category":  "Snare",
+        "no":  183,
+        "name":  "Acoustic Snare - Punchy 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  55
+    },
+    {
+        "category":  "Snare",
+        "no":  184,
+        "name":  "Acoustic Snare - Metallic 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  56
+    },
+    {
+        "category":  "Snare",
+        "no":  185,
+        "name":  "Acoustic Snare - Punchy 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  57
+    },
+    {
+        "category":  "Snare",
+        "no":  186,
+        "name":  "Acoustic Snare - Tight 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  58
+    },
+    {
+        "category":  "Snare",
+        "no":  187,
+        "name":  "Acoustic Snare - Tight 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  59
+    },
+    {
+        "category":  "Snare",
+        "no":  188,
+        "name":  "Acoustic Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  60
+    },
+    {
+        "category":  "Snare",
+        "no":  189,
+        "name":  "Acoustic Snare - Punchy 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  61
+    },
+    {
+        "category":  "Snare",
+        "no":  190,
+        "name":  "Acoustic Snare - Punchy 5",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  62
+    },
+    {
+        "category":  "Snare",
+        "no":  191,
+        "name":  "Acoustic Snare - Brush 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  63
+    },
+    {
+        "category":  "Snare",
+        "no":  192,
+        "name":  "Acoustic Snare - Brush Tap 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  64
+    },
+    {
+        "category":  "Snare",
+        "no":  193,
+        "name":  "Acoustic Snare - Flam 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  65
+    },
+    {
+        "category":  "Snare",
+        "no":  194,
+        "name":  "Glitch Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  66
+    },
+    {
+        "category":  "Snare",
+        "no":  195,
+        "name":  "Glitch Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  67
+    },
+    {
+        "category":  "Snare",
+        "no":  196,
+        "name":  "Glitch Snare 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  68
+    },
+    {
+        "category":  "Snare",
+        "no":  197,
+        "name":  "Hardcore Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  69
+    },
+    {
+        "category":  "Snare",
+        "no":  198,
+        "name":  "Hardcore Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  70
+    },
+    {
+        "category":  "Snare",
+        "no":  199,
+        "name":  "Hardcore Snare 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  71
+    },
+    {
+        "category":  "Snare",
+        "no":  200,
+        "name":  "Hardcore Snare 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  72
+    },
+    {
+        "category":  "Snare",
+        "no":  201,
+        "name":  "Hardcore Snare 5",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  73
+    },
+    {
+        "category":  "Snare",
+        "no":  202,
+        "name":  "Snare + Wood Block 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  74
+    },
+    {
+        "category":  "Snare",
+        "no":  203,
+        "name":  "Snare + Wood Block 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  75
+    },
+    {
+        "category":  "Snare",
+        "no":  204,
+        "name":  "Wood Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  76
+    },
+    {
+        "category":  "Snare",
+        "no":  205,
+        "name":  "Factory Snare + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  77
+    },
+    {
+        "category":  "Snare",
+        "no":  206,
+        "name":  "Metallic Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  78
+    },
+    {
+        "category":  "Snare",
+        "no":  207,
+        "name":  "Metallic Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  79
+    },
+    {
+        "category":  "Snare",
+        "no":  208,
+        "name":  "Metallic Snare 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  80
+    },
+    {
+        "category":  "Snare",
+        "no":  209,
+        "name":  "Metallic Snare 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  81
+    },
+    {
+        "category":  "Snare",
+        "no":  210,
+        "name":  "Metallic Snare 5",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  82
+    },
+    {
+        "category":  "Snare",
+        "no":  211,
+        "name":  "Glass Broken Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  83
+    },
+    {
+        "category":  "Snare",
+        "no":  212,
+        "name":  "Glass Broken Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  84
+    },
+    {
+        "category":  "Snare",
+        "no":  213,
+        "name":  "SFX Snare 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  85
+    },
+    {
+        "category":  "Snare",
+        "no":  214,
+        "name":  "SFX Snare 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  86
+    },
+    {
+        "category":  "Rim",
+        "no":  215,
+        "name":  "Acoustic Rim - Jazz 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  87
+    },
+    {
+        "category":  "Rim",
+        "no":  216,
+        "name":  "Acoustic Rim - Oak 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  88
+    },
+    {
+        "category":  "Rim",
+        "no":  217,
+        "name":  "Acoustic Rim - Fat 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  89
+    },
+    {
+        "category":  "Rim",
+        "no":  218,
+        "name":  "Acoustic Rim - Rock 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  90
+    },
+    {
+        "category":  "Rim",
+        "no":  219,
+        "name":  "Acoustic Rim - Standard 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  91
+    },
+    {
+        "category":  "Rim",
+        "no":  220,
+        "name":  "Acoustic Rim - High 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  92
+    },
+    {
+        "category":  "Rim",
+        "no":  221,
+        "name":  "RX11 Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  93
+    },
+    {
+        "category":  "Rim",
+        "no":  222,
+        "name":  "RX5 Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  94
+    },
+    {
+        "category":  "Rim",
+        "no":  223,
+        "name":  "Acoustic Rim - Short 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  95
+    },
+    {
+        "category":  "Rim",
+        "no":  224,
+        "name":  "Analog Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  96
+    },
+    {
+        "category":  "Rim",
+        "no":  225,
+        "name":  "Analog Rim 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  97
+    },
+    {
+        "category":  "Rim",
+        "no":  226,
+        "name":  "Pitched Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  98
+    },
+    {
+        "category":  "Rim",
+        "no":  227,
+        "name":  "Lo-Fi Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  99
+    },
+    {
+        "category":  "Rim",
+        "no":  228,
+        "name":  "Lo-Fi Rim 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  100
+    },
+    {
+        "category":  "Rim",
+        "no":  229,
+        "name":  "Lo-Fi Rim 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  101
+    },
+    {
+        "category":  "Rim",
+        "no":  230,
+        "name":  "Stick Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  102
+    },
+    {
+        "category":  "Rim",
+        "no":  231,
+        "name":  "Acoustic Rim - Short 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  103
+    },
+    {
+        "category":  "Rim",
+        "no":  232,
+        "name":  "High Pitched Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  104
+    },
+    {
+        "category":  "Rim",
+        "no":  233,
+        "name":  "Double Click Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  105
+    },
+    {
+        "category":  "Rim",
+        "no":  234,
+        "name":  "Acoustic Rim + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  106
+    },
+    {
+        "category":  "Rim",
+        "no":  235,
+        "name":  "Lo-Fi Rim + Reverb 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  107
+    },
+    {
+        "category":  "Rim",
+        "no":  236,
+        "name":  "Acoustic Rim + Reverb 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  108
+    },
+    {
+        "category":  "Rim",
+        "no":  237,
+        "name":  "Acoustic Rim + Reverb 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  109
+    },
+    {
+        "category":  "Rim",
+        "no":  238,
+        "name":  "Noisy Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  110
+    },
+    {
+        "category":  "Rim",
+        "no":  239,
+        "name":  "Noisy Rim 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  111
+    },
+    {
+        "category":  "Rim",
+        "no":  240,
+        "name":  "Noisy Rim 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  112
+    },
+    {
+        "category":  "Rim",
+        "no":  241,
+        "name":  "Noisy Rim 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  113
+    },
+    {
+        "category":  "Rim",
+        "no":  242,
+        "name":  "Noisy Rim 5",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  114
+    },
+    {
+        "category":  "Rim",
+        "no":  243,
+        "name":  "Noisy Rim 6",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  115
+    },
+    {
+        "category":  "Rim",
+        "no":  244,
+        "name":  "Noisy Rim 7",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  116
+    },
+    {
+        "category":  "Rim",
+        "no":  245,
+        "name":  "Metallic Rim 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  117
+    },
+    {
+        "category":  "Rim",
+        "no":  246,
+        "name":  "Double Click Rim 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  118
+    },
+    {
+        "category":  "Rim",
+        "no":  247,
+        "name":  "Rim + Low 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  119
+    },
+    {
+        "category":  "Rim",
+        "no":  248,
+        "name":  "Click Rim + Low 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  120
+    },
+    {
+        "category":  "Clap",
+        "no":  249,
+        "name":  "Hand Clap 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  121
+    },
+    {
+        "category":  "Clap",
+        "no":  250,
+        "name":  "Hand Clap 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  122
+    },
+    {
+        "category":  "Clap",
+        "no":  251,
+        "name":  "Hand Clap 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  123
+    },
+    {
+        "category":  "Clap",
+        "no":  252,
+        "name":  "Hand Clap 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  124
+    },
+    {
+        "category":  "Clap",
+        "no":  253,
+        "name":  "Group Clap 1",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  125
+    },
+    {
+        "category":  "Clap",
+        "no":  254,
+        "name":  "Group Clap 2",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  126
+    },
+    {
+        "category":  "Clap",
+        "no":  255,
+        "name":  "Group Clap 3",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  127
+    },
+    {
+        "category":  "Clap",
+        "no":  256,
+        "name":  "Group Clap 4",
+        "msb":  63,
+        "lsb":  1,
+        "bank":  1,
+        "program":  128
+    },
+    {
+        "category":  "Clap",
+        "no":  257,
+        "name":  "Hand Clap 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  1
+    },
+    {
+        "category":  "Clap",
+        "no":  258,
+        "name":  "Bright Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  2
+    },
+    {
+        "category":  "Clap",
+        "no":  259,
+        "name":  "Bright Clap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  3
+    },
+    {
+        "category":  "Clap",
+        "no":  260,
+        "name":  "Lo-Fi Thin Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  4
+    },
+    {
+        "category":  "Clap",
+        "no":  261,
+        "name":  "Wide Thin Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  5
+    },
+    {
+        "category":  "Clap",
+        "no":  262,
+        "name":  "Bright Clap 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  6
+    },
+    {
+        "category":  "Clap",
+        "no":  263,
+        "name":  "RX11 Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  7
+    },
+    {
+        "category":  "Clap",
+        "no":  264,
+        "name":  "Bitcrushed Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  8
+    },
+    {
+        "category":  "Clap",
+        "no":  265,
+        "name":  "Lo-Fi Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  9
+    },
+    {
+        "category":  "Clap",
+        "no":  266,
+        "name":  "Lo-Fi Clap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  10
+    },
+    {
+        "category":  "Clap",
+        "no":  267,
+        "name":  "Slow Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  11
+    },
+    {
+        "category":  "Clap",
+        "no":  268,
+        "name":  "Short Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  12
+    },
+    {
+        "category":  "Clap",
+        "no":  269,
+        "name":  "Short Clap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  13
+    },
+    {
+        "category":  "Clap",
+        "no":  270,
+        "name":  "Short Double Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  14
+    },
+    {
+        "category":  "Clap",
+        "no":  271,
+        "name":  "Double Clap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  15
+    },
+    {
+        "category":  "Clap",
+        "no":  272,
+        "name":  "Double Clap + Reverb 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  16
+    },
+    {
+        "category":  "Clap",
+        "no":  273,
+        "name":  "Bright Clap 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  17
+    },
+    {
+        "category":  "Clap",
+        "no":  274,
+        "name":  "Clicky Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  18
+    },
+    {
+        "category":  "Clap",
+        "no":  275,
+        "name":  "Long Clap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  19
+    },
+    {
+        "category":  "Clap",
+        "no":  276,
+        "name":  "Long Clap + Reverb 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  20
+    },
+    {
+        "category":  "Clap",
+        "no":  277,
+        "name":  "Hand Clap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  21
+    },
+    {
+        "category":  "Clap",
+        "no":  278,
+        "name":  "Thin Clap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  22
+    },
+    {
+        "category":  "Clap",
+        "no":  279,
+        "name":  "Thin Clap + Reverb 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  23
+    },
+    {
+        "category":  "Clap",
+        "no":  280,
+        "name":  "Click Clap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  24
+    },
+    {
+        "category":  "Clap",
+        "no":  281,
+        "name":  "Hand Clap + Reverb 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  25
+    },
+    {
+        "category":  "Clap",
+        "no":  282,
+        "name":  "Hand Clap + Reverb 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  26
+    },
+    {
+        "category":  "Clap",
+        "no":  283,
+        "name":  "Short Delay Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  27
+    },
+    {
+        "category":  "Clap",
+        "no":  284,
+        "name":  "Hand Clap + Reverb 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  28
+    },
+    {
+        "category":  "Clap",
+        "no":  285,
+        "name":  "Hand Clap + Reverb 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  29
+    },
+    {
+        "category":  "Clap",
+        "no":  286,
+        "name":  "Noise Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  30
+    },
+    {
+        "category":  "Clap",
+        "no":  287,
+        "name":  "Noise Clap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  31
+    },
+    {
+        "category":  "Clap",
+        "no":  288,
+        "name":  "Glitch Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  32
+    },
+    {
+        "category":  "Clap",
+        "no":  289,
+        "name":  "Glitch Clap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  33
+    },
+    {
+        "category":  "Clap",
+        "no":  290,
+        "name":  "Glitch Clap 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  34
+    },
+    {
+        "category":  "Clap",
+        "no":  291,
+        "name":  "Glitch Clap 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  35
+    },
+    {
+        "category":  "Clap",
+        "no":  292,
+        "name":  "Glitch Clap 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  36
+    },
+    {
+        "category":  "Clap",
+        "no":  293,
+        "name":  "Modulated Hand Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  37
+    },
+    {
+        "category":  "Clap",
+        "no":  294,
+        "name":  "Woody Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  38
+    },
+    {
+        "category":  "Clap",
+        "no":  295,
+        "name":  "Arabic Hand Clap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  39
+    },
+    {
+        "category":  "Clap",
+        "no":  296,
+        "name":  "Woody Clap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  40
+    },
+    {
+        "category":  "Snap",
+        "no":  297,
+        "name":  "Finger Snap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  41
+    },
+    {
+        "category":  "Snap",
+        "no":  298,
+        "name":  "Finger Snap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  42
+    },
+    {
+        "category":  "Snap",
+        "no":  299,
+        "name":  "Finger Snap 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  43
+    },
+    {
+        "category":  "Snap",
+        "no":  300,
+        "name":  "Finger Snap 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  44
+    },
+    {
+        "category":  "Snap",
+        "no":  301,
+        "name":  "Finger Snap 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  45
+    },
+    {
+        "category":  "Snap",
+        "no":  302,
+        "name":  "Finger Snap 6",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  46
+    },
+    {
+        "category":  "Snap",
+        "no":  303,
+        "name":  "Wide Snap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  47
+    },
+    {
+        "category":  "Snap",
+        "no":  304,
+        "name":  "Wide Snap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  48
+    },
+    {
+        "category":  "Snap",
+        "no":  305,
+        "name":  "Fat Snap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  49
+    },
+    {
+        "category":  "Snap",
+        "no":  306,
+        "name":  "Fat Snap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  50
+    },
+    {
+        "category":  "Snap",
+        "no":  307,
+        "name":  "Woody Snap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  51
+    },
+    {
+        "category":  "Snap",
+        "no":  308,
+        "name":  "Snap + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  52
+    },
+    {
+        "category":  "Snap",
+        "no":  309,
+        "name":  "Snap + Reverb 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  53
+    },
+    {
+        "category":  "Snap",
+        "no":  310,
+        "name":  "Click Snap 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  54
+    },
+    {
+        "category":  "Snap",
+        "no":  311,
+        "name":  "Click Snap 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  55
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  312,
+        "name":  "Tight Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  56
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  313,
+        "name":  "Tight Closed Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  57
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  314,
+        "name":  "Tight Closed Hat 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  58
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  315,
+        "name":  "Tight Closed Hat 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  59
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  316,
+        "name":  "Tight Closed Hat 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  60
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  317,
+        "name":  "Tight Closed Hat 6",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  61
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  318,
+        "name":  "Tight Closed Hat 7",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  62
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  319,
+        "name":  "Tight Closed Hat 8",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  63
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  320,
+        "name":  "Tight Closed Hat 9",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  64
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  321,
+        "name":  "Tight Closed Hat 10",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  65
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  322,
+        "name":  "Tight Closed Hat 11",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  66
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  323,
+        "name":  "Tight Closed Hat 12",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  67
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  324,
+        "name":  "Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  68
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  325,
+        "name":  "Closed Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  69
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  326,
+        "name":  "Closed Hat 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  70
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  327,
+        "name":  "Closed Hat 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  71
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  328,
+        "name":  "Closed Hat 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  72
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  329,
+        "name":  "Closed Hat 6",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  73
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  330,
+        "name":  "Acoustic Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  74
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  331,
+        "name":  "Closed Hat 7",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  75
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  332,
+        "name":  "Closed Hat 8",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  76
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  333,
+        "name":  "Closed Hat 9",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  77
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  334,
+        "name":  "Acoustic Closed Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  78
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  335,
+        "name":  "Closed Hat 10",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  79
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  336,
+        "name":  "Noise Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  80
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  337,
+        "name":  "Noise Closed Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  81
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  338,
+        "name":  "Noise Closed Hat + Low 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  82
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  339,
+        "name":  "Low Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  83
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  340,
+        "name":  "Closed Hat + High Tone 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  84
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  341,
+        "name":  "Acoustic Closed Hat 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  85
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  342,
+        "name":  "Acoustic Closed Hat 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  86
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  343,
+        "name":  "Acoustic Closed Hat 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  87
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  344,
+        "name":  "Acoustic Closed Hat 6",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  88
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  345,
+        "name":  "Acoustic Closed Hat 7",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  89
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  346,
+        "name":  "Acoustic Closed Hat 8",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  90
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  347,
+        "name":  "Acoustic Closed Hat 9",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  91
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  348,
+        "name":  "Acoustic Closed Hat 10",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  92
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  349,
+        "name":  "Acoustic Hat Pedal 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  93
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  350,
+        "name":  "Acoustic Hat Pedal 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  94
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  351,
+        "name":  "Acoustic Hat Pedal 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  95
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  352,
+        "name":  "Acoustic Hat Pedal 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  96
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  353,
+        "name":  "Acoustic Hat Pedal 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  97
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  354,
+        "name":  "Acoustic Hat Pedal 6",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  98
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  355,
+        "name":  "Click Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  99
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  356,
+        "name":  "Lo-Fi Short Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  100
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  357,
+        "name":  "Click Closed Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  101
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  358,
+        "name":  "Lo-Fi Short Closed Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  102
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  359,
+        "name":  "Lo-Fi Short Closed Hat 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  103
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  360,
+        "name":  "Lo-Fi Short Closed Hat 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  104
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  361,
+        "name":  "Lo-Fi Short Closed Hat 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  105
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  362,
+        "name":  "Lo-Fi Short Closed Hat 6",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  106
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  363,
+        "name":  "Lo-Fi Short Closed Hat 7",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  107
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  364,
+        "name":  "Lo-Fi Short Closed Hat 8",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  108
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  365,
+        "name":  "Lo-Fi Short Closed Hat 9",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  109
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  366,
+        "name":  "Bitcrushed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  110
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  367,
+        "name":  "Lo-Fi Closed Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  111
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  368,
+        "name":  "Lo-Fi Closed Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  112
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  369,
+        "name":  "Lo-Fi Closed Hat 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  113
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  370,
+        "name":  "Lo-Fi Closed Hat 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  114
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  371,
+        "name":  "Lo-Fi Closed Hat 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  115
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  372,
+        "name":  "Lo-Fi Closed Hat 6",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  116
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  373,
+        "name":  "Lo-Fi Closed Hat 7",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  117
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  374,
+        "name":  "Lo-Fi Closed Hat 8",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  118
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  375,
+        "name":  "Lo-Fi Closed Hat 9",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  119
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  376,
+        "name":  "Closed Hat + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  120
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  377,
+        "name":  "Lo-Fi Closed Hat + Reverb 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  121
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  378,
+        "name":  "Closed Hat + Reverb 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  122
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  379,
+        "name":  "Closed Hat + Reverb 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  123
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  380,
+        "name":  "Closed Hat + Reverb 4",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  124
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  381,
+        "name":  "Closed Hat + Reverb 5",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  125
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  382,
+        "name":  "Glitch Hat 1",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  126
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  383,
+        "name":  "Glitch Hat 2",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  127
+    },
+    {
+        "category":  "Closed HiHat",
+        "no":  384,
+        "name":  "Glitch Hat 3",
+        "msb":  63,
+        "lsb":  2,
+        "bank":  2,
+        "program":  128
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  385,
+        "name":  "Bright Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  1
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  386,
+        "name":  "Bright Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  2
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  387,
+        "name":  "Bright Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  3
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  388,
+        "name":  "Bright Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  4
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  389,
+        "name":  "Bright Open Hat 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  5
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  390,
+        "name":  "Noise Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  6
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  391,
+        "name":  "Noise Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  7
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  392,
+        "name":  "Noise Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  8
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  393,
+        "name":  "Noise Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  9
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  394,
+        "name":  "Noise Open Hat 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  10
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  395,
+        "name":  "Noise Open Hat 6",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  11
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  396,
+        "name":  "Noise Open Hat 7",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  12
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  397,
+        "name":  "Noise Open Hat 8",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  13
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  398,
+        "name":  "Noise Open Hat 9",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  14
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  399,
+        "name":  "Noise Open Hat 10",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  15
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  400,
+        "name":  "Noise Open Hat 11",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  16
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  401,
+        "name":  "Noise Open Hat 12",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  17
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  402,
+        "name":  "Noise Open Hat 13",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  18
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  403,
+        "name":  "Noise Open Hat 14",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  19
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  404,
+        "name":  "Noise Open Hat 15",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  20
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  405,
+        "name":  "Bright Open Hat 6",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  21
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  406,
+        "name":  "Acoustic Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  22
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  407,
+        "name":  "Acoustic Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  23
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  408,
+        "name":  "Acoustic Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  24
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  409,
+        "name":  "Acoustic Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  25
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  410,
+        "name":  "Acoustic Open Hat 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  26
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  411,
+        "name":  "Acoustic Open Hat 6",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  27
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  412,
+        "name":  "Acoustic Open Hat 7",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  28
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  413,
+        "name":  "Crash Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  29
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  414,
+        "name":  "Crash Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  30
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  415,
+        "name":  "Crash Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  31
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  416,
+        "name":  "Bitcrushed Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  32
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  417,
+        "name":  "Bitcrushed Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  33
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  418,
+        "name":  "Bitcrushed Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  34
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  419,
+        "name":  "Bitcrushed Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  35
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  420,
+        "name":  "Distorted Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  36
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  421,
+        "name":  "Distorted Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  37
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  422,
+        "name":  "Distorted Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  38
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  423,
+        "name":  "Distorted Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  39
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  424,
+        "name":  "Distorted Open Hat 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  40
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  425,
+        "name":  "Lo-Fi Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  41
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  426,
+        "name":  "Lo-Fi Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  42
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  427,
+        "name":  "Lo-Fi Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  43
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  428,
+        "name":  "Lo-Fi Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  44
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  429,
+        "name":  "Lo-Fi Open Hat 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  45
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  430,
+        "name":  "Gated Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  46
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  431,
+        "name":  "Gated Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  47
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  432,
+        "name":  "Gated Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  48
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  433,
+        "name":  "Gated Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  49
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  434,
+        "name":  "Gated Open Hat 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  50
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  435,
+        "name":  "Slow Attack Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  51
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  436,
+        "name":  "Slow Attack Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  52
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  437,
+        "name":  "Slow Attack Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  53
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  438,
+        "name":  "Slow Attack Open Hat 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  54
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  439,
+        "name":  "Slow Attack Open Hat 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  55
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  440,
+        "name":  "Slow Attack Open Hat 6",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  56
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  441,
+        "name":  "Slow Attack Open Hat 7",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  57
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  442,
+        "name":  "Open Hat with Bell 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  58
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  443,
+        "name":  "Open Hat with Bell 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  59
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  444,
+        "name":  "Open Hat with Bell 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  60
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  445,
+        "name":  "Bell Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  61
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  446,
+        "name":  "Splash Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  62
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  447,
+        "name":  "Open Hat + Delay 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  63
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  448,
+        "name":  "Open Hat + Reverb 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  64
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  449,
+        "name":  "Open Hat + Reverb 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  65
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  450,
+        "name":  "Panning Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  66
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  451,
+        "name":  "Panning Distorted Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  67
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  452,
+        "name":  "Modulated Open Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  68
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  453,
+        "name":  "Modulated Open Hat 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  69
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  454,
+        "name":  "Modulated Open Hat 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  70
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  455,
+        "name":  "Reversed Floor Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  71
+    },
+    {
+        "category":  "Open HiHat",
+        "no":  456,
+        "name":  "Reversed Hat 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  72
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  457,
+        "name":  "Shaker 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  73
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  458,
+        "name":  "Shaker 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  74
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  459,
+        "name":  "Shaker 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  75
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  460,
+        "name":  "Shaker 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  76
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  461,
+        "name":  "Shaker 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  77
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  462,
+        "name":  "Shaker 6",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  78
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  463,
+        "name":  "Shaker 7",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  79
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  464,
+        "name":  "Shaker 8",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  80
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  465,
+        "name":  "Shaker 9",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  81
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  466,
+        "name":  "Shaker 10",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  82
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  467,
+        "name":  "Shaker 11",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  83
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  468,
+        "name":  "Short Shaker Accent 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  84
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  469,
+        "name":  "Short Shaker Accent 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  85
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  470,
+        "name":  "Short Shaker Accent 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  86
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  471,
+        "name":  "Shaker + Reverb 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  87
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  472,
+        "name":  "Shaker + Reverb 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  88
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  473,
+        "name":  "Short Shaker Accent 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  89
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  474,
+        "name":  "Shaker 12",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  90
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  475,
+        "name":  "Shaker 13",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  91
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  476,
+        "name":  "Shaker 14",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  92
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  477,
+        "name":  "Shaker 15",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  93
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  478,
+        "name":  "Arabic Maracas 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  94
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  479,
+        "name":  "Caxixi 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  95
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  480,
+        "name":  "Afoxe Open 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  96
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  481,
+        "name":  "Muffled Shaker 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  97
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  482,
+        "name":  "Tambourine 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  98
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  483,
+        "name":  "Tambourine 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  99
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  484,
+        "name":  "Tambourine 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  100
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  485,
+        "name":  "Tambourine 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  101
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  486,
+        "name":  "Tambourine 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  102
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  487,
+        "name":  "Tambourine 6",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  103
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  488,
+        "name":  "Tambourine 7",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  104
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  489,
+        "name":  "Short Tambourine 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  105
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  490,
+        "name":  "Tambourine 8",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  106
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  491,
+        "name":  "RX5 Tambourine 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  107
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  492,
+        "name":  "Long Tambourine 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  108
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  493,
+        "name":  "Long Tambourine 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  109
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  494,
+        "name":  "Long Tambourine 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  110
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  495,
+        "name":  "Long Tambourine 4",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  111
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  496,
+        "name":  "Long Tambourine 5",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  112
+    },
+    {
+        "category":  "Shaker / Tambourine",
+        "no":  497,
+        "name":  "Tambourine + Reverb 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  113
+    },
+    {
+        "category":  "Ride",
+        "no":  498,
+        "name":  "Sharp Ride 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  114
+    },
+    {
+        "category":  "Ride",
+        "no":  499,
+        "name":  "Sharp Ride 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  115
+    },
+    {
+        "category":  "Ride",
+        "no":  500,
+        "name":  "Noise Ride 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  116
+    },
+    {
+        "category":  "Ride",
+        "no":  501,
+        "name":  "Sharp Ride 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  117
+    },
+    {
+        "category":  "Ride",
+        "no":  502,
+        "name":  "Acoustic Ride 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  118
+    },
+    {
+        "category":  "Ride",
+        "no":  503,
+        "name":  "Acoustic Ride - Brush 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  119
+    },
+    {
+        "category":  "Ride",
+        "no":  504,
+        "name":  "Acoustic Ride 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  120
+    },
+    {
+        "category":  "Ride",
+        "no":  505,
+        "name":  "Acoustic Ride 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  121
+    },
+    {
+        "category":  "Ride",
+        "no":  506,
+        "name":  "RX7 Ride 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  122
+    },
+    {
+        "category":  "Ride",
+        "no":  507,
+        "name":  "Ride Cup 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  123
+    },
+    {
+        "category":  "Ride",
+        "no":  508,
+        "name":  "Ride Cup 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  124
+    },
+    {
+        "category":  "Ride",
+        "no":  509,
+        "name":  "RX5 Ride Cup 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  125
+    },
+    {
+        "category":  "Ride",
+        "no":  510,
+        "name":  "Color Ride 1",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  126
+    },
+    {
+        "category":  "Ride",
+        "no":  511,
+        "name":  "Color Ride 2",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  127
+    },
+    {
+        "category":  "Ride",
+        "no":  512,
+        "name":  "Color Ride 3",
+        "msb":  63,
+        "lsb":  3,
+        "bank":  3,
+        "program":  128
+    },
+    {
+        "category":  "Ride",
+        "no":  513,
+        "name":  "Color Ride 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  1
+    },
+    {
+        "category":  "Ride",
+        "no":  514,
+        "name":  "Color Ride 5",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  2
+    },
+    {
+        "category":  "Ride",
+        "no":  515,
+        "name":  "Gate Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  3
+    },
+    {
+        "category":  "Ride",
+        "no":  516,
+        "name":  "Crash Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  4
+    },
+    {
+        "category":  "Ride",
+        "no":  517,
+        "name":  "Crash Ride 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  5
+    },
+    {
+        "category":  "Ride",
+        "no":  518,
+        "name":  "Crash Ride 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  6
+    },
+    {
+        "category":  "Ride",
+        "no":  519,
+        "name":  "Noise Ride 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  7
+    },
+    {
+        "category":  "Ride",
+        "no":  520,
+        "name":  "Noise Long Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  8
+    },
+    {
+        "category":  "Ride",
+        "no":  521,
+        "name":  "High Noise Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  9
+    },
+    {
+        "category":  "Ride",
+        "no":  522,
+        "name":  "Synth Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  10
+    },
+    {
+        "category":  "Ride",
+        "no":  523,
+        "name":  "Synth Long Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  11
+    },
+    {
+        "category":  "Ride",
+        "no":  524,
+        "name":  "Dark Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  12
+    },
+    {
+        "category":  "Ride",
+        "no":  525,
+        "name":  "Slow Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  13
+    },
+    {
+        "category":  "Ride",
+        "no":  526,
+        "name":  "Noise Ride 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  14
+    },
+    {
+        "category":  "Ride",
+        "no":  527,
+        "name":  "Bitcrushed Ride 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  15
+    },
+    {
+        "category":  "Crash",
+        "no":  528,
+        "name":  "RX5 Crash 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  16
+    },
+    {
+        "category":  "Crash",
+        "no":  529,
+        "name":  "Acoustic Crash 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  17
+    },
+    {
+        "category":  "Crash",
+        "no":  530,
+        "name":  "Acoustic Crash 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  18
+    },
+    {
+        "category":  "Crash",
+        "no":  531,
+        "name":  "Acoustic Crash + Reverb 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  19
+    },
+    {
+        "category":  "Crash",
+        "no":  532,
+        "name":  "Acoustic Crash 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  20
+    },
+    {
+        "category":  "Crash",
+        "no":  533,
+        "name":  "Slow Acoustic Crash 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  21
+    },
+    {
+        "category":  "Crash",
+        "no":  534,
+        "name":  "Acoustic Crash 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  22
+    },
+    {
+        "category":  "Crash",
+        "no":  535,
+        "name":  "Acoustic Crash 5",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  23
+    },
+    {
+        "category":  "Crash",
+        "no":  536,
+        "name":  "Splash Cymbal 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  24
+    },
+    {
+        "category":  "Crash",
+        "no":  537,
+        "name":  "Splash Cymbal 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  25
+    },
+    {
+        "category":  "Crash",
+        "no":  538,
+        "name":  "Splash Cymbal + Reverb 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  26
+    },
+    {
+        "category":  "Crash",
+        "no":  539,
+        "name":  "Big Cymbal 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  27
+    },
+    {
+        "category":  "Crash",
+        "no":  540,
+        "name":  "Big Cymbal 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  28
+    },
+    {
+        "category":  "Crash",
+        "no":  541,
+        "name":  "Big Cymbal 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  29
+    },
+    {
+        "category":  "Crash",
+        "no":  542,
+        "name":  "Cymbal Hammer 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  30
+    },
+    {
+        "category":  "Crash",
+        "no":  543,
+        "name":  "China Cymbal 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  31
+    },
+    {
+        "category":  "Crash",
+        "no":  544,
+        "name":  "4th Delay Crash 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  32
+    },
+    {
+        "category":  "Crash",
+        "no":  545,
+        "name":  "Long Crash + Reverb 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  33
+    },
+    {
+        "category":  "Crash",
+        "no":  546,
+        "name":  "Noise Crash 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  34
+    },
+    {
+        "category":  "Crash",
+        "no":  547,
+        "name":  "Noise Crash 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  35
+    },
+    {
+        "category":  "Crash",
+        "no":  548,
+        "name":  "Noise Crash 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  36
+    },
+    {
+        "category":  "Tom",
+        "no":  549,
+        "name":  "Acoustic High Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  37
+    },
+    {
+        "category":  "Tom",
+        "no":  550,
+        "name":  "Acoustic High Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  38
+    },
+    {
+        "category":  "Tom",
+        "no":  551,
+        "name":  "Acoustic Mid Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  39
+    },
+    {
+        "category":  "Tom",
+        "no":  552,
+        "name":  "Acoustic Mid Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  40
+    },
+    {
+        "category":  "Tom",
+        "no":  553,
+        "name":  "Acoustic Mid Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  41
+    },
+    {
+        "category":  "Tom",
+        "no":  554,
+        "name":  "Acoustic Mid Tom 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  42
+    },
+    {
+        "category":  "Tom",
+        "no":  555,
+        "name":  "Acoustic Low Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  43
+    },
+    {
+        "category":  "Tom",
+        "no":  556,
+        "name":  "Acoustic Low Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  44
+    },
+    {
+        "category":  "Tom",
+        "no":  557,
+        "name":  "Punchy High Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  45
+    },
+    {
+        "category":  "Tom",
+        "no":  558,
+        "name":  "Punchy High Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  46
+    },
+    {
+        "category":  "Tom",
+        "no":  559,
+        "name":  "Punchy High Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  47
+    },
+    {
+        "category":  "Tom",
+        "no":  560,
+        "name":  "Punchy Mid Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  48
+    },
+    {
+        "category":  "Tom",
+        "no":  561,
+        "name":  "Punchy Mid Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  49
+    },
+    {
+        "category":  "Tom",
+        "no":  562,
+        "name":  "Punchy Mid Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  50
+    },
+    {
+        "category":  "Tom",
+        "no":  563,
+        "name":  "Punchy Mid Tom 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  51
+    },
+    {
+        "category":  "Tom",
+        "no":  564,
+        "name":  "Punchy Mid Tom 5",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  52
+    },
+    {
+        "category":  "Tom",
+        "no":  565,
+        "name":  "Punchy Mid Tom 6",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  53
+    },
+    {
+        "category":  "Tom",
+        "no":  566,
+        "name":  "Punchy Low Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  54
+    },
+    {
+        "category":  "Tom",
+        "no":  567,
+        "name":  "Punchy Low Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  55
+    },
+    {
+        "category":  "Tom",
+        "no":  568,
+        "name":  "Punchy Low Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  56
+    },
+    {
+        "category":  "Tom",
+        "no":  569,
+        "name":  "Electronic High Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  57
+    },
+    {
+        "category":  "Tom",
+        "no":  570,
+        "name":  "Electronic High Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  58
+    },
+    {
+        "category":  "Tom",
+        "no":  571,
+        "name":  "Electronic High Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  59
+    },
+    {
+        "category":  "Tom",
+        "no":  572,
+        "name":  "Electronic High Tom 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  60
+    },
+    {
+        "category":  "Tom",
+        "no":  573,
+        "name":  "Electronic High Tom 5",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  61
+    },
+    {
+        "category":  "Tom",
+        "no":  574,
+        "name":  "Electronic Mid Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  62
+    },
+    {
+        "category":  "Tom",
+        "no":  575,
+        "name":  "Electronic Mid Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  63
+    },
+    {
+        "category":  "Tom",
+        "no":  576,
+        "name":  "Electronic Low Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  64
+    },
+    {
+        "category":  "Tom",
+        "no":  577,
+        "name":  "Electronic Low Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  65
+    },
+    {
+        "category":  "Tom",
+        "no":  578,
+        "name":  "RX5 High Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  66
+    },
+    {
+        "category":  "Tom",
+        "no":  579,
+        "name":  "RX5 Mid Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  67
+    },
+    {
+        "category":  "Tom",
+        "no":  580,
+        "name":  "RX5 Mid Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  68
+    },
+    {
+        "category":  "Tom",
+        "no":  581,
+        "name":  "RX5 Low Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  69
+    },
+    {
+        "category":  "Tom",
+        "no":  582,
+        "name":  "Acoustic High Tom - Oak 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  70
+    },
+    {
+        "category":  "Tom",
+        "no":  583,
+        "name":  "Acoustic Mid Tom - Oak 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  71
+    },
+    {
+        "category":  "Tom",
+        "no":  584,
+        "name":  "Acoustic Low Tom - Oak 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  72
+    },
+    {
+        "category":  "Tom",
+        "no":  585,
+        "name":  "Acoustic High Tom - Jazz 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  73
+    },
+    {
+        "category":  "Tom",
+        "no":  586,
+        "name":  "Acoustic Mid Tom - Jazz 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  74
+    },
+    {
+        "category":  "Tom",
+        "no":  587,
+        "name":  "Acoustic Low Tom - Jazz 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  75
+    },
+    {
+        "category":  "Tom",
+        "no":  588,
+        "name":  "Acoustic High Tom - Rock 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  76
+    },
+    {
+        "category":  "Tom",
+        "no":  589,
+        "name":  "Acoustic Mid Tom - Rock 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  77
+    },
+    {
+        "category":  "Tom",
+        "no":  590,
+        "name":  "Acoustic Low Tom - Rock 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  78
+    },
+    {
+        "category":  "Tom",
+        "no":  591,
+        "name":  "Acoustic High Tom - Maple 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  79
+    },
+    {
+        "category":  "Tom",
+        "no":  592,
+        "name":  "Acoustic Mid Tom - Maple 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  80
+    },
+    {
+        "category":  "Tom",
+        "no":  593,
+        "name":  "Acoustic Low Tom - Maple 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  81
+    },
+    {
+        "category":  "Tom",
+        "no":  594,
+        "name":  "Electronic High Tom + Reverb 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  82
+    },
+    {
+        "category":  "Tom",
+        "no":  595,
+        "name":  "Muffled Mid Tom + Reverb 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  83
+    },
+    {
+        "category":  "Tom",
+        "no":  596,
+        "name":  "Acoustic Mid Tom + Reverb 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  84
+    },
+    {
+        "category":  "Tom",
+        "no":  597,
+        "name":  "Modulated Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  85
+    },
+    {
+        "category":  "Tom",
+        "no":  598,
+        "name":  "Modulated Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  86
+    },
+    {
+        "category":  "Tom",
+        "no":  599,
+        "name":  "Modulated Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  87
+    },
+    {
+        "category":  "Tom",
+        "no":  600,
+        "name":  "RX5 High Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  88
+    },
+    {
+        "category":  "Tom",
+        "no":  601,
+        "name":  "RX5 Mid Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  89
+    },
+    {
+        "category":  "Tom",
+        "no":  602,
+        "name":  "RX5 Mid Tom 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  90
+    },
+    {
+        "category":  "Tom",
+        "no":  603,
+        "name":  "RX5 Low Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  91
+    },
+    {
+        "category":  "Tom",
+        "no":  604,
+        "name":  "Distorted Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  92
+    },
+    {
+        "category":  "Tom",
+        "no":  605,
+        "name":  "Distorted Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  93
+    },
+    {
+        "category":  "Tom",
+        "no":  606,
+        "name":  "Distorted Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  94
+    },
+    {
+        "category":  "Tom",
+        "no":  607,
+        "name":  "Distorted Tom 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  95
+    },
+    {
+        "category":  "Tom",
+        "no":  608,
+        "name":  "Distorted Tom 5",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  96
+    },
+    {
+        "category":  "Tom",
+        "no":  609,
+        "name":  "Distorted Tom 6",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  97
+    },
+    {
+        "category":  "Tom",
+        "no":  610,
+        "name":  "Distorted Tom 7",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  98
+    },
+    {
+        "category":  "Tom",
+        "no":  611,
+        "name":  "Bitcrushed Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  99
+    },
+    {
+        "category":  "Tom",
+        "no":  612,
+        "name":  "Bitcrushed Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  100
+    },
+    {
+        "category":  "Tom",
+        "no":  613,
+        "name":  "Bass Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  101
+    },
+    {
+        "category":  "Tom",
+        "no":  614,
+        "name":  "Bass Tom 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  102
+    },
+    {
+        "category":  "Tom",
+        "no":  615,
+        "name":  "Tonal Bass Tom 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  103
+    },
+    {
+        "category":  "Tom",
+        "no":  616,
+        "name":  "Bass Tom 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  104
+    },
+    {
+        "category":  "Tom",
+        "no":  617,
+        "name":  "Bass Tom 4",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  105
+    },
+    {
+        "category":  "Tom",
+        "no":  618,
+        "name":  "Bass Tom 5",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  106
+    },
+    {
+        "category":  "Bell",
+        "no":  619,
+        "name":  "Analog Cowbell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  107
+    },
+    {
+        "category":  "Bell",
+        "no":  620,
+        "name":  "Analog Cowbell Accent 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  108
+    },
+    {
+        "category":  "Bell",
+        "no":  621,
+        "name":  "Tonal Cowbell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  109
+    },
+    {
+        "category":  "Bell",
+        "no":  622,
+        "name":  "Tonal Cowbell 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  110
+    },
+    {
+        "category":  "Bell",
+        "no":  623,
+        "name":  "Metallic Cowbell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  111
+    },
+    {
+        "category":  "Bell",
+        "no":  624,
+        "name":  "Metallic Cowbell 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  112
+    },
+    {
+        "category":  "Bell",
+        "no":  625,
+        "name":  "Metallic Cowbell 3",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  113
+    },
+    {
+        "category":  "Bell",
+        "no":  626,
+        "name":  "Cowbell High 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  114
+    },
+    {
+        "category":  "Bell",
+        "no":  627,
+        "name":  "Cowbell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  115
+    },
+    {
+        "category":  "Bell",
+        "no":  628,
+        "name":  "Cowbell Mid 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  116
+    },
+    {
+        "category":  "Bell",
+        "no":  629,
+        "name":  "Cowbell Mid 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  117
+    },
+    {
+        "category":  "Bell",
+        "no":  630,
+        "name":  "Agogo High 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  118
+    },
+    {
+        "category":  "Bell",
+        "no":  631,
+        "name":  "Agogo Low 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  119
+    },
+    {
+        "category":  "Bell",
+        "no":  632,
+        "name":  "Small Bell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  120
+    },
+    {
+        "category":  "Bell",
+        "no":  633,
+        "name":  "Short Bell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  121
+    },
+    {
+        "category":  "Bell",
+        "no":  634,
+        "name":  "Short Bell 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  122
+    },
+    {
+        "category":  "Bell",
+        "no":  635,
+        "name":  "Tingsha Bell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  123
+    },
+    {
+        "category":  "Bell",
+        "no":  636,
+        "name":  "Ringing Bell 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  124
+    },
+    {
+        "category":  "Bell",
+        "no":  637,
+        "name":  "Muted Finger Cymbal 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  125
+    },
+    {
+        "category":  "Bell",
+        "no":  638,
+        "name":  "Muted Finger Cymbal 2",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  126
+    },
+    {
+        "category":  "Bell",
+        "no":  639,
+        "name":  "Sagat1 Open 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  127
+    },
+    {
+        "category":  "Bell",
+        "no":  640,
+        "name":  "Sagat1 Close 1",
+        "msb":  63,
+        "lsb":  4,
+        "bank":  4,
+        "program":  128
+    },
+    {
+        "category":  "Bell",
+        "no":  641,
+        "name":  "Sagat2 Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  1
+    },
+    {
+        "category":  "Bell",
+        "no":  642,
+        "name":  "Sagat2 Close 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  2
+    },
+    {
+        "category":  "Bell",
+        "no":  643,
+        "name":  "Sagat3 Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  3
+    },
+    {
+        "category":  "Bell",
+        "no":  644,
+        "name":  "Sagat3 Close 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  4
+    },
+    {
+        "category":  "Bell",
+        "no":  645,
+        "name":  "Atarigane 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  5
+    },
+    {
+        "category":  "Bell",
+        "no":  646,
+        "name":  "High Bell 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  6
+    },
+    {
+        "category":  "Bell",
+        "no":  647,
+        "name":  "Mind Bell 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  7
+    },
+    {
+        "category":  "Bell",
+        "no":  648,
+        "name":  "Sci-Fi Bell 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  8
+    },
+    {
+        "category":  "Bell",
+        "no":  649,
+        "name":  "Bell and Noise 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  9
+    },
+    {
+        "category":  "Bell",
+        "no":  650,
+        "name":  "Modulated Bell 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  10
+    },
+    {
+        "category":  "Bell",
+        "no":  1794,
+        "name":  "Metallic Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  2
+    },
+    {
+        "category":  "Bell",
+        "no":  1795,
+        "name":  "Twinkle",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  3
+    },
+    {
+        "category":  "Bell",
+        "no":  1796,
+        "name":  "Stick Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  4
+    },
+    {
+        "category":  "Bell",
+        "no":  1797,
+        "name":  "Ice Bells",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  5
+    },
+    {
+        "category":  "Bell",
+        "no":  1798,
+        "name":  "Ice Bells [Chord]",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  6
+    },
+    {
+        "category":  "Bell",
+        "no":  1799,
+        "name":  "Bell Ice",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  7
+    },
+    {
+        "category":  "Bell",
+        "no":  1800,
+        "name":  "Stack Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  8
+    },
+    {
+        "category":  "Bell",
+        "no":  1801,
+        "name":  "J-Pop",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  9
+    },
+    {
+        "category":  "Bell",
+        "no":  1802,
+        "name":  "Crystal",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  10
+    },
+    {
+        "category":  "Bell",
+        "no":  1803,
+        "name":  "Chorus Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  11
+    },
+    {
+        "category":  "Bell",
+        "no":  1804,
+        "name":  "Handbell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  12
+    },
+    {
+        "category":  "Bell",
+        "no":  1805,
+        "name":  "Bell Chiff",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  13
+    },
+    {
+        "category":  "Bell",
+        "no":  1806,
+        "name":  "Bell Chiff [Chord]",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  14
+    },
+    {
+        "category":  "Bell",
+        "no":  1807,
+        "name":  "Sako Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  15
+    },
+    {
+        "category":  "Bell",
+        "no":  1808,
+        "name":  "Nice Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  16
+    },
+    {
+        "category":  "Bell",
+        "no":  1809,
+        "name":  "Noisy Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  17
+    },
+    {
+        "category":  "Bell",
+        "no":  1810,
+        "name":  "Pop Bells \u0026 Pad",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  18
+    },
+    {
+        "category":  "Bell",
+        "no":  1811,
+        "name":  "Pop Bells \u0026 Pad [Chord]",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  19
+    },
+    {
+        "category":  "Bell",
+        "no":  1812,
+        "name":  "Digibox",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  20
+    },
+    {
+        "category":  "Bell",
+        "no":  1813,
+        "name":  "Nibelungen",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  21
+    },
+    {
+        "category":  "Bell",
+        "no":  1814,
+        "name":  "Wood Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  22
+    },
+    {
+        "category":  "Bell",
+        "no":  1815,
+        "name":  "Marimbell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  23
+    },
+    {
+        "category":  "Bell",
+        "no":  1816,
+        "name":  "Gamelan",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  24
+    },
+    {
+        "category":  "Bell",
+        "no":  1817,
+        "name":  "Mystic Bowl",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  25
+    },
+    {
+        "category":  "Bell",
+        "no":  1818,
+        "name":  "Island Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  26
+    },
+    {
+        "category":  "Bell",
+        "no":  1819,
+        "name":  "Tibetan",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  27
+    },
+    {
+        "category":  "Bell",
+        "no":  1820,
+        "name":  "Tibetan [Chord]",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  28
+    },
+    {
+        "category":  "Bell",
+        "no":  1821,
+        "name":  "Rimba Bells",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  29
+    },
+    {
+        "category":  "Bell",
+        "no":  1822,
+        "name":  "Lost in Asia",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  30
+    },
+    {
+        "category":  "Bell",
+        "no":  1823,
+        "name":  "Music Box",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  31
+    },
+    {
+        "category":  "Bell",
+        "no":  1824,
+        "name":  "Tinkle Bell",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  32
+    },
+    {
+        "category":  "Bell",
+        "no":  1825,
+        "name":  "Tubular Bells 1",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  33
+    },
+    {
+        "category":  "Bell",
+        "no":  1826,
+        "name":  "Tubular Bells 2",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  34
+    },
+    {
+        "category":  "Bell",
+        "no":  1827,
+        "name":  "Timp/Bell/Glocken",
+        "msb":  63,
+        "lsb":  14,
+        "bank":  14,
+        "program":  35
+    },
+    {
+        "category":  "Bell",
+        "no":  2013,
+        "name":  "FM Tubular Bells",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  93
+    },
+    {
+        "category":  "Bell",
+        "no":  2014,
+        "name":  "FM Tubular Bells [Chord]",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  94
+    },
+    {
+        "category":  "Bell",
+        "no":  2015,
+        "name":  "Future Bell",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  95
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  651,
+        "name":  "RX5 Conga High Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  11
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  652,
+        "name":  "RX5 Conga High Mute 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  12
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  653,
+        "name":  "RX5 Conga Low Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  13
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  654,
+        "name":  "Conga1 High Slap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  14
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  655,
+        "name":  "Conga1 High Slap Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  15
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  656,
+        "name":  "Conga1 High Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  16
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  657,
+        "name":  "Conga1 Low Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  17
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  658,
+        "name":  "Conga2 High 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  18
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  659,
+        "name":  "Conga2 Mid 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  19
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  660,
+        "name":  "Conga2 Mid Mute 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  20
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  661,
+        "name":  "Conga3 High Mute 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  21
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  662,
+        "name":  "Conga3 Mid Slap Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  22
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  663,
+        "name":  "Khalg Conga Low",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  23
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  664,
+        "name":  "Analog Conga High 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  24
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  665,
+        "name":  "Analog Conga Mid 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  25
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  666,
+        "name":  "Analog Conga Low 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  26
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  667,
+        "name":  "RX5 Bongo High 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  27
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  668,
+        "name":  "RX5 Bongo Low 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  28
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  669,
+        "name":  "Bongo1 High Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  29
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  670,
+        "name":  "Bongo1 Low Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  30
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  671,
+        "name":  "Bongo2 High 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  31
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  672,
+        "name":  "Bongo3 High 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  32
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  673,
+        "name":  "Bongo3 High 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  33
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  674,
+        "name":  "Bongo4 High 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  34
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  675,
+        "name":  "Bongo4 Low 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  35
+    },
+    {
+        "category":  "Conga / Bongo",
+        "no":  676,
+        "name":  "Bongo4 Low 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  36
+    },
+    {
+        "category":  "World",
+        "no":  677,
+        "name":  "Djembe 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  37
+    },
+    {
+        "category":  "World",
+        "no":  678,
+        "name":  "Djembe 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  38
+    },
+    {
+        "category":  "World",
+        "no":  679,
+        "name":  "Djembe 3",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  39
+    },
+    {
+        "category":  "World",
+        "no":  680,
+        "name":  "Djembe 4",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  40
+    },
+    {
+        "category":  "World",
+        "no":  681,
+        "name":  "Talking Drum 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  41
+    },
+    {
+        "category":  "World",
+        "no":  682,
+        "name":  "Talking Drum 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  42
+    },
+    {
+        "category":  "World",
+        "no":  683,
+        "name":  "Talking Drum 3",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  43
+    },
+    {
+        "category":  "World",
+        "no":  684,
+        "name":  "Talking Drum 4",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  44
+    },
+    {
+        "category":  "World",
+        "no":  685,
+        "name":  "Tamborim Up 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  45
+    },
+    {
+        "category":  "World",
+        "no":  686,
+        "name":  "Tamborim Down 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  46
+    },
+    {
+        "category":  "World",
+        "no":  687,
+        "name":  "Tamborim Finger Back 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  47
+    },
+    {
+        "category":  "World",
+        "no":  688,
+        "name":  "Tamborim Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  48
+    },
+    {
+        "category":  "World",
+        "no":  689,
+        "name":  "Pandeiro Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  49
+    },
+    {
+        "category":  "World",
+        "no":  690,
+        "name":  "Pandeiro Close 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  50
+    },
+    {
+        "category":  "World",
+        "no":  691,
+        "name":  "Reco-reco 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  51
+    },
+    {
+        "category":  "World",
+        "no":  692,
+        "name":  "Surdo Mute 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  52
+    },
+    {
+        "category":  "World",
+        "no":  693,
+        "name":  "Surdo Stop 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  53
+    },
+    {
+        "category":  "World",
+        "no":  694,
+        "name":  "Surdo Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  54
+    },
+    {
+        "category":  "World",
+        "no":  695,
+        "name":  "Surdo Mute 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  55
+    },
+    {
+        "category":  "World",
+        "no":  696,
+        "name":  "Surdo Stick 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  56
+    },
+    {
+        "category":  "World",
+        "no":  697,
+        "name":  "Caixa Rim 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  57
+    },
+    {
+        "category":  "World",
+        "no":  698,
+        "name":  "Vibraslap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  58
+    },
+    {
+        "category":  "World",
+        "no":  699,
+        "name":  "Darbuka Dum 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  59
+    },
+    {
+        "category":  "World",
+        "no":  700,
+        "name":  "Darbuka Dom \u0026 Tak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  60
+    },
+    {
+        "category":  "World",
+        "no":  701,
+        "name":  "Darbuka Tak Finger 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  61
+    },
+    {
+        "category":  "World",
+        "no":  702,
+        "name":  "Darbuka Tak Close 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  62
+    },
+    {
+        "category":  "World",
+        "no":  703,
+        "name":  "Darbuka Slap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  63
+    },
+    {
+        "category":  "World",
+        "no":  704,
+        "name":  "Darbuka Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  64
+    },
+    {
+        "category":  "World",
+        "no":  705,
+        "name":  "Darbuka Rak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  65
+    },
+    {
+        "category":  "World",
+        "no":  706,
+        "name":  "Darbuka Flam 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  66
+    },
+    {
+        "category":  "World",
+        "no":  707,
+        "name":  "Darbuka Noise 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  67
+    },
+    {
+        "category":  "World",
+        "no":  708,
+        "name":  "Tunisian Bendir Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  68
+    },
+    {
+        "category":  "World",
+        "no":  709,
+        "name":  "Tunisian Bendir Tak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  69
+    },
+    {
+        "category":  "World",
+        "no":  710,
+        "name":  "Tunisian Bendir Tak 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  70
+    },
+    {
+        "category":  "World",
+        "no":  711,
+        "name":  "Moroccan Bendir Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  71
+    },
+    {
+        "category":  "World",
+        "no":  712,
+        "name":  "Moroccan Bendir Dom 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  72
+    },
+    {
+        "category":  "World",
+        "no":  713,
+        "name":  "Moroccan Bendir Dom 3",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  73
+    },
+    {
+        "category":  "World",
+        "no":  714,
+        "name":  "Moroccan Bendir Edge 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  74
+    },
+    {
+        "category":  "World",
+        "no":  715,
+        "name":  "Moroccan Tamtam 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  75
+    },
+    {
+        "category":  "World",
+        "no":  716,
+        "name":  "Algerian Bendir Deza 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  76
+    },
+    {
+        "category":  "World",
+        "no":  717,
+        "name":  "Algerian Bendir Kaf 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  77
+    },
+    {
+        "category":  "World",
+        "no":  718,
+        "name":  "Algerian Galal Daza 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  78
+    },
+    {
+        "category":  "World",
+        "no":  719,
+        "name":  "Riq Dum Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  79
+    },
+    {
+        "category":  "World",
+        "no":  720,
+        "name":  "Riq Tek Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  80
+    },
+    {
+        "category":  "World",
+        "no":  721,
+        "name":  "Riq Teke Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  81
+    },
+    {
+        "category":  "World",
+        "no":  722,
+        "name":  "Riq Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  82
+    },
+    {
+        "category":  "World",
+        "no":  723,
+        "name":  "Riq Snouj Close 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  83
+    },
+    {
+        "category":  "World",
+        "no":  724,
+        "name":  "Hollo Finger 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  84
+    },
+    {
+        "category":  "World",
+        "no":  725,
+        "name":  "Bass Darbuka Dum 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  85
+    },
+    {
+        "category":  "World",
+        "no":  726,
+        "name":  "Bass Darbuka Tek 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  86
+    },
+    {
+        "category":  "World",
+        "no":  727,
+        "name":  "Bendir Tek 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  87
+    },
+    {
+        "category":  "World",
+        "no":  728,
+        "name":  "Bendir Slap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  88
+    },
+    {
+        "category":  "World",
+        "no":  729,
+        "name":  "Bendir Large 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  89
+    },
+    {
+        "category":  "World",
+        "no":  730,
+        "name":  "Merjaf Group Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  90
+    },
+    {
+        "category":  "World",
+        "no":  731,
+        "name":  "Merjaf Group Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  91
+    },
+    {
+        "category":  "World",
+        "no":  732,
+        "name":  "Zeer Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  92
+    },
+    {
+        "category":  "World",
+        "no":  733,
+        "name":  "Zeer Tak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  93
+    },
+    {
+        "category":  "World",
+        "no":  734,
+        "name":  "Merwas Group Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  94
+    },
+    {
+        "category":  "World",
+        "no":  735,
+        "name":  "Merwas Group Tak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  95
+    },
+    {
+        "category":  "World",
+        "no":  736,
+        "name":  "Medando Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  96
+    },
+    {
+        "category":  "World",
+        "no":  737,
+        "name":  "Medando Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  97
+    },
+    {
+        "category":  "World",
+        "no":  738,
+        "name":  "Sigal Marad Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  98
+    },
+    {
+        "category":  "World",
+        "no":  739,
+        "name":  "Sigal Marad Tak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  99
+    },
+    {
+        "category":  "World",
+        "no":  740,
+        "name":  "Doholla Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  100
+    },
+    {
+        "category":  "World",
+        "no":  741,
+        "name":  "Doholla Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  101
+    },
+    {
+        "category":  "World",
+        "no":  742,
+        "name":  "Katem Med Dom Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  102
+    },
+    {
+        "category":  "World",
+        "no":  743,
+        "name":  "Katem Med Tak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  103
+    },
+    {
+        "category":  "World",
+        "no":  744,
+        "name":  "Katem Med Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  104
+    },
+    {
+        "category":  "World",
+        "no":  745,
+        "name":  "Taar Barashim Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  105
+    },
+    {
+        "category":  "World",
+        "no":  746,
+        "name":  "Taar Barashim Shake 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  106
+    },
+    {
+        "category":  "World",
+        "no":  747,
+        "name":  "Req Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  107
+    },
+    {
+        "category":  "World",
+        "no":  748,
+        "name":  "Req Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  108
+    },
+    {
+        "category":  "World",
+        "no":  749,
+        "name":  "Req Open 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  109
+    },
+    {
+        "category":  "World",
+        "no":  750,
+        "name":  "Req Sajat 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  110
+    },
+    {
+        "category":  "World",
+        "no":  751,
+        "name":  "Udho Back 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  111
+    },
+    {
+        "category":  "World",
+        "no":  752,
+        "name":  "Udho Chap Body 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  112
+    },
+    {
+        "category":  "World",
+        "no":  753,
+        "name":  "Jahla Group Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  113
+    },
+    {
+        "category":  "World",
+        "no":  754,
+        "name":  "Iranian Bendir Tom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  114
+    },
+    {
+        "category":  "World",
+        "no":  755,
+        "name":  "Iranian Bendir Chap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  115
+    },
+    {
+        "category":  "World",
+        "no":  756,
+        "name":  "Iranian Bendir Back 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  116
+    },
+    {
+        "category":  "World",
+        "no":  757,
+        "name":  "Tombak Tom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  117
+    },
+    {
+        "category":  "World",
+        "no":  758,
+        "name":  "Tombak Slap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  118
+    },
+    {
+        "category":  "World",
+        "no":  759,
+        "name":  "Tombak Chap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  119
+    },
+    {
+        "category":  "World",
+        "no":  760,
+        "name":  "Tombak Flam \u0026 Back 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  120
+    },
+    {
+        "category":  "World",
+        "no":  761,
+        "name":  "Tempo Chap 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  121
+    },
+    {
+        "category":  "World",
+        "no":  762,
+        "name":  "Tabla Dom 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  122
+    },
+    {
+        "category":  "World",
+        "no":  763,
+        "name":  "Tabla Tak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  123
+    },
+    {
+        "category":  "World",
+        "no":  764,
+        "name":  "Tabla Sak 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  124
+    },
+    {
+        "category":  "World",
+        "no":  765,
+        "name":  "Tabla 1",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  125
+    },
+    {
+        "category":  "World",
+        "no":  766,
+        "name":  "Tabla 2",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  126
+    },
+    {
+        "category":  "World",
+        "no":  767,
+        "name":  "Tabla 3",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  127
+    },
+    {
+        "category":  "World",
+        "no":  768,
+        "name":  "Tabla 4",
+        "msb":  63,
+        "lsb":  5,
+        "bank":  5,
+        "program":  128
+    },
+    {
+        "category":  "World",
+        "no":  769,
+        "name":  "Tabla 5",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  1
+    },
+    {
+        "category":  "World",
+        "no":  770,
+        "name":  "Mridangam 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  2
+    },
+    {
+        "category":  "World",
+        "no":  771,
+        "name":  "Mridangam 2",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  3
+    },
+    {
+        "category":  "World",
+        "no":  772,
+        "name":  "Japanese Wa Taiko 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  4
+    },
+    {
+        "category":  "World",
+        "no":  773,
+        "name":  "Japanese Oo Taiko 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  5
+    },
+    {
+        "category":  "World",
+        "no":  774,
+        "name":  "Japanese Yagura Taiko 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  6
+    },
+    {
+        "category":  "World",
+        "no":  775,
+        "name":  "Japanese Shime Taiko 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  7
+    },
+    {
+        "category":  "World",
+        "no":  776,
+        "name":  "Japanese Tsuzumi 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  8
+    },
+    {
+        "category":  "World",
+        "no":  777,
+        "name":  "Timbale 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  9
+    },
+    {
+        "category":  "World",
+        "no":  778,
+        "name":  "Timbale 2",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  10
+    },
+    {
+        "category":  "World",
+        "no":  779,
+        "name":  "Cajon 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  11
+    },
+    {
+        "category":  "World",
+        "no":  780,
+        "name":  "Cajon 2",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  12
+    },
+    {
+        "category":  "World",
+        "no":  781,
+        "name":  "Claves 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  13
+    },
+    {
+        "category":  "World",
+        "no":  782,
+        "name":  "Wood Block 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  14
+    },
+    {
+        "category":  "World",
+        "no":  783,
+        "name":  "Bones 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  15
+    },
+    {
+        "category":  "World",
+        "no":  784,
+        "name":  "Bones 2",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  16
+    },
+    {
+        "category":  "World",
+        "no":  785,
+        "name":  "Bones 3",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  17
+    },
+    {
+        "category":  "World",
+        "no":  786,
+        "name":  "Bones Triplet 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  18
+    },
+    {
+        "category":  "World",
+        "no":  787,
+        "name":  "Spoons 1",
+        "msb":  63,
+        "lsb":  6,
+        "bank":  6,
+        "program":  19
+    },
+    {
+        "category":  "World",
+        "no":  1739,
+        "name":  "Sitar 1",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  75
+    },
+    {
+        "category":  "World",
+        "no":  1740,
+        "name":  "Sitar 2",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  76
+    },
+    {
+        "category":  "World",
+        "no":  1741,
+        "name":  "Sitar 3",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  77
+    },
+    {
+        "category":  "World",
+        "no":  1742,
+        "name":  "Tambura",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  78
+    },
+    {
+        "category":  "World",
+        "no":  1743,
+        "name":  "Banjo 1",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  79
+    },
+    {
+        "category":  "World",
+        "no":  1744,
+        "name":  "Banjo 2",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  80
+    },
+    {
+        "category":  "World",
+        "no":  1745,
+        "name":  "Shamisen",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  81
+    },
+    {
+        "category":  "World",
+        "no":  1746,
+        "name":  "Koto",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  82
+    },
+    {
+        "category":  "World",
+        "no":  1747,
+        "name":  "Baglama",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  83
+    },
+    {
+        "category":  "World",
+        "no":  1748,
+        "name":  "Saz Feeze",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  84
+    },
+    {
+        "category":  "World",
+        "no":  1749,
+        "name":  "Kanun",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  85
+    },
+    {
+        "category":  "World",
+        "no":  1750,
+        "name":  "Kotoun",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  86
+    },
+    {
+        "category":  "World",
+        "no":  1751,
+        "name":  "Bouzuki",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  87
+    },
+    {
+        "category":  "World",
+        "no":  1752,
+        "name":  "Where Am I?",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  88
+    },
+    {
+        "category":  "World",
+        "no":  1753,
+        "name":  "Sakura",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  89
+    },
+    {
+        "category":  "World",
+        "no":  1754,
+        "name":  "Nomad",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  90
+    },
+    {
+        "category":  "World",
+        "no":  1755,
+        "name":  "Nomad [Chord]",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  91
+    },
+    {
+        "category":  "World",
+        "no":  1756,
+        "name":  "Pluk-o-dy",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  92
+    },
+    {
+        "category":  "World",
+        "no":  1757,
+        "name":  "Kalimba",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  93
+    },
+    {
+        "category":  "World",
+        "no":  1758,
+        "name":  "Mbira",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  94
+    },
+    {
+        "category":  "World",
+        "no":  1759,
+        "name":  "Glass Mbira",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  95
+    },
+    {
+        "category":  "World",
+        "no":  1760,
+        "name":  "Fiddle",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  96
+    },
+    {
+        "category":  "World",
+        "no":  1761,
+        "name":  "Kemence",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  97
+    },
+    {
+        "category":  "World",
+        "no":  1762,
+        "name":  "Kemen Wet",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  98
+    },
+    {
+        "category":  "World",
+        "no":  1763,
+        "name":  "Yayli",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  99
+    },
+    {
+        "category":  "World",
+        "no":  1764,
+        "name":  "Kawala",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  100
+    },
+    {
+        "category":  "World",
+        "no":  1765,
+        "name":  "Ney",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  101
+    },
+    {
+        "category":  "World",
+        "no":  1766,
+        "name":  "Zurna",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  102
+    },
+    {
+        "category":  "World",
+        "no":  1767,
+        "name":  "Pungi",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  103
+    },
+    {
+        "category":  "World",
+        "no":  1768,
+        "name":  "Snake Charmer",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  104
+    },
+    {
+        "category":  "World",
+        "no":  1769,
+        "name":  "Shehnai 1",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  105
+    },
+    {
+        "category":  "World",
+        "no":  1770,
+        "name":  "Shehnai 2",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  106
+    },
+    {
+        "category":  "World",
+        "no":  1771,
+        "name":  "Mythic Flute",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  107
+    },
+    {
+        "category":  "World",
+        "no":  1772,
+        "name":  "Didgeridoo",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  108
+    },
+    {
+        "category":  "World",
+        "no":  1773,
+        "name":  "Kodo",
+        "msb":  63,
+        "lsb":  13,
+        "bank":  13,
+        "program":  109
+    },
+    {
+        "category":  "World",
+        "no":  2007,
+        "name":  "FM Koto",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  87
+    },
+    {
+        "category":  "World",
+        "no":  2008,
+        "name":  "FM Shamisen",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  88
+    },
+    {
+        "category":  "World",
+        "no":  2009,
+        "name":  "FM Sitar",
+        "msb":  63,
+        "lsb":  15,
+        "bank":  15,
+        "program":  89
+    }
+]
