@@ -261,18 +261,7 @@ export class MidiService {
       if ((window as any).SY_LOG) (window as any).SY_LOG("[MIDI] Access Granted.");
 
       console.log("[MIDI] Access granted. Setting up onstatechange listener.");
-      this.midiAccess.onstatechange = (event) => {
-        const port = (event as MIDIConnectionEvent).port;
-        if (port.type === 'input' && port.state === 'connected') {
-          const input = port as MIDIInput;
-          input.open();
-          input.removeEventListener('midimessage', this.handleIngressBound);
-          input.addEventListener('midimessage', this.handleIngressBound);
-          console.log(`[MIDI] New device connected: ${port.name}`);
-        }
-        this.onStateChangeListeners.forEach(l => l(event));
-      };
-
+      this.setupStateChangeHandler();
       this.reScanInputs();
       this.loadRoutingMatrix();
       this.loadBroadcastMode();
@@ -292,7 +281,12 @@ export class MidiService {
     try {
       this.midiAccess = await navigator.requestMIDIAccess({ sysex: true });
       this.sysexEnabled = true;
+      // Re-wire onstatechange on the new MIDIAccess object so future
+      // device reconnects still reattach the midimessage listener.
+      this.setupStateChangeHandler();
       this.reScanInputs();
+      // Notify listeners so midiStore.refreshDevices() updates its port refs.
+      this.onStateChangeListeners.forEach(l => l(new Event('reinit')));
       if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] SysEx access granted.');
       return true;
     } catch (e: any) {
@@ -520,6 +514,21 @@ export class MidiService {
 
   getBroadcastMode(): boolean {
     return this.broadcastMode;
+  }
+
+  private setupStateChangeHandler() {
+    if (!this.midiAccess) return;
+    this.midiAccess.onstatechange = (event) => {
+      const port = (event as MIDIConnectionEvent).port;
+      if (port.type === 'input' && port.state === 'connected') {
+        const input = port as MIDIInput;
+        input.open();
+        input.removeEventListener('midimessage', this.handleIngressBound);
+        input.addEventListener('midimessage', this.handleIngressBound);
+        console.log(`[MIDI] New device connected: ${port.name}`);
+      }
+      this.onStateChangeListeners.forEach(l => l(event));
+    };
   }
 
   private handleIngress(event: MIDIMessageEvent) {

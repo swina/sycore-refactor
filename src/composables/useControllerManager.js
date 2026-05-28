@@ -31,6 +31,10 @@ export function useControllerManager() {
 
   const activeControllers = ref([])
   const lastTriggerTimes = new Map()
+  const lastCCValuePerMapping = new Map() // tracks last CC value per mapping id for rising-edge detection
+  // IDs of controllers that have already received onInit — prevents re-sending the
+  // hardware reset sequence when an unrelated device connects/disconnects.
+  const initializedControllerIds = new Set()
   let stopWatch = null
   let lastInputCount = 0
 
@@ -109,8 +113,19 @@ export function useControllerManager() {
   }
 
   function setupControllers() {
+    // Capture which controllers were previously active so we can skip re-init.
+    // A controller that was already initialized keeps its LED state and doesn't
+    // receive the hardware reset sequence just because an unrelated device changed.
+    const previousIds = new Set(activeControllers.value.map(c => c.input.id))
+
     activeControllers.value = []
     const inputs = midiService.getInputs()
+
+    // Evict IDs that are no longer connected so a re-plug triggers a fresh onInit.
+    const liveIds = new Set(inputs.map(i => i.id))
+    for (const id of initializedControllerIds) {
+      if (!liveIds.has(id)) initializedControllerIds.delete(id)
+    }
     const outputs = midiService.getOutputs()
 
     log(`Scanning ${inputs.length} inputs...`)
@@ -124,18 +139,25 @@ export function useControllerManager() {
 
       if (profile) {
         log(`Matched profile: ${profile.name} for ${name}`)
-        
+
         const output = outputs.find(o => (o.name || o.id) === name)
         if (output) log(`Found matching output for ${name}: ID=${output.id}`)
         else log(`WARNING: No output found for ${name}! Feedback will not work.`)
 
         const sendFn = output ? (data) => midiService.sendRawToDevice(output.id, data) : null
 
-        if (sendFn) {
+        // Only run onInit for controllers that are genuinely new (not previously active
+        // and not already initialized this session).  This prevents the Launchpad from
+        // receiving a reset + re-init every time a different MIDI device connects.
+        const isNew = !previousIds.has(input.id) && !initializedControllerIds.has(input.id)
+        if (sendFn && isNew) {
           profile.onInit(sendFn)
           // Flash the Mixer button for feedback
           sendFn([0xB0, 111, 63])
           setTimeout(() => sendFn([0xB0, 111, 0]), 200)
+          initializedControllerIds.add(input.id)
+        } else if (!isNew) {
+          log(`Skipping onInit for ${name} (already initialized)`)
         }
 
         activeControllers.value.push({ input, output, profile, sendFn })
@@ -160,6 +182,22 @@ export function useControllerManager() {
 
     // 1. Check Custom App Mappings FIRST (User Override)
     const mappings = mappingStore.appMidiMappings
+
+    // Rising-edge tracking: read previous CC values and update for this event.
+    // Keyed by mapping id so each mapping tracks its own last-seen value independently.
+    const prevCCValues = new Map()
+    if (cc !== null) {
+      for (const m of mappings) {
+        if (m.cc !== cc) continue
+        if (m.channel !== -1 && m.channel !== chan) continue
+        const mName = (m.device || '').toLowerCase()
+        const dName = deviceName.toLowerCase()
+        if (mName !== dName && !dName.includes(mName)) continue
+        prevCCValues.set(m.id, lastCCValuePerMapping.get(m.id) ?? 0)
+        lastCCValuePerMapping.set(m.id, val)
+      }
+    }
+
     const matchedMapping = mappings.find(m => {
       // Robust device matching: partial and case-insensitive
       const mName = (m.device || '').toLowerCase()
@@ -191,6 +229,24 @@ export function useControllerManager() {
       const action = matchedMapping.action
       const now = Date.now()
       if (now - (lastTriggerTimes.get(action) || 0) < 50) return true
+
+      // Rising-edge guard for CC discrete (non-continuous) mappings:
+      // Only fire when the value transitions INTO the triggered zone.
+      // This prevents double-fire when a controller sends the same CC value
+      // on both press and release (e.g. 127 + 127 instead of 127 + 0).
+      if (cc !== null && matchedMapping.cc !== undefined && !CONTINUOUS_ACTIONS.has(action)) {
+        const prevVal = prevCCValues.get(matchedMapping.id) ?? 0
+        const mv = matchedMapping.value ?? -1
+        const wasTrig = mv !== -1
+          ? prevVal === mv
+          : (matchedMapping.minValue !== undefined ? prevVal >= matchedMapping.minValue : prevVal > 63)
+        if (wasTrig) {
+          // Value was already in the triggered zone — consume but do not re-fire.
+          updateFeedback()
+          return matchedMapping.consume !== false
+        }
+      }
+
       lastTriggerTimes.set(action, now)
 
       log(`User Override: Executing Custom Action ${action}`)
@@ -289,6 +345,7 @@ export function useControllerManager() {
     log('Unmounted')
     if (stopWatch) stopWatch()
     midiService.setIngressFilter(null)
+    initializedControllerIds.clear()
   })
 
   return { setupControllers, updateFeedback }

@@ -29,6 +29,7 @@ import { useMidiCCListener } from '@/composables/useMidiCCListener'
 import { useMidiCapture } from '@/composables/useMidiCapture'
 import { useControllerManager } from '@/composables/useControllerManager'
 import { usePushNotifications } from '@/composables/usePushNotifications'
+import { useMinimizedModals } from '@/composables/useMinimizedModals'
 
 // Components
 import GlobalTooltip from '@/components/GlobalTooltip.vue'
@@ -90,6 +91,16 @@ useMidiCCListener()
 useControllerManager()
 const { captureNotesRef, captureNoteCount, captureEnabled, resetCapture } = useMidiCapture()
 const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
+const { minimizedModals } = useMinimizedModals()
+
+watch(
+  [() => uiStore.openModalKeys, minimizedModals],
+  ([openKeys, minimized]) => {
+    if (!uiStore.isAppInitializing && openKeys.length === 0 && minimized.length === 0) {
+      router.push('/')
+    }
+  }
+)
 
 // Init push notifications for superadmin
 onMounted(async () => {
