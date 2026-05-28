@@ -113,7 +113,7 @@ function confirmLearn() {
     <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-900 border border-synth-neon/30 rounded-2xl p-6 max-w-md w-full max-h-[80vh] flex flex-col shadow-2xl'">
 
       <!-- Header -->
-      <div class="px-6 py-5 flex justify-between items-center border-b border-neutral-800 pb-4 bg-gradient-to-r from-emerald-950/40 to-transparent">
+      <div class="px-6 py-5 flex justify-between items-center border-b border-neutral-800 pb-4 bg-gradient-to-r from-cyan-950/40 to-transparent">
         <h2 class="text-xm font-black text-white tracking-widest uppercase flex items-center gap-2">
           <Radio class="w-6 h-6 text-synth-neon" /> MIDI MAPPING
         </h2>

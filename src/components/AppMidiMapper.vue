@@ -309,7 +309,7 @@ onUnmounted(() => cancelLearn())
     <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-900 border border-violet-500/30 rounded-2xl p-6 max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl'">
 
       <!-- Header -->
-      <div class="px-6 py-5 flex justify-between items-center border-b border-neutral-800 bg-gradient-to-r from-emerald-950/40 to-transparent pb-4 shrink-0">
+      <div class="px-6 py-5 flex justify-between items-center border-b border-neutral-800 bg-gradient-to-r from-cyan-950/40 to-transparent pb-4 shrink-0">
         <h2 class="text-sm font-black text-white tracking-widest uppercase flex items-center gap-2">
           <Gamepad2 class="w-6 h-6 text-violet-400" />
           MIDI ACTIONS

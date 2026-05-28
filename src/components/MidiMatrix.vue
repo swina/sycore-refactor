@@ -116,19 +116,19 @@ function openProgramChangePanel() {
 <template>
   <div :class="embedded ? '' : 'fixed inset-x-0 top-0 bottom-10 z-[600] flex items-center justify-center bg-black/80 backdrop-blur-md p-4'">
     <Transition name="hub" :appear="!embedded">
-      <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-emerald-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col max-h-[90vh]'">
+      <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-cyan-500/30 rounded-3xl w-full max-w-5xl overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col max-h-[90vh]'">
 
         <!-- ── HEADER ── -->
-        <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 to-transparent">
+        <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-cyan-950/40 to-transparent">
           <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <Cpu class="w-5 h-5 text-emerald-400" />
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+              <Cpu class="w-5 h-5 text-cyan-400" />
             </div>
             <div>
               <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">
-                MIDI Registry Matrix
+                MIDI Matrix
               </h2>
-              <p class="text-[9px] font-mono text-emerald-500/60 uppercase tracking-widest">
+              <p class="text-[9px] font-mono text-cyan-500/60 uppercase tracking-widest">
                 Unified Persistent Signal Routing
               </p>
             </div>
@@ -138,11 +138,11 @@ function openProgramChangePanel() {
             <!-- View Mode Toggle -->
             <div class="flex items-center bg-black/40 rounded-full border border-neutral-800 p-1">
               <button @click="viewMode = 'matrix'" 
-                :class="['px-4 py-1.5 rounded-full text-[9px] font-black transition-all', viewMode === 'matrix' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-neutral-500 hover:text-white']">
+                :class="['px-4 py-1.5 rounded-full text-[9px] font-black transition-all', viewMode === 'matrix' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20' : 'text-neutral-500 hover:text-white']">
                 GRID
               </button>
               <button @click="viewMode = 'flow'" 
-                :class="['px-4 py-1.5 rounded-full text-[9px] font-black transition-all', viewMode === 'flow' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-neutral-500 hover:text-white']">
+                :class="['px-4 py-1.5 rounded-full text-[9px] font-black transition-all', viewMode === 'flow' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20' : 'text-neutral-500 hover:text-white']">
                 FLOW
               </button>
             </div>
@@ -204,7 +204,7 @@ function openProgramChangePanel() {
               <!-- Add Device Section -->
               <div class="relative">
                 <button ref="addBtnRef" @click="showAddMenu = !showAddMenu" 
-                  class="w-full h-full bg-emerald-500 hover:bg-emerald-400 text-black font-black text-[10px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/10 active:scale-95">
+                  class="w-full h-full bg-cyan-500 hover:bg-cyan-400 text-black font-black text-[10px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-500/10 active:scale-95">
                   <Plus class="w-4 h-4" />
                   Add Device
                 </button>
@@ -213,14 +213,14 @@ function openProgramChangePanel() {
                   class="absolute top-full right-0 left-0 mt-2 z-50 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-60 animate-in fade-in slide-in-from-top-2">
                   <div class="p-2 border-b border-neutral-800">
                     <input v-model="searchQuery" type="text" placeholder="Search hardware..." 
-                      class="w-full bg-black/50 border border-neutral-800 rounded-xl px-3 py-1.5 text-[10px] text-white outline-none focus:border-emerald-500/50" />
+                      class="w-full bg-black/50 border border-neutral-800 rounded-xl px-3 py-1.5 text-[10px] text-white outline-none focus:border-cyan-500/50" />
                   </div>
                   <div class="flex-1 overflow-y-auto custom-scrollbar">
                     <div v-if="filteredHardware.length === 0" class="p-4 text-center text-[10px] text-neutral-500 font-mono italic">
                       No new hardware detected.
                     </div>
                     <button v-for="h in filteredHardware" :key="h" @click="handleAdd(h)"
-                      class="w-full text-left px-4 py-2 text-[10px] text-neutral-300 hover:bg-emerald-500 hover:text-black transition-colors border-b border-neutral-800/40 last:border-0 truncate">
+                      class="w-full text-left px-4 py-2 text-[10px] text-neutral-300 hover:bg-cyan-500 hover:text-black transition-colors border-b border-neutral-800/40 last:border-0 truncate">
                       {{ h }}
                     </button>
                   </div>
@@ -246,13 +246,13 @@ function openProgramChangePanel() {
                 </thead>
                 <tbody class="divide-y divide-neutral-900">
                   <tr v-for="reg in registrations" :key="reg.name" 
-                    :class="['group transition-all', isOnline(reg.name) ? 'hover:bg-emerald-500/5' : 'opacity-40 grayscale-[0.5] bg-black/20']">
+                    :class="['group transition-all', isOnline(reg.name) ? 'hover:bg-cyan-500/5' : 'opacity-40 grayscale-[0.5] bg-black/20']">
                     
                     <!-- Device Info -->
                     <td class="px-5 py-4">
                       <div class="flex items-center gap-3">
                         <div :class="['w-8 h-8 rounded-lg border flex items-center justify-center transition-all', 
-                          isOnline(reg.name) ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-neutral-800 border-neutral-700 text-neutral-600']">
+                          isOnline(reg.name) ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-neutral-800 border-neutral-700 text-neutral-600']">
                           <Usb class="w-4 h-4" />
                         </div>
                         <div class="flex flex-col min-w-0">
@@ -281,7 +281,7 @@ function openProgramChangePanel() {
                       <div class="flex flex-col items-center gap-1.5">
                         <button @click="toggleSetting(reg.name, 'inEnabled')"
                           :class="['w-6 h-6 rounded-md flex items-center justify-center transition-all border', 
-                            reg.inEnabled ? 'bg-blue-500 text-white border-blue-400' : 'bg-black text-neutral-700 border-neutral-800 hover:border-neutral-600']">
+                            reg.inEnabled ? 'bg-cyan-500 text-white border-cyan-400' : 'bg-black text-neutral-700 border-neutral-800 hover:border-neutral-600']">
                           <Power class="w-3 h-3" />
                         </button>
                         <select v-if="reg.inEnabled"

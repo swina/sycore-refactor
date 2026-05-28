@@ -230,7 +230,7 @@ function downloadCsv() {
               :class="[
                 'flex items-center gap-1.5 px-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors',
                 activeTab === tab.id
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                   : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/60'
               ]"
             >

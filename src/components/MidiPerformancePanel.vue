@@ -101,7 +101,7 @@ const activeOutputs = computed(() => {
       <div :class="embedded ? 'flex flex-col h-full overflow-hidden' : 'bg-neutral-950 border border-synth-neon/30 rounded-3xl w-full max-w-4xl overflow-hidden shadow-[0_0_50px_rgba(0,255,204,0.15)] flex flex-col max-h-[90vh]'">
         
         <!-- Header -->
-        <div class="p-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 to-transparent">
+        <div class="p-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-cyan-950/40 to-transparent">
           <div class="flex items-center gap-4">
             <div class="p-1 bg-synth-neon/10 rounded-2xl">
               <Network class="w-6 h-6 text-synth-neon" />
@@ -116,13 +116,13 @@ const activeOutputs = computed(() => {
             <div class="bg-neutral-900 border border-neutral-800 rounded-lg flex p-1">
               <button 
                 @click="viewMode = 'grid'" 
-                :class="['px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all', viewMode === 'grid' ? 'bg-synth-neon text-black' : 'text-neutral-500 hover:text-white']"
+                :class="['px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all', viewMode === 'grid' ? 'bg-synth-cyan text-black' : 'text-neutral-500 hover:text-white']"
               >
                 Grid
               </button>
               <button 
                 @click="viewMode = 'flow'" 
-                :class="['px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all', viewMode === 'flow' ? 'bg-synth-neon text-black' : 'text-neutral-500 hover:text-white']"
+                :class="['px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all', viewMode === 'flow' ? 'bg-synth-cyan text-black' : 'text-neutral-500 hover:text-white']"
               >
                 Flow
               </button>

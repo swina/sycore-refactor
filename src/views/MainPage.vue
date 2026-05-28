@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import {
   Radio, Cable, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music, Music2, Workflow,
-  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation, Settings, Infinity
+  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation, Settings, Infinity, Clock
 } from 'lucide-vue-next'
 import SlideshowModal from '@/components/SlideshowModal.vue'
 import AboutModal from '@/components/AboutModal.vue'
@@ -94,7 +94,7 @@ function goWorkspace() {
           <div  @click="uiStore.isSoundEngineOpen = true;goWorkspace()" class="flex-1 rounded-xl border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden items-center bg-sound-design">
 
               <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-                <Cpu class="w-7 h-7 text-synth-neon" />
+                <Zap class="w-7 h-7 text-synth-neon" />
                 <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Sound Engine</span>
               </div>  
               <!-- <h1 class="text-2xl font-bold font-mono uppercase w-full text-right text-synth-neon">Sound Design</h1> -->
@@ -102,8 +102,8 @@ function goWorkspace() {
           </div>
           <div @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 flex flex-col items-center overflow-hidden bg-home-performance">
             <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Zap class="w-7 h-7 text-synth-neon" />
-              <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Performance</span>
+              <Clock class="w-7 h-7 text-synth-neon" />
+              <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Timeline</span>
             </div>
           <!-- <div class="flex items-end w-full h-full p-4"><h1 class="text-2xl font-bold font-mono uppercase w-full text-right text-synth-cyan">Performance</h1></div> -->
           </div>
