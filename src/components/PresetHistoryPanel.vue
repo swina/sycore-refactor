@@ -190,7 +190,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[120] max-h-[92vh] pb-[30px] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-hidden p-4 md:p-8">
+  <div class="fixed inset-0 z-[1200] max-h-[95vh] pb-[30px] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-hidden p-4 md:p-8">
     <div class="bg-neutral-950 border border-neutral-900 rounded-3xl max-w-4xl overflow-hidden shadow-2xl pb-[24px]">
 
       <!-- Hidden file input -->

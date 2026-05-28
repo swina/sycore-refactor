@@ -75,7 +75,7 @@ function discardAndGenerate() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  <div class="fixed inset-0 z-[1200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
     <Transition name="sy-modal" appear>
       <div class="bg-neutral-950/90 border border-synth-neon/30 glow-neon rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] relative">
 

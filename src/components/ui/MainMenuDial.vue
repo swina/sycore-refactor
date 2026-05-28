@@ -116,7 +116,7 @@ const activeLabel = computed(() => {
 </script>
 
 <template>
-  <div class="fixed bottom-10 left-3 z-[700] flex flex-col items-center gap-3">
+  <div class="fixed bottom-10 left-3 z-[1200] flex flex-col items-center gap-3">
     
     <!-- Action Buttons -->
     <TransitionGroup 
@@ -153,7 +153,7 @@ const activeLabel = computed(() => {
     <button
       @click="toggle"
       :class="[
-        'w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl border-2 z-10',
+        'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl border-2 z-10',
         uiStore.isMainMenuOpen 
           ? 'bg-white text-black border-white rotate-90' 
           : 'bg-neutral-900 text-synth-neon border-synth-neon/30 hover:border-synth-neon hover:scale-105'

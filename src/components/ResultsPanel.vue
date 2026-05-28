@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onUnmounted, onMounted, nextTick } from 'vue'
-import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical} from 'lucide-vue-next'
+import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical, List} from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/MidiService'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -377,7 +377,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 </script>
 
 <template>
-  <div class="max-w-4xl m-auto h-full flex flex-col overflow-hidden bg-neutral-950 relative bg-container">
+  <div class="w-full m-auto h-full flex flex-col overflow-hidden bg-neutral-950 relative bg-container">
 
     <!-- ── NO PRESET: idle prompt ── -->
     <template v-if="!selectedPreset">
@@ -425,7 +425,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <div class="absolute inset-0 z-10 pointer-events-none scanlines"></div>
 
             <!-- Category icon (No background) -->
-            <div class="text-xl flex items-center justify-center select-none z-30 drop-shadow-[0_0_8px_rgba(0,255,136,0.5)]">
+            <div @click="uiStore.isHistoryOpen = !uiStore.isHistoryOpen" class="text-xl flex items-center justify-center select-none z-30 drop-shadow-[0_0_8px_rgba(0,255,136,0.5)]">
               {{ getCategoryIcon(presetStore.currentCategory) }}
             </div>
 
@@ -525,11 +525,11 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
               <RefreshCw :class="['w-5 h-5', presetStore.isGenerating ? 'animate-spin' : '']" />
             </button>
 
-            <button @click="addToLiveSet" 
+            <!-- <button @click="addToLiveSet" 
               class="w-10 h-10 rounded-full border border-neutral-700 bg-neutral-800 text-neutral-500 flex items-center justify-center hover:text-purple-400 hover:border-purple-500/50 hover:bg-purple-500/10 transition-all active:scale-90"
               title="Add to Live Pad">
               <Grid3x3 class="w-5 h-5" />
-            </button>
+            </button> -->
           </div>
 
           <div class="w-px h-6 bg-neutral-800/50 mx-1 hidden xl:block"></div>
@@ -584,6 +584,12 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 AUTO
               </button>
             </div>
+          
+            <button @click="uiStore.isHistoryOpen = !uiStore.isHistoryOpen" 
+              class="w-10 h-10 rounded-full border border-neutral-700 bg-neutral-800 text-neutral-500 flex items-center justify-center hover:text-purple-400 hover:border-purple-500/50 hover:bg-purple-500/10 transition-all active:scale-90"
+              title="Sound Library">
+              <List class="w-5 h-5" />
+            </button>
           </div>
         </div>
 

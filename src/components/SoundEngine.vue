@@ -2,7 +2,9 @@
 import { Cpu, Minus, X } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import ResultsPanel from '@/components/ResultsPanel.vue'
+import { useUiStore } from '@/stores/useUiStore'
 
+const uiStore = useUiStore()
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 

@@ -6,7 +6,8 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/MidiService'
@@ -20,6 +21,7 @@ const uiStore      = useUiStore()
 const configStore  = useConfigStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
+const router = useRouter()
 
 const showPartSelector = computed(() => configStore.enablePartSelector)
 
@@ -36,6 +38,11 @@ const btPlayingTrackLabel = ref('')
 
 const btIsPlaylistMode = computed(() => btPlaylistIdx.value >= 0 && btPlaylist.value.length > 0)
 const btProgress       = computed(() => btDuration.value > 0 ? (btCurrentTime.value / btDuration.value) * 100 : 0)
+
+const isOpen = computed({
+  get: () => uiStore.isTracksPlayerOpen,
+  set: (v) => uiStore.isTracksPlayerOpen = v
+})
 
 function onPlayerSync(e) {
   const d = e.detail
@@ -115,13 +122,21 @@ function handleBpmChange(e) {
   <footer class="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-md border-t border-neutral-900/80 z-[960] text-[10px] font-mono tracking-widest text-neutral-500 uppercase h-10">
     <div class="h-full px-4 md:px-2 flex flex-row justify-between items-center gap-2">
 
+      <button
+      @click="router.push('/')"
+      title="Home"
+      class="-ml-1 w-6 h-6 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
+    >
+      <Home class="w-5 h-5" />
+    </button>
+
       <!-- Left: Backing Track transport -->
-      <div v-if="authStore.user" class="flex-none flex items-center gap-2 bg-neutral-800/40 px-1">
+      <div v-if="authStore.user" class="flex-none flex items-center gap-2 bg-neutral-800/40 p-1">
 
         <!-- Library toggle -->
         <button
-          @click="uiStore.isBackingTrackOpen = !uiStore.isBackingTrackOpen"
-          :class="['flex items-center justify-center gap-1.5 transition-all active:scale-95', uiStore.isBackingTrackOpen || btIsPlaying ? 'text-synth-neon' : 'text-neutral-400 hover:text-white']"
+          @click="isOpen = !isOpen"
+          :class="['flex items-center justify-center gap-1.5 transition-all active:scale-95', isOpen || btIsPlaying ? 'text-synth-neon' : 'text-neutral-400 hover:text-white']"
           title="Library & Playlist"
         >
           <Settings :class="['w-4 h-4', btIsPlaying ? 'animate-pulse' : '']" />
@@ -196,17 +211,19 @@ function handleBpmChange(e) {
 
           <div class="w-px h-4 bg-white/10 mx-1" />
 
-          <!-- MIDI Sync -->
-          <button
+          
+        </template>
+        
+        
+        <span v-else class="text-[10px] font-black text-neutral-500 tracking-[0.2em] px-4">PLAYER READY</span>
+        <!-- MIDI Sync -->
+        <button
             @click="midiStore.syncMidiTransport = !midiStore.syncMidiTransport"
             :class="['transition-all p-1.5 rounded-md active:scale-90', midiStore.syncMidiTransport ? 'text-synth-neon bg-synth-neon/10' : 'text-neutral-500 hover:text-white']"
             title="Sync MIDI START/STOP with Audio Player"
           >
             <Link class="w-3.5 h-3.5" />
-          </button>
-        </template>
-
-        <span v-else class="text-[10px] font-black text-neutral-500 tracking-[0.2em] px-4">READY</span>
+        </button>
       </div>
 
       <!-- Right: controls -->
@@ -214,6 +231,7 @@ function handleBpmChange(e) {
 
         <div v-if="authStore.user" class="flex items-center gap-2">
           <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 rounded-full group">
+            <!-- MIDI TRANSPORT START/STOP -->
             <button
               @click="midiStore.toggleGlobalTransport()"
               @contextmenu.prevent="openMenu($event, { name: 'globalTransport', label: 'Global Transport' })"
@@ -221,7 +239,7 @@ function handleBpmChange(e) {
                 'flex items-center gap-2 text-synth-cyan px-2 py-1 rounded-full transition-all active:scale-95 font-black text-[8px] border',
                 midiStore.isTransportPlaying
                   ? 'text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500 hover:text-white'
-                  : 'text-emerald-500 bg-cyan-500/10 border-emerald-500/30 hover:bg-cyan-500 hover:text-black'
+                  : 'text-emerald-500 bg-red-500/10 border-emerald-500/30 hover:bg-red-500 hover:text-black'
               ]"
             >
               <div class="flex items-center gap-1.5">
