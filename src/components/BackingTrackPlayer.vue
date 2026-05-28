@@ -619,9 +619,16 @@ function onLoadedMeta(slot, d) {
   }
 }
 
-watch([isPlaying, playlistIdx, volume], () => {
+watch([isPlaying, playlistIdx, volume, isLooping, playingTrack, src], () => {
   window.dispatchEvent(new CustomEvent('player-state-sync', {
-    detail: { isPlaying: isPlaying.value, playlistIdx: playlistIdx.value, volume: volume.value }
+    detail: {
+      isPlaying: isPlaying.value,
+      playlistIdx: playlistIdx.value,
+      volume: volume.value,
+      isLooping: isLooping.value,
+      hasSrc: !!src.value,
+      playingTrackLabel: playingTrack.value?.label || fileName.value || '',
+    }
   }))
 })
 
@@ -796,10 +803,14 @@ onMounted(() => {
         playlistRepeats: playlistRepeats.value,
         crossfadeSec: crossfadeSec.value,
         loopPlaylist: loopPlaylist.value,
-        playlistCurrentRepeat: playlistCurrentRepeat.value
+        playlistCurrentRepeat: playlistCurrentRepeat.value,
+        isLooping: isLooping.value,
+        hasSrc: !!src.value,
+        playingTrackLabel: playingTrack.value?.label || fileName.value || '',
       }
     }))
   }
+  const handleLoopToggle = () => { isLooping.value = !isLooping.value }
 
   window.addEventListener('toggle-backing-track', handleToggle)
   window.addEventListener('playlist-play-stop', handlePlayStop)
@@ -812,8 +823,9 @@ onMounted(() => {
   window.addEventListener('playlist-mutate', handlePlaylistMutate)
   window.addEventListener('playlist-clear', handlePlaylistClear)
   window.addEventListener('player-state-request', handlePlayerStateRequest)
-  
-  _handlers = { handleToggle, handlePlayStop, handleNext, handleAddFromCapture, handlePrev, handlePlaylistPlay, handleSeek, handleVolume, handlePlaylistMutate, handlePlaylistClear, handlePlayerStateRequest }
+  window.addEventListener('playlist-loop-toggle', handleLoopToggle)
+
+  _handlers = { handleToggle, handlePlayStop, handleNext, handleAddFromCapture, handlePrev, handlePlaylistPlay, handleSeek, handleVolume, handlePlaylistMutate, handlePlaylistClear, handlePlayerStateRequest, handleLoopToggle }
 })
 
 onUnmounted(() => {
@@ -830,6 +842,7 @@ onUnmounted(() => {
   window.removeEventListener('playlist-mutate', _handlers.handlePlaylistMutate)
   window.removeEventListener('playlist-clear', _handlers.handlePlaylistClear)
   window.removeEventListener('player-state-request', _handlers.handlePlayerStateRequest)
+  window.removeEventListener('playlist-loop-toggle', _handlers.handleLoopToggle)
 })
 </script>
 

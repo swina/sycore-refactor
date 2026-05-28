@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
-  X, Play, Pause, Square, SkipBack, Plus, Trash2,
+  X, Minus, Play, Pause, Square, SkipBack, Plus, Trash2,
   ChevronUp, ChevronDown, Flag, ListMusic, ZoomIn, ZoomOut, Clock, Library,
   Save, FilePlus, FolderOpen
 } from 'lucide-vue-next'
@@ -18,13 +18,14 @@ import { db } from '@/lib/firebase'
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_LIVE_TIMELINE',
   initialWidth: 1020,
   initialHeight: 580,
   minWidth: 700,
   minHeight: 440,
   zIndex: 510,
+  minimizeLabel: 'Live Timeline',
 })
 
 const midiStore    = useMidiStore()
@@ -771,6 +772,7 @@ onUnmounted(() => {
 <template>
   <div
     v-if="isOpen"
+    v-show="!isMinimized"
     class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]"
     :style="panelStyle"
   >
@@ -815,9 +817,15 @@ onUnmounted(() => {
 
       
       <div class="flex-1" />
-      <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors ml-2">
-          <X class="w-5 h-5" />
+      <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+        <button @click="toggleMinimize" title="Minimize"
+          class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-600 hover:text-yellow-400 transition-colors">
+          <Minus class="w-4 h-4" />
         </button>
+        <button @click="emit('close')" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-600 hover:text-white transition-colors ml-0.5">
+          <X class="w-4 h-4" />
+        </button>
+      </div>
       
     </div>
 

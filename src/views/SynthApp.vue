@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
   LayoutGrid, Layers, Heart, ListMusic, User, BookOpen, Workflow,
-  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network, Home, Music2, X
+  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network, Home, Music2, X, SlidersHorizontal
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -67,8 +67,10 @@ import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
 import LivePerformancePad from '@/components/LivePerformancePad.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
+import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
+import MinimizedModalsBar from '@/components/ui/MinimizedModalsBar.vue'
 
 
 // Stores
@@ -130,7 +132,8 @@ const toolbarButtonMap = {
   'program-change':         { state: 'isProgramChangeBrowserOpen',       icon: Music2, label: 'Program Change Browser' },
   'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,   label: 'Device Program Change' },
   'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
-  'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic, label: 'Live Timeline' },
+  'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
+  'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
 }
 
 function handleToolbarButtonClick(button) {
@@ -244,20 +247,20 @@ onMounted(() => {
 <template>
   <div class="w-full h-screen bg-neutral-950 text-white overflow-hidden flex flex-col">
     <!-- Floating Vertical Logo -->
-    <div class="fixed top-[150px] left-4 z-[100] origin-left -rotate-90 pointer-events-auto cursor-pointer group" @click="uiStore.isAboutOpen = true">
+    <div class="fixed top-[150px] left-4 z-[100] origin-left -rotate-90 pointer-events-auto cursor-pointer group" @click="router.push('/')">
       <h1 class="text-4xl mt-8 font-black uppercase text-synth-neon/60 mix-blend-screen whitespace-nowrap group-hover:text-synth-neon transition-colors duration-500">
         <span class="text-white">{{ configStore.appName.split('.')[0] }}.</span>{{ configStore.appName.split('.')[1] }}
       </h1>
     </div>
 
     <!-- Home Button -->
-    <button
+    <!-- <button
       @click="router.push('/')"
       title="Home"
-      class="fixed top-4 right-4 z-[100] w-9 h-9 rounded-lg bg-neutral-900/70 border border-neutral-800 hover:border-synth-neon/60 hover:bg-neutral-900 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
+      class="fixed top-2 left-4 z-[200] w-9 h-9 rounded-lg bg-neutral-900/70 border border-neutral-800 hover:border-synth-neon/60 hover:bg-neutral-900 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
     >
       <Home class="w-4 h-4" />
-    </button>
+    </button> -->
 
     <!-- STARTUP SPLASH -->
     <Transition name="fade">
@@ -277,7 +280,8 @@ onMounted(() => {
     <!-- Main Content Area -->
     <div class="flex-1 overflow-hidden">
       <Welcome v-if="!authStore.user || !presetStore.showResults" />
-      <ResultsPanel v-else />
+      <SoundEngine  v-else/>
+      <!-- <ResultsPanel v-else /> -->
     </div>
 
     <!-- Modals (Teleport to body) -->
@@ -433,6 +437,14 @@ onMounted(() => {
         </Transition>
       </div>
 
+      <!-- Sound Engine (floating modal) -->
+      <div :style="focusStyle('soundEngine')">
+        <SoundEngine
+          :isOpen="uiStore.isSoundEngineOpen"
+          @close="uiStore.isSoundEngineOpen = false"
+        />
+      </div>
+
       <!-- MIDI Capture -->
       <div :style="focusStyle('capture')">
         <MidiCapture
@@ -556,6 +568,9 @@ onMounted(() => {
 
       <!-- Global MIDI Map context menu (always mounted, Teleports to body) -->
       <MidiMapContextMenu />
+
+      <!-- Minimized modals restore bar -->
+      <MinimizedModalsBar />
     </Teleport>
 
     <!-- Tooltip Wrapper -->

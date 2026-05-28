@@ -41,6 +41,7 @@ const normalizeDbLimit = ref(-0.5)
 const normalizeGateDb  = ref(-60)
 const isImporting      = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
+const appendMode       = ref(localStorage.getItem('S1_CAPTURE_APPEND') === '1')
 const error            = ref(null)
 
 const selectedLooperTrack = ref(1)
@@ -252,10 +253,15 @@ let rafRef         = null
 let blobUrlRef     = null
 let isRecordingRef = false
 let toPlaylistRef  = toPlaylist.value
+let prevBlobRef    = null
 
 watch(toPlaylist, v => {
   toPlaylistRef = v
   localStorage.setItem('S1_CAPTURE_TO_PLAYLIST', v ? '1' : '0')
+})
+
+watch(appendMode, v => {
+  localStorage.setItem('S1_CAPTURE_APPEND', v ? '1' : '0')
 })
 
 watch(loopStart, (ns) => {
@@ -460,15 +466,46 @@ async function handleDeviceChange(id) {
   await startMonitor(id)
 }
 
+// ── Append helper ─────────────────────────────────────────────────────────────
+async function mergeBlobs(blobA, blobB) {
+  const [bufA, bufB] = await Promise.all([blobA.arrayBuffer(), blobB.arrayBuffer()])
+  const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+  const ctx = new AudioCtxClass()
+  const [decA, decB] = await Promise.all([
+    ctx.decodeAudioData(bufA),
+    ctx.decodeAudioData(bufB),
+  ])
+  await ctx.close()
+  const numChannels = Math.max(decA.numberOfChannels, decB.numberOfChannels)
+  const sampleRate  = decA.sampleRate
+  const combined = new AudioBuffer({
+    numberOfChannels: numChannels,
+    length: decA.length + decB.length,
+    sampleRate,
+  })
+  for (let c = 0; c < numChannels; c++) {
+    const chanA = c < decA.numberOfChannels ? decA.getChannelData(c) : new Float32Array(decA.length)
+    const chanB = c < decB.numberOfChannels ? decB.getChannelData(c) : new Float32Array(decB.length)
+    const out = combined.getChannelData(c)
+    out.set(chanA, 0)
+    out.set(chanB, decA.length)
+  }
+  return audioBufferToWav(combined)
+}
+
 // ── Recording ────────────────────────────────────────────────────────────────
 function startRecording() {
   if (!streamRef || isRecording.value) return
+
+  // Save existing capture for append, or discard
+  prevBlobRef = (appendMode.value && recordedBlob.value) ? recordedBlob.value : null
+
   recordedBlob.value = null
   isPlaying.value = false
   if (blobUrlRef) { URL.revokeObjectURL(blobUrlRef); blobUrlRef = null }
   chunksRef = []
   recSecs.value = 0
-  
+
   audioDuration.value = 0
   loopStart.value = 0
   loopEnd.value = 0
@@ -482,10 +519,29 @@ function startRecording() {
 
   const recorder = new MediaRecorder(streamRef, mimeType ? { mimeType } : undefined)
   recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.push(e.data) }
-  recorder.onstop = () => {
-    const blob = new Blob(chunksRef, { type: recorder.mimeType || 'audio/webm' })
-    recordedBlob.value = blob
-    const previewUrl = URL.createObjectURL(blob)
+  recorder.onstop = async () => {
+    const newBlob = new Blob(chunksRef, { type: recorder.mimeType || 'audio/webm' })
+
+    let finalBlob = newBlob
+    let finalDuration = recSecs.value
+
+    if (prevBlobRef) {
+      try {
+        finalBlob = await mergeBlobs(prevBlobRef, newBlob)
+        const ab  = await finalBlob.arrayBuffer()
+        const tmp = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100)
+        const dec = await new Promise((res, rej) => tmp.decodeAudioData(ab, res, rej))
+        finalDuration = dec.duration
+      } catch (e) {
+        console.error('[AudioCapture] Append merge failed, using new blob only', e)
+        finalBlob = newBlob
+        finalDuration = recSecs.value
+      }
+      prevBlobRef = null
+    }
+
+    recordedBlob.value = finalBlob
+    const previewUrl = URL.createObjectURL(finalBlob)
     blobUrlRef = previewUrl
     if (audioRef1.value && audioRef2.value) {
       audioRef1.value.src = previewUrl
@@ -493,25 +549,24 @@ function startRecording() {
       audioRef1.value.load()
       audioRef2.value.load()
     }
-    
-    // Explicitly initialize loop range to full recording duration
-    audioDuration.value = recSecs.value
+
+    audioDuration.value = finalDuration
     loopStart.value = 0
-    loopEnd.value = recSecs.value
+    loopEnd.value = finalDuration
     playbackStart.value = 0
 
     if (toPlaylistRef) {
       const d = new Date()
       const pad = n => String(n).padStart(2, '0')
       const ts = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-      const playlistUrl = URL.createObjectURL(blob)
-      window.dispatchEvent(new CustomEvent('playlist-add-from-capture', { 
-        detail: { 
-          url: playlistUrl, 
-          label: `REC ${ts}`, 
-          duration: recSecs.value,
+      const playlistUrl = URL.createObjectURL(finalBlob)
+      window.dispatchEvent(new CustomEvent('playlist-add-from-capture', {
+        detail: {
+          url: playlistUrl,
+          label: `REC ${ts}`,
+          duration: finalDuration,
           bpm: midiStore.currentBpm
-        } 
+        }
       }))
     }
   }
@@ -1145,8 +1200,8 @@ function drawSingleFrame() {
     const barSecs = 4 * (60 / bpm)
     if (barSecs > 0 && audioDuration.value > 0) {
       ctx.lineWidth = 1 * dpr
-      ctx.strokeStyle = 'rgba(253, 224, 71, 0.35)' // Light yellow with transparency (yellow-300)
-      ctx.setLineDash([4 * dpr, 4 * dpr])
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.25)' // Light yellow with transparency (yellow-300)
+      ctx.setLineDash([2 * dpr, 2 * dpr])
       
       const gridAnchor = playbackStart.value
       const minI = Math.ceil((0 - gridAnchor) / barSecs)
@@ -1586,6 +1641,25 @@ onUnmounted(() => {
               class="w-1.5 h-1.5 rounded-full transition-all" 
               :class="midiPulse ? 'bg-white shadow-[0_0_8px_white]' : (midiTriggerEnabled ? 'bg-amber-500/50' : 'bg-neutral-800')"
             ></div>
+          </button>
+
+          <!-- Append mode toggle -->
+          <button
+            @click="appendMode = !appendMode"
+            :class="['flex items-center justify-between gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors w-full text-left',
+              appendMode
+                ? 'bg-synth-neon/15 text-synth-neon border-synth-neon/40'
+                : 'text-neutral-500 border-neutral-800 hover:text-neutral-400 hover:border-neutral-700']"
+            title="When ON, new recordings are appended to the existing capture"
+          >
+            <span class="flex items-center gap-1">
+              <ListPlus class="w-3 h-3" />
+              Append
+            </span>
+            <div
+              class="w-1.5 h-1.5 rounded-full transition-all"
+              :class="appendMode ? 'bg-synth-neon shadow-[0_0_6px_rgba(0,255,157,0.6)]' : 'bg-neutral-800'"
+            />
           </button>
 
           <!-- Playback preview -->

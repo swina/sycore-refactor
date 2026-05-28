@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
@@ -11,8 +11,9 @@ import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_DEVICE_PC',
+  minimizeLabel: 'Device PC',
   initialWidth: 900,
   initialHeight: 700,
   zIndex: 650,
@@ -531,7 +532,7 @@ function deleteSet(id) {
 <template>
   <div class="overflow-hidden">
     <Transition name="performance" appear>
-      <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle">
+      <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle" v-show="!isMinimized">
 
         <!-- Header -->
         <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
@@ -544,9 +545,15 @@ function deleteSet(id) {
               <p class="text-[9px] font-mono text-violet-500/60 uppercase tracking-widest">Per-Device Bank & Preset Browser</p>
             </div>
           </div>
-          <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-            <X class="w-5 h-5" />
-          </button>
+          <div class="flex items-center gap-1">
+            <button @click="toggleMinimize" title="Minimize"
+              class="p-2 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
+              <Minus class="w-4 h-4" />
+            </button>
+            <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <!-- Body: two columns -->

@@ -227,7 +227,7 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .bg-live-performance {
-    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, .1)), url('/live-performance-2.png');
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.3), rgba(10, 10, 10, .3)), url('/live-performance-2.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -241,7 +241,7 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .bg-home-performance {
-    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.35), rgba(10, 10, 10, .35)), url('/home-performance-synths.png');
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.1), rgba(10, 10, 10, .1)), url('/home-performance-synths.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -256,6 +256,34 @@ input[type='range']::-webkit-slider-thumb {
 
 .bg-midi-knob {
     background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.7), rgba(10, 10, 10, 0.7)), url('/midi-knob.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-audio-capture {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.6), rgba(10, 10, 10, 0.6)), url('/audio-capture-mixer.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-midi-capture {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.2), rgba(10, 10, 10, 0.2)), url('/midi-capture.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-backing-tracks {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.5), rgba(10, 10, 10, 0.5)), url('/backing-tracks.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-audio-looper {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.5), rgba(10, 10, 10, 0.5)), url('/looper.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

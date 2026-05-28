@@ -5,17 +5,14 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { computed, onMounted, onUnmounted } from 'vue'
-import { User, Radio, AlertTriangle, Play, Square, Clock } from 'lucide-vue-next'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
-import Tooltip from '@/components/Tooltip.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/MidiService'
 
 const emit = defineEmits(['bpm-override'])
 
-const router       = useRouter()
 const authStore    = useAuthStore()
 const midiStore    = useMidiStore()
 const arpStore     = useArpStore()
@@ -26,9 +23,57 @@ const { openMenu } = useMidiContextMenu()
 
 const showPartSelector = computed(() => configStore.enablePartSelector)
 
+// ── Backing Track transport state (synced via window events) ──────────────────
+const btIsPlaying        = ref(false)
+const btPlaylist         = ref([])
+const btPlaylistIdx      = ref(-1)
+const btSrc              = ref(false)
+const btCurrentTime      = ref(0)
+const btDuration         = ref(0)
+const btVolume           = ref(0.5)
+const btIsLooping        = ref(true)
+const btPlayingTrackLabel = ref('')
+
+const btIsPlaylistMode = computed(() => btPlaylistIdx.value >= 0 && btPlaylist.value.length > 0)
+const btProgress       = computed(() => btDuration.value > 0 ? (btCurrentTime.value / btDuration.value) * 100 : 0)
+
+function onPlayerSync(e) {
+  const d = e.detail
+  if (d.isPlaying          !== undefined) btIsPlaying.value         = d.isPlaying
+  if (d.playlistIdx        !== undefined) btPlaylistIdx.value       = d.playlistIdx
+  if (d.playlist           !== undefined) btPlaylist.value          = d.playlist
+  if (d.hasSrc             !== undefined) btSrc.value               = d.hasSrc
+  if (d.currentTime        !== undefined) btCurrentTime.value       = d.currentTime
+  if (d.duration           !== undefined) btDuration.value          = d.duration
+  if (d.volume             !== undefined) btVolume.value            = d.volume
+  if (d.isLooping          !== undefined) btIsLooping.value         = d.isLooping
+  if (d.playingTrackLabel  !== undefined) btPlayingTrackLabel.value = d.playingTrackLabel
+}
+
+function btPlayStop()     { window.dispatchEvent(new CustomEvent('playlist-play-stop')) }
+function btPrev()         { window.dispatchEvent(new CustomEvent('playlist-prev')) }
+function btNext()         { window.dispatchEvent(new CustomEvent('playlist-next')) }
+function btLoopToggle()   { window.dispatchEvent(new CustomEvent('playlist-loop-toggle')) }
+function btSetVolume(v)   { window.dispatchEvent(new CustomEvent('playlist-volume', { detail: parseFloat(v) })) }
+function btSeek(e) {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const pos  = (e.clientX - rect.left) / rect.width
+  window.dispatchEvent(new CustomEvent('playlist-seek', { detail: pos }))
+}
+
+function formatTime(t) {
+  if (isNaN(t) || !isFinite(t)) return '0:00'
+  const m = Math.floor(t / 60)
+  const s = Math.floor(t % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 let _unsubFooterMidi = null
 
 onMounted(() => {
+  window.addEventListener('player-state-sync', onPlayerSync)
+  window.dispatchEvent(new CustomEvent('player-state-request'))
+
   _unsubFooterMidi = midiService.addRawListener((event) => {
     if (!event.data || event.data.length < 3) return
     const status  = event.data[0]
@@ -52,7 +97,10 @@ onMounted(() => {
   })
 })
 
-onUnmounted(() => { if (_unsubFooterMidi) _unsubFooterMidi() })
+onUnmounted(() => {
+  window.removeEventListener('player-state-sync', onPlayerSync)
+  if (_unsubFooterMidi) _unsubFooterMidi()
+})
 
 function handleBpmChange(e) {
   const v = parseInt(e.target.value)
@@ -65,46 +113,115 @@ function handleBpmChange(e) {
 
 <template>
   <footer class="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-md border-t border-neutral-900/80 z-[960] text-[10px] font-mono tracking-widest text-neutral-500 uppercase h-10">
-    <div class="h-full px-4 md:px-6 flex flex-row justify-between items-center gap-2">
+    <div class="h-full px-4 md:px-2 flex flex-row justify-between items-center gap-2">
 
-      <!-- Left: app meta -->
-      <div class="flex-none flex items-center gap-2">
-        <Tooltip v-if="authStore.user" :content="`${authStore.user.email} (${authStore.profile?.role || 'demo'})`" :disabled="false" position="top">
-          <button
-            @click="uiStore.isProfileOpen = true"
-            class="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase bg-neutral-900/50 border border-neutral-800 text-neutral-400 hover:text-synth-neon hover:border-synth-neon transition-colors"
-          >
-            <User class="w-3 h-3" />
-            <span class="max-w-[100px] truncate">
-              {{ authStore.profile?.name || authStore.user.email.split('@')[0] }}
+      <!-- Left: Backing Track transport -->
+      <div v-if="authStore.user" class="flex-none flex items-center gap-2 bg-neutral-800/40 px-1">
+
+        <!-- Library toggle -->
+        <button
+          @click="uiStore.isBackingTrackOpen = !uiStore.isBackingTrackOpen"
+          :class="['flex items-center justify-center gap-1.5 transition-all active:scale-95', uiStore.isBackingTrackOpen || btIsPlaying ? 'text-synth-neon' : 'text-neutral-400 hover:text-white']"
+          title="Library & Playlist"
+        >
+          <Settings :class="['w-4 h-4', btIsPlaying ? 'animate-pulse' : '']" />
+          <span v-if="btIsPlaylistMode" class="text-[9px] font-black font-mono bg-synth-neon/20 px-1.5 rounded">{{ btPlaylistIdx + 1 }}/{{ btPlaylist.length }}</span>
+        </button>
+
+        <div class="w-px h-4 bg-white/10" />
+
+        <template v-if="btSrc">
+          <!-- Prev -->
+          <button @click="btPrev()" title="Previous track"
+            :disabled="!btIsPlaylistMode"
+            :class="['transition-colors', btIsPlaylistMode ? 'text-neutral-500 hover:text-white' : 'text-neutral-700 cursor-not-allowed']">
+            <SkipBack class="w-4 h-4" />
+          </button>
+
+          <!-- Play / Pause -->
+          <button @click="btPlayStop()"
+            class="w-8 h-8 flex items-center justify-center rounded-full bg-synth-neon/10 text-synth-neon hover:bg-synth-neon hover:text-black transition-all active:scale-90 shadow-lg shadow-synth-neon/20">
+            <Pause v-if="btIsPlaying" class="w-4 h-4 fill-current" />
+            <Play  v-else             class="w-4 h-4 fill-current ml-0.5" />
+          </button>
+
+          <!-- Next -->
+          <button @click="btNext()" title="Next track (crossfade)"
+            :disabled="!btIsPlaylistMode"
+            :class="['transition-colors', btIsPlaylistMode ? 'text-neutral-500 hover:text-white' : 'text-neutral-700 cursor-not-allowed']">
+            <SkipForward class="w-4 h-4" />
+          </button>
+
+          <!-- Loop (single track only) -->
+          <button v-if="!btIsPlaylistMode" @click="btLoopToggle()"
+            :class="['transition-colors', btIsLooping ? 'text-synth-neon' : 'text-neutral-500 hover:text-white']"
+            title="Toggle Loop">
+            <Repeat class="w-4 h-4" />
+          </button>
+
+          <!-- Track name -->
+          <div class="hidden sm:flex flex-col ml-1 min-w-0 max-w-[100px]">
+            <span class="text-[7px] font-black uppercase tracking-tighter text-white/30 leading-none mb-0.5">Playing</span>
+            <span class="text-[9px] font-black uppercase tracking-tighter text-synth-neon truncate leading-tight">
+              {{ btPlayingTrackLabel || 'Audio Track' }}
             </span>
-          </button>
-        </Tooltip>
-        <Tooltip content="MIDI Status — click to open Main Page" :disabled="false" position="top">
+          </div>
+
+          <!-- Progress -->
+          <div class="w-16 lg:w-24 flex flex-col items-center ml-2">
+            <div
+              class="w-full h-1 bg-white/5 rounded-full overflow-hidden cursor-pointer relative group/progress"
+              @click="btSeek"
+            >
+              <div
+                class="h-full bg-synth-neon absolute left-0 top-0 bottom-0 pointer-events-none transition-all duration-75 shadow-[0_0_8px_rgba(0,163,112,0.8)]"
+                :style="{ width: `${btProgress}%` }"
+              />
+            </div>
+          </div>
+
+          <!-- Volume -->
+          <div class="items-center gap-1.5 w-10 lg:w-14 flex ml-2 group/vol">
+            <Volume2 class="w-2.5 h-2.5 text-neutral-500 group-hover/vol:text-white transition-colors" />
+            <input type="range" min="0" max="1" step="0.01" :value="btVolume"
+              @input="e => btSetVolume(e.target.value)"
+              class="w-full h-1 bg-white/5 rounded-lg appearance-none cursor-pointer accent-synth-neon" />
+          </div>
+
+          <!-- Time -->
+          <div class="text-[8px] font-mono text-neutral-400 w-[70px] text-right ml-1 shrink-0 flex flex-col leading-tight">
+            <span class="text-white">{{ formatTime(btCurrentTime) }}</span>
+            <span class="text-neutral-600 tracking-tighter">{{ formatTime(btDuration) }}</span>
+          </div>
+
+          <div class="w-px h-4 bg-white/10 mx-1" />
+
+          <!-- MIDI Sync -->
           <button
-            @click="router.push('/')"
-            :class="['px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1.5 transition-colors cursor-pointer hover:brightness-125 active:scale-95', midiStore.midiReady ? 'bg-synth-neon/10 text-synth-neon' : 'bg-red-950/30 text-red-400']"
+            @click="midiStore.syncMidiTransport = !midiStore.syncMidiTransport"
+            :class="['transition-all p-1.5 rounded-md active:scale-90', midiStore.syncMidiTransport ? 'text-synth-neon bg-synth-neon/10' : 'text-neutral-500 hover:text-white']"
+            title="Sync MIDI START/STOP with Audio Player"
           >
-            <Radio class="w-3 h-3" />
-            {{ midiStore.midiReady ? 'READY' : 'WAITING S-1' }}
+            <Link class="w-3.5 h-3.5" />
           </button>
-        </Tooltip>
+        </template>
+
+        <span v-else class="text-[10px] font-black text-neutral-500 tracking-[0.2em] px-4">READY</span>
       </div>
 
       <!-- Right: controls -->
       <div class="flex-1 flex items-center justify-end gap-3 md:gap-5">
-        <QuickChannelSelector v-if="showPartSelector" />
 
         <div v-if="authStore.user" class="flex items-center gap-2">
-          <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 border border-neutral-800/60 rounded-full group">
+          <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 rounded-full group">
             <button
               @click="midiStore.toggleGlobalTransport()"
               @contextmenu.prevent="openMenu($event, { name: 'globalTransport', label: 'Global Transport' })"
               :class="[
-                'flex items-center gap-2 px-2 py-1 rounded-full transition-all active:scale-95 font-black text-[8px] border',
+                'flex items-center gap-2 text-synth-cyan px-2 py-1 rounded-full transition-all active:scale-95 font-black text-[8px] border',
                 midiStore.isTransportPlaying
                   ? 'text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500 hover:text-white'
-                  : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500 hover:text-black'
+                  : 'text-emerald-500 bg-cyan-500/10 border-emerald-500/30 hover:bg-cyan-500 hover:text-black'
               ]"
             >
               <div class="flex items-center gap-1.5">
@@ -114,41 +231,36 @@ function handleBpmChange(e) {
               </div>
             </button>
           </div>
+          <QuickChannelSelector v-if="showPartSelector" />
         </div>
 
+        <div v-if="authStore.user" class="flex items-center gap-1 relative group">
+          <span class="text-neutral-500 text-[8px]">BPM:</span>
+          <input
+            type="number" min="20" max="300"
+            :value="arpStore.arpBpm"
+            title="Set global BPM"
+            @change="handleBpmChange"
+            class="bg-black border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[14px] focus:outline-none focus:border-synth-neon transition-colors"
+          />
+        </div>
         <button
           v-if="authStore.user"
           @click="midiStore.panic()"
+          title="Panic (All Notes OFF)"
           class="w-8 h-8 flex items-center justify-center rounded-full bg-red-950/30 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-90"
         >
           <AlertTriangle class="w-3.5 h-3.5" />
         </button>
 
-        <!-- Timeline button -->
         <button
           v-if="authStore.user"
-          @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen"
-          :class="[
-            'flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase border transition-all active:scale-95',
-            uiStore.isLiveTimelineOpen
-              ? 'bg-synth-neon/10 text-synth-neon border-synth-neon/40 hover:bg-synth-neon/20'
-              : 'bg-neutral-900/40 text-neutral-500 border-neutral-800/60 hover:text-synth-neon hover:border-synth-neon/30'
-          ]"
-          title="Live Timeline"
+          @click="uiStore.isSessionOpen = true"
+          title="Save Session"
+          class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
         >
-          <Clock class="w-3 h-3" />
-          <span>Timeline</span>
+          <Save class="w-5 h-5 text-synth-neon" />
         </button>
-
-        <div v-if="authStore.user" class="flex items-center gap-2 relative group">
-          <span class="text-neutral-500 text-[10px]">GLOBAL BPM:</span>
-          <input
-            type="number" min="20" max="300"
-            :value="arpStore.arpBpm"
-            @change="handleBpmChange"
-            class="w-24 bg-neutral-900 border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-lg focus:outline-none focus:border-synth-neon transition-colors"
-          />
-        </div>
       </div>
 
     </div>

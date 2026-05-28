@@ -39,6 +39,7 @@ const ACTION_MAP = {
   'device-program-change':  () => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
   'live-performance-pad':   () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
   'live-timeline':          () => uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen,
+  'sound-engine':           () => uiStore.isSoundEngineOpen = !uiStore.isSoundEngineOpen,
   'midi-manager': () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
 }
 

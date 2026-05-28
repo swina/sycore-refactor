@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { 
-  X, RotateCw, Trash2, Mic, Square, Play, Pause, 
+import {
+  X, Minus, RotateCw, Trash2, Mic, Square, Play, Pause,
   Volume2, VolumeX, RefreshCcw, Activity, ChevronRight, Settings2, Bookmark,
   Plus, Search, Grid, List, CheckCircle2, FolderSearch, Music2, SkipBack, Zap, ZapOff,
   MicOff, Settings, Download, ListPlus, Loader2
@@ -35,8 +35,9 @@ let streamRef = null
 
 const emit = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_AUDIO_LOOPER',
+  minimizeLabel: 'Audio Looper',
   initialWidth: 1000,
   initialHeight: 720,
   minWidth: 600,
@@ -400,7 +401,7 @@ const hasTakes = computed(() => looperStore.takes.some(t => !t.isEmpty))
 </script>
 
 <template>
-  <div class="bg-neutral-950 z-[1000]border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden relative" :style="panelStyle">
+  <div class="bg-neutral-950 z-[1000]border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden relative" :style="panelStyle" v-show="!isMinimized">
       
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-3 bg-gradient-to-b from-white/5 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
@@ -430,7 +431,11 @@ const hasTakes = computed(() => looperStore.takes.some(t => !t.isEmpty))
           <span class="text-neutral-500 uppercase tracking-tighter">Sync</span> {{ midiStore.currentBpm }} BPM
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <button @click="toggleMinimize" title="Minimize"
+            class="p-2 hover:bg-white/5 rounded-full transition-all active:scale-90 text-neutral-500 hover:text-yellow-400">
+            <Minus class="w-4 h-4" />
+          </button>
           <button @click="uiStore.isLooperOpen = false" class="p-2 hover:bg-white/5 rounded-full transition-all active:scale-90">
             <X class="w-5 h-5 text-neutral-500 hover:text-white" />
           </button>

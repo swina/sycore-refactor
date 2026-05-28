@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Download, RotateCcw, Play, Square, Scissors, SendHorizonal, Trash2, Magnet, Music, Repeat } from 'lucide-vue-next'
+import { X, Minus, Download, RotateCcw, Play, Square, Scissors, SendHorizonal, Trash2, Magnet, Music, Repeat } from 'lucide-vue-next'
 import { buildMidiFile } from '@/lib/midi-file'
 import { storeToRefs } from 'pinia'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -8,8 +8,9 @@ import { useCaptureStore } from '@/stores/useCaptureStore'
 import { midiService } from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 
-const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_MIDI_CAPTURE',
+  minimizeLabel: 'MIDI Capture',
   initialWidth: 920,
   initialHeight: 720,
   minHeight: 500,
@@ -1128,7 +1129,7 @@ onUnmounted(() => {
 
 <template>
   <div v-if="isOpen" @click.self="ctxMenu = null">
-      <div class="bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden flex flex-col shadow-[0_0_10px_rgba(0,255,204,0.15)]" :style="panelStyle">
+      <div class="bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden flex flex-col shadow-[0_0_10px_rgba(0,255,204,0.15)]" :style="panelStyle" v-show="!isMinimized">
 
         <!-- Header -->
         <div class="px-5 py-3 border-b border-neutral-900 flex justify-between items-center bg-gradient-to-r from-cyan-950/40 to-transparent flex-shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
@@ -1142,9 +1143,15 @@ onUnmounted(() => {
               {{ phase === 'capturing' ? 'REC' : phase === 'review' ? `${frozenNotes.length} notes` : 'IDLE' }}
             </span>
           </div>
-          <button @click="emit('close')" class="p-1 text-neutral-500 hover:text-white transition-colors">
-            <X class="w-4 h-4" />
-          </button>
+          <div class="flex items-center gap-1">
+            <button @click="toggleMinimize" title="Minimize"
+              class="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-yellow-400 transition-colors">
+              <Minus class="w-3.5 h-3.5" />
+            </button>
+            <button @click="emit('close')" class="p-1 text-neutral-500 hover:text-white transition-colors">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <!-- Capture controls bar -->

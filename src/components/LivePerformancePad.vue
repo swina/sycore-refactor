@@ -1,15 +1,16 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
-  X, Trash2, Play, Pause, SkipBack, SkipForward,
+  X, Minus, Trash2, Play, Pause, SkipBack, SkipForward,
   BookOpen, ListMusic, Save, FolderOpen, Check,
-  Volume2, VolumeX, Cpu, Music
+  Volume2, VolumeX, Cpu, Music, AudioLines
 } from 'lucide-vue-next'
 import { useMidiStore }       from '@/stores/useMidiStore'
 import { usePresetStore }     from '@/stores/usePresetStore'
 import { useLivePadStore }    from '@/stores/useLivePadStore'
 import { useMappingStore }    from '@/stores/useMappingStore'
 import { useSyncStore }       from '@/stores/useSyncStore'
+import { useUiStore }         from '@/stores/useUiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDeviceRegistry }  from '@/composables/useDeviceRegistry'
 import { midiService }        from '@/core/midi/MidiService'
@@ -20,8 +21,9 @@ import PlayList        from '@/components/PlayList.vue'
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_LIVE_PERF',
+  minimizeLabel: 'Live Performance',
   initialWidth: 900,
   initialHeight: 700,
   zIndex: 1000,
@@ -32,6 +34,7 @@ const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
 const mappingStore = useMappingStore()
 const syncStore    = useSyncStore()
+const uiStore      = useUiStore()
 const { openMenu } = useMidiContextMenu()
 const { devices: registeredDevices } = useDeviceRegistry()
 
@@ -490,7 +493,7 @@ function formatTime(t) {
 
 <template>
   <div v-show="isOpen">
-    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]" :style="panelStyle">
+    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]" :style="panelStyle" v-show="!isMinimized">
 
     <!-- ── Header ── -->
     <div class="px-6 py-2 border-b border-violet-900 flex items-center shrink-0 bg-gradient-to-r from-violet-950/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
@@ -549,9 +552,15 @@ function formatTime(t) {
           {{ activeSnapshot.name }}
         </span>
       </div>
-      <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors">
-        <X class="w-5 h-5" />
-      </button>
+      <div class="flex items-center gap-1">
+        <button @click="toggleMinimize" title="Minimize"
+          class="p-1 rounded-lg hover:bg-neutral-800 text-neutral-600 hover:text-yellow-400 transition-colors">
+          <Minus class="w-4 h-4" />
+        </button>
+        <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors p-1">
+          <X class="w-5 h-5" />
+        </button>
+      </div>
     </div>
 
     <!-- Snapshot save dialog -->
@@ -813,6 +822,7 @@ function formatTime(t) {
         </button>
       </div>
       <div class="flex flex-col items-end gap-0.5 relative z-10">
+        <div class="flex items-center gap-1.5 mb-0.5">
         <!-- Audio capture sync toggle -->
         <div
           class="flex items-center gap-1.5 mb-0.5 cursor-pointer select-none"
@@ -833,8 +843,12 @@ function formatTime(t) {
             : 'text-neutral-600 hover:text-neutral-500'
           ]">REC SYNC</span>
         </div>
+        <!--- Open Audio Capture-->
+        <div v-if="syncRecordAudioCapture && !isPlaying" @click="uiStore.isAudioCaptureOpen = true" class="cursor-pointer text-synth-cyan text-mono text-xs uppercase text-[9px]">
+          <AudioLines title="Audio Capture" class="w-5 h-5" />
+        </div>
         <!-- <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest" :class="syncRecordAudioCapture?'text-red-500':''">{{ syncRecordAudioCapture ? 'ON' : 'OFF' }}  </span> -->
-
+        </div>
         <span class="text-xs font-black text-violet-400 font-mono">{{ playlistIdx >= 0 ? `#${playlistIdx + 1} ${playlist[playlistIdx]?.label || ''}` : 'IDLE' }}</span>
       </div>
     </div>

@@ -6,11 +6,12 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import {
-  Radio, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music2, Workflow,
-  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation
+  Radio, Cable, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music, Music2, Workflow,
+  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation, Settings, Infinity
 } from 'lucide-vue-next'
 import SlideshowModal from '@/components/SlideshowModal.vue'
 import AboutModal from '@/components/AboutModal.vue'
+import AdminPanel from '@/components/AdminPanel.vue'
 import { useMidiInit } from '@/composables/useMidiInit'
 
 const router = useRouter()
@@ -21,6 +22,7 @@ const uiStore = useUiStore()
 
 const isSlideshowOpen = ref(false)
 const isHelpSlideshowOpen = ref(false)
+const isAdminPanelOpen = ref(false)
 
 useMidiInit()
 
@@ -50,8 +52,18 @@ function goWorkspace() {
           <Radio class="w-3 h-3" />
           {{ midiStore.midiReady ? 'MIDI READY' : 'MIDI WAITING' }}
         </div>
+        <!-- Admin Panel -->
+        <button
+          v-if="authStore.isAdmin"
+          @click="isAdminPanelOpen = true"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase font-mono border transition-colors bg-neutral-900/60 text-neutral-400 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon"
+        >
+          <Settings class="w-3 h-3" />
+          Admin
+        </button>
+
         <!-- Presentation Link (Not logged in) -->
-      
+
         <!-- <button
           v-if="authStore.user"
           @click="goWorkspace"
@@ -77,90 +89,42 @@ function goWorkspace() {
       <!-- Column 1 — 70% -->
       <div class="flex flex-col gap-3 cursor-pointer" style="flex: 0 0 70%">
 
-        <!-- Box 1-A: top 50% -->
-        <div class="flex-1 rounded-xl border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden items-end bg-sound-design">
-          <div class="flex items-end w-full h-full p-4" @click="goWorkspace()"><h1 class="text-2xl font-bold font-mono uppercase w-full text-right text-synth-neon">Sound Design</h1></div>
-          <!-- <div class="flex-none px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2">
-            <Zap class="w-3.5 h-3.5 text-synth-neon" />
-            <span class="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-300 font-mono">Sound Design</span>
-          </div> -->
-          <!-- <div class="flex-1 grid grid-cols-2 gap-3 p-4">
-            <button
-              @click="uiStore.isTypesOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <LayoutGrid class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">Sound Types</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">Browse and generate AI sound categories</span>
-            </button>
-            <button
-              @click="uiStore.isHistoryOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <Layers class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">Preset Library</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">History and saved patches</span>
-            </button>
-            <button
-              @click="uiStore.isArpOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <Music2 class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">Arpeggiator</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">Note patterns with BPM sync</span>
-            </button>
-            <button
-              @click="uiStore.isSequencerOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <Cpu class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">Step Sequencer</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">Pattern programming with two slots</span>
-            </button>
-          </div> -->
-        </div>
+        <div class="flex h-1/2 gap-3">
+          <!-- Box 1-A: top 50% -->
+          <div  @click="uiStore.isSoundEngineOpen = true;goWorkspace()" class="flex-1 rounded-xl border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden items-center bg-sound-design">
 
-        <!-- Box 1-B: bottom 50% -->
-        <div @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden bg-home-performance">
-          <div class="flex items-end w-full h-full p-4"><h1 class="text-2xl font-bold font-mono uppercase w-full text-right text-synth-cyan">Performance</h1></div>
-          <!-- <div class="flex-none px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2">
-            <Network class="w-3.5 h-3.5 text-synth-neon" />
-            <span class="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-300 font-mono">MIDI Control & Live</span>
+              <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+                <Cpu class="w-7 h-7 text-synth-neon" />
+                <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Sound Engine</span>
+              </div>  
+              <!-- <h1 class="text-2xl font-bold font-mono uppercase w-full text-right text-synth-neon">Sound Design</h1> -->
+            
           </div>
-          <div class="flex-1 grid grid-cols-2 gap-3 p-4">
-            <button
-              @click="uiStore.isMidiMappingOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <Workflow class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">MIDI Mapping</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">Learn & assign CC controllers</span>
-            </button>
-            <button
-              @click="uiStore.isMidiPerformanceOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <Gamepad2 class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">Performance Grid</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">Live MIDI performance pads</span>
-            </button>
-            <button
-              @click="uiStore.isLooperOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <RotateCw class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">Audio Looper</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">Multi-track looping</span>
-            </button>
-            <button
-              @click="uiStore.isBackingTrackOpen = true; goWorkspace()"
-              class="group flex flex-col gap-2 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700/50 hover:border-synth-neon/40 hover:bg-synth-neon/5 transition-all text-left"
-            >
-              <Disc3 class="w-5 h-5 text-synth-neon/70 group-hover:text-synth-neon transition-colors" />
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-300 font-mono">Backing Track</span>
-              <span class="text-[10px] text-neutral-500 font-mono leading-tight">Play along with audio tracks</span>
-            </button>
-          </div> -->
+          <div @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 flex flex-col items-center overflow-hidden bg-home-performance">
+            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+              <Zap class="w-7 h-7 text-synth-neon" />
+              <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Performance</span>
+            </div>
+          <!-- <div class="flex items-end w-full h-full p-4"><h1 class="text-2xl font-bold font-mono uppercase w-full text-right text-synth-cyan">Performance</h1></div> -->
+          </div>
+        </div>
+        <!-- Box 1-B: bottom 50% -->
+        <div class="flex h-1/2 gap-3">
+          <div @click="uiStore.isLivePerformancePadOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-live-performance">
+          <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+            <Music2 class="w-7 h-7 text-synth-neon" />
+            <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Live Set</span>
+          </div>
+          </div>
+          <div @click="uiStore.isAudioCaptureOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-audio-capture">
+          <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+            <Mic class="w-7 h-7 text-synth-neon" />
+            <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Audio Capture</span>
+          </div>
+          </div>
+        <!-- <div @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden bg-home-performance">
+          <div class="flex items-end w-full h-full p-4"><h1 class="text-2xl font-bold font-mono uppercase w-full text-right text-synth-cyan">Performance</h1></div>
+        </div> -->
         </div>
 
       </div>
@@ -188,7 +152,7 @@ function goWorkspace() {
          <!-- Box 2-2 -->
         <div @click="uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-midi-knob">
           <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-            <Mic class="w-5 h-5 text-synth-neon" />
+            <Cable class="w-5 h-5 text-synth-neon" />
             <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Multi Sounds</span>
           </div>
           <!-- <div class="flex-1 flex flex-col items-end justify-center gap-2 p-3">
@@ -203,22 +167,34 @@ function goWorkspace() {
         </div>
 
         <!-- Box 2-3 -->
-        <div @click="uiStore.isLivePerformancePadOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-live-performance">
-          <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-            <Zap class="w-5 h-5 text-synth-neon" />
-            <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Live Set</span>
+        <div class="flex h-1/5 gap-3">
+          <div @click="uiStore.isBackingTrackOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-backing-tracks">
+            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+              <Music class="h-5 w-5 text-synth-neon"/>
+              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Tracks</span>            
+            </div>
           </div>
-          <!-- <div class="flex-1 flex flex-col items-center justify-center gap-2 p-3">
-            <button
-              @click="uiStore.isLivePerformancePadOpen = true; goWorkspace()"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-800 border border-neutral-700 hover:border-synth-neon/40 text-neutral-400 hover:text-synth-neon text-[10px] font-mono uppercase tracking-widest transition-all w-full justify-center"
-            >
-              <Zap class="w-3.5 h-3.5" />
-              Open
-            </button>
-          </div> -->
+          <div @click="uiStore.isAudioLooper = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-audio-looper">
+            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+              <Infinity class="h-5 w-5 text-synth-neon"/>
+              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Looper</span>            
+            </div>
+          </div>
         </div>
+                <!-- Box 2-5: SY.CORE logo -->
+        <div @click="uiStore.isCaptureOpen = true; goWorkspace();" class="cursor-pointer flex-none rounded-xl border border-neutral-800 bg-black/60 flex items-center justify-center py-4 bg-midi-capture">
+          <div class="flex items-center gap-1">
+            <Cable class="w-5 h-5 text-synth-neon" />
+            <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Piano Roll</span>
 
+            <!-- <span class="text-xl font-black uppercase text-synth-neon drop-shadow-[0_0_12px_rgba(0,163,112,0.5)] font-mono">
+              <span class="text-white">{{ configStore.appName.split('.')[0] }}.</span>{{ configStore.appName.split('.')[1] }}
+            </span> -->
+            <!-- <span class="text-[8px] font-mono uppercase tracking-[0.25em] text-neutral-600">
+              v{{ configStore.appVersion || '—' }}
+            </span> -->
+          </div>
+        </div>
         <!-- Box 2-4 -->
         <div class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/60 backdrop-blur-sm flex flex-col overflow-hidden bg-settings">
           <div class="flex items-end w-full h-full p-2">
@@ -260,25 +236,9 @@ function goWorkspace() {
             </div>
           </div>
         </div>
-
-       
-
         
 
-        <!-- Box 2-4 -->
-        
 
-        <!-- Box 2-5: SY.CORE logo -->
-        <div class="flex-none rounded-xl border border-neutral-800 bg-black/60 flex items-center justify-center py-4">
-          <div class="flex flex-col items-center gap-1">
-            <span class="text-xl font-black uppercase text-synth-neon drop-shadow-[0_0_12px_rgba(0,163,112,0.5)] font-mono">
-              <span class="text-white">{{ configStore.appName.split('.')[0] }}.</span>{{ configStore.appName.split('.')[1] }}
-            </span>
-            <span class="text-[8px] font-mono uppercase tracking-[0.25em] text-neutral-600">
-              v{{ configStore.appVersion || '—' }}
-            </span>
-          </div>
-        </div>
 
       </div>
     </div>
@@ -286,5 +246,6 @@ function goWorkspace() {
     <SlideshowModal :isOpen="isSlideshowOpen" @close="isSlideshowOpen = false" />
     <SlideshowModal :isOpen="isHelpSlideshowOpen" source="help" @close="isHelpSlideshowOpen = false" />
     <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
+    <AdminPanel :isOpen="isAdminPanelOpen" @close="isAdminPanelOpen = false" />
   </div>
 </template>

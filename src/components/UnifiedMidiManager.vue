@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import {
-  X, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2, Download
+  X, Minus, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2, Download
 } from 'lucide-vue-next'
 import { useUiStore }      from '@/stores/useUiStore'
 import { useMidiStore }    from '@/stores/useMidiStore'
@@ -23,8 +23,9 @@ const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
 const syncStore    = useSyncStore()
 
-const { panelStyle, onDragStart, onResizeStart } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_UNIFIED_MIDI',
+  minimizeLabel: 'MIDI Manager',
   initialWidth: 920,
   initialHeight: 720,
   zIndex: 900,
@@ -208,6 +209,7 @@ function downloadCsv() {
   <Transition name="umm">
     <div
       v-if="uiStore.showUnifiedMidiManager"
+      v-show="!isMinimized"
       class="bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
       :style="panelStyle"
     >
@@ -243,6 +245,12 @@ function downloadCsv() {
               title="Download MIDI config report (CSV)"
             >
               <Download class="w-4 h-4" />
+            </button>
+            <button @click="toggleMinimize"
+              class="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-yellow-400 transition-colors"
+              title="Minimize"
+            >
+              <Minus class="w-4 h-4" />
             </button>
             <button @click="close"
               class="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"

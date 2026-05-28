@@ -1,4 +1,5 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { registerMinimized, unregisterMinimized } from './useMinimizedModals'
 
 export function useDraggableResizable({
   storageKey = null,
@@ -7,7 +8,11 @@ export function useDraggableResizable({
   minWidth = 500,
   minHeight = 400,
   zIndex = 100,
+  minimizedHeight = 44,
+  minimizeLabel = 'Modal',
 } = {}) {
+
+  const _id = storageKey || `modal_${Math.random().toString(36).slice(2)}`
 
   function loadSaved() {
     if (!storageKey) return null
@@ -26,10 +31,29 @@ export function useDraggableResizable({
       y: Math.max(8, Math.round((window.innerHeight - h) / 2)),
       w,
       h,
+      minimized: false,
     }
   }
 
   const pos = ref(loadSaved() ?? getDefault())
+  if (pos.value.minimized === undefined) pos.value.minimized = false
+
+  const isMinimized = computed({
+    get: () => !!pos.value.minimized,
+    set: (v) => { pos.value.minimized = v; persist() },
+  })
+
+  function toggleMinimize() {
+    isMinimized.value = !isMinimized.value
+  }
+
+  // Keep global minimized-modals registry in sync
+  watch(isMinimized, (v) => {
+    if (v) registerMinimized(_id, minimizeLabel, toggleMinimize)
+    else   unregisterMinimized(_id)
+  }, { immediate: true })
+
+  onUnmounted(() => unregisterMinimized(_id))
 
   function persist() {
     if (storageKey) {
@@ -47,9 +71,9 @@ export function useDraggableResizable({
 
   const panelStyle = computed(() => ({
     position: 'fixed',
-    left: pos.value.x + 'px',
-    top: pos.value.y + 'px',
-    width: pos.value.w + 'px',
+    left:   pos.value.x + 'px',
+    top:    pos.value.y + 'px',
+    width:  pos.value.w + 'px',
     height: pos.value.h + 'px',
     zIndex,
   }))
@@ -85,6 +109,7 @@ export function useDraggableResizable({
 
   function onResizeStart(e, dir) {
     if (e.button !== 0) return
+    if (pos.value.minimized) return
     e.preventDefault()
     e.stopPropagation()
     _res = {
@@ -115,5 +140,5 @@ export function useDraggableResizable({
     persist()
   }
 
-  return { panelStyle, onDragStart, onResizeStart }
+  return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize }
 }

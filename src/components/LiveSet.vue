@@ -707,9 +707,8 @@ function formatTime(t) {
 
 <style scoped>
 .vertical-slider {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
-  writing-mode: bt-lr;
+  writing-mode: vertical-lr;
+  direction: rtl;
 }
 
 .vertical-slider::-webkit-slider-runnable-track {
