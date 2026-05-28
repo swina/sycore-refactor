@@ -1,4 +1,4 @@
-# MidiDeviceProgramChangePanel — Technical & Commercial Reference
+# Multi Sound — Technical & Commercial Reference
 
 **Component:** `src/components/MidiDeviceProgramChangePanel.vue`  
 **Module:** SY.CORE — Program Change Browser  
@@ -8,7 +8,7 @@
 
 ## Overview
 
-`MidiDeviceProgramChangePanel` is a full-featured, per-device MIDI Program Change (PC) browser and dispatcher. It surfaces as a modal overlay and provides three distinct interaction modes:
+`Multi Sound` is a full-featured, per-device MIDI Program Change (PC) browser and dispatcher. It surfaces as a modal overlay and provides three distinct interaction modes:
 
 | Mode | Trigger condition | Description |
 |---|---|---|
@@ -20,6 +20,8 @@
 ---
 
 ## Architecture & Data Flow
+
+<img src="../../public/help/guides/multi-program-change.png" width="640"/>
 
 ```
 ┌─────────────────────────────────────────────────────────┐

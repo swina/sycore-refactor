@@ -15,6 +15,8 @@ Audio Capture is a full-featured in-app audio recorder and editor. It records di
 
 ## Interface Layout
 
+<img src="../../public/help/guides/sycore-audio-capture.png"/>
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ [≡] 🎙 AUDIO CAPTURE  [REC 00:12] ···················· [✕]    │ ← Header

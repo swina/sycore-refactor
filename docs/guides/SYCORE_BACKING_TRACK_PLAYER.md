@@ -2,6 +2,9 @@
 
 The Backing Track Player is a core module of SY.CORE designed for managing and playing audio files, backing tracks, and playlists during live performances. It provides advanced features like crossfading, MIDI synchronization, and real-time BPM updates.
 
+
+<img src="../../public/help/guides/sycore-tracks-player.png"/>
+
 ## Key Features
 
 ### 1. Dual-Slot Playback Engine

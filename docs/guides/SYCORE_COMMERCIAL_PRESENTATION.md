@@ -3,6 +3,7 @@
 
 > *Where algorithmic intelligence meets hardware mastery. Zero latency. Offline-first. Stage-ready.*
 
+<img src="../../public/help/guides/landing.png" width="640"/>   
 ---
 
 ## The Problem Every Electronic Musician Knows
@@ -195,7 +196,7 @@ Anyone ready to unlock the full potential of their MIDI synthesizers through int
 
 ---
 
-## About SY.CORE Labs
+## About SY.CORE Lab
 
 SY.CORE Lab is a research and development collective operating at the intersection of **Music Technology, Adaptive Algorithms, and Human-Instrument Interaction**.
 

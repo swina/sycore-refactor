@@ -541,7 +541,7 @@ function deleteSet(id) {
               <Music2 class="w-5 h-5 text-violet-400" />
             </div>
             <div>
-              <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">Device Program Change</h2>
+              <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">MULTI SOUND</h2>
               <p class="text-[9px] font-mono text-violet-500/60 uppercase tracking-widest">Per-Device Bank & Preset Browser</p>
             </div>
           </div>
