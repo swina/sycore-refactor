@@ -128,40 +128,43 @@ export function useControllerManager() {
     }
     const outputs = midiService.getOutputs()
 
-    log(`Scanning ${inputs.length} inputs...`)
+    log(`Scanning ${inputs.length} inputs: [${inputs.map(i => i.name || i.id).join(', ')}]`)
+    log(`Available outputs: [${outputs.map(o => o.name || o.id).join(', ')}]`)
 
     inputs.forEach(input => {
       const name = input.name || input.id
-      const profile = AVAILABLE_PROFILES.find(p => {
-        const isMatch = p.matchName.test(name)
-        return isMatch
-      })
+      const profile = AVAILABLE_PROFILES.find(p => p.matchName.test(name))
 
-      if (profile) {
-        log(`Matched profile: ${profile.name} for ${name}`)
+      if (!profile) {
+        log(`No profile match for input: "${name}"`)
+        return
+      }
 
-        const output = outputs.find(o => (o.name || o.id) === name)
-        if (output) log(`Found matching output for ${name}: ID=${output.id}`)
-        else log(`WARNING: No output found for ${name}! Feedback will not work.`)
+      log(`Matched profile: ${profile.name} for "${name}"`)
 
-        const sendFn = output ? (data) => midiService.sendRawToDevice(output.id, data) : null
+      // Match output by profile regex (not strict name equality) to handle OS port name differences
+      const output = outputs.find(o => profile.matchName.test(o.name || o.id))
+      if (output) log(`Found matching output: "${output.name}" ID=${output.id}`)
+      else log(`WARNING: No output found for "${name}" — feedback disabled, onInit will still run`)
 
-        // Only run onInit for controllers that are genuinely new (not previously active
-        // and not already initialized this session).  This prevents the Launchpad from
-        // receiving a reset + re-init every time a different MIDI device connects.
-        const isNew = !previousIds.has(input.id) && !initializedControllerIds.has(input.id)
-        if (sendFn && isNew) {
-          profile.onInit(sendFn)
-          // Flash the Mixer button for feedback
+      const sendFn = output ? (data) => midiService.sendRawToDevice(output.id, data) : () => {}
+
+      const isNew = !previousIds.has(input.id) && !initializedControllerIds.has(input.id)
+      log(`isNew=${isNew} (previousIds has=${previousIds.has(input.id)}, initializedIds has=${initializedControllerIds.has(input.id)})`)
+
+      if (isNew) {
+        log(`Calling onInit for ${name}`)
+        profile.onInit(sendFn)
+        if (output) {
           sendFn([0xB0, 111, 63])
           setTimeout(() => sendFn([0xB0, 111, 0]), 200)
-          initializedControllerIds.add(input.id)
-        } else if (!isNew) {
-          log(`Skipping onInit for ${name} (already initialized)`)
         }
-
-        activeControllers.value.push({ input, output, profile, sendFn })
+        initializedControllerIds.add(input.id)
+      } else {
+        log(`Skipping onInit for "${name}" (already initialized)`)
       }
+
+      activeControllers.value.push({ input, output, profile, sendFn })
     })
   }
 
@@ -172,6 +175,7 @@ export function useControllerManager() {
     const deviceName = input?.name || midiStore.inputs.find(i => i.id === inputId)?.name || inputId || 'Unknown'
     const data = e.data
     if (!data || data.length < 2) return false
+
 
     const status = data[0]
     const type = status & 0xF0

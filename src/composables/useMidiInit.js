@@ -20,6 +20,54 @@ export function useMidiInit() {
   const arpStore  = useArpStore()
   const mappingStore = useMappingStore()
 
+  function checkLaunchpadMini() {
+    const log = (msg) => window.SY_LOG ? window.SY_LOG(msg) : console.log(msg)
+
+    const lpOut = midiService.getOutputs().find(o => o.name?.toLowerCase().includes('launchpad'))
+    const lpIn  = midiService.getInputs().find(i => i.name?.toLowerCase().includes('launchpad'))
+
+    if (!lpOut && !lpIn) {
+      log('[Launchpad Mini] Not detected in inputs or outputs — skipping check.')
+      return
+    }
+
+    log(`[Launchpad Mini] Found — Output: ${lpOut?.name ?? 'none'}, Input: ${lpIn?.name ?? 'none'}`)
+
+    // Send: All Notes Off (CC 123 val 0, ch 1) as a benign presence ping
+    if (lpOut) {
+      try {
+        lpOut.send([0xB0, 0x7B, 0x00])
+        log(`[Launchpad Mini] Send OK — All Notes Off sent to ${lpOut.name}`)
+      } catch (err) {
+        log(`[Launchpad Mini] Send FAILED — ${err.message}`)
+      }
+    }
+
+    // Receive: listen for any incoming message within 1.5 s
+    if (lpIn) {
+      let received = false
+      const timeout = setTimeout(() => {
+        if (!received) {
+          log('[Launchpad Mini] Receive check — no messages in 1.5 s (device may be idle)')
+        }
+      }, 1500)
+
+      const handler = (e) => {
+        const inputId = e.target?.id
+        const inputPort = midiService.getInputs().find(i => i.id === inputId)
+        if (!inputPort?.name?.toLowerCase().includes('launchpad')) return
+        if (received) return
+        received = true
+        clearTimeout(timeout)
+        unsub()
+        const bytes = Array.from(e.data ?? []).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+        log(`[Launchpad Mini] Receive OK — got message: [${bytes}]`)
+      }
+
+      const unsub = midiService.addRawListener(handler)
+    }
+  }
+
   let isInitializing = false
   async function checkAndAutoSelect() {
     if (isInitializing) return
@@ -51,6 +99,8 @@ export function useMidiInit() {
     if (window.SY_LOG) window.SY_LOG(`MIDI Store Init Result: ${ok}`)
     isInitializing = false
     if (!ok) return
+
+    checkLaunchpadMini()
 
     // Auto-detect Roland S-1 by name
     const s1Out = midiStore.outputs.find(o => o.name?.toLowerCase().includes('s-1'))

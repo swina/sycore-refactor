@@ -725,7 +725,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
               <button
                 @click="activeCategory = null;isPanelCollapsed = false; uiStore.isSequencerOpen = false;"
                 @contextmenu.prevent="openMenu($event, { name: 'ui_cat_grid', label: 'Grid Tab' })"
-                :class="['relative px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !activeCategory ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
+                :class="['ml-2 relative px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !activeCategory ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
               >
                 <span v-if="mappingStore.learningParamName === 'ui_cat_grid'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 <LayoutGrid class="w-3 h-3" />

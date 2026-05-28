@@ -14,8 +14,9 @@ const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
 const configStore  = useConfigStore()
 
-const targetParam = ref('')
-const lastRawData = ref('')
+const targetParam  = ref('')
+const lastRawData  = ref('')
+const learnDevice  = ref('')
 
 // Combine S-1 hardware parameters with "registered" controllers from the database
 const availableParams = computed(() => {
@@ -60,11 +61,14 @@ function setupLearn() {
   _unsubLearn = midiService.addRawListener((event) => {
     if (!event.data || event.data.length === 0) return
     const status = event.data[0]
-    
+
     // Get device name from target
     const inputId = event.target?.id
     const inputPort = midiService.getInputs().find(i => i.id === inputId)
     const deviceName = inputPort?.name || 'Unknown Device'
+
+    // Filter by selected device if one is chosen
+    if (learnDevice.value && deviceName !== learnDevice.value) return
 
     lastRawData.value = `Dev: ${deviceName} | Status: 0x${status.toString(16).toUpperCase()} | Data: ${event.data[1]}`
     
@@ -154,6 +158,23 @@ function confirmLearn() {
         <p v-if="mappingStore.activePresetId" class="text-[9px] text-neutral-600 mt-1 font-mono">
           Active: {{ mappingStore.presets.find(p => p.id === mappingStore.activePresetId)?.name }}
           · {{ mappingStore.mappingCount }} mapping{{ mappingStore.mappingCount !== 1 ? 's' : '' }}
+        </p>
+      </div>
+
+      <!-- MIDI Input Device selector -->
+      <div class="px-4 pt-3 pb-1 shrink-0">
+        <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-1">MIDI Input Device</label>
+        <select
+          v-model="learnDevice"
+          class="w-full bg-black border border-neutral-700 rounded-lg px-3 py-2 text-neutral-300 font-mono text-sm focus:border-synth-neon/50 outline-none"
+        >
+          <option value="">— any device —</option>
+          <option v-for="d in midiStore.inputs" :key="d.id" :value="d.name ?? d.id">
+            {{ d.name ?? `Device ${d.id.slice(0, 8)}` }}
+          </option>
+        </select>
+        <p v-if="midiStore.inputs.length === 0" class="text-[10px] font-mono text-neutral-600 mt-1">
+          No MIDI input devices detected.
         </p>
       </div>
 

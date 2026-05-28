@@ -1793,8 +1793,8 @@ function handleClear() {
         <!-- Swing Control -->
         <div class="flex items-center gap-2">
           <span class="text-[9px] font-mono text-neutral-500 uppercase">Swing</span>
-          <div class="flex items-center bg-black border border-neutral-800 rounded px-2 h-9 gap-3">
-            <input v-model.number="swingAmount" type="range" min="0" max="100" class="w-20 h-1 accent-emerald-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+          <div class="flex items-center bg-black border border-neutral-800 rounded w-24 px-2 h-9 gap-3">
+            <input v-model.number="swingAmount" type="range" min="0" max="100" class="w-14 h-1 accent-emerald-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
             <span class="text-[9px] font-mono text-amber-500 w-8 text-right">{{ swingAmount }}%</span>
           </div>
         </div>
@@ -1820,7 +1820,6 @@ function handleClear() {
             class="h-8 px-2 rounded-lg font-black uppercase text-[10px] transition-all border shadow-sm bg-black text-neutral-500 border-neutral-800 hover:border-synth-neon/50 hover:text-synth-neon flex items-center gap-1.5"
           >
             <RotateCcw class="w-3.5 h-3.5" />
-            RELOAD
           </button>
           
           <button @click="handleClear"
