@@ -1,8 +1,8 @@
 <template>
   <div class="efx-mixer-container w-full h-full">
-    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="efx-mixer-svg">
+    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="m-auto efx-mixer-svg">
       <!-- Grid/Background -->
-      <rect x="0" y="0" :width="width" :height="height" class="efx-mixer-bg" />
+      <rect x="0" y="0" :width="width" :height="height" class="efx-mixer-bg pl-4" />
 
       <!-- EFX Level Bars -->
       <g v-for="(efx, index) in effects" :key="efx.name">

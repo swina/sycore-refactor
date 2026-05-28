@@ -56,6 +56,28 @@ function resetToWelcome() {
     </template>
 
     <div class="p-6 space-y-8">
+      <!-- Author -->
+      <section>
+        <div class="flex items-center gap-2 mb-4">
+          <User class="w-4 h-4 text-synth-neon" />
+          <h3 class="text-xs font-bold uppercase tracking-widest text-neutral-400">Author & Development</h3>
+        </div>
+        <div class="p-4 rounded-xl bg-gradient-to-br from-neutral-950 to-neutral-900 border border-neutral-800 flex items-center justify-between">
+          <div>
+            <img src="/sycore-lab.png" alt="SY.CORE Logo" class="w-[180px] h-[180px] mb-2 rounded-lg border border-neutral-800" />
+            <!-- <h4 class="text-lg font-black text-white italic tracking-tight">SY.CORE Lab</h4>
+            <p class="text-xs text-neutral-500">Professional Audio Software & AI Orchestration</p> -->
+          </div>
+          <div class="flex gap-2">
+            <a href="#" class="w-8 h-8 flex items-center justify-center rounded-lg bg-neutral-800 text-neutral-400 hover:text-synth-neon transition-colors">
+              <Globe class="w-4 h-4" />
+            </a>
+            <a href="#" class="w-8 h-8 flex items-center justify-center rounded-lg bg-neutral-800 text-neutral-400 hover:text-white transition-colors">
+              <Github class="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+      </section>
 
       <!-- Product Details -->
       <section>
@@ -72,28 +94,7 @@ function resetToWelcome() {
         </div>
       </section>
 
-      <!-- Author -->
-      <section>
-        <div class="flex items-center gap-2 mb-4">
-          <User class="w-4 h-4 text-synth-neon" />
-          <h3 class="text-xs font-bold uppercase tracking-widest text-neutral-400">Author & Development</h3>
-        </div>
-        <div class="p-4 rounded-xl bg-gradient-to-br from-neutral-950 to-neutral-900 border border-neutral-800 flex items-center justify-between">
-          <div>
-            <h4 class="text-lg font-black text-white italic tracking-tight">SY.CORE Labs</h4>
-            <p class="text-xs text-neutral-500">Professional Audio Software & AI Orchestration</p>
-          </div>
-          <div class="flex gap-2">
-            <a href="#" class="w-8 h-8 flex items-center justify-center rounded-lg bg-neutral-800 text-neutral-400 hover:text-synth-neon transition-colors">
-              <Globe class="w-4 h-4" />
-            </a>
-            <a href="#" class="w-8 h-8 flex items-center justify-center rounded-lg bg-neutral-800 text-neutral-400 hover:text-white transition-colors">
-              <Github class="w-4 h-4" />
-            </a>
-          </div>
-        </div>
-      </section>
-
+      
       <!-- Open Source Stack -->
       <section>
         <div class="flex items-center gap-2 mb-4">
@@ -127,7 +128,7 @@ function resetToWelcome() {
     <template #footer>
       <div class="p-4 bg-neutral-950 border-t border-neutral-800 text-center">
         <p class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">
-          SY.CORE &copy; 2026 Moodgiver Labs &middot; Made with Precision & Neural Magic
+          SY.CORE &copy; 2026 SYCORE Lab &middot; Made with Precision & Neural Magic
         </p>
       </div>
     </template>

@@ -7,7 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home } from 'lucide-vue-next'
+import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/MidiService'
@@ -227,7 +227,7 @@ function handleBpmChange(e) {
       </div>
 
       <!-- Right: controls -->
-      <div class="flex-1 flex items-center justify-end gap-3 md:gap-5">
+      <div class="flex-1 flex items-center justify-end gap-1 md:gap-2">
 
         <div v-if="authStore.user" class="flex items-center gap-2">
           <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 rounded-full group">
@@ -278,6 +278,14 @@ function handleBpmChange(e) {
           class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
         >
           <Save class="w-5 h-5 text-synth-neon" />
+        </button>
+        <button
+          v-if="authStore.user"
+          @click="uiStore.isProfileOpen = true"
+          title="Profile"
+          class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
+        >
+          <User class="w-5 h-5 text-synth-neon" />
         </button>
       </div>
 

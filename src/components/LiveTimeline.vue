@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   X, Minus, Play, Pause, Square, SkipBack, Plus, Trash2,
   ChevronUp, ChevronDown, Flag, ListMusic, ZoomIn, ZoomOut, Clock, Library,
-  Save, FilePlus, FolderOpen
+  Save, FilePlus, FolderOpen, AudioLines
 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore }    from '@/stores/useMidiStore'
@@ -39,6 +39,9 @@ const syncTimelineToAudioCapture = computed({
   set: (v) => { syncStore.syncTimelineToAudioCapture = v },
 })
 
+
+
+
 // ─── localStorage ──────────────────────────────────────────────────────────
 const LS_SEGS  = 'SYCORE_TIMELINE_SEGMENTS'
 const LS_MARKS = 'SYCORE_TIMELINE_MARKERS'
@@ -52,7 +55,7 @@ const markers  = ref(getLS(LS_MARKS, []))
 
 // ─── UI ────────────────────────────────────────────────────────────────────
 const tab   = ref('timeline')  // 'timeline' | 'arrange'
-const scale = ref(50)          // px per second
+const scale = ref(15)          // px per second
 
 const showAddSeg    = ref(false)
 const showAddMarker = ref(false)
@@ -786,13 +789,16 @@ onUnmounted(() => {
 
     <!-- ── Header ──────────────────────────────────────────────────────────── -->
     <div
-      class="px-4 py-2 border-b border-neutral-900 flex items-center gap-4 shrink-0 bg-black/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none"
+      class="px-4 py-4 border-b border-neutral-900 flex items-center gap-4 shrink-0 bg-black/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none bg-gradient-to-r from-violet-950/40 "
       @mousedown="onDragStart"
     >
       <!-- Title & Tabs -->
       <div class="flex items-center gap-6 pointer-events-auto" @mousedown.stop>
         <div class="flex flex-col">
-          <h2 class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Timeline</h2>
+          <div class="flex items-center gap-2">
+            <Clock class="w-4 h-4 text-synth-neon" />
+            <h2 class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Timeline</h2>
+          </div>
           <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Live Set Arranger</span>
         </div>
         <nav class="flex items-center gap-6">
@@ -1058,7 +1064,7 @@ onUnmounted(() => {
     </div>
 
     <!--- footer -->
-    <div class="flex p-4 relative">
+    <div class="flex p-4 relative" v-if="tab === 'timeline'">
       <div
         v-if="syncTimelineToAudioCapture && isPlaying"
         class="absolute inset-0 pointer-events-none"
@@ -1108,6 +1114,36 @@ onUnmounted(() => {
         <!-- <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors ml-2">
           <X class="w-5 h-5" />
         </button> -->
+      </div>
+
+      <div class="flex flex items-center gap-0.5 relative z-10">
+        <div class="flex items-center gap-1.5 mb-0.5">
+        <!-- Audio capture sync toggle -->
+        <div
+          class="flex items-center gap-1.5 mb-0.5 cursor-pointer select-none"
+          @click="syncTimelineToAudioCapture = !syncTimelineToAudioCapture"
+        >
+          <span
+            :class="[
+              'w-1.5 h-1.5 rounded-full transition-all duration-300',
+              syncTimelineToAudioCapture && isPlaying ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse'
+              : syncTimelineToAudioCapture ? 'bg-red-500/60'
+              : 'bg-neutral-700'
+            ]"
+          />
+          <span :class="[
+            'text-[11px] font-mono uppercase tracking-widest transition-colors duration-300',
+            syncTimelineToAudioCapture && isPlaying ? 'text-red-400'
+            : syncTimelineToAudioCapture ? 'text-red-500/60 hover:text-red-400'
+            : 'text-neutral-600 hover:text-neutral-500'
+          ]">REC SYNC</span>
+        </div>
+        <!--- Open Audio Capture-->
+        <div v-if="syncTimelineToAudioCapture && !isPlaying" @click="uiStore.isAudioCaptureOpen = true" class="cursor-pointer text-synth-cyan text-mono text-xs uppercase text-[9px]">
+          <AudioLines title="Audio Capture" class="w-5 h-5" />
+        </div>
+        <!-- <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest" :class="syncRecordAudioCapture?'text-red-500':''">{{ syncRecordAudioCapture ? 'ON' : 'OFF' }}  </span> -->
+        </div>
       </div>
 
       <!-- Save / Load controls -->

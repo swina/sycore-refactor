@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
+import TracksPlayer from '@/components/TracksPlayer.vue'
 
 const tooSmall = ref(false)
 
@@ -27,4 +28,5 @@ onUnmounted(() => {
     </p>
   </div>
   <RouterView />
+  <TracksPlayer />
 </template>

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   Play, Pause, Volume2, Upload, Music, X, ListMusic,
   Plus, Trash2, Edit2, Repeat, ListPlus, ChevronUp, ChevronDown,
@@ -24,7 +25,7 @@ const midiStore = useMidiStore()
 const authStore = useAuthStore()
 const configStore = useConfigStore()
 const syncStore = useSyncStore()
-
+const route = useRoute()
 
 const props = defineProps({})
 const emit = defineEmits(['srcChange'])
@@ -36,6 +37,10 @@ const isAdmin = computed(() => authStore.isAdmin)
 const isOpen = computed({
   get: () => uiStore.isTracksPlayerOpen,
   set: (v) => uiStore.isTracksPlayerOpen = v
+})
+
+watch(() => route.path, (path) => {
+  if (path === '/') isOpen.value = false
 })
 const src             = ref(null)
 const isPlaying       = ref(false)
@@ -854,7 +859,7 @@ onUnmounted(() => {
           <!-- 1. Controls Bar & Info -->
           <div
             v-show="!isMinimized"
-            class="fixed z-[700] min-w-[920px] flex flex-col items-center gap-1 pointer-events-none"
+            class="fixed z-[2700] min-w-[920px] flex flex-col items-center gap-1 pointer-events-none"
             :style="{ left: barX + 'px', top: barY + 'px' }"
           >
 
@@ -971,7 +976,7 @@ onUnmounted(() => {
       <Transition name="panel-up">
         <div
           v-if="isOpen"
-          :style="panelDRStyle"
+          :style="[panelDRStyle, { zIndex: 9000 }]"
           class="flex flex-col bg-black/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-[0_0_50px_rgba(0,163,112,0.15)] p-4 md:p-6 relative overflow-hidden"
         >
           <!-- Header -->

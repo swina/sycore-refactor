@@ -6,7 +6,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import {
-  Radio, Cable, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music, Music2, Workflow,
+  Radio, Cable, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music, Music2, ListMusic, Workflow,
   Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation, Settings, Infinity, Clock
 } from 'lucide-vue-next'
 import SlideshowModal from '@/components/SlideshowModal.vue'
@@ -112,7 +112,7 @@ function goWorkspace() {
         <div class="flex h-1/2 gap-3">
           <div @click="uiStore.isLivePerformancePadOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-live-performance">
           <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-            <Music2 class="w-7 h-7 text-synth-neon" />
+            <ListMusic class="w-7 h-7 text-synth-neon" />
             <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Live Set</span>
           </div>
           </div>

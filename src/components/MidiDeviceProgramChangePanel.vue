@@ -532,10 +532,10 @@ function deleteSet(id) {
 <template>
   <div class="overflow-hidden">
     <Transition name="performance" appear>
-      <div class="bg-neutral-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle" v-show="!isMinimized">
+      <div class="bg-neutral-900 border border-violet-500/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle" v-show="!isMinimized">
 
         <!-- Header -->
-        <div class="px-6 py-5 border-b border-neutral-900 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
+        <div class="px-4 py-2 border-b border-neutral-800 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
           <div class="flex items-center gap-4">
             <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
               <Music2 class="w-5 h-5 text-violet-400" />
@@ -560,11 +560,11 @@ function deleteSet(id) {
         <div class="flex flex-1 overflow-hidden">
 
           <!-- ── LEFT: PC-enabled device list + Performance Sets ── -->
-          <div class="w-64 shrink-0 border-r border-neutral-900 flex flex-col overflow-hidden">
+          <div class="w-64 shrink-0 border-r border-neutral-800 flex flex-col overflow-hidden">
 
             <!-- Device list (scrollable) -->
             <div class="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
-              <div class="px-4 py-3 border-b border-neutral-900 shrink-0">
+              <div class="px-4 py-3 border-b border-neutral-800 shrink-0">
                 <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">PC Devices</span>
               </div>
 
@@ -578,7 +578,7 @@ function deleteSet(id) {
                 :key="dev.name"
                 @click="selectedDeviceName = dev.name"
                 :class="[
-                  'w-full text-left px-4 py-3 border-b border-neutral-900/60 transition-all',
+                  'w-full text-left px-4 py-3 border-b border-neutral-800/60 transition-all',
                   selectedDeviceName === dev.name
                     ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
                     : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'

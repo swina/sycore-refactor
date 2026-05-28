@@ -72,7 +72,6 @@ import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 import MinimizedModalsBar from '@/components/ui/MinimizedModalsBar.vue'
-import TracksPlayer from '@/components/TracksPlayer.vue'
 
 // Stores
 const midiStore = useMidiStore()
@@ -590,7 +589,6 @@ onMounted(() => {
     <AppFooter @bpm-override="sessionBpmOverride = true" />
     <!-- <SideBar /> -->
     <MainMenuDial />
-    <TracksPlayer />
     <!-- <BackingTrackPlayer /> -->
   </div>
 </template>

@@ -501,8 +501,8 @@ function formatTime(t) {
         <div class="flex flex-col">
           
           <div class="flex">
-              <Music class="w-5 h-5 text-violet-400 mr-2" />
-              <h2 class="text-sm font-black uppercase tracking-[0.3em] text-violet-400">Live Performance</h2></div>
+              <ListMusic class="w-5 h-5 text-violet-400 mr-2" />
+              <h2 class="text-sm font-black uppercase tracking-[0.3em] text-violet-400">Live Set</h2></div>
           <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">PC Sets · Backing Tracks</span>
         </div>
         <nav class="flex items-center gap-6 ml-4">
@@ -614,10 +614,10 @@ function formatTime(t) {
             @click="triggerSetPad(idx)"
             @contextmenu.prevent="openMenu($event, { name: 'lpp_set_' + idx, label: pad.setName || 'Set Pad ' + (idx + 1) })"
             :class="[
-              'h-16 rounded-xl border-2 flex flex-col items-center justify-center p-2 gap-0.5 transition-all relative overflow-hidden',
+              'h-16 rounded-xl border-2 bg-neutral-900 flex flex-col items-center justify-center p-2 gap-0.5 transition-all relative overflow-hidden',
               pad.setId
                 ? activePerfSetIdx === idx
-                  ? 'bg-violet-500 border-violet-400 text-black shadow-[0_0_15px_rgba(139,92,246,0.6)]'
+                  ? 'bg-violet-700 border-violet-400 text-white shadow-[0_0_15px_rgba(139,92,246,0.6)]'
                   : 'border-violet-500/50 text-violet-300 hover:bg-violet-500/20 hover:border-violet-400/70'
                 : 'border border-neutral-800 text-neutral-700 cursor-default hover:border-neutral-700'
             ]"
@@ -883,8 +883,8 @@ function formatTime(t) {
       </div>
 
       <!-- Performance Sets assignment (16 pads) -->
-      <div v-if="setupTab === 'sets'" class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-2">
-        <p class="text-[9px] font-mono text-neutral-600 mb-4 leading-relaxed">
+      <div v-if="setupTab === 'sets'" class="grid grid-cols-2 gap-4 overflow-y-auto custom-scrollbar p-6 space-y-2">
+        <p class="col-span-2 text-[9px] font-mono text-neutral-600 mb-4 leading-relaxed">
           Assign a saved Performance Set to each of the 16 pads. Click the pad in Performance mode to instantly recall all device PC states in that set.
         </p>
         <div
@@ -902,7 +902,7 @@ function formatTime(t) {
               {{ s.name }} ({{ s.devices?.length ?? 0 }} device{{ s.devices?.length !== 1 ? 's' : '' }})
             </option>
           </select>
-          <span v-if="pad.setId" class="text-[9px] font-mono text-violet-400/60 truncate max-w-[120px]">{{ pad.setName }}</span>
+          <!-- <span v-if="pad.setId" class="text-[9px] font-mono text-violet-400/60 truncate max-w-[120px]">{{ pad.setName }}</span> -->
           <button v-if="pad.setId" @click="clearSetPad(idx)"
             class="shrink-0 p-1.5 rounded-lg text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
             <Trash2 class="w-3.5 h-3.5" />

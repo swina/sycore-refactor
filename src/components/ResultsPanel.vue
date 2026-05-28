@@ -712,18 +712,18 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
               <!---@click="isPanelCollapsed = !isPanelCollapsed"-->
               <button v-if="isPanelCollapsed"
                 @click="isPanelCollapsed = !isPanelCollapsed; uiStore.isSequencerOpen = false;"
-                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Generate':'Show Controls'"
+                :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', isPanelCollapsed ? 'bg-synth-cyan text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Generate':'Show Controls'"
               >
-                <SlidersHorizontal class="w-3 h-3" />
+                <SlidersHorizontal class="w-3 h-3" /><span>Controls</span>
               </button>
               <button v-if="!isPanelCollapsed"
                 @click="isPanelCollapsed = !isPanelCollapsed; uiStore.isSequencerOpen = false;"
                 :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Generate':'Show Controls'"
               >
-                <Zap class="w-3 h-3" />
+                <Zap class="w-3 h-3" /><span>Generate</span>
               </button>
               <button
-                @click="activeCategory = null"
+                @click="activeCategory = null;isPanelCollapsed = false; uiStore.isSequencerOpen = false;"
                 @contextmenu.prevent="openMenu($event, { name: 'ui_cat_grid', label: 'Grid Tab' })"
                 :class="['relative px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !activeCategory ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
               >
@@ -830,7 +830,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                 />
 
               <!-- Back button inside visualizer for mobile? -->
-              <div class="absolute bottom-6 left-6 flex items-center gap-3">
+              <div class="absolute bottom-2 left-2 flex items-center gap-3">
                  <div class="h-1 w-8 rounded-full" :style="{ backgroundColor: cat.color }"></div>
                  <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.4em]">REALTIME // DATA_FLOW</span>
               </div>

@@ -210,7 +210,7 @@ function downloadCsv() {
     <div
       v-if="uiStore.showUnifiedMidiManager"
       v-show="!isMinimized"
-      class="bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+      class="bg-neutral-950 border border-neutral-800 rounded-xl max-h-[93vh] shadow-2xl flex flex-col overflow-hidden"
       :style="panelStyle"
     >
 

@@ -115,7 +115,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="flex items-center gap-2 bg-neutral-900/60 border border-neutral-800 rounded-full px-3 py-1 group hover:border-emerald-500/30 transition-all"
+    class="flex items-center gap-2 bg-neutral-900/60 border border-neutral-800 rounded-full px-2 py-1 group hover:border-emerald-500/30 transition-all"
     @contextmenu="openContextMenu"
   >
     <div class="flex items-center gap-2 pr-2 border-r border-neutral-800">
@@ -128,7 +128,7 @@ onUnmounted(() => {
         <ChevronDown class="w-3 h-3" />
       </button>
 
-      <div class="relative flex items-center justify-center w-6 h-4 overflow-hidden">
+      <div class="relative flex items-center justify-center w-3 h-4 overflow-hidden">
         <Transition name="slide-up" mode="out-in">
           <span :key="currentChannel" class="text-[11px] font-mono font-bold text-emerald-400">
             {{ currentChannel }}

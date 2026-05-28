@@ -1129,7 +1129,7 @@ onUnmounted(() => {
 
 <template>
   <div v-if="isOpen" @click.self="ctxMenu = null">
-      <div class="bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden flex flex-col shadow-[0_0_10px_rgba(0,255,204,0.15)]" :style="panelStyle" v-show="!isMinimized">
+      <div class="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_10px_rgba(0,255,204,0.15)]" :style="panelStyle" v-show="!isMinimized">
 
         <!-- Header -->
         <div class="px-5 py-3 border-b border-neutral-900 flex justify-between items-center bg-gradient-to-r from-cyan-950/40 to-transparent flex-shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">

@@ -1,6 +1,6 @@
 <template>
   <div class="adsr-container w-full h-full">
-    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="adsr-svg">
+    <svg :viewBox="`0 0 ${width} ${height}`" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" class="adsr-svg m-auto">
       <!-- Grid/Background (Optional) -->
       <rect x="0" y="0" :width="width" :height="height" class="adsr-bg" />
       

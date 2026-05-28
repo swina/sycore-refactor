@@ -410,7 +410,7 @@ watch(openSections, (sections) => {
   <Transition name="sy-drawer">
     <div
       v-if="isOpen && authStore.isAdmin"
-      class="fixed top-0 right-0 bottom-10 w-full max-w-3xl bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[450] overflow-hidden flex flex-col"
+      class="fixed inset-0 w-full max-w-full bg-neutral-950 border-l border-neutral-900 shadow-2xl z-[450] overflow-hidden flex flex-col"
     >
       <!-- Header -->
       <div class="p-6 border-b border-neutral-900 flex items-center justify-between bg-black/50 backdrop-blur-xl shrink-0">
