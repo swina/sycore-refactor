@@ -250,16 +250,16 @@ export const usePresetStore = defineStore('preset', () => {
       mappingStore.velocityConfig.active = false
     }
 
-    // Sequencer — only restore if explicitly linked
+    // Sequencer — restore if explicitly linked; if not linked, only clear when sequencer is not open
     const uiStore = useUiStore()
     if (variant.seqLinked && variant.seqConfig) {
       uiStore.seqCurrentConfig = JSON.parse(JSON.stringify(variant.seqConfig))
-    } else {
+    } else if (!uiStore.isSequencerOpen) {
       uiStore.seqCurrentConfig = null
     }
     if (variant.seqLinked && variant.seqConfig2) {
       uiStore.seqCurrentConfig2 = JSON.parse(JSON.stringify(variant.seqConfig2))
-    } else {
+    } else if (!uiStore.isSequencerOpen) {
       uiStore.seqCurrentConfig2 = null
     }
     uiStore.seqActiveSlot = variant.seqActiveSlot || 1

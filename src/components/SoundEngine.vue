@@ -49,7 +49,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
             class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-yellow-400 transition-colors">
             <Minus class="w-3.5 h-3.5" />
           </button>
-          <button @click="emit('close')" title="Close"
+          <button @click="emit('close');;uiStore.isSequencerOpen = false" title="Close"
             class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-white transition-colors">
             <X class="w-3.5 h-3.5" />
           </button>

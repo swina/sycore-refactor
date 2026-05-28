@@ -20,6 +20,7 @@ import EfxMixerVisualizer from '@/components/EfxMixerVisualizer.vue'
 import SignalFlowVisualizer from '@/components/SignalFlowVisualizer.vue'
 import VisualizerPanel from '@/components/ui/VisualizerPanel.vue'
 import SyButton from '@/components/ui/SyButton.vue'
+import StepSequencer from '@/components/StepSequencer.vue'
 
 const presetStore = usePresetStore()
 const midiStore = useMidiStore()
@@ -49,6 +50,23 @@ const showSaveFeedback = ref(false)
 const liveSetFeedback = ref('')
 const _previewTimeouts = []
 const VISUALIZER_CATEGORIES = ['FLOW', 'LFO', 'OSCILLATOR', 'ENV', 'FILTER', 'EFX']
+
+const seqGlobalTranspose = ref(0)
+
+async function handleSeqSave(config) {
+  if (uiStore.seqActiveSlot === 2) {
+    uiStore.seqCurrentConfig2 = config
+  } else {
+    uiStore.seqCurrentConfig = config
+  }
+  if (presetStore.lastPreset) {
+    try {
+      await presetStore.savePreset()
+    } catch (e) {
+      console.error('Failed to save preset with sequencer data:', e)
+    }
+  }
+}
 
 const activeCategory = computed({
   get: () => uiStore.activeVisualizerCategory,
@@ -693,13 +711,13 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-1 min-w-0">
               <!---@click="isPanelCollapsed = !isPanelCollapsed"-->
               <button v-if="isPanelCollapsed"
-                @click="isPanelCollapsed = !isPanelCollapsed"
+                @click="isPanelCollapsed = !isPanelCollapsed; uiStore.isSequencerOpen = false;"
                 :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Generate':'Show Controls'"
               >
                 <SlidersHorizontal class="w-3 h-3" />
               </button>
               <button v-if="!isPanelCollapsed"
-                @click="isPanelCollapsed = !isPanelCollapsed"
+                @click="isPanelCollapsed = !isPanelCollapsed; uiStore.isSequencerOpen = false;"
                 :class="['px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0', !isPanelCollapsed ? 'bg-synth-neon text-black shadow-[0_0_12px_rgba(0,255,166,0.4)]' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']" :data-tooltip="!isPanelCollapsed?'Generate':'Show Controls'"
               >
                 <Zap class="w-3 h-3" />
@@ -717,7 +735,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
               <button
                 v-for="cat in categoriesWithCtrls"
                 :key="cat.id"
-                @click="setActiveCategory(cat.id)"
+                @click="setActiveCategory(cat.id); uiStore.isSequencerOpen = false;"
                 @contextmenu.prevent="openMenu($event, { name: 'ui_cat_' + cat.id, label: (cat.name === 'SIGNAL_FLOW' ? 'FLOW' : cat.name) + ' Tab' })"
                 :class="['relative px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 flex items-center gap-2', activeCategory === cat.id ? 'text-black shadow-md' : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5']"
                 :style="activeCategory === cat.id ? { backgroundColor: cat.color, boxShadow: `0 0 12px ${cat.color}66` } : {}"
@@ -732,6 +750,9 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
         
       </div>
       
+      <!-- ── CONTENT AREA (below headers, sequencer overlays here) ── -->
+      <div class="flex-1 min-h-0 flex flex-col relative overflow-hidden">
+
       <!-- ── COLLAPSE TOGGLE ── -->
       <button
         @click="isPanelCollapsed = !isPanelCollapsed"
@@ -1226,6 +1247,47 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           Controls are currently hidden
         </p>
       </div>
+
+      <!-- ── EMBEDDED STEP SEQUENCER (opens below headers within this panel) ── -->
+      <StepSequencer
+        v-show="uiStore.isSequencerOpen"
+        :embedded="true"
+        :isOpen="uiStore.isSequencerOpen"
+        :bpm="midiStore.currentBpm || 120"
+        :channel="midiStore.midiChannel"
+        :currentSoundName="presetStore.currentName || ''"
+        :currentCategory="presetStore.currentCategory || 'pad'"
+        :polyModeString="'poly'"
+        :isKeyboardOpen="uiStore.isKeyboardOpen"
+        :globalTranspose="seqGlobalTranspose"
+        :seqStepsLimit="64"
+        :canUseSeqGen="authStore.profile?.features?.canUseSeqGen ?? true"
+        :canUseSeqParam2="true"
+        :canUseSeqGlobalTranspose="authStore.profile?.features?.canUseSeqGlobalTranspose ?? true"
+        :canUseSeqSyncTrack="authStore.profile?.features?.canUseSeqSyncTrack ?? false"
+        :midiMappings="mappingStore.appMidiMappings"
+        :initialConfig="uiStore.seqActiveSlot === 2 ? uiStore.seqCurrentConfig2 : uiStore.seqCurrentConfig"
+        :currentPresetCCValues="presetStore.lastPreset?.data || {}"
+        :activeSlot="uiStore.seqActiveSlot"
+        @close="uiStore.isSequencerOpen = false"
+        @bpmChange="bpm => { arpStore.arpBpm = bpm }"
+        @transposeChange="val => { seqGlobalTranspose.value = val }"
+        @configChange="config => {
+          if (uiStore.seqActiveSlot === 2) {
+            uiStore.seqCurrentConfig2 = config
+          } else {
+            uiStore.seqCurrentConfig = config
+          }
+        }"
+        @savePattern="handleSeqSave"
+        @openKeyboard="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
+        @prevSlot="presetStore.navigateHistory('prev')"
+        @nextSlot="presetStore.navigateHistory('next')"
+        @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
+        @stop="() => {}"
+      />
+
+      </div><!-- end content area -->
 
     </template>
 

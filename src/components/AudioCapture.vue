@@ -22,8 +22,8 @@ const looperStore  = useLooperStore()
 const { openMenu } = useMidiContextMenu()
 
 const { x, y, startDrag } = useDraggable(
-  Math.max(8, (window.innerWidth - 480) / 2),
-  window.innerHeight - 320,
+  Math.max(8, (window.innerWidth - 980) / 2),
+  window.innerHeight - 720,
   'S1_CAPTURE_POS'
 )
 
@@ -775,6 +775,9 @@ async function handleFileImport(e) {
     zoomX.value = 1.0
     zoomY.value = 1.0
     panOffset.value = 0.0
+
+    // Restart mic monitoring so the level meter and new recordings work
+    startMonitor(selectedDeviceId.value)
   } catch (err) {
     console.error('Import failed', err)
   } finally {
@@ -1526,11 +1529,11 @@ onUnmounted(() => {
   <Transition name="capture">
     <div
       v-show="uiStore.isAudioCaptureOpen"
-      class="fixed z-[1000] min-w-[892px] min-h-[420px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
+      class="fixed z-[1000] min-w-[920px] w-[980px] min-h-[620px] h-[720px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
       :style="{ left: x + 'px', top: y + 'px' }"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0">
+      <div class="flex items-center justify-between px-4 py-2 border-b border-neutral-800 shrink-0 bg-gradient-to-r from-cyan-950/40 to-transparent">
         <div class="flex items-center gap-2">
           <div @mousedown="startDrag" class="cursor-grab active:cursor-grabbing p-1 -ml-2 text-neutral-600 hover:text-neutral-400">
             <GripVertical class="w-3.5 h-3.5" />
@@ -1848,7 +1851,7 @@ onUnmounted(() => {
               {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
             </div> -->
 
-            <div v-if="!isMonitoring" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <div v-if="!isMonitoring && !recordedBlob" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
               <template v-if="error">
                 <p class="text-red-400 text-[10px] font-mono px-6 text-center">{{ error }}</p>
                 <button

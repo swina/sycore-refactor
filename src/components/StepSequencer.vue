@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
+import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
@@ -30,7 +30,8 @@ const props = defineProps({
   midiMappings: Object,
   initialConfig: Object,
   currentPresetCCValues: Object,
-  activeSlot: { type: Number, default: 1 }
+  activeSlot: { type: Number, default: 1 },
+  embedded: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'activeSlotChange'])
@@ -51,7 +52,7 @@ const DEFAULT_STEP = {
   active: false,
   notes: [60],
   velocity: 100,
-  gate: 50,
+  gate: 75,
   tieSteps: 0,
   param1Value: 64,
   param2Value: 64,
@@ -62,16 +63,16 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 
 const STYLES = {
   House: { steps: 16, density: 0.50, octaves: [3, 4], velMin: 80, velMax: 110, gateMin: 40, gateMax: 70 },
-  Techno: { steps: 16, density: 0.65, octaves: [2, 3], velMin: 95, velMax: 127, gateMin: 15, gateMax: 40, accentGrid: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
+  Techno: { steps: 16, density: 0.65, octaves: [2, 3], velMin: 95, velMax: 127, gateMin: 35, gateMax: 70, accentGrid: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
   HipHop: { steps: 16, density: 0.40, octaves: [2, 4], velMin: 65, velMax: 105, gateMin: 40, gateMax: 80 },
-  Acid: { steps: 16, density: 0.75, octaves: [2, 3], velMin: 80, velMax: 127, gateMin: 10, gateMax: 35, slideProbability: 0.25 },
-  Funk: { steps: 16, density: 0.50, octaves: [3, 4], velMin: 75, velMax: 120, gateMin: 25, gateMax: 55, accentGrid: [true, false, false, true, false, false, true, false, false, true, false, false, true, false, false, false] },
-  Jazz: { steps: 16, density: 0.45, octaves: [3, 5], velMin: 55, velMax: 100, gateMin: 55, gateMax: 90 },
+  Acid: { steps: 16, density: 0.75, octaves: [2, 3], velMin: 80, velMax: 127, gateMin: 30, gateMax: 65, slideProbability: 0.25 },
+  Funk: { steps: 16, density: 0.50, octaves: [3, 4], velMin: 75, velMax: 120, gateMin: 35, gateMax: 55, accentGrid: [true, false, false, true, false, false, true, false, false, true, false, false, true, false, false, false] },
+  Jazz: { steps: 16, density: 0.45, octaves: [3, 5], velMin: 55, velMax: 100, gateMin: 35, gateMax: 90 },
   Ambient: { steps: 16, density: 0.22, octaves: [4, 5], velMin: 35, velMax: 75, gateMin: 75, gateMax: 100 },
-  'Drum&Bass': { steps: 32, density: 0.55, octaves: [2, 4], velMin: 85, velMax: 127, gateMin: 10, gateMax: 30 },
-  Minimal: { steps: 16, density: 0.28, octaves: [3, 4], velMin: 70, velMax: 95, gateMin: 20, gateMax: 50 },
+  'Drum&Bass': { steps: 32, density: 0.55, octaves: [2, 4], velMin: 85, velMax: 127, gateMin: 30, gateMax: 50 },
+  Minimal: { steps: 16, density: 0.28, octaves: [3, 4], velMin: 70, velMax: 95, gateMin: 30, gateMax: 50 },
   Latin: { steps: 16, density: 0.55, octaves: [3, 4], velMin: 75, velMax: 115, gateMin: 30, gateMax: 60, accentGrid: [true, false, false, true, false, true, false, false, true, false, false, true, false, true, false, false] },
-  Industrial: { steps: 16, density: 0.65, octaves: [1, 3], velMin: 100, velMax: 127, gateMin: 8, gateMax: 25 },
+  Industrial: { steps: 16, density: 0.65, octaves: [1, 3], velMin: 100, velMax: 127, gateMin: 38, gateMax: 55 },
   Reggae: { steps: 16, density: 0.40, octaves: [3, 4], velMin: 70, velMax: 105, gateMin: 35, gateMax: 65, accentGrid: [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false] },
   Pop: { steps: 16, density: 0.55, octaves: [3, 4], velMin: 80, velMax: 115, gateMin: 45, gateMax: 75, accentGrid: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
   Rock: { steps: 16, density: 0.60, octaves: [2, 4], velMin: 90, velMax: 127, gateMin: 35, gateMax: 65, accentGrid: [true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false] },
@@ -1557,13 +1558,18 @@ function handleClear() {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-0 bottom-10 z-[600] flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-neon overflow-hidden">
+  <div v-if="isOpen" :class="[
+    embedded
+      ? 'absolute inset-0 z-[50]'
+      : 'fixed inset-x-0 top-0 bottom-10 z-[600]',
+    'flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-amber overflow-hidden'
+  ]">
     <div class="w-full max-w-[1024px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
       
       <!-- ── HEADER: Compact & Responsive ── -->
       <div class="shrink-0 px-4 py-2 border-b border-neutral-800 bg-black/40 flex flex-col sm:flex-row items-center gap-3 justify-between">
         <div class="flex items-center gap-4 w-full sm:w-auto">
-          <h2 class="text-base font-black uppercase tracking-tight text-synth-neon shrink-0">Sequencer</h2>
+          <h2 class="text-base font-black uppercase tracking-tight text-synth-amber shrink-0">Sequencer</h2>
           
           <div class="flex items-center bg-black/60 border border-neutral-800 rounded-lg px-2 py-1 gap-3">
             <div class="flex items-center gap-1.5">
@@ -1572,7 +1578,7 @@ function handleClear() {
                 type="number"
                 :value="bpm"
                 @input="e => emit('bpmChange', Number(e.target.value))"
-                class="w-10 bg-transparent text-synth-neon font-mono text-sm outline-none text-center"
+                class="w-10 bg-transparent text-synth-amber font-mono text-sm outline-none text-center"
               />
             </div>
             <div class="w-px h-3 bg-neutral-800" />
@@ -1599,7 +1605,7 @@ function handleClear() {
           <div class="flex items-center bg-black/60 border border-neutral-800 rounded-lg p-0.5 font-mono text-[9px]">
             <button 
               @click="emit('activeSlotChange', 1)"
-              :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', activeSlot === 1 ? 'bg-synth-neon text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
+              :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', activeSlot === 1 ? 'bg-synth-amber text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
             >
               Seq 1
             </button>
@@ -1649,10 +1655,10 @@ function handleClear() {
         <div class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Scale</span>
           <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800/50">
-            <select v-model="selectedKey" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
+            <select v-model="selectedKey" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
               <option v-for="key in NOTE_NAMES" :key="key" :value="key" class="bg-neutral-900">{{ key }}</option>
             </select>
-            <select v-model="selectedScale" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
+            <select v-model="selectedScale" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="scale in Object.keys(SCALES)" :key="scale" :value="scale" class="bg-neutral-900">{{ scale }}</option>
             </select>
           </div>
@@ -1661,10 +1667,10 @@ function handleClear() {
         <div class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Oct</span>
           <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800/50">
-            <select v-model="selectedOctave" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
+            <select v-model="selectedOctave" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
               <option v-for="o in [0,1,2,3,4,5,6,7,8]" :key="o" :value="o" class="bg-neutral-900">{{ o }}</option>
             </select>
-            <select v-model="octaveRange" class="bg-neutral-900 text-synth-neon font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
+            <select v-model="octaveRange" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="r in [-3,-2,-1,0,1,2,3]" :key="r" :value="r" class="bg-neutral-900">{{ r >= 0 ? '+' + r : r }}</option>
             </select>
           </div>
@@ -1672,7 +1678,7 @@ function handleClear() {
 
         <div class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Style</span>
-          <select v-model="selectedStyle" class="bg-black/40 border border-neutral-800 text-synth-neon rounded-lg px-2 py-1 text-[14px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
+          <select v-model="selectedStyle" class="bg-black/40 border border-neutral-800 text-synth-amber rounded-lg px-2 py-1 text-[14px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
             <option v-for="style in Object.keys(STYLES)" :key="style" :value="style" class="bg-neutral-900">{{ style }}</option>
           </select>
         </div>
@@ -1680,8 +1686,8 @@ function handleClear() {
         <div class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Density</span>
           <div class="flex items-center gap-3 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7">
-            <input v-model.number="genDensity" type="range" min="0" max="100" class="w-24 h-1 accent-synth-neon bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-            <span class="text-[12px] font-mono text-synth-neon w-8 text-right">{{ genDensity }}%</span>
+            <input v-model.number="genDensity" type="range" min="0" max="100" class="w-24 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+            <span class="text-[12px] font-mono text-synth-amber w-8 text-right">{{ genDensity }}%</span>
           </div>
         </div>
 
@@ -1690,9 +1696,9 @@ function handleClear() {
         
 
         <button @click="generateSequence" 
-          class="ml-auto flex items-center gap-2 px-4 py-1.5 bg-synth-neon text-black rounded-lg hover:bg-white transition-all font-black text-[9px] uppercase shadow-[0_0_15px_rgba(0,255,204,0.3)]">
-          <Plus class="w-3.5 h-3.5" />
-          Generate Pattern
+          class="ml-auto flex items-center gap-2 px-1 py-1.5 bg-synth-amber text-black rounded-lg hover:bg-white transition-all font-black text-[9px] uppercase shadow-[0_0_15px_rgba(0,255,166,0.3)]">
+          <Zap class="w-3.5 h-3.5" />
+          Generate
         </button>
       </div>
       <div class="flex w-full gap-3 px-4">
@@ -1700,13 +1706,13 @@ function handleClear() {
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
             <span class="text-[12px] font-mono text-neutral-500 uppercase leading-none">P1</span>
-            <select v-model="param1CC" class="bg-black/40 border border-neutral-800 text-synth-neon rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-30 cursor-pointer [color-scheme:dark]">
+            <select v-model="param1CC" class="bg-black/40 border border-neutral-800 text-synth-amber rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-30 cursor-pointer [color-scheme:dark]">
               <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
             </select>
             <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
               <span class="text-[8px] font-mono text-neutral-500" title="Variazione P1 RND">RND%</span>
-              <input v-model.number="param1Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-neon bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
-              <span class="text-[9px] font-mono text-synth-neon w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param1Variation > 0 ? '+' : '' }}{{ param1Variation }}</span>
+              <input v-model.number="param1Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
+              <span class="text-[9px] font-mono text-synth-amber w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param1Variation > 0 ? '+' : '' }}{{ param1Variation }}</span>
             </div>
           </div>
           
@@ -1714,13 +1720,13 @@ function handleClear() {
 
           <div class="flex items-center gap-2">
             <span class="text-[12px] font-mono text-neutral-500 uppercase leading-none">P2</span>
-            <select v-model="param2CC" class="bg-black/40 border border-neutral-800 text-synth-neon rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-24 cursor-pointer [color-scheme:dark]">
+            <select v-model="param2CC" class="bg-black/40 border border-neutral-800 text-synth-amber rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-24 cursor-pointer [color-scheme:dark]">
               <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
             </select>
             <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
               <span class="text-[8px] font-mono text-neutral-500" title="Variazione P2 RND">RND%</span>
-              <input v-model.number="param2Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-neon bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
-              <span class="text-[9px] font-mono text-synth-neon w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param2Variation > 0 ? '+' : '' }}{{ param2Variation }}</span>
+              <input v-model.number="param2Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
+              <span class="text-[9px] font-mono text-synth-amber w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param2Variation > 0 ? '+' : '' }}{{ param2Variation }}</span>
             </div>
           </div>
         </div>
@@ -1730,7 +1736,7 @@ function handleClear() {
         <!-- Transport Controls -->
         <div class="flex items-center gap-1">
           <button @click="isPlaying = !isPlaying"
-            :class="['flex items-center gap-2 px-4 h-9 rounded-lg font-black uppercase text-[10px] transition-all', isPlaying ? 'bg-amber-500 text-black' : 'bg-synth-neon text-black']">
+            :class="['flex items-center gap-2 px-4 h-9 rounded-lg font-black uppercase text-[10px] transition-all', isPlaying ? 'bg-amber-500 text-black' : 'bg-neutral-500 text-black']">
             <Square v-if="isPlaying" class="w-3.5 h-3.5 fill-current" />
             <Play v-else class="w-3.5 h-3.5 fill-current" />
             {{ isPlaying ? 'STOP' : 'PLAY' }}
@@ -1747,12 +1753,12 @@ function handleClear() {
         <div class="flex items-center gap-2">
           <span class="text-[9px] font-mono text-neutral-500 uppercase">Length</span>
           <div class="flex items-center bg-black border border-neutral-800 rounded px-2 h-9 gap-2">
-            <button @click="reduceLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="/2 (Dimezza)">
+            <button @click="reduceLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="/2">
               <ChevronDown class="w-3.5 h-3.5" />
             </button>
             <input v-model.number="numSteps" type="range" min="2" :max="seqStepsLimit" 
               class="w-20 h-1 accent-orange-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-            <button @click="duplicateLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="x2 (Raddoppia)">
+            <button @click="duplicateLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="x2">
               <ChevronUp class="w-3.5 h-3.5" />
             </button>
             <div class="w-px h-3 bg-neutral-800 ml-1" />
@@ -1774,7 +1780,7 @@ function handleClear() {
               type="number"
               :value="globalTranspose"
               @input="e => emit('transposeChange', Math.max(-24, Math.min(24, Number(e.target.value))))"
-              class="w-8 bg-transparent text-synth-neon font-mono text-sm outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              class="w-8 bg-transparent text-synth-amber font-mono text-sm outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <button 
               @click="emit('transposeChange', Math.min(24, (globalTranspose || 0) + 1))" 
@@ -1789,7 +1795,7 @@ function handleClear() {
           <span class="text-[9px] font-mono text-neutral-500 uppercase">Swing</span>
           <div class="flex items-center bg-black border border-neutral-800 rounded px-2 h-9 gap-3">
             <input v-model.number="swingAmount" type="range" min="0" max="100" class="w-20 h-1 accent-emerald-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-            <span class="text-[9px] font-mono text-emerald-500 w-8 text-right">{{ swingAmount }}%</span>
+            <span class="text-[9px] font-mono text-amber-500 w-8 text-right">{{ swingAmount }}%</span>
           </div>
         </div>
 
@@ -1828,9 +1834,9 @@ function handleClear() {
       <Transition name="toolbar">
         <div class="shrink-0 bg-neutral-800 border-b border-synth-neon/20 p-2 px-4 flex items-center gap-6 overflow-x-auto no-scrollbar h-12">
           <div class="flex items-center gap-3 shrink-0">
-            <span class="text-[10px] font-black text-synth-neon uppercase tracking-tighter">Step {{ selectedStepIdx + 1 }}</span>
+            <span class="text-[10px] font-black text-synth-amber uppercase tracking-tighter">Step {{ selectedStepIdx + 1 }}</span>
             <button @click="updateStep(selectedStepIdx, { active: !steps[selectedStepIdx].active })"
-              :class="['px-2 py-1 rounded text-[9px] font-black', steps[selectedStepIdx]?.active ? 'bg-synth-neon text-black' : 'bg-neutral-900 text-neutral-500']">
+              :class="['px-2 py-1 rounded text-[9px] font-black', steps[selectedStepIdx]?.active ? 'bg-synth-amber text-black' : 'bg-neutral-900 text-neutral-500']">
               {{ steps[selectedStepIdx]?.active ? 'ACTIVE' : 'OFF' }}
             </button>
             <button 
@@ -1855,8 +1861,8 @@ function handleClear() {
                 <div class="flex justify-between items-center mb-0.5">
                   <span class="text-[8px] font-mono text-neutral-500 uppercase">Vel ({{ steps[selectedStepIdx].velocity }})</span>
                   <div class="flex gap-1">
-                    <button @click="applyToAll('velocity', steps[selectedStepIdx].velocity)" class="text-[7px] text-synth-neon hover:underline">ALL</button>
-                    <button @click="randomize('velocity')" class="text-[7px] text-synth-neon hover:underline">RND</button>
+                    <button @click="applyToAll('velocity', steps[selectedStepIdx].velocity)" class="text-[7px] text-synth-amber hover:underline">ALL</button>
+                    <button @click="randomize('velocity')" class="text-[7px] text-synth-amber hover:underline">RND</button>
                   </div>
                 </div>
                 <input 
@@ -1872,8 +1878,8 @@ function handleClear() {
                 <div class="flex justify-between items-center mb-0.5">
                   <span class="text-[8px] font-mono text-neutral-500 uppercase">Gate ({{ steps[selectedStepIdx].gate }}%)</span>
                   <div class="flex gap-1">
-                    <button @click="applyToAll('gate', steps[selectedStepIdx].gate)" class="text-[7px] text-synth-neon hover:underline">ALL</button>
-                    <button @click="randomize('gate')" class="text-[7px] text-synth-neon hover:underline">RND</button>
+                    <button @click="applyToAll('gate', steps[selectedStepIdx].gate)" class="text-[7px] text-synth-amber hover:underline">ALL</button>
+                    <button @click="randomize('gate')" class="text-[7px] text-synth-amber hover:underline">RND</button>
                   </div>
                 </div>
                 <input 
@@ -1902,8 +1908,8 @@ function handleClear() {
                   <div class="flex justify-between items-center mb-0.5">
                     <span class="text-[8px] font-mono text-neutral-500 uppercase truncate max-w-[50px]">{{ S1_CC_MAP[param1CC] }}</span>
                     <div class="flex gap-1">
-                      <button @click="applyToAll('param1Value', steps[selectedStepIdx].param1Value)" class="text-[7px] text-synth-neon hover:underline">ALL</button>
-                      <button @click="randomize('param1Value')" class="text-[7px] text-synth-neon hover:underline">RND</button>
+                      <button @click="applyToAll('param1Value', steps[selectedStepIdx].param1Value)" class="text-[7px] text-synth-amber hover:underline">ALL</button>
+                      <button @click="randomize('param1Value')" class="text-[7px] text-synth-amber hover:underline">RND</button>
                     </div>
                   </div>
                   <input 
@@ -1922,8 +1928,8 @@ function handleClear() {
                   <div class="flex justify-between items-center mb-0.5">
                     <span class="text-[8px] font-mono text-neutral-500 uppercase truncate max-w-[50px]">{{ S1_CC_MAP[param2CC] }}</span>
                     <div class="flex gap-1">
-                      <button @click="applyToAll('param2Value', steps[selectedStepIdx].param2Value)" class="text-[7px] text-synth-neon hover:underline">ALL</button>
-                      <button @click="randomize('param2Value')" class="text-[7px] text-synth-neon hover:underline">RND</button>
+                      <button @click="applyToAll('param2Value', steps[selectedStepIdx].param2Value)" class="text-[7px] text-synth-amber hover:underline">ALL</button>
+                      <button @click="randomize('param2Value')" class="text-[7px] text-synth-amber hover:underline">RND</button>
                     </div>
                   </div>
                   <input 
@@ -1949,7 +1955,7 @@ function handleClear() {
             @click="selectedStepIdx = idx"
             :class="[
               'group relative flex flex-col rounded-lg border transition-all cursor-pointer',
-              selectedStepIdx === idx ? 'border-synth-neon ring-1 ring-synth-neon/50 bg-neutral-800' : 'border-neutral-800 bg-neutral-950/40',
+              selectedStepIdx === idx ? 'border-synth-amber ring-1 ring-synth-amber/50 bg-neutral-800' : 'border-neutral-800 bg-neutral-950/40',
               currentStep === idx && isPlaying ? 'border-amber-400 ring-1 ring-amber-400/50 bg-neutral-900 z-10 shadow-[0_0_10px_rgba(245,158,11,0.25)]' : ''
             ]"
           >

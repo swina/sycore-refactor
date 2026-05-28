@@ -485,8 +485,8 @@ onMounted(() => {
       <!-- Step Sequencer -->
       <div :style="focusStyle('sequencer')">
       <StepSequencer
-        v-show="uiStore.isSequencerOpen"
-        :isOpen="uiStore.isSequencerOpen"
+        v-show="uiStore.isSequencerOpen && !uiStore.isSoundEngineOpen"
+        :isOpen="uiStore.isSequencerOpen && !uiStore.isSoundEngineOpen"
         :bpm="midiStore.currentBpm || 120"
         :channel="midiStore.midiChannel"
         :currentSoundName="presetStore.currentName || ''"
