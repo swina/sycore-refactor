@@ -7,63 +7,63 @@
     <div class="absolute inset-0 z-20 pointer-events-none glass-reflection"></div>
     <div class="absolute inset-0 z-10 pointer-events-none scanlines"></div>
     
-    <AdsrEnvelope 
-      v-if="uiStore.activeVisualizerCategory === 'ENV'" 
-      :attack="getVal('attack')" 
-      :decay="getVal('decay')" 
-      :sustain="getVal('sustain')" 
-      :release="getVal('release')" 
-      :width="130" :height="60" :color="activeCategoryColor" 
-    />
-    
-    <FilterEnvelope 
-      v-else-if="uiStore.activeVisualizerCategory === 'FILTER'" 
-      :cutoff="getVal('cutoff')" 
-      :resonance="getVal('res')" 
-      :width="130" :height="60" :color="activeCategoryColor" 
+    <AdsrEnvelope
+      v-if="localVisualizerMode === 'ENV'"
+      :attack="getVal('attack')"
+      :decay="getVal('decay')"
+      :sustain="getVal('sustain')"
+      :release="getVal('release')"
+      :width="130" :height="60" :color="activeCategoryColor"
     />
 
-    <EfxMixerVisualizer 
-      v-else-if="uiStore.activeVisualizerCategory === 'EFX'" 
-      :delay="getVal('delayLvl')" 
-      :reverb="getVal('reverb')" 
-      :chorus="getVal('chorusMode')" 
-      :width="130" :height="60" :color="activeCategoryColor" 
+    <FilterEnvelope
+      v-else-if="localVisualizerMode === 'FILTER'"
+      :cutoff="getVal('cutoff')"
+      :resonance="getVal('res')"
+      :width="130" :height="60" :color="activeCategoryColor"
     />
 
-    <OscMixerVisualizer 
-      v-else-if="uiStore.activeVisualizerCategory === 'OSCILLATOR'" 
-      :pulse="getVal('oscSq')" 
-      :saw="getVal('oscSaw')" 
-      :lfo="getVal('oscLFO')" 
-      :sub="getVal('oscSub')" 
-      :noise="getVal('oscNoise')" 
-      :width="130" :height="60" :color="activeCategoryColor" 
+    <EfxMixerVisualizer
+      v-else-if="localVisualizerMode === 'EFX'"
+      :delay="getVal('delayLvl')"
+      :reverb="getVal('reverb')"
+      :chorus="getVal('chorusMode')"
+      :width="130" :height="60" :color="activeCategoryColor"
     />
 
-    <WaveformVisualizer 
-      v-else-if="uiStore.activeVisualizerCategory === 'LFO'" 
-      :waveform="getVal('lfoWave')" 
-      :rate="getVal('lfoRate')" 
+    <OscMixerVisualizer
+      v-else-if="localVisualizerMode === 'OSCILLATOR'"
+      :pulse="getVal('oscSq')"
+      :saw="getVal('oscSaw')"
+      :lfo="getVal('oscLFO')"
+      :sub="getVal('oscSub')"
+      :noise="getVal('oscNoise')"
+      :width="130" :height="60" :color="activeCategoryColor"
+    />
+
+    <WaveformVisualizer
+      v-else-if="localVisualizerMode === 'LFO'"
+      :waveform="getVal('lfoWave')"
+      :rate="getVal('lfoRate')"
       :lfoFilter="getVal('lfoFilt')"
-      :width="130" :height="60" :color="activeCategoryColor" 
+      :width="130" :height="60" :color="activeCategoryColor"
     />
 
     <div v-else class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest animate-pulse">
-      {{ uiStore.activeVisualizerCategory }}
+      {{ localVisualizerMode }}
     </div>
-    
+
     <!-- Label overlay (Permanently visible) -->
     <div class="absolute top-1 right-1 pointer-events-none z-30">
       <div class="text-[7px] font-mono font-black text-white/40 uppercase tracking-widest bg-black/60 backdrop-blur-md border border-white/5 px-1.5 py-0.5 rounded shadow-lg group-hover:text-white/80 transition-colors">
-        {{ uiStore.activeVisualizerCategory }}
+        {{ localVisualizerMode }}
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, watch, ref } from 'vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -79,15 +79,25 @@ const configStore = useConfigStore()
 
 const VISUALIZER_MODES = ['FILTER', 'OSCILLATOR', 'ENV', 'LFO', 'EFX']
 
+// Local mode for the mini visualizer — auto-switches on param change without affecting the main tab
+const localVisualizerMode = ref(uiStore.activeVisualizerCategory || 'FILTER')
+
+// Sync local mode when the user explicitly changes the main tab
+watch(() => uiStore.activeVisualizerCategory, (newCat) => {
+  if (newCat && VISUALIZER_MODES.includes(newCat)) {
+    localVisualizerMode.value = newCat
+  }
+})
+
 function cycleCategory() {
-  const currentIndex = VISUALIZER_MODES.indexOf(uiStore.activeVisualizerCategory)
+  const currentIndex = VISUALIZER_MODES.indexOf(localVisualizerMode.value)
   const nextIndex = (currentIndex + 1) % VISUALIZER_MODES.length
-  uiStore.activeVisualizerCategory = VISUALIZER_MODES[nextIndex]
+  localVisualizerMode.value = VISUALIZER_MODES[nextIndex]
 }
 
 // Get active category color from config store
 const activeCategoryColor = computed(() => {
-  const cat = configStore.categories.find(c => c.id === uiStore.activeVisualizerCategory)
+  const cat = configStore.categories.find(c => c.id === localVisualizerMode.value)
   return cat?.color || '#00ff88'
 })
 
@@ -161,8 +171,8 @@ watch(activeData, (newVal) => {
       const isHighPriority = key === 'lfoFilt'
 
       if (!isLocked || isHighPriority || targetMode === lockedCategory) {
-        if (uiStore.activeVisualizerCategory !== targetMode) {
-          uiStore.activeVisualizerCategory = targetMode
+        if (localVisualizerMode.value !== targetMode) {
+          localVisualizerMode.value = targetMode
         }
         
         // Reset/Update the lock timer whenever an intentional change happens
