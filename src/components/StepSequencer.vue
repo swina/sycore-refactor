@@ -1455,7 +1455,7 @@ const hasSavedSeqConfig = computed(() => {
   return false
 })
 
-function linkSequence() {
+async function linkSequence() {
   const preset = presetStore.lastPreset
   if (!preset) return
   const isAlt = presetStore.useAlternativeEngine
@@ -1476,9 +1476,14 @@ function linkSequence() {
     selectedStyle: selectedStyle.value,
   }))
   variant.seqLinked = true
+  try {
+    await presetStore.savePreset()
+  } catch (e) {
+    console.error('[StepSequencer] Failed to save preset after link:', e)
+  }
 }
 
-function unlinkSequence() {
+async function unlinkSequence() {
   const preset = presetStore.lastPreset
   if (!preset) return
   const isAlt = presetStore.useAlternativeEngine
@@ -1486,6 +1491,11 @@ function unlinkSequence() {
   if (!variant) return
   variant.seqConfig = null
   variant.seqLinked = false
+  try {
+    await presetStore.savePreset()
+  } catch (e) {
+    console.error('[StepSequencer] Failed to save preset after unlink:', e)
+  }
 }
 
 function handleReload() {

@@ -87,6 +87,15 @@ watch(() => presetStore.lastPreset?.id, () => {
   activeCategory.value = 'FLOW'
 })
 
+// Auto-switch category tab when a controller field is modified
+watch(() => presetStore.lastModifiedField, (fieldName) => {
+  if (!fieldName) return
+  const cfg = configStore.midiConfig.find(c => c.name === fieldName)
+  if (cfg?.category) {
+    setActiveCategory(cfg.category)
+  }
+})
+
 function toggleSequencerPlay() {
   window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: !uiStore.isSequencerPlaying } }))
 }

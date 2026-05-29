@@ -24,7 +24,7 @@ export const S1_MUSICAL_VARIATIONS = {
       keywords: "dark, underground, filtered, deep",
       values: {
         attack: 90, decay: 120, sustain: 80, release: 95,
-        cutoff: 25, res: 15, envFilt: 40,
+        cutoff: 40, res: 15, envFilt: 40,
         oscSaw: 60, oscSq: 40, oscSub: 90,
         chorusMode: 1, reverb: 90, delayLvl: 20,
         transpose: 64

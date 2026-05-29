@@ -4,11 +4,11 @@
 
 export const S1_TYPES = {
   pad: {
-    attack: [60, 110],
+    attack: [30, 110],
     decay: [80, 127],
     sustain: [70, 127],
     release: [70, 120],
-    cutoff: [20, 85],
+    cutoff: [40, 100],
     res: [0, 25],
     envFilt: [40, 85],
     lfoFilt: [5, 20],
