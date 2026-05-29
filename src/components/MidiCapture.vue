@@ -181,7 +181,13 @@ const selectedOutputId = ref('all')
 const playbackChannel = ref(1)
 let playbackTimeouts = []
 
-const midiOutputs = computed(() => midiStore.outputs || [])
+const midiOutputs = computed(() => {
+  const regs = midiStore.routingConfig?.registrations ?? {}
+  return (midiStore.outputs || []).filter(o => {
+    const reg = regs[o.name]
+    return reg && reg.outEnabled && reg.notes
+  })
+})
 
 function sendNoteOn(pitch, velocity, ch) {
   const outId = selectedOutputId.value === 'all' ? null : selectedOutputId.value
@@ -255,6 +261,17 @@ function togglePlayback() {
   if (isPlayingBack.value) stopPlayback()
   else startPlayback()
 }
+
+// Sync playback channel to the routing registration when the output device changes
+watch(selectedOutputId, (id) => {
+  if (id === 'all') return
+  const output = (midiStore.outputs || []).find(o => o.id === id)
+  if (!output) return
+  const reg = midiStore.routingConfig?.registrations?.[output.name]
+  if (reg && reg.outChannel >= 0) {
+    playbackChannel.value = reg.outChannel + 1  // registration is 0-based, selector is 1-based
+  }
+})
 
 // Timeline: active while capturing OR playing back
 watch([() => phase.value, isPlayingBack], ([p, playing]) => {
@@ -383,7 +400,7 @@ function drawRuler(ctx, W, xOfBeat, pxPerBeat) {
     const isMeasureStart = beat === 1
 
     // Tick
-    ctx.strokeStyle = isMeasureStart ? '#555' : '#2e2e2e'
+    ctx.strokeStyle = isMeasureStart ? '#666' : '#3e3e3e'
     ctx.lineWidth = isMeasureStart ? 1 : 0.5
     const tickTop = RULER_H - (isMeasureStart ? 10 : 6)
     ctx.beginPath(); ctx.moveTo(x, tickTop); ctx.lineTo(x, RULER_H); ctx.stroke()
@@ -427,7 +444,7 @@ function drawFixedRuler(pxPerBeat) {
     const beat    = (b % 4) + 1
     const isMeasureStart = beat === 1
 
-    ctx.strokeStyle = isMeasureStart ? '#555' : '#2e2e2e'
+    ctx.strokeStyle = isMeasureStart ? '#666' : '#3e3e3e'
     ctx.lineWidth = isMeasureStart ? 1 : 0.5
     const tickTop = RULER_H - (isMeasureStart ? 10 : 6)
     ctx.beginPath(); ctx.moveTo(sx, tickTop); ctx.lineTo(sx, RULER_H); ctx.stroke()
@@ -524,7 +541,7 @@ function drawLivePianoRoll() {
     ctx.fillStyle = isBlack ? '#0c0c0c' : '#101010'
     ctx.fillRect(0, pitchToY(p), W, noteH)
     if (p % 12 === 0) {
-      ctx.strokeStyle = '#252525'
+      ctx.strokeStyle = '#3a3a3a'
       ctx.lineWidth = 0.5
       ctx.beginPath(); ctx.moveTo(0, pitchToY(p)); ctx.lineTo(W, pitchToY(p)); ctx.stroke()
     }
@@ -536,7 +553,7 @@ function drawLivePianoRoll() {
     const x = gridT * pxPerMs
     const isBeat = stepIdx % 4 === 0
     const isBar = stepIdx % 16 === 0
-    ctx.strokeStyle = isBar ? '#303030' : isBeat ? '#202020' : '#161616'
+    ctx.strokeStyle = isBar ? '#4a4a4a' : isBeat ? '#303030' : '#222222'
     ctx.lineWidth = isBar ? 1 : 0.5
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
     gridT += sixteenth; stepIdx++
@@ -627,7 +644,7 @@ function drawReviewPianoRoll() {
     ctx.fillStyle = isBlack ? '#0c0c0c' : '#101010'
     ctx.fillRect(0, y, W, noteH)
     if (p % 12 === 0) {
-      ctx.strokeStyle = '#252525'
+      ctx.strokeStyle = '#3a3a3a'
       ctx.lineWidth = 0.5
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
     }
@@ -641,7 +658,7 @@ function drawReviewPianoRoll() {
     const x = msToX(gridT)
     const isBeat = stepIdx % 4 === 0
     const isBar = stepIdx % 16 === 0
-    ctx.strokeStyle = isBar ? '#303030' : isBeat ? '#202020' : '#161616'
+    ctx.strokeStyle = isBar ? '#4a4a4a' : isBeat ? '#303030' : '#222222'
     ctx.lineWidth = isBar ? 1 : 0.5
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
     gridT += sixteenth
@@ -1269,13 +1286,13 @@ onUnmounted(() => {
               class="w-4 h-4 flex items-center justify-center text-neutral-500 hover:text-white text-[10px] font-bold rounded hover:bg-neutral-800 transition-colors">+</button>
           </div>
 
-          <!-- Fixed ruler overlay (never scrolls) -->
+          <!-- Fixed ruler overlay (never scrolls) — starts after the 36px note-label column -->
           <canvas
             v-show="phase !== 'idle'"
             ref="rulerCanvasRef"
             height="16"
-            class="absolute top-0 left-0 w-full pointer-events-none z-10 block"
-            style="height:16px"
+            class="absolute top-0 pointer-events-none z-10 block"
+            style="left:36px; height:16px; width:calc(100% - 36px)"
           />
 
           <!-- Fixed note-name labels (scrolls vertically in sync, never horizontally) -->
@@ -1288,10 +1305,11 @@ onUnmounted(() => {
             style="top:16px"
           />
 
-          <!-- Scrollable piano roll -->
+          <!-- Scrollable piano roll — offset by 36px so the note-label column is a distinct layer -->
           <div
             ref="scrollWrapRef"
             class="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar"
+            style="margin-left:36px"
             @scroll="onScrollWrap"
           >
             <canvas
