@@ -126,6 +126,7 @@ const toolbarButtonMap = {
   midilearn:   { state: 'isMidiMappingOpen',icon: Workflow,      label: 'MIDI Mapping (Learn CC)' },
   manual:      { state: 'isManualOpen',     icon: BookOpen,      label: 'User Manual' },
   help:        { state: 'isHelpOpen',       icon: HelpCircle,    label: 'Help & Info' },
+  guides:      { state: 'isGuidesOpen',    icon: BookOpen,      label: 'Guides' },
   liveset:     { state: 'isLiveSetOpen',    icon: Zap,           label: 'Live Set' },
   midiactions: { state: 'isMidiActionsOpen',icon: Gamepad2,      label: 'MIDI Actions' },
   panic:       { state: null,               icon: AlertTriangle,  label: 'PANIC: All Notes Off', action: 'panic' },

@@ -54,9 +54,12 @@ import {
   Grid3x3,
   RotateCw,
   RotateCcw,
+  RefreshCw,
   Network,
   ListTree,
+  List,
   Shield,
+  Copy,
   X
 } from 'lucide-vue-next'
 
@@ -116,8 +119,11 @@ export const lucideIcons = {
   Grid3x3,
   RotateCw,
   RotateCcw,
+  RefreshCw,
   Network,
   ListTree,
+  List,
   Shield,
+  Copy,
   X
 }

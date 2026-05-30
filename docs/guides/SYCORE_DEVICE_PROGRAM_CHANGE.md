@@ -21,7 +21,7 @@
 
 ## Architecture & Data Flow
 
-<img src="../../public/help/guides/multi-program-change.png" width="640"/>
+<img src="/help/guides/multi-program-change.png" width="640"/>
 
 ```
 ┌─────────────────────────────────────────────────────────┐

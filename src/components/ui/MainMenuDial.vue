@@ -23,6 +23,7 @@ const ACTION_MAP = {
   favorites:      () => uiStore.isFavoritesOpen = !uiStore.isFavoritesOpen,
   profile:        () => uiStore.isProfileOpen = !uiStore.isProfileOpen,
   help:           () => uiStore.isHelpOpen = !uiStore.isHelpOpen,
+  guides:         () => uiStore.isGuidesOpen = !uiStore.isGuidesOpen,
   support:        () => uiStore.isSupportOpen = !uiStore.isSupportOpen,
   manual:         () => uiStore.isManualOpen = !uiStore.isManualOpen,
   portal:         () => uiStore.isPortalOpen = !uiStore.isPortalOpen,

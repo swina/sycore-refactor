@@ -218,7 +218,7 @@ function goWorkspace() {
               </div>
             </div>
             <div class="flex flex-col w-1/2 gap-1.5 items-center h-full">
-              <div @click="isHelpSlideshowOpen = true" class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 flex items-center gap-1.5 cursor-pointer">
+              <div @click="uiStore.isGuidesOpen = true" class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 flex items-center gap-1.5 cursor-pointer">
                 <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
                   <CircleQuestionMark class="w-3 h-3 text-synth-neon" />
                   <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">HELP</span>

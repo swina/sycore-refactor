@@ -2,6 +2,10 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import TracksPlayer from '@/components/TracksPlayer.vue'
+import GuidesPanel from '@/components/GuidesPanel.vue'
+import { useUiStore } from '@/stores/useUiStore'
+
+const uiStore = useUiStore()
 
 const tooSmall = ref(false)
 
@@ -29,4 +33,5 @@ onUnmounted(() => {
   </div>
   <RouterView />
   <TracksPlayer />
+  <GuidesPanel v-if="uiStore.isGuidesOpen" @close="uiStore.isGuidesOpen = false" />
 </template>

@@ -598,12 +598,12 @@ export const usePresetStore = defineStore('preset', () => {
         continue
       }
 
-      // If a variation is provided, use its value as base
       if (variation && variation.values && variation.values[field] !== undefined) {
-        // We add a tiny bit of drift (±2) to keep it generative but close to the intent
-        const base = variation.values[field]
-        const drift = Math.floor(Math.random() * 5) - 2
-        ccValues[field] = Math.max(0, Math.min(127, base + drift))
+        // Randomize between the flavour's value and the S1_TYPES max for this category
+        const flavourBase = variation.values[field]
+        const lo = Math.min(flavourBase, max)
+        const hi = max
+        ccValues[field] = Math.round(lo + Math.random() * (hi - lo))
       } else {
         ccValues[field] = Math.round(min + Math.random() * (max - min))
       }

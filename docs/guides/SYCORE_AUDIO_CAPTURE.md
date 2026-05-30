@@ -15,7 +15,7 @@ Audio Capture is a full-featured in-app audio recorder and editor. It records di
 
 ## Interface Layout
 
-<img src="../../public/help/guides/sycore-audio-capture.png"/>
+<img src="/help/guides/sycore-audio-capture.png"/>
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -23,16 +23,17 @@ Audio Capture is a full-featured in-app audio recorder and editor. It records di
 ├───────────────┬─────────────────────────────────────────────────┤
 │ [Device ▾] [PL]                                                 │ ← Device bar
 ├───────┬───────────────────────────────────────────────────────  │
-│ REC   │                                                         │
-│ MIDI  │         WAVEFORM / OSCILLOSCOPE CANVAS                 │ ← Main area
-│ SYNC  │                                                         │
-│ PLAY  │    [bar 1][bar 2][bar 3][bar 4]  BPM timeline          │
-│ MP3   │    Measures: [1][2][4][8]  SNAP [⊞]  Crossfade [──]  │
-│ +PL   │                                                         │
-│ →LPR  │  Loop: START [──────────────────] END                  │
-│ SAVE  │  Play Start: [──────────────────]                      │
-│ IMPRT │  Zoom X [─] 1.0x [+]    Zoom Y [─] 1.0x [+]          │
-│ RESET │                                                         │
+│ REC   │  Timeline: [Sync | Manual] [▶/■]  Bars: [1|2|4|8|16]  │ ← Timeline bar
+│ MIDI  │                                                         │
+│ SYNC  │         WAVEFORM / OSCILLOSCOPE CANVAS                 │ ← Main area
+│ APND  │                                                         │
+│ PLAY  │                                                         │
+│ MP3   │  [PLAY START ─────────────────────────────]            │
+│ +PL   │  [LOOP START ──────────] [LOOP END ───────]  (loop on) │
+│ →LPR  │  [ZOOM H ─────] x  [PAN ─────]  %           (footer)  │
+│ SAVE  │  [ZOOM V ─────] x  [CROSSFADE ─────]  s               │
+│ IMPRT │                                                         │
+│ RESET │  IN [▓░░░░]  NORM  CEIL[──]dB  GATE[──]dB  00:00/00:12│
 └───────┴────────────────────────────────────────────────────────-┘
 ```
 
@@ -84,6 +85,21 @@ When `hasBackingTrack` prop is true, starting a recording also sends `toggle-bac
 
 Toggle the **PL** button in the device bar to automatically send every completed recording to the backing track playlist (dispatches `playlist-add-from-capture` with URL, label, duration, and current BPM).
 
+### Append Mode
+
+Toggle **Append** in the left column to accumulate recordings rather than replacing them.
+
+| State | Behaviour |
+|-------|-----------|
+| **OFF** (default) | Each new recording discards the previous capture |
+| **ON** | Each new recording is decoded and concatenated onto the existing capture — the result is a single merged WAV |
+
+The merge happens via `OfflineAudioContext`: both blobs are fully decoded, their PCM frames are concatenated into a new `AudioBuffer`, and a fresh WAV is written back into memory. The waveform view, loop markers, and all export actions then operate on the merged audio.
+
+**Use cases:** recording multiple takes without stopping the monitoring stream; capturing a live session in segments and assembling them in-app; building a rough multitrack composite without a DAW.
+
+> The **PL** auto-add fires on the merged result, not on each segment individually.
+
 ### MIDI Trigger
 
 Enable **MIDI SYNC** to arm the recorder. A flashing amber **Armed…** button replaces REC. The recording starts as soon as any MIDI note-on arrives. A live pulse dot shows incoming MIDI activity even when not armed.
@@ -116,23 +132,31 @@ Bars inside the active loop region are drawn full-brightness; outside the region
 
 ### Zoom & Pan
 
-| Control | Description |
-|---------|-------------|
-| **Zoom X** | Time axis zoom (0.5× – 8×) |
-| **Zoom Y** | Amplitude zoom (clip visibility) |
-| **Pan** | Horizontal pan offset (0–1), constrained so you can't pan past the content |
+| Control | Range | Description |
+|---------|-------|-------------|
+| **Zoom H** | 1× – 10× | Expands the time axis — useful for inspecting transients or aligning loop points to sample accuracy |
+| **Pan** | 0–100 % | Horizontal scroll within the zoomed view; disabled and greyed out when Zoom H is at 1× |
+| **Zoom V** | 1× – 10× | Amplifies the waveform vertically — reveals low-level detail in quiet recordings |
+| **Crossfade** | 0 – 5 s | Controls the crossfade duration for looped playback (greyed out when Loop is OFF) |
+
+Pan is automatically clamped so you cannot scroll past the end of the waveform — the slider maximum adjusts dynamically to `1 − 1/zoomX`.
 
 ---
 
 ## Timeline (Measure Progress)
 
-A row of 1–8 measure bars appears above the waveform controls. Bars fill left-to-right as playback or recording proceeds, synchronized to the current BPM from `midiStore.currentBpm`.
+A row of measure bars sits above the waveform canvas. Each bar sweeps left-to-right as playback or recording proceeds, driven by the current BPM from `midiStore.currentBpm`.
 
 **Modes:**
-- `synced` — progress locked to `currentPlaybackTime` (accurate when playing)
-- `free` — runs independently using `performance.now()` (useful during monitoring)
 
-Bars selector (`1 / 2 / 4 / 8`) persisted in localStorage (`S1_CAPTURE_TIMELINE_MEASURES`).
+| Mode | Trigger | Progress source |
+|------|---------|-----------------|
+| **Sync** | Automatic when playing or recording | Locked to `currentPlaybackTime` — accurate to the playhead |
+| **Manual** | User-controlled | A dedicated ▶/■ button starts and stops the sweep independently of audio transport — useful for counting bars during live monitoring |
+
+In **Manual** mode a small Play/Stop button appears next to the mode selector. Clicking it starts or stops the bar sweep without affecting the recording or playback state.
+
+**Bars selector:** `1 / 2 / 4 / 8 / 16` — sets the number of measures in one sweep cycle. Persisted in localStorage (`S1_CAPTURE_TIMELINE_MEASURES`).
 
 ---
 
@@ -148,12 +172,20 @@ Bars selector (`1 / 2 / 4 / 8`) persisted in localStorage (`S1_CAPTURE_TIMELINE_
 
 ### Normalization
 
-The **NORMALIZE** function:
-1. Applies a noise gate (`normalizeGateDb`, default −60 dB) — samples below the threshold are zeroed.
-2. Finds the post-gate peak across all channels.
-3. Scales all samples so the peak lands at `normalizeDbLimit` (default −0.5 dBFS).
+The **NORM** button in the footer normalizes the current recording in-place. Before clicking it, two sliders in the footer let you tune the process:
 
-Result is stored as a new WAV blob, replacing the original recording in memory.
+| Slider | Range | Default | Effect |
+|--------|-------|---------|--------|
+| **CEIL** | −12 to 0 dBFS | −3.0 dBFS | Target peak level after normalization |
+| **GATE** | −96 to −12 dBFS | −60 dBFS | Noise gate threshold — samples quieter than this are zeroed before peak detection |
+
+**Processing pipeline:**
+1. All samples below the GATE threshold are set to zero.
+2. The loudest remaining sample across all channels is measured.
+3. Every sample is scaled so that peak lands at the CEIL value.
+4. The result is encoded as a new 16-bit WAV blob and replaces the original in memory — the waveform view updates immediately.
+
+> Set CEIL to −0.1 dBFS for the loudest possible result. Use a less aggressive GATE (e.g. −80 dBFS) if the recording has intentionally quiet sections you don't want gated out.
 
 ---
 
@@ -175,8 +207,9 @@ This produces gapless looping for sample-accurate material when crossfade = 0, o
 |-----|---------|
 | `S1_CAPTURE_DEVICE` | Last selected audio input device ID |
 | `S1_CAPTURE_TO_PLAYLIST` | Auto-add to playlist toggle (`'1'`/`'0'`) |
-| `S1_CAPTURE_TIMELINE_MEASURES` | Number of bars (1/2/4/8) |
-| `S1_CAPTURE_TIMELINE_MODE` | `'synced'` or `'free'` |
+| `S1_CAPTURE_APPEND` | Append mode toggle (`'1'`/`'0'`) |
+| `S1_CAPTURE_TIMELINE_MEASURES` | Number of bars (1/2/4/8/16) |
+| `S1_CAPTURE_TIMELINE_MODE` | `'synced'` or `'manual'` |
 | `S1_CAPTURE_SNAP_GRID` | Snap to bar divisions (`'1'`/`'0'`) |
 | `S1_CAPTURE_MIDI_TRIGGER` | MIDI sync armed state persistence |
 | `S1_CAPTURE_POS` | Draggable panel position |
@@ -208,9 +241,46 @@ The `audioCapture_record` param name can be mapped to any CC or Note via right-c
 
 ---
 
+## Playback Time Counter
+
+When a recording is loaded, the footer displays a real-time position readout:
+
+```
+00:14 / 01:23
+```
+
+The left value tracks the current playback position (MM:SS); the right value is the total recording duration. The counter updates every animation frame during playback and is always visible regardless of loop or zoom state.
+
+---
+
+## Device Handling
+
+### Hot-swap while monitoring
+
+Selecting a different device from the dropdown while the monitor is already running reconnects immediately — the stream is stopped, the Web Audio graph is torn down, and monitoring restarts on the new device without closing the panel or losing any existing recording.
+
+### Auto-fallback to default device
+
+If the stored device ID fails to open (device disconnected, exclusive ownership by another app, driver error), the capture panel silently retries with the system default audio input and updates `S1_CAPTURE_DEVICE` accordingly. An error message is shown only if the default also fails.
+
+### Device list refresh
+
+The device list updates automatically whenever a device is plugged or unplugged (`navigator.mediaDevices.devicechange` event) — no manual refresh required.
+
+---
+
+## Resizable Panel
+
+The capture panel supports free-form resizing: drag any corner or edge to adjust the width and height to match your workspace. The minimum size is 920 × 620 px. The position is persisted but the size is session-only (resets to default on reopen).
+
+---
+
 ## Tips
 
 - **Headless recording:** Fire `capture-start-rec` with `detail.background = true` to record without opening the panel. The monitor starts automatically.
 - **BPM grid alignment:** Set the BPM in your MIDI clock source before recording. The waveform grid and snap grid will align to bars automatically.
 - **Looper transfer:** Record a loop, crop with Loop Start/End handles, then send to any of the 8 Looper tracks with `→ Looper`.
 - **MP3 range export:** The MP3 export always respects the current Loop Start/End crop — you get only what's between the handles.
+- **Building a long take with Append:** Enable Append, record a section, stop, then record again — each stop merges the new chunk onto the growing capture. Disable Append when you want to start fresh.
+- **Normalize before exporting:** Run NORM after recording to bring the level up before MP3 or WAV export. The GATE slider is especially useful for recordings with noisy silence between phrases.
+- **Manual timeline for count-in:** Set the timeline to Manual mode and tap ▶ a bar before hitting REC — the sweep gives you a visual count-in at the current BPM without affecting the recording.
