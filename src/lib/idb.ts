@@ -43,14 +43,15 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
   users: 'id',
-  user_presets: 'id',   // composite id = uid + '__' + docId
-  user_playlists: 'id', // composite id = uid + '__' + docId
-  user_sequences: 'id', // composite id = uid + '__' + docId
+  user_presets: 'id',              // composite id = uid + '__' + docId
+  user_playlists: 'id',            // composite id = uid + '__' + docId
+  user_sequences: 'id',            // composite id = uid + '__' + docId
+  user_chord_progressions: 'id',   // composite id = uid + '__' + docId
   system: 'id',
   settings: 'id',
   backing_tracks: 'id',
@@ -98,7 +99,8 @@ function parsePath(segments: PathSegments): { store: string; key: string } {
     const storeMap: Record<string, string> = {
       'presets': 'user_presets',
       'playlists': 'user_playlists',
-      'sequences': 'user_sequences'
+      'sequences': 'user_sequences',
+      'chord_progressions': 'user_chord_progressions',
     };
     const store = storeMap[collectionName];
     if (!store) throw new Error(`Unsupported sub-collection: ${collectionName}`);

@@ -146,7 +146,7 @@ Enable the checkbox at each source → output intersection to create a route. Fo
 Keyboard           ✔
 Sequencer          ✔
 Arpeggiator        ✔
-UI / Preview       —
+UI / Preview       ✔  (this enables the Sound Engine to generate sounds for the device)
 Transport          ✔
 ```
 

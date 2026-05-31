@@ -50,6 +50,7 @@ export const useUiStore = defineStore('ui', () => {
   const isHelpSlideshowOpen      = ref(false)
   const isSoundEngineOpen        = ref(false)
   const isGuidesOpen             = ref(false)
+  const isChordProgOpen          = ref(false)
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
   const midiActionsActiveTab = ref('mapper')
@@ -112,6 +113,7 @@ export const useUiStore = defineStore('ui', () => {
     soundEngine:         () => isSoundEngineOpen.value,
     guides:              () => isGuidesOpen.value,
     unifiedMidi:         () => showUnifiedMidiManager.value,
+    chordProg:           () => isChordProgOpen.value,
   }
 
   const openModalKeys = computed(() =>
@@ -181,6 +183,7 @@ export const useUiStore = defineStore('ui', () => {
     isHelpSlideshowOpen.value      = false
     isSoundEngineOpen.value        = false
     isGuidesOpen.value             = false
+    isChordProgOpen.value          = false
     midiActionsActiveTab.value = 'mapper'
     midiActionsSelectedDevice.value = ''
     focusedModalKey.value = null
@@ -225,7 +228,7 @@ export const useUiStore = defineStore('ui', () => {
     isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
-    isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen,
+    isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,

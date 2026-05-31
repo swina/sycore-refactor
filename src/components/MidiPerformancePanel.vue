@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import { X, Network, Music, Keyboard, ListMusic, Zap, Radio, Globe, Layers, Usb, Cable, Lock, Check } from 'lucide-vue-next'
+import { X, Network, Music, Music2, Keyboard, ListMusic, Zap, Radio, Globe, Layers, Usb, Cable, Lock, Check } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 
@@ -9,11 +9,12 @@ const emit  = defineEmits(['close'])
 const midiStore = useMidiStore()
 
 const coreSources = [
-  { id: MidiSource.TRANSPORT, label: 'Transport / Clock', icon: Zap, color: 'text-red-400' },
-  { id: MidiSource.SEQUENCER, label: 'Sequencer', icon: ListMusic, color: 'text-amber-400' },
-  { id: MidiSource.ARP,       label: 'Arpeggiator', icon: Music,     color: 'text-emerald-400' },
-  { id: MidiSource.KEYBOARD,  label: 'Keyboard',    icon: Keyboard,  color: 'text-sky-400' },
-  { id: MidiSource.UI,        label: 'UI / Preview', icon: Layers,    color: 'text-purple-400' },
+  { id: MidiSource.TRANSPORT,  label: 'Transport / Clock',    icon: Zap,      color: 'text-red-400' },
+  { id: MidiSource.SEQUENCER,  label: 'Sequencer',            icon: ListMusic, color: 'text-amber-400' },
+  { id: MidiSource.CHORD_PROG, label: 'Chord Prog Sequencer', icon: Music2,    color: 'text-purple-400' },
+  { id: MidiSource.ARP,        label: 'Arpeggiator',          icon: Music,     color: 'text-emerald-400' },
+  { id: MidiSource.KEYBOARD,   label: 'Keyboard',             icon: Keyboard,  color: 'text-sky-400' },
+  { id: MidiSource.UI,         label: 'UI / Preview',         icon: Layers,    color: 'text-neutral-400' },
 ]
 
 const sources = computed(() => {

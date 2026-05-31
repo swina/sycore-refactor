@@ -209,7 +209,7 @@ function goWorkspace() {
                 </span>
                 
               </div>
-              <div @click="isSlideshowOpen = true" class="flex flex-col bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 mb-3 flex items-center gap-1.5 cursor-pointer">
+              <div @click="uiStore.isChordProgOpen = true;goWorkspace()" class="flex flex-col bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 mb-3 flex items-center gap-1.5 cursor-pointer">
                 <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
                   <Presentation class="w-3 h-3 text-synth-cyan" />
                   <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Quick Guide</span>

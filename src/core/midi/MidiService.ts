@@ -54,6 +54,7 @@ export interface MidiMonitorEntry {
 
 export enum MidiSource {
   SEQUENCER = 'SEQUENCER',
+  CHORD_PROG = 'CHORD_PROG',
   KEYBOARD = 'KEYBOARD',
   ARP = 'ARP',
   UI = 'UI',
@@ -79,6 +80,7 @@ export class MidiService {
   // Multi-Output Routing Matrix
   private routingMatrix: Map<string, Set<string>> = new Map([
     [MidiSource.SEQUENCER, new Set()],
+    [MidiSource.CHORD_PROG, new Set()],
     [MidiSource.KEYBOARD, new Set()],
     [MidiSource.ARP, new Set()],
     [MidiSource.UI, new Set()],

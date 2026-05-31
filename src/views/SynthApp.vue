@@ -43,6 +43,7 @@ import MidiCapture from '@/components/MidiCapture.vue'
 import AudioCapture from '@/components/AudioCapture.vue'
 import AudioVisualizer from '@/components/AudioVisualizer.vue'
 import StepSequencer from '@/components/StepSequencer.vue'
+import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
 import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
@@ -145,6 +146,7 @@ const toolbarButtonMap = {
   'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
   'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
+  'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
 }
 
 function handleToolbarButtonClick(button) {
@@ -520,6 +522,16 @@ onMounted(() => {
         @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
         @stop="() => {}"
       />
+      </div>
+
+      <!-- Chord Progression Sequencer -->
+      <div :style="focusStyle('chordProg')">
+        <ChordProgSequencer
+          :isOpen="uiStore.isChordProgOpen"
+          :bpm="midiStore.currentBpm || 120"
+          :channel="midiStore.midiChannel"
+          @close="uiStore.isChordProgOpen = false"
+        />
       </div>
 
       <!-- User Profile Modal -->
