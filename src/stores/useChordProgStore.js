@@ -4,12 +4,20 @@ import { useAuthStore } from './useAuthStore'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 
 export const DURATION_OPTIONS = [
-  '8m', '4m', '2m', '1m', '2n', '4n', '8n', '16n', '32n', '64n', '128n',
+  '8m', '4m', '2m', '1m',
+  '2n.', '2n',
+  '4n.', '4n', '4t',
+  '8n.', '8n', '8t',
+  '16n.', '16n', '16t',
+  '32n', '64n', '128n',
 ]
 
 export const DURATION_LABELS = {
   '8m': '8/1', '4m': '4/1', '2m': '2/1', '1m': '1/1',
-  '2n': '1/2', '4n': '1/4', '8n': '1/8', '16n': '1/16',
+  '2n.': '3/4', '2n': '1/2',
+  '4n.': '3/8', '4n': '1/4', '4t': '1/4T',
+  '8n.': '3/16', '8n': '1/8', '8t': '1/8T',
+  '16n.': '3/32', '16n': '1/16', '16t': '1/16T',
   '32n': '1/32', '64n': '1/64', '128n': '1/128',
 }
 
@@ -20,6 +28,7 @@ export const DEFAULT_CHORD_STEP = {
   velocity: 100,
   duration: '4n',
   gate: 80,
+  transpose: 0,
 }
 
 const STORAGE_KEY = 'SYCORE_CHORD_PROG_STATE'

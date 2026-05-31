@@ -18,6 +18,7 @@ const LS_IN_CHANNEL = 'midiInputChannel'
 const LS_SEND_CLOCK = 'midiSendClock'
 const LS_SYNC_TRANSPORT = 'midiSyncTransport'
 const LS_SYNC_SEQUENCER_TRANSPORT = 'midiSyncSequencerTransport'
+const LS_SYNC_CHORDPROG_TRANSPORT = 'midiSyncChordProgTransport'
 
 export const useMidiStore = defineStore('midi', () => {
   const midiReady = ref(false)
@@ -30,6 +31,7 @@ export const useMidiStore = defineStore('midi', () => {
   const sendClock = ref(localStorage.getItem(LS_SEND_CLOCK) === 'true')
   const syncMidiTransport = ref(localStorage.getItem(LS_SYNC_TRANSPORT) === 'true')
   const syncSequencerTransport = ref(localStorage.getItem(LS_SYNC_SEQUENCER_TRANSPORT) === 'true')
+  const syncChordProgTransport = ref(localStorage.getItem(LS_SYNC_CHORDPROG_TRANSPORT) === 'true')
   const isTransportPlaying = ref(false)
   const currentBpm = ref(120)
 
@@ -273,6 +275,11 @@ export const useMidiStore = defineStore('midi', () => {
     localStorage.setItem(LS_SYNC_SEQUENCER_TRANSPORT, String(enabled))
   }
 
+  function setSyncChordProgTransport(enabled) {
+    syncChordProgTransport.value = enabled
+    localStorage.setItem(LS_SYNC_CHORDPROG_TRANSPORT, String(enabled))
+  }
+
   function toggleGlobalTransport() {
     if (isTransportPlaying.value) sendStop()
     else sendStart()
@@ -400,6 +407,7 @@ export const useMidiStore = defineStore('midi', () => {
       sendClock:               sendClock.value,
       syncMidiTransport:       syncMidiTransport.value,
       syncSequencerTransport:  syncSequencerTransport.value,
+      syncChordProgTransport:  syncChordProgTransport.value,
     }
   }
 
@@ -436,6 +444,7 @@ export const useMidiStore = defineStore('midi', () => {
     if (preset.sendClock !== undefined) setSendClock(preset.sendClock)
     if (preset.syncMidiTransport !== undefined) setSyncMidiTransport(preset.syncMidiTransport)
     if (preset.syncSequencerTransport !== undefined) setSyncSequencerTransport(preset.syncSequencerTransport)
+    if (preset.syncChordProgTransport !== undefined) setSyncChordProgTransport(preset.syncChordProgTransport)
 
     if (preset.smartLatch) {
       isSmartLatchActive.value  = preset.smartLatch.active
@@ -513,6 +522,7 @@ export const useMidiStore = defineStore('midi', () => {
     sendClock, setSendClock, currentBpm,
     syncMidiTransport, setSyncMidiTransport,
     syncSequencerTransport, setSyncSequencerTransport,
+    syncChordProgTransport, setSyncChordProgTransport,
     isTransportPlaying, toggleGlobalTransport,
     routingConfig,
     saveRoutingConfig,

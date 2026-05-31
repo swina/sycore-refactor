@@ -138,6 +138,33 @@ const ROWS = computed(() => [
     },
   },
   {
+    id: 'chord-prog',
+    label: 'Chord Prog Seq',
+    icon: Music2,
+    cells: {
+      'midi-transport': {
+        get: () => midiStore.syncChordProgTransport,
+        set: (v) => midiStore.setSyncChordProgTransport(v),
+      },
+      'sequencer': {
+        get: () => syncStore.syncChordProgToSequencer,
+        set: (v) => { syncStore.syncChordProgToSequencer = v },
+      },
+      'backing-track': {
+        get: () => syncStore.syncChordProgToBackingTrack,
+        set: (v) => { syncStore.syncChordProgToBackingTrack = v },
+      },
+      'audio-looper': {
+        get: () => syncStore.syncChordProgToLooper,
+        set: (v) => { syncStore.syncChordProgToLooper = v },
+      },
+      'audio-capture': {
+        get: () => syncStore.syncChordProgToAudioCapture,
+        set: (v) => { syncStore.syncChordProgToAudioCapture = v },
+      },
+    },
+  },
+  {
     id: 'audio-capture',
     label: 'Audio Capture',
     icon: Mic,

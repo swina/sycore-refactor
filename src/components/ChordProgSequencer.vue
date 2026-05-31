@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2 } from 'lucide-vue-next'
+import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import { useSyncStore } from '@/stores/useSyncStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
 
@@ -21,6 +23,8 @@ const midiStore = useMidiStore()
 const arpStore = useArpStore()
 const authStore = useAuthStore()
 const store = useChordProgStore()
+const syncStore = useSyncStore()
+const uiStore = useUiStore()
 const { progressionData, progressionNames, loading: progLoading, loadByIndex } = useProgressionLoader()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
@@ -35,18 +39,27 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
 
 // ── Playback ─────────────────────────────────────────────────────────────────
 
-// Ticks per duration (base = 128th note = 1 tick)
+// Ticks per duration (base = 384th note = 1 tick, i.e. PPQ=96 per quarter)
+// Schedule fires every '384n'; multiply old 128n-based values by 3 so triplets become integers.
 const DURATION_TICKS = {
-  '128n': 1, '64n': 2, '32n': 4, '16n': 8,
-  '8n': 16, '4n': 32, '2n': 64, '1m': 128,
-  '2m': 256, '4m': 512, '8m': 1024,
+  '128n': 3,   '64n': 6,   '32n': 12,
+  '16n': 24,   '16n.': 36, '16t': 16,
+  '8n': 48,    '8n.': 72,  '8t': 32,
+  '4n': 96,    '4n.': 144, '4t': 64,
+  '2n': 192,   '2n.': 288,
+  '1m': 384,   '2m': 768,  '4m': 1536, '8m': 3072,
 }
 
 const playStateRef = { current: {} }
 const repeatEventIdRef = ref(null)
 const rafRef = ref(null)
-const activeTimeouts = ref([])
-const activeMidiNotes = ref(new Set())
+
+// Plain JS (non-reactive) for timing-critical note tracking.
+// Vue reactive refs cause stale reads and proxy overhead inside nested setTimeout callbacks.
+let _pendingTimeouts = new Set()  // all scheduled timeout IDs
+let _activeNoteKeys = new Set()   // "note-channel" keys currently sounding
+let _stopPending = false          // set synchronously on stop; blocks any queued tid callbacks
+let _transportTicks = 0          // our own tick counter (384n resolution, resets on each play)
 
 const seqTranspose = ref(0)
 const loopEnabled = ref(true)
@@ -57,7 +70,7 @@ function buildPlayState() {
     steps: store.steps,
     numSteps: store.numSteps,
     bpm: arpStore.arpBpm || 120,
-    channel: store.midiChannel,
+    channel: midiStore.midiChannel,
     playMode: store.playMode,
     arpRate: store.arpRate,
     transpose: seqTranspose.value,
@@ -67,20 +80,24 @@ function buildPlayState() {
   }
 }
 
+let _panicTimeout = null
+
 function stopAllNotes() {
-  activeTimeouts.value.forEach(id => clearTimeout(id))
-  activeTimeouts.value = []
-  activeMidiNotes.value.forEach(key => {
+  _stopPending = true
+  _pendingTimeouts.forEach(id => clearTimeout(id))
+  _pendingTimeouts.clear()
+  _activeNoteKeys.forEach(key => {
     const [noteStr, chanStr] = key.split('-')
     midiStore.sendNoteOff(parseInt(noteStr), 0, parseInt(chanStr), MidiSource.CHORD_PROG)
   })
-  activeMidiNotes.value.clear()
-  midiStore.allNotesOff(store.midiChannel)
+  _activeNoteKeys.clear()
+  // Delayed panic: catches any note-ons that slipped through the timing gap
+  if (_panicTimeout) clearTimeout(_panicTimeout)
+  _panicTimeout = window.setTimeout(() => { midiStore.panic(); _panicTimeout = null }, panicDelayMs.value)
 }
 
 watch(() => store.isPlaying, (playing) => {
   if (!playing) {
-    // Stop
     if (repeatEventIdRef.value !== null) {
       getTransport().clear(repeatEventIdRef.value)
       repeatEventIdRef.value = null
@@ -91,7 +108,11 @@ watch(() => store.isPlaying, (playing) => {
     return
   }
 
-  // Start
+  // Reset stop flag and clear stale state before starting
+  _stopPending = false
+  _transportTicks = 0
+  _pendingTimeouts.clear()
+  _activeNoteKeys.clear()
   playStateRef.current = buildPlayState()
 
   toneStart().then(() => {
@@ -99,7 +120,9 @@ watch(() => store.isPlaying, (playing) => {
 
     repeatEventIdRef.value = getTransport().scheduleRepeat((time) => {
       const state = playStateRef.current
-      if (!state.isPlaying) return
+      if (!state.isPlaying || _stopPending) return
+
+      _transportTicks++
 
       const activeCount = Math.max(1, Math.min(state.numSteps, 16))
       const step = state.steps[state.stepPointer]
@@ -111,7 +134,7 @@ watch(() => store.isPlaying, (playing) => {
         }, time)
 
         if (step?.active && step.velocity > 0 && step.notes?.length > 0) {
-          const tickMs = 60000 / (state.bpm * 32)
+          const tickMs = 60000 / (state.bpm * 96)
           const stepMs = tickMs * ticksNeeded
           const noteDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
           const channel = state.channel
@@ -120,33 +143,34 @@ watch(() => store.isPlaying, (playing) => {
             const arpTicks = DURATION_TICKS[state.arpRate] ?? 8
             const staggerMs = tickMs * arpTicks
             step.notes.forEach((note, i) => {
-              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0)))
+              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
               const noteKey = `${clampedNote}-${channel}`
               const tid = window.setTimeout(() => {
+                _pendingTimeouts.delete(tid)
+                if (_stopPending) return
                 midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
-                activeMidiNotes.value.add(noteKey)
+                _activeNoteKeys.add(noteKey)
                 const offTid = window.setTimeout(() => {
+                  _pendingTimeouts.delete(offTid)
                   midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
-                  activeMidiNotes.value.delete(noteKey)
-                  activeTimeouts.value = activeTimeouts.value.filter(x => x !== offTid)
+                  _activeNoteKeys.delete(noteKey)
                 }, noteDurationMs)
-                activeTimeouts.value.push(offTid)
-                activeTimeouts.value = activeTimeouts.value.filter(x => x !== tid)
+                _pendingTimeouts.add(offTid)
               }, i * staggerMs)
-              activeTimeouts.value.push(tid)
+              _pendingTimeouts.add(tid)
             })
           } else {
             step.notes.forEach(note => {
-              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0)))
+              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
               const noteKey = `${clampedNote}-${channel}`
               midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
-              activeMidiNotes.value.add(noteKey)
+              _activeNoteKeys.add(noteKey)
               const tid = window.setTimeout(() => {
+                _pendingTimeouts.delete(tid)
                 midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
-                activeMidiNotes.value.delete(noteKey)
-                activeTimeouts.value = activeTimeouts.value.filter(x => x !== tid)
+                _activeNoteKeys.delete(noteKey)
               }, noteDurationMs)
-              activeTimeouts.value.push(tid)
+              _pendingTimeouts.add(tid)
             })
           }
         }
@@ -165,25 +189,36 @@ watch(() => store.isPlaying, (playing) => {
           state.stepPointer = nextPointer
         }
       }
-    }, '128n')
+    }, '384n')
 
     getTransport().start()
   })
 })
 
 // Sync live state changes into playStateRef without restarting
-watch([() => store.steps, () => store.numSteps, () => store.playMode, () => store.arpRate, () => store.midiChannel], () => {
+watch([() => store.steps, () => store.numSteps, () => store.playMode, () => store.arpRate, () => midiStore.midiChannel], () => {
   if (playStateRef.current && store.isPlaying) {
     playStateRef.current.steps = store.steps
     playStateRef.current.numSteps = store.numSteps
     playStateRef.current.playMode = store.playMode
     playStateRef.current.arpRate = store.arpRate
-    playStateRef.current.channel = store.midiChannel
+    playStateRef.current.channel = midiStore.midiChannel
   }
 }, { deep: true })
 
 watch(seqTranspose, v => { if (playStateRef.current) playStateRef.current.transpose = v })
 watch(loopEnabled, v => { if (playStateRef.current) playStateRef.current.loop = v })
+
+watch(() => store.isPlaying, (playing) => {
+  if (midiStore.syncChordProgTransport) {
+    if (playing) midiStore.sendStart()
+    else midiStore.sendStop()
+  }
+  if (syncStore.syncChordProgToAudioCapture) {
+    if (playing) window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
+    else window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+  }
+})
 
 watch(() => arpStore.arpBpm, (bpm) => {
   if (playStateRef.current && store.isPlaying) {
@@ -192,13 +227,25 @@ watch(() => arpStore.arpBpm, (bpm) => {
   }
 })
 
-// Step highlight animation
+// Transport position display — derived from our own tick counter (independent of global Tone.js transport)
+const transportPos = ref('001:1:1')
+
+function updateTransportPos() {
+  const t    = _transportTicks
+  const bar  = (Math.floor(t / 384) + 1).toString().padStart(3, '0')
+  const beat = (Math.floor((t % 384) / 96) + 1).toString()
+  const sixteenth = (Math.floor((t % 96) / 24) + 1).toString()
+  transportPos.value = `${bar}:${beat}:${sixteenth}`
+}
+
+// Step highlight animation + transport position update
 watch(() => store.isPlaying, (playing) => {
   if (playing) {
-    const tick = () => { rafRef.value = requestAnimationFrame(tick) }
+    const tick = () => { updateTransportPos(); rafRef.value = requestAnimationFrame(tick) }
     tick()
   } else {
     if (rafRef.value !== null) { cancelAnimationFrame(rafRef.value); rafRef.value = null }
+    transportPos.value = '001:1:1'
   }
 })
 
@@ -206,13 +253,16 @@ onUnmounted(() => {
   store.isPlaying = false
   if (repeatEventIdRef.value !== null) getTransport().clear(repeatEventIdRef.value)
   stopAllNotes()
+  if (_panicTimeout) { clearTimeout(_panicTimeout); midiStore.panic() }
   if (rafRef.value !== null) cancelAnimationFrame(rafRef.value)
   previewTimeouts.forEach(id => clearTimeout(id))
 })
 
 // ── UI State ─────────────────────────────────────────────────────────────────
 
+const panicDelayMs = ref(250)
 const activeTab = ref('library')
+const libSubTab = ref(store.selectedKey >= 13 ? 'genre' : 'keys')
 const selectedProgressionName = ref('')
 const savePatternName = ref('')
 const savingPattern = ref(false)
@@ -242,10 +292,33 @@ function togglePlay() {
 
 function handleStepClick(idx) {
   store.selectedStepIdx = idx
+  if (!store.isPlaying) previewStep(idx)
 }
 
 function handleStepDoubleClick(idx) {
   store.toggleStepActive(idx)
+}
+
+function previewStep(idx) {
+  const step = store.steps[idx]
+  if (!step?.active || !step.notes?.length) return
+  previewTimeouts.forEach(id => clearTimeout(id))
+  previewTimeouts.length = 0
+  previewActiveNotes.forEach(({ note, channel }) =>
+    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
+  previewActiveNotes.length = 0
+  const channel = midiStore.midiChannel
+  const shift = (seqTranspose.value || 0) + (step.transpose || 0)
+  step.notes.forEach(note => {
+    const n = Math.max(0, Math.min(127, note + shift))
+    midiStore.sendNoteOn(n, 90, channel, MidiSource.CHORD_PROG)
+    previewActiveNotes.push({ note: n, channel })
+    previewTimeouts.push(window.setTimeout(() => {
+      midiStore.sendNoteOff(n, 0, channel, MidiSource.CHORD_PROG)
+      const i = previewActiveNotes.findIndex(x => x.note === n && x.channel === channel)
+      if (i !== -1) previewActiveNotes.splice(i, 1)
+    }, 1000))
+  })
 }
 
 function handleDurationClick(idx, e) {
@@ -257,18 +330,29 @@ function handleDurationClick(idx, e) {
 const selectedChord = ref(null) // { chordName, notes }
 const chordTranspose = ref(0)
 const previewTimeouts = []
+const previewActiveNotes = [] // { note, channel } — track exactly what's sounding
 
 function previewChord(chord) {
   selectedChord.value = chord
+  // Cancel all pending note-offs
   previewTimeouts.forEach(id => clearTimeout(id))
   previewTimeouts.length = 0
-  const channel = store.midiChannel
+  // Explicitly stop every note that is currently sounding
+  previewActiveNotes.forEach(({ note, channel }) => {
+    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
+  })
+  previewActiveNotes.length = 0
+
+  const channel = midiStore.midiChannel
   const velocity = 90
   chord.notes.forEach(note => {
     const n = Math.max(0, Math.min(127, note + chordTranspose.value))
     midiStore.sendNoteOn(n, velocity, channel, MidiSource.CHORD_PROG)
+    previewActiveNotes.push({ note: n, channel })
     previewTimeouts.push(window.setTimeout(() => {
       midiStore.sendNoteOff(n, 0, channel, MidiSource.CHORD_PROG)
+      const idx = previewActiveNotes.findIndex(x => x.note === n && x.channel === channel)
+      if (idx !== -1) previewActiveNotes.splice(idx, 1)
     }, 1000))
   })
 }
@@ -286,6 +370,10 @@ function loadProgressionToSteps() {
 
 function handleGenerate() {
   store.generateAlgorithmic(progressionData.value)
+  const dur = fillDurationRandom.value
+    ? DURATION_OPTIONS[Math.floor(Math.random() * DURATION_OPTIONS.length)]
+    : fillDuration.value
+  for (let i = 0; i < store.numSteps; i++) store.setStep(i, { duration: dur })
 }
 
 async function handleSave() {
@@ -329,6 +417,7 @@ function updateSelectedStepField(field, val) {
   if (!step) return
   if (field === 'velocity') store.setStep(store.selectedStepIdx, { velocity: Math.max(0, Math.min(127, Math.round(parsed))) })
   if (field === 'gate') store.setStep(store.selectedStepIdx, { gate: Math.max(0, Math.min(100, Math.round(parsed))) })
+  if (field === 'transpose') store.setStep(store.selectedStepIdx, { transpose: Math.max(-24, Math.min(24, Math.round(parsed))) })
 }
 
 function handleVelocityKeydown(e) {
@@ -353,6 +442,53 @@ function handleGateKeydown(e) {
 
 const selectedStep = computed(() => store.steps[store.selectedStepIdx])
 
+// ── Fill All ──────────────────────────────────────────────────────────────────
+
+const fillDuration = ref('4n')
+const fillDurationRandom = ref(false)
+const fillVelocity = ref(100)
+const fillVelocityRandom = ref(false)
+const fillGate = ref(80)
+const fillGateRandom = ref(false)
+const fillTranspose = ref(0)
+const fillTransposeRandom = ref(false)
+
+function applyFillDuration() {
+  for (let i = 0; i < store.numSteps; i++) {
+    const dur = fillDurationRandom.value
+      ? DURATION_OPTIONS[Math.floor(Math.random() * DURATION_OPTIONS.length)]
+      : fillDuration.value
+    store.setStep(i, { duration: dur })
+  }
+}
+
+function applyFillVelocity() {
+  for (let i = 0; i < store.numSteps; i++) {
+    const vel = fillVelocityRandom.value
+      ? Math.floor(Math.random() * 128)
+      : Math.max(0, Math.min(127, fillVelocity.value))
+    store.setStep(i, { velocity: vel })
+  }
+}
+
+function applyFillGate() {
+  for (let i = 0; i < store.numSteps; i++) {
+    const gate = fillGateRandom.value
+      ? Math.floor(Math.random() * 101)
+      : Math.max(0, Math.min(100, fillGate.value))
+    store.setStep(i, { gate })
+  }
+}
+
+function applyFillTranspose() {
+  for (let i = 0; i < store.numSteps; i++) {
+    const transpose = fillTransposeRandom.value
+      ? Math.floor(Math.random() * 49) - 24
+      : Math.max(-24, Math.min(24, fillTranspose.value))
+    store.setStep(i, { transpose })
+  }
+}
+
 function velBarColor(v) {
   if (v === 0) return 'bg-neutral-700'
   if (v < 40) return 'bg-blue-600'
@@ -370,117 +506,176 @@ function velBarColor(v) {
   >
     <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
     <div
-      class="shrink-0 px-3 py-2 bg-black/50 border-b border-neutral-800 flex items-center gap-3 cursor-grab active:cursor-grabbing"
+      class="shrink-0 px-3 py-2 bg-black/50 border-b border-neutral-800 flex flex-col items-center gap-3 cursor-grab active:cursor-grabbing"
       @mousedown="onDragStart"
     >
-      <Music2 class="w-4 h-4 text-purple-400 shrink-0" />
-      <h2 class="text-xs font-black uppercase tracking-widest text-purple-400 shrink-0">Chord Prog</h2>
+      <div class="flex items-center gap-2 w-full">
+        <Music2 class="w-4 h-4 text-purple-400 shrink-0" />
+        <h2 class="text-lg font-black uppercase tracking-widest text-purple-400 shrink-0">Chord Prog</h2>
 
-      <!-- BPM display -->
-      <div class="flex items-center gap-1.5 px-2 py-0.5 bg-black/60 border border-neutral-800 rounded text-[10px] font-mono">
-        <span class="text-neutral-500">BPM</span>
-        <span class="text-purple-300 font-bold">{{ arpStore.arpBpm }}</span>
+        <!-- BPM display -->
+        <!--
+        <div class="flex items-center gap-1.5 px-2 py-0.5 bg-black/60 border border-neutral-800 rounded text-[10px] font-mono">
+          <span class="text-neutral-500">BPM</span>
+          <span class="text-purple-300 font-bold">{{ arpStore.arpBpm }}</span>
+        </div> -->
+
+        
+
+        
+
+        <!-- Channel (follows QuickChannelSelector / midiStore) -->
+        <div class="flex items-center gap-1 text-[10px]" title="MIDI channel — change via the global channel selector">
+          <span class="text-neutral-500 font-mono">Ch</span>
+          <span class="text-purple-300 font-bold font-mono">{{ midiStore.midiChannel }}</span>
+        </div>
+
+        <div class="flex w-full justify-end gap-4">
+          <!-- REC SYNC -->
+          <div class="flex items-center gap-1.5">
+            <div
+              class="flex items-center gap-1.5 cursor-pointer select-none"
+              @click.stop="syncStore.syncChordProgToAudioCapture = !syncStore.syncChordProgToAudioCapture"
+              title="Sync audio recording with playback"
+            >
+              <span
+                :class="[
+                  'w-1.5 h-1.5 rounded-full transition-all duration-300',
+                  syncStore.syncChordProgToAudioCapture && store.isPlaying
+                    ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse'
+                    : syncStore.syncChordProgToAudioCapture
+                      ? 'bg-red-500/60'
+                      : 'bg-neutral-700'
+                ]"
+              />
+              <span :class="[
+                'text-[11px] font-mono uppercase tracking-widest transition-colors duration-300',
+                syncStore.syncChordProgToAudioCapture && store.isPlaying
+                  ? 'text-red-400'
+                  : syncStore.syncChordProgToAudioCapture
+                    ? 'text-red-500/60 hover:text-red-400'
+                    : 'text-neutral-600 hover:text-neutral-500'
+              ]">REC SYNC</span>
+            </div>
+            <div
+              v-if="syncStore.syncChordProgToAudioCapture && !store.isPlaying"
+              @click.stop="uiStore.isAudioCaptureOpen = true"
+              class="cursor-pointer text-synth-cyan"
+              title="Open Audio Capture"
+            >
+              <AudioLines class="w-4 h-4" />
+            </div>
+          </div>
+          
+          <!-- Minimize -->
+          <button @click.stop="toggleMinimize" class="text-neutral-500 hover:text-neutral-300 transition-colors">
+            <Minus class="w-4 h-4" />
+          </button>
+
+          <!-- Close -->
+          <button @click.stop="emit('close')" class="text-neutral-500 hover:text-red-400 transition-colors">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <!-- Play / Stop -->
-      <button
-        @click.stop="togglePlay"
-        :class="[
-          'flex items-center gap-1 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all',
-          store.isPlaying
-            ? 'bg-red-600 hover:bg-red-700 text-white'
-            : 'bg-purple-600 hover:bg-purple-500 text-white'
-        ]"
-      >
-        <Square v-if="store.isPlaying" class="w-3 h-3" />
-        <Play v-else class="w-3 h-3" />
-        {{ store.isPlaying ? 'Stop' : 'Play' }}
-      </button>
 
-      <!-- Step count -->
-      <div class="flex items-center gap-1.5 text-[10px]">
-        <span class="text-neutral-500 font-mono">Steps</span>
-        <button @click.stop="store.numSteps = Math.max(1, store.numSteps - 1)" class="w-5 h-5 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"><ChevronLeft class="w-3 h-3" /></button>
-        <span class="text-purple-300 font-bold font-mono w-4 text-center">{{ store.numSteps }}</span>
-        <button @click.stop="store.numSteps = Math.min(16, store.numSteps + 1)" class="w-5 h-5 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"><ChevronRight class="w-3 h-3" /></button>
-      </div>
+      <div class="flex items-center gap-2 justify-start w-full gap-5">
+        <!-- Transport position -->
+        <div class="flex items-center gap-1 px-2 py-0.5 bg-black/60 border border-neutral-800 rounded font-mono" title="Bar : Beat : Sixteenth">
+          <span :class="['text-[14px] font-bold tabular-nums tracking-wider', store.isPlaying ? 'text-red-700' : 'text-neutral-500']">
+            {{ transportPos }}
+          </span>
+        </div>
 
-      <!-- Channel -->
-      <div class="flex items-center gap-1 text-[10px]">
-        <span class="text-neutral-500 font-mono">Ch</span>
-        <select
-          v-model="store.midiChannel"
-          @mousedown.stop
-          class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-[10px] text-purple-300 font-mono outline-none"
-        >
-          <option v-for="ch in 16" :key="ch" :value="ch">{{ ch }}</option>
-        </select>
-      </div>
-
-      <!-- Play mode -->
-      <div class="flex items-center rounded overflow-hidden border border-neutral-700 text-[9px] font-bold uppercase tracking-wider">
+        <!-- Play / Stop -->
         <button
-          @click.stop="store.playMode = 'chord'"
-          :class="['px-2 py-0.5 transition-colors', store.playMode === 'chord' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
-        >Chord</button>
-        <button
-          @click.stop="store.playMode = 'arp'"
-          :class="['px-2 py-0.5 transition-colors', store.playMode === 'arp' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
-        >Arp</button>
-      </div>
-
-      <!-- Arp rate (only in arp mode) -->
-      <div v-if="store.playMode === 'arp'" class="flex items-center gap-1 text-[10px]">
-        <span class="text-neutral-500 font-mono">Rate</span>
-        <select
-          v-model="store.arpRate"
-          @mousedown.stop
-          class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-[10px] text-purple-300 font-mono outline-none"
+          @click.stop="togglePlay"
+          :class="[
+            'flex items-center gap-1 px-3 py-1 rounded text-[12x] font-mono uppercase tracking-wider transition-all',
+            store.isPlaying
+              ? 'bg-red-600 hover:bg-red-700 text-white'
+              : 'bg-purple-600 hover:bg-purple-500 text-white'
+          ]"
         >
-          <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
-        </select>
+          <Square v-if="store.isPlaying" class="w-3 h-3" />
+          <Play v-else class="w-3 h-3" />
+          {{ store.isPlaying ? 'Stop' : 'Play' }}
+        </button>
+        <!-- Step count -->
+        <div class="flex items-center gap-1.5 text-[12px]">
+          <span class="text-neutral-500 font-mono">Steps</span>
+          <button @click.stop="store.numSteps = Math.max(1, store.numSteps - 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"><ChevronLeft class="w-3 h-3" /></button>
+          <span class="text-purple-300 font-bold font-mono w-4 text-center">{{ store.numSteps }}</span>
+          <button @click.stop="store.numSteps = Math.min(16, store.numSteps + 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"><ChevronRight class="w-3 h-3" /></button>
+        </div>
+
+        <!-- Play mode -->
+        <div class="flex items-center rounded overflow-hidden border border-neutral-700 text-[12px] font-mono uppercase tracking-wider">
+          <button
+            @click.stop="store.playMode = 'chord'"
+            title="Play chords"
+            :class="['px-2 py-0.5 transition-colors', store.playMode === 'chord' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+          >Chord</button>
+          <button
+            @click.stop="store.playMode = 'arp'"
+            title="Play arpeggio"
+            :class="['px-2 py-0.5 transition-colors', store.playMode === 'arp' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+          >Arp</button>
+        </div>
+
+        <!-- Arp rate (only in arp mode) -->
+        <div v-if="store.playMode === 'arp'" class="flex items-center gap-1 text-[12px] font-mono">
+          <span class="text-neutral-500 font-mono">Rate</span>
+          <select
+            v-model="store.arpRate"
+            @mousedown.stop
+            title="Arpeggio rate"
+            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-[12px] text-purple-300 font-mono outline-none"
+          >
+            <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
+          </select>
+        </div>
+
+        <!-- Sequence transpose -->
+        <div class="flex items-center gap-1 text-[12px]">
+          <span class="text-neutral-500 font-mono shrink-0 text-[12px]">Transpose</span>
+          <button @click.stop="seqTranspose = Math.max(-24, seqTranspose - 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[12px]">−</button>
+          <span :class="['font-bold font-mono w-6 text-center', seqTranspose !== 0 ? 'text-yellow-300' : 'text-neutral-400']">{{ seqTranspose > 0 ? '+' : '' }}{{ seqTranspose }}</span>
+          <button @click.stop="seqTranspose = Math.min(24, seqTranspose + 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[12px]">+</button>
+          <button v-if="seqTranspose !== 0" @click.stop="seqTranspose = 0" class="text-[8px] text-neutral-600 hover:text-neutral-300 ml-0.5">↺</button>
+        </div>
+
+        <!-- Loop toggle -->
+        <button
+          @click.stop="loopEnabled = !loopEnabled"
+          :title="loopEnabled ? 'Loop on — click to play once' : 'Loop off — click to enable loop'"
+          :class="[
+            'flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-bold uppercase border transition-colors',
+            loopEnabled ? 'border-purple-600 text-purple-400 bg-purple-950/40' : 'border-neutral-700 text-neutral-500 hover:text-neutral-300'
+          ]"
+        >
+          ⟳ {{ loopEnabled ? 'Loop' : 'Once' }}
+        </button>
+
+        <!-- Panic delay -->
+        <div class="ml-auto flex items-center gap-1" title="Delay before All Notes Off is sent on stop">
+          <span class="text-[10px] text-neutral-600 font-mono">AOF</span>
+          <input
+            v-model.number="panicDelayMs"
+            type="number"
+            min="0"
+            max="2000"
+            step="50"
+            class="w-14 bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-neutral-300 text-center outline-none focus:border-purple-600"
+          />
+          <span class="text-[10px] text-neutral-600 font-mono">ms</span>
+        </div>
+
+        
+
+        
       </div>
-
-      <!-- Sequence transpose -->
-      <div class="flex items-center gap-1 text-[10px]">
-        <span class="text-neutral-500 font-mono shrink-0">Tr</span>
-        <button @click.stop="seqTranspose = Math.max(-24, seqTranspose - 1)" class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]">−</button>
-        <span :class="['font-bold font-mono w-6 text-center', seqTranspose !== 0 ? 'text-yellow-300' : 'text-neutral-400']">{{ seqTranspose > 0 ? '+' : '' }}{{ seqTranspose }}</span>
-        <button @click.stop="seqTranspose = Math.min(24, seqTranspose + 1)" class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]">+</button>
-        <button v-if="seqTranspose !== 0" @click.stop="seqTranspose = 0" class="text-[8px] text-neutral-600 hover:text-neutral-300 ml-0.5">↺</button>
-      </div>
-
-      <!-- Loop toggle -->
-      <button
-        @click.stop="loopEnabled = !loopEnabled"
-        :title="loopEnabled ? 'Loop on — click to play once' : 'Loop off — click to enable loop'"
-        :class="[
-          'flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase border transition-colors',
-          loopEnabled ? 'border-purple-600 text-purple-400 bg-purple-950/40' : 'border-neutral-700 text-neutral-500 hover:text-neutral-300'
-        ]"
-      >
-        ⟳ {{ loopEnabled ? 'Loop' : 'Once' }}
-      </button>
-
-      <!-- Clear -->
-      <button
-        @click.stop="store.clearSteps()"
-        title="Clear all steps"
-        class="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase text-neutral-500 hover:text-red-400 border border-neutral-800 hover:border-red-800 transition-colors"
-      >
-        <RotateCcw class="w-3 h-3" />
-        Clear
-      </button>
-
-      <!-- Minimize -->
-      <button @click.stop="toggleMinimize" class="text-neutral-500 hover:text-neutral-300 transition-colors">
-        <Minus class="w-4 h-4" />
-      </button>
-
-      <!-- Close -->
-      <button @click.stop="emit('close')" class="text-neutral-500 hover:text-red-400 transition-colors">
-        <X class="w-4 h-4" />
-      </button>
     </div>
 
     <div v-if="!isMinimized" class="flex flex-col flex-1 overflow-hidden">
@@ -504,7 +699,7 @@ function velBarColor(v) {
         >
           <!-- Step number -->
           <div class="w-full flex items-center justify-between px-1 pt-1">
-            <span :class="['text-[9px] font-bold font-mono', step.active ? 'text-purple-400' : 'text-neutral-600']">
+            <span :class="['text-[12px] font-bold font-mono', step.active ? 'text-purple-400' : 'text-neutral-600']">
               {{ idx + 1 }}
             </span>
             <!-- Active indicator dot -->
@@ -518,7 +713,7 @@ function velBarColor(v) {
           <!-- Chord name -->
           <div class="px-1 w-full text-center">
             <span :class="[
-              'text-[10px] font-bold truncate block leading-tight',
+              'text-[14px] font-mono truncate block leading-tight',
               step.active ? (idx === store.currentStep && store.isPlaying ? 'text-yellow-300' : 'text-white') : 'text-neutral-600'
             ]">
               {{ step.chordName }}
@@ -526,17 +721,21 @@ function velBarColor(v) {
           </div>
 
           <!-- Duration badge -->
-          <button
+          <div
+            role="button"
+            tabindex="0"
             :class="[
-              'text-[8px] font-mono px-1 rounded mb-0.5 transition-colors',
-              step.active ? 'text-purple-300 hover:text-purple-100' : 'text-neutral-600 hover:text-neutral-400'
+              'text-[12px] font-mono px-1 rounded mb-0.5 transition-colors cursor-pointer',
+              step.active ? 'text-purple-300 hover:text-purple-100' : 'text-neutral-700 hover:text-neutral-400'
             ]"
             @click.stop="handleDurationClick(idx, $event)"
             @contextmenu.prevent="handleDurationClick(idx, $event)"
+            @keydown.enter.stop="handleDurationClick(idx, $event)"
+            @keydown.space.stop.prevent="handleDurationClick(idx, $event)"
             title="Click to cycle duration | Right-click / Shift+click reverse"
           >
             {{ DURATION_LABELS[step.duration] }}
-          </button>
+          </div>
 
           <!-- Velocity bar -->
           <div class="w-full h-1 bg-neutral-800 rounded-b overflow-hidden">
@@ -549,7 +748,7 @@ function velBarColor(v) {
       </div>
 
       <!-- ── STEP DETAIL ────────────────────────────────────────────────── -->
-      <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[10px]">
+      <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
         <span class="text-neutral-500 font-mono shrink-0">Step {{ store.selectedStepIdx + 1 }}</span>
 
         <!-- Active toggle -->
@@ -585,7 +784,7 @@ function velBarColor(v) {
             min="0" max="127"
             @change="e => updateSelectedStepField('velocity', e.target.value)"
             @keydown="handleVelocityKeydown"
-            class="w-10 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
+            class="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
             title="Velocity 0–127 (0 = off). Arrow keys to nudge, Shift+Arrow ×10"
           />
         </div>
@@ -599,11 +798,134 @@ function velBarColor(v) {
             min="0" max="100"
             @change="e => updateSelectedStepField('gate', e.target.value)"
             @keydown="handleGateKeydown"
-            class="w-10 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
+            class="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
             title="Gate 0–100%. Arrow keys to nudge."
           />
           <span class="text-neutral-600">%</span>
         </div>
+
+        <!-- Per-step Transpose -->
+        <div class="flex items-center gap-1 ml-auto">
+          <span class="text-neutral-500">Tr</span>
+          <button
+            @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) - 1)"
+            class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
+          >−</button>
+          <span
+            :class="['font-bold font-mono w-6 text-center', (selectedStep.transpose || 0) !== 0 ? 'text-yellow-300' : 'text-neutral-400']"
+          >{{ (selectedStep.transpose || 0) > 0 ? '+' : '' }}{{ selectedStep.transpose || 0 }}</span>
+          <button
+            @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) + 1)"
+            class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
+          >+</button>
+          <button
+            v-if="(selectedStep.transpose || 0) !== 0"
+            @click="updateSelectedStepField('transpose', 0)"
+            class="text-[8px] text-neutral-600 hover:text-neutral-300"
+          >↺</button>
+        </div>
+      </div>
+
+      <!-- ── FILL ALL ──────────────────────────────────────────────────────── -->
+      <div class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-3 text-[12px] flex-wrap">
+        <span class="text-neutral-500 font-mono shrink-0 font-bold uppercase tracking-wider">Fill</span>
+
+        <!-- Duration fill -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-neutral-500">Dur</span>
+          <select
+            v-if="!fillDurationRandom"
+            v-model="fillDuration"
+            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
+          >
+            <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
+          </select>
+          <span v-else class="text-yellow-400 font-mono px-1 py-0.5 bg-neutral-800 border border-neutral-700 rounded">Rnd</span>
+          <label class="flex items-center gap-0.5 cursor-pointer text-neutral-500 hover:text-neutral-300 select-none">
+            <input type="checkbox" v-model="fillDurationRandom" class="w-14 h-3 accent-purple-500" />
+            <span>~</span>
+          </label>
+          <button
+            @click="applyFillDuration"
+            class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
+          >All</button>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Velocity fill -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-neutral-500">Vel</span>
+          <input
+            v-if="!fillVelocityRandom"
+            v-model.number="fillVelocity"
+            type="number" min="0" max="127"
+            class="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
+          />
+          <span v-else class="text-yellow-400 font-mono px-1 py-0.5 bg-neutral-800 border border-neutral-700 rounded">Rnd</span>
+          <label class="flex items-center gap-0.5 cursor-pointer text-neutral-500 hover:text-neutral-300 select-none">
+            <input type="checkbox" v-model="fillVelocityRandom" class="w-7 h-3 accent-purple-500" />
+            <span>~</span>
+          </label>
+          <button
+            @click="applyFillVelocity"
+            class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
+          >All</button>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Gate fill -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-neutral-500">Gate</span>
+          <input
+            v-if="!fillGateRandom"
+            v-model.number="fillGate"
+            type="number" min="0" max="100"
+            class="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
+          />
+          <span v-else class="text-yellow-400 font-mono px-1 py-0.5 bg-neutral-800 border border-neutral-700 rounded">Rnd</span>
+          <label class="flex items-center gap-0.5 cursor-pointer text-neutral-500 hover:text-neutral-300 select-none">
+            <input type="checkbox" v-model="fillGateRandom" class="w-7 h-3 accent-purple-500" />
+            <span>~</span>
+          </label>
+          <button
+            @click="applyFillGate"
+            class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
+          >All</button>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Transpose fill -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-neutral-500">Tr</span>
+          <input
+            v-if="!fillTransposeRandom"
+            v-model.number="fillTranspose"
+            type="number" min="-24" max="24"
+            class="w-12 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
+          />
+          <span v-else class="text-yellow-400 font-mono px-1 py-0.5 bg-neutral-800 border border-neutral-700 rounded">Rnd</span>
+          <label class="flex items-center gap-0.5 cursor-pointer text-neutral-500 hover:text-neutral-300 select-none">
+            <input type="checkbox" v-model="fillTransposeRandom" class="w-7 h-3 accent-purple-500" />
+            <span>~</span>
+          </label>
+          <button
+            @click="applyFillTranspose"
+            class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
+          >All</button>
+        </div>
+
+        <!-- Clear -->
+        <button
+          @click.stop="store.clearSteps()"
+          title="Clear all steps"
+          class="flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-mono uppercase text-neutral-500 hover:text-red-400 border border-neutral-800 hover:border-red-800 transition-colors"
+        >
+          <RotateCcw class="w-3 h-3" />
+          Clear
+        </button>
       </div>
 
       <!-- ── BOTTOM TABS ─────────────────────────────────────────────────── -->
@@ -627,19 +949,44 @@ function velBarColor(v) {
         <div v-if="activeTab === 'library'" class="flex flex-1 min-h-0 overflow-hidden gap-0">
 
           <!-- Key selector column -->
-          <div class="w-48 shrink-0 border-r border-neutral-800 flex flex-col overflow-y-auto py-1">
-            <div class="px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-neutral-500">Key / Source</div>
-            <button
-              v-for="(name, idx) in KEY_FILE_NAMES"
-              :key="idx"
-              @click="store.selectedKey = idx"
-              :class="[
-                'text-left px-3 py-1 text-[10px] transition-colors truncate',
-                store.selectedKey === idx ? 'bg-purple-900/50 text-purple-300 font-bold' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
-              ]"
-            >
-              {{ name }}
-            </button>
+          <div class="w-48 shrink-0 border-r border-neutral-800 flex flex-col overflow-hidden">
+            <!-- Sub-tabs -->
+            <div class="flex shrink-0 border-b border-neutral-800">
+              <button
+                @click="libSubTab = 'keys'"
+                :class="['flex-1 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-colors',
+                  libSubTab === 'keys' ? 'text-purple-300 bg-purple-900/20' : 'text-neutral-500 hover:text-neutral-300']"
+              >Keys</button>
+              <button
+                @click="libSubTab = 'genre'"
+                :class="['flex-1 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-colors',
+                  libSubTab === 'genre' ? 'text-purple-300 bg-purple-900/20' : 'text-neutral-500 hover:text-neutral-300']"
+              >Genre</button>
+            </div>
+            <!-- Keys (0–12) -->
+            <div v-if="libSubTab === 'keys'" class="flex-1 overflow-y-auto py-1 custom-scrollbar">
+              <button
+                v-for="(name, idx) in KEY_FILE_NAMES.slice(0, 13)"
+                :key="idx"
+                @click="store.selectedKey = idx"
+                :class="[
+                  'text-left px-3 py-1 font-mono text-[11px] transition-colors truncate w-full',
+                  store.selectedKey === idx ? 'bg-purple-900/50 text-purple-300 font-bold' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
+                ]"
+              >{{ name }}</button>
+            </div>
+            <!-- Genre (13–20) -->
+            <div v-else class="flex-1 overflow-y-auto py-1 custom-scrollbar">
+              <button
+                v-for="(name, idx) in KEY_FILE_NAMES.slice(13)"
+                :key="idx + 13"
+                @click="store.selectedKey = idx + 13"
+                :class="[
+                  'text-left px-3 py-1 font-mono text-[11px] transition-colors truncate w-full',
+                  store.selectedKey === idx + 13 ? 'bg-purple-900/50 text-purple-300 font-bold' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
+                ]"
+              >{{ name }}</button>
+            </div>
           </div>
 
           <!-- Progression list -->
@@ -648,13 +995,13 @@ function velBarColor(v) {
               <span class="text-[9px] font-bold uppercase tracking-widest text-neutral-500 flex-1">Progressions</span>
               <div v-if="progLoading" class="w-3 h-3 border border-purple-500 border-t-transparent rounded-full animate-spin" />
             </div>
-            <div class="flex-1 overflow-y-auto">
+            <div class="flex-1 overflow-y-auto custom-scrollbar">
               <button
                 v-for="name in progressionNames"
                 :key="name"
                 @click="selectedProgressionName = name"
                 :class="[
-                  'w-full text-left px-3 py-1 text-[10px] truncate transition-colors',
+                  'w-full text-left font-mono px-3 items-center py-1 text-[11px] truncate transition-colors',
                   selectedProgressionName === name ? 'bg-purple-900/40 text-purple-300 font-bold' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/40'
                 ]"
               >
@@ -667,7 +1014,7 @@ function velBarColor(v) {
           </div>
 
           <!-- Chord list + assign -->
-          <div class="w-56 shrink-0 flex flex-col overflow-hidden">
+          <div class="w-56 shrink-0 flex flex-col overflow-hidden custom-scrollbar">
             <div class="px-2 py-1 border-b border-neutral-800 flex flex-col gap-1">
               <!-- Chord transpose row -->
               <div class="flex items-center gap-1 text-[9px]">
@@ -684,7 +1031,7 @@ function velBarColor(v) {
                 <button
                   v-if="selectedChord"
                   @click="loadSelectedChordToStep"
-                  class="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors whitespace-nowrap"
+                  class="text-[9px] font-mono uppercase px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors whitespace-nowrap"
                   :title="`Assign ${selectedChord.chordName} to step ${store.selectedStepIdx + 1}`"
                 >
                   + Step {{ store.selectedStepIdx + 1 }}
@@ -692,7 +1039,7 @@ function velBarColor(v) {
                 <button
                   v-if="selectedProgressionChords.length"
                   @click="loadProgressionToSteps"
-                  class="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-neutral-700 hover:bg-neutral-600 text-white transition-colors whitespace-nowrap"
+                  class="text-[9px] font-mono uppercase px-2 py-0.5 rounded bg-neutral-700 hover:bg-neutral-600 text-white transition-colors whitespace-nowrap"
                 >
                   Load All
                 </button>
@@ -711,7 +1058,7 @@ function velBarColor(v) {
                     : 'text-neutral-300 hover:text-white hover:bg-purple-900/30'
                 ]"
               >
-                <span class="font-bold truncate">{{ chord.chordName }}</span>
+                <span class="font-mono text-[12px] truncate">{{ chord.chordName }}</span>
                 <span class="text-neutral-600 font-mono text-[8px] shrink-0">{{ chord.notes.length }}n</span>
               </button>
               <div v-if="!selectedProgressionName" class="px-3 py-4 text-[10px] text-neutral-600 text-center">
@@ -819,7 +1166,7 @@ function velBarColor(v) {
     <div
       v-if="!isMinimized"
       class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-30 hover:opacity-80 transition-opacity"
-      @mousedown.stop="onResizeStart"
+      @mousedown.stop="e => onResizeStart(e, 'se')"
       style="background: linear-gradient(135deg, transparent 50%, #7c3aed 50%); border-radius: 0 0 4px 0;"
     />
   </div>

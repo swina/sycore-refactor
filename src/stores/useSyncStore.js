@@ -28,6 +28,12 @@ export const useSyncStore = defineStore('sync', () => {
   const syncAudioCaptureToBackingTrack = ref(localStorage.getItem('S1_SYNC_CAPTURE_TRACK') === 'true')
   const syncAudioCaptureToLooper = ref(localStorage.getItem('S1_SYNC_CAPTURE_LOOPER') === 'true')
 
+  // Chord Prog Sequencer source → targets
+  const syncChordProgToSequencer    = ref(localStorage.getItem('S1_SYNC_CHORDPROG_SEQ')     === 'true')
+  const syncChordProgToBackingTrack = ref(localStorage.getItem('S1_SYNC_CHORDPROG_TRACK')   === 'true')
+  const syncChordProgToLooper       = ref(localStorage.getItem('S1_SYNC_CHORDPROG_LOOPER')  === 'true')
+  const syncChordProgToAudioCapture = ref(localStorage.getItem('S1_SYNC_CHORDPROG_CAPTURE') === 'true')
+
   watch(syncTrack, v => localStorage.setItem('S1_SYNC_TRACK', v ? 'true' : 'false'))
   watch(syncRecordAudioCapture, v => localStorage.setItem('S1_SYNC_REC_CAPTURE', v ? 'true' : 'false'))
   watch(syncBackingTrackToLooper, v => localStorage.setItem('S1_SYNC_TRACK_LOOPER', v ? 'true' : 'false'))
@@ -44,6 +50,10 @@ export const useSyncStore = defineStore('sync', () => {
   watch(syncAudioCaptureToSequencer, v => localStorage.setItem('S1_SYNC_CAPTURE_SEQ', v ? 'true' : 'false'))
   watch(syncAudioCaptureToBackingTrack, v => localStorage.setItem('S1_SYNC_CAPTURE_TRACK', v ? 'true' : 'false'))
   watch(syncAudioCaptureToLooper, v => localStorage.setItem('S1_SYNC_CAPTURE_LOOPER', v ? 'true' : 'false'))
+  watch(syncChordProgToSequencer,    v => localStorage.setItem('S1_SYNC_CHORDPROG_SEQ',     v ? 'true' : 'false'))
+  watch(syncChordProgToBackingTrack, v => localStorage.setItem('S1_SYNC_CHORDPROG_TRACK',   v ? 'true' : 'false'))
+  watch(syncChordProgToLooper,       v => localStorage.setItem('S1_SYNC_CHORDPROG_LOOPER',  v ? 'true' : 'false'))
+  watch(syncChordProgToAudioCapture, v => localStorage.setItem('S1_SYNC_CHORDPROG_CAPTURE', v ? 'true' : 'false'))
 
   return {
     syncTrack, syncRecordAudioCapture,
@@ -51,5 +61,6 @@ export const useSyncStore = defineStore('sync', () => {
     syncBackingTrackToLooper, syncSequencerToLooper,
     syncLooperToMidi, syncLooperToSequencer, syncLooperToBackingTrack, syncLooperToAudioCapture,
     syncAudioCaptureToMidi, syncAudioCaptureToSequencer, syncAudioCaptureToBackingTrack, syncAudioCaptureToLooper,
+    syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
   }
 })

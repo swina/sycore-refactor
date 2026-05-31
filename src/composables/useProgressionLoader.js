@@ -6,6 +6,8 @@ export const KEY_FILE_NAMES = [
   'Gb Major / Eb min', 'G Major / E min', 'Ab Major / F min',
   'A Major / F# min', 'Bb Major / G min', 'B Major / G# min',
   'Modal Chords',
+  '· Blues', '· Jazz', '· Pop', '· Rock',
+  '· R&B / Soul', '· Latin', '· EDM', '· Funk',
 ]
 
 const KEY_FILE_MAP = [
@@ -21,6 +23,15 @@ const KEY_FILE_MAP = [
   '10-AMajor-F#minor.json',
   '11-BbMajor-Gminor.json',
   '12-BMajor-G#minor.json',
+  null,
+  'Genre-Blues.json',
+  'Genre-Jazz.json',
+  'Genre-Pop.json',
+  'Genre-Rock.json',
+  'Genre-RnB.json',
+  'Genre-Latin.json',
+  'Genre-EDM.json',
+  'Genre-Funk.json',
 ]
 
 // Vite glob import for all progression JSON files
