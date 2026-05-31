@@ -241,10 +241,10 @@ const lastSent    = ref(null)
 watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null })
 
 // ── pcChannels persistence helper ──────────────────────────────
-function recordChannelState(ch, program, bank, soundName) {
+function recordChannelState(ch, program, bank, soundName, category) {
   const reg = selectedReg.value
   if (!reg) return
-  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName } }
+  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, category: category ?? '' } }
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannels', updated)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', program)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcBank', bank)
@@ -286,7 +286,7 @@ function sendCatalogSound(sound) {
   port.send([0xC0 | ch, progNum])
 
   lastSent.value = sound
-  recordChannelState(ch, progNum, selectedBank.value, sound.name)
+  recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'])
 
   const msg = `[Device PC] → ${selectedDeviceName.value} ch${ch + 1}: MSB=${msb} LSB=${lsb} PC=${progNum} | ${sound.name}`
   if (window.SY_LOG) window.SY_LOG(msg); else console.log(msg)
@@ -863,6 +863,7 @@ function deleteSet(id) {
                       ]">CH {{ entry.ch + 1 }}</span>
                       <span class="text-[10px] font-bold text-white truncate flex-1">{{ entry.soundName }}</span>
                       <div class="flex items-center gap-2 shrink-0">
+                        <span v-if="entry.category" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400/80 border border-violet-500/20">{{ entry.category }}</span>
                         <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
                         <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ entry.program }}</span>
                       </div>
@@ -875,6 +876,7 @@ function deleteSet(id) {
                     </span>
                     <span class="text-[10px] font-bold text-white truncate flex-1">{{ currentPcState[0]?.soundName }}</span>
                     <div class="flex items-center gap-2 shrink-0">
+                      <span v-if="currentPcState[0]?.category" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400/80 border border-violet-500/20">{{ currentPcState[0].category }}</span>
                       <span v-if="currentPcState[0]?.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ currentPcState[0].bank }}</span>
                       <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ currentPcState[0]?.program }}</span>
                     </div>
