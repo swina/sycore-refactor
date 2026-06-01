@@ -42,7 +42,7 @@ import LiveSet from '@/components/LiveSet.vue'
 import MidiCapture from '@/components/MidiCapture.vue'
 import AudioCapture from '@/components/AudioCapture.vue'
 import AudioVisualizer from '@/components/AudioVisualizer.vue'
-import StepSequencer from '@/components/StepSequencer.vue'
+import StepSequencerModal from '@/components/StepSequencerModal.vue'
 import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
@@ -486,42 +486,41 @@ onMounted(() => {
 
       <!-- Step Sequencer -->
       <div :style="focusStyle('sequencer')">
-      <StepSequencer
-        v-show="uiStore.isSequencerOpen && !uiStore.isSoundEngineOpen"
-        :isOpen="uiStore.isSequencerOpen && !uiStore.isSoundEngineOpen"
-        :bpm="midiStore.currentBpm || 120"
-        :channel="midiStore.midiChannel"
-        :currentSoundName="presetStore.currentName || ''"
-        :currentCategory="presetStore.currentCategory || 'pad'"
-        :polyModeString="'poly'"
-        :isKeyboardOpen="uiStore.isKeyboardOpen"
-        :globalTranspose="globalTranspose"
-        :seqStepsLimit="64"
-        :canUseSeqGen="authStore.profile?.features?.canUseSeqGen ?? true"
-        :canUseSeqParam2="true"
-        :canUseSeqGlobalTranspose="authStore.profile?.features?.canUseSeqGlobalTranspose ?? true"
-        :canUseSeqSyncTrack="authStore.profile?.features?.canUseSeqSyncTrack ?? false"
-        :midiMappings="mappingStore.appMidiMappings"
-        :initialConfig="uiStore.seqActiveSlot === 2 ? uiStore.seqCurrentConfig2 : uiStore.seqCurrentConfig"
-        :currentPresetCCValues="presetStore.lastPreset?.data || {}"
-        :activeSlot="uiStore.seqActiveSlot"
-        @close="uiStore.isSequencerOpen = false"
-        @bpmChange="bpm => { arpStore.arpBpm = bpm; sessionBpmOverride = true }"
-        @transposeChange="handleStepSequencerTranspose"
-        @configChange="config => {
-          if (uiStore.seqActiveSlot === 2) {
-            uiStore.seqCurrentConfig2 = config
-          } else {
-            uiStore.seqCurrentConfig = config
-          }
-        }"
-        @savePattern="handleStepSequencerSave"
-        @openKeyboard="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
-        @prevSlot="presetStore.navigateHistory('prev')"
-        @nextSlot="presetStore.navigateHistory('next')"
-        @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
-        @stop="() => {}"
-      />
+        <StepSequencerModal
+          :isOpen="uiStore.isSequencerOpen && !uiStore.isSoundEngineOpen"
+          :bpm="midiStore.currentBpm || 120"
+          :channel="midiStore.midiChannel"
+          :currentSoundName="presetStore.currentName || ''"
+          :currentCategory="presetStore.currentCategory || 'pad'"
+          :polyModeString="'poly'"
+          :isKeyboardOpen="uiStore.isKeyboardOpen"
+          :globalTranspose="globalTranspose"
+          :seqStepsLimit="64"
+          :canUseSeqGen="authStore.profile?.features?.canUseSeqGen ?? true"
+          :canUseSeqParam2="true"
+          :canUseSeqGlobalTranspose="authStore.profile?.features?.canUseSeqGlobalTranspose ?? true"
+          :canUseSeqSyncTrack="authStore.profile?.features?.canUseSeqSyncTrack ?? false"
+          :midiMappings="mappingStore.appMidiMappings"
+          :initialConfig="uiStore.seqActiveSlot === 2 ? uiStore.seqCurrentConfig2 : uiStore.seqCurrentConfig"
+          :currentPresetCCValues="presetStore.lastPreset?.data || {}"
+          :activeSlot="uiStore.seqActiveSlot"
+          @close="uiStore.isSequencerOpen = false"
+          @bpmChange="bpm => { arpStore.arpBpm = bpm; sessionBpmOverride = true }"
+          @transposeChange="handleStepSequencerTranspose"
+          @configChange="config => {
+            if (uiStore.seqActiveSlot === 2) {
+              uiStore.seqCurrentConfig2 = config
+            } else {
+              uiStore.seqCurrentConfig = config
+            }
+          }"
+          @savePattern="handleStepSequencerSave"
+          @openKeyboard="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
+          @prevSlot="presetStore.navigateHistory('prev')"
+          @nextSlot="presetStore.navigateHistory('next')"
+          @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
+          @stop="() => {}"
+        />
       </div>
 
       <!-- Chord Progression Sequencer -->

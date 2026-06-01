@@ -1571,10 +1571,10 @@ function handleClear() {
   <div v-if="isOpen" :class="[
     embedded
       ? 'absolute inset-0 z-[50]'
-      : 'fixed inset-x-0 top-0 bottom-10 z-[600]',
+      : 'fixed inset-x-0 top-0 bottom-14 rounded-lg z-[600]',
     'flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-amber overflow-hidden'
   ]">
-    <div class="w-full max-w-[1024px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
+    <div class="w-full max-w-[970px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
       
       <!-- ── HEADER: Compact & Responsive ── -->
       <div class="shrink-0 px-4 py-2 border-b border-neutral-800 bg-black/40 flex flex-col sm:flex-row items-center gap-3 justify-between">
@@ -1701,12 +1701,12 @@ function handleClear() {
           </div>
         </div>
 
-        <div class="w-px h-6 bg-neutral-800 mx-2" />
+        <!-- <div class="w-px h-6 bg-neutral-800 mx-2" /> -->
 
         
 
         <button @click="generateSequence" 
-          class="ml-auto flex items-center gap-2 px-1 py-1.5 bg-synth-amber text-black rounded-lg hover:bg-white transition-all font-black text-[9px] uppercase shadow-[0_0_15px_rgba(0,255,166,0.3)]">
+          class="ml-auto flex items-center gap-1 px-1 py-1.5 bg-synth-amber text-black rounded-lg hover:bg-white transition-all font-black text-[9px] uppercase shadow-[0_0_15px_rgba(0,255,166,0.3)]">
           <Zap class="w-3.5 h-3.5" />
           Generate
         </button>
