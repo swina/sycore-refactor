@@ -125,10 +125,10 @@ function handleBpmChange(e) {
       <button
       @click="router.push('/')"
       title="Home"
-      class="-ml-1 w-6 h-6 text-neutral-400 hover:text-synth-neon flex items-center justify-center transition-all active:scale-95 shadow-lg"
+      class="-ml-1 w-10 h-10 text-neutral-400 hover:bg-synth-cyan hover:text-black flex items-center justify-center transition-all active:scale-95 shadow-lg"
     >
-      <Home class="w-5 h-5" />
-    </button>
+        <Home class="w-5 h-5" />
+      </button>
 
       <!-- Left: Backing Track transport -->
       <div v-if="authStore.user" class="flex-none flex items-center gap-2 bg-neutral-800/40 p-1">

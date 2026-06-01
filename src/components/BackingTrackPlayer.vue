@@ -1,12 +1,10 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
-  Play, Pause, Volume2, Upload, Music, X, ListMusic,
-  Plus, Trash2, Edit2, Repeat, ListPlus, ChevronUp, ChevronDown,
-  Save, FolderOpen, GripVertical, SkipBack, SkipForward, Link,
-  Minimize2, Maximize2
+  Play, Pause, Volume2, Upload, Music, X, Minus,
+  Plus, Trash2, Edit2, Repeat, ListPlus,
+  Save, SkipBack, SkipForward, Link
 } from 'lucide-vue-next'
-import { useDraggable } from '@/composables/useDraggable'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import {
   collection, onSnapshot, query, orderBy, addDoc,
@@ -28,7 +26,7 @@ const syncStore = useSyncStore()
 
 
 const props = defineProps({})
-const emit = defineEmits(['srcChange'])
+const emit = defineEmits(['srcChange', 'close'])
 
 const isAdmin = computed(() => authStore.isAdmin)
 
@@ -79,19 +77,9 @@ const syncRecordAudioCapture = computed({
   set: (v) => { syncStore.syncRecordAudioCapture = v },
 })
 
-const isMinimized = ref(localStorage.getItem('S1_BT_MINIMIZED') === 'true')
-watch(isMinimized, v => localStorage.setItem('S1_BT_MINIMIZED', v ? 'true' : 'false'))
-const isDialOpen = ref(false)
-
-
-const { x: barX, y: barY, startDrag: startBarDrag } = useDraggable(
-  Math.max(8, (window.innerWidth  - 600) / 2),
-  Math.max(8,  window.innerHeight - 80),
-  'S1_BT_BAR_POS'
-)
-
-const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize } = useDraggableResizable({
+const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize, isMinimized, toggleMinimize } = useDraggableResizable({
   storageKey: 'S1_BT_PANEL_DR',
+  minimizeLabel: 'Backing Track',
   initialWidth: 904,
   initialHeight: Math.min(500, window.innerHeight - 60),
   minWidth: 904,
@@ -847,222 +835,42 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative">
-    <!-- ── Floating Control Bar ── -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="authStore.user" class="contents">
-          
-          <!-- 1. Controls Bar & Info -->
-          <div 
-            v-show="!isMinimized"
-            class="fixed z-[700] min-w-[920px] flex flex-col items-center gap-1 pointer-events-none"
-            :style="{ left: barX + 'px', top: barY + 'px' }"
-          >
-
-          
-          <!-- Main Controls Bar -->
-          <div class="pointer-events-auto flex items-center gap-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border-t-white/20">
-            
-            <!-- Drag Handle -->
-            <div 
-              @mousedown="startBarDrag"
-              class="cursor-grab active:cursor-grabbing p-1 text-white/20 hover:text-white/40 transition-colors"
-            >
-              <GripVertical class="w-3.5 h-3.5" />
-            </div>
-
-            <button
-              @click="isOpen = !isOpen"
-
-              :class="['flex items-center justify-center gap-1.5 transition-all active:scale-95', isOpen || isPlaying ? 'text-synth-neon' : 'text-neutral-400 hover:text-white']"
-              title="Library & Playlist"
-            >
-              <Music :class="['w-4 h-4', isPlaying ? 'animate-pulse' : '']" />
-              <span v-if="isPlaylistMode" class="text-[9px] font-black font-mono bg-synth-neon/20 px-1.5 rounded">{{ playlistIdx + 1 }}/{{ playlist.length }}</span>
-            </button>
-
-            <div class="w-px h-4 bg-white/10 mx-1" />
-
-            <template v-if="src">
-              <button v-if="isPlaylistMode" @click="playlistPrev" title="Previous track"
-                class="text-neutral-500 hover:text-white transition-colors">
-                <SkipBack class="w-4 h-4" />
-              </button>
-
-              <button @click="togglePlay" class="w-8 h-8 flex items-center justify-center rounded-full bg-synth-neon/10 text-synth-neon hover:bg-synth-neon hover:text-black transition-all active:scale-90 shadow-lg shadow-synth-neon/20">
-                <Pause v-if="isPlaying" class="w-4 h-4 fill-current" />
-                <Play v-else class="w-4 h-4 fill-current ml-0.5" />
-              </button>
-
-              <button v-if="isPlaylistMode" @click="playlistNext" title="Next track (crossfade)"
-                class="text-neutral-500 hover:text-white transition-colors">
-                <SkipForward class="w-4 h-4" />
-              </button>
-              <button v-else
-                @click="isLooping = !isLooping"
-                :class="['transition-colors', isLooping ? 'text-synth-neon' : 'text-neutral-500 hover:text-white']"
-                title="Toggle Loop"
-              >
-                <Repeat class="w-4 h-4" />
-              </button>
-
-              <!-- Track Name -->
-              <div class="hidden sm:flex flex-col ml-1 min-w-0 max-w-[100px]">
-                <span class="text-[7px] font-black uppercase tracking-tighter text-white/30 leading-none mb-0.5">Playing</span>
-                <span class="text-[9px] font-black uppercase tracking-tighter text-synth-neon truncate leading-tight">
-                  {{ playingTrack?.label || fileName || 'Audio Track' }}
-                </span>
-              </div>
-
-
-              <!-- Progress -->
-              <div class="w-16 lg:w-24 flex flex-col items-center ml-2">
-                <div
-                  class="w-full h-1 bg-white/5 rounded-full overflow-hidden cursor-pointer relative group/progress"
-                  @click="seekTo"
-                >
-                  <div
-                    class="h-full bg-synth-neon absolute left-0 top-0 bottom-0 pointer-events-none transition-all duration-75 shadow-[0_0_8px_rgba(0,163,112,0.8)]"
-                    :style="{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }"
-                  />
-                </div>
-              </div>
-
-              <!-- Volume -->
-              <div class="items-center gap-1.5 w-10 lg:w-14 flex ml-2 group/vol">
-                <Volume2 class="w-2.5 h-2.5 text-neutral-500 group-hover/vol:text-white transition-colors" />
-                <input type="range" min="0" max="1" step="0.01" :value="volume"
-                  @input="e => volume = parseFloat(e.target.value)"
-                  class="w-full h-1 bg-white/5 rounded-lg appearance-none cursor-pointer accent-synth-neon" />
-              </div>
-
-              <!-- Time -->
-              <div class="text-[8px] font-mono text-neutral-400 w-[70px] text-right ml-1 shrink-0 flex flex-col leading-tight">
-                <span class="text-white">{{ formatTime(currentTime) }}</span>
-                <span class="text-neutral-600 tracking-tighter">{{ formatTime(duration) }}</span>
-              </div>
-
-              <div class="w-px h-4 bg-white/10 mx-1" />
-
-              <!-- MIDI Sync Toggle -->
-              <button 
-                @click="midiStore.syncMidiTransport = !midiStore.syncMidiTransport"
-                :class="['transition-all p-1.5 rounded-md active:scale-90', midiStore.syncMidiTransport ? 'text-synth-neon bg-synth-neon/10' : 'text-neutral-500 hover:text-white']"
-                title="Sync MIDI START/STOP with Audio Player"
-              >
-                <Link class="w-3.5 h-3.5" />
-              </button>
-
-            </template>
-            <span v-else class="text-[10px] font-black text-neutral-500 tracking-[0.2em] px-4">READY</span>
-
-          </div>
-
-
-
-        </div>
-
-        <!-- Overlay backdrop when dial open -->
-        <div 
-          v-if="isDialOpen" 
-          @click="isDialOpen = false"
-          class="fixed inset-0 bg-black/10 backdrop-blur-[1px] z-[690]"
-        ></div>
-
-        <!-- Speedy-Dial in the bottom-left -->
-        <div class="fixed bottom-10 left-[76px] z-[700] flex flex-col items-center gap-2 pointer-events-auto">
-          <!-- Action buttons -->
-          <TransitionGroup 
-            name="speed-dial"
-            tag="div"
-            class="flex flex-col items-center gap-2 mb-1"
-          >
-            <div v-if="isDialOpen" class="flex flex-col items-center gap-2">
-              <!-- Minimize / Maximize -->
-              <button
-                @click="isMinimized = !isMinimized; isDialOpen = false"
-                class="w-10 h-10 rounded-full border border-white/10 bg-black/80 backdrop-blur-md flex items-center justify-center text-synth-neon hover:text-white hover:border-synth-neon/50 shadow-lg active:scale-95 transition-all duration-300"
-                :title="isMinimized ? 'Visualizza controlli player' : 'Minimizza controlli player'"
-              >
-                <Maximize2 v-if="isMinimized" class="w-4 h-4" />
-                <Minimize2 v-else class="w-4 h-4" />
-              </button>
-
-              <!-- Play / Pause -->
-              <button
-                v-if="src"
-                @click="togglePlay"
-                class="w-10 h-10 rounded-full border border-white/10 bg-black/80 backdrop-blur-md flex items-center justify-center text-synth-neon hover:text-white hover:border-synth-neon/50 shadow-lg active:scale-95 transition-all duration-300"
-                :title="isPlaying ? 'Pausa' : 'Riproduci'"
-              >
-                <Pause v-if="isPlaying" class="w-4 h-4 fill-current" />
-                <Play v-else class="w-4 h-4 fill-current ml-0.5" />
-              </button>
-
-              <!-- Library / Playlist Panel -->
-              <button
-                @click="isOpen = !isOpen; isDialOpen = false"
-                class="w-10 h-10 rounded-full border border-white/10 bg-black/80 backdrop-blur-md flex items-center justify-center text-synth-neon hover:text-white hover:border-synth-neon/50 shadow-lg active:scale-95 transition-all duration-300"
-                title="Sorgente Traccia"
-              >
-                <Music class="w-4 h-4" />
-              </button>
-            </div>
-          </TransitionGroup>
-
-          <!-- Main Dial Toggle Button -->
-          <button
-            @click="isDialOpen = !isDialOpen"
-            :class="[
-              'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl border-2 z-10 active:scale-95',
-              isDialOpen 
-                ? 'bg-white text-black border-white' 
-                : 'bg-neutral-900 text-synth-neon border-synth-neon/30 hover:border-synth-neon hover:scale-105'
-            ]"
-            :title="isDialOpen ? 'Chiudi controlli rapidi' : 'Controlli Rapidi Player'"
-          >
-            <X v-if="isDialOpen" class="w-5 h-5" />
-            <Music v-else :class="['w-5 h-5', isPlaying && !isMinimized ? 'animate-pulse' : '']" />
-          </button>
-          
-          <!-- Dial Indicator (Small neon dot if minimized) -->
-          <div 
-            v-if="isMinimized && !isDialOpen" 
-            class="absolute -top-1 -right-1 w-3 h-3 bg-synth-neon rounded-full border-2 border-neutral-950 animate-ping"
-          />
-          <div 
-            v-if="isMinimized && !isDialOpen" 
-            class="absolute -top-1 -right-1 w-3 h-3 bg-synth-neon rounded-full border-2 border-neutral-950"
-          />
-        </div>
-
-      </div>
-
-      </Transition>
-    </Teleport>
-
-    <!-- ── Settings panel (teleported to avoid overflow-hidden clipping) ── -->
+  <!-- ── Panel (teleported to avoid overflow-hidden clipping) ── -->
     <Teleport to="body">
       <Transition name="panel-up">
         <div
           v-if="isOpen"
           :style="panelDRStyle"
-          class="flex flex-col bg-black/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-[0_0_50px_rgba(0,163,112,0.15)] p-4 md:p-6 relative overflow-hidden"
+          class="flex flex-col bg-neutral-900 max-h-[94vh] border border-emerald-500/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(0,163,112,0.15)]"
+          v-show="!isMinimized"
         >
           <!-- Header -->
-          <div class="flex items-center mb-4 shrink-0">
-            <!-- Drag handle -->
-            <div class="flex items-center gap-2 flex-1 min-w-0 cursor-grab active:cursor-grabbing select-none"
-                 @mousedown="startPanelDrag">
-              <GripVertical class="w-3 h-3 text-neutral-600 shrink-0" />
-              <Music class="w-5 h-5 text-synth-neon shrink-0" />
-              <h3 class="text-xs font-black uppercase tracking-widest text-neutral-400 truncate">Track Source</h3>
+          <div
+            class="px-4 py-2 border-b border-neutral-800 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none"
+            @mousedown="startPanelDrag"
+          >
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Music class="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">BACKING TRACK</h2>
+                <p class="text-[9px] font-mono text-emerald-500/60 uppercase tracking-widest">Audio Library & Playlist Player</p>
+              </div>
             </div>
-            <button @click="isOpen = false" class="ml-3 text-neutral-600 hover:text-white transition-colors shrink-0">
-              <X class="w-7 h-7" />
-            </button>
+            <div class="flex items-center gap-1">
+              <button @click="toggleMinimize" title="Minimize"
+                class="p-2 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
+                <Minus class="w-4 h-4" />
+              </button>
+              <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
+                <X class="w-5 h-5" />
+              </button>
+            </div>
           </div>
+
+          <!-- Body -->
+          <div class="flex flex-col flex-1 min-h-0 p-4 md:p-6 overflow-hidden">
 
           <!-- Tabs -->
           <div class="flex bg-neutral-900 rounded-lg p-1 mb-3 shrink-0 gap-0.5">
@@ -1293,6 +1101,8 @@ onUnmounted(() => {
 
           </div>
 
+          </div><!-- /Body -->
+
           <!-- Resize handle -->
           <div
             @mousedown="e => startPanelResize(e, 'se')"
@@ -1328,7 +1138,6 @@ onUnmounted(() => {
       @loadedmetadata="e => onLoadedMeta('b', e.target.duration)"
       class="hidden"
     />
-  </div>
 </template>
 
 
@@ -1342,22 +1151,4 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-/* Speed Dial Transition */
-.speed-dial-enter-active,
-.speed-dial-leave-active {
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-}
-
-.speed-dial-enter-from,
-.speed-dial-leave-to {
-  opacity: 0;
-  transform: translateY(20px) scale(0.5);
-}
-
-button:not(.bg-white) {
-  box-shadow: 0 0 15px rgba(0, 255, 204, 0.1);
-}
-button:not(.bg-white):hover {
-  box-shadow: 0 0 25px rgba(0, 255, 204, 0.3);
-}
 </style>

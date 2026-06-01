@@ -6,7 +6,7 @@ defineProps({ isOpen: Boolean })
 </script>
 
 <template>
-  <div class="fixed rounded-lg py-4 inset-0 max-w-[980px] ml-16 bg-black/50 backdrop-blur-sm z-40" @click="$emit('close')">
+  <div v-if="isOpen" class="fixed rounded-lg py-4 inset-0 max-w-[980px] ml-16 bg-black/50 backdrop-blur-sm z-40" @click="$emit('close')">
   <StepSequencer
     v-if="isOpen"
     v-bind="$attrs"

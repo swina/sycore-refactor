@@ -114,6 +114,7 @@ export const useUiStore = defineStore('ui', () => {
     guides:              () => isGuidesOpen.value,
     unifiedMidi:         () => showUnifiedMidiManager.value,
     chordProg:           () => isChordProgOpen.value,
+    tracksPlayer:        () => isTracksPlayerOpen.value,
   }
 
   const openModalKeys = computed(() =>

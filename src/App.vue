@@ -32,6 +32,6 @@ onUnmounted(() => {
     </p>
   </div>
   <RouterView />
-  <TracksPlayer />
+  <TracksPlayer @close="uiStore.isTracksPlayerOpen = false" />
   <GuidesPanel v-if="uiStore.isGuidesOpen" @close="uiStore.isGuidesOpen = false" />
 </template>

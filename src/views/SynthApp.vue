@@ -47,7 +47,6 @@ import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
 import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
-import BackingTrackPlayer from '@/components/BackingTrackPlayer.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import Welcome from '@/components/Welcome.vue'
 import Tooltip from '@/components/Tooltip.vue'
@@ -601,7 +600,6 @@ onMounted(() => {
     <AppFooter @bpm-override="sessionBpmOverride = true" />
     <!-- <SideBar /> -->
     <MainMenuDial />
-    <!-- <BackingTrackPlayer /> -->
   </div>
 </template>
 

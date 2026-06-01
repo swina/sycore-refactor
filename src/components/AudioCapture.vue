@@ -1529,7 +1529,7 @@ onUnmounted(() => {
   <Transition name="capture">
     <div
       v-show="uiStore.isAudioCaptureOpen"
-      class="fixed z-[1000] min-w-[920px] w-[980px] min-h-[620px] h-[720px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
+      class="fixed z-[1000] max-w-[950px] w-[950px] min-h-[620px] h-[720px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
       :style="{ left: x + 'px', top: y + 'px' }"
     >
       <!-- Header -->
