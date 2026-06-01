@@ -75,6 +75,7 @@ const CATEGORIES = [
       { id: 'live-pad',       label: 'Live Performance Pad',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },
       { id: 'live-timeline',  label: 'Live Timeline',         file: 'SYCORE_LIVE_TIMELINE' },
       { id: 'step-sequencer', label: 'Step Sequencer',        file: 'SYCORE_STEP_SEQUENCER' },
+      { id: 'chord-progression-sequencer', label: 'Chord Progression Sequencer', file: 'SYCORE_CHORD_PROG_SEQUENCER' },
     ],
   },
 ]
@@ -169,8 +170,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <!-- Content -->
           <div class="flex flex-col flex-1 min-w-0">
             <!-- Content header -->
-            <div class="shrink-0 flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950/60">
-              <span class="text-xs font-black uppercase tracking-widest text-neutral-400">
+            <div class="shrink-0 flex items-center justify-between px-6 py-2 border-b border-neutral-800 bg-neutral-950/60">
+              <span class="text-xs font-black text-synth-neon uppercase tracking-widest text-neutral-400">
                 {{ ALL_ITEMS.find(i => i.id === activeId)?.label ?? '' }}
               </span>
               <button

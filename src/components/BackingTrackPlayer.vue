@@ -1056,11 +1056,11 @@ onUnmounted(() => {
             <div class="flex items-center gap-2 flex-1 min-w-0 cursor-grab active:cursor-grabbing select-none"
                  @mousedown="startPanelDrag">
               <GripVertical class="w-3 h-3 text-neutral-600 shrink-0" />
-              <Music class="w-3 h-3 text-synth-neon shrink-0" />
+              <Music class="w-5 h-5 text-synth-neon shrink-0" />
               <h3 class="text-xs font-black uppercase tracking-widest text-neutral-400 truncate">Track Source</h3>
             </div>
             <button @click="isOpen = false" class="ml-3 text-neutral-600 hover:text-white transition-colors shrink-0">
-              <X class="w-3 h-3" />
+              <X class="w-7 h-7" />
             </button>
           </div>
 
