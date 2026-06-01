@@ -475,7 +475,7 @@ onMounted(() => {
 
       <!-- Audio Capture -->
       <div :style="focusStyle('audioCapture')">
-        <AudioCapture />
+        <AudioCapture @close="uiStore.isAudioCaptureOpen = false" />
       </div>
 
       <!-- Audio Visualizer -->

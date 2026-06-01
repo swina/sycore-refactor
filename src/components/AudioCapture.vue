@@ -1,11 +1,11 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Play, Pause, RotateCcw, FileAudio, ListPlus, GripVertical, Repeat, Zap, Upload, Magnet } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { useDraggable } from '@/composables/useDraggable'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { Mp3Encoder } from '@breezystack/lamejs'
 import { midiService } from '@/core/midi/MidiService'
 import { looperEngine } from '@/lib/looper-engine'
@@ -14,6 +14,7 @@ import { useLooperStore } from '@/stores/useLooperStore'
 const props = defineProps({
   hasBackingTrack: { type: Boolean, default: false },
 })
+const emit = defineEmits(['close'])
 
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
@@ -21,11 +22,15 @@ const mappingStore = useMappingStore()
 const looperStore  = useLooperStore()
 const { openMenu } = useMidiContextMenu()
 
-const { x, y, startDrag } = useDraggable(
-  Math.max(8, (window.innerWidth - 980) / 2),
-  window.innerHeight - 720,
-  'S1_CAPTURE_POS'
-)
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+  storageKey: 'S1_CAPTURE_DR',
+  minimizeLabel: 'Audio Capture',
+  initialWidth: 950,
+  initialHeight: 720,
+  minWidth: 950,
+  minHeight: 620,
+  zIndex: 1000,
+})
 
 // ── Reactive state ────────────────────────────────────────────────────────────
 const devices          = ref([])
@@ -1528,32 +1533,38 @@ onUnmounted(() => {
 <template>
   <Transition name="capture">
     <div
-      v-show="uiStore.isAudioCaptureOpen"
-      class="fixed z-[1000] max-w-[950px] w-[950px] min-h-[620px] h-[720px] bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col resize overflow-hidden"
-      :style="{ left: x + 'px', top: y + 'px' }"
+      v-show="uiStore.isAudioCaptureOpen && !isMinimized"
+      :style="panelStyle"
+      class="bg-neutral-950 border border-cyan-500/30 rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-2 border-b border-neutral-800 shrink-0 bg-gradient-to-r from-cyan-950/40 to-transparent">
-        <div class="flex items-center gap-2">
-          <div @mousedown="startDrag" class="cursor-grab active:cursor-grabbing p-1 -ml-2 text-neutral-600 hover:text-neutral-400">
-            <GripVertical class="w-3.5 h-3.5" />
+      <div
+        class="px-4 py-2 border-b border-neutral-800 flex items-center justify-between bg-gradient-to-r from-cyan-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none"
+        @mousedown="onDragStart"
+      >
+        <div class="flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
+            <Mic :class="['w-5 h-5', isRecording ? 'text-red-400 animate-pulse' : 'text-cyan-400']" />
           </div>
-          <Mic :class="['w-3.5 h-3.5', isRecording ? 'text-red-400' : 'text-synth-neon']" />
-          <span :class="['text-[10px] font-black uppercase tracking-widest', isRecording ? 'text-red-400' : 'text-synth-neon']">
-            Audio Capture
-          </span>
-          <span v-if="isRecording" class="flex items-center gap-1 text-[8px] font-mono px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
-            <span class="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-            REC {{ fmtTime(recSecs) }}
-          </span>
-          <span v-else-if="recordedBlob" class="text-[8px] font-mono text-neutral-500 px-1.5 py-0.5 rounded bg-neutral-800">
-            {{ fmtTime(recSecs) }} captured
-          </span>
-          <span v-else-if="!isMonitoring && !error" class="text-[8px] font-mono text-neutral-600">connecting…</span>
+          <div>
+            <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">AUDIO CAPTURE</h2>
+            <p v-if="isRecording" class="flex items-center gap-1 text-[9px] font-mono text-red-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse inline-block" />
+              REC {{ fmtTime(recSecs) }}
+            </p>
+            <p v-else-if="recordedBlob" class="text-[9px] font-mono text-neutral-500">{{ fmtTime(recSecs) }} captured</p>
+            <p v-else class="text-[9px] font-mono text-cyan-500/60 uppercase tracking-widest">Multi-format recording & monitoring</p>
+          </div>
         </div>
-        <button @click="uiStore.isAudioCaptureOpen = false" class="text-neutral-600 hover:text-white transition-colors">
-          <X class="w-3.5 h-3.5" />
-        </button>
+        <div class="flex items-center gap-1">
+          <button @click="toggleMinimize" title="Minimize"
+            class="p-2 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
+            <Minus class="w-4 h-4" />
+          </button>
+          <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <!-- Input device selector + playlist toggle -->
