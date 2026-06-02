@@ -111,9 +111,6 @@ export function useMidiCCListener() {
     const isMappedToS1 = targets.some(target => isS1Device(target))
 
     if (!isS1 && !isMappedToS1) {
-      if (cc !== undefined) {
-        console.log(`[MIDI Listener] Filtered CC ${cc} from ${deviceName || 'Unknown'} (CH ${chan+1}): Device is not S-1 and not mapped to S-1.`)
-      }
       return
     }
 

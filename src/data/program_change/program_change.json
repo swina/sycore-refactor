@@ -28,7 +28,7 @@
             "lsb": true,
             "category_field": "category",
             "program_field": "program",
-            "program_base": 0,
+            "program_base": -1,
             "offset": false,
             "bank_size": false
         },
@@ -38,7 +38,7 @@
             "lsb": true,
             "category_field": "category",
             "program_field": "program",
-            "program_base": 0,
+            "program_base": -1,
             "offset": false,
             "bank_size": false
         },
@@ -48,7 +48,7 @@
             "lsb": true,
             "category_field": "category",
             "program_field": "program",
-            "program_base": 0,
+            "program_base": -1,
             "offset": false,
             "bank_size": false
         },
@@ -58,7 +58,7 @@
             "lsb": true,
             "category_field": "category",
             "program_field": "program",
-            "program_base": 0,
+            "program_base": -1,
             "offset": false,
             "bank_size": false
         }
