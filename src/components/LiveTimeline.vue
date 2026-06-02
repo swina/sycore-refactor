@@ -374,14 +374,12 @@ function _tick() {
     return
   }
 
-  // Auto-scroll to keep playhead in view
+  // Smooth auto-scroll: keep playhead at ~30% from left
   const el = timelineRef.value
   if (el) {
-    const px     = timelinePos.value * scale.value
-    const margin = 80
-    if (px > el.scrollLeft + el.clientWidth - margin) {
-      el.scrollLeft = px - el.clientWidth * 0.35
-    }
+    const px         = timelinePos.value * scale.value
+    const targetLeft = Math.max(0, px - el.clientWidth * 0.3)
+    el.scrollLeft   += (targetLeft - el.scrollLeft) * 0.1
   }
 
   _checkSegments()
