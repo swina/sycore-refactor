@@ -29,6 +29,38 @@ export const S1_MUSICAL_VARIATIONS = {
         chorusMode: 1, reverb: 90, delayLvl: 20,
         transpose: 64
       }
+    },
+    {
+      name: "Ambient Dreamscape",
+      keywords: "evolving, spacious, atmospheric, ambient",
+      values: {
+        "attack": 75,
+            "decay":100,
+            "sustain":110,
+            "release":110,
+            "cutoff":80,
+            "res":5,
+            "envFilt":30,
+            "lfoFilt":10,
+            "lfoRate":3,
+            "lfoMod":8,
+            "lfoWave":3,
+            "oscSaw":95,
+            "oscSq":40,
+            "oscSub":75,
+            "oscNoise":1,
+            "pwWidth":60,
+            "pwmSrc":30,
+            "chorusMode":2,
+            "reverbType":80,
+            "reverb": 115,
+            "delayLvl":40,
+            "delayTime":75,
+            "lfoSync": 1,
+            "drawMode":0,
+            "polyMode":2,
+            transpose: 64
+        }
     }
   ],
   lead: [

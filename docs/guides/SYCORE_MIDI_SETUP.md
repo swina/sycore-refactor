@@ -6,7 +6,7 @@
 ---
 ## Quick Reference
 
-<img src="../../public/help/guides/sycore-MIDI-Setup-Guide.png"/>
+<img src="/help/guides/sycore-MIDI-Setup-Guide.png"/>
 
 ## Before You Start
 
@@ -61,7 +61,7 @@ All eight tabs are described below in the order you will use them during initial
 
 ## Step 4 — Discover Your Devices (Devices Tab)
 
-<img src="../../public/help/guides/sycore-midi-manager.png"/>
+<img src="/help/guides/sycore-midi-manager.png"/>
 
 Open the **Devices** tab (the first tab, selected by default).
 

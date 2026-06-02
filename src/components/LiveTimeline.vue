@@ -491,6 +491,74 @@ function _fireMarker(m) {
   }
 }
 
+// ─── Selection ─────────────────────────────────────────────────────────────
+const selectedSegIdx   = ref(-1)
+const selectedMarkerId = ref(null)
+
+const selectedSeg    = computed(() => selectedSegIdx.value >= 0 ? segments.value[selectedSegIdx.value] : null)
+const selectedMarker = computed(() => selectedMarkerId.value ? markers.value.find(m => m.id === selectedMarkerId.value) : null)
+
+function clickSeg(idx) {
+  selectedSegIdx.value   = selectedSegIdx.value === idx ? -1 : idx
+  selectedMarkerId.value = null
+}
+
+function clickMarker(id) {
+  selectedMarkerId.value = selectedMarkerId.value === id ? null : id
+  selectedSegIdx.value   = -1
+}
+
+// ─── Time editing helpers ───────────────────────────────────────────────────
+function parseTimeStr(s) {
+  s = String(s).trim()
+  if (s.includes(':')) {
+    const [m, sec] = s.split(':')
+    return Math.max(0, (Number(m) || 0) * 60 + (Number(sec) || 0))
+  }
+  return Math.max(0, Number(s) || 0)
+}
+
+function updateSegStart(val) {
+  const idx = selectedSegIdx.value
+  if (idx < 0) return
+  const t   = parseTimeStr(val)
+  const seg = segments.value[idx]
+  seg.segStart = Math.max(0, Math.min(t, seg.segEnd - 1))
+}
+
+function updateSegEnd(val) {
+  const idx = selectedSegIdx.value
+  if (idx < 0) return
+  const t      = parseTimeStr(val)
+  const seg    = segments.value[idx]
+  const maxDur = playlist.value[seg.trackIdx]?.duration || 3600
+  seg.segEnd   = Math.min(maxDur, Math.max(seg.segStart + 1, t))
+}
+
+function updateMarkerPos(val) {
+  const m = markers.value.find(mk => mk.id === selectedMarkerId.value)
+  if (!m) return
+  m.position = Math.max(0, parseTimeStr(val))
+  markers.value.sort((a, b) => a.position - b.position)
+}
+
+// Editable footer position
+const editingPos = ref(false)
+
+function commitSeek(val) {
+  if (!editingPos.value) return
+  editingPos.value = false
+  const t = parseTimeStr(val)
+  timelinePos.value = Math.max(0, Math.min(t, totalDuration.value || Infinity))
+  if (isPlaying.value) {
+    _posAtStart = timelinePos.value
+    _startedAt  = performance.now()
+    _fired.clear()
+    markers.value.forEach(m  => { if (m.position  < timelinePos.value) _fired.add(m.id) })
+    segBounds.value.forEach((b, i) => { if (b.end <= timelinePos.value) _fired.add(`seg_${i}`) })
+  }
+}
+
 // ─── Seek ──────────────────────────────────────────────────────────────────
 const timelineRef = ref(null)
 
@@ -507,6 +575,40 @@ function onRulerClick(e) {
     markers.value.forEach(m => { if (m.position < t) _fired.add(m.id) })
     segBounds.value.forEach((b, i) => { if (b.end <= t) _fired.add(`seg_${i}`) })
   }
+}
+
+// ─── Playhead drag ─────────────────────────────────────────────────────────
+const isDraggingPlayhead = ref(false)
+
+function _seekTo(t) {
+  timelinePos.value = t
+  if (isPlaying.value) {
+    _posAtStart = t
+    _startedAt  = performance.now()
+    _fired.clear()
+    markers.value.forEach(m => { if (m.position < t) _fired.add(m.id) })
+    segBounds.value.forEach((b, i) => { if (b.end <= t) _fired.add(`seg_${i}`) })
+  }
+}
+
+function onPlayheadMouseDown(e) {
+  e.stopPropagation()
+  isDraggingPlayhead.value = true
+  document.addEventListener('mousemove', _onPlayheadDrag)
+  document.addEventListener('mouseup',   _onPlayheadDragEnd)
+}
+
+function _onPlayheadDrag(e) {
+  if (!timelineRef.value) return
+  const rect = timelineRef.value.getBoundingClientRect()
+  const x    = e.clientX - rect.left + timelineRef.value.scrollLeft
+  _seekTo(Math.max(0, Math.min(x / scale.value, totalDuration.value)))
+}
+
+function _onPlayheadDragEnd() {
+  isDraggingPlayhead.value = false
+  document.removeEventListener('mousemove', _onPlayheadDrag)
+  document.removeEventListener('mouseup',   _onPlayheadDragEnd)
 }
 
 // ─── Segment ops ───────────────────────────────────────────────────────────
@@ -769,6 +871,8 @@ onMounted(() => {
 onUnmounted(() => {
   if (_rafId) cancelAnimationFrame(_rafId)
   _unsubLib?.()
+  document.removeEventListener('mousemove', _onPlayheadDrag)
+  document.removeEventListener('mouseup',   _onPlayheadDragEnd)
 })
 </script>
 
@@ -919,7 +1023,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Timeline canvas -->
-      <div class="flex-1 overflow-hidden relative bg-neutral-950 pl-8">
+      <div class="shrink-0 overflow-hidden relative bg-neutral-950 pl-8" style="height: 158px;">
 
         <!-- Empty state -->
         <div v-if="!segments.length" class="absolute inset-0 flex flex-col items-center justify-center text-neutral-700 gap-2 pointer-events-none">
@@ -951,20 +1055,21 @@ onUnmounted(() => {
             </div>
 
             <!-- Marker label cards (type · name · value) -->
-            <div class="absolute left-0 right-0 pointer-events-none" style="top: 28px; height: 62px;">
+            <div class="absolute left-0 right-0" style="top: 28px; height: 62px;">
               <div
                 v-for="m in markers"
                 :key="m.id + '_card'"
-                class="absolute top-0 flex flex-col items-center"
+                class="absolute top-0 flex flex-col items-center cursor-pointer"
                 :style="{ left: (m.position * scale) + 'px', transform: 'translateX(-50%)' }"
+                @click.stop="clickMarker(m.id)"
               >
                 <!-- type badge + icon -->
                 <div
-                  class="flex items-center gap-0.5 px-1 py-0.5 rounded-sm text-[7px] font-black uppercase tracking-wider leading-none"
+                  class="flex items-center gap-0.5 px-1 py-0.5 rounded-sm text-[7px] font-black uppercase tracking-wider leading-none transition-all"
                   :style="{
-                    background: mColor(m.type) + '22',
+                    background: selectedMarkerId === m.id ? mColor(m.type) + '44' : mColor(m.type) + '22',
                     color:      mColor(m.type),
-                    border:     '1px solid ' + mColor(m.type) + '66'
+                    border:     '1px solid ' + (selectedMarkerId === m.id ? mColor(m.type) + 'cc' : mColor(m.type) + '66')
                   }"
                 >
                   <span>{{ mIcon(m.type) }}</span>
@@ -989,7 +1094,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Segment lane -->
-            <div class="absolute left-0 right-0" style="top: 90px; bottom: 4px;">
+            <div class="absolute left-0 right-0" style="top: 90px; height: 60px;">
               <!-- Subtle grid lines -->
               <div
                 v-for="tick in rulerTicks"
@@ -1002,8 +1107,11 @@ onUnmounted(() => {
               <div
                 v-for="(seg, idx) in segments"
                 :key="seg.id"
-                class="absolute top-1 bottom-1 rounded border-l-[3px] flex items-center overflow-hidden"
-                :class="{ 'ring-1 ring-white/30': activeSegIdx === idx }"
+                class="absolute top-1 bottom-1 rounded border-l-[3px] flex flex-col items-start justify-start overflow-hidden cursor-pointer select-none"
+                :class="[
+                  activeSegIdx === idx ? 'ring-1 ring-white/30' : '',
+                  selectedSegIdx === idx ? 'ring-2 ring-white/60 brightness-125' : ''
+                ]"
                 :style="{
                   background:  segColor(idx).bg,
                   borderColor: segColor(idx).border,
@@ -1011,46 +1119,143 @@ onUnmounted(() => {
                   left:  (segBounds[idx].start * scale) + 'px',
                   width: Math.max(3, segBounds[idx].dur * scale) + 'px',
                 }"
+                @click.stop="clickSeg(idx)"
               >
-                <span class="text-[9px] font-bold uppercase tracking-tight px-1.5 truncate">{{ seg.label }}</span>
-                <!-- track BPM badge -->
-                <span
+                <div class="text-[11px] font-bold uppercase tracking-tight px-1.5 py-1 mt-1 truncate w-full leading-tight">{{ seg.label }}</div>
+                <div
                   v-if="getTrackBpm(seg.trackIdx)"
-                  class="text-[8px] font-black font-mono shrink-0 px-1 py-0.5 rounded-sm ml-1"
-                  :style="{
-                    background: segColor(idx).border + '33',
-                    color:      segColor(idx).border,
-                    border:     '1px solid ' + segColor(idx).border + '66'
-                  }"
-                >{{ getTrackBpm(seg.trackIdx) }} BPM</span>
-                <span
-                  v-if="segBounds[idx].dur * scale > 120"
-                  class="text-[8px] font-mono opacity-40 ml-auto mr-1.5 shrink-0"
-                >{{ formatTime(seg.segStart) }}–{{ formatTime(seg.segEnd) }}</span>
+                  class="text-[10px] font-black font-mono px-1.5 leading-none"
+                  :style="{ color: segColor(idx).border }"
+                >{{ getTrackBpm(seg.trackIdx) }} BPM</div>
+                <div class="text-[9px] font-mono px-1.5 py-1 leading-none opacity-50">
+                  {{ formatTime(seg.segStart) }}–{{ formatTime(seg.segEnd) }}
+                  <span v-if="playlist[seg.trackIdx]?.duration" class="ml-1 opacity-60">[{{ formatTime(playlist[seg.trackIdx].duration) }}]</span>
+                </div>
               </div>
 
               <!-- Marker vertical lines -->
               <div
                 v-for="m in markers"
                 :key="m.id + '_line'"
-                class="absolute top-0 bottom-0 w-px pointer-events-none"
-                :style="{ left: (m.position * scale) + 'px', background: mColor(m.type) + 'bb' }"
+                class="absolute top-0 bottom-0 w-px cursor-pointer"
+                :style="{
+                  left: (m.position * scale) + 'px',
+                  background: selectedMarkerId === m.id ? mColor(m.type) : mColor(m.type) + 'bb'
+                }"
+                @click.stop="clickMarker(m.id)"
               />
             </div>
 
             <!-- Playhead -->
             <div
-              class="absolute top-0 bottom-0 w-0.5 pointer-events-none z-20"
+              class="absolute top-0 bottom-0 w-0.5 z-20"
+              :class="isDraggingPlayhead ? 'cursor-grabbing' : 'cursor-ew-resize'"
               :style="{
                 left:       (timelinePos * scale) + 'px',
                 background: 'rgba(255,255,255,0.85)',
                 boxShadow:  '0 0 8px rgba(255,255,255,0.5)',
               }"
+              @mousedown.stop="onPlayheadMouseDown"
             >
-              <div class="w-2.5 h-2.5 bg-white rounded-full -translate-x-[4px] mt-0.5" />
+              <div
+                class="w-3.5 h-3.5 bg-white rounded-full -translate-x-[6px] mt-0.5 shadow-[0_0_6px_rgba(255,255,255,0.7)]"
+                :class="isDraggingPlayhead ? 'scale-110' : 'hover:scale-125'"
+                style="transition: transform 0.1s"
+              />
             </div>
 
           </div>
+        </div>
+      </div>
+
+      <!-- Info panel — shows selected segment or marker details -->
+      <div class="flex-1 min-h-0 overflow-hidden border-t text-[12px] border-neutral-900/60 bg-neutral-950/60 px-4 py-2">
+        <!-- Nothing selected -->
+        <div v-if="!selectedSeg && !selectedMarker" class="h-full flex items-center justify-center">
+          <span class="text-[9px] font-mono text-neutral-700 uppercase tracking-widest">Click a segment or marker for details</span>
+        </div>
+
+        <!-- Selected segment info -->
+        <div v-else-if="selectedSeg" class="flex items-start gap-6 h-full">
+          <!-- Color bar -->
+          <div class="w-1 self-stretch rounded-full shrink-0" :style="{ background: segColor(selectedSegIdx).border }" />
+          <!-- Info rows -->
+          <div class="flex flex-col justify-center gap-0.5 min-w-0">
+            <div class="text-[14px] font-black uppercase tracking-wide text-white truncate">
+              {{ selectedSeg.label }}
+              <span v-if="playlist[selectedSeg.trackIdx]?.duration" class="ml-1 font-mono text-xs opacity-60">[{{ formatTime(playlist[selectedSeg.trackIdx].duration) }}]</span>
+            </div>
+            <div class="text-[12px] font-mono text-neutral-500">
+              Track {{ selectedSeg.trackIdx + 1 }}
+              <span
+                v-if="getTrackBpm(selectedSeg.trackIdx)"
+                class="ml-2 font-bold"
+                :style="{ color: segColor(selectedSegIdx).border }"
+              >{{ getTrackBpm(selectedSeg.trackIdx) }} BPM</span>
+            </div>
+            <div class="flex items-center gap-1 text-[16px] font-mono text-neutral-500">
+              <input
+                :value="formatTime(selectedSeg.segStart)"
+                @change="updateSegStart($event.target.value)"
+                @keyup.enter="$event.target.blur()"
+                class="w-14 bg-transparent border-b border-neutral-700 text-neutral-300 outline-none text-center hover:border-neutral-500 focus:border-synth-neon transition-colors cursor-text"
+                title="Segment in-point (m:ss or seconds)"
+              />
+              <span class="text-neutral-700">→</span>
+              <input
+                :value="formatTime(selectedSeg.segEnd)"
+                @change="updateSegEnd($event.target.value)"
+                @keyup.enter="$event.target.blur()"
+                class="w-14 bg-transparent border-b border-neutral-700 text-neutral-300 outline-none text-center hover:border-neutral-500 focus:border-synth-neon transition-colors cursor-text"
+                title="Segment out-point (m:ss or seconds)"
+              />
+              <span class="ml-1 text-neutral-700">({{ formatTime(selectedSeg.segEnd - selectedSeg.segStart) }})</span>
+              <span class="ml-2 text-neutral-600">@ {{ formatTime(segBounds[selectedSegIdx]?.start) }}</span>
+            </div>
+          </div>
+          <button @click="selectedSegIdx = -1" class="ml-auto shrink-0 text-neutral-700 hover:text-neutral-400 transition-colors p-1">
+            <X class="w-3 h-3" />
+          </button>
+        </div>
+
+        <!-- Selected marker info -->
+        <div v-else-if="selectedMarker" class="flex items-start gap-6 h-full">
+          <!-- Icon badge -->
+          <div
+            class="w-7 h-7 rounded flex items-center justify-center shrink-0 text-[10px] font-black self-center"
+            :style="{
+              background: mColor(selectedMarker.type) + '22',
+              color:      mColor(selectedMarker.type),
+              border:     '1px solid ' + mColor(selectedMarker.type) + '66'
+            }"
+          >{{ mIcon(selectedMarker.type) }}</div>
+          <!-- Info rows -->
+          <div class="flex flex-col justify-center gap-0.5 min-w-0">
+            <div class="text-[14px] font-black uppercase tracking-wide" :style="{ color: mColor(selectedMarker.type) }">
+              {{ mTypeLabel(selectedMarker.type) }}
+            </div>
+            <div v-if="selectedMarker.label" class="text-[12px] font-mono text-neutral-400">{{ selectedMarker.label }}</div>
+            <div class="flex items-center gap-2 text-[14px] font-mono text-neutral-500">
+              <span class="text-neutral-600">@</span>
+              <input
+                :value="formatTime(selectedMarker.position)"
+                @change="updateMarkerPos($event.target.value)"
+                @keyup.enter="$event.target.blur()"
+                class="w-14 bg-transparent border-b border-neutral-700 text-neutral-300 outline-none text-center hover:border-neutral-500 transition-colors cursor-text"
+                :style="{ borderColor: 'inherit' }"
+                @focus="$event.target.style.borderColor = mColor(selectedMarker.type)"
+                @blur="$event.target.style.borderColor = ''"
+                title="Marker position (m:ss or seconds)"
+              />
+              <span v-if="mDisplayValue(selectedMarker)" :style="{ color: mColor(selectedMarker.type) }">{{ mDisplayValue(selectedMarker) }}</span>
+              <template v-if="selectedMarker.type === 'program-change'">
+                <span v-if="selectedMarker.device" class="text-neutral-600">→ {{ selectedMarker.device }} CH{{ Number(selectedMarker.channel ?? 0) + 1 }}</span>
+              </template>
+            </div>
+          </div>
+          <button @click="selectedMarkerId = null" class="ml-auto shrink-0 text-neutral-700 hover:text-neutral-400 transition-colors p-1">
+            <X class="w-3 h-3" />
+          </button>
         </div>
       </div>
 
@@ -1106,9 +1311,24 @@ onUnmounted(() => {
         <!-- Position -->
         <div class="flex flex-col items-end">
           <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Position</span>
-          <span class="text-xs font-black text-neutral-200 font-mono">
-            {{ formatTime(timelinePos) }} / {{ formatTime(totalDuration) }}
-          </span>
+          <div class="flex items-center gap-1">
+            <input
+              v-if="editingPos"
+              :value="formatTime(timelinePos)"
+              @keyup.enter="commitSeek($event.target.value)"
+              @blur="commitSeek($event.target.value)"
+              class="w-16 bg-transparent border-b border-synth-neon text-xs font-black text-synth-neon font-mono outline-none text-center"
+              autofocus
+              title="Seek to position (m:ss or seconds)"
+            />
+            <span
+              v-else
+              class="text-xs font-black text-neutral-200 font-mono cursor-pointer hover:text-synth-neon transition-colors"
+              title="Click to seek"
+              @click="editingPos = true"
+            >{{ formatTime(timelinePos) }}</span>
+            <span class="text-[12px] font-mono text-neutral-600">/ {{ formatTime(totalDuration) }}</span>
+          </div>
         </div>
 
         <!-- <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors ml-2">
