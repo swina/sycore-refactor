@@ -22,7 +22,7 @@ const mappingStore = useMappingStore()
 const looperStore  = useLooperStore()
 const { openMenu } = useMidiContextMenu()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'S1_CAPTURE_DR',
   minimizeLabel: 'Audio Capture',
   initialWidth: 950,
@@ -31,6 +31,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
   minHeight: 620,
   zIndex: 1000,
 })
+watch(() => uiStore.isAudioCaptureOpen, (v) => { if (v) bringToFront() })
 
 // ── Reactive state ────────────────────────────────────────────────────────────
 const devices          = ref([])

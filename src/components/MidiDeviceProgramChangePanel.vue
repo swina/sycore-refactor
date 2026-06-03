@@ -4,6 +4,7 @@ import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Za
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { MidiSource, midiService } from '@/core/midi/MidiService'
@@ -11,7 +12,7 @@ import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'SYCORE_POS_DEVICE_PC',
   minimizeLabel: 'Device PC',
   initialWidth: 900,
@@ -20,6 +21,8 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
 })
 
 const midiStore      = useMidiStore()
+const uiStore        = useUiStore()
+watch(() => uiStore.isDeviceProgramChangePanelOpen, (v) => { if (v) bringToFront() })
 const presetStore    = usePresetStore()
 const userBanksStore = useUserBanksStore()
 

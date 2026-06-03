@@ -153,8 +153,8 @@ Each LFO has a two-part pill button:
 ### History Navigation (◁ ▷)
 
 Two circular arrow buttons navigate through the preset history list:
-- **◁ Previous:** Go to an older preset in the filtered history
-- **▷ Next:** Go to a newer preset in the filtered history
+- :ChevronLeft:  Go to an older preset in the filtered history
+- :ChevronRight: Go to a newer preset in the filtered history
 
 These are hidden when there are unsaved changes (to prevent accidental navigation away from modified data).
 
@@ -162,14 +162,18 @@ These are hidden when there are unsaved changes (to prevent accidental navigatio
 
 | Tab | Description |
 |-----|-------------|
-| **⊟ (slider icon)** | Toggles the control panel visible/collapsed |
-| **⊞ GRID** | Shows all parameter categories at once in compact grid view |
+| :Zap: **Generate** | Toggles to the generator |
+| :Sliders: **Controls** | Toggles the control panel visible/collapsed |
+| :LayoutGrid:**GRID** | Shows all parameter categories at once in compact grid view |
 | **FLOW** | Virtual summary category — key parameters from across all sections |
-| **OSCILLATOR** | Oscillator mix and waveform controls |
 | **LFO** | LFO waveform, rate, depth, modulation routing |
+| **OSCILLATOR** | Oscillator mix and waveform controls |
 | **ENV** | ADSR amplitude envelope |
 | **FILTER** | Filter cutoff, resonance, filter envelope |
 | **EFX** | Effects: reverb, delay, chorus |
+| **POLY** | Mono/Polyphony settings |
+| **ADVANCED ** | Advanced settings |
+| **DYNAMIC** | Dynamic parameters settings |
 
 Active category tabs are color-coded to their section color with a glow shadow.
 

@@ -82,7 +82,7 @@ const syncRecordAudioCapture = computed({
   set: (v) => { syncStore.syncRecordAudioCapture = v },
 })
 
-const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'S1_TP_PANEL_DR',
   minimizeLabel: 'Backing Track',
   initialWidth: 904,
@@ -91,6 +91,7 @@ const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: st
   minHeight: 280,
   zIndex: 220,
 })
+watch(isOpen, (v) => { if (v) bringToFront() })
 
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────

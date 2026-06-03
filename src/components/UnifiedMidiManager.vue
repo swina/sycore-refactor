@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import {
   X, Minus, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2, Download
 } from 'lucide-vue-next'
@@ -23,13 +23,14 @@ const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
 const syncStore    = useSyncStore()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'SYCORE_POS_UNIFIED_MIDI',
   minimizeLabel: 'MIDI Manager',
   initialWidth: 920,
   initialHeight: 720,
   zIndex: 900,
 })
+watch(() => uiStore.showUnifiedMidiManager, (v) => { if (v) bringToFront() })
 
 const TABS = [
   { id: 'devices',     label: 'Devices',     icon: Cpu     },

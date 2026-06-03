@@ -92,14 +92,6 @@ const { captureNotesRef, captureNoteCount, captureEnabled, resetCapture } = useM
 const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
 const { minimizedModals } = useMinimizedModals()
 
-watch(
-  [() => uiStore.openModalKeys, minimizedModals],
-  ([openKeys, minimized]) => {
-    if (!uiStore.isAppInitializing && openKeys.length === 0 && minimized.length === 0) {
-      router.push('/')
-    }
-  }
-)
 
 // Init push notifications for superadmin
 onMounted(async () => {

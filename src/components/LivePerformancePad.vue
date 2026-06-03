@@ -21,13 +21,14 @@ import PlayList        from '@/components/PlayList.vue'
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'SYCORE_POS_LIVE_PERF',
   minimizeLabel: 'Live Performance',
   initialWidth: 900,
   initialHeight: 700,
   zIndex: 1000,
 })
+watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 const midiStore    = useMidiStore()
 const presetStore  = usePresetStore()

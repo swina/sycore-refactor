@@ -35,7 +35,7 @@ let streamRef = null
 
 const emit = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'SYCORE_POS_AUDIO_LOOPER',
   minimizeLabel: 'Audio Looper',
   initialWidth: 1000,
@@ -44,6 +44,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
   minHeight: 500,
   zIndex: 160,
 })
+watch(() => uiStore.isLooperOpen, (v) => { if (v) bringToFront() })
 
 async function refreshDevices() {
   try {

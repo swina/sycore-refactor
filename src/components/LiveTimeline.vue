@@ -19,7 +19,7 @@ import { db } from '@/lib/firebase'
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'SYCORE_POS_LIVE_TIMELINE',
   initialWidth: 1020,
   initialHeight: 580,
@@ -28,6 +28,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
   zIndex: 510,
   minimizeLabel: 'Live Timeline',
 })
+watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 const midiStore    = useMidiStore()
 const livePadStore = useLivePadStore()

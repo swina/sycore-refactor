@@ -8,7 +8,7 @@ import { useCaptureStore } from '@/stores/useCaptureStore'
 import { midiService } from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'SYCORE_POS_MIDI_CAPTURE',
   minimizeLabel: 'MIDI Capture',
   initialWidth: 920,
@@ -1118,6 +1118,7 @@ watch(() => props.isOpen, (open) => {
     cancelAnimationFrame(animFrameId)
     ctxMenu.value = null
   } else {
+    bringToFront()
     if (phase.value === 'capturing') {
       cancelAnimationFrame(animFrameId)
       animFrameId = requestAnimationFrame(drawLivePianoRoll)

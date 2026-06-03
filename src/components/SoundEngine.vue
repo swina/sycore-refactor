@@ -1,4 +1,5 @@
 <script setup>
+import { watch } from 'vue'
 import { Cpu, Minus, X } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import ResultsPanel from '@/components/ResultsPanel.vue'
@@ -8,7 +9,7 @@ const uiStore = useUiStore()
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey:    'SYCORE_POS_SOUND_ENGINE',
   initialWidth:  920,
   initialHeight: 720,
@@ -17,6 +18,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
   zIndex:        450,
   minimizeLabel: 'Sound Engine',
 })
+watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 </script>
 
 <template>

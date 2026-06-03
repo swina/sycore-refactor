@@ -1,6 +1,9 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { registerMinimized, unregisterMinimized } from './useMinimizedModals'
 
+// Shared counter — each bringToFront call gets the next highest z-index
+let _topZ = 1000
+
 export function useDraggableResizable({
   storageKey = null,
   initialWidth = 900,
@@ -37,6 +40,12 @@ export function useDraggableResizable({
 
   const pos = ref(loadSaved() ?? getDefault())
   if (pos.value.minimized === undefined) pos.value.minimized = false
+
+  const activeZ = ref(zIndex)
+
+  function bringToFront() {
+    activeZ.value = ++_topZ
+  }
 
   const isMinimized = computed({
     get: () => !!pos.value.minimized,
@@ -75,7 +84,7 @@ export function useDraggableResizable({
     top:    pos.value.y + 'px',
     width:  pos.value.w + 'px',
     height: pos.value.h + 'px',
-    zIndex,
+    zIndex: activeZ.value,
   }))
 
   /* ── Drag ──────────────────────────────────────────────────────── */
@@ -84,6 +93,7 @@ export function useDraggableResizable({
   function onDragStart(e) {
     if (e.button !== 0) return
     if (e.target.closest('button, input, select, a, [role="button"]')) return
+    bringToFront()
     e.preventDefault()
     _drag = { ox: e.clientX, oy: e.clientY, px: pos.value.x, py: pos.value.y }
     window.addEventListener('mousemove', _onDragMove)
@@ -110,6 +120,7 @@ export function useDraggableResizable({
   function onResizeStart(e, dir) {
     if (e.button !== 0) return
     if (pos.value.minimized) return
+    bringToFront()
     e.preventDefault()
     e.stopPropagation()
     _res = {
@@ -140,5 +151,5 @@ export function useDraggableResizable({
     persist()
   }
 
-  return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize }
+  return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront }
 }

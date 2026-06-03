@@ -27,7 +27,7 @@ const syncStore = useSyncStore()
 const uiStore = useUiStore()
 const { progressionData, progressionNames, loading: progLoading, loadByIndex } = useProgressionLoader()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey: 'SYCORE_POS_CHORD_PROG',
   minimizeLabel: 'Chord Prog Sequencer',
   initialWidth: 900,
@@ -36,6 +36,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize } = 
   minHeight: 440,
   zIndex: 700,
 })
+watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 // ── Playback ─────────────────────────────────────────────────────────────────
 
