@@ -116,7 +116,7 @@ const toolbarButtonMap = {
   profile:     { state: 'isProfileOpen',    icon: User,          label: 'User Profile' },
   portal:      { state: 'isPortalOpen',     icon: BookOpen,      label: 'Back to S1CORE Portal' },
   midilearn:   { state: 'isMidiMappingOpen',icon: Workflow,      label: 'MIDI Mapping (Learn CC)' },
-  manual:      { state: 'isManualOpen',     icon: BookOpen,      label: 'User Manual' },
+  manual:      { state: 'isGuidesOpen',     icon: BookOpen,      label: 'User Manual' },
   help:        { state: 'isHelpOpen',       icon: HelpCircle,    label: 'Help & Info' },
   guides:      { state: 'isGuidesOpen',    icon: BookOpen,      label: 'Guides' },
   liveset:     { state: 'isLiveSetOpen',    icon: Zap,           label: 'Live Set' },
@@ -251,7 +251,7 @@ onMounted(() => {
 <template>
   <div class="w-full h-screen bg-neutral-950 text-white overflow-hidden flex flex-col">
     <!-- Floating Vertical Logo -->
-    <div class="fixed top-[150px] left-4 z-[100] origin-left -rotate-90 pointer-events-auto cursor-pointer group" @click="router.push('/')">
+    <div class="fixed top-[150px] left-4 z-[50] origin-left -rotate-90 pointer-events-auto cursor-pointer group" @click="router.push('/')">
       <h1 class="text-4xl mt-8 font-black uppercase text-synth-neon/60 mix-blend-screen whitespace-nowrap group-hover:text-synth-neon transition-colors duration-500">
         <span class="text-white">{{ configStore.appName.split('.')[0] }}.</span>{{ configStore.appName.split('.')[1] }}
       </h1>

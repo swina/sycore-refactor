@@ -7,7 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X } from 'lucide-vue-next'
+import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X } from 'lucide-vue-next'
 import { lucideIcons } from '@/lib/lucide-icons'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -41,7 +41,7 @@ const MENU_ACTION_MAP = {
   help:           () => uiStore.isHelpOpen = !uiStore.isHelpOpen,
   guides:         () => uiStore.isGuidesOpen = !uiStore.isGuidesOpen,
   support:        () => uiStore.isSupportOpen = !uiStore.isSupportOpen,
-  manual:         () => uiStore.isManualOpen = !uiStore.isManualOpen,
+  manual:         () => uiStore.isGuidesOpen = !uiStore.isGuidesOpen,
   portal:         () => uiStore.isPortalOpen = !uiStore.isPortalOpen,
   panic:          () => uiStore.isPanicOpen = !uiStore.isPanicOpen,
   midilogger:     () => uiStore.isAdminLoggerOpen = !uiStore.isAdminLoggerOpen,
@@ -178,12 +178,9 @@ function handleBpmChange(e) {
     <div class="h-full px-4 md:px-2 flex flex-row justify-between items-center gap-2">
 
       <button
-        @click="uiStore.openModalKeys.length > 0 ? uiStore.closeAll() : null"
-        title="Close all panels"
-        :class="[
-          '-ml-1 w-10 h-10 flex items-center justify-center transition-all active:scale-95 shadow-lg',
-          uiStore.openModalKeys.length > 0 ? 'text-neutral-400 hover:bg-synth-cyan hover:text-black' : 'text-neutral-700 cursor-default'
-        ]"
+        @click="uiStore.closeAll(); router.push('/')"
+        title="Home"
+        class="-ml-1 w-10 h-10 text-neutral-400 hover:bg-synth-cyan hover:text-black flex items-center justify-center transition-all active:scale-95 shadow-lg"
       >
         <Home class="w-5 h-5" />
       </button>
@@ -275,7 +272,7 @@ function handleBpmChange(e) {
           </div>
 
           <!-- Time -->
-          <div class="text-[8px] font-mono text-neutral-400 w-[70px] text-right ml-1 shrink-0 flex flex-col leading-tight">
+          <div class="text-[8px] font-mono text-neutral-400 w-[40px] text-right ml-1 shrink-0 flex flex-col leading-tight">
             <span class="text-white">{{ formatTime(btCurrentTime) }}</span>
             <span class="text-neutral-600 tracking-tighter">{{ formatTime(btDuration) }}</span>
           </div>
@@ -286,11 +283,11 @@ function handleBpmChange(e) {
         </template>
         
         
-        <span v-else class="text-[10px] font-black text-neutral-500 tracking-[0.2em] px-4">PLAYER READY</span>
+        <span v-else class="text-[10px] font-black text-neutral-500 tracking-[0.2em] px-2">PLAYER READY</span>
         <!-- MIDI Sync -->
         <button
             @click="midiStore.syncMidiTransport = !midiStore.syncMidiTransport"
-            :class="['transition-all p-1.5 rounded-md active:scale-90', midiStore.syncMidiTransport ? 'text-synth-neon bg-synth-neon/10' : 'text-neutral-500 hover:text-white']"
+            :class="['transition-all p-1 rounded-md active:scale-90', midiStore.syncMidiTransport ? 'text-synth-neon bg-synth-neon/10' : 'text-neutral-500 hover:text-white']"
             title="Sync MIDI START/STOP with Audio Player"
           >
             <Link class="w-3.5 h-3.5" />
@@ -298,7 +295,7 @@ function handleBpmChange(e) {
       </div>
 
       <!-- Right: controls -->
-      <div class="flex-1 flex items-center justify-end gap-1 md:gap-2">
+      <div class="flex-1 flex items-center justify-end gap-1 md:gap-1">
 
         <div v-if="authStore.user" class="flex items-center gap-2">
           <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 rounded-full group">
@@ -330,7 +327,7 @@ function handleBpmChange(e) {
             :value="arpStore.arpBpm"
             title="Set global BPM"
             @change="handleBpmChange"
-            class="bg-black border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[14px] focus:outline-none focus:border-synth-neon transition-colors"
+            class="bg-black border border-neutral-800 w-[60px] rounded px-1 py-0.5 text-center text-synth-neon text-[14px] focus:outline-none focus:border-synth-neon transition-colors"
           />
         </div>
         <button
@@ -375,11 +372,12 @@ function handleBpmChange(e) {
   <Transition name="menu-slide">
     <div
       v-if="uiStore.isMainMenuOpen"
-      class="fixed bottom-10 left-0 w-full flex flex-row items-center gap-1.5 px-2 py-2 bg-black/90 backdrop-blur-md border-t border-neutral-800/60 overflow-x-auto z-[1050]"
+      class="fixed bottom-10 left-0 w-full flex flex-row items-center gap-1.5 px-2 py-2 bg-black/90 backdrop-blur-md border-t border-neutral-800/60 overflow-x-auto z-[1050] justify-between"
     >
       <button
         v-for="(action, index) in menuActions"
         :key="action.id"
+        :title="action.label"
         @click="action.onClick(); uiStore.isMainMenuOpen = false"
         :class="[
           'flex-shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-xl border transition-all active:scale-95',

@@ -17,7 +17,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minimizeLabel: 'Device PC',
   initialWidth: 900,
   initialHeight: 700,
-  zIndex: 650,
+  zIndex: 100,
 })
 
 const midiStore      = useMidiStore()
@@ -244,12 +244,14 @@ const lastSent    = ref(null)
 watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null })
 
 // ── pcChannels persistence helper ──────────────────────────────
-function recordChannelState(ch, program, bank, soundName, category) {
+function recordChannelState(ch, program, bank, soundName, category, msb = 0, lsb = 0) {
   const reg = selectedReg.value
   if (!reg) return
-  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, category: category ?? '' } }
+  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, category: category ?? '', msb, lsb } }
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannels', updated)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', program)
+  midiStore.updateRegistration(selectedDeviceName.value, 'pcMsb', msb)
+  midiStore.updateRegistration(selectedDeviceName.value, 'pcLsb', lsb)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcBank', bank)
 }
 
@@ -289,7 +291,7 @@ function sendCatalogSound(sound) {
   port.send([0xC0 | ch, progNum])
 
   lastSent.value = sound
-  recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'])
+  recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb)
 
   const msg = `[Device PC] → ${selectedDeviceName.value} ch${ch + 1}: MSB=${msb} LSB=${lsb} PC=${progNum} | ${sound.name}`
   if (window.SY_LOG) window.SY_LOG(msg); else console.log(msg)
@@ -449,6 +451,8 @@ function saveCurrentSet() {
       pcChannel:      reg?.pcChannel ?? 0,
       pcBank:         reg?.pcBank    ?? '',
       pcProgram:      reg?.pcProgram ?? 0,
+      pcMsb:          reg?.pcMsb ?? 0,
+      pcLsb:          reg?.pcLsb ?? 0,
       pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
       isUiDevice:     isUi,
       lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
@@ -477,6 +481,8 @@ function recallSet(set) {
     midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
     midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
     midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
+    midiStore.updateRegistration(entry.deviceName, 'pcMsb',     entry.pcMsb ?? 0)
+    midiStore.updateRegistration(entry.deviceName, 'pcLsb',     entry.pcLsb ?? 0)
     midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
 
     if (entry.isUiDevice) {
@@ -491,14 +497,14 @@ function recallSet(set) {
       if (multiEntries.length > 0) {
         multiEntries.forEach(([chStr, info]) => {
           const ch = parseInt(chStr)
-          port.send([0xB0 | ch, 0,  0])
-          port.send([0xB0 | ch, 32, 0])
+          port.send([0xB0 | ch, 0,  info.msb ?? 0])
+          port.send([0xB0 | ch, 32, info.lsb ?? 0])
           port.send([0xC0 | ch, info.program ?? 0])
         })
       } else {
         const ch = entry.pcChannel ?? 0
-        port.send([0xB0 | ch, 0,  0])
-        port.send([0xB0 | ch, 32, 0])
+        port.send([0xB0 | ch, 0,  entry.pcMsb ?? 0])
+        port.send([0xB0 | ch, 32, entry.pcLsb ?? 0])
         port.send([0xC0 | ch, entry.pcProgram ?? 0])
       }
     }
@@ -514,6 +520,8 @@ function updateSet(id) {
       pcChannel:      reg?.pcChannel ?? 0,
       pcBank:         reg?.pcBank    ?? '',
       pcProgram:      reg?.pcProgram ?? 0,
+      pcMsb:          reg?.pcMsb ?? 0,
+      pcLsb:          reg?.pcLsb ?? 0,
       pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
       isUiDevice:     isUi,
       lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
@@ -849,7 +857,7 @@ function deleteSet(id) {
                     <span v-if="selectedReg?.isMulti" class="text-[7px] font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 uppercase tracking-tighter">Multi-Timbral</span>
                   </div>
                   <!-- Multi-timbral: capped height with own scroll -->
-                  <div v-if="selectedReg?.isMulti" class="overflow-y-auto custom-scrollbar divide-y divide-neutral-900/60" style="max-height: 30vh">
+                  <div v-if="selectedReg?.isMulti" class="overflow-y-auto custom-scrollbar divide-y divide-neutral-900/60" style="max-height: 20vh">
                     <div
                       v-for="entry in currentPcState"
                       :key="entry.ch"

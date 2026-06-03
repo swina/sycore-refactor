@@ -27,9 +27,9 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minimizeLabel: 'Audio Capture',
   initialWidth: 950,
   initialHeight: 720,
-  minWidth: 950,
-  minHeight: 620,
-  zIndex: 1000,
+  minWidth: 700,
+  minHeight: 500,
+  zIndex: 100,
 })
 watch(() => uiStore.isAudioCaptureOpen, (v) => { if (v) bringToFront() })
 
@@ -1538,6 +1538,12 @@ onUnmounted(() => {
       :style="panelStyle"
       class="bg-neutral-950 border border-cyan-500/30 rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
     >
+      <!-- Resize handles -->
+      <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3  h-1  cursor-n-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3  h-1  cursor-s-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3 right-0   w-1  cursor-e-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3 left-0    w-1  cursor-w-resize  z-50" />
+      <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-0 right-0         w-4  h-4 cursor-se-resize z-50" />
       <!-- Header -->
       <div
         class="px-4 py-2 border-b border-neutral-800 flex items-center justify-between bg-gradient-to-r from-cyan-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none"

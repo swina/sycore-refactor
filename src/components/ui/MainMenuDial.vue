@@ -25,7 +25,7 @@ const ACTION_MAP = {
   help:           () => uiStore.isHelpOpen = !uiStore.isHelpOpen,
   guides:         () => uiStore.isGuidesOpen = !uiStore.isGuidesOpen,
   support:        () => uiStore.isSupportOpen = !uiStore.isSupportOpen,
-  manual:         () => uiStore.isManualOpen = !uiStore.isManualOpen,
+  manual:         () => uiStore.isGuidesOpen = !uiStore.isGuidesOpen,
   portal:         () => uiStore.isPortalOpen = !uiStore.isPortalOpen,
   panic:          () => uiStore.isPanicOpen = !uiStore.isPanicOpen,
   midilogger:     () => uiStore.isAdminLoggerOpen = !uiStore.isAdminLoggerOpen,

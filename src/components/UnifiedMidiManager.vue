@@ -28,7 +28,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minimizeLabel: 'MIDI Manager',
   initialWidth: 920,
   initialHeight: 720,
-  zIndex: 900,
+  zIndex: 100,
 })
 watch(() => uiStore.showUnifiedMidiManager, (v) => { if (v) bringToFront() })
 

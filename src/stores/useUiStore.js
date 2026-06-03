@@ -123,6 +123,58 @@ export const useUiStore = defineStore('ui', () => {
       .map(([key]) => key)
   )
 
+  // Refs keyed by MODAL_CYCLE_REGISTRY key — used to close others on open
+  const MODAL_REFS = {
+    auth:                isAuthModalOpen,
+    types:               isTypesOpen,
+    history:             isHistoryOpen,
+    keyboard:            isKeyboardOpen,
+    sequencer:           isSequencerOpen,
+    arp:                 isArpOpen,
+    midiMapping:         isMidiMappingOpen,
+    midiActions:         isMidiActionsOpen,
+    midiMatrix:          isMidiMatrixOpen,
+    midiPerformance:     isMidiPerformanceOpen,
+    deviceProgramChange: isDeviceProgramChangePanelOpen,
+    programChangeBrowser:isProgramChangeBrowserOpen,
+    liveSet:             isLiveSetOpen,
+    livePerformancePad:  isLivePerformancePadOpen,
+    liveTimeline:        isLiveTimelineOpen,
+    capture:             isCaptureOpen,
+    audioCapture:        isAudioCaptureOpen,
+    visualizer:          isVisualizerOpen,
+    profile:             isProfileOpen,
+    adminPanel:          isAdminPanelOpen,
+    about:               isAboutOpen,
+    helpSlideshow:       isHelpSlideshowOpen,
+    velocityMap:         isVelocityMapOpen,
+    lfo1:                isLfo1Open,
+    lfo2:                isLfo2Open,
+    session:             isSessionOpen,
+    looper:              isLooperOpen,
+    adminLogger:         isAdminLoggerOpen,
+    midiMonitor:         isMidiMonitorOpen,
+    soundEngine:         isSoundEngineOpen,
+    guides:              isGuidesOpen,
+    unifiedMidi:         showUnifiedMidiManager,
+    chordProg:           isChordProgOpen,
+    tracksPlayer:        isTracksPlayerOpen,
+  }
+
+  // These modals coexist freely — they never trigger close-others and are
+  // never closed when another modal opens.
+  const MODAL_EXCLUDED = new Set(['lfo1', 'lfo2', 'velocityMap', 'arp', 'history', 'types', 'sequencer'])
+
+  // When a non-excluded modal opens, close all other non-excluded modals
+  watch(openModalKeys, (newKeys, oldKeys) => {
+    if (!oldKeys || newKeys.length <= oldKeys.length) return
+    const added = newKeys.find(k => !oldKeys.includes(k))
+    if (!added || MODAL_EXCLUDED.has(added)) return
+    for (const [key, r] of Object.entries(MODAL_REFS)) {
+      if (key !== added && !MODAL_EXCLUDED.has(key)) r.value = false
+    }
+  })
+
   function cycleFocusedModal(reverse = false) {
     const open = openModalKeys.value
     if (open.length === 0) { focusedModalKey.value = null; return }

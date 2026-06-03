@@ -26,7 +26,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minimizeLabel: 'Live Performance',
   initialWidth: 900,
   initialHeight: 700,
-  zIndex: 1000,
+  zIndex: 100,
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 

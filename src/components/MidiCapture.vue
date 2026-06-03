@@ -14,7 +14,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   initialWidth: 920,
   initialHeight: 720,
   minHeight: 500,
-  zIndex: 1000,
+  zIndex: 100,
 })
 
 const props = defineProps({

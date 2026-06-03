@@ -1,8 +1,10 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { registerMinimized, unregisterMinimized } from './useMinimizedModals'
 
-// Shared counter — each bringToFront call gets the next highest z-index
-let _topZ = 1000
+// Shared counter for draggable panels. Capped at 399 so non-draggable
+// modals (z-[400]+) always layer above floating panels.
+let _topZ = 50
+const DRAGGABLE_Z_MAX = 399
 
 export function useDraggableResizable({
   storageKey = null,
@@ -44,6 +46,7 @@ export function useDraggableResizable({
   const activeZ = ref(zIndex)
 
   function bringToFront() {
+    if (_topZ >= DRAGGABLE_Z_MAX) _topZ = 50
     activeZ.value = ++_topZ
   }
 

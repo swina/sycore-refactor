@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import {
   X, Settings, Settings2, Save, Download, Database, Trash2,
-  ChevronUp, ChevronDown, Plus, Search, Palette, LayoutGrid, Loader2, AlertCircle, Bell
+  ChevronUp, ChevronDown, Plus, Search, Palette, Captions, LayoutGrid, Loader2, AlertCircle, Bell
 } from 'lucide-vue-next'
 import { lucideIcons } from '@/lib/lucide-icons'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -77,7 +77,7 @@ const FEATURE_KEYS = [
 ]
 
 const ALL_AVAILABLE_ICONS = [
-  'AudioLines','LayoutGrid','Cpu','Layers','Heart','KeyboardMusic','ListMusic','User','BookOpen','Workflow',
+  'AudioLines','LayoutGrid','Cpu','Captions','Layers','Heart','KeyboardMusic','ListMusic','User','BookOpen','Workflow',
   'Cable','Settings','Settings2','Gamepad2','AlertTriangle','Mail','HelpCircle','Zap',
   'Activity','Sliders','Menu','MoreVertical','Plus','Minus','ChevronDown','ChevronUp',
   'Clock','Music','Volume2','Pause','Play','Square','Circle','Triangle',
@@ -115,7 +115,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'program-change', label: 'Program Change Browser', icon: 'Music2'           },
   { id: 'midi-manager',   label: 'MIDI Manager',          icon: 'Cpu'              },
   { id: 'live-timeline',        label: 'Live Timeline',         icon: 'Clock'      },
-  { id: 'sound-engine',         label: 'Sound Engine',          icon: 'Cpu'        },
+  { id: 'sound-engine',         label: 'Sound Engine',          icon: 'Captions'        },
   { id: 'tracks-player',        label: 'Tracks Player',         icon: 'Music'      },
   { id: 'chord-prog',           label: 'Chord Progression',     icon: 'AudioLines' },
   { id: 'live-performance-pad', label: 'Live Performance',      icon: 'Layers'     },
@@ -131,9 +131,13 @@ const filteredControllers = computed(() =>
   )
 )
 
+const activeToolbarButtons = computed(() =>
+  toolbarButtons.value.filter(b => b.enabled !== false)
+)
+
 const addableButtons = computed(() => {
-  const existing = new Set(toolbarButtons.value.map(b => b.id))
-  return KNOWN_TOOLBAR_FUNCTIONS.filter(f => !existing.has(f.id))
+  const activeIds = new Set(activeToolbarButtons.value.map(b => b.id))
+  return KNOWN_TOOLBAR_FUNCTIONS.filter(f => !activeIds.has(f.id))
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -380,20 +384,36 @@ function removeController(id) {
 
 // ─── Toolbar reorder / add / remove ──────────────────────────────────────────
 
-function moveButton(index, dir) {
+function moveButton(activeIndex, dir) {
+  const active = activeToolbarButtons.value
+  const targetActive = activeIndex + dir
+  if (targetActive < 0 || targetActive >= active.length) return
+  const aId = active[activeIndex].id
+  const bId = active[targetActive].id
   const next = [...toolbarButtons.value]
-  const target = index + dir
-  if (target < 0 || target >= next.length) return
-  ;[next[index], next[target]] = [next[target], next[index]]
+  const aReal = next.findIndex(b => b.id === aId)
+  const bReal = next.findIndex(b => b.id === bId)
+  ;[next[aReal], next[bReal]] = [next[bReal], next[aReal]]
   toolbarButtons.value = next
 }
 
-function removeButton(index) {
-  toolbarButtons.value = toolbarButtons.value.filter((_, i) => i !== index)
+function removeButton(activeIndex) {
+  const id = activeToolbarButtons.value[activeIndex]?.id
+  if (!id) return
+  toolbarButtons.value = toolbarButtons.value.map(b =>
+    b.id === id ? { ...b, enabled: false } : b
+  )
 }
 
 function addButton(fn) {
-  toolbarButtons.value = [...toolbarButtons.value, { id: fn.id, label: fn.label, icon: fn.icon, enabled: true, fab: 'main' }]
+  const existing = toolbarButtons.value.find(b => b.id === fn.id)
+  if (existing) {
+    toolbarButtons.value = toolbarButtons.value.map(b =>
+      b.id === fn.id ? { ...b, enabled: true } : b
+    )
+  } else {
+    toolbarButtons.value = [...toolbarButtons.value, { id: fn.id, label: fn.label, icon: fn.icon, enabled: true, fab: 'main' }]
+  }
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -973,7 +993,7 @@ watch(openSections, (sections) => {
             </button>
             <div v-if="openSections.has('toolbar')" class="px-6 pb-6 border-t border-neutral-800/50 pt-5 space-y-5">
               <p class="text-xs text-neutral-500 font-mono">
-                Reorder buttons with ↑ ↓. Toggle visible for standard users. Admins always see all buttons.
+                Reorder active buttons with ↑ ↓. Remove to send back to the pick list.
               </p>
 
               <!-- Icon size -->
@@ -987,7 +1007,7 @@ watch(openSections, (sections) => {
               <!-- Button list -->
               <div class="space-y-2">
                 <div
-                  v-for="(button, index) in toolbarButtons" :key="button.id"
+                  v-for="(button, index) in activeToolbarButtons" :key="button.id"
                   class="flex items-center gap-3 bg-neutral-900/50 border border-neutral-800 p-2 rounded-lg"
                 >
                   <!-- Up / Down -->
@@ -995,7 +1015,7 @@ watch(openSections, (sections) => {
                     <button @click="moveButton(index, -1)" :disabled="index === 0" class="text-neutral-500 hover:text-white disabled:opacity-30 transition-colors">
                       <ChevronUp class="w-4 h-4" />
                     </button>
-                    <button @click="moveButton(index, 1)" :disabled="index === toolbarButtons.length - 1" class="text-neutral-500 hover:text-white disabled:opacity-30 transition-colors">
+                    <button @click="moveButton(index, 1)" :disabled="index === activeToolbarButtons.length - 1" class="text-neutral-500 hover:text-white disabled:opacity-30 transition-colors">
                       <ChevronDown class="w-4 h-4" />
                     </button>
                   </div>
@@ -1028,14 +1048,6 @@ watch(openSections, (sections) => {
                       <option value="main">MAIN</option>
                       <option value="settings">SETT</option>
                     </select>
-                    <!-- Toggle switch -->
-                    <button
-                      @click="button.enabled = !button.enabled; toolbarButtons = [...toolbarButtons]"
-                      :class="['w-12 h-6 rounded-full relative transition-colors border', button.enabled ? 'bg-synth-neon/80 border-synth-neon' : 'bg-neutral-800 border-neutral-700']"
-                      title="Visible to standard users"
-                    >
-                      <div :class="['absolute top-1 w-4 h-4 rounded-full bg-black transition-all', button.enabled ? 'left-[26px]' : 'left-1']" />
-                    </button>
                     <!-- Remove -->
                     <button
                       @click="removeButton(index)"

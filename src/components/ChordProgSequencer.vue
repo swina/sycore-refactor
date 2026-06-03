@@ -34,7 +34,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   initialHeight: 640,
   minWidth: 640,
   minHeight: 440,
-  zIndex: 700,
+  zIndex: 100,
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 

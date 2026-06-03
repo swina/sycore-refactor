@@ -7,6 +7,8 @@ import {
 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore }    from '@/stores/useMidiStore'
+import { usePresetStore }  from '@/stores/usePresetStore'
+import { MidiSource }      from '@/core/midi/MidiService'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useArpStore }     from '@/stores/useArpStore'
 import { useSyncStore }    from '@/stores/useSyncStore'
@@ -25,13 +27,37 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   initialHeight: 580,
   minWidth: 700,
   minHeight: 440,
-  zIndex: 510,
+  zIndex: 100,
   minimizeLabel: 'Live Timeline',
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 const midiStore    = useMidiStore()
+const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
+
+const allDevicesPcState = computed(() => {
+  if (!midiStore.routingConfig?.registrations) return []
+  const uiRoutes = midiStore.routingMatrix?.[MidiSource.UI] ?? []
+  const curCh = (midiStore.midiChannel ?? 1) - 1  // 0-based
+
+  return Object.entries(midiStore.routingConfig.registrations)
+    .filter(([, r]) => r.outEnabled && r.pcEnabled)
+    .map(([regKey, r]) => {
+      const isUi = uiRoutes.includes(r.name ?? regKey)
+      if (isUi) {
+        return { key: regKey, name: r.name ?? regKey, isUi: true, soundName: presetStore.lastPreset?.name ?? null }
+      }
+      const allEntries = Object.entries(r.pcChannels ?? {})
+        .map(([ch, info]) => ({ ch: parseInt(ch), ...info }))
+        .sort((a, b) => a.ch - b.ch)
+      const isMulti = r.isMulti && allEntries.length > 1
+      const entries = isMulti
+        ? [allEntries.find(e => e.ch === curCh) ?? allEntries[0]]
+        : allEntries
+      return { key: regKey, name: r.name ?? regKey, isUi: false, isMulti, entries }
+    })
+})
 const arpStore     = useArpStore()
 const syncStore    = useSyncStore()
 const uiStore      = useUiStore()
@@ -464,6 +490,25 @@ function _fireMarker(m) {
         if (m.lsb !== null && m.lsb !== undefined) port.send([0xB0 | ch, 32, m.lsb])
         port.send([0xC0 | ch, pc])
       }
+      // Keep pcChannels in sync so the Patches panel reflects the fired state
+      const reg = midiStore.routingConfig?.registrations?.[m.device]
+      if (reg) {
+        const updated = {
+          ...(reg.pcChannels ?? {}),
+          [ch]: {
+            program:   pc,
+            bank:      reg.pcBank ?? '',
+            soundName: m.soundName ?? '',
+            category:  '',
+            msb:       m.msb ?? 0,
+            lsb:       m.lsb ?? 0,
+          },
+        }
+        midiStore.updateRegistration(m.device, 'pcChannels', updated)
+        midiStore.updateRegistration(m.device, 'pcProgram', pc)
+        if (m.msb != null) midiStore.updateRegistration(m.device, 'pcMsb', m.msb)
+        if (m.lsb != null) midiStore.updateRegistration(m.device, 'pcLsb', m.lsb)
+      }
       break
     }
     case 'seq-start':
@@ -773,9 +818,13 @@ function selectPcSound(sound) {
   const prog   = sound[pField] ?? 0
   let progNum  = prog >= 128 ? prog % 128 : prog
   progNum      = Math.max(0, Math.min(127, progNum + (cfg.program_base ?? 0)))
+  // Mirror MidiDeviceProgramChangePanel.sendCatalogSound: always derive msb/lsb,
+  // never store null when the catalog has cfg.msb/lsb = false.
+  const msb = cfg.msb ? (sound.msb ?? 0) : Math.floor(prog / 128)
+  const lsb = cfg.lsb ? (sound.lsb ?? 0) : 0
   newMkr.value.value       = progNum
-  newMkrPc.value.msb       = cfg.msb ? (sound.msb ?? 0) : null
-  newMkrPc.value.lsb       = cfg.lsb ? (sound.lsb ?? 0) : null
+  newMkrPc.value.msb       = msb
+  newMkrPc.value.lsb       = lsb
   newMkrPc.value.soundName = sound.name || ''
   showPcBrowser.value = false
 }
@@ -1171,7 +1220,10 @@ onUnmounted(() => {
       </div>
 
       <!-- Info panel — shows selected segment or marker details -->
-      <div class="flex-1 min-h-0 overflow-hidden border-t text-[12px] border-neutral-900/60 bg-neutral-950/60 px-4 py-2">
+      <div class="flex flex-1 min-h-0 overflow-hidden border-t text-[12px] border-neutral-900/60 bg-neutral-950/60">
+
+        <!-- Left column: segment / marker details -->
+        <div class="flex-1 min-w-0 px-4 py-2">
         <!-- Nothing selected -->
         <div v-if="!selectedSeg && !selectedMarker" class="h-full flex items-center justify-center">
           <span class="text-[9px] font-mono text-neutral-700 uppercase tracking-widest">Click a segment or marker for details</span>
@@ -1259,6 +1311,35 @@ onUnmounted(() => {
             <X class="w-3 h-3" />
           </button>
         </div>
+        </div><!-- /left column -->
+
+        <!-- Right column: current program/patch per device -->
+        <div class="w-52 shrink-0 border-l border-neutral-900/80 overflow-y-auto py-1.5 px-2 flex flex-col gap-0.5">
+          <div class="px-1 pb-1 shrink-0">
+            <span class="text-[8px] font-mono text-neutral-700 uppercase tracking-widest">Patches</span>
+          </div>
+          <div v-if="allDevicesPcState.length === 0" class="flex-1 flex items-center justify-center">
+            <span class="text-[8px] font-mono text-neutral-800 italic">No PC devices</span>
+          </div>
+          <template v-for="dev in allDevicesPcState" :key="dev.key">
+            <!-- UI device: show Sound Library preset name -->
+            <div v-if="dev.isUi" class="flex flex-col items-start border-b border-neutral-700/60 justify-start cursor-pointer gap-2 px-1.5 py-0.5 hover:bg-white/[0.02]">
+              <div class="text-[11px] font-bold text-neutral-500 truncate" style="max-width:5rem">{{ dev.name }}</div>
+              <div class="text-[11px] font-mono text-sky-400/80 truncate flex-1 text-right">{{ dev.soundName ?? '—' }}</div>
+            </div>
+            <!-- PC device: no state yet -->
+            <div v-else-if="!dev.entries || dev.entries.length === 0" class="flex flex-col items-start border-b border-neutral-700/60 justify-start cursor-pointer gap-2 px-1.5 py-0.5">
+              <div class="text-[11px] font-bold text-neutral-600 truncate flex-1">{{ dev.name }}</div>
+              <div class="text-[11px] font-mono text-neutral-800 shrink-0">—</div>
+            </div>
+            <!-- PC device: single entry (mono or multi showing current channel) -->
+            <div v-else class="flex flex-col items-start border-b border-neutral-700/60 justify-start cursor-pointer gap-2 px-1.5 py-0.5 hover:bg-white/[0.02] cursor-pointer">
+              <div class="text-[11px] font-bold text-neutral-500 truncate">{{ dev.name }}</div>
+              <div class="text-[11px] font-mono text-violet-400/80 truncate flex-1 text-right">{{ dev.entries[0].soundName || ('PC' + dev.entries[0].program) }}</div>
+            </div>
+          </template>
+        </div><!-- /right column -->
+
       </div>
 
       <!-- Progress bar -->
