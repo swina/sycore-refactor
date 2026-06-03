@@ -7,7 +7,8 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User } from 'lucide-vue-next'
+import { AlertTriangle, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X } from 'lucide-vue-next'
+import { lucideIcons } from '@/lib/lucide-icons'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/MidiService'
@@ -24,6 +25,60 @@ const { openMenu } = useMidiContextMenu()
 const router = useRouter()
 
 const showPartSelector = computed(() => configStore.enablePartSelector)
+
+const MENU_ACTION_MAP = {
+  types:          () => uiStore.isTypesOpen = !uiStore.isTypesOpen,
+  history:        () => uiStore.isHistoryOpen = !uiStore.isHistoryOpen,
+  liveset:        () => uiStore.isLiveSetOpen = !uiStore.isLiveSetOpen,
+  tracks:         () => uiStore.isBackingTrackOpen = !uiStore.isBackingTrackOpen,
+  sequencer:      () => uiStore.isSequencerOpen = !uiStore.isSequencerOpen,
+  'audio-capture':() => uiStore.isAudioCaptureOpen = !uiStore.isAudioCaptureOpen,
+  visualizer:     () => uiStore.isVisualizerOpen = !uiStore.isVisualizerOpen,
+  keyboard:       () => uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen,
+  arp:            () => uiStore.isArpOpen = !uiStore.isArpOpen,
+  favorites:      () => uiStore.isFavoritesOpen = !uiStore.isFavoritesOpen,
+  profile:        () => uiStore.isProfileOpen = !uiStore.isProfileOpen,
+  help:           () => uiStore.isHelpOpen = !uiStore.isHelpOpen,
+  guides:         () => uiStore.isGuidesOpen = !uiStore.isGuidesOpen,
+  support:        () => uiStore.isSupportOpen = !uiStore.isSupportOpen,
+  manual:         () => uiStore.isManualOpen = !uiStore.isManualOpen,
+  portal:         () => uiStore.isPortalOpen = !uiStore.isPortalOpen,
+  panic:          () => uiStore.isPanicOpen = !uiStore.isPanicOpen,
+  midilogger:     () => uiStore.isAdminLoggerOpen = !uiStore.isAdminLoggerOpen,
+  routing:        () => uiStore.isMidiPortOpen = !uiStore.isMidiPortOpen,
+  midiactions:    () => uiStore.isMidiActionsOpen = !uiStore.isMidiActionsOpen,
+  midilearn:      () => uiStore.isMidiMappingOpen = !uiStore.isMidiMappingOpen,
+  session:        () => uiStore.isSessionOpen = !uiStore.isSessionOpen,
+  looper:         () => uiStore.isLooperOpen = !uiStore.isLooperOpen,
+  admin:          () => uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen,
+  midi_matrix:    () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
+  'midi-performance':     () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
+  'midi-manager':         () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
+  capture:                () => uiStore.isCaptureOpen = !uiStore.isCaptureOpen,
+  'live-timeline':        () => uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen,
+  'sound-engine':         () => uiStore.isSoundEngineOpen = !uiStore.isSoundEngineOpen,
+  'tracks-player':        () => uiStore.isTracksPlayerOpen = !uiStore.isTracksPlayerOpen,
+  'chord-prog':           () => uiStore.isChordProgOpen = !uiStore.isChordProgOpen,
+  'live-performance-pad': () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
+  'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
+}
+
+const MENU_COLORS = [
+  'text-synth-neon', 'text-blue-400', 'text-yellow-400', 'text-emerald-400',
+  'text-pink-400', 'text-red-400', 'text-indigo-400', 'text-orange-400',
+  'text-rose-400', 'text-cyan-400', 'text-purple-400', 'text-amber-400'
+]
+
+const menuActions = computed(() => {
+  const configButtons = (configStore.toolbarConfig || [])
+    .filter(b => b.enabled !== false && (b.fab === 'main' || !b.fab))
+  return configButtons.map((b, idx) => ({
+    ...b,
+    iconComponent: lucideIcons[b.icon] || lucideIcons.HelpCircle,
+    color: MENU_COLORS[idx % MENU_COLORS.length],
+    onClick: MENU_ACTION_MAP[b.id] || (() => console.warn(`No action for ${b.id}`))
+  }))
+})
 
 // ── Backing Track transport state (synced via window events) ──────────────────
 const btIsPlaying        = ref(false)
@@ -123,11 +178,24 @@ function handleBpmChange(e) {
     <div class="h-full px-4 md:px-2 flex flex-row justify-between items-center gap-2">
 
       <button
-      @click="router.push('/')"
-      title="Home"
-      class="-ml-1 w-10 h-10 text-neutral-400 hover:bg-synth-cyan hover:text-black flex items-center justify-center transition-all active:scale-95 shadow-lg"
-    >
+        @click="router.push('/')"
+        title="Home"
+        class="-ml-1 w-10 h-10 text-neutral-400 hover:bg-synth-cyan hover:text-black flex items-center justify-center transition-all active:scale-95 shadow-lg"
+      >
         <Home class="w-5 h-5" />
+      </button>
+
+      <!-- Burger menu toggle -->
+      <button
+        @click="uiStore.toggleMainMenu()"
+        :class="[
+          'w-10 h-10 flex items-center justify-center transition-all active:scale-95',
+          uiStore.isMainMenuOpen ? 'text-white bg-white/10' : 'text-synth-neon hover:bg-synth-neon/10'
+        ]"
+        title="Menu"
+      >
+        <X v-if="uiStore.isMainMenuOpen" class="w-5 h-5" />
+        <Menu v-else class="w-5 h-5" />
       </button>
 
       <!-- Left: Backing Track transport -->
@@ -290,5 +358,49 @@ function handleBpmChange(e) {
       </div>
 
     </div>
+
   </footer>
+
+  <!-- Backdrop — outside footer to escape its stacking context -->
+  <div
+    v-if="uiStore.isMainMenuOpen"
+    @click="uiStore.isMainMenuOpen = false"
+    class="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[1040]"
+  />
+
+  <!-- Horizontal menu panel — outside footer so z-index is not capped at z-960 -->
+  <Transition name="menu-slide">
+    <div
+      v-if="uiStore.isMainMenuOpen"
+      class="fixed bottom-10 left-0 w-full flex flex-row items-center gap-1.5 px-2 py-2 bg-black/90 backdrop-blur-md border-t border-neutral-800/60 overflow-x-auto z-[1050]"
+    >
+      <button
+        v-for="(action, index) in menuActions"
+        :key="action.id"
+        @click="action.onClick(); uiStore.isMainMenuOpen = false"
+        :class="[
+          'flex-shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-xl border transition-all active:scale-95',
+          'border-white/10 bg-black/60 hover:border-white/30 hover:scale-105',
+          action.color
+        ]"
+      >
+        <component :is="action.iconComponent" class="w-4 h-4" />
+        <span class="text-[7px] font-black uppercase tracking-tighter text-center leading-none opacity-80">
+          {{ action.label }}
+        </span>
+      </button>
+    </div>
+  </Transition>
 </template>
+
+<style scoped>
+.menu-slide-enter-active,
+.menu-slide-leave-active {
+  transition: all 0.2s ease;
+}
+.menu-slide-enter-from,
+.menu-slide-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+</style>

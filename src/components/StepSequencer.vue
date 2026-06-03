@@ -1565,16 +1565,18 @@ function handleClear() {
     clearTimer.value = null
   }
 }
+
+let generateHidden = ref(false)
 </script>
 
 <template>
   <div v-if="isOpen" :class="[
     embedded
-      ? 'absolute inset-0 z-[50]'
+      ? 'absolute inset-0 z-[1500]'
       : 'fixed inset-x-0 top-0 bottom-14 rounded-lg z-[600]',
     'flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-amber overflow-hidden'
   ]">
-    <div class="w-full max-w-[970px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
+    <div class="w-full max-w-[1024px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
       
       <!-- ── HEADER: Compact & Responsive ── -->
       <div class="shrink-0 px-4 py-2 border-b border-neutral-800 bg-black/40 flex flex-col sm:flex-row items-center gap-3 justify-between">
@@ -1711,6 +1713,7 @@ function handleClear() {
           Generate
         </button>
       </div>
+      
       <div class="flex w-full gap-3 px-4">
         <!-- Param Assign -->
         <div class="flex items-center gap-3">

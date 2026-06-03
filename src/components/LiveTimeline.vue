@@ -12,6 +12,7 @@ import { useArpStore }     from '@/stores/useArpStore'
 import { useSyncStore }    from '@/stores/useSyncStore'
 import { useUiStore }      from '@/stores/useUiStore'
 import catalogIndex        from '@/data/program_change/program_change.json'
+const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc } from '@/lib/idb'
 import { db } from '@/lib/firebase'
 
@@ -747,8 +748,10 @@ watch(pcBrowserBank, async (bank) => {
     const match = pcBrowserBankConfig.value.data.match(/^\.\/([^/]+)\/(.+)$/)
     if (!match) return
     const [, folder, filename] = match
-    const res = await fetch(`/src/data/program_change/${folder}/${filename}`)
-    if (res.ok) pcBrowserSounds.value = await res.json()
+    const key    = Object.keys(_pcDataModules).find(k => k.endsWith(`/${folder}/${filename}`))
+    if (!key) { console.warn('[Timeline PC Browser] data file not found:', folder, filename); return }
+    const mod    = await _pcDataModules[key]()
+    pcBrowserSounds.value = mod.default ?? mod
   } catch (e) {
     console.error('[Timeline PC Browser]', e)
   } finally {

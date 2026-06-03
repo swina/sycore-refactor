@@ -113,7 +113,13 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'midi_matrix',    label: 'MIDI Matrix',      icon: 'Network'      },
   { id: 'midilogger',      label: 'MIDI Logger',           icon: 'GitCompareArrows' },
   { id: 'program-change', label: 'Program Change Browser', icon: 'Music2'           },
-  { id: 'midi-manager',   label: 'MIDI Manager',    icon: 'Cpu' }
+  { id: 'midi-manager',   label: 'MIDI Manager',          icon: 'Cpu'              },
+  { id: 'live-timeline',        label: 'Live Timeline',         icon: 'Clock'      },
+  { id: 'sound-engine',         label: 'Sound Engine',          icon: 'Cpu'        },
+  { id: 'tracks-player',        label: 'Tracks Player',         icon: 'Music'      },
+  { id: 'chord-prog',           label: 'Chord Progression',     icon: 'AudioLines' },
+  { id: 'live-performance-pad', label: 'Live Performance',      icon: 'Layers'     },
+  { id: 'device-program-change',label: 'Device Program Change', icon: 'Disc3'      },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

@@ -36,8 +36,15 @@ const ACTION_MAP = {
   looper:         () => uiStore.isLooperOpen = !uiStore.isLooperOpen,
   admin:          () => uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen,
   midi_matrix:   () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
-  'midi-performance':() => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
-  'midi-manager': () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
+  'midi-performance':     () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
+  'midi-manager':         () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
+  capture:                () => uiStore.isCaptureOpen = !uiStore.isCaptureOpen,
+  'live-timeline':        () => uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen,
+  'sound-engine':         () => uiStore.isSoundEngineOpen = !uiStore.isSoundEngineOpen,
+  'tracks-player':        () => uiStore.isTracksPlayerOpen = !uiStore.isTracksPlayerOpen,
+  'chord-prog':           () => uiStore.isChordProgOpen = !uiStore.isChordProgOpen,
+  'live-performance-pad': () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
+  'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
 }
 
 const COLORS = [
@@ -116,105 +123,4 @@ const activeLabel = computed(() => {
 })
 </script>
 
-<template>
-  <div class="fixed bottom-10 left-3 z-[1200] flex flex-col items-center gap-3">
-    
-    <!-- Action Buttons -->
-    <TransitionGroup 
-      name="speed-dial"
-      tag="div"
-      class="flex flex-col items-center gap-3 mb-2"
-    >
-      <div 
-        v-for="(action, index) in filteredActions" 
-        :key="action.id"
-        class="group relative flex items-center"
-      >
-        <!-- Action Button -->
-        <button
-          @click="action.onClick(); uiStore.isMainMenuOpen = false"
-          :class="[
-            'w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all shadow-xl group',
-            uiStore.mainMenuSelectedIndex === index
-              ? 'border-2 border-synth-neon scale-110 ring-2 ring-synth-neon/50 bg-neutral-900/90 shadow-[0_0_20px_rgba(0,255,204,0.6)] animate-pulse'
-              : 'border border-white/10 bg-black/60 backdrop-blur-md hover:scale-105 hover:border-white/30',
-            action.color
-          ]"
-          :style="{ transitionDelay: `${(filteredActions.length - index) * 50}ms` }"
-        >
-          <component :is="action.iconComponent" class="w-5 h-5" />
-          <span class="text-[8px] font-black uppercase tracking-tighter text-center leading-none opacity-80">
-            {{ action.label }}
-          </span>
-        </button>
-      </div>
-    </TransitionGroup>
-
-    <!-- Main FAB -->
-    <button
-      @click="toggle"
-      :class="[
-        'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl border-2 z-10',
-        uiStore.isMainMenuOpen 
-          ? 'bg-white text-black border-white rotate-90' 
-          : 'bg-neutral-900 text-synth-neon border-synth-neon/30 hover:border-synth-neon hover:scale-105'
-      ]"
-    >
-      <X v-if="uiStore.isMainMenuOpen" class="w-6 h-6" />
-      <Menu v-else class="w-6 h-6" />
-    </button>
-
-    <!-- Centered Menu Name Indicator (positioned over the footer) -->
-    <Transition name="fade">
-      <div 
-        v-if="uiStore.isMainMenuOpen && activeLabel"
-        class="fixed bottom-0 left-1/2 -translate-x-1/2 h-10 pointer-events-none flex items-center justify-center gap-2 z-[710]"
-      >
-        <span class="w-1.5 h-1.5 rounded-full bg-synth-neon animate-pulse"></span>
-        <span class="text-synth-neon font-black text-[10px] tracking-widest font-mono uppercase">
-          MENU: {{ activeLabel }}
-        </span>
-        <span class="w-1.5 h-1.5 rounded-full bg-synth-neon animate-pulse"></span>
-      </div>
-    </Transition>
-
-    <!-- Overlay backdrop when open -->
-    <div 
-      v-if="uiStore.isMainMenuOpen" 
-      @click="uiStore.isMainMenuOpen = false"
-      class="fixed inset-0 bg-black/20 backdrop-blur-[2px] -z-10"
-    ></div>
-  </div>
-</template>
-
-<style scoped>
-/* Speed Dial Transition */
-.speed-dial-enter-active,
-.speed-dial-leave-active {
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-}
-
-.speed-dial-enter-from,
-.speed-dial-leave-to {
-  opacity: 0;
-  transform: translateY(20px) scale(0.5);
-}
-
-/* Fade Transition */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-button:not(.bg-white) {
-  box-shadow: 0 0 15px rgba(0, 255, 204, 0.1);
-}
-button:not(.bg-white):hover {
-  box-shadow: 0 0 25px rgba(0, 255, 204, 0.3);
-}
-</style>
+<template></template>
