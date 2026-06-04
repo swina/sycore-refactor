@@ -412,8 +412,8 @@ const hasTakes = computed(() => looperStore.takes.some(t => !t.isEmpty))
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <h2 class="text-lg font-black text-white tracking-[0.1em] uppercase">SY.CORE Looper</h2>
-              <div class="px-1.5 py-0.5 bg-violet-500/20 rounded text-[9px] font-mono text-violet-400 border border-violet-500/20 uppercase tracking-widest">Live Engine</div>
+              <h2 class="text-lg font-black text-white tracking-[0.1em] uppercase">Looper</h2>
+              <div class="px-1.5 py-0.5 bg-violet-500/20 rounded text-[9px] font-mono text-violet-400 border border-violet-500/20 uppercase tracking-widest">Live Engine </div><span class="bg-amber-400/70 text-[8px] rounded font-mono px-2 text-black">BETA</span>
             </div>
             <div class="flex items-center gap-3 mt-0.5">
               <button 

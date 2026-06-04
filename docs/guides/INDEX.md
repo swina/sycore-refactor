@@ -14,11 +14,18 @@
 
 ---
 
-## Sound & Audio
+## Sound Engine
 
 | Guide | Description |
 |-------|-------------|
 | [Sound Engine — Roland S-1 Adaptive Generator](./SYCORE_SOUND_ENGINE_S1.md) | Preset identity, real-time parameter control, modulation, and performance integration |
+
+---
+
+## Audio
+
+| Guide | Description |
+|-------|-------------|
 | [Audio Capture](./SYCORE_AUDIO_CAPTURE.md) | Record audio directly within SY.CORE via the mic toolbar panel |
 | [Audio Looper](./SYCORE_LOOPER.md) | Sample-accurate looper for live instrumental and digital performance *(Beta)* |
 | [Backing Track Player](./SYCORE_BACKING_TRACK_PLAYER.md) | Dual-slot playback engine with crossfade, playlist, and MIDI sync |
@@ -36,6 +43,7 @@
 | [Performance](./SYCORE_MIDI_PERFORMANCE.md) | Source-to-output routing matrix — controls |
 | [Mapping](./SYCORE_MIDI_MAPPING.md) | MIDI CC → application parameter |
 | [Actions](./SYCORE_MIDI_ACTIONS.md) | Per-device app action binding — maps MIDI CC/Note inputs to high-level SY.CORE actions (e.g. start sequencer, toggle looper, change preset). |
+| [Sync](./SYCORE_MIDI_SYNC.md) | Cross-subsystem transport synchronization matrix |
 | [MIDI Capture](./SYCORE_MIDI_CAPTURE.md) | Record, view, and export MIDI events in real time |
 | [Multi Sound — Program Change Browser](./SYCORE_DEVICE_PROGRAM_CHANGE.md) | Browse and send Program Change messages to connected devices |
 

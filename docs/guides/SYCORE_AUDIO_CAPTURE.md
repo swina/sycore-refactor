@@ -1,15 +1,6 @@
-# SY.CORE — Audio Capture
+# Audio Capture
 
-> **Panel:** Audio Capture (`AudioCapture.vue`)  
-> **Open via:** Toolbar mic button → `isAudioCaptureOpen`  
-> **Keyboard shortcut:** assignable via MIDI learn  
-> **Position:** Draggable, persisted in `S1_CAPTURE_POS` (localStorage)
-
----
-
-## Overview
-
-Audio Capture is a full-featured in-app audio recorder and editor. It records directly from any connected audio input, shows a live waveform during monitoring, and provides an interactive waveform editor with loop, crop, normalize, and export tools — all without leaving SY.CORE.
+**Audio Capture** is a full-featured in-app audio recorder and editor. It records directly from any connected audio input, shows a live waveform during monitoring, and provides an interactive waveform editor with loop, crop, normalize, and export tools — all without leaving SY.CORE.
 
 ---
 
@@ -17,27 +8,6 @@ Audio Capture is a full-featured in-app audio recorder and editor. It records di
 
 <img src="/help/guides/sycore-audio-capture.png"/>
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ [≡] 🎙 AUDIO CAPTURE  [REC 00:12] ···················· [✕]    │ ← Header
-├───────────────┬─────────────────────────────────────────────────┤
-│ [Device ▾] [PL]                                                 │ ← Device bar
-├───────┬───────────────────────────────────────────────────────  │
-│ REC   │  Timeline: [Sync | Manual] [▶/■]  Bars: [1|2|4|8|16]  │ ← Timeline bar
-│ MIDI  │                                                         │
-│ SYNC  │         WAVEFORM / OSCILLOSCOPE CANVAS                 │ ← Main area
-│ APND  │                                                         │
-│ PLAY  │                                                         │
-│ MP3   │  [PLAY START ─────────────────────────────]            │
-│ +PL   │  [LOOP START ──────────] [LOOP END ───────]  (loop on) │
-│ →LPR  │  [ZOOM H ─────] x  [PAN ─────]  %           (footer)  │
-│ SAVE  │  [ZOOM V ─────] x  [CROSSFADE ─────]  s               │
-│ IMPRT │                                                         │
-│ RESET │  IN [▓░░░░]  NORM  CEIL[──]dB  GATE[──]dB  00:00/00:12│
-└───────┴────────────────────────────────────────────────────────-┘
-```
-
----
 
 ## Core Concepts
 
@@ -198,36 +168,6 @@ When `isLooping` is true and the active audio element reaches `loopEnd - crossfa
 4. `isCrossfading` flag prevents re-triggering until the swap completes.
 
 This produces gapless looping for sample-accurate material when crossfade = 0, or smooth blended loops when crossfade > 0.
-
----
-
-## localStorage Keys
-
-| Key | Content |
-|-----|---------|
-| `S1_CAPTURE_DEVICE` | Last selected audio input device ID |
-| `S1_CAPTURE_TO_PLAYLIST` | Auto-add to playlist toggle (`'1'`/`'0'`) |
-| `S1_CAPTURE_APPEND` | Append mode toggle (`'1'`/`'0'`) |
-| `S1_CAPTURE_TIMELINE_MEASURES` | Number of bars (1/2/4/8/16) |
-| `S1_CAPTURE_TIMELINE_MODE` | `'synced'` or `'manual'` |
-| `S1_CAPTURE_SNAP_GRID` | Snap to bar divisions (`'1'`/`'0'`) |
-| `S1_CAPTURE_MIDI_TRIGGER` | MIDI sync armed state persistence |
-| `S1_CAPTURE_POS` | Draggable panel position |
-
----
-
-## Window Events
-
-| Event (listen) | Trigger |
-|----------------|---------|
-| `capture-rec-toggle` | Toggle record/stop from external UI |
-| `capture-start-rec` | Start recording; `detail.background` = true for headless recording |
-| `capture-stop-rec` | Stop recording from external UI |
-
-| Event (dispatch) | Payload |
-|-----------------|---------|
-| `playlist-add-from-capture` | `{ url, label, duration, bpm, repeats }` |
-| `toggle-backing-track` | `{ play: true, restart: true }` (when hasBackingTrack) |
 
 ---
 

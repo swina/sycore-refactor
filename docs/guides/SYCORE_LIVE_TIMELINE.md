@@ -1,8 +1,6 @@
 # Live Timeline
 
-## Overview
-
-LiveTimeline is a draggable/resizable panel component that provides a visual arrangement
+**Live Timeline** is a draggable/resizable panel component that provides a visual arrangement
 timeline for live performance. It sequences backing track segments, fires MIDI/UI events at
 specific time positions (markers), and controls MIDI transport sync independently of the
 Backing Track Player's own sync logic.

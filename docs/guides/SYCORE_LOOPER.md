@@ -1,8 +1,10 @@
-# SY.CORE Audio Looper: Technical & Performance Overview (Beta)
+# Audio Looper (Beta)
 
-The SY.CORE Audio Looper is a high-fidelity, sample-accurate performance tool designed for seamless integration between live instrumental performance and digital production. 
+The Audio Looper is a high-fidelity, sample-accurate performance tool designed for seamless integration between live instrumental performance and digital production. 
 
 ***This tool is still under development to fix stability issues***
+
+<img src="/help/guides/sycore-looper.png"/>
 
 ## 🎸 For the Musician (Performance Features)
 
@@ -34,9 +36,5 @@ Under the hood, SY.CORE uses a custom-built low-latency audio engine designed fo
 ---
 
 ## 🛠 Tech Stack
-*   **Framework**: Vue 3 (Composition API)
-*   **State**: Pinia
 *   **Audio Core**: Web Audio API / OfflineAudioContext
 *   **MP3 Encoder**: lamejs
-*   **Icons**: Lucide-Vue-Next
-*   **Styling**: Vanilla CSS + Tailwind Utility Classes

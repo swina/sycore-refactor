@@ -45,17 +45,15 @@ const CATEGORIES = [
     items: [
       { id: 'commercial',     label: 'Product Overview',      file: 'SYCORE_COMMERCIAL_PRESENTATION' },
       { id: 'advantages',     label: 'SY.CORE Advantages',    file: 'SYCORE_ADVANTEGES' },
+      { id: 'start-here',     label: 'Start Here',  file: 'SYCORE_MIDI_SETUP' },
       { id: 'entrepreneurs',  label: 'Note for Entrepreneurs', file: 'SYCORE_FOR_ENTERPRENEURS' },
     ],
   },
   {
-    label: 'Sound & Audio',
+    label: 'Sound Engine',
     color: 'text-emerald-400',
     items: [
-      { id: 'sound-engine',  label: 'Sound Engine — S-1',     file: 'SYCORE_SOUND_ENGINE_S1' },
-      { id: 'audio-capture', label: 'Audio Capture',          file: 'SYCORE_AUDIO_CAPTURE' },
-      { id: 'looper',        label: 'Audio Looper',           file: 'SYCORE_LOOPER', badge: 'Beta' },
-      { id: 'backing-track', label: 'Backing Track Player',   file: 'SYCORE_BACKING_TRACK_PLAYER' },
+      { id: 'sound-engine',  label: 'Roland S-1',     file: 'SYCORE_SOUND_ENGINE_S1' },
     ],
   },
   {
@@ -69,10 +67,21 @@ const CATEGORIES = [
       { id: 'midi-performance',  label: 'Performance',         file: 'SYCORE_MIDI_PERFORMANCE' },
       { id: 'midi-mapping',      label: 'CC Mapping',         file: 'SYCORE_MIDI_MAPPING' },
       { id: 'midi-actions',      label: 'MIDI Actions',         file: 'SYCORE_MIDI_ACTIONS' },
+      { id: 'midi-sync',    label: 'MIDI Sync',         file: 'SYCORE_MIDI_SYNC' },
       { id: 'midi-capture',    label: 'MIDI Capture',         file: 'SYCORE_MIDI_CAPTURE' },
       { id: 'program-change',  label: 'Multi Sound',          file: 'SYCORE_DEVICE_PROGRAM_CHANGE' },
     ],
   },
+  {
+    label: 'Audio',
+    color: 'text-emerald-400',
+    items: [
+      { id: 'audio-capture', label: 'Audio Capture',          file: 'SYCORE_AUDIO_CAPTURE' },
+      { id: 'looper',        label: 'Audio Looper',           file: 'SYCORE_LOOPER', badge: 'Beta' },
+      { id: 'backing-track', label: 'Backing Track Player',   file: 'SYCORE_BACKING_TRACK_PLAYER' },
+    ],
+  },
+
   {
     label: 'Live Performance',
     color: 'text-pink-400',

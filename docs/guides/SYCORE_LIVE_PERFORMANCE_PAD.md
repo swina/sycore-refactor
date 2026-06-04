@@ -1,9 +1,6 @@
 # LIVE SET
 
-
-## Overview
-
-Live Set is the dedicated **show-mode** control center. It consolidates three essential live tools into a single panel:
+**Live Set** is the dedicated **show-mode** control center. It consolidates three essential live tools into a single panel:
 
 1. **Performance Sets** — 16 one-touch recall pads for complete device program change states
 2. **Backing Tracks** — a 16-slot playlist pad grid for click-and-play audio tracks

@@ -197,10 +197,10 @@ const ROWS = computed(() => [
 
       <!-- Header -->
       <div>
-        <h3 class="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1 flex items-center gap-2">
+        <h2 class="text-[16px] font-black uppercase tracking-widest text-synth-cyan mb-1 flex items-center gap-2">
           <Link2 class="w-3.5 h-3.5" />
           Sync Automation Matrix
-        </h3>
+        </h2>
         <p class="text-[10px] text-neutral-600">
           Each cell controls what happens automatically when the row's source starts or stops.
         </p>

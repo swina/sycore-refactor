@@ -138,6 +138,7 @@ const toolbarButtonMap = {
   'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
   'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
+  'audio-looper':           { state: 'isLooperOpen',                     icon: RotateCw,           label: 'Audio Looper' },
 }
 
 function handleToolbarButtonClick(button) {

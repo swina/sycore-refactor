@@ -1,58 +1,22 @@
-# MIDI MANAGER — Technical & Commercial Reference
+# MIDI MANAGER
 
-**Component:** `src/components/UnifiedMidiManager.vue`  
-**Module:** SY.CORE — Unified MIDI Control Center  
-**Version context:** release/0.0.6
 
----
-
-## Overview
-
-`UnifiedMidiManager` is the top-level modal shell that consolidates every MIDI management surface in SY.CORE into a single, tab-navigated workspace. It acts as a pure orchestrator: it holds no MIDI logic of its own, delegating all functionality to eight specialist sub-panels rendered conditionally by tab.
-
-The panel opens via `uiStore.showUnifiedMidiManager` and is permanently available at `z-[900]` — the highest z-index in the application — ensuring it sits above all other overlays.
+`MIDI Manager` is the top-level modal shell that consolidates every MIDI management surface in SY.CORE into a single, tab-navigated workspace. It acts as a pure orchestrator: it holds no MIDI logic of its own, delegating all functionality to eight specialist sub-panels rendered conditionally by tab.
 
 ---
 
 ## Architecture
 
-```
-UnifiedMidiManager.vue  (orchestrator shell)
-│
-├─ DeviceListPanel.vue          [tab: devices]
-├─ MidiMatrix.vue               [tab: routing]
-├─ MidiPerformancePanel.vue     [tab: performance]
-├─ MidiMappingPanel.vue         [tab: mapping]
-├─ AppMidiMapper.vue            [tab: actions]
-├─ MidiMonitorPanel.vue         [tab: monitor]
-├─ MidiSyncMatrix.vue           [tab: sync]
-└─ MidiSettingsPanel.vue        [tab: settings]
-```
 
 ### State management
 
-The shell owns only two pieces of state, both delegated to `useUiStore`:
-
-| State | Key | Default |
-|---|---|---|
-| Panel visibility | `uiStore.showUnifiedMidiManager` | `false` |
-| Active tab | `uiStore.unifiedMidiManagerTab` | `'devices'` |
 
 Tab persistence across close/reopen is handled naturally because `uiStore` is a Pinia singleton — the last active tab survives without explicit persistence.
 
-### Layout
-
-- **Size:** `min(90vw, 1200px)` wide × `min(85vh, 860px)` tall — scales down on smaller viewports without breakpoints.
-- **Tab bar:** centered in the header, between the title and the close button. Icons are always shown; labels are hidden below `sm` breakpoint.
-- **Content area:** `flex-1 overflow-hidden` — each child panel is responsible for its own internal scrolling.
-- **Dismiss:** clicking the backdrop (`@click.self`) closes the panel, as does the explicit close button.
-- **Animation:** `umm` transition — 150ms opacity + scale(0.97) on enter/leave.
-
----
 
 ## Tab Reference
 
-### Tab 1 — Devices (`DeviceListPanel.vue`)
+### Tab 1 — Devices
 
 **Purpose:** Device discovery, type classification, and per-device capability registration.
 
@@ -73,7 +37,7 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ---
 
-### Tab 2 — Routing (`MidiMatrix.vue`, `embedded: true`)
+### Tab 2 — Routing
 
 <img src="/help/guides/sycore-midi-routing.png"/>
 
@@ -120,7 +84,7 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ---
 
-### Tab 3 — Performance (`MidiPerformancePanel.vue`, `embedded: true`)
+### Tab 3 — Performance
 
 **Purpose:** Source-to-output routing matrix — controls which SY.CORE internal sources (and physical inputs) route to which hardware outputs.
 
@@ -151,7 +115,7 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ---
 
-### Tab 4 — Mapping (`MidiMappingPanel.vue`, `embedded: true`)
+### Tab 4 — Mapping 
 
 **Purpose:** MIDI CC → application parameter mapping with preset management.
 
@@ -184,7 +148,7 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ---
 
-### Tab 5 — Actions (`AppMidiMapper.vue`, `embedded: true`)
+### Tab 5 — Actions 
 
 **Purpose:** Per-device app action binding — maps MIDI CC/Note inputs to high-level SY.CORE actions (e.g. start sequencer, toggle looper, change preset).
 
@@ -202,7 +166,7 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ---
 
-### Tab 6 — Monitor (`MidiMonitorPanel.vue`, `embedded: true`)
+### Tab 6 — Monitor 
 
 **Purpose:** Real-time MIDI message logger with filtering, pause, and JSON export.
 
@@ -245,7 +209,7 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ---
 
-### Tab 7 — Sync (`MidiSyncMatrix.vue`)
+### Tab 7 — Sync 
 
 **Purpose:** Cross-subsystem transport synchronization matrix — which playback sources trigger which other playback targets when started/stopped.
 
@@ -263,7 +227,7 @@ Each cell is an independent boolean toggle. Enabling a cell means "when this row
 
 ---
 
-### Tab 8 — Settings (`MidiSettingsPanel.vue`)
+### Tab 8 — Settings 
 
 **Purpose:** MIDI configuration persistence — named presets for the full routing configuration, plus full JSON export/import.
 

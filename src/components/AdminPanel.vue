@@ -120,6 +120,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'chord-prog',           label: 'Chord Progression',     icon: 'AudioLines' },
   { id: 'live-performance-pad', label: 'Live Performance',      icon: 'Layers'     },
   { id: 'device-program-change',label: 'Device Program Change', icon: 'Disc3'      },
+  { id: 'audio-looper',         label: 'Audio Looper',          icon: 'RotateCw'   },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

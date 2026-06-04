@@ -50,6 +50,7 @@ const MENU_ACTION_MAP = {
   midilearn:      () => uiStore.isMidiMappingOpen = !uiStore.isMidiMappingOpen,
   session:        () => uiStore.isSessionOpen = !uiStore.isSessionOpen,
   looper:         () => uiStore.isLooperOpen = !uiStore.isLooperOpen,
+  'audio-looper': () => uiStore.isLooperOpen = !uiStore.isLooperOpen,
   admin:          () => uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen,
   midi_matrix:    () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
   'midi-performance':     () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,

@@ -1,9 +1,6 @@
 # MIDI Capture
 
-
-## Overview
-
-MIDI Capture records live MIDI note performance into an interactive piano roll. After stopping, the captured notes can be reviewed, edited (pitch, velocity, duration), cropped to a precise range, quantized, played back through any MIDI output, and exported as a `.mid` file or sent directly into the Step Sequencer.
+**MIDI Capture** records live MIDI note performance into an interactive piano roll. After stopping, the captured notes can be reviewed, edited (pitch, velocity, duration), cropped to a precise range, quantized, played back through any MIDI output, and exported as a `.mid` file or sent directly into the Step Sequencer.
 
 
 ---
