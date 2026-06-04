@@ -89,6 +89,8 @@ If the auto-detected type is wrong (e.g. a controller is classified as an instru
 
 ## Step 5 — Configure Routing (Routing Tab)
 
+<img src="/help/guides/sycore-midi-routing.png"/>
+
 Switch to the **Routing** tab. You will see one row per registered device in **Grid view**.
 
 ### Enable inputs and outputs
@@ -127,6 +129,8 @@ At the bottom of the Routing tab, enabling **Global Thru Bridge** forwards all i
 
 ## Step 6 — Set Up Performance Routing (Performance Tab)
 
+<img src="/help/guides/sycore-midi-performance-grid.png"/>
+
 The **Performance** tab controls which *internal SY.CORE sources* route to which hardware outputs.
 
 | Source | Sends from |
@@ -156,7 +160,9 @@ Toggle **Broadcast Mode** (top of the Performance tab) to send all sources to al
 
 ---
 
-## Step 7 — Map CC Controls (Mapping Tab)
+## Step 7 — Mapping (Map CC Controls)
+
+<img src="/help/guides/sycore-midi-mapping.png"/>
 
 If you want a physical knob or fader on your controller to control a parameter in SY.CORE or on your synth hardware, use the **Mapping** tab.
 

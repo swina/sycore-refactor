@@ -6,6 +6,7 @@ import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { usePresetStore } from '@/stores/usePresetStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -22,6 +23,7 @@ const emit = defineEmits(['close'])
 const midiStore = useMidiStore()
 const arpStore = useArpStore()
 const authStore = useAuthStore()
+const presetStore = usePresetStore()
 const store = useChordProgStore()
 const syncStore = useSyncStore()
 const uiStore = useUiStore()
@@ -263,6 +265,7 @@ onUnmounted(() => {
 
 const panicDelayMs = ref(250)
 const activeTab = ref('library')
+watch(activeTab, (tab) => { if (tab === 'performance') loadPcSets() })
 const libSubTab = ref(store.selectedKey >= 13 ? 'genre' : 'keys')
 const selectedProgressionName = ref('')
 const savePatternName = ref('')
@@ -401,6 +404,7 @@ async function handleDeletePattern(id) {
 
 onMounted(() => {
   if (authStore.user) store.loadLibrary()
+  loadPcSets()
 })
 
 watch(() => authStore.user, (u) => {
@@ -488,6 +492,56 @@ function applyFillTranspose() {
       : Math.max(-24, Math.min(24, fillTranspose.value))
     store.setStep(i, { transpose })
   }
+}
+
+// ── Performance Sets (from MidiDeviceProgramChangePanel / localStorage) ───────
+
+const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
+const pcSets = ref([])
+const activePcSetId = ref(null)
+
+function loadPcSets() {
+  try {
+    const raw = localStorage.getItem(LS_PC_SETS)
+    pcSets.value = raw ? JSON.parse(raw) : []
+  } catch { pcSets.value = [] }
+}
+
+function recallPcSet(set) {
+  activePcSetId.value = set.id
+  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
+  set.devices.forEach(entry => {
+    if (!midiStore.routingConfig?.registrations?.[entry.deviceName]) return
+    midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
+    midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
+    midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
+    midiStore.updateRegistration(entry.deviceName, 'pcMsb',     entry.pcMsb ?? 0)
+    midiStore.updateRegistration(entry.deviceName, 'pcLsb',     entry.pcLsb ?? 0)
+    midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
+    if (entry.isUiDevice) {
+      if (entry.lastPresetId) {
+        const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
+        if (preset) presetStore.recallPreset(preset, false)
+      }
+    } else {
+      const port = midiStore.outputs.find(o => o.name === entry.deviceName)
+      if (!port) return
+      const multiEntries = Object.entries(entry.pcChannels ?? {})
+      if (multiEntries.length > 0) {
+        multiEntries.forEach(([chStr, info]) => {
+          const ch = parseInt(chStr)
+          port.send([0xB0 | ch, 0,  info.msb ?? 0])
+          port.send([0xB0 | ch, 32, info.lsb ?? 0])
+          port.send([0xC0 | ch, info.program ?? 0])
+        })
+      } else {
+        const ch = entry.pcChannel ?? 0
+        port.send([0xB0 | ch, 0,  entry.pcMsb ?? 0])
+        port.send([0xB0 | ch, 32, entry.pcLsb ?? 0])
+        port.send([0xC0 | ch, entry.pcProgram ?? 0])
+      }
+    }
+  })
 }
 
 function velBarColor(v) {
@@ -932,7 +986,7 @@ function velBarColor(v) {
       <!-- ── BOTTOM TABS ─────────────────────────────────────────────────── -->
       <div class="shrink-0 flex border-b border-neutral-800 px-3">
         <button
-          v-for="tab in ['library', 'generate', 'save-load']"
+          v-for="tab in ['library', 'generate', 'save-load', 'performance']"
           :key="tab"
           @click="activeTab = tab"
           :class="[
@@ -940,7 +994,7 @@ function velBarColor(v) {
             activeTab === tab ? 'border-purple-500 text-purple-300' : 'border-transparent text-neutral-500 hover:text-neutral-300'
           ]"
         >
-          {{ tab === 'save-load' ? 'Save / Load' : tab }}
+          {{ tab === 'save-load' ? 'Save / Load' : tab === 'performance' ? 'Performance Set' : tab }}
         </button>
       </div>
 
@@ -1093,6 +1147,41 @@ function velBarColor(v) {
           </button>
 
           <div v-if="progLoading" class="text-[10px] text-neutral-500">Loading progression data…</div>
+        </div>
+
+        <!-- Performance Set Tab -->
+        <div v-else-if="activeTab === 'performance'" class="flex-1 flex flex-col overflow-hidden min-h-0">
+          <div class="px-3 py-1.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
+            <span class="text-[9px] font-bold uppercase tracking-widest text-neutral-500 flex-1">Performance Sets</span>
+            <span v-if="pcSets.length" class="text-[8px] font-black px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20">{{ pcSets.length }}</span>
+          </div>
+          <div class="flex-1 overflow-y-auto custom-scrollbar">
+            <button
+              v-for="set in pcSets"
+              :key="set.id"
+              @click="recallPcSet(set)"
+              :class="[
+                'w-full text-left flex items-center gap-3 px-4 py-2.5 border-b border-neutral-800/50 transition-colors group',
+                activePcSetId === set.id
+                  ? 'bg-violet-900/30 border-l-2 border-l-violet-500'
+                  : 'hover:bg-violet-900/20 border-l-2 border-l-transparent'
+              ]"
+            >
+              <div class="flex-1 min-w-0">
+                <div :class="['text-[13px] font-bold truncate transition-colors', activePcSetId === set.id ? 'text-violet-300' : 'text-white group-hover:text-violet-200']">
+                  {{ set.name }}
+                </div>
+                <div class="text-[10px] text-neutral-600 font-mono mt-0.5">
+                  {{ set.devices.length }} device{{ set.devices.length !== 1 ? 's' : '' }}
+                  <span v-if="set.midiChannel"> · CH{{ set.midiChannel }}</span>
+                </div>
+              </div>
+              <RotateCcw :class="['w-3.5 h-3.5 shrink-0 transition-colors', activePcSetId === set.id ? 'text-violet-400' : 'text-neutral-700 group-hover:text-violet-400']" />
+            </button>
+            <div v-if="pcSets.length === 0" class="px-4 py-8 text-[10px] text-neutral-600 text-center font-mono">
+              No performance sets saved — create them in the Multi Sound panel
+            </div>
+          </div>
         </div>
 
         <!-- Save / Load Tab -->

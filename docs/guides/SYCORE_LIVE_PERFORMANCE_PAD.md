@@ -1,15 +1,9 @@
-# SY.CORE — Live Performance Pad
+# LIVE SET
 
-> **Panel:** Live Performance Pad (`LivePerformancePad.vue`)  
-> **Open via:** Toolbar → Live Performance button → `isLivePerformancePadOpen`  
-> **Position:** Draggable and resizable, persisted in `SYCORE_POS_LIVE_PERF`  
-> **Default size:** 900 × 700 px
-
----
 
 ## Overview
 
-Live Performance Pad is the dedicated **show-mode** control center. It consolidates three essential live tools into a single panel:
+Live Set is the dedicated **show-mode** control center. It consolidates three essential live tools into a single panel:
 
 1. **Performance Sets** — 16 one-touch recall pads for complete device program change states
 2. **Backing Tracks** — a 16-slot playlist pad grid for click-and-play audio tracks
@@ -21,23 +15,7 @@ All three can run simultaneously. MIDI mappings allow any pad, track, or fader t
 
 ## Interface Layout
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ 🎵 LIVE PERFORMANCE   [Performance] [Setup]      [Save] [Save New] [✕]│ ← Header
-├──────────────────────────────────────────────────────────────────────┤
-│ ━━━━━━━━━ PERFORMANCE SETS (row A: pads 1–8) ━━━━━━━━━━━━━━━━━━━   │
-│ [SET 1][SET 2][SET 3][SET 4][SET 5][SET 6][SET 7][SET 8]            │
-│ ━━━━━━━━━ PERFORMANCE SETS B (row B: pads 9–16) ━━━━━━━━━━━━━━━━━━ │
-│ [SET 9][SET 10]…                    [SET 16]                         │
-│ ━━━━━━━━━ BACKING TRACKS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   │
-│ [PlaylistPadGrid — 16 slots]                                         │
-│ ━━━━━━━━━ VOLUME MIX ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   │
-│ [🔇] Roland S-1  ●─────────────────────── 100  CC[7]                │
-├──────────────────────────────────────────────────────────────────────┤
-│          [◀]  [▶ / ⏸]  [▶▶]     REC SYNC ●      #3 Track name      │ ← Player footer
-│ ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  (playlist bar)       │
-└──────────────────────────────────────────────────────────────────────┘
-```
+<img src="/help/guides/sycore-live-set.png"/>
 
 ---
 
@@ -115,13 +93,12 @@ A persistent transport bar at the bottom of the Performance tab:
 
 When **REC SYNC** is on and a backing track is playing, the footer background pulses red. This is a visual indicator for the performer to know that backing track playback is synced to Audio Capture recording.
 
-The `syncStore.syncRecordAudioCapture` flag is shared with the `SyncStore` — other parts of the app can start/stop recording based on this state.
 
 ---
 
 ## Volume Mix
 
-Appears when at least one registered device has type `audio-interface`, `instrument-single`, or `instrument-multi`.
+Appears when at least one registered device.
 
 ### Per-Device Row
 
@@ -143,16 +120,6 @@ Appears when at least one registered device has type `audio-interface`, `instrum
 For `instrument-multi` devices, the mix key includes the current MIDI channel: `DeviceName:CH`. Each MIDI channel of a multitimbral device has its own stored volume and CC number. The badge `CH3` updates when the active part changes.
 
 ### Mute Implementation
-
-Instead of a state-only flag, muting **monkey-patches `port.send`**:
-
-```js
-port.send = (data, ts) => {
-  const type = data[0] & 0xF0
-  if (type === 0x90 || type === 0x80) return  // drop Note On/Off
-  orig(data, ts)
-}
-```
 
 This intercepts all outgoing messages at the WebMIDI level. CC, PC, SysEx, and clock messages still pass through. The patch is removed on unmute, on component unmount, and on device reconnect (reapplied on reconnect if still muted).
 
@@ -184,7 +151,7 @@ The active snapshot is highlighted in the list and its name appears in the heade
 
 ## MIDI Listener
 
-A dedicated raw MIDI listener (`_startLppMidiListener`) runs independently of the main CC listener. It monitors all inputs and resolves mapped param names:
+A dedicated raw MIDI listener runs independently of the main CC listener. It monitors all inputs and resolves mapped param names:
 
 | Param pattern | Trigger |
 |--------------|---------|
@@ -193,45 +160,6 @@ A dedicated raw MIDI listener (`_startLppMidiListener`) runs independently of th
 | `lpp_mix_DeviceName` | Sets device volume to the CC value |
 | `lpp_playstop` | Toggles playlist play/stop |
 
-All mappings live in `mappingStore.midiMappings` and use the standard `Device:CH:CC#` key format.
-
----
-
-## Timeline Integration
-
-The panel listens for two window events dispatched by `LiveTimeline`:
-
-| Event | Action |
-|-------|--------|
-| `timeline-trigger-perf-set` | `detail.idx` — triggers pad N (same as clicking it) |
-| `timeline-load-perf-set` | `detail.setId` — applies a PC set directly by ID without changing activePadIdx |
-
-This allows the Live Timeline to drive performance set changes on a pre-programmed schedule during a set.
-
----
-
-## localStorage Keys
-
-| Key | Content |
-|-----|---------|
-| `SYCORE_PC_PERFORMANCE_SETS` | All saved PC sets (from Device Program Change Panel) |
-| `SYCORE_LPP_SETS` | Current 16 pad assignments |
-| `SYCORE_LPP_SNAPSHOTS` | Saved snapshots (array) |
-| `SYCORE_LPP_MIX` | Volume mix state per device/channel |
-| `SYCORE_POS_LIVE_PERF` | Draggable panel position and size |
-
----
-
-## Stores Used
-
-| Store | Purpose |
-|-------|---------|
-| `useMidiStore` | MIDI channel, output ports, routing config |
-| `usePresetStore` | Recall preset by ID when a PC set's UI device is applied |
-| `useLivePadStore` | Shared playlist, playlistIdx, crossfade, active pad state |
-| `useMappingStore` | MIDI mappings (for MIDI learn dots and lookup) |
-| `useSyncStore` | `syncRecordAudioCapture` flag for REC SYNC |
-| `useDeviceRegistry` | Registered device list for Volume Mix |
 
 ---
 

@@ -1,17 +1,10 @@
-# SY.CORE — MIDI Capture
+# MIDI Capture
 
-> **Panel:** MIDI Capture (`MidiCapture.vue`)  
-> **Open via:** Toolbar → MIDI Capture button → `isMidiCaptureOpen`  
-> **Position:** Draggable and resizable, persisted in `SYCORE_POS_MIDI_CAPTURE`  
-> **Min size:** 920 × 500 px
-
----
 
 ## Overview
 
 MIDI Capture records live MIDI note performance into an interactive piano roll. After stopping, the captured notes can be reviewed, edited (pitch, velocity, duration), cropped to a precise range, quantized, played back through any MIDI output, and exported as a `.mid` file or sent directly into the Step Sequencer.
 
-The capture state (**frozen notes**, **phase**, **range**) persists in `useCaptureStore` so closing and reopening the panel does not lose the session.
 
 ---
 
@@ -35,27 +28,8 @@ MIDI Capture operates in three mutually exclusive phases:
 
 ## Interface Layout
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  🎵 MIDI CAPTURE  [REC / N notes / IDLE]                      [✕]   │ ← Header
-├──────────────────────────────────────────────────────────────────────┤
-│ [All inputs ▾]  [▶ Capture / ■ Stop]  [bar1][bar2][bar3][bar4]  [↺] │ ← Controls
-├──────────────────────────────────────────────────────────────────────┤
-│ (review only) [Output ▾]  [CH ▾]  BPM 120 · 1/16=125ms · 42 notes  │
-├────┬─────────────────────────────────────────────────────────────────┤
-│    │                                                                  │
-│ C4 │ ─────────────────── piano roll canvas ─────────────────────     │
-│ B3 │                                                                  │
-│ A3 │    [▲ range handle]          [▲ range handle]                    │
-│    │                                                                  │
-├────┴─────────────────────────────────────────────────────────────────┤
-│ (selected note) Pitch: C4 ──[────]──  Vel: 84 ──[████░░]──           │
-│                 Dur: [1/4][1/4·][1/4T][1/8]…  [🗑] [✕]              │
-├──────────────────────────────────────────────────────────────────────┤
-│ 56 total / 42 in range   IN: beat 1.00   OUT: beat 5.00   [✂ Crop]  │
-│                     [🔁 Loop] [▶ Play / ■ Stop] [⊞ 1/16] [→ SEQ] [↓ MIDI] │
-└──────────────────────────────────────────────────────────────────────┘
-```
+<img src="/help/guides/sycore-midi-capture.png"/>
+
 
 ---
 
@@ -83,14 +57,13 @@ The piano roll height expands automatically as notes arrive but never shrinks mi
 
 The canvas is drawn entirely in `<canvas>` with two rendering paths:
 
-### Live (`drawLivePianoRoll`)
+### Live
 
-- Called via `requestAnimationFrame` while `phase === 'capturing'`.
 - Canvas grows in width as the recording progresses.
 - Auto-scrolls to keep the playhead at ~80% from the left.
 - Notes color-coded by velocity: `hsl(velocity × 2, 80%, 55%)`.
 
-### Review (`drawReviewPianoRoll`)
+### Review
 
 - Drawn once per user interaction (note edit, range drag, zoom change).
 - Out-of-range regions are shaded with 55% black overlay.
@@ -123,6 +96,8 @@ A 36px wide canvas on the left edge shows pitch names (C4, B3, …). It redraws 
 ---
 
 ## Inline Note Editor
+
+<img src="/help/guides/sycore-midi-capture-edit.png"/>
 
 Appears at the bottom of the panel when a note is selected. Changes apply **live** to the piano roll without confirmation.
 

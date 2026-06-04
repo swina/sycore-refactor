@@ -2,6 +2,10 @@
 
 The **Step Sequencer** is a powerful algorithmic composition and MIDI sequencing engine integrated into SY.CORE. It allows you to create complex patterns, chord progressions, and automations quickly and intuitively, with a particular focus on live performance and creative generation.
 
+
+<img src="../../public/help/guides/sycore-step-sequencer.png"/>
+
+
 ---
 
 ## 1. Intelligent Generation (Algorithmic Engine)
@@ -39,8 +43,6 @@ The Step Sequencer is accessed directly from the Sound Engine header. It lives a
 
 ### 5.1 — Opening the Sequencer
 
-<img src="../../public/help/guides/sycore-step-sequencer.png"/>
-
 In the Sound Engine header, click the :ListMusic: **Sequencer** button (the list-music icon). The panel opens below the sound engine. While open, the button turns **amber**. If a pattern is already saved with the current sound, the button is **violet** even when the panel is closed — that is the SEQ badge.
 
 ```
@@ -53,18 +55,8 @@ In the Sound Engine header, click the :ListMusic: **Sequencer** button (the list
 
 ### 5.2 — Interface at a Glance
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ [▶] [■] [⏺ REC]  BPM [120]  Steps [16]  Transpose [-2 .. +2]  [⬇ MIDI] │  ← Toolbar
-│ [Style ▾] [Scale ▾] [Key ▾] [Oct] [Range] [Density] [Generate]    [LINK] │  ← Gen row
-├──────────────────────────────────────────────────────────────────────┤
-│ [ 1 ]  [ 2 ]  [ 3 ]  [ 4 ]  [ 5 ]  [ 6 ]  [ 7 ]  [ 8 ]            │
-│ [ 9 ]  [10]  [11]  [12]  [13]  [14]  [15]  [16]                    │  ← Step grid
-├──────────────────────────────────────────────────────────────────────┤
-│ Step 3 — ACTIVE   Notes: C3  Vel [▓▓▓░] 87  Gate [▓▓░░] 60%        │
-│          Tie [0]   P1 CUTOFF [▓▓▓░] 74   P2 RESONANCE [▓░░░] 42   │  ← Step editor
-└──────────────────────────────────────────────────────────────────────┘
-```
+<img src="/help/guides/sycore-step-sequencer.png"/>
+
 
 Each step cell shows:
 - The note name(s) — e.g. `C3` or `C3+2` for a chord
@@ -257,14 +249,6 @@ The file is named `S1_Sequence_[SoundName].mid` and downloads immediately. Impor
 2. Play single notes on your keyboard — each note re-roots the sequence
 3. Use the **Transpose** control (±24) for coarser shifts mid-performance
 4. Switch A/B variant for an instant tonal change without stopping
-
-**Chord progression builder**
-
-1. Enable **Chords**, set Max Polyphony to **3**, Style → **Ambient**, Density → **30 %**
-2. Generate → sparse three-note chord pattern
-3. Select individual steps, adjust the notes manually via MIDI keyboard
-4. Set P1 → **Reverb (CC 91)**, give each chord a different reverb depth in the step editor
-5. Export as MIDI → bring into DAW for arrangement
 
 ---
 

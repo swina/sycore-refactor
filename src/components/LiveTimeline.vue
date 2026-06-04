@@ -952,7 +952,7 @@ onUnmounted(() => {
         <div class="flex flex-col">
           <div class="flex items-center gap-2">
             <Clock class="w-4 h-4 text-synth-neon" />
-            <h2 class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Timeline</h2>
+            <h2 class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Live Timeline</h2>
           </div>
           <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Live Set Arranger</span>
         </div>

@@ -1,6 +1,5 @@
-# Multi Sound — Technical & Commercial Reference
+# Multi Sound 
 
-**Component:** `src/components/MidiDeviceProgramChangePanel.vue`  
 **Module:** SY.CORE — Program Change Browser  
 **Version context:** release/0.0.6
 
@@ -23,38 +22,6 @@
 
 <img src="/help/guides/multi-program-change.png" width="640"/>
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                MidiDeviceProgramChangePanel              │
-│                                                         │
-│  ┌───────────────┐     ┌───────────────────────────┐   │
-│  │  Device List  │────▶│   Right Panel (browser)   │   │
-│  │  (left col)   │     │                           │   │
-│  │               │     │  ┌─────────────────────┐  │   │
-│  │  Performance  │     │  │  Bank Selector      │  │   │
-│  │  Sets         │     │  │  (catalog + user)   │  │   │
-│  └───────────────┘     │  └─────────────────────┘  │   │
-│                        │  ┌─────────────────────┐  │   │
-│                        │  │  Preset List        │  │   │
-│                        │  │  + MIDI CC Scroll   │  │   │
-│                        │  └─────────────────────┘  │   │
-│                        └───────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-         │                         │
-    useMidiStore             midiService
-    usePresetStore           Web MIDI API
-    useUserBanksStore        localStorage
-```
-
-### Store dependencies
-
-| Store | Purpose |
-|---|---|
-| `useMidiStore` | `routingConfig.registrations`, `routingMatrix`, `outputs`, `updateRegistration()`, `setMidiChannel()` |
-| `usePresetStore` | `history`, `lastPreset`, `recallPreset()` — used in UI Device mode |
-| `useUserBanksStore` | Per-device user-imported banks; CRUD backed by `localStorage` under key `SYCORE_USER_PRESET_BANKS` |
-
----
 
 ## Component Structure
 
@@ -70,7 +37,6 @@
 
 ### Left Column — Performance Sets
 
-Stored in `localStorage` under key `SYCORE_PC_PERFORMANCE_SETS`.
 
 Each set snapshot contains, per device:
 
@@ -95,24 +61,8 @@ On recall, for hardware devices, if `pcChannels` contains multi-channel state, a
 
 ## Catalog System
 
-### Index file: `src/data/program_change/program_change.json`
 
 Top-level keys are device name fragments matched case-insensitively with partial substring matching (`includes`).
-
-Per-bank schema:
-
-```jsonc
-{
-  "data":           "./folder/file.json",   // relative path under /src/data/program_change/
-  "msb":            boolean,                // send CC 0 (Bank Select MSB) from sound data
-  "lsb":            boolean,                // send CC 32 (Bank Select LSB) from sound data
-  "category_field": "category",             // field name in sound objects for the category
-  "program_field":  "program",              // field name carrying the raw program number
-  "program_base":   number,                 // offset applied before clamping to 0–127
-  "offset":         number | false,         // unused in current PC send logic
-  "bank_size":      number | false
-}
-```
 
 Sound data files are lazy-loaded at runtime via `fetch()` when a bank is selected.
 
@@ -137,8 +87,6 @@ CC 32 (Bank Select LSB): value from sound.lsb  OR 0
 PC    (0xC0 | ch):       sound[program_field] clamped to 0–127 after applying program_base
 ```
 
-If `midiStore.sendClock` is true, `midiStore.startClock()` is called 100 ms after the PC message.
-
 ### Manual fallback send
 
 - MSB / LSB are optional (checkbox-gated).
@@ -159,16 +107,10 @@ This state survives panel close/reopen and is the source of truth for the "Curre
 
 Allows a physical knob/encoder to scroll the preset list without touching the UI.
 
-- Stored in `localStorage` under key `SYCORE_PC_SCROLL_CC` as `{ cc, channel, device }`.
-- Uses `midiService.addRawListener()` — listens to raw Web MIDI events across all inputs.
-- Learn mode: captures the first CC event received and stores its `cc`, `channel`, and input device name.
-- Navigation: computes delta against `lastScrollCCVal`; wraps `navigatePresetList(±1)` and auto-scrolls the active button into view via `scrollIntoView`.
-
 ---
 
-## `.mfprojz` Import (Arturia MIDI Control Center)
+## Import (Arturia MIDI Control Center)
 
-Handled by the composable `src/composables/useMfprojzParser.js`.
 
 ### Parse pipeline
 
@@ -181,30 +123,14 @@ Handled by the composable `src/composables/useMfprojzParser.js`.
 
 ### In-component flow
 
-1. Hidden `<input type="file" accept=".mfprojz">` triggered programmatically.
 2. On parse success → inline rename dialog pre-filled with filename (extension stripped).
 3. On confirm → `userBanksStore.addBank(deviceName, bankName, presets)`.
 4. Bank immediately selected and available for sending.
 
----
-
-## UI / Visual Design
-
-- **Framework:** Vue 3 `<script setup>` + Tailwind CSS
-- **Icons:** Lucide Vue Next
-- **Modal:** fixed overlay, `z-[650]`, `backdrop-blur-md`, max-width `5xl`, height `90vh`
-- **Animation:** `performance` transition — 400ms cubic-bezier ease-out, translate + scale on enter/leave
-- **Color language:**
-  - Violet — catalog banks, active presets, standard PC state
-  - Teal — user-imported banks
-  - Sky — UI Device / Sound Library mode
-  - Amber — offline device warning
-  - Orange — MIDI Learn active state
-  - Emerald — device online indicator
 
 ---
 
-## Commercial Value Proposition
+## Opportunities
 
 ### For live performers
 
@@ -247,11 +173,3 @@ The **multi-timbral display** renders the current program state per channel, giv
 - MIDI CC scroll uses relative delta (value change per message), which works correctly with endless encoders but may behave unexpectedly with absolute pot controllers.
 
 ---
-
-## LocalStorage Keys
-
-| Key | Content |
-|---|---|
-| `SYCORE_PC_PERFORMANCE_SETS` | JSON array of saved Performance Set objects |
-| `SYCORE_PC_SCROLL_CC` | JSON object `{ cc, channel, device }` for CC scroll mapping |
-| `SYCORE_USER_PRESET_BANKS` | JSON object `{ [deviceName]: [{ name, createdAt, presets }] }` |

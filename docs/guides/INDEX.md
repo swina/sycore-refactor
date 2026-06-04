@@ -31,6 +31,11 @@
 |-------|-------------|
 | [Connecting Your MIDI Devices](./SYCORE_MIDI_SETUP.md) | Step-by-step setup procedure — connect hardware, register devices, configure routing, map controls |
 | [MIDI Manager](./SYCORE_MIDI%20MANAGER.md) | Unified MIDI control center — routing, mapping, and device management |
+| [Devices](./SYCORE_MIDI_DEVICES.md) | Auto discover and register your devices |
+| [Routing](./SYCORE_MIDI_ROUTING.md) | Configure MIDI routing flow |
+| [Performance](./SYCORE_MIDI_PERFORMANCE.md) | Source-to-output routing matrix — controls |
+| [Mapping](./SYCORE_MIDI_MAPPING.md) | MIDI CC → application parameter |
+| [Actions](./SYCORE_MIDI_ACTIONS.md) | Per-device app action binding — maps MIDI CC/Note inputs to high-level SY.CORE actions (e.g. start sequencer, toggle looper, change preset). |
 | [MIDI Capture](./SYCORE_MIDI_CAPTURE.md) | Record, view, and export MIDI events in real time |
 | [Multi Sound — Program Change Browser](./SYCORE_DEVICE_PROGRAM_CHANGE.md) | Browse and send Program Change messages to connected devices |
 

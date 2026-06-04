@@ -2,6 +2,7 @@
 
 The **Chord Progression Sequencer** is a dedicated step-based engine for building and performing harmonic sequences in SY.CORE. Each step holds a complete chord — or triggers it as an arpeggio — with individual control over timing, velocity, gate, and transpose. A built-in library of progressions organised by musical key and genre lets you go from zero to a full sequence in seconds.
 
+<img src="/help/guides/sycore-chord-progression.png"/>
 ---
 
 ## 1. Overview
@@ -27,26 +28,7 @@ The panel can be **minimised** (title bar only) without stopping playback, and c
 
 ## 3. Interface at a Glance
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ ♩ Chord Prog  Ch 1   [REC SYNC ●]               [–] [✕]               │  ← Header
-│ 001:1:1  [▶ Play / ■ Stop]  Steps [◀ 8 ▶]  [Chord|Arp]  [Rate ▾]     │
-│ Transpose [– 0 +]  ⟳ Loop  AOF [250] ms                               │  ← Transport row
-├─────────────────────────────────────────────────────────────────────────┤
-│  1      2      3      4      5      6      7      8                     │  ← Step grid
-│ Cmaj  Fmaj  Gmaj  Amin  ░░░░  ░░░░  ░░░░  ░░░░                        │
-│  4n    4n    4n    4n   16n                                             │
-│ ████  ████  ████  ████                                                  │  ← velocity bars
-├─────────────────────────────────────────────────────────────────────────┤
-│ Step [N] [Active|Off]  ChordName  Dur [▾]  Vel [100]  Gate [80]%  Tr   │  ← Step detail
-├─────────────────────────────────────────────────────────────────────────┤
-│ Fill: Dur [4n|Rnd] [All]  Vel [100|Rnd] [All]  Gate [80|Rnd] [All]  …  │  ← Fill row
-├─────────────────────────────────────────────────────────────────────────┤
-│ [Library]  [Generate]  [Save / Load]                                    │  ← Tabs
-│  Keys    Progressions    Chords                                         │
-│  C Maj   I–IV–V–I        Cmaj  …                                       │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+<img src="/help/guides/sycore-chord-progression.png"/>
 
 ---
 
@@ -178,7 +160,13 @@ Your saved progressions appear in the right column. Hover a row to reveal:
 
 ---
 
-## 11. Playback Engine Details
+## 11. Performance Set Tab
+
+List of available Performance Sets to select and load the devices patches.
+
+---
+
+## 12. Playback Engine Details
 
 The sequencer uses a **384th-note tick grid** (4× the standard 96 PPQ) to support all standard durations including dotted and triplet values as exact integers.
 
@@ -200,7 +188,7 @@ A delayed **All Notes Off** panic (`AOF ms`) fires after stop to catch any notes
 
 ---
 
-## 12. MIDI Sync
+## 13. MIDI Sync
 
 | Option | Where to enable |
 |--------|----------------|
@@ -211,7 +199,7 @@ The sequencer output is tagged `MidiSource.CHORD_PROG` internally, which allows 
 
 ---
 
-## 13. Tips & Best Practices
+## 14. Tips & Best Practices
 
 - **Combine with the Step Sequencer** — run a bass/lead pattern in the Step Sequencer on one MIDI channel while the Chord Prog Sequencer drives pads or strings on another.
 - **Use per-step transpose for modulation** — assign the same chord to multiple steps, then use per-step Tr offsets to create a modulating progression without changing the chord.

@@ -1,16 +1,13 @@
-# Live Timeline — Technical & Usage Guide
+# Live Timeline
 
 ## Overview
 
-LiveTimeline is a Vue 3 draggable/resizable panel component that provides a visual arrangement
+LiveTimeline is a draggable/resizable panel component that provides a visual arrangement
 timeline for live performance. It sequences backing track segments, fires MIDI/UI events at
 specific time positions (markers), and controls MIDI transport sync independently of the
 Backing Track Player's own sync logic.
 
-**File:** `src/components/LiveTimeline.vue`  
-**z-index:** 510 | **Storage key (position):** `SYCORE_POS_LIVE_TIMELINE`  
-**Opened via:** `uiStore.isLiveTimelineOpen` (footer Timeline button, SideBar, SynthApp.vue)
-
+<img src="/help/guides/sycore-timeline.png"/>
 ---
 
 ## UI Structure
@@ -54,49 +51,21 @@ Both columns show BPM, labels, values, and position timestamps.
 
 ## Segments
 
-### Data Structure
-
-```json
-{
-  "id": "s1748000000000",
-  "trackIdx": 2,
-  "segStart": 30,
-  "segEnd": 90,
-  "label": "Verse"
-}
-```
-
-- `trackIdx`: index into `livePadStore.playlist`
-- `segStart` / `segEnd`: seconds within the track (sub-region of the full track)
-- `segBounds` computed array translates segment regions into timeline-absolute start/end positions
-
 Segments play in their defined order — when the playhead enters a segment's bounds, that track begins playing at the corresponding `segStart` offset.
 
 ### Adding a Segment
 
 The Add Segment dialog has two source tabs:
 
-**Playlist tab**: selects from `livePadStore.playlist` tracks already loaded in the Backing Track Player. Shows label, BPM, and duration.
+**Playlist tab**: selects from Playlist tracks already loaded in the Backing Track Player. Shows label, BPM, and duration.
 
-**Library tab**: live-searches the `backing_tracks` Firestore collection (same source as BTP library).
+**Library tab**: live-searches the `backing_tracks` collection (same source as BTP library).
 - If the selected library track is already in the playlist → reuses its existing index
 - If not → auto-appends to `livePadStore.playlist` before creating the segment (index = `newPlaylist.length - 1`)
 
 ### BPM Propagation
 
-When a segment starts playing (`_checkSegments`), the track's BPM is promoted to the global tempo:
-
-```
-getTrackBpm(trackIdx)
-  → arpStore.arpBpm
-  → midiStore.currentBpm
-  → midiStore.setBpm()   ← updates MIDI clock service
-  → dispatches bpm-update event
-```
-
-`getTrackBpm()` uses a two-level fallback:
-1. Playlist entry's `bpm` field (fast, no Firestore lookup)
-2. Match track by `id` in the live Firestore library subscription
+When a segment starts playing, the track's BPM is promoted to the global tempo.
 
 The fallback handles tracks that were added to the playlist before BPM was part of the data model.
 
@@ -129,10 +98,9 @@ Markers fire at their `position` (seconds) as the playhead passes them. Each mar
 
 ### Program Change Browser
 
-When adding a `program-change` marker with a device that has a preset catalog entry in
-`src/data/program_change/program_change.json`, a **Browse** button appears.
+When adding a `program-change` marker with a device that has a preset catalog entry and a **Browse** button appears.
 
-The PC Preset Browser (z-index 700) loads bank JSON files and lets the user select a sound by name.  
+The PC Preset Browser loads bank and lets the user select a sound by name.  
 On selection: computes the PC number from `program_base`, stores `msb` / `lsb` / `soundName`.
 
 ---
@@ -163,28 +131,6 @@ preventing double transport messages when the timeline controls BTP playback.
 
 Without this guard, a `transport-start` marker firing 10 seconds into a set would race with BTP's
 own `sendStart()` triggered by track playback starting.
-
-### MidiService Transport Fix
-
-The original `sendStart()` / `sendStop()` used `broadcast()`, which gates on `broadcastMode`.
-When explicit performance matrix routing is configured, `broadcastMode` can be false and TRANSPORT
-has no matrix entries → messages silently dropped.
-
-`_sendTransportDirect()` iterates `midiAccess.outputs` directly, sending to every registered
-output with `outEnabled: true` and `transport: true`, independent of the routing matrix.
-
-```ts
-private _sendTransportDirect(status: 0xFA | 0xFC) {
-  if (!this.midiAccess) return
-  this.midiAccess.outputs.forEach(outPort => {
-    const config = this.routingConfig?.registrations[outPort.name]
-    if (!config?.outEnabled || !config?.transport) return
-    outPort.send([status])
-  })
-}
-```
-
----
 
 ## Playback Engine
 
@@ -240,75 +186,8 @@ None — the timeline only dispatches; it does not listen to external events.
 
 ---
 
-## localStorage Keys
-
-| Key | Content |
-|---|---|
-| `SYCORE_TIMELINE_SEGMENTS` | `Array<Segment>` — persisted segment list |
-| `SYCORE_TIMELINE_MARKERS` | `Array<Marker>` — persisted marker list (sorted by position on save) |
-| `SYCORE_PC_PERFORMANCE_SETS` | `Array<PerfSet>` — read-only by timeline (written by LivePerformancePad) |
-| `SYCORE_POS_LIVE_TIMELINE` | Panel position/size object (managed by `useDraggableResizable`) |
-
----
-
-## Stores Used
-
-| Store | Fields accessed |
-|---|---|
-| `useMidiStore` | `currentBpm`, `sendStart()`, `sendStop()`, `startClock()`, `stopClock()`, `setBpm()` |
-| `useArpStore` | `arpBpm` (read/write for tempo sync) |
-| `useLivePadStore` | `playlist` (read/write), `crossfadeSec` |
-| `useUiStore` | `isLiveTimelineOpen` |
-
----
-
-## Integration Points
-
-| Component / File | Role |
-|---|---|
-| `src/views/SynthApp.vue` | Mounts `<LiveTimeline>` inside Teleport; `focusStyle('liveTimeline')` for z-index cycling |
-| `src/components/AppFooter.vue` | Footer Timeline button toggles `uiStore.isLiveTimelineOpen` |
-| `src/components/ui/SideBar.vue` | `ACTION_MAP['live-timeline']` entry |
-| `src/components/BackingTrackPlayer.vue` | Handles `playlist-play` with `source` field; blocks auto transport sync for `'timeline'` source |
-| `src/components/LivePerformancePad.vue` | `v-show` mounted (never unmounted); handles `timeline-trigger-perf-set` and `timeline-load-perf-set` |
-| `src/core/midi/MidiService.ts` | `_sendTransportDirect()` bypasses routing matrix for transport messages |
-| `src/stores/useUiStore.js` | `isLiveTimelineOpen` ref; `closeAll()` includes timeline; `MODAL_CYCLE_REGISTRY` includes `'liveTimeline'` |
-| `src/lib/firebase.js` | Firestore `db` instance for library track subscription |
-
----
-
-## Marker Data Structure
-
-```json
-{
-  "id": "m1748000000001",
-  "position": 45.0,
-  "type": "transport-start",
-  "label": "Drop",
-  "value": null,
-  "device": null,
-  "channel": null,
-  "setId": null,
-  "setName": null
-}
-```
-
-Fields used per type:
-
-| Type | Fields |
-|---|---|
-| `tempo` | `value` (BPM number) |
-| `perf-set` | `value` (pad index 0–15) |
-| `load-perf-set` | `setId`, `setName` |
-| `crossfade` | `value` (ms) |
-| `program-change` | `value` (PC 0–127), `device`, `channel`, `msb`, `lsb`, `soundName` |
-| all others | — |
-
----
-
 ## Known Constraints
 
 - **Segment `segStart`/`segEnd`**: sub-region playback is passed to BTP via `playlist-play`; actual track seek support depends on BTP implementing the seek offset.
-- **Library tab Firestore query**: `orderBy('createdAt', 'desc')` — requires a Firestore composite index if combined with `where` clauses in future filters.
 - **Performance set loading**: `recallSet()` in LivePerformancePad is called synchronously; any async loading (e.g., large soundfonts) is not awaited by the timeline.
 - **Loop + MIDI transport**: On loop restart, no MIDI STOP/START pair is automatically sent. Place explicit `transport-stop` and `transport-start` markers near the loop boundary if devices need resync.

@@ -367,6 +367,18 @@ export const S1_MUSICAL_VARIATIONS = {
         reverb: 30, delayLvl: 40,
         transpose: 64
       }
+    },
+    {
+      name: "Steel String",
+      keywords: "acoustic, bright, steel, fingerpicked",
+      values: {
+        attack: 0, decay: 55, sustain: 0, release: 35,
+        cutoff: 100, res: 10, envFilt: 80,
+        oscSaw: 100, oscSq: 20, oscSub: 0,
+        pwWidth: 70,
+        chorusMode: 1, reverb: 25, delayLvl: 20, delayTime: 30,
+        transpose: 64
+      }
     }
   ],
   padchord: [

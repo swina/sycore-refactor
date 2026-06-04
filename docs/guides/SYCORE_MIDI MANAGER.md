@@ -75,6 +75,8 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ### Tab 2 — Routing (`MidiMatrix.vue`, `embedded: true`)
 
+<img src="/help/guides/sycore-midi-routing.png"/>
+
 **Purpose:** The core MIDI routing registry — which devices are active, what message types they pass, and how they interconnect.
 
 **Data source:** `useMidiStore.routingConfig`, `useConfigStore`, `midiService`

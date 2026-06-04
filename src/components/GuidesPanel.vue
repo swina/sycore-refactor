@@ -64,6 +64,11 @@ const CATEGORIES = [
     items: [
       { id: 'midi-setup',       label: 'Connecting MIDI Devices', file: 'SYCORE_MIDI_SETUP' },
       { id: 'midi-manager',    label: 'MIDI Manager',         file: 'SYCORE_MIDI MANAGER' },
+      { id: 'midi-devices',    label: 'Devices',         file: 'SYCORE_MIDI_DEVICES' },
+      { id: 'midi-routing',    label: 'Routing',         file: 'SYCORE_MIDI_ROUTING' },
+      { id: 'midi-performance',  label: 'Performance',         file: 'SYCORE_MIDI_PERFORMANCE' },
+      { id: 'midi-mapping',      label: 'CC Mapping',         file: 'SYCORE_MIDI_MAPPING' },
+      { id: 'midi-actions',      label: 'MIDI Actions',         file: 'SYCORE_MIDI_ACTIONS' },
       { id: 'midi-capture',    label: 'MIDI Capture',         file: 'SYCORE_MIDI_CAPTURE' },
       { id: 'program-change',  label: 'Multi Sound',          file: 'SYCORE_DEVICE_PROGRAM_CHANGE' },
     ],
@@ -72,7 +77,7 @@ const CATEGORIES = [
     label: 'Live Performance',
     color: 'text-pink-400',
     items: [
-      { id: 'live-pad',       label: 'Live Performance Pad',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },
+      { id: 'live-pad',       label: 'Live Set',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },
       { id: 'live-timeline',  label: 'Live Timeline',         file: 'SYCORE_LIVE_TIMELINE' },
       { id: 'step-sequencer', label: 'Step Sequencer',        file: 'SYCORE_STEP_SEQUENCER' },
       { id: 'chord-progression-sequencer', label: 'Chord Progression Sequencer', file: 'SYCORE_CHORD_PROG_SEQUENCER' },

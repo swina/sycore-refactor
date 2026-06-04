@@ -126,7 +126,7 @@ function openProgramChangePanel() {
             </div>
             <div>
               <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">
-                MIDI Matrix
+                MIDI Routing
               </h2>
               <p class="text-[9px] font-mono text-cyan-500/60 uppercase tracking-widest">
                 Unified Persistent Signal Routing
