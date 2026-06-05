@@ -1861,7 +1861,7 @@ onUnmounted(() => {
           </div>
           
           <!-- Canvas container -->
-          <div class="relative flex-1 min-h-[60px]">
+          <div class="relative flex-1 min-h-[60px] max-h-[50vh]">
             <canvas ref="canvasRef" class="w-full h-full block" />
             
             <!-- Playback Time overlay in bottom-left corner of the canvas -->
@@ -1885,7 +1885,7 @@ onUnmounted(() => {
         </div>
       </div>
       <!-- Footer controls -->
-      <div class="flex items-center gap-2 px-4 py-2 bg-neutral-900/60 border-t border-neutral-800 shrink-0">
+      <div class="flex items-center gap-2 px-4 py-1 bg-neutral-900/60 border-t border-neutral-800 shrink-0">
         <!-- Level meter -->
         <div class="flex items-center gap-1.5 w-24 shrink-0">
           <span class="text-[8px] font-mono text-neutral-600">IN</span>
@@ -1939,7 +1939,7 @@ onUnmounted(() => {
             <span class="text-[9px] font-mono text-synth-neon w-8 text-right">{{ normalizeGateDb }}dB</span>
           </div>
           <!-- Playback Time overlay in bottom-left corner of the canvas -->
-          <div v-if="recordedBlob" class="bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">
+          <div v-if="recordedBlob" class="bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[14px] font-mono tracking-wider shadow-md pointer-events-none z-10">
             {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
           </div>
         </div>
