@@ -43,7 +43,7 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
@@ -67,6 +67,7 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
+      const tx = (e.target as IDBOpenDBRequest).transaction!;
       for (const [storeName, keyPath] of Object.entries(STORES)) {
         if (!db.objectStoreNames.contains(storeName)) {
           if (keyPath) {
@@ -75,6 +76,20 @@ function openDb(): Promise<IDBDatabase> {
             db.createObjectStore(storeName);
           }
         }
+      }
+      // v7 → v8: backfill device: "S-1" on all existing user_presets
+      if (e.oldVersion < 8 && db.objectStoreNames.contains('user_presets')) {
+        const store = tx.objectStore('user_presets');
+        const cursorReq = store.openCursor();
+        cursorReq.onsuccess = (ce) => {
+          const cursor = (ce.target as IDBRequest<IDBCursorWithValue>).result;
+          if (cursor) {
+            if (!cursor.value.device) {
+              cursor.update({ ...cursor.value, device: 'S-1' });
+            }
+            cursor.continue();
+          }
+        };
       }
     };
     req.onsuccess = (e) => {
@@ -385,3 +400,32 @@ export function onSnapshot(target: CollectionReference | Query, callback: (snaps
 }
 
 export const db = {};
+
+// ---------------------------------------------------------------------------
+// Startup Migrations
+// ---------------------------------------------------------------------------
+
+export async function runStartupMigrations(): Promise<void> {
+  const FLAG = 'sycore_migration_device_field_done';
+  if (localStorage.getItem(FLAG)) return;
+
+  const database = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = database.transaction('user_presets', 'readwrite');
+    const store = tx.objectStore('user_presets');
+    const req = store.openCursor();
+    req.onsuccess = (e) => {
+      const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor) {
+        if (!cursor.value.device) {
+          cursor.update({ ...cursor.value, device: 'S-1' });
+        }
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+
+  localStorage.setItem(FLAG, '1');
+}

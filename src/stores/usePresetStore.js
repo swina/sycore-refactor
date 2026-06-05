@@ -100,8 +100,8 @@ export const usePresetStore = defineStore('preset', () => {
         ...d.data(),
         id: d.id
       })).sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime()
-        const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime()
+        const dateA = new Date(a.createdAt || 0).getTime()
+        const dateB = new Date(b.createdAt || 0).getTime()
         return dateB - dateA
       })
 
@@ -427,6 +427,7 @@ export const usePresetStore = defineStore('preset', () => {
             id: rawPreset.id,
             name: cleanName,
             category: category || currentCategory.value,
+            device: 'S-1',
             aVariant: rawPreset.aVariant,
             bVariant: rawPreset.bVariant,
             patchNotes: options.patchNotes || currentPatchNotes.value || rawPreset.patchNotes,
@@ -467,6 +468,7 @@ export const usePresetStore = defineStore('preset', () => {
         id: presetId,
         name: name || 'Imported Preset',
         category: category || 'pad',
+        device: 'S-1',
         patchNotes: options.patchNotes || null,
         aVariant: options.aVariant || _createVariant(data || {}, options.patchNotes),
         bVariant: options.bVariant || _createVariant(data || {}, options.patchNotes),

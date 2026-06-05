@@ -4,6 +4,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useConfigStore } from './stores/useConfigStore'
 import { useAuthStore } from './stores/useAuthStore'
 import { useUiStore } from './stores/useUiStore'
+import { runStartupMigrations } from './lib/idb'
 import './assets/main.css'
 import App from './App.vue'
 import SynthApp from './views/SynthApp.vue'
@@ -40,6 +41,9 @@ app.use(pinia)
 const configStore = useConfigStore(pinia)
 const authStore = useAuthStore(pinia)
 const uiStore = useUiStore(pinia)
+
+// Run one-time DB migrations before store initialization
+runStartupMigrations().catch(err => console.error('[Main] Migration failed', err))
 
 // Initialize critical stores asynchronously
 console.log('[Main] Starting store initialization...')
