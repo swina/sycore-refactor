@@ -3,7 +3,7 @@
 The **Step Sequencer** is a powerful algorithmic composition and MIDI sequencing engine integrated into SY.CORE. It allows you to create complex patterns, chord progressions, and automations quickly and intuitively, with a particular focus on live performance and creative generation.
 
 
-<img src="../../public/help/guides/sycore-step-sequencer.png"/>
+<img src="/help/guides/sycore-step-sequencer.png"/>
 
 
 ---
