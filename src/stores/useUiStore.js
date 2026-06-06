@@ -44,6 +44,7 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiPerformanceOpen = ref(false)
   const isProgramChangeBrowserOpen = ref(false)
   const isDeviceProgramChangePanelOpen = ref(false)
+  const isFreesoundBrowserOpen   = ref(false)
   const isLivePerformancePadOpen = ref(false)
   const isLiveTimelineOpen       = ref(false)
   const isMidiMonitorOpen        = ref(false)
@@ -115,6 +116,7 @@ export const useUiStore = defineStore('ui', () => {
     unifiedMidi:         () => showUnifiedMidiManager.value,
     chordProg:           () => isChordProgOpen.value,
     tracksPlayer:        () => isTracksPlayerOpen.value,
+    freesoundBrowser:    () => isFreesoundBrowserOpen.value,
   }
 
   const openModalKeys = computed(() =>
@@ -159,6 +161,7 @@ export const useUiStore = defineStore('ui', () => {
     unifiedMidi:         showUnifiedMidiManager,
     chordProg:           isChordProgOpen,
     tracksPlayer:        isTracksPlayerOpen,
+    freesoundBrowser:    isFreesoundBrowserOpen,
   }
 
   // These modals coexist freely — they never trigger close-others and are
@@ -282,6 +285,7 @@ export const useUiStore = defineStore('ui', () => {
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen,
+    isFreesoundBrowserOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,

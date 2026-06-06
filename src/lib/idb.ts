@@ -43,7 +43,7 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
@@ -57,6 +57,7 @@ const STORES: Record<string, string | null> = {
   backing_tracks: 'id',
   support_tickets: 'id',
   timeline_sets: 'id',
+  freesound_cache: 'id',           // downloaded Freesound preview blobs
 };
 
 let _db: IDBDatabase | null = null;
@@ -400,6 +401,50 @@ export function onSnapshot(target: CollectionReference | Query, callback: (snaps
 }
 
 export const db = {};
+
+// ---------------------------------------------------------------------------
+// Freesound Cache — raw Blob-safe operations (bypass JSON serialisation)
+// ---------------------------------------------------------------------------
+
+export async function idbCachePut(value: { id: string; [key: string]: any }): Promise<void> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction('freesound_cache', 'readwrite');
+    tx.objectStore('freesound_cache').put(value);
+    tx.oncomplete = () => resolve();
+    tx.onerror   = () => reject(tx.error);
+  });
+}
+
+export async function idbCacheGet(id: string): Promise<any | undefined> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx  = database.transaction('freesound_cache', 'readonly');
+    const req = tx.objectStore('freesound_cache').get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+export async function idbCacheDelete(id: string): Promise<void> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction('freesound_cache', 'readwrite');
+    tx.objectStore('freesound_cache').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror   = () => reject(tx.error);
+  });
+}
+
+export async function idbCacheGetAllKeys(): Promise<string[]> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx  = database.transaction('freesound_cache', 'readonly');
+    const req = tx.objectStore('freesound_cache').getAllKeys();
+    req.onsuccess = () => resolve(req.result as string[]);
+    req.onerror   = () => reject(req.error);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Startup Migrations

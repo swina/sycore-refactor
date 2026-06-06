@@ -14,6 +14,7 @@
     "@tailwindcss/postcss": "^4.2.4",
     "@upstash/redis": "^1.38.0",
     "@vercel/kv": "^3.0.0",
+    "freesound": "^0.0.4",
     "jszip": "^3.10.1",
     "lucide-vue-next": "^1.0.0",
     "marked": "^18.0.4",

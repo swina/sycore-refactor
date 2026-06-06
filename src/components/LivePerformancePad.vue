@@ -3,8 +3,9 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   X, Minus, Trash2, Play, Pause, SkipBack, SkipForward,
   BookOpen, ListMusic, Save, FolderOpen, Check,
-  Volume2, VolumeX, Cpu, Music, AudioLines
+  Music, AudioLines, Repeat, Waves, Zap
 } from 'lucide-vue-next'
+import { useFreesoundCache }  from '@/composables/useFreesoundCache'
 import { useMidiStore }       from '@/stores/useMidiStore'
 import { usePresetStore }     from '@/stores/usePresetStore'
 import { useLivePadStore }    from '@/stores/useLivePadStore'
@@ -12,7 +13,6 @@ import { useMappingStore }    from '@/stores/useMappingStore'
 import { useSyncStore }       from '@/stores/useSyncStore'
 import { useUiStore }         from '@/stores/useUiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { useDeviceRegistry }  from '@/composables/useDeviceRegistry'
 import { midiService }        from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
@@ -30,6 +30,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
+const { resolveUrl: resolveFreesoundUrl } = useFreesoundCache()
 const midiStore    = useMidiStore()
 const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
@@ -37,7 +38,6 @@ const mappingStore = useMappingStore()
 const syncStore    = useSyncStore()
 const uiStore      = useUiStore()
 const { openMenu } = useMidiContextMenu()
-const { devices: registeredDevices } = useDeviceRegistry()
 
 const syncRecordAudioCapture = computed({
   get: () => syncStore.syncRecordAudioCapture,
@@ -48,7 +48,7 @@ const syncRecordAudioCapture = computed({
 const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
 const LS_LPP_SETS       = 'SYCORE_LPP_SETS'
 const LS_LPP_SNAPSHOTS  = 'SYCORE_LPP_SNAPSHOTS'
-const LS_LPP_MIX        = 'SYCORE_LPP_MIX'
+const LS_LPP_LOOP_PADS  = 'SYCORE_LPP_LOOP_PADS'
 
 function getLS(key, def) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def } catch { return def }
@@ -276,91 +276,123 @@ function handleStateUpdate(e) {
   if (d.totalPlaylistDuration !== undefined) totalPlaylistDuration.value = d.totalPlaylistDuration
 }
 
-// ── Volume Mix ────────────────────────────────────────────────────
-// Only devices that are in the routing config AND are not controllers
-const volumeDevices = computed(() => {
-  const regs = midiStore.routingConfig?.registrations ?? {}
-  return registeredDevices.value.filter(d =>
-    (d.type === 'audio-interface' ||
-     d.type === 'instrument-single' ||
-     d.type === 'instrument-multi') &&
-    !!regs[d.name]
-  )
-})
+// ── Loop Pads ─────────────────────────────────────────────────────
+const LOOP_PAD_VOL = 0.8
 
-// Storage key: for multitimbral devices it includes the current channel so each
-// part stores its own vol/cc independently. Single/audio-interface: just the name.
-function mixKey(name) {
-  const dev = registeredDevices.value.find(d => d.name === name)
-  return dev?.type === 'instrument-multi'
-    ? `${name}:${midiStore.midiChannel}`
-    : name
-}
+const loopPads   = ref(Array(8).fill(null))
+const loopActive = ref(Array(8).fill(false))
+const _loopAudios     = Array(8).fill(null)  // non-reactive Audio elements
+const _loopFadeTimers = Array(8).fill(null)  // per-pad fade setTimeout handles
 
-// { mixKey: { vol: 0–127, cc: 0–127 } }
-const mixState = ref(getLS(LS_LPP_MIX, {}))
-
-function getMix(name) {
-  return mixState.value[mixKey(name)] ?? { vol: 100, cc: 7, mute: false }
-}
-
-// ── Mute — wraps port.send to block Note On/Off while muted ──────
-const _mutedPorts = new Map() // deviceName → original send fn
-
-function _applyMuteWrap(name) {
-  const port = midiStore.outputs.find(o => o.name === name)
-  if (!port || _mutedPorts.has(name)) return
-  const orig = port.send.bind(port)
-  _mutedPorts.set(name, { port, orig })
-  port.send = (data, ts) => {
-    const type = data[0] & 0xF0
-    if (type === 0x90 || type === 0x80) return
-    orig(data, ts)
+function _getLoopAudio(idx) {
+  if (!_loopAudios[idx]) {
+    const a = new Audio()
+    a.loop   = true
+    a.volume = LOOP_PAD_VOL
+    a.addEventListener('error', () => { loopActive.value[idx] = false })
+    _loopAudios[idx] = a
   }
+  return _loopAudios[idx]
 }
 
-function _removeMuteWrap(name) {
-  const entry = _mutedPorts.get(name)
-  if (!entry) return
-  entry.port.send = entry.orig
-  _mutedPorts.delete(name)
+function _clearFade(idx) {
+  if (_loopFadeTimers[idx]) { clearTimeout(_loopFadeTimers[idx]); _loopFadeTimers[idx] = null }
 }
 
-function toggleMute(name) {
-  const next = !getMix(name).mute
-  setMixField(name, 'mute', next)
-  if (next) {
-    // Silence device immediately across all channels
-    const port = midiStore.outputs.find(o => o.name === name)
-    if (port) {
-      for (let ch = 0; ch < 16; ch++) port.send([0xB0 | ch, 123, 0])
+function _fadeSec() {
+  return Math.max(0.3, Math.min(crossfadeSec.value ?? 1, 3))
+}
+
+function _fadeIn(audio, idx) {
+  const fadeSec = _fadeSec()
+  const steps   = Math.max(10, Math.round(fadeSec * 20))
+  const stepMs  = (fadeSec * 1000) / steps
+  audio.volume  = 0
+  let step = 0
+  const tick = () => {
+    step++
+    audio.volume = Math.min(LOOP_PAD_VOL, (step / steps) * LOOP_PAD_VOL)
+    _loopFadeTimers[idx] = step < steps ? setTimeout(tick, stepMs) : null
+  }
+  _loopFadeTimers[idx] = setTimeout(tick, stepMs)
+}
+
+function _fadeOut(audio, idx) {
+  const fadeSec  = _fadeSec()
+  const steps    = Math.max(10, Math.round(fadeSec * 20))
+  const stepMs   = (fadeSec * 1000) / steps
+  const startVol = audio.volume
+  let step = 0
+  const tick = () => {
+    step++
+    audio.volume = Math.max(0, (1 - step / steps) * startVol)
+    if (step < steps) {
+      _loopFadeTimers[idx] = setTimeout(tick, stepMs)
+    } else {
+      audio.pause()
+      audio.volume = LOOP_PAD_VOL
+      loopActive.value[idx] = false
+      _loopFadeTimers[idx] = null
     }
-    _applyMuteWrap(name)
+  }
+  _loopFadeTimers[idx] = setTimeout(tick, stepMs)
+}
+
+async function toggleLoopPad(idx) {
+  const pad = loopPads.value[idx]
+  if (!pad?.url) return
+  const audio   = _getLoopAudio(idx)
+  const instant = !!pad.noCrossfade
+
+  if (loopActive.value[idx]) {
+    _clearFade(idx)
+    if (instant) {
+      audio.pause(); audio.volume = LOOP_PAD_VOL; loopActive.value[idx] = false
+    } else {
+      _fadeOut(audio, idx)  // sets loopActive false when done
+    }
   } else {
-    _removeMuteWrap(name)
+    _clearFade(idx)
+    const url = await resolveFreesoundUrl(pad.id, pad.url)
+    if (audio.src !== url) audio.src = url
+    audio.volume = instant ? LOOP_PAD_VOL : 0
+    audio.play().catch(() => { loopActive.value[idx] = false })
+    loopActive.value[idx] = true
+    if (!instant) _fadeIn(audio, idx)
+    if (pad.bpm) window.dispatchEvent(new CustomEvent('bpm-update', { detail: { bpm: pad.bpm } }))
   }
 }
 
-function setMixField(name, field, value) {
-  const key = mixKey(name)
-  mixState.value = { ...mixState.value, [key]: { ...getMix(name), [field]: value } }
-  setLS(LS_LPP_MIX, mixState.value)
-  if (field === 'vol') sendMixCC(name)
+function toggleLoopPadNoCrossfade(idx) {
+  const pad = loopPads.value[idx]
+  if (!pad) return
+  loopPads.value = loopPads.value.map((p, i) => i === idx ? { ...p, noCrossfade: !p.noCrossfade } : p)
+  setLS(LS_LPP_LOOP_PADS, loopPads.value)
 }
 
-function sendMixCC(name) {
-  const port = midiStore.outputs.find(o => o.name === name)
-  if (!port) return
-  const reg = midiStore.routingConfig?.registrations?.[name]
-  const dev = registeredDevices.value.find(d => d.name === name)
-  const ch  = dev?.type === 'instrument-multi'
-    ? midiStore.midiChannel - 1
-    : (reg?.outChannel != null && reg.outChannel >= 0) ? reg.outChannel : 0
-  const { vol, cc } = getMix(name)
-  const ccVal  = Math.min(127, cc)
-  const volVal = Math.min(127, Math.round(vol))
-  console.log(`[LPP Mix] ${name} | MIDI CH${ch + 1} (byte=${ch}) | CC${ccVal} = ${volVal}`)
-  port.send([0xB0 | ch, ccVal, volVal])
+function clearLoopPad(idx) {
+  _clearFade(idx)
+  const audio = _loopAudios[idx]
+  if (audio) { audio.pause(); audio.volume = LOOP_PAD_VOL; audio.src = '' }
+  loopActive.value[idx] = false
+  loopPads.value = loopPads.value.map((p, i) => i === idx ? null : p)
+  setLS(LS_LPP_LOOP_PADS, loopPads.value)
+}
+
+function openFreesoundBrowser() {
+  uiStore.isFreesoundBrowserOpen = true
+}
+
+function _handleLoopPadAssign(e) {
+  const { padIdx, track } = e.detail || {}
+  if (padIdx == null || padIdx < 0 || padIdx >= 8 || !track) return
+  if (loopActive.value[padIdx]) {
+    const audio = _loopAudios[padIdx]
+    if (audio) { audio.pause(); audio.src = '' }
+    loopActive.value[padIdx] = false
+  }
+  loopPads.value = loopPads.value.map((p, i) => i === padIdx ? { ...track } : p)
+  setLS(LS_LPP_LOOP_PADS, loopPads.value)
 }
 
 // ── Init ──────────────────────────────────────────────────────────
@@ -369,10 +401,15 @@ function loadState() {
   lppSnapshots.value = getLS(LS_LPP_SNAPSHOTS, [])
   const saved = getLS(LS_LPP_SETS, null)
   if (Array.isArray(saved)) {
-    // migrate old 8-item saves to 16
     const pads = [...saved]
     while (pads.length < 16) pads.push(emptySetPad())
     setPads.value = pads.slice(0, 16)
+  }
+  const savedLoops = getLS(LS_LPP_LOOP_PADS, null)
+  if (Array.isArray(savedLoops)) {
+    const lp = [...savedLoops]
+    while (lp.length < 8) lp.push(null)
+    loopPads.value = lp.slice(0, 8)
   }
 }
 
@@ -415,10 +452,6 @@ function _startLppMidiListener() {
       if (isCC && byte2 === 0) return
       const idx = parseInt(paramName.slice('lpp_bt_'.length))
       if (!isNaN(idx)) playFromPlaylist(idx)
-    } else if (paramName.startsWith('lpp_mix_')) {
-      if (!isCC) return
-      const devName = paramName.slice('lpp_mix_'.length)
-      setMixField(devName, 'vol', byte2)
     } else if (paramName === 'lpp_playstop') {
       if (isCC && byte2 === 0) return
       handlePlaylistToggle()
@@ -450,28 +483,18 @@ onMounted(() => {
   window.addEventListener('timeline-load-perf-set', _onTimelineLoadPerfSet)
   window.dispatchEvent(new CustomEvent('player-state-request'))
   _startLppMidiListener()
-  // Reapply any mutes that were persisted from a previous session
-  volumeDevices.value.forEach(dev => {
-    if (getMix(dev.name).mute) _applyMuteWrap(dev.name)
-  })
+  window.addEventListener('loop-pad-assign', _handleLoopPadAssign)
 })
 
 onUnmounted(() => {
   window.removeEventListener('player-state-sync', handleStateUpdate)
   window.removeEventListener('timeline-trigger-perf-set', _onTimelinePerfSet)
   window.removeEventListener('timeline-load-perf-set', _onTimelineLoadPerfSet)
+  window.removeEventListener('loop-pad-assign', _handleLoopPadAssign)
   if (_unsubLppMidi) _unsubLppMidi()
-  // Restore all wrapped ports so mute doesn't outlive the component
-  _mutedPorts.forEach(({ port, orig }) => { port.send = orig })
-  _mutedPorts.clear()
+  _loopFadeTimers.forEach(t => { if (t) clearTimeout(t) })
+  _loopAudios.forEach(a => { if (a) { a.pause(); a.src = '' } })
 })
-
-// Reapply mutes when outputs come online (e.g. device reconnect)
-watch(() => midiStore.outputs, () => {
-  volumeDevices.value.forEach(dev => {
-    if (getMix(dev.name).mute) _applyMuteWrap(dev.name)
-  })
-}, { deep: false })
 
 // Refresh PC sets list and sync pad names when panel opens
 watch(() => props.isOpen, (open) => {
@@ -687,85 +710,66 @@ function formatTime(t) {
         />
       </div>
 
-      <!-- Volume Mix -->
-      <div v-if="volumeDevices.length > 0" class="shrink-0">
+      <!-- Loop Pads -->
+      <div class="shrink-0">
         <div class="flex items-center gap-3 mb-2">
-          <Volume2 class="w-3.5 h-3.5 text-emerald-500/50 shrink-0" />
-          <span class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono whitespace-nowrap">Volume Mix</span>
+          <Repeat class="w-3.5 h-3.5 text-cyan-500/50 shrink-0" />
+          <span class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono whitespace-nowrap">Loop Pads</span>
           <div class="h-px flex-1 bg-neutral-900" />
-          <span class="text-[8px] font-mono text-neutral-700 shrink-0">right-click to MIDI map</span>
-        </div>
-        <div class="grid gap-1.5">
-          <div
-            v-for="dev in volumeDevices"
-            :key="dev.id"
-            @contextmenu.prevent="openMenu($event, { name: 'lpp_mix_' + dev.name, label: dev.name + ' Volume' })"
-            class="flex items-center gap-3 bg-neutral-900/40 border border-neutral-800/40 rounded-xl px-3 py-2 relative cursor-context-menu"
+          <button
+            @click="openFreesoundBrowser"
+            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/30 bg-cyan-500/5 text-cyan-400 text-[9px] font-black uppercase tracking-widest hover:bg-cyan-500/15 hover:border-cyan-400/50 transition-all shrink-0"
+            title="Open Freesound browser"
           >
-            <!-- MIDI learn orange dot -->
-            <span
-              v-if="mappingStore.learningParamName === 'lpp_mix_' + dev.name"
-              class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none"
-            />
-            <!-- Mute button -->
+            <Repeat class="w-2.5 h-2.5" />
+            Freesound
+          </button>
+        </div>
+        <div class="grid grid-cols-8 gap-2">
+          <div v-for="(pad, idx) in loopPads" :key="'lp-' + idx" class="relative group">
             <button
-              @click.stop="toggleMute(dev.name)"
+              @click="toggleLoopPad(idx)"
               :class="[
-                'shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center transition-all',
-                getMix(dev.name).mute
-                  ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30'
-                  : 'border-neutral-700 text-neutral-600 hover:border-neutral-500 hover:text-neutral-400'
+                'w-full h-16 rounded-xl border-2 flex flex-col items-center justify-center p-1.5 gap-0.5 transition-all relative overflow-hidden',
+                pad
+                  ? loopActive[idx]
+                    ? 'bg-cyan-700/30 border-cyan-400 text-white shadow-[0_0_14px_rgba(34,211,238,0.45)]'
+                    : 'border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-400/60'
+                  : 'border border-neutral-800 text-neutral-700 cursor-default'
               ]"
-              :title="getMix(dev.name).mute ? 'Unmute — click to re-enable MIDI notes' : 'Mute — block MIDI notes to this device'"
+              :title="pad ? (loopActive[idx] ? 'Stop loop' : 'Start loop: ' + pad.label) : 'Assign from Freesound browser'"
             >
-              <VolumeX v-if="getMix(dev.name).mute" class="w-3.5 h-3.5" />
-              <Volume2 v-else class="w-3.5 h-3.5" />
+              <div v-if="loopActive[idx]" class="absolute inset-0 bg-cyan-500/10 animate-pulse pointer-events-none" />
+              <span class="text-[9px] font-black uppercase tracking-tight leading-none text-center line-clamp-2 w-full px-0.5 z-10">
+                {{ pad ? pad.label : `— ${idx + 1} —` }}
+              </span>
+              <span v-if="pad?.author" class="text-[7px] font-mono opacity-50 z-10 truncate w-full text-center normal-case">{{ pad.author }}</span>
+              <span v-if="!pad" class="text-[7px] font-mono uppercase tracking-widest opacity-30 z-10">loop</span>
             </button>
-            <!-- Online dot + type icon -->
-            <div class="flex items-center gap-1.5 shrink-0">
-              <div :class="['w-1.5 h-1.5 rounded-full', dev.online ? 'bg-emerald-500' : 'bg-neutral-700']" />
-              <component
-                :is="dev.type === 'audio-interface' ? Cpu : Music"
-                :class="['w-3 h-3', dev.type === 'audio-interface' ? 'text-amber-400/70' : 'text-emerald-400/70']"
-              />
-            </div>
-            <!-- Name + part badge for multitimbral -->
-            <div class="flex items-center gap-1.5 w-28 shrink-0 min-w-0">
-              <span class="text-[10px] font-bold text-neutral-300 truncate" :title="dev.name">{{ dev.name }}</span>
-              <span
-                v-if="dev.type === 'instrument-multi'"
-                class="shrink-0 text-[7px] font-black px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 leading-none"
-              >CH{{ midiStore.midiChannel }}</span>
-            </div>
-            <!-- Slider -->
-            <input
-              type="range"
-              min="0"
-              max="127"
-              :value="getMix(dev.name).vol"
-              @input="e => setMixField(dev.name, 'vol', parseInt(e.target.value))"
-              :disabled="!dev.online || getMix(dev.name).mute"
+            <!-- Crossfade toggle -->
+            <button
+              v-if="pad"
+              @click.stop="toggleLoopPadNoCrossfade(idx)"
               :class="[
-                'flex-1 h-1 rounded appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed',
-                getMix(dev.name).mute ? 'accent-red-500 bg-red-900/30' : 'accent-emerald-500 bg-neutral-800'
+                'absolute -top-1 -left-1 w-4 h-4 rounded-full border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20',
+                pad.noCrossfade
+                  ? 'bg-neutral-900 border-yellow-600/50 text-yellow-500 hover:border-yellow-400'
+                  : 'bg-neutral-900 border-cyan-600/50 text-cyan-400 hover:border-cyan-400'
               ]"
-            />
-            <!-- Volume value -->
-            <span :class="['text-[9px] font-mono w-7 text-right shrink-0', getMix(dev.name).mute ? 'text-red-500/50 line-through' : 'text-emerald-400']">
-              {{ getMix(dev.name).vol }}
-            </span>
-            <!-- CC# picker -->
-            <div class="flex items-center gap-1 shrink-0 ml-1 border-l border-neutral-800 pl-2">
-              <span class="text-[8px] font-mono text-neutral-600 uppercase">CC</span>
-              <input
-                type="number"
-                min="0"
-                max="127"
-                :value="getMix(dev.name).cc"
-                @change="e => setMixField(dev.name, 'cc', Math.min(127, Math.max(0, parseInt(e.target.value) || 0)))"
-                class="w-9 bg-black border border-neutral-700 rounded px-1 py-0.5 text-center text-[9px] font-mono text-violet-300 outline-none focus:border-violet-500"
-              />
-            </div>
+              :title="pad.noCrossfade ? 'Crossfade: OFF (instant) — click to enable' : 'Crossfade: ON — click to disable'"
+            >
+              <Zap  v-if="pad.noCrossfade" class="w-2 h-2" />
+              <Waves v-else                 class="w-2 h-2" />
+            </button>
+            <!-- Clear -->
+            <button
+              v-if="pad"
+              @click.stop="clearLoopPad(idx)"
+              class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-neutral-900 border border-neutral-700 text-neutral-500 hover:text-red-400 hover:border-red-500/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
+              title="Remove sound"
+            >
+              <X class="w-2.5 h-2.5" />
+            </button>
           </div>
         </div>
       </div>

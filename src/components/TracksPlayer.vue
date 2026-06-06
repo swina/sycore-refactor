@@ -803,6 +803,14 @@ onMounted(() => {
     }))
   }
   const handleLoopToggle = () => { isLooping.value = !isLooping.value }
+  const handleOpenFreesound = () => { uiStore.isFreesoundBrowserOpen = true }
+  const handleFreesoundAdd = (e) => {
+    const track = e.detail
+    if (!track) return
+    addToPlaylist(track)
+    inputType.value = 'playlist'
+    isOpen.value = true
+  }
 
   window.addEventListener('toggle-backing-track', handleToggle)
   window.addEventListener('playlist-play-stop', handlePlayStop)
@@ -816,8 +824,10 @@ onMounted(() => {
   window.addEventListener('playlist-clear', handlePlaylistClear)
   window.addEventListener('player-state-request', handlePlayerStateRequest)
   window.addEventListener('playlist-loop-toggle', handleLoopToggle)
+  window.addEventListener('tracks-player-open-freesound', handleOpenFreesound)
+  window.addEventListener('freesound-add-to-playlist', handleFreesoundAdd)
 
-  _handlers = { handleToggle, handlePlayStop, handleNext, handleAddFromCapture, handlePrev, handlePlaylistPlay, handleSeek, handleVolume, handlePlaylistMutate, handlePlaylistClear, handlePlayerStateRequest, handleLoopToggle }
+  _handlers = { handleToggle, handlePlayStop, handleNext, handleAddFromCapture, handlePrev, handlePlaylistPlay, handleSeek, handleVolume, handlePlaylistMutate, handlePlaylistClear, handlePlayerStateRequest, handleLoopToggle, handleOpenFreesound, handleFreesoundAdd }
 })
 
 onUnmounted(() => {
@@ -835,6 +845,8 @@ onUnmounted(() => {
   window.removeEventListener('playlist-clear', _handlers.handlePlaylistClear)
   window.removeEventListener('player-state-request', _handlers.handlePlayerStateRequest)
   window.removeEventListener('playlist-loop-toggle', _handlers.handleLoopToggle)
+  window.removeEventListener('tracks-player-open-freesound', _handlers.handleOpenFreesound)
+  window.removeEventListener('freesound-add-to-playlist', _handlers.handleFreesoundAdd)
 })
 </script>
 
