@@ -47,6 +47,7 @@ export const useUiStore = defineStore('ui', () => {
   const isFreesoundBrowserOpen   = ref(false)
   const isLivePerformancePadOpen = ref(false)
   const isLiveTimelineOpen       = ref(false)
+  const isCaptureRecording       = ref(false)
   const isMidiMonitorOpen        = ref(false)
   const isHelpSlideshowOpen      = ref(false)
   const isSoundEngineOpen        = ref(false)
@@ -286,7 +287,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen,
     isFreesoundBrowserOpen,
-    isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen,
+    isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,

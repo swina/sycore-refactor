@@ -62,6 +62,7 @@ const MENU_ACTION_MAP = {
   'chord-prog':           () => uiStore.isChordProgOpen = !uiStore.isChordProgOpen,
   'live-performance-pad': () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
   'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
+  'freesound-browser':    () => uiStore.isFreesoundBrowserOpen = !uiStore.isFreesoundBrowserOpen,
 }
 
 const MENU_COLORS = [
@@ -297,6 +298,17 @@ function handleBpmChange(e) {
 
       <!-- Right: controls -->
       <div class="flex-1 flex items-center justify-end gap-1 md:gap-1">
+
+        <!-- Audio Capture recording indicator -->
+        <div
+          v-if="uiStore.isCaptureRecording"
+          class="flex items-center gap-1 px-2 py-0.5 bg-red-950/60 border border-red-500/40 rounded-full cursor-pointer"
+          title="Audio Capture is recording"
+          @click="uiStore.isAudioCaptureOpen = true"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_4px_rgba(239,68,68,0.8)]" />
+          <span class="text-[8px] font-black text-red-400 tracking-widest">REC</span>
+        </div>
 
         <div v-if="authStore.user" class="flex items-center gap-2">
           <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 rounded-full group">

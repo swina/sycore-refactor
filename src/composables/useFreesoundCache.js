@@ -1,5 +1,5 @@
 import { ref, readonly } from 'vue'
-import { idbCachePut, idbCacheGet, idbCacheDelete, idbCacheGetAllKeys } from '@/lib/idb'
+import { idbCachePut, idbCacheGet, idbCacheDelete, idbCacheGetAllKeys, idbCacheGetAll } from '@/lib/idb'
 
 // Module-level singletons — state survives component mount/unmount cycles.
 const cachedIds   = ref(new Set())   // reactive Set<string> of 'freesound_N' ids
@@ -86,14 +86,55 @@ export function useFreesoundCache() {
     return cached ?? fallbackUrl
   }
 
+  // Returns all cached entries as sound-shaped objects (no blob data loaded).
+  async function getCachedSounds() {
+    const entries = await idbCacheGetAll()
+    return entries.map(e => ({
+      id:           e.id,
+      freesoundId:  e.id.startsWith('freesound_') ? Number(e.id.replace('freesound_', '')) : null,
+      label:        e.name  || e.id,
+      author:       e.author || '',
+      duration:     e.duration || 0,
+      genre:        'Freesound',
+      url:          '',
+      tags:         [],
+      license:      '',
+      previews:     {},
+      bpm:          null,
+      isLoop:       false,
+      downloadedAt: e.downloadedAt || null,
+      size:         e.size || 0,
+    }))
+  }
+
+  // Stores an arbitrary local-file Blob in IDB under a given id so that
+  // resolveUrl() can find it by id across sessions.
+  async function cacheFileBlob(id, name, blob, { author = '', duration = 0 } = {}) {
+    await idbCachePut({
+      id,
+      blob,
+      name,
+      author,
+      duration,
+      downloadedAt: new Date().toISOString(),
+      size: blob.size,
+    })
+    const url = URL.createObjectURL(blob)
+    blobUrls.set(id, url)
+    cachedIds.value.add(id)
+    return url
+  }
+
   return {
     cachedIds:   readonly(cachedIds),
     downloading: readonly(downloading),
     isDownloaded,
     isDownloading,
     getCachedUrl,
+    getCachedSounds,
     downloadSound,
     deleteCache,
     resolveUrl,
+    cacheFileBlob,
   }
 }

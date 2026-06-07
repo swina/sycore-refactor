@@ -446,6 +446,16 @@ export async function idbCacheGetAllKeys(): Promise<string[]> {
   });
 }
 
+export async function idbCacheGetAll(): Promise<any[]> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx  = database.transaction('freesound_cache', 'readonly');
+    const req = tx.objectStore('freesound_cache').getAll();
+    req.onsuccess = () => resolve(req.result as any[]);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Startup Migrations
 // ---------------------------------------------------------------------------

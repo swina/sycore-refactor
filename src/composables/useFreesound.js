@@ -2,16 +2,30 @@
 // The freesound npm package (freesound.js) uses CJS + eval() + XHR which conflicts
 // with Vite's ESM bundler, so we call the REST API directly — same endpoints,
 // same results, no compatibility issues.
-// API key: set VITE_FREESOUND_API_KEY in .env
+// API key: stored per-user in Firestore profile.freesoundApiKey (set via User Profile modal).
+// Falls back to VITE_FREESOUND_API_KEY env var for development.
+
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const BASE = 'https://freesound.org/apiv2'
-const FIELDS = 'id,name,previews,duration,username,tags,license'
+const FIELDS = 'id,name,previews,duration,username,tags,license,ac_analysis'
 
 function getToken() {
+  try {
+    const profile = useAuthStore().profile
+    if (profile?.freesoundApiKey) return profile.freesoundApiKey
+  } catch {}
   return import.meta.env.VITE_FREESOUND_API_KEY || ''
 }
 
+export function hasFreesoundApiKey() {
+  return !!getToken()
+}
+
 function mapSound(s) {
+  const ac = s.ac_analysis || {}
+  const rawBpm = ac.ac_tempo
+  const bpm = rawBpm != null && rawBpm > 0 ? Math.round(rawBpm) : null
   return {
     id: `freesound_${s.id}`,
     freesoundId: s.id,
@@ -23,6 +37,8 @@ function mapSound(s) {
     tags: s.tags || [],
     license: s.license || '',
     previews: s.previews || {},
+    bpm,
+    isLoop: ac.ac_loop === true,
   }
 }
 
@@ -34,7 +50,7 @@ async function fetchJson(url) {
 
 export async function searchSounds(query, { page = 1, pageSize = 15, minDuration, maxDuration, cc0Only = false } = {}) {
   const token = getToken()
-  if (!token) throw new Error('VITE_FREESOUND_API_KEY is not set')
+  if (!token) throw new Error('Freesound API key not configured')
 
   const filters = []
   if (minDuration != null && maxDuration != null) filters.push(`duration:[${minDuration} TO ${maxDuration}]`)

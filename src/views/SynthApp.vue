@@ -21,7 +21,7 @@ import { useLfoStore } from '@/stores/useLfoStore'
 const iconMap = {
   LayoutGrid, Layers, Heart, Keyboard: KeyboardMusic, ListMusic, User, BookOpen, 
   Workflow, RotateCw, HelpCircle, Cable, Settings2, Zap, Gamepad2, Activity,
-  Save, AlertTriangle, Settings, Cpu, Play, Square, Mic, History, Network, Music2, Disc3
+  Save, AlertTriangle, Settings, Cpu, Play, Square, Mic, History, Network, Music2, Disc3, Radio
 }
 
 import { useMidiInit } from '@/composables/useMidiInit'
@@ -139,6 +139,7 @@ const toolbarButtonMap = {
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
   'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
   'audio-looper':           { state: 'isLooperOpen',                     icon: RotateCw,           label: 'Audio Looper' },
+  'freesound-browser':      { state: 'isFreesoundBrowserOpen',           icon: Radio,               label: 'Freesound Browser' },
 }
 
 function handleToolbarButtonClick(button) {
@@ -252,7 +253,7 @@ onMounted(() => {
 <template>
   <div class="w-full h-screen bg-neutral-950 text-white overflow-hidden flex flex-col">
     <!-- Floating Vertical Logo -->
-    <div class="fixed top-[150px] left-4 z-[50] origin-left -rotate-90 pointer-events-auto cursor-pointer group" @click="router.push('/')">
+    <div class="fixed top-[150px] left-4 origin-left -rotate-90 pointer-events-auto cursor-pointer group" @click="router.push('/')">
       <h1 class="text-4xl mt-8 font-black uppercase text-synth-neon/60 mix-blend-screen whitespace-nowrap group-hover:text-synth-neon transition-colors duration-500">
         <span class="text-white">{{ configStore.appName.split('.')[0] }}.</span>{{ configStore.appName.split('.')[1] }}
       </h1>

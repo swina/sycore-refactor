@@ -34,6 +34,13 @@ export const useSyncStore = defineStore('sync', () => {
   const syncChordProgToLooper       = ref(localStorage.getItem('S1_SYNC_CHORDPROG_LOOPER')  === 'true')
   const syncChordProgToAudioCapture = ref(localStorage.getItem('S1_SYNC_CHORDPROG_CAPTURE') === 'true')
 
+  // Loop Pads source → targets
+  const syncLoopPadsToMidi         = ref(localStorage.getItem('S1_SYNC_LOOPPADS_MIDI')    === 'true')
+  const syncLoopPadsToSequencer    = ref(localStorage.getItem('S1_SYNC_LOOPPADS_SEQ')     === 'true')
+  const syncLoopPadsToBackingTrack = ref(localStorage.getItem('S1_SYNC_LOOPPADS_TRACK')   === 'true')
+  const syncLoopPadsToLooper       = ref(localStorage.getItem('S1_SYNC_LOOPPADS_LOOPER')  === 'true')
+  const syncLoopPadsToAudioCapture = ref(localStorage.getItem('S1_SYNC_LOOPPADS_CAPTURE') === 'true')
+
   watch(syncTrack, v => localStorage.setItem('S1_SYNC_TRACK', v ? 'true' : 'false'))
   watch(syncRecordAudioCapture, v => localStorage.setItem('S1_SYNC_REC_CAPTURE', v ? 'true' : 'false'))
   watch(syncBackingTrackToLooper, v => localStorage.setItem('S1_SYNC_TRACK_LOOPER', v ? 'true' : 'false'))
@@ -54,6 +61,11 @@ export const useSyncStore = defineStore('sync', () => {
   watch(syncChordProgToBackingTrack, v => localStorage.setItem('S1_SYNC_CHORDPROG_TRACK',   v ? 'true' : 'false'))
   watch(syncChordProgToLooper,       v => localStorage.setItem('S1_SYNC_CHORDPROG_LOOPER',  v ? 'true' : 'false'))
   watch(syncChordProgToAudioCapture, v => localStorage.setItem('S1_SYNC_CHORDPROG_CAPTURE', v ? 'true' : 'false'))
+  watch(syncLoopPadsToMidi,         v => localStorage.setItem('S1_SYNC_LOOPPADS_MIDI',    v ? 'true' : 'false'))
+  watch(syncLoopPadsToSequencer,    v => localStorage.setItem('S1_SYNC_LOOPPADS_SEQ',     v ? 'true' : 'false'))
+  watch(syncLoopPadsToBackingTrack, v => localStorage.setItem('S1_SYNC_LOOPPADS_TRACK',   v ? 'true' : 'false'))
+  watch(syncLoopPadsToLooper,       v => localStorage.setItem('S1_SYNC_LOOPPADS_LOOPER',  v ? 'true' : 'false'))
+  watch(syncLoopPadsToAudioCapture, v => localStorage.setItem('S1_SYNC_LOOPPADS_CAPTURE', v ? 'true' : 'false'))
 
   return {
     syncTrack, syncRecordAudioCapture,
@@ -62,5 +74,6 @@ export const useSyncStore = defineStore('sync', () => {
     syncLooperToMidi, syncLooperToSequencer, syncLooperToBackingTrack, syncLooperToAudioCapture,
     syncAudioCaptureToMidi, syncAudioCaptureToSequencer, syncAudioCaptureToBackingTrack, syncAudioCaptureToLooper,
     syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
+    syncLoopPadsToMidi, syncLoopPadsToSequencer, syncLoopPadsToBackingTrack, syncLoopPadsToLooper, syncLoopPadsToAudioCapture,
   }
 })

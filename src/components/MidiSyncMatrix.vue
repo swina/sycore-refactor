@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Link2, Clock, Play, Mic, Music2, Zap, ArrowRight, Layers } from 'lucide-vue-next'
+import { Link2, Clock, Play, Mic, Music2, Zap, ArrowRight, Layers, Repeat } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -161,6 +161,33 @@ const ROWS = computed(() => [
       'audio-capture': {
         get: () => syncStore.syncChordProgToAudioCapture,
         set: (v) => { syncStore.syncChordProgToAudioCapture = v },
+      },
+    },
+  },
+  {
+    id: 'loop-pads',
+    label: 'Loop Pads',
+    icon: Repeat,
+    cells: {
+      'midi-transport': {
+        get: () => syncStore.syncLoopPadsToMidi,
+        set: (v) => { syncStore.syncLoopPadsToMidi = v },
+      },
+      'sequencer': {
+        get: () => syncStore.syncLoopPadsToSequencer,
+        set: (v) => { syncStore.syncLoopPadsToSequencer = v },
+      },
+      'backing-track': {
+        get: () => syncStore.syncLoopPadsToBackingTrack,
+        set: (v) => { syncStore.syncLoopPadsToBackingTrack = v },
+      },
+      'audio-looper': {
+        get: () => syncStore.syncLoopPadsToLooper,
+        set: (v) => { syncStore.syncLoopPadsToLooper = v },
+      },
+      'audio-capture': {
+        get: () => syncStore.syncLoopPadsToAudioCapture,
+        set: (v) => { syncStore.syncLoopPadsToAudioCapture = v },
       },
     },
   },
@@ -359,6 +386,11 @@ const ROWS = computed(() => [
           <li>
             <span class="text-neutral-500 font-semibold">Live Performance Pad → MIDI START/STOP</span>
             is a global guard — disable it to prevent double-firing when both Live Performance Pad and Backing Track are active.
+          </li>
+          <li>
+            <span class="text-neutral-500 font-semibold">Loop Pads</span>
+            sync fires when a pad starts playing (start actions) or is stopped (stop actions).
+            Backing Track sync guards against toggling in the wrong direction by checking current playback state.
           </li>
           <li>
             <span class="text-neutral-500 font-semibold">Audio Looper</span>

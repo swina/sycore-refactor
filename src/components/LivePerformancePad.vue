@@ -7,6 +7,7 @@ import {
 } from 'lucide-vue-next'
 import { useFreesoundCache }  from '@/composables/useFreesoundCache'
 import { useMidiStore }       from '@/stores/useMidiStore'
+import { useArpStore }        from '@/stores/useArpStore'
 import { usePresetStore }     from '@/stores/usePresetStore'
 import { useLivePadStore }    from '@/stores/useLivePadStore'
 import { useMappingStore }    from '@/stores/useMappingStore'
@@ -15,6 +16,7 @@ import { useUiStore }         from '@/stores/useUiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService }        from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import { looperEngine }          from '@/lib/looper-engine'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
 import PlayList        from '@/components/PlayList.vue'
 
@@ -30,8 +32,9 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
-const { resolveUrl: resolveFreesoundUrl } = useFreesoundCache()
+const { resolveUrl: resolveFreesoundUrl, cacheFileBlob } = useFreesoundCache()
 const midiStore    = useMidiStore()
+const arpStore     = useArpStore()
 const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
 const mappingStore = useMappingStore()
@@ -39,10 +42,17 @@ const syncStore    = useSyncStore()
 const uiStore      = useUiStore()
 const { openMenu } = useMidiContextMenu()
 
-const syncRecordAudioCapture = computed({
-  get: () => syncStore.syncRecordAudioCapture,
-  set: (v) => { syncStore.syncRecordAudioCapture = v },
-})
+// Local session-only REC SYNC toggle — does NOT write to the sync store,
+// so it never overrides MidiSyncMatrix settings.
+const localRecSync = ref(false)
+
+// Visual indicator: ON if the local override is active OR either sync matrix
+// flag (Backing Track → Capture, Loop Pads → Capture) is enabled.
+const recSyncActive = computed(() =>
+  localRecSync.value ||
+  syncStore.syncRecordAudioCapture ||
+  syncStore.syncLoopPadsToAudioCapture
+)
 
 // ── localStorage ─────────────────────────────────────────────────
 const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
@@ -144,6 +154,13 @@ const currentTime           = ref(0)
 const duration              = ref(0)
 const isPlaying             = ref(false)
 const volume                = ref(0.5)
+
+// When the local REC SYNC override is ON, mirror backing-track play/stop → capture.
+watch(isPlaying, (playing) => {
+  if (!localRecSync.value) return
+  if (playing) window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
+  else         window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+})
 const totalPlaylistDuration = ref(0)
 const isPlaylistMode        = computed(() => playlistIdx.value >= 0 && playlist.value.length > 0)
 
@@ -279,10 +296,10 @@ function handleStateUpdate(e) {
 // ── Loop Pads ─────────────────────────────────────────────────────
 const LOOP_PAD_VOL = 0.8
 
-const loopPads   = ref(Array(8).fill(null))
-const loopActive = ref(Array(8).fill(false))
-const _loopAudios     = Array(8).fill(null)  // non-reactive Audio elements
-const _loopFadeTimers = Array(8).fill(null)  // per-pad fade setTimeout handles
+const loopPads   = ref(Array(16).fill(null))
+const loopActive = ref(Array(16).fill(false))
+const _loopAudios     = Array(16).fill(null)  // non-reactive Audio elements
+const _loopFadeTimers = Array(16).fill(null)  // per-pad fade setTimeout handles
 
 function _getLoopAudio(idx) {
   if (!_loopAudios[idx]) {
@@ -338,6 +355,29 @@ function _fadeOut(audio, idx) {
   _loopFadeTimers[idx] = setTimeout(tick, stepMs)
 }
 
+function _fireSyncActions(starting) {
+  if (syncStore.syncLoopPadsToMidi) {
+    if (starting) midiStore.sendStart()
+    else midiStore.sendStop()
+  }
+  if (syncStore.syncLoopPadsToSequencer) {
+    window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: starting, source: 'loop-pads' } }))
+  }
+  if (syncStore.syncLoopPadsToBackingTrack) {
+    // Guard: only toggle if it would move in the desired direction
+    if (starting !== isPlaying.value)
+      window.dispatchEvent(new CustomEvent('playlist-play-stop'))
+  }
+  if (syncStore.syncLoopPadsToLooper) {
+    if (starting) looperEngine.startAll()
+    else looperEngine.stopAllPlayback()
+  }
+  if (syncStore.syncLoopPadsToAudioCapture) {
+    if (starting) window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
+    else window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+  }
+}
+
 async function toggleLoopPad(idx) {
   const pad = loopPads.value[idx]
   if (!pad?.url) return
@@ -351,7 +391,21 @@ async function toggleLoopPad(idx) {
     } else {
       _fadeOut(audio, idx)  // sets loopActive false when done
     }
+    _fireSyncActions(false)
   } else {
+    // Stop every other active pad (respects each pad's own crossfade setting)
+    loopPads.value.forEach((otherPad, i) => {
+      if (i === idx || !loopActive.value[i]) return
+      _clearFade(i)
+      const otherAudio = _loopAudios[i]
+      if (!otherAudio) return
+      if (otherPad?.noCrossfade) {
+        otherAudio.pause(); otherAudio.volume = LOOP_PAD_VOL; loopActive.value[i] = false
+      } else {
+        _fadeOut(otherAudio, i)
+      }
+    })
+
     _clearFade(idx)
     const url = await resolveFreesoundUrl(pad.id, pad.url)
     if (audio.src !== url) audio.src = url
@@ -359,7 +413,12 @@ async function toggleLoopPad(idx) {
     audio.play().catch(() => { loopActive.value[idx] = false })
     loopActive.value[idx] = true
     if (!instant) _fadeIn(audio, idx)
-    if (pad.bpm) window.dispatchEvent(new CustomEvent('bpm-update', { detail: { bpm: pad.bpm } }))
+    if (pad.bpm) {
+      arpStore.arpBpm      = pad.bpm
+      midiStore.currentBpm = pad.bpm
+      midiStore.setBpm(pad.bpm)
+    }
+    _fireSyncActions(true)
   }
 }
 
@@ -383,9 +442,63 @@ function openFreesoundBrowser() {
   uiStore.isFreesoundBrowserOpen = true
 }
 
+// ── Open local file for a loop pad ───────────────────────────────
+const loopFileInputRef  = ref(null)
+const loopFileTargetIdx = ref(null)
+
+function openFileForPad(idx) {
+  loopFileTargetIdx.value = idx
+  loopFileInputRef.value?.click()
+}
+
+async function handleLoopFileSelect(e) {
+  const file = e.target?.files?.[0]
+  const idx  = loopFileTargetIdx.value
+  loopFileTargetIdx.value = null
+  e.target.value = ''
+  if (!file || idx == null) return
+
+  // Stop whatever is playing on this pad
+  _clearFade(idx)
+  const existingAudio = _loopAudios[idx]
+  if (existingAudio) { existingAudio.pause(); existingAudio.src = '' }
+  loopActive.value[idx] = false
+
+  try {
+    const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/mpeg' })
+    const id   = `file_${Date.now()}`
+    const name = file.name.replace(/\.[^.]+$/, '')
+
+    // Probe duration via a temporary Audio element
+    let duration = 0
+    const tmpUrl = URL.createObjectURL(blob)
+    try {
+      await new Promise((resolve) => {
+        const a = new Audio()
+        a.onloadedmetadata = () => { duration = isFinite(a.duration) ? a.duration : 0; resolve() }
+        a.onerror = resolve
+        a.src = tmpUrl
+        setTimeout(resolve, 3000)
+      })
+    } finally {
+      URL.revokeObjectURL(tmpUrl)
+    }
+
+    // Store blob in IDB so resolveFreesoundUrl finds it on future sessions
+    const url = await cacheFileBlob(id, name, blob, { duration })
+
+    loopPads.value = loopPads.value.map((p, i) =>
+      i === idx ? { id, label: name, url, author: '', duration } : p
+    )
+    setLS(LS_LPP_LOOP_PADS, loopPads.value)
+  } catch (err) {
+    console.error('[LivePerformancePad] File load failed', err)
+  }
+}
+
 function _handleLoopPadAssign(e) {
   const { padIdx, track } = e.detail || {}
-  if (padIdx == null || padIdx < 0 || padIdx >= 8 || !track) return
+  if (padIdx == null || padIdx < 0 || padIdx >= 16 || !track) return
   if (loopActive.value[padIdx]) {
     const audio = _loopAudios[padIdx]
     if (audio) { audio.pause(); audio.src = '' }
@@ -408,8 +521,8 @@ function loadState() {
   const savedLoops = getLS(LS_LPP_LOOP_PADS, null)
   if (Array.isArray(savedLoops)) {
     const lp = [...savedLoops]
-    while (lp.length < 8) lp.push(null)
-    loopPads.value = lp.slice(0, 8)
+    while (lp.length < 16) lp.push(null)
+    loopPads.value = lp.slice(0, 16)
   }
 }
 
@@ -724,6 +837,13 @@ function formatTime(t) {
             <Repeat class="w-2.5 h-2.5" />
             Freesound
           </button>
+          <input
+            ref="loopFileInputRef"
+            type="file"
+            accept=".mp3,.wav,.ogg,audio/*"
+            class="hidden"
+            @change="handleLoopFileSelect"
+          />
         </div>
         <div class="grid grid-cols-8 gap-2">
           <div v-for="(pad, idx) in loopPads" :key="'lp-' + idx" class="relative group">
@@ -744,7 +864,20 @@ function formatTime(t) {
                 {{ pad ? pad.label : `— ${idx + 1} —` }}
               </span>
               <span v-if="pad?.author" class="text-[7px] font-mono opacity-50 z-10 truncate w-full text-center normal-case">{{ pad.author }}</span>
+              <div v-if="pad?.duration || pad?.bpm" class="flex items-center justify-center gap-1 z-10">
+                <span v-if="pad.duration" class="text-[7px] font-mono text-cyan-500/50">{{ formatTime(pad.duration) }}</span>
+                <span v-if="pad.duration && pad.bpm" class="text-[6px] text-neutral-700">·</span>
+                <span v-if="pad.bpm" class="text-[7px] font-mono text-violet-400/70">{{ pad.bpm }}bpm</span>
+              </div>
               <span v-if="!pad" class="text-[7px] font-mono uppercase tracking-widest opacity-30 z-10">loop</span>
+            </button>
+            <!-- Open local file -->
+            <button
+              @click.stop="openFileForPad(idx)"
+              class="absolute bottom-0.5 left-0.5 w-4 h-4 rounded border border-neutral-700 bg-neutral-900 text-neutral-500 hover:text-emerald-400 hover:border-emerald-500/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
+              title="Load local file (MP3 / WAV / OGG)"
+            >
+              <FolderOpen class="w-2.5 h-2.5" />
             </button>
             <!-- Crossfade toggle -->
             <button
@@ -780,16 +913,16 @@ function formatTime(t) {
     <div v-if="tab === 'perf'"
       :class="[
         'shrink-0 border-t border-neutral-900 flex items-center justify-between px-8 py-2 transition-all duration-500 relative overflow-hidden',
-        syncRecordAudioCapture && isPlaying
+        recSyncActive && isPlaying
           ? 'bg-red-950/60'
-          : syncRecordAudioCapture
+          : recSyncActive
             ? 'bg-black/60'
             : 'bg-black/60'
       ]"
     >
       <!-- Audio capture sync background pulse -->
       <div
-        v-if="syncRecordAudioCapture && isPlaying"
+        v-if="recSyncActive && isPlaying"
         class="absolute inset-0 pointer-events-none"
         style="background: radial-gradient(ellipse at center, rgba(239,68,68,0.08) 0%, transparent 70%); animation: rec-pulse 2s ease-in-out infinite;"
       />
@@ -813,7 +946,7 @@ function formatTime(t) {
             @contextmenu.prevent="openMenu($event, { name: 'lpp_playstop', label: 'Play / Stop' })"
             :class="[
               'w-10 h-10 rounded-full text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all',
-              syncRecordAudioCapture && isPlaying
+              recSyncActive && isPlaying
                 ? 'bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.6)]'
                 : 'bg-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.3)]'
             ]"
@@ -831,25 +964,25 @@ function formatTime(t) {
         <!-- Audio capture sync toggle -->
         <div
           class="flex items-center gap-1.5 mb-0.5 cursor-pointer select-none"
-          @click="syncRecordAudioCapture = !syncRecordAudioCapture"
+          @click="localRecSync = !localRecSync"
         >
           <span
             :class="[
               'w-1.5 h-1.5 rounded-full transition-all duration-300',
-              syncRecordAudioCapture && isPlaying ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse'
-              : syncRecordAudioCapture ? 'bg-red-500/60'
+              recSyncActive && isPlaying ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse'
+              : recSyncActive ? 'bg-red-500/60'
               : 'bg-neutral-700'
             ]"
           />
           <span :class="[
             'text-[11px] font-mono uppercase tracking-widest transition-colors duration-300',
-            syncRecordAudioCapture && isPlaying ? 'text-red-400'
-            : syncRecordAudioCapture ? 'text-red-500/60 hover:text-red-400'
+            recSyncActive && isPlaying ? 'text-red-400'
+            : recSyncActive ? 'text-red-500/60 hover:text-red-400'
             : 'text-neutral-600 hover:text-neutral-500'
           ]">REC SYNC</span>
         </div>
         <!--- Open Audio Capture-->
-        <div v-if="syncRecordAudioCapture && !isPlaying" @click="uiStore.isAudioCaptureOpen = true" class="cursor-pointer text-synth-cyan text-mono text-xs uppercase text-[9px]">
+        <div v-if="recSyncActive && !isPlaying" @click="uiStore.isAudioCaptureOpen = true" class="cursor-pointer text-synth-cyan text-mono text-xs uppercase text-[9px]">
           <AudioLines title="Audio Capture" class="w-5 h-5" />
         </div>
         <!-- <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest" :class="syncRecordAudioCapture?'text-red-500':''">{{ syncRecordAudioCapture ? 'ON' : 'OFF' }}  </span> -->

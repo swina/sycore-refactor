@@ -121,6 +121,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'live-performance-pad', label: 'Live Performance',      icon: 'Layers'     },
   { id: 'device-program-change',label: 'Device Program Change', icon: 'Disc3'      },
   { id: 'audio-looper',         label: 'Audio Looper',          icon: 'RotateCw'   },
+  { id: 'freesound-browser',    label: 'Freesound Browser',     icon: 'Radio'      },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -138,7 +139,9 @@ const activeToolbarButtons = computed(() =>
 
 const addableButtons = computed(() => {
   const activeIds = new Set(activeToolbarButtons.value.map(b => b.id))
-  return KNOWN_TOOLBAR_FUNCTIONS.filter(f => !activeIds.has(f.id))
+  return KNOWN_TOOLBAR_FUNCTIONS
+    .filter(f => !activeIds.has(f.id))
+    .sort((a, b) => a.label.localeCompare(b.label))
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

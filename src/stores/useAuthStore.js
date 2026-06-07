@@ -60,6 +60,14 @@ export const useAuthStore = defineStore('auth', () => {
     return unsubscribe
   }
 
+  async function saveFreesoundApiKey(key) {
+    if (!user.value) return
+    const trimmed = (key || '').trim()
+    const userRef = doc(db, 'users', user.value.uid)
+    await setDoc(userRef, { freesoundApiKey: trimmed }, { merge: true })
+    if (profile.value) profile.value = { ...profile.value, freesoundApiKey: trimmed }
+  }
+
   async function logout() {
     await auth.signOut()
     user.value    = null
@@ -69,6 +77,6 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user, profile, loadingAuth,
     isAdmin,
-    getLimits, init, logout,
+    getLimits, init, logout, saveFreesoundApiKey,
   }
 })

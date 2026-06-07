@@ -46,6 +46,7 @@ const isNormalizing    = ref(false)
 const normalizeDbLimit = ref(-3.0)
 const normalizeGateDb  = ref(-60)
 const isImporting      = ref(false)
+const isDiscoveringLoop = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const appendMode       = ref(localStorage.getItem('S1_CAPTURE_APPEND') === '1')
 const error            = ref(null)
@@ -172,6 +173,8 @@ watch(timelineActive, (active) => {
     stopTimelineLoop()
   }
 })
+
+watch(isRecording, (v) => { uiStore.isCaptureRecording = v })
 
 watch([isRecording, isPlaying, timelineMode], ([rec, play, mode]) => {
   if (mode === 'synced') {
@@ -628,6 +631,17 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url)
 }
 
+function triggerMetaDownload(audioFilename) {
+  const meta = {
+    loopStart:     loopStart.value,
+    loopEnd:       loopEnd.value,
+    playbackStart: playbackStart.value,
+    isLooping:     isLooping.value,
+  }
+  const blob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' })
+  triggerDownload(blob, audioFilename + '.s1loop.json')
+}
+
 // ── Audio Cropping & WAV Encoding Helpers ─────────────────────────────────────
 function audioBufferToWav(buffer) {
   const numOfChan = buffer.numberOfChannels
@@ -723,13 +737,19 @@ async function handleDownload() {
       }
       
       const croppedWav = audioBufferToWav(croppedBuffer)
-      triggerDownload(croppedWav, `s1-audio-cropped-${getTimestamp()}.wav`)
+      const ts = getTimestamp()
+      const audioFilename = `s1-audio-cropped-${ts}.wav`
+      triggerDownload(croppedWav, audioFilename)
+      triggerMetaDownload(audioFilename)
     } catch (e) {
       console.error('Failed to download cropped audio', e)
     }
   } else {
+    const ts = getTimestamp()
     const ext = recordedBlob.value.type.includes('ogg') ? 'ogg' : 'webm'
-    triggerDownload(recordedBlob.value, `s1-audio-${getTimestamp()}.${ext}`)
+    const audioFilename = `s1-audio-${ts}.${ext}`
+    triggerDownload(recordedBlob.value, audioFilename)
+    triggerMetaDownload(audioFilename)
   }
 }
 
@@ -737,59 +757,169 @@ function handleImportClick() {
   fileInputRef.value?.click()
 }
 
+async function loadBlobToCapture(blob) {
+  stopAll(true)
+  recordedBlob.value = blob
+  recSecs.value = 0
+  if (blobUrlRef) URL.revokeObjectURL(blobUrlRef)
+  blobUrlRef = URL.createObjectURL(blob)
+  if (audioRef1.value && audioRef2.value) {
+    audioRef1.value.src = blobUrlRef
+    audioRef2.value.src = blobUrlRef
+    audioRef1.value.load()
+    audioRef2.value.load()
+  }
+  try {
+    const arrayBuffer = await blob.arrayBuffer()
+    const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
+    const tempCtx = new audioCtxClass(1, 1, 44100)
+    const decoded = await new Promise((resolve, reject) => {
+      tempCtx.decodeAudioData(arrayBuffer, b => resolve(b), e => reject(e))
+    })
+    audioDuration.value = decoded.duration
+    loopStart.value = 0
+    loopEnd.value = decoded.duration
+    playbackStart.value = 0
+  } catch (decodeErr) {
+    console.warn('Could not decode audio for duration', decodeErr)
+  }
+  zoomX.value = 1.0
+  zoomY.value = 1.0
+  panOffset.value = 0.0
+  startMonitor(selectedDeviceId.value)
+}
+
 async function handleFileImport(e) {
   const file = e.target?.files?.[0]
   if (!file) return
+
+  // Restore loop settings from a companion sidecar without loading audio
+  if (file.name.endsWith('.s1loop.json')) {
+    try {
+      const meta = JSON.parse(await file.text())
+      if (meta.loopStart     != null) loopStart.value     = meta.loopStart
+      if (meta.loopEnd       != null) loopEnd.value       = meta.loopEnd
+      if (meta.playbackStart != null) playbackStart.value = meta.playbackStart
+      if (meta.isLooping     != null) isLooping.value     = meta.isLooping
+    } catch (err) {
+      console.error('Failed to restore loop metadata', err)
+    } finally {
+      e.target.value = ''
+    }
+    return
+  }
+
   isImporting.value = true
   try {
-    // Read the file into a Blob
     const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/wav' })
-
-    // Stop any current playback and monitoring
-    stopAll(true)
-
-    recordedBlob.value = blob
-    recSecs.value = 0
-
-    // Set up preview
-    if (blobUrlRef) URL.revokeObjectURL(blobUrlRef)
-    blobUrlRef = URL.createObjectURL(blob)
-    if (audioRef1.value && audioRef2.value) {
-      audioRef1.value.src = blobUrlRef
-      audioRef2.value.src = blobUrlRef
-      audioRef1.value.load()
-      audioRef2.value.load()
-    }
-
-    // Decode to get actual duration
-    try {
-      const arrayBuffer = await blob.arrayBuffer()
-      const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
-      const tempCtx = new audioCtxClass(1, 1, 44100)
-      const decoded = await new Promise((resolve, reject) => {
-        tempCtx.decodeAudioData(arrayBuffer, b => resolve(b), e => reject(e))
-      })
-      audioDuration.value = decoded.duration
-      loopStart.value = 0
-      loopEnd.value = decoded.duration
-      playbackStart.value = 0
-    } catch (decodeErr) {
-      console.warn('Could not decode imported file for duration', decodeErr)
-    }
-
-    // Reset zoom/pan
-    zoomX.value = 1.0
-    zoomY.value = 1.0
-    panOffset.value = 0.0
-
-    // Restart mic monitoring so the level meter and new recordings work
-    startMonitor(selectedDeviceId.value)
+    await loadBlobToCapture(blob)
   } catch (err) {
     console.error('Import failed', err)
   } finally {
     isImporting.value = false
-    // Reset the file input so the same file can be re-imported
     e.target.value = ''
+  }
+}
+
+async function discoverSeamlessLoop() {
+  if (!recordedBlob.value || isDiscoveringLoop.value) return
+  isDiscoveringLoop.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
+    const tempCtx = new audioCtxClass(1, 1, 44100)
+    const decoded = await new Promise((resolve, reject) => {
+      tempCtx.decodeAudioData(arrayBuffer, resolve, reject)
+    })
+
+    const sampleRate = decoded.sampleRate
+    const len = decoded.length
+
+    // Downmix to mono
+    const mono = new Float32Array(len)
+    for (let c = 0; c < decoded.numberOfChannels; c++) {
+      const ch = decoded.getChannelData(c)
+      for (let i = 0; i < len; i++) mono[i] += ch[i]
+    }
+    if (decoded.numberOfChannels > 1) {
+      const inv = 1 / decoded.numberOfChannels
+      for (let i = 0; i < len; i++) mono[i] *= inv
+    }
+
+    const WINDOW = 2048
+    const NUM_CANDIDATES = 48
+    const MIN_LOOP_SECS = 0.5
+
+    const startMin = Math.floor(len * 0.05)
+    const startMax = Math.floor(len * 0.40) - WINDOW
+    const endMin   = Math.floor(len * 0.55)
+    const endMax   = Math.floor(len * 0.95) - WINDOW
+
+    const startStep = Math.max(1, Math.floor((startMax - startMin) / NUM_CANDIDATES))
+    const endStep   = Math.max(1, Math.floor((endMax - endMin) / NUM_CANDIDATES))
+
+    // RMS-normalize a window into a unit vector (cosine similarity compatible)
+    const unitVec = (offset) => {
+      let sq = 0
+      for (let i = 0; i < WINDOW; i++) { const v = mono[offset + i]; sq += v * v }
+      const rms = Math.sqrt(sq / WINDOW)
+      const out = new Float32Array(WINDOW)
+      if (rms > 1e-9) for (let i = 0; i < WINDOW; i++) out[i] = mono[offset + i] / rms
+      return out
+    }
+
+    const cosineSim = (a, b) => {
+      let s = 0
+      for (let i = 0; i < WINDOW; i++) s += a[i] * b[i]
+      return s / WINDOW
+    }
+
+    let bestScore = -Infinity
+    let bestSi = startMin
+    let bestEi = endMin
+
+    for (let si = startMin; si <= startMax; si += startStep) {
+      const sv = unitVec(si)
+      for (let ei = endMin; ei <= endMax; ei += endStep) {
+        if ((ei - si) / sampleRate < MIN_LOOP_SECS) continue
+        const score = cosineSim(sv, unitVec(ei))
+        if (score > bestScore) { bestScore = score; bestSi = si; bestEi = ei }
+      }
+    }
+
+    // Snap both points to the nearest ascending zero-crossing within ±50 ms
+    const snapZC = (pos) => {
+      const range = Math.floor(sampleRate * 0.05)
+      let best = pos, minDist = Infinity
+      for (let i = Math.max(0, pos - range); i < Math.min(len - 1, pos + range); i++) {
+        if (mono[i] <= 0 && mono[i + 1] > 0) {
+          const d = Math.abs(i - pos)
+          if (d < minDist) { minDist = d; best = i }
+        }
+      }
+      return best
+    }
+
+    loopStart.value = snapZC(bestSi) / sampleRate
+    loopEnd.value   = snapZC(bestEi) / sampleRate
+    isLooping.value = true
+
+    // If a BPM is set, round the loop to the nearest whole number of bars
+    const bpm = midiStore.currentBpm
+    if (bpm > 0) {
+      const barSecs = 4 * (60 / bpm)
+      // Snap start to the nearest bar boundary (anchored at 0)
+      const snappedStart = Math.round(loopStart.value / barSecs) * barSecs
+      // Compute current loop duration, round it to the nearest whole bar count (min 1)
+      const rawDur = loopEnd.value - loopStart.value
+      const bars   = Math.max(1, Math.round(rawDur / barSecs))
+      loopStart.value = Math.max(0, snappedStart)
+      loopEnd.value   = Math.min(audioDuration.value, snappedStart + bars * barSecs)
+    }
+  } catch (e) {
+    console.error('[AudioCapture] discoverSeamlessLoop failed', e)
+  } finally {
+    isDiscoveringLoop.value = false
   }
 }
 
@@ -897,7 +1027,9 @@ async function handleExportMp3() {
     const tail = enc.flush()
     if (tail.length > 0) mp3Parts.push(toAB(tail))
 
-    triggerDownload(new Blob(mp3Parts, { type: 'audio/mpeg' }), `s1-audio-${getTimestamp()}.mp3`)
+    const audioFilename = `s1-audio-${getTimestamp()}.mp3`
+    triggerDownload(new Blob(mp3Parts, { type: 'audio/mpeg' }), audioFilename)
+    triggerMetaDownload(audioFilename)
   } catch (e) {
     console.error('MP3 export failed', e)
   } finally {
@@ -1079,37 +1211,39 @@ function startPlaybackLoop() {
       const fadeTime = Math.max(0, Math.min(loopCrossfadeDur.value, maxFade))
       
       if (!isCrossfading && activeAudio.currentTime >= (loopEnd.value - fadeTime)) {
-        isCrossfading = true
         initWebAudio()
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume()
-        }
-        
-        const nextAudio = activeAudio === audioRef1.value ? audioRef2.value : audioRef1.value
+        if (audioCtx.state === 'suspended') audioCtx.resume()
+
+        const nextAudio  = activeAudio === audioRef1.value ? audioRef2.value : audioRef1.value
         const activeGain = activeAudio === audioRef1.value ? gainNode1 : gainNode2
-        const nextGain = nextAudio === audioRef1.value ? gainNode1 : gainNode2
-        
+        const nextGain   = nextAudio   === audioRef1.value ? gainNode1 : gainNode2
+
         nextAudio.currentTime = loopStart.value
         nextAudio.play().catch(() => {})
-        
+
         const now = audioCtx.currentTime
+
         if (fadeTime > 0) {
+          isCrossfading = true
           activeGain.gain.setValueAtTime(1, now)
           activeGain.gain.linearRampToValueAtTime(0, now + fadeTime)
-          
           nextGain.gain.setValueAtTime(0, now)
           nextGain.gain.linearRampToValueAtTime(1, now + fadeTime)
+
+          if (crossfadeTimeout) clearTimeout(crossfadeTimeout)
+          crossfadeTimeout = setTimeout(() => {
+            activeAudio.pause()
+            activeAudio = nextAudio
+            isCrossfading = false
+          }, fadeTime * 1000)
         } else {
+          // Hard immediate loop — switch synchronously so the next RAF tick is clean
           activeGain.gain.setValueAtTime(0, now)
           nextGain.gain.setValueAtTime(1, now)
-        }
-        
-        if (crossfadeTimeout) clearTimeout(crossfadeTimeout)
-        crossfadeTimeout = setTimeout(() => {
           activeAudio.pause()
           activeAudio = nextAudio
-          isCrossfading = false
-        }, fadeTime * 1000)
+          // isCrossfading stays false — no re-entry risk in a single tick
+        }
       }
     }
   }
@@ -1410,6 +1544,7 @@ function fmtTime(s) {
 let _recToggleHandler = null
 let _startRecHandler = null
 let _stopRecHandler = null
+let _freesoundCaptureHandler = null
 let _recMidiUnsub = null
 let resizeObserver = null
 
@@ -1454,6 +1589,25 @@ onMounted(async () => {
 
   window.addEventListener('capture-start-rec', _startRecHandler)
   window.addEventListener('capture-stop-rec', _stopRecHandler)
+
+  _freesoundCaptureHandler = async (e) => {
+    const { blob, bpm } = e.detail || {}
+    if (!blob) return
+    // Apply BPM before opening so discoverSeamlessLoop can use it immediately
+    if (bpm != null && bpm > 0) {
+      midiStore.currentBpm = bpm
+      midiStore.setBpm(bpm)
+    }
+    uiStore.isAudioCaptureOpen = true
+    isImporting.value = true
+    try {
+      await loadBlobToCapture(blob)
+      await discoverSeamlessLoop()
+    } finally {
+      isImporting.value = false
+    }
+  }
+  window.addEventListener('freesound-send-to-capture', _freesoundCaptureHandler)
 
   midiService.reScanInputs()
   if (!midiService.isReady) {
@@ -1527,6 +1681,7 @@ onUnmounted(() => {
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
   window.removeEventListener('capture-start-rec', _startRecHandler)
   window.removeEventListener('capture-stop-rec', _stopRecHandler)
+  if (_freesoundCaptureHandler) window.removeEventListener('freesound-send-to-capture', _freesoundCaptureHandler)
   if (_recMidiUnsub) _recMidiUnsub()
 })
 </script>
@@ -2081,6 +2236,18 @@ onUnmounted(() => {
               <Magnet class="w-3 h-3" />
               Snap {{ snapEnabled ? 'ON' : 'OFF' }}
             </button>
+            <button
+              @click="discoverSeamlessLoop"
+              :disabled="!recordedBlob || isDiscoveringLoop"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isDiscoveringLoop
+                  ? 'text-violet-300 border-violet-500/40 hover:bg-violet-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Auto-discover seamless loop points"
+            >
+              <Magnet class="w-3 h-3" />
+              {{ isDiscoveringLoop ? 'Analyzing…' : 'Auto Loop' }}
+            </button>
             <span class="text-[12px] font-mono text-neutral-500">
               Range: {{ formatTimeSecs(loopStart) }} - {{ formatTimeSecs(loopEnd) }} / {{ formatTimeSecs(audioDuration) }}
             </span>
@@ -2208,7 +2375,7 @@ onUnmounted(() => {
   <!-- Hidden audio elements for playback preview with crossfade -->
   <audio ref="audioRef1" @loadedmetadata="handleLoadedMetadata" class="hidden" />
   <audio ref="audioRef2" class="hidden" />
-  <input ref="fileInputRef" type="file" accept=".mp3,.ogg,.wav,audio/*" @change="handleFileImport" class="hidden" />
+  <input ref="fileInputRef" type="file" accept=".mp3,.ogg,.wav,audio/*,.s1loop.json" @change="handleFileImport" class="hidden" />
 </template>
 
 <style scoped>
