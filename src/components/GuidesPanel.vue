@@ -76,9 +76,10 @@ const CATEGORIES = [
     label: 'Audio',
     color: 'text-emerald-400',
     items: [
-      { id: 'audio-capture', label: 'Audio Capture',          file: 'SYCORE_AUDIO_CAPTURE' },
-      { id: 'looper',        label: 'Audio Looper',           file: 'SYCORE_LOOPER', badge: 'Beta' },
-      { id: 'backing-track', label: 'Backing Track Player',   file: 'SYCORE_BACKING_TRACK_PLAYER' },
+      { id: 'audio-capture', label: 'Audio Capture',              file: 'SYCORE_AUDIO_CAPTURE' },
+      { id: 'looper',        label: 'Audio Looper',               file: 'SYCORE_LOOPER', badge: 'Beta' },
+      { id: 'backing-track', label: 'Backing Track Player',       file: 'SYCORE_BACKING_TRACK_PLAYER' },
+      { id: 'freesound-browser', label: 'Freesound.org Browser',  file: 'SYCORE_FREESOUND_BROWSER' }
     ],
   },
 
