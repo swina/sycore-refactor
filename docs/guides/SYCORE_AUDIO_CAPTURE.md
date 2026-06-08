@@ -135,10 +135,37 @@ In **Manual** mode a small Play/Stop button appears next to the mode selector. C
 | Action | Result |
 |--------|--------|
 | **MP3** | Exports the selected loop region as 192kbps MP3 (via `@breezystack/lamejs`) |
-| **Save (WAV / WebM)** | If the loop is cropped: exports a 16-bit WAV; otherwise the raw WebM/OGG |
+| **Save (WAV / WebM)** | If the loop is cropped: exports a 16-bit WAV; otherwise the raw WebM/OGG. A companion `.s1loop.json` sidecar is downloaded alongside it (see below). |
 | **+PL (Nx)** | Sends the cropped region to the backing track playlist (with repeat count) |
-| **→ Looper (T1–T8)** | Decodes and loads the cropped region into a Looper track slot |
-| **Import** | Loads any MP3/OGG/WAV file as the "recording" for editing/re-export |
+| **→ Loop Pad** | Opens the Loop Pad assignment modal — crop is encoded as WAV, cached in IndexedDB, and assigned to the chosen pad in Live Performance Pad |
+| **Import** | Loads any MP3/OGG/WAV file as the "recording" for editing/re-export. Drop a `.s1loop.json` sidecar to restore loop points without reloading audio. |
+
+### Loop Point Sidecar (`.s1loop.json`)
+
+Every WAV and MP3 export downloads a companion `.s1loop.json` file alongside the audio. It stores:
+
+| Field | Description |
+|-------|-------------|
+| `loopStart` | Loop start position in seconds |
+| `loopEnd` | Loop end position in seconds |
+| `playbackStart` | Play start offset in seconds |
+| `isLooping` | Whether the loop was active at export time |
+
+To restore: import the `.s1loop.json` file via the **Import** button (or the file input). The loop markers snap back to their saved positions without reloading the audio. Useful for resuming editing across sessions.
+
+### Loop Pad Assignment Modal
+
+Clicking **→ Loop Pad** opens a 4×4 modal grid showing all 16 pads with their current assignments:
+
+<img src="/help/guides/sycore-audio-capture-to-loop-pad.png"/>
+
+- Occupied pads show track name, duration, and BPM.
+- Empty pads show "empty".
+- The selected pad is highlighted in cyan.
+- If the target pad is already occupied, an amber **overwrite** badge appears as a warning.
+- A summary line at the bottom describes the outcome (`→ replaces "…"` or `→ Pad N (empty)`).
+
+After confirming, the cropped audio is encoded as WAV, cached in IndexedDB (so the pad survives page reload), and dispatched via `loop-pad-assign` to Live Performance Pad.
 
 ### Normalization
 
@@ -168,6 +195,12 @@ When `isLooping` is true and the active audio element reaches `loopEnd - crossfa
 4. `isCrossfading` flag prevents re-triggering until the swap completes.
 
 This produces gapless looping for sample-accurate material when crossfade = 0, or smooth blended loops when crossfade > 0.
+
+---
+
+## Footer Recording Indicator
+
+Whenever Audio Capture is actively recording, a pulsing red **REC** badge appears in the app footer — visible even when the Audio Capture panel is closed or minimised. Clicking the badge opens the Audio Capture panel. The badge reflects any recording trigger: direct panel use, backing-track sync, or Loop Pad REC SYNC.
 
 ---
 
@@ -219,8 +252,14 @@ The capture panel supports free-form resizing: drag any corner or edge to adjust
 
 - **Headless recording:** Fire `capture-start-rec` with `detail.background = true` to record without opening the panel. The monitor starts automatically.
 - **BPM grid alignment:** Set the BPM in your MIDI clock source before recording. The waveform grid and snap grid will align to bars automatically.
-- **Looper transfer:** Record a loop, crop with Loop Start/End handles, then send to any of the 8 Looper tracks with `→ Looper`.
+- **Loop Pad transfer:** Record a loop, set Loop Start/End handles, then click **→ Loop Pad** to open the assignment modal. Pick an empty pad (or overwrite an existing one) and confirm — the cropped audio lands in the Live Performance Pad grid ready to play.
 - **MP3 range export:** The MP3 export always respects the current Loop Start/End crop — you get only what's between the handles.
 - **Building a long take with Append:** Enable Append, record a section, stop, then record again — each stop merges the new chunk onto the growing capture. Disable Append when you want to start fresh.
 - **Normalize before exporting:** Run NORM after recording to bring the level up before MP3 or WAV export. The GATE slider is especially useful for recordings with noisy silence between phrases.
 - **Manual timeline for count-in:** Set the timeline to Manual mode and tap ▶ a bar before hitting REC — the sweep gives you a visual count-in at the current BPM without affecting the recording.
+- **Restore loop points across sessions:** Always export the WAV and the `.s1loop.json` together. On your next session, import the audio first, then import the sidecar — your loop start, end, and play start snap back exactly.
+- **Footer REC indicator:** The pulsing red REC badge in the footer is your safety net — if the panel is behind other windows you always know recording is active. Click it to bring the panel to focus.
+
+---
+
+*Last updated: 2026-06-08*

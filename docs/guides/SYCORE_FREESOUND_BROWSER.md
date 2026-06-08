@@ -103,13 +103,19 @@ The assignment dispatches a `loop-pad-assign` custom event. The **Live Performan
 
 > Clicking **Pad** again on the same sound before assigning cancels the picker.
 
+#### MIDI Learn for pad slots
+
+Right-click any slot button in the pad picker to open the MIDI learn context menu for that slot. Param name: `lpp_loop_N` (0-based). Once mapped, the hardware controller LED turns **green** when that pad is playing and **amber** when stopped. The same right-click is available directly on the Loop Pad buttons inside the Live Performance Pad panel.
+
 ### Capture — Send to Audio Capture
 
 1. Click **Capture** on the sound you want to work with
 2. A BPM picker appears inline — pre-filled with the sound's analysed BPM or the current global BPM
 3. Adjust BPM if needed, then click **Send**
 
-The browser fetches the full preview blob (or uses the local cache), then dispatches a `freesound-send-to-capture` event with the blob, metadata, and BPM. The **Audio Capture** panel loads it as a new recording, sets the BPM, and runs automatic loop-point discovery.
+The browser fetches the full preview blob (or uses the local cache), then dispatches a `freesound-send-to-capture` event with the blob, metadata, and BPM. The **Audio Capture** panel loads it as a new recording and runs automatic loop-point discovery.
+
+When a BPM is confirmed, the global BPM is updated everywhere: `arpStore.arpBpm` (footer display and arpeggiator), `midiStore.currentBpm`, and the MIDI clock output.
 
 > The **Capture** button shows a spinner (`…`) and is disabled while the fetch is in progress.
 
@@ -190,4 +196,4 @@ The `useFreesoundCache` composable maintains a reactive `cachedIds` Set at modul
 
 ---
 
-*Last updated: 2026-06-07*
+*Last updated: 2026-06-08*

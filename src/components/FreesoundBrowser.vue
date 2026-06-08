@@ -276,6 +276,20 @@ onUnmounted(() => {
         :style="{ left: pos.x + 'px', top: pos.y + 'px', width: size.w + 'px', height: size.h + 'px' }"
       >
 
+        <!-- ── Capture busy overlay ─────────────────────────────────── -->
+        <Transition name="fade">
+          <div
+            v-if="isSendingToCapture"
+            class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm rounded-2xl pointer-events-auto select-none"
+          >
+            <div class="w-12 h-12 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
+            <div class="text-center">
+              <p class="text-sm font-black uppercase tracking-widest text-white">Capturing…</p>
+              <p class="text-[10px] font-mono text-violet-400 mt-1">Please wait, fetching sound</p>
+            </div>
+          </div>
+        </Transition>
+
         <!-- ── Header / drag handle ───────────────────────────────── -->
         <div
           @mousedown="startDrag"
@@ -726,6 +740,12 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
 .fade-down-enter-active, .fade-down-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }

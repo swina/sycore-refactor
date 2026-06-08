@@ -4,7 +4,7 @@
 
 1. **Performance Sets** — 16 one-touch recall pads for complete device program change states
 2. **Backing Tracks** — a 16-slot playlist pad grid for click-and-play audio tracks
-3. **Volume Mix** — per-device MIDI CC volume faders with mute and MIDI learn
+3. **Loop Pads** — 16 one-touch recall pads for click-and-loop audio, can be mapped to freesound.org sounds
 
 All three can run simultaneously. MIDI mappings allow any pad, track, or fader to be triggered from a hardware controller. Pad layouts can be saved and recalled as **Snapshots**.
 
@@ -35,6 +35,8 @@ Three sub-tabs for configuration:
 ---
 
 ## Performance Sets
+
+<img src="/help/guides/sycore-live-set-performance.png"/>
 
 ### What is a Performance Set?
 
@@ -67,6 +69,8 @@ Right-click any pad to open the MIDI learn context menu. Param name: `lpp_set_N`
 
 ## Backing Tracks
 
+<img src="/help/guides/sycore-live-set-backing-tracks.png"/>
+
 The backing track section uses the `PlaylistPadGrid` component — 16 clickable track pads driven by `livePadStore.playlist`.
 
 - Click a pad to start that track immediately (dispatches `playlist-play` with crossfade).
@@ -88,43 +92,51 @@ A persistent transport bar at the bottom of the Performance tab:
 
 ### REC SYNC
 
-When **REC SYNC** is on and a backing track is playing, the footer background pulses red. This is a visual indicator for the performer to know that backing track playback is synced to Audio Capture recording.
+The **REC SYNC** indicator in the player footer has two independent sources:
 
+| Source | Behaviour |
+|--------|-----------|
+| **MidiSyncMatrix** (Backing Track → Capture or Loop Pads → Capture) | Persistent global setting — survives page reload, shared with all consumers |
+| **Local REC SYNC toggle** (in the Live Performance Pad footer) | Session-only — never writes to the sync store, does not affect MidiSyncMatrix settings |
+
+The indicator lights up when **any** of the three is active. Clicking it toggles only the local session flag; it never overrides the Matrix settings.
+
+When the local toggle is on and a backing track starts or stops, `capture-start-rec` / `capture-stop-rec` events are dispatched to Audio Capture. The footer background pulses red while both local sync and playback are active.
 
 ---
 
-## Volume Mix
+## Loop Pads
 
-Appears when at least one registered device.
+<img src="/help/guides/sycore-live-set-loop-pads.png"/>
 
-### Per-Device Row
+A 16-pad grid (two rows of 8) for triggering looped audio samples. Pads are independent of Performance Sets and can run simultaneously with a backing track.
 
-```
-[🔇 Mute]  ● 🎵  Roland S-1  CH3  [─────────────────────]  84  CC[7]
-```
+### Assigning a sound
 
-| Element | Description |
-|---------|-------------|
-| Mute button | Wraps `port.send()` to block Note On/Off silently; sends `CC 123` first |
-| Online dot | Green if the MIDI output is detected; grey if offline |
-| Device type icon | CPU = audio-interface; Music = instrument |
-| Name + CH badge | CH badge shows only for multitimbral (`instrument-multi`) devices |
-| Volume slider | 0–127; sends the configured CC on value change |
-| CC# input | Which CC to send for volume (default 7 = MIDI Volume) |
+| Method | How |
+|--------|-----|
+| **Freesound Browser** | Click **Pad** on any search result, pick a slot in the pad picker |
+| **Local file** | Click the folder icon on an empty pad — loads MP3/WAV/OGG directly |
+| **Audio Capture** | Click **→ Loop Pad** in Audio Capture, pick a slot in the modal |
 
-### Multitimbral Devices
+Assignments are saved to localStorage (`SYCORE_LPP_LOOP_PADS`) and restored on reload. Sounds from Freesound or Audio Capture are also cached in IndexedDB so they play without re-downloading.
 
-For `instrument-multi` devices, the mix key includes the current MIDI channel: `DeviceName:CH`. Each MIDI channel of a multitimbral device has its own stored volume and CC number. The badge `CH3` updates when the active part changes.
+### Playing and stopping
 
-### Mute Implementation
+- Click an assigned pad to start the loop. The pad glows cyan with a pulsing overlay.
+- Click again to stop. Only one pad plays at a time — starting a new pad fades out the current one (unless crossfade is disabled).
+- The **crossfade toggle** (⚡/≋ button, top-left of pad on hover) switches between smooth crossfade and instant cut.
+- The **clear button** (✕, top-right on hover) removes the assignment.
 
-This intercepts all outgoing messages at the WebMIDI level. CC, PC, SysEx, and clock messages still pass through. The patch is removed on unmute, on component unmount, and on device reconnect (reapplied on reconnect if still muted).
+### BPM sync
 
-Mute state is persisted in `SYCORE_LPP_MIX` (localStorage) so it survives a page reload.
+If the sound has a BPM tag (from Freesound acoustic analysis or manual entry), starting the pad automatically sets the global BPM (`arpStore.arpBpm`, `midiStore.currentBpm`, and the MIDI clock).
 
-### MIDI Learn (Volume)
+### MIDI Learn
 
-Right-click any device row → opens MIDI learn for `lpp_mix_DeviceName`. When a CC arrives mapped to this param name, the CC value (0–127) is applied directly as the volume for that device.
+Right-click any Loop Pad to open the MIDI learn context menu. Param name: `lpp_loop_N` (0-based). The assigned controller LED turns **green** when the pad is playing and **amber** when stopped — identical to Performance Set pad feedback.
+
+Right-click is also available on each slot inside the **Freesound Browser pad picker**, so you can assign MIDI triggers without opening the Live Performance Pad directly.
 
 ---
 
@@ -152,10 +164,13 @@ A dedicated raw MIDI listener runs independently of the main CC listener. It mon
 
 | Param pattern | Trigger |
 |--------------|---------|
-| `lpp_set_N` | Triggers pad N (fires on note-on or CC > 0) |
+| `lpp_set_N` | Triggers Performance Set pad N (fires on note-on or CC > 0) |
+| `lpp_loop_N` | Toggles Loop Pad N (play/stop) |
 | `lpp_bt_N` | Plays backing track N |
 | `lpp_mix_DeviceName` | Sets device volume to the CC value |
 | `lpp_playstop` | Toggles playlist play/stop |
+
+LED feedback is sent for all `lpp_set_N` and `lpp_loop_N` mappings: **green** = active/playing, **amber** = inactive/stopped. The active state for loop pads is tracked in `livePadStore.loopActivePads` and watched by the controller manager.
 
 
 ---
@@ -165,5 +180,10 @@ A dedicated raw MIDI listener runs independently of the main CC listener. It mon
 - **Set order matters:** Pad 1 should be your opener set — it's the first pad a controller will hit if mapped sequentially.
 - **REC SYNC workflow:** Enable REC SYNC before the set. Hit Play — the backing track starts, and a connected Audio Capture will know to start recording simultaneously.
 - **Snapshot discipline:** Save a snapshot before every show with the set name (e.g. `Show 2026-06-01`). Use **Save New** at the top of each show, not **Update**, so you keep historical show configs.
-- **Multitimbral volume:** On multitimbral devices, switch to each MIDI part and set its volume independently. The mix state stores a separate level per part per device.
-- **Mute on reconnect:** If a MIDI device disconnects and reconnects mid-show, SY.CORE reapplies mutes automatically via the `watch(midiStore.outputs)` watcher.
+- **Loop Pad BPM tagging:** When assigning a Freesound sound to a pad, enter the BPM in the picker. Starting that pad will sync the global clock to its tempo automatically.
+- **Loop Pad MIDI grid:** Map `lpp_loop_0` through `lpp_loop_15` to a grid of 16 pads on your controller. Green = playing, amber = stopped — your controller mirrors the pad state live.
+- **REC SYNC isolation:** The REC SYNC toggle in the player footer is session-only — it won't break your MidiSyncMatrix configuration. Use the Matrix for persistent show-night sync; use the footer toggle for quick ad-hoc recording during rehearsal.
+
+---
+
+*Last updated: 2026-06-08*
