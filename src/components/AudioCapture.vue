@@ -58,6 +58,8 @@ const selectedLoopPad      = ref(0)    // 0-based index
 const isSendingToLoopPad   = ref(false)
 const showLoopPadModal     = ref(false)
 const loopPadModalSlots    = ref([])
+const loopPadSoundName     = ref('')
+const lastCaptureLabel     = ref('')   // set when a Freesound sound is loaded
 
 function openLoopPadModal() {
   try {
@@ -68,6 +70,7 @@ function openLoopPadModal() {
   } catch {
     loopPadModalSlots.value = Array(16).fill(null)
   }
+  loopPadSoundName.value = lastCaptureLabel.value || `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
   showLoopPadModal.value = true
 }
 
@@ -529,6 +532,8 @@ async function mergeBlobs(blobA, blobB) {
 // ── Recording ────────────────────────────────────────────────────────────────
 function startRecording() {
   if (!streamRef || isRecording.value) return
+
+  lastCaptureLabel.value = ''   // fresh recording — no Freesound label to inherit
 
   // Save existing capture for append, or discard
   prevBlobRef = (appendMode.value && recordedBlob.value) ? recordedBlob.value : null
@@ -1172,7 +1177,7 @@ async function handleSendToLoopPad() {
 
     const wav  = audioBufferToWav(croppedBuffer)
     const id   = `capture_${Date.now()}`
-    const label = `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+    const label = loopPadSoundName.value.trim() || `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
     const duration = loopEnd.value - loopStart.value
     const url  = await cacheFileBlob(id, label, wav, { author: 'Audio Capture', duration })
 
@@ -1655,7 +1660,8 @@ onMounted(async () => {
   window.addEventListener('capture-stop-rec', _stopRecHandler)
 
   _freesoundCaptureHandler = async (e) => {
-    const { blob, bpm } = e.detail || {}
+    const { blob, bpm, label } = e.detail || {}
+    if (label) lastCaptureLabel.value = label
     if (!blob) return
     // Apply BPM before opening so discoverSeamlessLoop can use it immediately
     if (bpm != null && bpm > 0) {
@@ -2017,21 +2023,34 @@ onUnmounted(() => {
                   </div>
 
                   <!-- Footer -->
-                  <div class="px-5 pb-5 flex items-center gap-3">
-                    <span class="flex-1 text-[9px] font-mono text-neutral-500 truncate">
-                      Sending: <span class="text-white">{{ loopPadModalSlots[selectedLoopPad] ? `→ replaces "${loopPadModalSlots[selectedLoopPad].label}"` : `→ Pad ${selectedLoopPad + 1} (empty)` }}</span>
-                    </span>
-                    <button
-                      @click="showLoopPadModal = false"
-                      class="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] font-bold uppercase tracking-widest transition-colors"
-                    >Cancel</button>
-                    <button
-                      @click="confirmLoopPadAssign"
-                      :disabled="isSendingToLoopPad"
-                      class="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 hover:bg-cyan-500/30 text-cyan-300 text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-40"
-                    >
-                      {{ isSendingToLoopPad ? '…' : `Assign to Pad ${selectedLoopPad + 1}` }}
-                    </button>
+                  <div class="px-5 pb-5 flex flex-col gap-3">
+                    <!-- Sound name input -->
+                    <div class="flex items-center gap-2">
+                      <label class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">Name</label>
+                      <input
+                        v-model="loopPadSoundName"
+                        type="text"
+                        placeholder="Sound name…"
+                        maxlength="64"
+                        class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono outline-none focus:border-cyan-500 placeholder-neutral-700 transition-colors"
+                      />
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="flex-1 text-[9px] font-mono text-neutral-500 truncate">
+                        Sending: <span class="text-white">{{ loopPadModalSlots[selectedLoopPad] ? `→ replaces "${loopPadModalSlots[selectedLoopPad].label}"` : `→ Pad ${selectedLoopPad + 1} (empty)` }}</span>
+                      </span>
+                      <button
+                        @click="showLoopPadModal = false"
+                        class="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] font-bold uppercase tracking-widest transition-colors"
+                      >Cancel</button>
+                      <button
+                        @click="confirmLoopPadAssign"
+                        :disabled="isSendingToLoopPad"
+                        class="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 hover:bg-cyan-500/30 text-cyan-300 text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                      >
+                        {{ isSendingToLoopPad ? '…' : `Assign to Pad ${selectedLoopPad + 1}` }}
+                      </button>
+                    </div>
                   </div>
 
                 </div>
