@@ -185,6 +185,8 @@ function recallSet(set) {
     midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
     midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
     midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
+    midiStore.updateRegistration(entry.deviceName, 'pcMsb',      entry.pcMsb ?? 0)
+    midiStore.updateRegistration(entry.deviceName, 'pcLsb',      entry.pcLsb ?? 0)
     midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
     if (entry.isUiDevice) {
       if (entry.lastPresetId) {
@@ -198,14 +200,14 @@ function recallSet(set) {
       if (multi.length > 0) {
         multi.forEach(([chStr, info]) => {
           const ch = parseInt(chStr)
-          port.send([0xB0 | ch, 0,  0])
-          port.send([0xB0 | ch, 32, 0])
+          port.send([0xB0 | ch, 0,  info.msb ?? 0])
+          port.send([0xB0 | ch, 32, info.lsb ?? 0])
           port.send([0xC0 | ch, info.program ?? 0])
         })
       } else {
         const ch = entry.pcChannel ?? 0
-        port.send([0xB0 | ch, 0,  0])
-        port.send([0xB0 | ch, 32, 0])
+        port.send([0xB0 | ch, 0,  entry.pcMsb ?? 0])
+        port.send([0xB0 | ch, 32, entry.pcLsb ?? 0])
         port.send([0xC0 | ch, entry.pcProgram ?? 0])
       }
     }
@@ -300,61 +302,129 @@ const loopPads   = ref(Array(16).fill(null))
 const loopActive = ref(Array(16).fill(false))
 
 watch(loopActive, (v) => { livePadStore.loopActivePads = [...v] }, { deep: true })
-const _loopAudios     = Array(16).fill(null)  // non-reactive Audio elements
-const _loopFadeTimers = Array(16).fill(null)  // per-pad fade setTimeout handles
 
-function _getLoopAudio(idx) {
-  if (!_loopAudios[idx]) {
-    const a = new Audio()
-    a.loop   = true
-    a.volume = LOOP_PAD_VOL
-    a.addEventListener('error', () => { loopActive.value[idx] = false })
-    _loopAudios[idx] = a
+// Per-pad Web Audio state: { a, b, gainA, gainB, active:'a'|'b', rafId, isCrossfading }
+let _padCtx = null
+const _padWA = Array(16).fill(null)
+
+function _getAudioCtx() {
+  if (!_padCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext
+    _padCtx = new AC()
   }
-  return _loopAudios[idx]
+  if (_padCtx.state === 'suspended') _padCtx.resume()
+  return _padCtx
 }
 
-function _clearFade(idx) {
-  if (_loopFadeTimers[idx]) { clearTimeout(_loopFadeTimers[idx]); _loopFadeTimers[idx] = null }
+function _initPadWA(idx) {
+  if (_padWA[idx]) return _padWA[idx]
+  const ctx  = _getAudioCtx()
+  const a    = new Audio(); a.preload = 'auto'
+  const b    = new Audio(); b.preload = 'auto'
+  a.addEventListener('error', () => { loopActive.value[idx] = false })
+  const gainA = ctx.createGain(); gainA.gain.value = 0
+  const gainB = ctx.createGain(); gainB.gain.value = 0
+  ctx.createMediaElementSource(a).connect(gainA); gainA.connect(ctx.destination)
+  ctx.createMediaElementSource(b).connect(gainB); gainB.connect(ctx.destination)
+  _padWA[idx] = { a, b, gainA, gainB, active: 'a', rafId: null, isCrossfading: false }
+  return _padWA[idx]
 }
 
 function _fadeSec() {
   return Math.max(0.3, Math.min(crossfadeSec.value ?? 1, 3))
 }
 
-function _fadeIn(audio, idx) {
-  const fadeSec = _fadeSec()
-  const steps   = Math.max(10, Math.round(fadeSec * 20))
-  const stepMs  = (fadeSec * 1000) / steps
-  audio.volume  = 0
-  let step = 0
-  const tick = () => {
-    step++
-    audio.volume = Math.min(LOOP_PAD_VOL, (step / steps) * LOOP_PAD_VOL)
-    _loopFadeTimers[idx] = step < steps ? setTimeout(tick, stepMs) : null
-  }
-  _loopFadeTimers[idx] = setTimeout(tick, stepMs)
+function _stopPadRaf(idx) {
+  const wa = _padWA[idx]; if (!wa) return
+  if (wa.rafId) { cancelAnimationFrame(wa.rafId); wa.rafId = null }
+  wa.isCrossfading = false
 }
 
-function _fadeOut(audio, idx) {
-  const fadeSec  = _fadeSec()
-  const steps    = Math.max(10, Math.round(fadeSec * 20))
-  const stepMs   = (fadeSec * 1000) / steps
-  const startVol = audio.volume
-  let step = 0
-  const tick = () => {
-    step++
-    audio.volume = Math.max(0, (1 - step / steps) * startVol)
-    if (step < steps) {
-      _loopFadeTimers[idx] = setTimeout(tick, stepMs)
-    } else {
-      audio.pause()
-      audio.volume = LOOP_PAD_VOL
-      loopActive.value[idx] = false
-      _loopFadeTimers[idx] = null
-    }
+function _clearFade(idx) { _stopPadRaf(idx) }
+
+// rAF loop: watches playback position, triggers crossfade before the loop boundary
+function _padLoopTick(idx) {
+  const wa = _padWA[idx]
+  if (!wa || !loopActive.value[idx]) return
+  wa.rafId = requestAnimationFrame(() => _padLoopTick(idx))
+  if (wa.isCrossfading) return
+
+  const activeEl   = wa.active === 'a' ? wa.a   : wa.b
+  const nextEl     = wa.active === 'a' ? wa.b   : wa.a
+  const activeGain = wa.active === 'a' ? wa.gainA : wa.gainB
+  const nextGain   = wa.active === 'a' ? wa.gainB : wa.gainA
+
+  const dur = activeEl.duration
+  if (!dur || !isFinite(dur)) return
+
+  const fadeTime  = Math.min(_fadeSec(), dur * 0.45)
+  if (activeEl.currentTime < dur - fadeTime - 0.05) return
+
+  wa.isCrossfading = true
+  nextEl.currentTime = 0
+  nextEl.play().catch(() => {})
+
+  const ctx = _getAudioCtx()
+  const now = ctx.currentTime
+  if (fadeTime > 0) {
+    activeGain.gain.cancelScheduledValues(now)
+    activeGain.gain.setValueAtTime(activeGain.gain.value, now)
+    activeGain.gain.linearRampToValueAtTime(0, now + fadeTime)
+    nextGain.gain.cancelScheduledValues(now)
+    nextGain.gain.setValueAtTime(0, now)
+    nextGain.gain.linearRampToValueAtTime(LOOP_PAD_VOL, now + fadeTime)
+  } else {
+    activeGain.gain.setValueAtTime(0, now)
+    nextGain.gain.setValueAtTime(LOOP_PAD_VOL, now)
   }
-  _loopFadeTimers[idx] = setTimeout(tick, stepMs)
+
+  setTimeout(() => {
+    activeEl.pause()
+    activeEl.currentTime = 0
+    wa.active = wa.active === 'a' ? 'b' : 'a'
+    wa.isCrossfading = false
+  }, (fadeTime + 0.08) * 1000)
+}
+
+function _startPadRaf(idx) { _stopPadRaf(idx); _padLoopTick(idx) }
+
+function _fadeInPad(idx) {
+  const wa = _padWA[idx]; if (!wa) return
+  const ctx = _getAudioCtx(); const now = ctx.currentTime
+  const fadeSec    = _fadeSec()
+  const activeGain = wa.active === 'a' ? wa.gainA : wa.gainB
+  activeGain.gain.cancelScheduledValues(now)
+  activeGain.gain.setValueAtTime(0, now)
+  activeGain.gain.linearRampToValueAtTime(LOOP_PAD_VOL, now + fadeSec)
+}
+
+function _fadeOutPad(idx) {
+  const wa = _padWA[idx]; if (!wa) return
+  _stopPadRaf(idx)
+  const ctx  = _getAudioCtx(); const now = ctx.currentTime
+  const fadeSec    = _fadeSec()
+  const activeGain = wa.active === 'a' ? wa.gainA : wa.gainB
+  const otherGain  = wa.active === 'a' ? wa.gainB : wa.gainA
+  activeGain.gain.cancelScheduledValues(now)
+  activeGain.gain.setValueAtTime(activeGain.gain.value, now)
+  activeGain.gain.linearRampToValueAtTime(0, now + fadeSec)
+  otherGain.gain.cancelScheduledValues(now); otherGain.gain.setValueAtTime(0, now)
+  setTimeout(() => {
+    wa.a.pause(); wa.a.currentTime = 0
+    wa.b.pause(); wa.b.currentTime = 0
+    loopActive.value[idx] = false
+  }, fadeSec * 1000)
+}
+
+function _stopPadInstant(idx) {
+  const wa = _padWA[idx]; if (!wa) return
+  _stopPadRaf(idx)
+  const ctx = _getAudioCtx(); const now = ctx.currentTime
+  wa.gainA.gain.cancelScheduledValues(now); wa.gainA.gain.setValueAtTime(0, now)
+  wa.gainB.gain.cancelScheduledValues(now); wa.gainB.gain.setValueAtTime(0, now)
+  wa.a.pause(); wa.a.currentTime = 0
+  wa.b.pause(); wa.b.currentTime = 0
+  loopActive.value[idx] = false
 }
 
 function _fireSyncActions(starting) {
@@ -383,45 +453,51 @@ function _fireSyncActions(starting) {
 async function toggleLoopPad(idx) {
   const pad = loopPads.value[idx]
   if (!pad?.url) return
-  const audio   = _getLoopAudio(idx)
   const instant = !!pad.noCrossfade
 
   if (loopActive.value[idx]) {
-    _clearFade(idx)
-    if (instant) {
-      audio.pause(); audio.volume = LOOP_PAD_VOL; loopActive.value[idx] = false
-    } else {
-      _fadeOut(audio, idx)  // sets loopActive false when done
-    }
+    if (instant) { _stopPadInstant(idx) } else { _fadeOutPad(idx) }
     _fireSyncActions(false)
-  } else {
-    // Stop every other active pad (respects each pad's own crossfade setting)
-    loopPads.value.forEach((otherPad, i) => {
-      if (i === idx || !loopActive.value[i]) return
-      _clearFade(i)
-      const otherAudio = _loopAudios[i]
-      if (!otherAudio) return
-      if (otherPad?.noCrossfade) {
-        otherAudio.pause(); otherAudio.volume = LOOP_PAD_VOL; loopActive.value[i] = false
-      } else {
-        _fadeOut(otherAudio, i)
-      }
-    })
-
-    _clearFade(idx)
-    const url = await resolveFreesoundUrl(pad.id, pad.url)
-    if (audio.src !== url) audio.src = url
-    audio.volume = instant ? LOOP_PAD_VOL : 0
-    audio.play().catch(() => { loopActive.value[idx] = false })
-    loopActive.value[idx] = true
-    if (!instant) _fadeIn(audio, idx)
-    if (pad.bpm) {
-      arpStore.arpBpm      = pad.bpm
-      midiStore.currentBpm = pad.bpm
-      midiStore.setBpm(pad.bpm)
-    }
-    _fireSyncActions(true)
+    return
   }
+
+  // Stop every other active pad (respects each pad's own crossfade setting)
+  loopPads.value.forEach((otherPad, i) => {
+    if (i === idx || !loopActive.value[i]) return
+    if (otherPad?.noCrossfade) { _stopPadInstant(i) } else { _fadeOutPad(i) }
+  })
+
+  const url = await resolveFreesoundUrl(pad.id, pad.url)
+  // Guard: pad may have been cleared during async URL resolution
+  if (!loopPads.value[idx]?.url) return
+
+  const wa  = _initPadWA(idx)
+  _stopPadRaf(idx)
+
+  // Set URL on both elements so the crossfade partner is always ready
+  wa.active = 'a'
+  wa.a.src  = url; wa.a.currentTime = 0
+  wa.b.src  = url; wa.b.currentTime = 0
+  const ctx = _getAudioCtx(); const now = ctx.currentTime
+  wa.gainA.gain.cancelScheduledValues(now); wa.gainA.gain.setValueAtTime(0, now)
+  wa.gainB.gain.cancelScheduledValues(now); wa.gainB.gain.setValueAtTime(0, now)
+
+  try { await wa.a.play() } catch { loopActive.value[idx] = false; return }
+
+  loopActive.value[idx] = true
+  if (instant) {
+    wa.gainA.gain.setValueAtTime(LOOP_PAD_VOL, _getAudioCtx().currentTime)
+  } else {
+    _fadeInPad(idx)
+  }
+  _startPadRaf(idx)
+
+  if (pad.bpm) {
+    arpStore.arpBpm      = pad.bpm
+    midiStore.currentBpm = pad.bpm
+    midiStore.setBpm(pad.bpm)
+  }
+  _fireSyncActions(true)
 }
 
 function toggleLoopPadNoCrossfade(idx) {
@@ -432,10 +508,9 @@ function toggleLoopPadNoCrossfade(idx) {
 }
 
 function clearLoopPad(idx) {
-  _clearFade(idx)
-  const audio = _loopAudios[idx]
-  if (audio) { audio.pause(); audio.volume = LOOP_PAD_VOL; audio.src = '' }
-  loopActive.value[idx] = false
+  _stopPadInstant(idx)
+  const wa = _padWA[idx]
+  if (wa) { wa.a.src = ''; wa.b.src = '' }
   loopPads.value = loopPads.value.map((p, i) => i === idx ? null : p)
   setLS(LS_LPP_LOOP_PADS, loopPads.value)
 }
@@ -461,10 +536,9 @@ async function handleLoopFileSelect(e) {
   if (!file || idx == null) return
 
   // Stop whatever is playing on this pad
-  _clearFade(idx)
-  const existingAudio = _loopAudios[idx]
-  if (existingAudio) { existingAudio.pause(); existingAudio.src = '' }
-  loopActive.value[idx] = false
+  _stopPadInstant(idx)
+  const wa = _padWA[idx]
+  if (wa) { wa.a.src = ''; wa.b.src = '' }
 
   try {
     const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/mpeg' })
@@ -502,9 +576,9 @@ function _handleLoopPadAssign(e) {
   const { padIdx, track } = e.detail || {}
   if (padIdx == null || padIdx < 0 || padIdx >= 16 || !track) return
   if (loopActive.value[padIdx]) {
-    const audio = _loopAudios[padIdx]
-    if (audio) { audio.pause(); audio.src = '' }
-    loopActive.value[padIdx] = false
+    _stopPadInstant(padIdx)
+    const wa = _padWA[padIdx]
+    if (wa) { wa.a.src = ''; wa.b.src = '' }
   }
   loopPads.value = loopPads.value.map((p, i) => i === padIdx ? { ...track } : p)
   setLS(LS_LPP_LOOP_PADS, loopPads.value)
@@ -595,6 +669,13 @@ function _onTimelineLoadPerfSet(e) {
   }
 }
 
+function _onLppSetAssign(e) {
+  const { setId, padIdx } = e.detail ?? {}
+  if (!setId || typeof padIdx !== 'number' || padIdx < 0 || padIdx >= 16) return
+  pcSets.value = getLS(LS_PC_SETS, [])
+  assignSetPad(padIdx, setId)
+}
+
 onMounted(() => {
   loadState()
   window.addEventListener('player-state-sync', handleStateUpdate)
@@ -603,6 +684,7 @@ onMounted(() => {
   window.dispatchEvent(new CustomEvent('player-state-request'))
   _startLppMidiListener()
   window.addEventListener('loop-pad-assign', _handleLoopPadAssign)
+  window.addEventListener('lpp-set-assign', _onLppSetAssign)
 })
 
 onUnmounted(() => {
@@ -610,9 +692,10 @@ onUnmounted(() => {
   window.removeEventListener('timeline-trigger-perf-set', _onTimelinePerfSet)
   window.removeEventListener('timeline-load-perf-set', _onTimelineLoadPerfSet)
   window.removeEventListener('loop-pad-assign', _handleLoopPadAssign)
+  window.removeEventListener('lpp-set-assign', _onLppSetAssign)
   if (_unsubLppMidi) _unsubLppMidi()
-  _loopFadeTimers.forEach(t => { if (t) clearTimeout(t) })
-  _loopAudios.forEach(a => { if (a) { a.pause(); a.src = '' } })
+  _padWA.forEach((wa, i) => { if (wa) _stopPadInstant(i) })
+  if (_padCtx) { _padCtx.close().catch(() => {}); _padCtx = null }
 })
 
 // Refresh PC sets list and sync pad names when panel opens

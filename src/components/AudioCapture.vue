@@ -243,18 +243,20 @@ async function generateWaveformPeaks(blob) {
     })
     
     const channelData = decoded.getChannelData(0)
-    const numPoints = 160
+    const numPoints = 512
     const step = Math.ceil(channelData.length / numPoints)
     const peaks = []
-    
+
     for (let i = 0; i < numPoints; i++) {
       const start = i * step
       let maxVal = 0
+      let minVal = 0
       for (let j = 0; j < step && (start + j) < channelData.length; j++) {
-        const val = Math.abs(channelData[start + j])
+        const val = channelData[start + j]
         if (val > maxVal) maxVal = val
+        if (val < minVal) minVal = val
       }
-      peaks.push(maxVal)
+      peaks.push({ max: maxVal, min: minVal })
     }
     waveformPeaks.value = peaks
   } catch (e) {
@@ -1456,7 +1458,7 @@ function drawSingleFrame() {
     }
 
     // Draw waveform bars
-    const barWidth = Math.max(1.5, (W / len) * 0.6 * zoomX.value)
+    const barWidth = Math.max(1 * dpr, (W / len) * 0.7 * zoomX.value)
     const gap = ((W / len) * zoomX.value) - barWidth
 
     for (let i = 0; i < len; i++) {
@@ -1466,9 +1468,10 @@ function drawSingleFrame() {
       // Skip drawing if bar is completely out of visible canvas range
       if (x < -barWidth || x > W) continue
 
-      const val = peaks[i]
-      const amplitude = Math.max(3 * dpr, val * (H * 0.75) * zoomY.value)
-      
+      const peak = peaks[i]
+      const posH = Math.max(1.5 * dpr, peak.max * (H * 0.47) * zoomY.value)
+      const negH = Math.max(1.5 * dpr, Math.abs(peak.min) * (H * 0.47) * zoomY.value)
+
       // Highlight active loop area vs outside loop area
       const inside = x >= startX && x <= endX
       if (inside) {
@@ -1479,8 +1482,8 @@ function drawSingleFrame() {
         ctx.fillStyle = 'rgba(0, 255, 157, 0.22)'
         ctx.shadowBlur = 0
       }
-      
-      ctx.fillRect(x, midY - amplitude / 2, barWidth, amplitude)
+
+      ctx.fillRect(x, midY - posH, barWidth, posH + negH)
     }
     ctx.shadowBlur = 0
 
@@ -2413,10 +2416,17 @@ onUnmounted(() => {
               type="range"
               min="0"
               :max="audioDuration"
-              step="0.01"
+              step="0.001"
               class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
             />
-            <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(playbackStart) }}</span>
+            <input
+              v-model.number="playbackStart"
+              type="number"
+              min="0"
+              :max="audioDuration"
+              step="0.001"
+              class="w-16 text-[9px] font-mono text-cyan-400 bg-transparent border border-neutral-700 rounded px-1 py-0.5 text-right focus:outline-none focus:border-cyan-500"
+            />
           </div>
 
           <div v-if="isLooping" class="flex flex-row gap-3 mt-1">
@@ -2428,10 +2438,17 @@ onUnmounted(() => {
                 type="range"
                 min="0"
                 :max="audioDuration"
-                step="0.01"
+                step="0.001"
                 class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
               />
-              <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopStart) }}</span>
+              <input
+                v-model.number="loopStart"
+                type="number"
+                min="0"
+                :max="audioDuration"
+                step="0.001"
+                class="w-16 text-[9px] font-mono text-synth-neon bg-transparent border border-neutral-700 rounded px-1 py-0.5 text-right focus:outline-none focus:border-synth-neon"
+              />
             </div>
 
             <!-- Loop End Slider -->
@@ -2442,10 +2459,17 @@ onUnmounted(() => {
                 type="range"
                 min="0"
                 :max="audioDuration"
-                step="0.01"
+                step="0.001"
                 class="flex-1 h-1 accent-red-500 bg-neutral-800 rounded appearance-none cursor-pointer"
               />
-              <span class="text-[9px] font-mono text-neutral-500 w-10 text-right">{{ formatTimeSecs(loopEnd) }}</span>
+              <input
+                v-model.number="loopEnd"
+                type="number"
+                min="0"
+                :max="audioDuration"
+                step="0.001"
+                class="w-16 text-[9px] font-mono text-red-400 bg-transparent border border-neutral-700 rounded px-1 py-0.5 text-right focus:outline-none focus:border-red-500"
+              />
             </div>
           </div>
           <div class="flex flex-col">

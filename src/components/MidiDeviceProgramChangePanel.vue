@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
@@ -281,10 +281,15 @@ function sendCatalogSound(sound) {
   const ch     = reg.pcChannel ?? 0
   const pField = cfg?.program_field ?? 'program'
   const prog   = sound[pField] ?? 0
-  let progNum  = prog >= 128 ? prog % 128 : prog
-  progNum      = Math.max(0, Math.min(127, progNum + cfg.program_base))
-  const msb    = cfg.msb ? (sound.msb ?? 0) : Math.floor(prog / 128)
+
+  // Normalize to 0-indexed absolute MIDI program number using program_base,
+  // then derive bank MSB and within-bank PC consistently from the same index.
+  // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
+  // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
+  const progIdx = prog + (cfg.program_base ?? 0)           // 0-indexed absolute program
+  const msb    = cfg.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
   const lsb    = cfg.lsb ? (sound.lsb ?? 0) : 0
+  const progNum = Math.max(0, Math.min(127, progIdx % 128))
 
   port.send([0xB0 | ch, 0,  msb])
   port.send([0xB0 | ch, 32, lsb])
@@ -538,6 +543,42 @@ function deleteSet(id) {
   pcSets.value = pcSets.value.filter(s => s.id !== id)
   persistSets()
 }
+
+// ── Assign set to LPP performance pad ───────────────────────────
+const LS_LPP_SETS    = 'SYCORE_LPP_SETS'
+const assigningSetId = ref(null)
+const lppSetPads     = ref([])   // mirrors LivePerformancePad's setPads from localStorage
+
+function refreshLppPads() {
+  try { lppSetPads.value = JSON.parse(localStorage.getItem(LS_LPP_SETS)) ?? [] }
+  catch { lppSetPads.value = [] }
+}
+
+// setId → padIdx reverse map (null if not assigned)
+const lppPadBySetId = computed(() => {
+  const map = {}
+  lppSetPads.value.forEach((pad, idx) => { if (pad?.setId) map[pad.setId] = idx })
+  return map
+})
+
+function togglePadPicker(setId) {
+  if (assigningSetId.value === setId) { assigningSetId.value = null; return }
+  refreshLppPads()
+  assigningSetId.value = setId
+}
+
+function assignToPad(setId, padIdx) {
+  window.dispatchEvent(new CustomEvent('lpp-set-assign', { detail: { setId, padIdx } }))
+  // Optimistic local update so the picker reflects the change instantly
+  const pads = [...lppSetPads.value]
+  while (pads.length < 16) pads.push({ setId: null, setName: null })
+  for (let i = 0; i < pads.length; i++) {
+    if (pads[i]?.setId === setId) pads[i] = { setId: null, setName: null }
+  }
+  pads[padIdx] = { setId, setName: pcSets.value.find(s => s.id === setId)?.name ?? '' }
+  lppSetPads.value = pads
+  assigningSetId.value = null
+}
 </script>
 
 <template>
@@ -614,7 +655,9 @@ function deleteSet(id) {
                       </template>
                       <template v-else>
                         <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">CH{{ (dev.pcChannel ?? 0) + 1 }}</span>
-                        <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-black font-mono text-violet-400/70">PC{{ dev.pcProgram }}</span>
+                        <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-black font-mono text-violet-400/70">
+                          <template v-if="(dev.pcMsb ?? 0) > 0">B{{ dev.pcMsb }}·</template>PC{{ dev.pcProgram }}
+                        </span>
                       </template>
                       <span v-if="!dev.isOnline" class="text-[7px] font-mono text-neutral-700 uppercase">offline</span>
                     </div>
@@ -668,42 +711,87 @@ function deleteSet(id) {
 
               <!-- Saved sets list -->
               <div v-if="pcSets.length > 0" class="overflow-y-auto custom-scrollbar">
-                <div
-                  v-for="set in pcSets"
-                  :key="set.id"
-                  :class="[
-                    'group flex items-center gap-2 px-3 py-2 border-t border-neutral-900/60 transition-colors',
-                    activeSetId === set.id
-                      ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
-                      : 'hover:bg-white/[0.02] border-l-2 border-l-transparent'
-                  ]"
-                >
-                  <div class="flex-1 min-w-0">
-                    <p :class="['text-[10px] font-bold truncate leading-none mb-0.5', activeSetId === set.id ? 'text-violet-300' : 'text-neutral-300']">{{ set.name }}</p>
-                    <p class="text-[8px] font-mono text-neutral-700">{{ set.devices.length }} device{{ set.devices.length !== 1 ? 's' : '' }}</p>
+                <template v-for="set in pcSets" :key="set.id">
+                  <!-- Set row -->
+                  <div
+                    :class="[
+                      'group flex items-center gap-2 px-3 py-2 border-t border-neutral-900/60 transition-colors',
+                      activeSetId === set.id
+                        ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
+                        : 'hover:bg-white/[0.02] border-l-2 border-l-transparent'
+                    ]"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <p :class="['text-[10px] font-bold truncate leading-none mb-0.5', activeSetId === set.id ? 'text-violet-300' : 'text-neutral-300']">{{ set.name }}</p>
+                      <p class="text-[8px] font-mono text-neutral-700 flex items-center gap-1">
+                        {{ set.devices.length }} device{{ set.devices.length !== 1 ? 's' : '' }}
+                        <span v-if="lppPadBySetId[set.id] != null" class="text-violet-500/70">· Pad {{ lppPadBySetId[set.id] + 1 }}</span>
+                      </p>
+                    </div>
+                    <button
+                      @click="recallSet(set)"
+                      title="Recall this set"
+                      class="shrink-0 p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500 hover:text-black hover:border-violet-500 transition-all"
+                    >
+                      <RotateCcw class="w-2.5 h-2.5" />
+                    </button>
+                    <button
+                      @click="togglePadPicker(set.id)"
+                      :title="lppPadBySetId[set.id] != null ? `Assigned to Pad ${lppPadBySetId[set.id] + 1} — click to reassign` : 'Assign to a performance pad'"
+                      :class="[
+                        'shrink-0 p-1.5 rounded-lg border transition-all opacity-0 group-hover:opacity-100',
+                        assigningSetId === set.id
+                          ? 'bg-violet-500/20 border-violet-500/50 text-violet-300'
+                          : lppPadBySetId[set.id] != null
+                            ? 'bg-violet-500/10 border-violet-500/30 text-violet-400 opacity-100'
+                            : 'text-neutral-600 border-transparent hover:bg-violet-500/10 hover:text-violet-400 hover:border-violet-500/20'
+                      ]"
+                    >
+                      <LayoutGrid class="w-2.5 h-2.5" />
+                    </button>
+                    <button
+                      @click="updateSet(set.id)"
+                      title="Update this set with current state"
+                      class="shrink-0 p-1.5 rounded-lg text-neutral-600 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border hover:border-emerald-500/20 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Save class="w-2.5 h-2.5" />
+                    </button>
+                    <button
+                      @click="deleteSet(set.id)"
+                      title="Delete this set"
+                      class="shrink-0 p-1.5 rounded-lg text-neutral-700 hover:bg-red-500/10 hover:text-red-400 hover:border hover:border-red-500/20 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 class="w-2.5 h-2.5" />
+                    </button>
                   </div>
-                  <button
-                    @click="recallSet(set)"
-                    title="Recall this set"
-                    class="shrink-0 p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500 hover:text-black hover:border-violet-500 transition-all"
-                  >
-                    <RotateCcw class="w-2.5 h-2.5" />
-                  </button>
-                  <button
-                    @click="updateSet(set.id)"
-                    title="Update this set with current state"
-                    class="shrink-0 p-1.5 rounded-lg text-neutral-600 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border hover:border-emerald-500/20 transition-all opacity-0 group-hover:opacity-100"
-                  >
-                    <Save class="w-2.5 h-2.5" />
-                  </button>
-                  <button
-                    @click="deleteSet(set.id)"
-                    title="Delete this set"
-                    class="shrink-0 p-1.5 rounded-lg text-neutral-700 hover:bg-red-500/10 hover:text-red-400 hover:border hover:border-red-500/20 transition-all opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 class="w-2.5 h-2.5" />
-                  </button>
-                </div>
+
+                  <!-- Pad picker (expands inline below the row) -->
+                  <div v-if="assigningSetId === set.id" class="px-3 py-2 bg-black/50 border-t border-neutral-900/40">
+                    <p class="text-[7px] font-mono text-violet-400/60 uppercase tracking-widest mb-1.5">Assign to pad</p>
+                    <div class="grid grid-cols-4 gap-1">
+                      <button
+                        v-for="padIdx in 16"
+                        :key="padIdx"
+                        @click="assignToPad(set.id, padIdx - 1)"
+                        :title="lppSetPads[padIdx - 1]?.setId && lppSetPads[padIdx - 1].setId !== set.id ? `Replace: ${lppSetPads[padIdx - 1].setName}` : `Assign to Pad ${padIdx}`"
+                        :class="[
+                          'flex flex-col items-center justify-center h-8 rounded border text-center transition-all',
+                          lppSetPads[padIdx - 1]?.setId === set.id
+                            ? 'bg-violet-500/30 border-violet-400/60 text-violet-200'
+                            : lppSetPads[padIdx - 1]?.setId
+                              ? 'bg-neutral-900/60 border-neutral-800 text-neutral-600 hover:border-violet-500/40 hover:text-violet-400'
+                              : 'bg-neutral-900/40 border-neutral-800/60 text-neutral-500 hover:border-violet-500/40 hover:text-violet-400 hover:bg-violet-500/10'
+                        ]"
+                      >
+                        <span class="text-[8px] font-black leading-none">{{ padIdx }}</span>
+                        <span v-if="lppSetPads[padIdx - 1]?.setId && lppSetPads[padIdx - 1].setId !== set.id" class="text-[6px] font-mono leading-none mt-0.5 truncate w-full px-0.5 opacity-60">
+                          {{ lppSetPads[padIdx - 1].setName }}
+                        </span>
+                        <span v-else-if="lppSetPads[padIdx - 1]?.setId === set.id" class="text-[6px] font-black leading-none mt-0.5 text-violet-300">✓</span>
+                      </button>
+                    </div>
+                  </div>
+                </template>
               </div>
 
               <div v-else-if="!showSaveDialog" class="px-4 py-3 text-[9px] font-mono text-neutral-700 italic">
@@ -876,7 +964,9 @@ function deleteSet(id) {
                       <div class="flex items-center gap-2 shrink-0">
                         <span v-if="entry.category" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400/80 border border-violet-500/20">{{ entry.category }}</span>
                         <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
-                        <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ entry.program }}</span>
+                        <span class="text-[8px] font-black font-mono text-violet-400/80 text-right whitespace-nowrap">
+                          <template v-if="(entry.msb ?? 0) > 0 || (entry.lsb ?? 0) > 0">B{{ entry.msb ?? 0 }}·</template>PC{{ entry.program }}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -889,7 +979,9 @@ function deleteSet(id) {
                     <div class="flex items-center gap-2 shrink-0">
                       <span v-if="currentPcState[0]?.category" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400/80 border border-violet-500/20">{{ currentPcState[0].category }}</span>
                       <span v-if="currentPcState[0]?.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ currentPcState[0].bank }}</span>
-                      <span class="text-[8px] font-black font-mono text-violet-400/80 w-8 text-right">PC{{ currentPcState[0]?.program }}</span>
+                      <span class="text-[8px] font-black font-mono text-violet-400/80 text-right whitespace-nowrap">
+                        <template v-if="((currentPcState[0]?.msb ?? 0) > 0) || ((currentPcState[0]?.lsb ?? 0) > 0)">B{{ currentPcState[0]?.msb ?? 0 }}·</template>PC{{ currentPcState[0]?.program }}
+                      </span>
                     </div>
                   </div>
                 </div>

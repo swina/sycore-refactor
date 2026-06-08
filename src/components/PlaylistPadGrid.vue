@@ -57,10 +57,10 @@ const mappingStore = useMappingStore()
 function getPadColorClass(idx, isActive) {
   const row = Math.floor(idx / 2) // Two columns, so row changes every 2 pads
   const colors = [
-    { base: 'border-white/10 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' },
-    { base: 'border-white/10 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' },
-    { base: 'border-white/10 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' },
-    { base: 'border-white/10 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' }
+    { base: 'border-red-500/70 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' },
+    { base: 'border-red-500/70 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' },
+    { base: 'border-red-500/70 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' },
+    { base: 'border-red-500/70 text-white bg-white/5 hover:bg-red-700/20', active: 'bg-red-700/50 text-white shadow-[0_0_15px_rgba(255,0,0,0.5)]' }
   ]
   return isActive ? colors[row % colors.length].active : colors[row % colors.length].base
 }
