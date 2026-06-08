@@ -10,6 +10,7 @@ import { Mp3Encoder } from '@breezystack/lamejs'
 import { midiService } from '@/core/midi/MidiService'
 import { looperEngine } from '@/lib/looper-engine'
 import { useLooperStore } from '@/stores/useLooperStore'
+import { useFreesoundCache } from '@/composables/useFreesoundCache'
 
 const props = defineProps({
   hasBackingTrack: { type: Boolean, default: false },
@@ -53,6 +54,29 @@ const error            = ref(null)
 
 const selectedLooperTrack = ref(1)
 const isSendingToLooper   = ref(false)
+const selectedLoopPad      = ref(0)    // 0-based index
+const isSendingToLoopPad   = ref(false)
+const showLoopPadModal     = ref(false)
+const loopPadModalSlots    = ref([])
+
+function openLoopPadModal() {
+  try {
+    const v = localStorage.getItem('SYCORE_LPP_LOOP_PADS')
+    const arr = v ? JSON.parse(v) : []
+    while (arr.length < 16) arr.push(null)
+    loopPadModalSlots.value = arr.slice(0, 16)
+  } catch {
+    loopPadModalSlots.value = Array(16).fill(null)
+  }
+  showLoopPadModal.value = true
+}
+
+async function confirmLoopPadAssign() {
+  await handleSendToLoopPad()
+  showLoopPadModal.value = false
+}
+
+const { cacheFileBlob } = useFreesoundCache()
 
 const isLooping           = ref(false)
 const audioDuration       = ref(0)
@@ -1125,6 +1149,46 @@ async function handleSendToLooper() {
   }
 }
 
+async function handleSendToLoopPad() {
+  if (!recordedBlob.value || isSendingToLoopPad.value) return
+  isSendingToLoopPad.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const audioCtxClass = window.AudioContext || window.webkitAudioContext
+    const ctx = new audioCtxClass()
+    const decoded = await ctx.decodeAudioData(arrayBuffer)
+    await ctx.close()
+
+    const sampleRate  = decoded.sampleRate
+    const startSample = Math.floor(loopStart.value * sampleRate)
+    const endSample   = Math.floor(loopEnd.value   * sampleRate)
+    const length      = endSample - startSample
+    if (length <= 0) return
+
+    const croppedBuffer = new AudioBuffer({ numberOfChannels: decoded.numberOfChannels, length, sampleRate })
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+      croppedBuffer.copyToChannel(decoded.getChannelData(ch).subarray(startSample, endSample), ch)
+    }
+
+    const wav  = audioBufferToWav(croppedBuffer)
+    const id   = `capture_${Date.now()}`
+    const label = `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+    const duration = loopEnd.value - loopStart.value
+    const url  = await cacheFileBlob(id, label, wav, { author: 'Audio Capture', duration })
+
+    const track = { id, label, url, author: 'Audio Capture', duration, bpm: midiStore.currentBpm || undefined }
+    window.dispatchEvent(new CustomEvent('loop-pad-assign', { detail: { padIdx: selectedLoopPad.value, track } }))
+    // Update modal snapshot so the slot shows the new assignment immediately
+    const updated = [...loopPadModalSlots.value]
+    updated[selectedLoopPad.value] = track
+    loopPadModalSlots.value = updated
+  } catch (e) {
+    console.error('Failed to send to Loop Pad', e)
+  } finally {
+    isSendingToLoopPad.value = false
+  }
+}
+
 // ── Playback & Crossfading ────────────────────────────────────────────────────
 let audioCtx = null
 let sourceNode1 = null
@@ -1886,30 +1950,94 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Send to Looper Track -->
-          <div v-if="recordedBlob && !isRecording" class="flex flex-col gap-1 border border-neutral-700 rounded p-1.5">
-            <span class="text-[7px] font-black uppercase tracking-widest text-neutral-500">→ Looper</span>
-            <div class="flex items-center gap-1">
-              <div class="flex gap-0.5 flex-wrap">
-                <button
-                  v-for="t in 8"
-                  :key="t"
-                  @click="selectedLooperTrack = t"
-                  :class="['w-5 h-5 text-[7px] font-bold rounded border transition-colors',
-                    selectedLooperTrack === t
-                      ? 'bg-violet-500/30 text-violet-300 border-violet-500/50'
-                      : 'text-neutral-600 border-neutral-800 hover:text-neutral-400']"
-                >{{ t }}</button>
+          <!-- Send to Loop Pad — trigger button -->
+          <button
+            v-if="recordedBlob && !isRecording"
+            @click="openLoopPadModal"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/15 transition-colors"
+          >
+            <Repeat class="w-3 h-3" /> Loop Pad
+          </button>
+
+          <!-- Loop Pad assignment modal -->
+          <Teleport to="body">
+            <Transition name="fade">
+              <div
+                v-if="showLoopPadModal"
+                class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[1200] flex items-center justify-center"
+                @click.self="showLoopPadModal = false"
+              >
+                <div class="bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl w-[480px] max-w-[95vw] overflow-hidden">
+
+                  <!-- Header -->
+                  <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-800 bg-neutral-950/60">
+                    <div class="flex items-center gap-2">
+                      <Repeat class="w-4 h-4 text-cyan-400" />
+                      <span class="text-sm font-black uppercase tracking-widest text-white">Send to Loop Pad</span>
+                    </div>
+                    <button @click="showLoopPadModal = false" class="text-neutral-500 hover:text-white transition-colors">
+                      <X class="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <!-- Pad grid -->
+                  <div class="p-5 grid grid-cols-4 gap-2">
+                    <button
+                      v-for="(slot, i) in loopPadModalSlots"
+                      :key="i"
+                      @click="selectedLoopPad = i"
+                      :class="[
+                        'relative flex flex-col items-center justify-center rounded-xl border p-2 h-16 transition-all text-left',
+                        selectedLoopPad === i
+                          ? 'border-cyan-400 bg-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.3)]'
+                          : slot
+                            ? 'border-cyan-500/30 bg-cyan-500/5 hover:border-cyan-400/50 hover:bg-cyan-500/10'
+                            : 'border-neutral-800 bg-neutral-950/40 hover:border-neutral-600'
+                      ]"
+                    >
+                      <span :class="['text-[9px] font-black leading-none mb-0.5', selectedLoopPad === i ? 'text-cyan-300' : 'text-neutral-500']">
+                        {{ i + 1 }}
+                      </span>
+                      <template v-if="slot">
+                        <span class="text-[9px] font-bold text-white leading-tight text-center line-clamp-2 w-full px-0.5">
+                          {{ slot.label }}
+                        </span>
+                        <span class="text-[7px] font-mono text-cyan-500/60 mt-0.5">
+                          {{ slot.duration ? `${Math.floor(slot.duration / 60)}:${String(Math.floor(slot.duration % 60)).padStart(2,'0')}` : '' }}
+                          {{ slot.bpm ? `· ${slot.bpm}bpm` : '' }}
+                        </span>
+                      </template>
+                      <span v-else class="text-[8px] font-mono text-neutral-700">empty</span>
+                      <!-- overwrite badge -->
+                      <span
+                        v-if="slot && selectedLoopPad === i"
+                        class="absolute top-1 right-1 text-[6px] font-black uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1 leading-tight"
+                      >overwrite</span>
+                    </button>
+                  </div>
+
+                  <!-- Footer -->
+                  <div class="px-5 pb-5 flex items-center gap-3">
+                    <span class="flex-1 text-[9px] font-mono text-neutral-500 truncate">
+                      Sending: <span class="text-white">{{ loopPadModalSlots[selectedLoopPad] ? `→ replaces "${loopPadModalSlots[selectedLoopPad].label}"` : `→ Pad ${selectedLoopPad + 1} (empty)` }}</span>
+                    </span>
+                    <button
+                      @click="showLoopPadModal = false"
+                      class="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] font-bold uppercase tracking-widest transition-colors"
+                    >Cancel</button>
+                    <button
+                      @click="confirmLoopPadAssign"
+                      :disabled="isSendingToLoopPad"
+                      class="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 hover:bg-cyan-500/30 text-cyan-300 text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                    >
+                      {{ isSendingToLoopPad ? '…' : `Assign to Pad ${selectedLoopPad + 1}` }}
+                    </button>
+                  </div>
+
+                </div>
               </div>
-            </div>
-            <button
-              @click="handleSendToLooper"
-              :disabled="isSendingToLooper"
-              class="flex items-center justify-center gap-1 text-[8px] font-bold uppercase px-2 py-1 rounded border text-violet-300 border-violet-500/40 hover:bg-violet-500/15 transition-colors"
-            >
-              {{ isSendingToLooper ? '…' : `T${selectedLooperTrack}` }}
-            </button>
-          </div>
+            </Transition>
+          </Teleport>
 
           <!-- Save (original format / WAV cropped) -->
           <button
@@ -2387,5 +2515,14 @@ onUnmounted(() => {
 .capture-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(16px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

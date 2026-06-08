@@ -101,6 +101,10 @@ export function useControllerManager() {
               const idx = parseInt(action.slice('lpp_bt_'.length), 10)
               return livePadStore.playlistIdx === idx
             }
+            if (action.startsWith('lpp_loop_')) {
+              const idx = parseInt(action.slice('lpp_loop_'.length), 10)
+              return livePadStore.loopActivePads[idx] === true
+            }
             return false
         }
       },
@@ -325,6 +329,7 @@ export function useControllerManager() {
         () => livePadStore.activePerfSetIdx,
         () => livePadStore.activeDevicePcIdx,
         () => livePadStore.playlistIdx,
+        () => livePadStore.loopActivePads,
         () => uiStore.activeVisualizerCategory
       ],
       ([ready, inputsLen]) => {
@@ -341,7 +346,7 @@ export function useControllerManager() {
         }
         updateFeedback()
       },
-      { immediate: true }
+      { immediate: true, deep: true }
     )
   })
 

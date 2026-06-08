@@ -8,12 +8,18 @@ import {
 import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useArpStore } from '@/stores/useArpStore'
+import { useMappingStore } from '@/stores/useMappingStore'
 import { useFreesoundBrowserState } from '@/composables/useFreesoundBrowserState'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 
-const uiStore    = useUiStore()
-const authStore  = useAuthStore()
-const midiStore  = useMidiStore()
+const uiStore      = useUiStore()
+const authStore    = useAuthStore()
+const midiStore    = useMidiStore()
+const arpStore     = useArpStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 const hasApiKey = computed(() => !!authStore.profile?.freesoundApiKey || !!import.meta.env.VITE_FREESOUND_API_KEY)
 
@@ -159,6 +165,7 @@ async function confirmCaptureAndSend() {
   if (!capturePickerFor.value || isSendingToCapture.value) return
   const bpm = captureBpm.value !== '' ? Number(captureBpm.value) : null
   if (bpm !== null && bpm > 0) {
+    arpStore.arpBpm      = bpm
     midiStore.currentBpm = bpm
     midiStore.setBpm(bpm)
   }
@@ -429,21 +436,28 @@ onUnmounted(() => {
                 </button>
               </div>
               <div class="grid grid-cols-8 gap-1.5">
-                <button
-                  v-for="(slot, i) in loopPadsSnapshot" :key="i"
-                  @click="selectPadSlot(i)"
-                  :class="['h-10 rounded-lg border flex flex-col items-center justify-center p-1 transition-all',
-                    pendingPadSlot === i
-                      ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200'
-                      : slot
-                        ? 'border-cyan-500/40 bg-cyan-500/5 hover:bg-cyan-500/20 hover:border-cyan-400/60'
-                        : 'border-neutral-700 bg-neutral-900 hover:border-cyan-500/50 hover:bg-cyan-500/5']"
-                  :title="slot ? `Replace: ${slot.label}` : `Assign to Pad ${i + 1}`"
-                >
-                  <span class="text-[9px] font-black text-neutral-400">{{ i + 1 }}</span>
-                  <span v-if="slot" class="text-[6px] text-cyan-400/70 truncate w-full text-center leading-none px-0.5">{{ slot.label?.slice(0, 7) }}</span>
-                  <span v-else class="text-[6px] text-neutral-700 leading-none">empty</span>
-                </button>
+                <div v-for="(slot, i) in loopPadsSnapshot" :key="i" class="relative">
+                  <button
+                    @click="selectPadSlot(i)"
+                    @contextmenu.prevent="openMenu($event, { name: 'lpp_loop_' + i, label: 'Loop Pad ' + (i + 1) })"
+                    :class="['w-full h-10 rounded-lg border flex flex-col items-center justify-center p-1 transition-all',
+                      pendingPadSlot === i
+                        ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200'
+                        : slot
+                          ? 'border-cyan-500/40 bg-cyan-500/5 hover:bg-cyan-500/20 hover:border-cyan-400/60'
+                          : 'border-neutral-700 bg-neutral-900 hover:border-cyan-500/50 hover:bg-cyan-500/5']"
+                    :title="slot ? `Replace: ${slot.label} (right-click to MIDI learn)` : `Assign to Pad ${i + 1} (right-click to MIDI learn)`"
+                  >
+                    <span class="text-[9px] font-black text-neutral-400">{{ i + 1 }}</span>
+                    <span v-if="slot" class="text-[6px] text-cyan-400/70 truncate w-full text-center leading-none px-0.5">{{ slot.label?.slice(0, 7) }}</span>
+                    <span v-else class="text-[6px] text-neutral-700 leading-none">empty</span>
+                  </button>
+                  <!-- MIDI learning indicator -->
+                  <span
+                    v-if="mappingStore.learningParamName === 'lpp_loop_' + i"
+                    class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none"
+                  />
+                </div>
               </div>
               <Transition name="fade-down">
                 <div v-if="pendingPadSlot != null" class="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800">

@@ -298,6 +298,8 @@ const LOOP_PAD_VOL = 0.8
 
 const loopPads   = ref(Array(16).fill(null))
 const loopActive = ref(Array(16).fill(false))
+
+watch(loopActive, (v) => { livePadStore.loopActivePads = [...v] }, { deep: true })
 const _loopAudios     = Array(16).fill(null)  // non-reactive Audio elements
 const _loopFadeTimers = Array(16).fill(null)  // per-pad fade setTimeout handles
 
@@ -561,6 +563,10 @@ function _startLppMidiListener() {
       if (isCC && byte2 === 0) return
       const idx = parseInt(paramName.slice('lpp_set_'.length))
       if (!isNaN(idx)) triggerSetPad(idx)
+    } else if (paramName.startsWith('lpp_loop_')) {
+      if (isCC && byte2 === 0) return
+      const idx = parseInt(paramName.slice('lpp_loop_'.length))
+      if (!isNaN(idx)) toggleLoopPad(idx)
     } else if (paramName.startsWith('lpp_bt_')) {
       if (isCC && byte2 === 0) return
       const idx = parseInt(paramName.slice('lpp_bt_'.length))
@@ -849,6 +855,7 @@ function formatTime(t) {
           <div v-for="(pad, idx) in loopPads" :key="'lp-' + idx" class="relative group">
             <button
               @click="toggleLoopPad(idx)"
+              @contextmenu.prevent="openMenu($event, { name: 'lpp_loop_' + idx, label: (pad?.label || 'Loop Pad ' + (idx + 1)) })"
               :class="[
                 'w-full h-16 rounded-xl border-2 flex flex-col items-center justify-center p-1.5 gap-0.5 transition-all relative overflow-hidden',
                 pad
@@ -903,6 +910,11 @@ function formatTime(t) {
             >
               <X class="w-2.5 h-2.5" />
             </button>
+            <!-- MIDI learning indicator -->
+            <span
+              v-if="mappingStore.learningParamName === 'lpp_loop_' + idx"
+              class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none"
+            />
           </div>
         </div>
       </div>
