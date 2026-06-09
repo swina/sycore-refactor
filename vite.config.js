@@ -79,5 +79,13 @@ export default defineConfig({
   server: {
     port: 3094,
     host: '0.0.0.0',
+    proxy: {
+      '/freesound-api': {
+        target: 'https://freesound.org/apiv2',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/freesound-api/, ''),
+        secure: true,
+      },
+    },
   },
 });

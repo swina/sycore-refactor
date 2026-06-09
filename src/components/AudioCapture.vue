@@ -1573,6 +1573,50 @@ function drawSingleFrame() {
   }
 }
 
+// ── Playhead scrub ───────────────────────────────────────────────────────────
+const isDraggingPlayhead = ref(false)
+let wasPlayingBeforeDrag = false
+
+function canvasXToTime(cssX) {
+  if (!audioDuration.value) return 0
+  const W = canvasRef.value?.offsetWidth || 1
+  const frac = Math.max(0, Math.min(1, cssX / (zoomX.value * W) + panOffset.value))
+  return frac * audioDuration.value
+}
+
+function handleCanvasMousedown(e) {
+  if (!recordedBlob.value || !audioDuration.value) return
+  e.preventDefault()
+  const rect = canvasRef.value.getBoundingClientRect()
+  currentPlaybackTime.value = canvasXToTime(e.clientX - rect.left)
+  isDraggingPlayhead.value = true
+  wasPlayingBeforeDrag = isPlaying.value
+  if (isPlaying.value) {
+    stopAllSources()
+    isPlaying.value = false
+  }
+  startDrawLoop()
+  window.addEventListener('mousemove', onScrubMove)
+  window.addEventListener('mouseup', onScrubEnd)
+}
+
+function onScrubMove(e) {
+  const rect = canvasRef.value?.getBoundingClientRect()
+  if (!rect) return
+  currentPlaybackTime.value = canvasXToTime(e.clientX - rect.left)
+}
+
+async function onScrubEnd() {
+  window.removeEventListener('mousemove', onScrubMove)
+  window.removeEventListener('mouseup', onScrubEnd)
+  isDraggingPlayhead.value = false
+  if (wasPlayingBeforeDrag) {
+    wasPlayingBeforeDrag = false
+    await playAudio(currentPlaybackTime.value)
+    isPlaying.value = true
+  }
+}
+
 function startDrawLoop() {
   if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
 
@@ -1580,7 +1624,8 @@ function startDrawLoop() {
     const monitoring = isMonitoring.value
     const rec = isRecording.value
     const playing = isPlaying.value
-    const needsAnimation = monitoring || rec || playing
+    const dragging = isDraggingPlayhead.value
+    const needsAnimation = monitoring || rec || playing || dragging
 
     if (playing) currentPlaybackTime.value = getPlaybackTime()
 
@@ -1734,6 +1779,8 @@ onUnmounted(() => {
     resizeObserver.disconnect()
     resizeObserver = null
   }
+  window.removeEventListener('mousemove', onScrubMove)
+  window.removeEventListener('mouseup', onScrubEnd)
   navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
   window.removeEventListener('capture-start-rec', _startRecHandler)
@@ -2151,7 +2198,11 @@ onUnmounted(() => {
           
           <!-- Canvas container -->
           <div class="relative flex-1 min-h-[60px] max-h-[50vh]">
-            <canvas ref="canvasRef" class="w-full h-full block" />
+            <canvas
+              ref="canvasRef"
+              :class="['w-full h-full block', recordedBlob && !isRecording ? (isDraggingPlayhead ? 'cursor-col-resize' : 'cursor-crosshair') : '']"
+              @mousedown="handleCanvasMousedown"
+            />
             
             <!-- Playback Time overlay in bottom-left corner of the canvas -->
             <!-- <div v-if="recordedBlob" class="absolute bottom-2 left-2 bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[18px] font-mono tracking-wider shadow-md pointer-events-none z-10">

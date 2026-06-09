@@ -7,7 +7,7 @@
 
 import { useAuthStore } from '@/stores/useAuthStore'
 
-const BASE = 'https://freesound.org/apiv2'
+const BASE = import.meta.env.DEV ? '/freesound-api' : 'https://freesound.org/apiv2'
 const FIELDS = 'id,name,previews,duration,username,tags,license,ac_analysis'
 
 function getToken() {

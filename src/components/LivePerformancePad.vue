@@ -357,8 +357,8 @@ function _padLoopTick(idx) {
   const dur = activeEl.duration
   if (!dur || !isFinite(dur)) return
 
-  const fadeTime  = Math.min(_fadeSec(), dur * 0.45)
-  if (activeEl.currentTime < dur - fadeTime - 0.05) return
+  const fadeTime  = 0
+  if (activeEl.currentTime < dur - 0.05) return
 
   wa.isCrossfading = true
   nextEl.currentTime = 0
