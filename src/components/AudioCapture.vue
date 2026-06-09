@@ -89,6 +89,8 @@ const playbackStart       = ref(0)
 const loopCrossfadeDur    = ref(0.5)
 const currentPlaybackTime = ref(0)
 const waveformPeaks = ref([])
+const waveformDetail = ref(parseInt(localStorage.getItem('S1_CAPTURE_WAVEFORM_DETAIL') || '512', 10))
+const decodedBuffer = ref(null)
 const zoomX = ref(1.0)
 const zoomY = ref(1.0)
 const panOffset = ref(0.0)
@@ -228,6 +230,19 @@ function isBarActive(idx) {
   return timelineProgress.value >= barStart && timelineProgress.value < barStart + pctPerBar
 }
 
+async function decodeRecordedBlob(blob) {
+  try {
+    // OfflineAudioContext has no autoplay restrictions and needs no close/resume
+    const OfflineCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
+    const tmpCtx = new OfflineCtxClass(2, 1, 44100)
+    const buffer = await tmpCtx.decodeAudioData(await blob.arrayBuffer())
+    return buffer
+  } catch (e) {
+    console.error('[AudioCapture] Failed to decode blob', e)
+    return null
+  }
+}
+
 async function generateWaveformPeaks(blob) {
   try {
     const arrayBuffer = await blob.arrayBuffer()
@@ -243,7 +258,7 @@ async function generateWaveformPeaks(blob) {
     })
     
     const channelData = decoded.getChannelData(0)
-    const numPoints = 512
+    const numPoints = waveformDetail.value
     const step = Math.ceil(channelData.length / numPoints)
     const peaks = []
 
@@ -267,17 +282,25 @@ async function generateWaveformPeaks(blob) {
 
 watch(recordedBlob, async (newBlob) => {
   if (newBlob) {
-    await generateWaveformPeaks(newBlob)
+    const [buf] = await Promise.all([
+      decodeRecordedBlob(newBlob),
+      generateWaveformPeaks(newBlob),
+    ])
+    decodedBuffer.value = buf
   } else {
     waveformPeaks.value = []
+    decodedBuffer.value = null
   }
+})
+
+watch(waveformDetail, async (val) => {
+  localStorage.setItem('S1_CAPTURE_WAVEFORM_DETAIL', val.toString())
+  if (recordedBlob.value) await generateWaveformPeaks(recordedBlob.value)
 })
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const canvasRef   = ref(null)
 const levelBarRef = ref(null)
-const audioRef1   = ref(null)
-const audioRef2   = ref(null)
 const fileInputRef = ref(null)
 
 // ── Plain mutable (Web Audio nodes) ──────────────────────────────────────────
@@ -288,7 +311,6 @@ let recorderRef    = null
 let chunksRef      = []
 let timerRef       = null
 let rafRef         = null
-let blobUrlRef     = null
 let isRecordingRef = false
 let toPlaylistRef  = toPlaylist.value
 let prevBlobRef    = null
@@ -354,24 +376,6 @@ watch(playbackStart, (ns) => {
   }
 })
 
-function handleLoadedMetadata() {
-  if (audioRef1.value) {
-    const dur = audioRef1.value.duration
-    if (dur && isFinite(dur)) {
-      audioDuration.value = dur
-      loopStart.value = 0
-      loopEnd.value = dur
-      playbackStart.value = 0
-    }
-  }
-}
-
-function handleTimeUpdate() {
-  if (audioRef.value) {
-    currentPlaybackTime.value = audioRef.value.currentTime || 0
-  }
-}
-
 function formatTimeSecs(val) {
   const v = typeof val === 'object' ? val.value : val
   return `${v.toFixed(2)}s`
@@ -400,21 +404,12 @@ function stopAll(keepBlob = false) {
   isPlaying.value = false
   isArmed.value = false
 
-  cleanupWebAudio()
-
-  if (audioRef1.value) {
-    audioRef1.value.pause()
-    if (!keepBlob) audioRef1.value.src = ''
-  }
-  if (audioRef2.value) {
-    audioRef2.value.pause()
-    if (!keepBlob) audioRef2.value.src = ''
-  }
+  stopAllSources()
 
   if (!keepBlob) {
     recordedBlob.value = null
+    decodedBuffer.value = null
     recSecs.value = 0
-    if (blobUrlRef) { URL.revokeObjectURL(blobUrlRef); blobUrlRef = null }
     zoomX.value = 1.0
     zoomY.value = 1.0
     panOffset.value = 0.0
@@ -541,8 +536,8 @@ function startRecording() {
   prevBlobRef = (appendMode.value && recordedBlob.value) ? recordedBlob.value : null
 
   recordedBlob.value = null
+  stopAllSources()
   isPlaying.value = false
-  if (blobUrlRef) { URL.revokeObjectURL(blobUrlRef); blobUrlRef = null }
   chunksRef = []
   recSecs.value = 0
 
@@ -581,15 +576,6 @@ function startRecording() {
     }
 
     recordedBlob.value = finalBlob
-    const previewUrl = URL.createObjectURL(finalBlob)
-    blobUrlRef = previewUrl
-    if (audioRef1.value && audioRef2.value) {
-      audioRef1.value.src = previewUrl
-      audioRef2.value.src = previewUrl
-      audioRef1.value.load()
-      audioRef2.value.load()
-    }
-
     audioDuration.value = finalDuration
     loopStart.value = 0
     loopEnd.value = finalDuration
@@ -790,23 +776,12 @@ function handleImportClick() {
 
 async function loadBlobToCapture(blob) {
   stopAll(true)
-  recordedBlob.value = blob
   recSecs.value = 0
-  if (blobUrlRef) URL.revokeObjectURL(blobUrlRef)
-  blobUrlRef = URL.createObjectURL(blob)
-  if (audioRef1.value && audioRef2.value) {
-    audioRef1.value.src = blobUrlRef
-    audioRef2.value.src = blobUrlRef
-    audioRef1.value.load()
-    audioRef2.value.load()
-  }
   try {
-    const arrayBuffer = await blob.arrayBuffer()
-    const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
-    const tempCtx = new audioCtxClass(1, 1, 44100)
-    const decoded = await new Promise((resolve, reject) => {
-      tempCtx.decodeAudioData(arrayBuffer, b => resolve(b), e => reject(e))
-    })
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const tmpCtx = new AudioCtxClass()
+    const decoded = await tmpCtx.decodeAudioData(await blob.arrayBuffer())
+    await tmpCtx.close()
     audioDuration.value = decoded.duration
     loopStart.value = 0
     loopEnd.value = decoded.duration
@@ -814,6 +789,7 @@ async function loadBlobToCapture(blob) {
   } catch (decodeErr) {
     console.warn('Could not decode audio for duration', decodeErr)
   }
+  recordedBlob.value = blob
   zoomX.value = 1.0
   zoomY.value = 1.0
   panOffset.value = 0.0
@@ -996,17 +972,12 @@ async function handleNormalize() {
       }
 
       const normalizedWav = audioBufferToWav(decoded)
-      recordedBlob.value = normalizedWav
-
-      // Refresh preview URLs
-      if (blobUrlRef) URL.revokeObjectURL(blobUrlRef)
-      blobUrlRef = URL.createObjectURL(normalizedWav)
-      if (audioRef1.value && audioRef2.value) {
-        audioRef1.value.src = blobUrlRef
-        audioRef2.value.src = blobUrlRef
-        audioRef1.value.load()
-        audioRef2.value.load()
+      if (isPlaying.value) {
+        currentPlaybackTime.value = getPlaybackTime()
+        stopAllSources()
+        isPlaying.value = false
       }
+      recordedBlob.value = normalizedWav
     }
   } catch (e) {
     console.error('Normalization failed', e)
@@ -1196,164 +1167,179 @@ async function handleSendToLoopPad() {
   }
 }
 
-// ── Playback & Crossfading ────────────────────────────────────────────────────
-let audioCtx = null
-let sourceNode1 = null
-let sourceNode2 = null
-let gainNode1 = null
-let gainNode2 = null
-let activeAudio = null
-let crossfadeTimeout = null
-let playbackRafRef = null
+// ── Playback ──────────────────────────────────────────────────────────────────
+let playbackCtx = null
+let playbackMasterGain = null
+let activeNodes = []
+let scheduleTimer = null
+let playbackStartCtxTime = 0
+let playbackStartOffset = 0
 
-watch(isPlaying, (playing) => {
-  if (playing) {
-    startPlaybackLoop()
+async function ensurePlaybackCtx() {
+  if (!playbackCtx || playbackCtx.state === 'closed') {
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    playbackCtx = new AudioCtxClass()
+    playbackMasterGain = playbackCtx.createGain()
+    playbackMasterGain.connect(playbackCtx.destination)
+  }
+  if (playbackCtx.state === 'suspended') await playbackCtx.resume()
+  return playbackCtx
+}
+
+function stopAllSources() {
+  if (scheduleTimer) { clearTimeout(scheduleTimer); scheduleTimer = null }
+  for (const { source, gain } of activeNodes) {
+    try { source.stop() } catch {}
+    try { source.disconnect() } catch {}
+    try { gain.disconnect() } catch {}
+  }
+  activeNodes = []
+}
+
+function destroyPlaybackCtx() {
+  stopAllSources()
+  if (playbackCtx) {
+    playbackCtx.close().catch(() => {})
+    playbackCtx = null
+    playbackMasterGain = null
+  }
+}
+
+function getPlaybackTime() {
+  if (!playbackCtx || !isPlaying.value) return currentPlaybackTime.value
+  const elapsed = playbackCtx.currentTime - playbackStartCtxTime
+  const raw = playbackStartOffset + elapsed
+  if (!isLooping.value) return Math.min(raw, audioDuration.value)
+  const loopDur = loopEnd.value - loopStart.value
+  if (loopDur <= 0) return raw
+  if (raw < loopEnd.value) return raw
+  return loopStart.value + ((raw - loopStart.value) % loopDur)
+}
+
+function scheduleCrossfadeSource(startCtxTime, audioOffset) {
+  if (!decodedBuffer.value) return
+  const ctx = playbackCtx
+  const loopDur = loopEnd.value - loopStart.value
+  if (loopDur <= 0) return
+
+  const fadeDur = Math.min(loopCrossfadeDur.value, loopDur / 2)
+  const endCtxTime = startCtxTime + (loopEnd.value - audioOffset)
+
+  const nodeGain = ctx.createGain()
+  nodeGain.connect(playbackMasterGain)
+  const source = ctx.createBufferSource()
+  source.buffer = decodedBuffer.value
+  source.connect(nodeGain)
+
+  if (fadeDur > 0) {
+    nodeGain.gain.setValueAtTime(0, startCtxTime)
+    nodeGain.gain.linearRampToValueAtTime(1, startCtxTime + fadeDur)
+    nodeGain.gain.setValueAtTime(1, endCtxTime - fadeDur)
+    nodeGain.gain.linearRampToValueAtTime(0, endCtxTime)
   } else {
-    if (playbackRafRef) {
-      cancelAnimationFrame(playbackRafRef)
-      playbackRafRef = null
+    nodeGain.gain.setValueAtTime(1, startCtxTime)
+  }
+
+  source.start(startCtxTime, audioOffset)
+  source.stop(endCtxTime)
+
+  const node = { source, gain: nodeGain }
+  activeNodes.push(node)
+  source.onended = () => {
+    try { source.disconnect() } catch {}
+    try { nodeGain.disconnect() } catch {}
+    activeNodes = activeNodes.filter(n => n !== node)
+  }
+
+  // Schedule next segment before this one ends
+  const msUntilNext = (endCtxTime - fadeDur - ctx.currentTime - 0.05) * 1000
+  scheduleTimer = setTimeout(() => {
+    if (isPlaying.value && isLooping.value) scheduleCrossfadeSource(endCtxTime, loopStart.value)
+  }, Math.max(0, msUntilNext))
+}
+
+async function playAudio(offset) {
+  const ctx = await ensurePlaybackCtx()
+  if (!decodedBuffer.value) return
+
+  stopAllSources()
+  playbackStartCtxTime = ctx.currentTime
+  playbackStartOffset = offset
+
+  if (!isLooping.value) {
+    const nodeGain = ctx.createGain()
+    nodeGain.connect(playbackMasterGain)
+    const source = ctx.createBufferSource()
+    source.buffer = decodedBuffer.value
+    source.connect(nodeGain)
+    const node = { source, gain: nodeGain }
+    activeNodes.push(node)
+    source.start(0, offset)
+    source.onended = () => {
+      if (isPlaying.value) {
+        isPlaying.value = false
+        currentPlaybackTime.value = playbackStartOffset
+      }
+      try { source.disconnect() } catch {}
+      try { nodeGain.disconnect() } catch {}
+      activeNodes = activeNodes.filter(n => n !== node)
     }
+    return
+  }
+
+  const fadeDur = Math.min(loopCrossfadeDur.value, (loopEnd.value - loopStart.value) / 2)
+  if (fadeDur === 0) {
+    // Native sample-accurate loop — no rAF involvement at the boundary
+    const nodeGain = ctx.createGain()
+    nodeGain.connect(playbackMasterGain)
+    const source = ctx.createBufferSource()
+    source.buffer = decodedBuffer.value
+    source.connect(nodeGain)
+    source.loop = true
+    source.loopStart = loopStart.value
+    source.loopEnd = loopEnd.value
+    source.start(0, offset)
+    activeNodes.push({ source, gain: nodeGain })
+  } else {
+    scheduleCrossfadeSource(ctx.currentTime, offset)
+  }
+}
+
+async function togglePlay() {
+  if (!decodedBuffer.value) return
+
+  if (isPlaying.value) {
+    currentPlaybackTime.value = getPlaybackTime()
+    stopAllSources()
+    isPlaying.value = false
+  } else {
+    const offset = Math.min(Math.max(0, currentPlaybackTime.value || playbackStart.value), audioDuration.value)
+    await playAudio(offset)
+    isPlaying.value = true
+  }
+}
+
+// Restart or update source in-place when loop params change while playing
+watch([loopStart, loopEnd], async () => {
+  if (!isPlaying.value || !decodedBuffer.value || !isLooping.value) return
+  const fadeDur = Math.min(loopCrossfadeDur.value, (loopEnd.value - loopStart.value) / 2)
+  if (fadeDur === 0 && activeNodes.length === 1 && activeNodes[0].source.loop) {
+    activeNodes[0].source.loopStart = loopStart.value
+    activeNodes[0].source.loopEnd = loopEnd.value
+  } else {
+    await playAudio(getPlaybackTime())
   }
 })
 
-function cleanupWebAudio() {
-  if (crossfadeTimeout) {
-    clearTimeout(crossfadeTimeout)
-    crossfadeTimeout = null
-  }
-}
-
-function destroyWebAudio() {
-  cleanupWebAudio()
-  if (audioCtx) {
-    audioCtx.close().catch(() => {})
-    audioCtx = null
-  }
-  sourceNode1 = null
-  sourceNode2 = null
-  gainNode1 = null
-  gainNode2 = null
-}
-
-function initWebAudio() {
-  if (audioCtx) return
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext
-  audioCtx = new AudioContextClass()
-  
-  sourceNode1 = audioCtx.createMediaElementSource(audioRef1.value)
-  sourceNode2 = audioCtx.createMediaElementSource(audioRef2.value)
-  
-  gainNode1 = audioCtx.createGain()
-  gainNode2 = audioCtx.createGain()
-  
-  sourceNode1.connect(gainNode1)
-  sourceNode2.connect(gainNode2)
-  
-  gainNode1.connect(audioCtx.destination)
-  gainNode2.connect(audioCtx.destination)
-}
-
-function startPlaybackLoop() {
-  if (playbackRafRef) cancelAnimationFrame(playbackRafRef)
-  
-  let isCrossfading = false
-  
-  const tick = () => {
-    if (!isPlaying.value || !activeAudio) return
-    playbackRafRef = requestAnimationFrame(tick)
-    
-    let time = activeAudio.currentTime || 0
-    if (isLooping.value) {
-      time = Math.min(loopEnd.value, time)
-    }
-    currentPlaybackTime.value = time
-    
-    if (!isLooping.value) {
-      if (activeAudio.currentTime >= audioDuration.value) {
-        isPlaying.value = false
-        activeAudio.pause()
-        activeAudio.currentTime = 0
-        currentPlaybackTime.value = 0
-        return
-      }
-    } else {
-      const maxFade = (loopEnd.value - loopStart.value) / 2
-      const fadeTime = Math.max(0, Math.min(loopCrossfadeDur.value, maxFade))
-      
-      if (!isCrossfading && activeAudio.currentTime >= (loopEnd.value - fadeTime)) {
-        initWebAudio()
-        if (audioCtx.state === 'suspended') audioCtx.resume()
-
-        const nextAudio  = activeAudio === audioRef1.value ? audioRef2.value : audioRef1.value
-        const activeGain = activeAudio === audioRef1.value ? gainNode1 : gainNode2
-        const nextGain   = nextAudio   === audioRef1.value ? gainNode1 : gainNode2
-
-        nextAudio.currentTime = loopStart.value
-        nextAudio.play().catch(() => {})
-
-        const now = audioCtx.currentTime
-
-        if (fadeTime > 0) {
-          isCrossfading = true
-          activeGain.gain.setValueAtTime(1, now)
-          activeGain.gain.linearRampToValueAtTime(0, now + fadeTime)
-          nextGain.gain.setValueAtTime(0, now)
-          nextGain.gain.linearRampToValueAtTime(1, now + fadeTime)
-
-          if (crossfadeTimeout) clearTimeout(crossfadeTimeout)
-          crossfadeTimeout = setTimeout(() => {
-            activeAudio.pause()
-            activeAudio = nextAudio
-            isCrossfading = false
-          }, fadeTime * 1000)
-        } else {
-          // Hard immediate loop — switch synchronously so the next RAF tick is clean
-          activeGain.gain.setValueAtTime(0, now)
-          nextGain.gain.setValueAtTime(1, now)
-          activeAudio.pause()
-          activeAudio = nextAudio
-          // isCrossfading stays false — no re-entry risk in a single tick
-        }
-      }
-    }
-  }
-  tick()
-}
+watch([isLooping, loopCrossfadeDur], async () => {
+  if (isPlaying.value && decodedBuffer.value) await playAudio(getPlaybackTime())
+})
 
 function formatMmSs(s) {
   const secs = Math.floor(s)
   const mm = Math.floor(secs / 60).toString().padStart(2, '0')
   const ss = (secs % 60).toString().padStart(2, '0')
   return `${mm}:${ss}`
-}
-
-function togglePlay() {
-  if (!audioRef1.value || !audioRef2.value || !blobUrlRef) return
-  
-  if (isPlaying.value) {
-    isPlaying.value = false
-    audioRef1.value.pause()
-    audioRef2.value.pause()
-    if (crossfadeTimeout) {
-      clearTimeout(crossfadeTimeout)
-      crossfadeTimeout = null
-    }
-  } else {
-    initWebAudio()
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume()
-    }
-    
-    gainNode1.gain.setValueAtTime(1, audioCtx.currentTime)
-    gainNode2.gain.setValueAtTime(0, audioCtx.currentTime)
-    
-    activeAudio = audioRef1.value
-    activeAudio.currentTime = playbackStart.value
-    activeAudio.play().catch(() => {})
-    
-    isPlaying.value = true
-  }
 }
 
 // ── rAF draw loop ─────────────────────────────────────────────────────────────
@@ -1589,12 +1575,14 @@ function drawSingleFrame() {
 
 function startDrawLoop() {
   if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
-  
+
   const draw = () => {
     const monitoring = isMonitoring.value
     const rec = isRecording.value
     const playing = isPlaying.value
     const needsAnimation = monitoring || rec || playing
+
+    if (playing) currentPlaybackTime.value = getPlaybackTime()
 
     drawSingleFrame()
 
@@ -1604,7 +1592,7 @@ function startDrawLoop() {
       rafRef = null
     }
   }
-  
+
   draw()
 }
 
@@ -1733,14 +1721,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopAll()
-  destroyWebAudio()
+  destroyPlaybackCtx()
   if (midiCleanup) {
     midiCleanup()
     midiCleanup = null
-  }
-  if (playbackRafRef) {
-    cancelAnimationFrame(playbackRafRef)
-    playbackRafRef = null
   }
   if (timelineRaf) {
     cancelAnimationFrame(timelineRaf)
@@ -2243,6 +2227,21 @@ onUnmounted(() => {
             />
             <span class="text-[9px] font-mono text-synth-neon w-8 text-right">{{ normalizeGateDb }}dB</span>
           </div>
+          <!-- Waveform detail presets -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[8px] font-mono text-neutral-500">DETAIL</span>
+            <div class="flex p-0.5 bg-neutral-900 border border-neutral-800 rounded-lg h-6">
+              <button
+                v-for="d in [64, 128, 256, 512, 1024]"
+                :key="d"
+                @click="waveformDetail = d"
+                :title="`Waveform detail: ${d} points`"
+                :class="['px-1.5 text-[8px] font-mono font-bold rounded transition-all', waveformDetail === d ? 'bg-synth-neon/20 text-synth-neon shadow-sm' : 'text-neutral-500 hover:text-white']"
+              >
+                {{ d >= 1024 ? '1k' : d }}
+              </button>
+            </div>
+          </div>
           <!-- Playback Time overlay in bottom-left corner of the canvas -->
           <div v-if="recordedBlob" class="bg-black/75 px-1.5 py-0.5 rounded border border-neutral-800 text-synth-neon text-[14px] font-mono tracking-wider shadow-md pointer-events-none z-10">
             {{ formatMmSs(currentPlaybackTime) }} / {{ formatMmSs(audioDuration) }}
@@ -2537,15 +2536,13 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </div>
     </div>
   </Transition>
 
-  <!-- Hidden audio elements for playback preview with crossfade -->
-  <audio ref="audioRef1" @loadedmetadata="handleLoadedMetadata" class="hidden" />
-  <audio ref="audioRef2" class="hidden" />
   <input ref="fileInputRef" type="file" accept=".mp3,.ogg,.wav,audio/*,.s1loop.json" @change="handleFileImport" class="hidden" />
 </template>
 
