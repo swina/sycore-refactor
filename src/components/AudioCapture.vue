@@ -817,6 +817,7 @@ async function handleFileImport(e) {
   }
 
   isImporting.value = true
+  lastCaptureLabel.value = file.name.replace(/\.[^.]+$/, '')
   try {
     const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/wav' })
     await loadBlobToCapture(blob)
@@ -2090,7 +2091,7 @@ onUnmounted(() => {
           </button>
 
           <!-- Record / Stop / Armed -->
-          <div class="relative mt-3">
+          <div class="relative mt-14">
             <span
               v-if="mappingStore.learningParamName === 'audioCapture_record'"
               class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-10 pointer-events-none"
@@ -2462,11 +2463,16 @@ onUnmounted(() => {
               <Magnet class="w-3 h-3" />
               {{ isDiscoveringLoop ? 'Analyzing…' : 'Auto Loop' }}
             </button>
-            <span class="text-[12px] font-mono text-neutral-500">
+            <span class="text-[10px] font-mono text-neutral-500">
               Range: {{ formatTimeSecs(loopStart) }} - {{ formatTimeSecs(loopEnd) }} / {{ formatTimeSecs(audioDuration) }}
             </span>
           </div>
-          <span class="text-[12px] font-mono text-synth-neon">
+          <span
+            v-if="lastCaptureLabel"
+            class="text-[11px] font-mono text-cyan-400/70 truncate max-w-[480px] px-2"
+            :title="lastCaptureLabel"
+          >{{ lastCaptureLabel }}</span>
+          <span class="text-[12px] font-mono text-pink-500/80">
             Pos: {{ formatTimeSecs(currentPlaybackTime) }}
           </span>
         </div>
