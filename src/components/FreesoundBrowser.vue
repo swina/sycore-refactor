@@ -14,6 +14,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useFreesoundBrowserState } from '@/composables/useFreesoundBrowserState'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { detectBpmFromUrl } from '@/composables/useBpmDetector'
 
 const uiStore      = useUiStore()
 const authStore    = useAuthStore()
@@ -145,7 +146,7 @@ function readLoopPads() {
 
 function openPadPicker(sound) {
   if (pickingPadFor.value?.freesoundId === sound.freesoundId) {
-    pickingPadFor.value = null; pendingPadSlot.value = null; pendingBpm.value = ''; return
+    pickingPadFor.value = null; pendingPadSlot.value = null; pendingBpm.value = ''; isPadDetecting.value = false; return
   }
   loopPadsSnapshot.value = readLoopPads()
   pickingPadFor.value    = sound
@@ -153,6 +154,7 @@ function openPadPicker(sound) {
   pendingBpm.value       = sound.bpm != null
     ? String(sound.bpm)
     : midiStore.currentBpm > 0 ? String(midiStore.currentBpm) : ''
+  _autoDetectBpm(sound, pendingBpm, isPadDetecting)
 }
 
 function selectPadSlot(padIdx) {
@@ -176,21 +178,51 @@ function confirmPadAssign() {
 }
 
 // ── Send to AudioCapture ─────────────────────────────────────────
-const capturePickerFor  = ref(null)
-const captureBpm        = ref('')
-const captureBpmInput   = ref(null)
+const capturePickerFor   = ref(null)
+const captureBpm         = ref('')
+const captureBpmInput    = ref(null)
 const isSendingToCapture = ref(false)
+const isCaptureDetecting = ref(false)
+
+const isPadDetecting     = ref(false)
+
+// Runs client-side BPM detection if the sound has no ac_tempo from Freesound.
+// bpmRef and detectingRef are the caller's reactive refs.
+// guardId is checked after async resolution to avoid races when the user
+// switches sounds before detection finishes.
+async function _autoDetectBpm(sound, bpmRef, detectingRef) {
+  if (sound.bpm != null) return
+  const guardId = sound.freesoundId
+  detectingRef.value = true
+  try {
+    const url = await getCachedUrl(sound.id)
+      ?? sound.previews?.['preview-hq-mp3']
+      ?? sound.previews?.['preview-lq-mp3']
+      ?? sound.url
+    const detected = await detectBpmFromUrl(url)
+    // Only apply if the user hasn't switched to a different sound
+    if (detected && (bpmRef === captureBpm ? capturePickerFor.value?.freesoundId : pickingPadFor.value?.freesoundId) === guardId) {
+      bpmRef.value = String(detected)
+    }
+  } catch {
+    // detection failed silently — user can type BPM manually
+  } finally {
+    if ((bpmRef === captureBpm ? capturePickerFor.value?.freesoundId : pickingPadFor.value?.freesoundId) === guardId) {
+      detectingRef.value = false
+    }
+  }
+}
 
 function openCapturePicker(sound) {
   if (capturePickerFor.value?.freesoundId === sound.freesoundId) {
-    capturePickerFor.value = null; captureBpm.value = ''; return
+    capturePickerFor.value = null; captureBpm.value = ''; isCaptureDetecting.value = false; return
   }
   capturePickerFor.value = sound
-  // Prefer the sound's own BPM from Freesound analysis, fall back to global BPM
   captureBpm.value = sound.bpm != null
     ? String(sound.bpm)
     : midiStore.currentBpm > 0 ? String(midiStore.currentBpm) : ''
   nextTick(() => captureBpmInput.value?.focus())
+  _autoDetectBpm(sound, captureBpm, isCaptureDetecting)
 }
 
 async function confirmCaptureAndSend() {
@@ -507,11 +539,15 @@ onUnmounted(() => {
                 </button>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">BPM</span>
+                <span class="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">
+                  BPM
+                  <Loader2 v-if="isCaptureDetecting" class="w-2.5 h-2.5 animate-spin text-violet-400" />
+                </span>
                 <input
                   ref="captureBpmInput"
                   v-model="captureBpm"
-                  type="number" min="1" max="999" placeholder="e.g. 120"
+                  type="number" min="1" max="999"
+                  :placeholder="isCaptureDetecting ? 'Detecting…' : 'e.g. 120'"
                   @keydown.enter="confirmCaptureAndSend"
                   @keydown.esc="capturePickerFor = null; captureBpm = ''"
                   class="w-24 bg-black border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono outline-none focus:border-violet-500 placeholder-neutral-700"
@@ -570,8 +606,12 @@ onUnmounted(() => {
               </div>
               <Transition name="fade-down">
                 <div v-if="pendingPadSlot != null" class="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800">
-                  <span class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">BPM</span>
-                  <input ref="bpmInput" v-model="pendingBpm" type="number" min="1" max="999" placeholder="optional"
+                  <span class="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">
+                    BPM
+                    <Loader2 v-if="isPadDetecting" class="w-2.5 h-2.5 animate-spin text-cyan-400" />
+                  </span>
+                  <input ref="bpmInput" v-model="pendingBpm" type="number" min="1" max="999"
+                    :placeholder="isPadDetecting ? 'Detecting…' : 'optional'"
                     @keydown.enter="confirmPadAssign" @keydown.esc="pendingPadSlot = null"
                     class="w-24 bg-black border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono outline-none focus:border-cyan-500 placeholder-neutral-700" />
                   <button @click="confirmPadAssign"
