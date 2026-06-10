@@ -136,46 +136,45 @@ watch(() => store.isPlaying, (playing) => {
           store.currentStep = state.stepPointer
         }, time)
 
-        if (step?.active && step.velocity > 0 && step.notes?.length > 0) {
+        if (step?.active && step.velocity > 0 && step.notes?.length > 0 && state.playMode !== 'arp') {
           const tickMs = 60000 / (state.bpm * 96)
           const stepMs = tickMs * ticksNeeded
           const noteDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
           const channel = state.channel
+          step.notes.forEach(note => {
+            const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
+            const noteKey = `${clampedNote}-${channel}`
+            midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
+            _activeNoteKeys.add(noteKey)
+            const tid = window.setTimeout(() => {
+              _pendingTimeouts.delete(tid)
+              midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
+              _activeNoteKeys.delete(noteKey)
+            }, noteDurationMs)
+            _pendingTimeouts.add(tid)
+          })
+        }
+      }
 
-          if (state.playMode === 'arp') {
-            const arpTicks = DURATION_TICKS[state.arpRate] ?? 8
-            const staggerMs = tickMs * arpTicks
-            step.notes.forEach((note, i) => {
-              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
-              const noteKey = `${clampedNote}-${channel}`
-              const tid = window.setTimeout(() => {
-                _pendingTimeouts.delete(tid)
-                if (_stopPending) return
-                midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
-                _activeNoteKeys.add(noteKey)
-                const offTid = window.setTimeout(() => {
-                  _pendingTimeouts.delete(offTid)
-                  midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
-                  _activeNoteKeys.delete(noteKey)
-                }, noteDurationMs)
-                _pendingTimeouts.add(offTid)
-              }, i * staggerMs)
-              _pendingTimeouts.add(tid)
-            })
-          } else {
-            step.notes.forEach(note => {
-              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
-              const noteKey = `${clampedNote}-${channel}`
-              midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
-              _activeNoteKeys.add(noteKey)
-              const tid = window.setTimeout(() => {
-                _pendingTimeouts.delete(tid)
-                midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
-                _activeNoteKeys.delete(noteKey)
-              }, noteDurationMs)
-              _pendingTimeouts.add(tid)
-            })
-          }
+      if (state.playMode === 'arp' && step?.active && step.velocity > 0 && step.notes?.length > 0) {
+        const arpTicks = DURATION_TICKS[state.arpRate] ?? 8
+        if (state.tickCounter % arpTicks === 0) {
+          if (_stopPending) return
+          const tickMs = 60000 / (state.bpm * 96)
+          const arpMs = tickMs * arpTicks
+          const noteDurationMs = Math.max(10, arpMs * ((step.gate ?? 80) / 100))
+          const channel = state.channel
+          const noteIdx = Math.floor(state.tickCounter / arpTicks) % step.notes.length
+          const clampedNote = Math.max(0, Math.min(127, step.notes[noteIdx] + (state.transpose || 0) + (step.transpose || 0)))
+          const noteKey = `${clampedNote}-${channel}`
+          midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
+          _activeNoteKeys.add(noteKey)
+          const tid = window.setTimeout(() => {
+            _pendingTimeouts.delete(tid)
+            midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
+            _activeNoteKeys.delete(noteKey)
+          }, noteDurationMs)
+          _pendingTimeouts.add(tid)
         }
       }
 
