@@ -5,8 +5,10 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { MidiSource, midiService } from '@/core/midi/MidiService'
 import catalogIndex from '@/data/program_change/program_change.json'
 
@@ -25,6 +27,8 @@ const uiStore        = useUiStore()
 watch(() => uiStore.isDeviceProgramChangePanelOpen, (v) => { if (v) bringToFront() })
 const presetStore    = usePresetStore()
 const userBanksStore = useUserBanksStore()
+const mappingStore   = useMappingStore()
+const { openMenu }   = useMidiContextMenu()
 
 // ── Device list (left column) — only PC-enabled devices ────────
 const devices = computed(() => {
@@ -416,8 +420,57 @@ function clearScrollCC() {
   localStorage.removeItem(LS_SCROLL_CC)
 }
 
-onMounted(() => startScrollCCListener())
-onUnmounted(() => _unsubScrollCC?.())
+let _pcNavHandler   = null
+let _unsubDevMidi   = null
+
+function _startDevMidiListener() {
+  _unsubDevMidi?.()
+  _unsubDevMidi = midiService.addRawListener((event) => {
+    if (!event.data || event.data.length < 3) return
+    const status  = event.data[0]
+    const type    = status & 0xF0
+    const channel = status & 0x0F
+    const byte1   = event.data[1]
+    const byte2   = event.data[2]
+
+    const isCC   = type === 0xB0
+    const isNote = type === 0x90 && byte2 > 0
+    if (!isCC && !isNote) return
+    if (isCC && byte2 === 0) return
+
+    const inputId   = event.target?.id
+    const inputPort = midiService.getInputs().find(i => i.id === inputId)
+    const device    = inputPort?.name || null
+
+    const keyParts = []
+    if (device) keyParts.push(device)
+    keyParts.push(`CH${channel + 1}`)
+    keyParts.push(isNote ? `NOTE${byte1}` : `CC${byte1}`)
+    const key = keyParts.join(':')
+
+    const mapping = mappingStore.midiMappings[key]
+    if (!mapping) return
+    const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+    if (!paramName?.startsWith('pc_dev_')) return
+
+    const idx = parseInt(paramName.slice('pc_dev_'.length))
+    if (!isNaN(idx) && idx >= 0 && idx < devices.value.length) {
+      selectedDeviceName.value = devices.value[idx].name
+    }
+  })
+}
+
+onMounted(() => {
+  startScrollCCListener()
+  _startDevMidiListener()
+  _pcNavHandler = e => navigatePresetList(e.detail?.delta ?? 1)
+  window.addEventListener('device-pc-preset-navigate', _pcNavHandler)
+})
+onUnmounted(() => {
+  _unsubScrollCC?.()
+  _unsubDevMidi?.()
+  if (_pcNavHandler) window.removeEventListener('device-pc-preset-navigate', _pcNavHandler)
+})
 
 // ── Performance Sets ────────────────────────────────────────────
 const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
@@ -626,16 +679,22 @@ function assignToPad(setId, padIdx) {
               </div>
 
               <button
-                v-for="dev in devices"
+                v-for="(dev, devIdx) in devices"
                 :key="dev.name"
                 @click="selectedDeviceName = dev.name"
+                @contextmenu.prevent="openMenu($event, { name: 'pc_dev_' + devIdx, label: dev.name })"
                 :class="[
-                  'w-full text-left px-4 py-3 border-b border-neutral-800/60 transition-all',
+                  'relative w-full text-left px-4 py-3 border-b border-neutral-800/60 transition-all',
                   selectedDeviceName === dev.name
                     ? 'bg-violet-500/10 border-l-2 border-l-violet-500'
                     : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'
                 ]"
               >
+                <!-- MIDI learning indicator -->
+                <span
+                  v-if="mappingStore.learningParamName === 'pc_dev_' + devIdx"
+                  class="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none"
+                />
                 <div class="flex items-center gap-2.5">
                   <div :class="['w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', dev.isOnline ? 'bg-emerald-500' : 'bg-neutral-700']" />
                   <div class="flex flex-col min-w-0 flex-1">

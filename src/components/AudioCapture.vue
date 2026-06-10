@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -61,6 +61,13 @@ const loopPadModalSlots    = ref([])
 const loopPadSoundName     = ref('')
 const lastCaptureLabel     = ref('')   // set when a Freesound sound is loaded
 
+// ── Loop Machine assignment ───────────────────────────────────────
+const showLMModal          = ref(false)
+const lmModalSlots         = ref([])
+const lmSoundName          = ref('')
+const selectedLMPad        = ref(0)
+const isSendingToLM        = ref(false)
+
 function openLoopPadModal() {
   try {
     const v = localStorage.getItem('SYCORE_LPP_LOOP_PADS')
@@ -77,6 +84,58 @@ function openLoopPadModal() {
 async function confirmLoopPadAssign() {
   await handleSendToLoopPad()
   showLoopPadModal.value = false
+}
+
+function openLMModal() {
+  try {
+    const v = localStorage.getItem('SYCORE_LOOP_MACHINE_PADS')
+    const arr = v ? JSON.parse(v) : []
+    while (arr.length < 32) arr.push(null)
+    lmModalSlots.value = arr.slice(0, 32)
+  } catch {
+    lmModalSlots.value = Array(32).fill(null)
+  }
+  lmSoundName.value = lastCaptureLabel.value || `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+  showLMModal.value = true
+}
+
+async function confirmLMAssign() {
+  if (!recordedBlob.value) return
+  isSendingToLM.value = true
+  try {
+    const arrayBuf = await recordedBlob.value.arrayBuffer()
+    const tmpCtx   = new (window.AudioContext || window.webkitAudioContext)()
+    let decoded
+    try { decoded = await tmpCtx.decodeAudioData(arrayBuf) } finally { tmpCtx.close() }
+
+    const sampleRate  = decoded.sampleRate
+    const startSample = Math.floor(loopStart.value * sampleRate)
+    const endSample   = Math.floor(loopEnd.value   * sampleRate)
+    const length      = endSample - startSample
+    if (length <= 0) return
+
+    const croppedBuffer = new AudioBuffer({ numberOfChannels: decoded.numberOfChannels, length, sampleRate })
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+      croppedBuffer.copyToChannel(decoded.getChannelData(ch).subarray(startSample, endSample), ch)
+    }
+
+    const wav      = audioBufferToWav(croppedBuffer)
+    const id       = `capture_lm_${Date.now()}`
+    const label    = lmSoundName.value.trim() || `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+    const duration = loopEnd.value - loopStart.value
+    const url      = await cacheFileBlob(id, label, wav, { author: 'Audio Capture', duration })
+
+    const track = { id, label, url, author: 'Audio Capture', duration, bpm: midiStore.currentBpm || undefined }
+    window.dispatchEvent(new CustomEvent('loop-machine-assign', { detail: { padIdx: selectedLMPad.value, track } }))
+    const updated = [...lmModalSlots.value]
+    updated[selectedLMPad.value] = track
+    lmModalSlots.value = updated
+    showLMModal.value  = false
+  } catch (e) {
+    console.error('Failed to send to Loop Machine', e)
+  } finally {
+    isSendingToLM.value = false
+  }
 }
 
 const { cacheFileBlob } = useFreesoundCache()
@@ -1867,6 +1926,14 @@ onUnmounted(() => {
           <Repeat class="w-3 h-3" />
           Freesound
         </button>
+        <button
+          @click="uiStore.isLoopMachineOpen = true"
+          title="Open Loop Machine"
+          class="shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors text-fuchsia-500 border-fuchsia-500/30 hover:bg-fuchsia-500/10 hover:border-fuchsia-500/50"
+        >
+          <Layers class="w-3 h-3" />
+          Loop Machine
+        </button>
       </div>
       <div class="flex">
         <!--- Controls Left Column -->
@@ -1941,9 +2008,20 @@ onUnmounted(() => {
           <button
             v-if="recordedBlob && !isRecording"
             @click="openLoopPadModal"
+            title="Send cropped audio to Loop Pad"
             class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/15 transition-colors"
           >
             <Repeat class="w-3 h-3" /> Loop Pad
+          </button>
+
+          <!-- Send to Loop Machine — trigger button -->
+          <button
+            v-if="recordedBlob && !isRecording"
+            @click="openLMModal"
+            title="Send cropped audio to Loop Machine"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-300 border-amber-500/40 hover:bg-amber-500/15 transition-colors"
+          >
+            <Layers class="w-3 h-3" /> Loop Machine
           </button>
 
           <!-- Loop Pad assignment modal -->
@@ -2039,6 +2117,89 @@ onUnmounted(() => {
             </Transition>
           </Teleport>
 
+          <!-- Loop Machine assignment modal -->
+          <Teleport to="body">
+            <Transition name="fade">
+              <div
+                v-if="showLMModal"
+                class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[1200] flex items-center justify-center"
+                @click.self="showLMModal = false"
+              >
+                <div class="bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl w-[640px] max-w-[95vw] overflow-hidden">
+
+                  <!-- Header -->
+                  <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-800 bg-neutral-950/60">
+                    <div class="flex items-center gap-2">
+                      <Layers class="w-4 h-4 text-amber-400" />
+                      <span class="text-sm font-black uppercase tracking-widest text-white">Send to Loop Machine</span>
+                    </div>
+                    <button @click="showLMModal = false" class="text-neutral-500 hover:text-white transition-colors">
+                      <X class="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <!-- Pad grid (8 × 4 = 32) -->
+                  <div class="p-4 grid grid-cols-8 gap-1.5">
+                    <button
+                      v-for="(slot, i) in lmModalSlots"
+                      :key="i"
+                      @click="selectedLMPad = i"
+                      :class="[
+                        'relative flex flex-col items-center justify-center rounded-lg border p-1 h-12 transition-all',
+                        selectedLMPad === i
+                          ? 'border-amber-400 bg-amber-500/20 shadow-[0_0_8px_rgba(232,121,249,0.3)]'
+                          : slot
+                            ? 'border-amber-500/30 bg-amber-500/5 hover:border-amber-400/50 hover:bg-amber-500/10'
+                            : 'border-neutral-800 bg-neutral-950/40 hover:border-neutral-600'
+                      ]"
+                    >
+                      <span :class="['text-[9px] font-black leading-none mb-0.5', selectedLMPad === i ? 'text-amber-300' : 'text-neutral-500']">
+                        {{ i + 1 }}
+                      </span>
+                      <span v-if="slot" class="text-[7px] font-bold text-white leading-tight text-center truncate w-full px-0.5">{{ slot.label?.slice(0, 8) }}</span>
+                      <span v-else class="text-[7px] font-mono text-neutral-700">—</span>
+                      <span
+                        v-if="slot && selectedLMPad === i"
+                        class="absolute top-0.5 right-0.5 text-[5px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-0.5 leading-tight"
+                      >OVR</span>
+                    </button>
+                  </div>
+
+                  <!-- Footer -->
+                  <div class="px-5 pb-5 flex flex-col gap-3">
+                    <div class="flex items-center gap-2">
+                      <label class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">Name</label>
+                      <input
+                        v-model="lmSoundName"
+                        type="text"
+                        placeholder="Sound name…"
+                        maxlength="64"
+                        class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono outline-none focus:border-amber-500 placeholder-neutral-700 transition-colors"
+                      />
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="flex-1 text-[9px] font-mono text-neutral-500 truncate">
+                        Sending: <span class="text-white">{{ lmModalSlots[selectedLMPad] ? `→ replaces "${lmModalSlots[selectedLMPad].label}"` : `→ Pad ${selectedLMPad + 1} (empty)` }}</span>
+                      </span>
+                      <button
+                        @click="showLMModal = false"
+                        class="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] font-bold uppercase tracking-widest transition-colors"
+                      >Cancel</button>
+                      <button
+                        @click="confirmLMAssign"
+                        :disabled="isSendingToLM"
+                        class="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                      >
+                        {{ isSendingToLM ? '…' : `Assign to Pad ${selectedLMPad + 1}` }}
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+
            <!-- Export MP3 -->
           <button
             @click="handleExportMp3"
@@ -2091,7 +2252,7 @@ onUnmounted(() => {
           </button>
 
           <!-- Record / Stop / Armed -->
-          <div class="relative mt-14">
+          <div class="relative mt-4">
             <span
               v-if="mappingStore.learningParamName === 'audioCapture_record'"
               class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-10 pointer-events-none"

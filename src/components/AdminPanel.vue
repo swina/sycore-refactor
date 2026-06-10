@@ -122,6 +122,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'device-program-change',label: 'Device Program Change', icon: 'Disc3'      },
   { id: 'audio-looper',         label: 'Audio Looper',          icon: 'RotateCw'   },
   { id: 'freesound-browser',    label: 'Freesound Browser',     icon: 'Radio'      },
+  { id: 'loop-machine',         label: 'Loop Machine',          icon: 'Layers'     },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

@@ -45,6 +45,7 @@ export const useUiStore = defineStore('ui', () => {
   const isProgramChangeBrowserOpen = ref(false)
   const isDeviceProgramChangePanelOpen = ref(false)
   const isFreesoundBrowserOpen   = ref(false)
+  const isLoopMachineOpen        = ref(false)
   const isLivePerformancePadOpen = ref(false)
   const isLiveTimelineOpen       = ref(false)
   const isCaptureRecording       = ref(false)
@@ -118,6 +119,7 @@ export const useUiStore = defineStore('ui', () => {
     chordProg:           () => isChordProgOpen.value,
     tracksPlayer:        () => isTracksPlayerOpen.value,
     freesoundBrowser:    () => isFreesoundBrowserOpen.value,
+    loopMachine:         () => isLoopMachineOpen.value,
   }
 
   const openModalKeys = computed(() =>
@@ -163,11 +165,12 @@ export const useUiStore = defineStore('ui', () => {
     chordProg:           isChordProgOpen,
     tracksPlayer:        isTracksPlayerOpen,
     freesoundBrowser:    isFreesoundBrowserOpen,
+    loopMachine:         isLoopMachineOpen,
   }
 
   // These modals coexist freely — they never trigger close-others and are
   // never closed when another modal opens.
-  const MODAL_EXCLUDED = new Set(['lfo1', 'lfo2', 'velocityMap', 'arp', 'history', 'types', 'sequencer', 'freesoundBrowser'])
+  const MODAL_EXCLUDED = new Set(['lfo1', 'lfo2', 'velocityMap', 'arp', 'history', 'types', 'sequencer', 'freesoundBrowser', 'loopMachine'])
 
   // When a non-excluded modal opens, close all other non-excluded modals
   watch(openModalKeys, (newKeys, oldKeys) => {
@@ -240,6 +243,7 @@ export const useUiStore = defineStore('ui', () => {
     isHelpSlideshowOpen.value      = false
     isSoundEngineOpen.value        = false
     isGuidesOpen.value             = false
+    isLoopMachineOpen.value        = false
     isChordProgOpen.value          = false
     midiActionsActiveTab.value = 'mapper'
     midiActionsSelectedDevice.value = ''
@@ -286,7 +290,7 @@ export const useUiStore = defineStore('ui', () => {
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen,
-    isFreesoundBrowserOpen,
+    isFreesoundBrowserOpen, isLoopMachineOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,

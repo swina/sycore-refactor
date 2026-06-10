@@ -61,6 +61,7 @@ const MENU_ACTION_MAP = {
   'tracks-player':        () => uiStore.isTracksPlayerOpen = !uiStore.isTracksPlayerOpen,
   'chord-prog':           () => uiStore.isChordProgOpen = !uiStore.isChordProgOpen,
   'live-performance-pad': () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
+  'loop-machine':         () => uiStore.isLoopMachineOpen = !uiStore.isLoopMachineOpen,
   'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
   'freesound-browser':    () => uiStore.isFreesoundBrowserOpen = !uiStore.isFreesoundBrowserOpen,
 }

@@ -315,6 +315,11 @@ export function useAppActions() {
         arpStore.arpHold = ccVal >= 64
         break
 
+      case 'pc_preset_up':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('device-pc-preset-navigate', { detail: { delta: -1 } })); break
+      case 'pc_preset_down':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('device-pc-preset-navigate', { detail: { delta: 1 } })); break
+
       case 'liveset_up':
         window.dispatchEvent(new CustomEvent('liveset-navigate', { detail: { dir: 'up' } })); break
       case 'liveset_down':

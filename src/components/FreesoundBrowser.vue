@@ -4,7 +4,7 @@ import {
   Search, Play, Pause, Plus, Loader2, Music2,
   ChevronLeft, ChevronRight, Repeat, BadgeCheck, X,
   Download, HardDrive, Trash2, FileAudio, KeyRound, DatabaseZap,
-  Tag, ChevronDown,
+  Tag, ChevronDown, Layers,
 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -69,6 +69,12 @@ const previewAudio   = new Audio()
 const previewingId   = ref(null)
 const previewPlaying = ref(false)
 
+function stopPreview() {
+  previewAudio.pause()
+  previewPlaying.value = false
+  previewingId.value   = null
+}
+
 previewAudio.addEventListener('ended', () => {
   previewPlaying.value = false
   previewingId.value   = null
@@ -123,6 +129,7 @@ watch(cachedIds, () => { if (localOnly.value) loadCachedSounds() }, { deep: true
 
 // ── Add to playlist ──────────────────────────────────────────────
 function addToPlaylist(sound) {
+  stopPreview()
   const { tags, license, previews, freesoundId, ...track } = sound
   window.dispatchEvent(new CustomEvent('freesound-add-to-playlist', { detail: track }))
 }
@@ -145,6 +152,7 @@ function readLoopPads() {
 }
 
 function openPadPicker(sound) {
+  stopPreview()
   if (pickingPadFor.value?.freesoundId === sound.freesoundId) {
     pickingPadFor.value = null; pendingPadSlot.value = null; pendingBpm.value = ''; isPadDetecting.value = false; return
   }
@@ -175,6 +183,58 @@ function confirmPadAssign() {
   updated[pendingPadSlot.value] = track
   loopPadsSnapshot.value = updated
   pendingPadSlot.value = null; pendingBpm.value = ''; pickingPadFor.value = null
+}
+
+// ── Loop Machine assignment ──────────────────────────────────────
+const LS_LM_PADS           = 'SYCORE_LOOP_MACHINE_PADS'
+const pickingLMFor         = ref(null)
+const pendingLMSlot        = ref(null)
+const pendingLMBpm         = ref('')
+const lmBpmInput           = ref(null)
+const lmPadsSnapshot       = ref(readLMPads())
+const isLMDetecting        = ref(false)
+
+function readLMPads() {
+  try {
+    const v = localStorage.getItem(LS_LM_PADS)
+    const arr = v ? JSON.parse(v) : []
+    while (arr.length < 32) arr.push(null)
+    return arr.slice(0, 32)
+  } catch { return Array(32).fill(null) }
+}
+
+function openLMPicker(sound) {
+  stopPreview()
+  if (pickingLMFor.value?.freesoundId === sound.freesoundId) {
+    pickingLMFor.value = null; pendingLMSlot.value = null; pendingLMBpm.value = ''; isLMDetecting.value = false; return
+  }
+  lmPadsSnapshot.value = readLMPads()
+  pickingLMFor.value   = sound
+  pendingLMSlot.value  = null
+  pendingLMBpm.value   = sound.bpm != null
+    ? String(sound.bpm)
+    : midiStore.currentBpm > 0 ? String(midiStore.currentBpm) : ''
+  _autoDetectBpm(sound, pendingLMBpm, isLMDetecting)
+}
+
+function selectLMSlot(padIdx) {
+  pendingLMSlot.value = padIdx
+  nextTick(() => lmBpmInput.value?.focus())
+}
+
+function confirmLMAssign() {
+  if (pendingLMSlot.value == null || !pickingLMFor.value) return
+  const bpm   = pendingLMBpm.value !== '' ? Number(pendingLMBpm.value) : undefined
+  const track = {
+    id: pickingLMFor.value.id, label: pickingLMFor.value.label,
+    url: pickingLMFor.value.url, author: pickingLMFor.value.author,
+    duration: pickingLMFor.value.duration, ...(bpm ? { bpm } : {}),
+  }
+  window.dispatchEvent(new CustomEvent('loop-machine-assign', { detail: { padIdx: pendingLMSlot.value, track } }))
+  const updated = [...lmPadsSnapshot.value]
+  updated[pendingLMSlot.value] = track
+  lmPadsSnapshot.value = updated
+  pendingLMSlot.value = null; pendingLMBpm.value = ''; pickingLMFor.value = null
 }
 
 // ── Send to AudioCapture ─────────────────────────────────────────
@@ -214,6 +274,7 @@ async function _autoDetectBpm(sound, bpmRef, detectingRef) {
 }
 
 function openCapturePicker(sound) {
+  stopPreview()
   if (capturePickerFor.value?.freesoundId === sound.freesoundId) {
     capturePickerFor.value = null; captureBpm.value = ''; isCaptureDetecting.value = false; return
   }
@@ -622,6 +683,59 @@ onUnmounted(() => {
               </Transition>
             </div>
           </Transition>
+
+          <!-- Loop Machine picker -->
+          <Transition name="fade-down">
+            <div v-if="pickingLMFor" class="bg-neutral-950 border border-fuchsia-500/30 rounded-xl p-3 mt-2">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-black uppercase tracking-widest text-fuchsia-400 flex items-center gap-1.5">
+                  <Layers class="w-3 h-3" /> Assign to Loop Machine
+                </span>
+                <span class="text-[9px] text-neutral-500 truncate max-w-[200px] italic">{{ pickingLMFor.label }}</span>
+                <button @click="pickingLMFor = null; pendingLMSlot = null" class="text-neutral-600 hover:text-white transition-colors ml-2 shrink-0">
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+              <div class="grid grid-cols-8 gap-1 mb-1">
+                <div v-for="(slot, i) in lmPadsSnapshot" :key="i">
+                  <button
+                    @click="selectLMSlot(i)"
+                    :class="['w-full h-8 rounded border flex flex-col items-center justify-center p-0.5 transition-all text-[8px]',
+                      pendingLMSlot === i
+                        ? 'border-fuchsia-400 bg-fuchsia-500/20 text-fuchsia-200'
+                        : slot
+                          ? 'border-fuchsia-500/40 bg-fuchsia-500/5 hover:bg-fuchsia-500/20 hover:border-fuchsia-400/60'
+                          : 'border-neutral-700 bg-neutral-900 hover:border-fuchsia-500/50 hover:bg-fuchsia-500/5']"
+                    :title="slot ? `Replace: ${slot.label}` : `Assign to Pad ${i + 1}`"
+                  >
+                    <span class="font-black text-neutral-400">{{ i + 1 }}</span>
+                    <span v-if="slot" class="text-[6px] text-fuchsia-400/70 truncate w-full text-center leading-none px-0.5">{{ slot.label?.slice(0, 5) }}</span>
+                    <span v-else class="text-[6px] text-neutral-700 leading-none">—</span>
+                  </button>
+                </div>
+              </div>
+              <Transition name="fade-down">
+                <div v-if="pendingLMSlot != null" class="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800">
+                  <span class="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">
+                    BPM
+                    <Loader2 v-if="isLMDetecting" class="w-2.5 h-2.5 animate-spin text-fuchsia-400" />
+                  </span>
+                  <input ref="lmBpmInput" v-model="pendingLMBpm" type="number" min="1" max="999"
+                    :placeholder="isLMDetecting ? 'Detecting…' : 'optional'"
+                    @keydown.enter="confirmLMAssign" @keydown.esc="pendingLMSlot = null"
+                    class="w-24 bg-black border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono outline-none focus:border-fuchsia-500 placeholder-neutral-700" />
+                  <button @click="confirmLMAssign"
+                    class="flex-1 py-1 rounded-lg bg-fuchsia-700 hover:bg-fuchsia-600 text-white text-[10px] font-black uppercase tracking-widest transition-colors">
+                    Assign to LM Pad {{ pendingLMSlot + 1 }}
+                  </button>
+                  <button @click="pendingLMSlot = null"
+                    class="px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </Transition>
+            </div>
+          </Transition>
         </div>
 
         <!-- ── Scrollable results ─────────────────────────────────── -->
@@ -704,6 +818,14 @@ onUnmounted(() => {
                         : 'border-neutral-700 text-neutral-500 hover:border-cyan-500/50 hover:text-cyan-400']"
                     title="Assign to Loop Pad">
                     <Repeat class="w-2.5 h-2.5" /> Pad
+                  </button>
+                  <button @click.stop="openLMPicker(sound)"
+                    :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                      pickingLMFor?.freesoundId === sound.freesoundId
+                        ? 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-300'
+                        : 'border-neutral-700 text-neutral-500 hover:border-fuchsia-500/50 hover:text-fuchsia-400']"
+                    title="Assign to Loop Machine">
+                    <Layers class="w-2.5 h-2.5" /> LM
                   </button>
                   <button
                     @click.stop="deleteCache(sound.id)"
@@ -789,6 +911,14 @@ onUnmounted(() => {
                   title="Assign to Loop Pad">
                   <Repeat class="w-2.5 h-2.5" /> Pad
                 </button>
+                <button @click.stop="openLMPicker(sound)"
+                  :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                    pickingLMFor?.freesoundId === sound.freesoundId
+                      ? 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-300'
+                      : 'border-neutral-700 text-neutral-500 hover:border-fuchsia-500/50 hover:text-fuchsia-400']"
+                  title="Assign to Loop Machine">
+                  <Layers class="w-2.5 h-2.5" /> LM
+                </button>
                 <button
                   @click.stop="openCapturePicker(sound)"
                   :disabled="isSendingToCapture"
@@ -823,7 +953,7 @@ onUnmounted(() => {
                 </button>
                 <button
                   v-else
-                  @click.stop="downloadSound(sound)"
+                  @click.stop="stopPreview(); downloadSound(sound)"
                   class="flex items-center gap-1 px-2 py-1 rounded border border-neutral-700 text-neutral-500 hover:border-sky-500/50 hover:text-sky-400 text-[9px] font-black uppercase tracking-widest transition-colors"
                   title="Download preview to local cache"
                 >

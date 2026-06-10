@@ -67,6 +67,7 @@ import LfoMappingDialog from '@/components/LfoMappingDialog.vue'
 import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
 import LivePerformancePad from '@/components/LivePerformancePad.vue'
+import LoopMachine        from '@/components/LoopMachine.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
 import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -135,6 +136,7 @@ const toolbarButtonMap = {
   'program-change':         { state: 'isProgramChangeBrowserOpen',       icon: Music2, label: 'Program Change Browser' },
   'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,   label: 'Device Program Change' },
   'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
+  'loop-machine':           { state: 'isLoopMachineOpen',                icon: Layers,  label: 'Loop Machine' },
   'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
   'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
@@ -331,7 +333,7 @@ onMounted(() => {
       <div :style="focusStyle('deviceProgramChange')">
         <Transition name="sy-modal">
           <MidiDeviceProgramChangePanel
-            v-if="uiStore.isDeviceProgramChangePanelOpen"
+            v-show="uiStore.isDeviceProgramChangePanelOpen"
             @close="uiStore.isDeviceProgramChangePanelOpen = false"
           />
         </Transition>
@@ -428,6 +430,16 @@ onMounted(() => {
             v-show="uiStore.isLivePerformancePadOpen"
             :isOpen="uiStore.isLivePerformancePadOpen"
             @close="uiStore.isLivePerformancePadOpen = false"
+          />
+        </Transition>
+      </div>
+
+      <div :style="focusStyle('loopMachine')">
+        <Transition name="sy-modal">
+          <LoopMachine
+            v-show="uiStore.isLoopMachineOpen"
+            :isOpen="uiStore.isLoopMachineOpen"
+            @close="uiStore.isLoopMachineOpen = false"
           />
         </Transition>
       </div>

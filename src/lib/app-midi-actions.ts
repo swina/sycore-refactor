@@ -102,6 +102,8 @@ export type AppAction =
   | 'pc_bank_cc'
   | 'pc_category_cc'
   | 'pc_preset_cc'
+  | 'pc_preset_up'
+  | 'pc_preset_down'
   | 'pc_pad_a1' | 'pc_pad_a2' | 'pc_pad_a3' | 'pc_pad_a4'
   | 'pc_pad_b1' | 'pc_pad_b2' | 'pc_pad_b3' | 'pc_pad_b4'
   | 'backing_track_pad_1'  | 'backing_track_pad_2'  | 'backing_track_pad_3'  | 'backing_track_pad_4'
@@ -246,6 +248,8 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   pc_bank_cc:           'PC Browser: Select Bank via CC',
   pc_category_cc:       'PC Browser: Select Category via CC',
   pc_preset_cc:         'PC Browser: Select & Send Preset via CC',
+  pc_preset_up:         'PC Browser: Preset List ↑ (works when panel is closed)',
+  pc_preset_down:       'PC Browser: Preset List ↓ (works when panel is closed)',
   pc_pad_a1:            'PC Pad A — Slot 1',
   pc_pad_a2:            'PC Pad A — Slot 2',
   pc_pad_a3:            'PC Pad A — Slot 3',
@@ -327,6 +331,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
   ],
   'Program Change Browser': [
     'pc_device_cc', 'pc_bank_cc', 'pc_category_cc', 'pc_preset_cc',
+    'pc_preset_up', 'pc_preset_down',
     'pc_pad_a1', 'pc_pad_a2', 'pc_pad_a3', 'pc_pad_a4',
     'pc_pad_b1', 'pc_pad_b2', 'pc_pad_b3', 'pc_pad_b4',
   ],
