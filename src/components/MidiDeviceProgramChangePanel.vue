@@ -334,6 +334,7 @@ function sendCatalogSound(sound) {
 
   lastSent.value = sound
   recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb)
+  showPcNotification(selectedDeviceName.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'] ?? '')
 
   const msg = `[Device PC] → ${selectedDeviceName.value} ch${ch + 1}: MSB=${msb} LSB=${lsb} PC=${progNum} | ${sound.name}`
   if (window.SY_LOG) window.SY_LOG(msg); else console.log(msg)
@@ -362,6 +363,7 @@ function sendManual() {
   port.send([0xC0 | ch, prog])
   recordChannelState(ch, prog, '', `PC ${manualProg.value}`)
   lastSent.value = { name: `PC ${manualProg.value}` }
+  showPcNotification(selectedDeviceName.value, `PC ${manualProg.value}`)
 }
 
 // ── Channel helper ──────────────────────────────────────────────
@@ -462,12 +464,32 @@ let _unsubDevMidi   = null
 function _startDevMidiListener() {
   _unsubDevMidi?.()
   _unsubDevMidi = midiService.addRawListener((event) => {
-    if (!event.data || event.data.length < 3) return
+    if (!event.data || event.data.length < 2) return
     const status  = event.data[0]
     const type    = status & 0xF0
     const channel = status & 0x0F
     const byte1   = event.data[1]
     const byte2   = event.data[2]
+
+    // Incoming Program Change → show toast notification
+    if (type === 0xC0) {
+      const progNum = byte1
+      const matchedDev = devices.value.find(d => {
+        const reg = midiStore.routingConfig.registrations[d.name]
+        return reg?.pcEnabled && reg?.pcChannel === channel
+      })
+      if (matchedDev) {
+        const reg = midiStore.routingConfig.registrations[matchedDev.name]
+        const storedInfo = reg?.pcChannels?.[channel]
+        const matched = storedInfo?.program === progNum ? storedInfo : null
+        const name = matched?.soundName ?? `PC ${progNum + 1}`
+        const category = matched?.category ?? ''
+        showPcNotification(matchedDev.name, name, category)
+      }
+      return
+    }
+
+    if (event.data.length < 3) return
 
     const isCC   = type === 0xB0
     const isNote = type === 0x90 && byte2 > 0
@@ -491,7 +513,7 @@ function _startDevMidiListener() {
 
     const idx = parseInt(paramName.slice('pc_dev_'.length))
     if (!isNaN(idx) && idx >= 0 && idx < devices.value.length) {
-      selectedDeviceName.value = devices.value[idx].name
+      selectDevice(devices.value[idx].name)
     }
   })
 }
@@ -506,7 +528,31 @@ onUnmounted(() => {
   _unsubScrollCC?.()
   _unsubDevMidi?.()
   if (_pcNavHandler) window.removeEventListener('device-pc-preset-navigate', _pcNavHandler)
+  clearTimeout(_pcNotifTimer)
 })
+
+// ── PC Toast Notification ───────────────────────────────────────
+function selectDevice(name) {
+  selectedDeviceName.value = name
+  const reg = midiStore.routingConfig.registrations[name]
+  if (!reg) return
+  const ch = reg.pcChannel ?? 0
+  const chInfo = reg.pcChannels?.[ch]
+  if (chInfo?.soundName) {
+    showPcNotification(name, chInfo.soundName, chInfo.category ?? '')
+  } else if (reg.pcProgram != null) {
+    showPcNotification(name, `PC ${reg.pcProgram + 1}`)
+  }
+}
+
+const pcNotification = ref({ visible: false, device: '', name: '', category: '' })
+let _pcNotifTimer = null
+
+function showPcNotification(device, name, category = '') {
+  clearTimeout(_pcNotifTimer)
+  pcNotification.value = { visible: true, device, name, category }
+  _pcNotifTimer = setTimeout(() => { pcNotification.value.visible = false }, 3000)
+}
 
 // ── Performance Sets ────────────────────────────────────────────
 const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
@@ -719,7 +765,7 @@ function assignToPad(setId, padIdx) {
               <button
                 v-for="(dev, devIdx) in devices"
                 :key="dev.name"
-                @click="selectedDeviceName = dev.name"
+                @click="selectDevice(dev.name)"
                 @contextmenu.prevent="openMenu($event, { name: 'pc_dev_' + devIdx, label: dev.name })"
                 :class="[
                   'relative w-full text-left px-4 py-3 border-b border-neutral-800/60 transition-all',
@@ -1360,6 +1406,27 @@ function assignToPad(setId, padIdx) {
       <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-1 right-1  w-3 h-3 cursor-se-resize z-50 opacity-40 hover:opacity-80" style="background:radial-gradient(circle,#aaa 1px,transparent 1px) 0 0/3px 3px" />
       </div>
     </Transition>
+
+    <!-- PC Notification Toast -->
+    <Teleport to="body">
+    <Transition name="pc-toast">
+      <div
+        v-if="pcNotification.visible"
+        class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none"
+      >
+        <div class="flex items-center gap-3 px-5 py-3 rounded-2xl bg-neutral-900/95 border border-violet-500/40 shadow-[0_0_30px_rgba(139,92,246,0.25)] backdrop-blur-md">
+          <div class="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.8)] animate-pulse shrink-0" />
+          <span class="text-[10px] font-black uppercase tracking-widest text-violet-400">{{ pcNotification.device }}</span>
+          <span class="text-[10px] font-mono text-neutral-500">·</span>
+          <span class="text-[11px] font-bold text-white">{{ pcNotification.name }}</span>
+          <span
+            v-if="pcNotification.category"
+            class="text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30"
+          >{{ pcNotification.category }}</span>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
   </div>
 </template>
 
@@ -1372,5 +1439,13 @@ function assignToPad(setId, padIdx) {
 .performance-leave-to {
   opacity: 0;
   transform: translateY(20px) scale(0.98);
+}
+
+.pc-toast-enter-active { transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.pc-toast-leave-active { transition: all 0.3s ease-in; }
+.pc-toast-enter-from,
+.pc-toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(12px) scale(0.95);
 }
 </style>

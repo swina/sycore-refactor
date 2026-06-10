@@ -199,10 +199,10 @@ function goWorkspace() {
               <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Tracks</span>            
             </div>
           </div>
-          <div @click="uiStore.isLooperOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-audio-looper">
+          <div @click="uiStore.isLoopMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-loop-machine">
             <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
               <Infinity class="h-5 w-5 text-synth-neon"/>
-              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Looper</span>            
+              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Loop Machine</span>            
             </div>
           </div>
         </div>

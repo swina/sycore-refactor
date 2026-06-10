@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { midiService } from '@/core/midi/MidiService'
@@ -38,11 +38,31 @@ let _successTimer    = null
 
 function openContextMenu(e) {
   e.preventDefault()
-  menuX.value    = e.clientX
+  menuX.value    = Math.min(e.clientX, window.innerWidth - 216)  // w-52 + margin
   menuY.value    = e.clientY
   menuVisible.value = true
   learningAction.value = null
 }
+
+// Keep the menu fully on-screen: opened from the footer the cursor sits at
+// the bottom edge, so re-clamp the top after render whenever the menu opens
+// or its content changes height (learn / success states are taller).
+const menuEl = ref(null)
+const topPx  = ref(0)
+
+watch(
+  [menuVisible, menuY, learningAction, learnSuccess],
+  async () => {
+    if (!menuVisible.value) return
+    topPx.value = menuY.value
+    await nextTick()
+    const el = menuEl.value
+    if (!el) return
+    const maxTop = window.innerHeight - el.offsetHeight - 8
+    if (topPx.value > maxTop) topPx.value = Math.max(8, maxTop)
+  },
+  { immediate: true }
+)
 
 function closeMenu() {
   cancelLearn()
@@ -120,11 +140,11 @@ onUnmounted(() => {
   >
     <div class="flex items-center gap-2 pr-2 border-r border-neutral-800">
       <Layers class="w-3 h-3 text-emerald-500" />
-      <span class="text-[9px] font-black text-neutral-500 uppercase tracking-tighter">PART</span>
+      <!-- <span class="text-[9px] font-black text-neutral-500 uppercase tracking-tighter">PART</span> -->
     </div>
 
-    <div class="flex items-center gap-3">
-      <button @click="prevChannel" class="text-neutral-600 hover:text-white transition-colors">
+    <div class="flex items-center gap-2">
+      <button @click="prevChannel" title="Multi Device: MIDI Channel" class="text-neutral-600 hover:text-white transition-colors">
         <ChevronDown class="w-3 h-3" />
       </button>
 
@@ -136,7 +156,7 @@ onUnmounted(() => {
         </Transition>
       </div>
 
-      <button @click="nextChannel" class="text-neutral-600 hover:text-white transition-colors">
+      <button @click="nextChannel" title="Multi Device: MIDI Channel" class="text-neutral-600 hover:text-white transition-colors">
         <ChevronUp class="w-3 h-3" />
       </button>
     </div>
@@ -178,8 +198,9 @@ onUnmounted(() => {
     <Transition name="ctx-menu">
       <div
         v-if="menuVisible"
-        class="fixed z-[1091] w-52 bg-neutral-950 border border-neutral-800 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden"
-        :style="{ left: menuX + 'px', top: menuY + 'px' }"
+        ref="menuEl"
+        class="fixed z-[1091] w-52 max-h-[calc(100vh-16px)] overflow-y-auto bg-neutral-950 border border-neutral-800 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+        :style="{ left: menuX + 'px', top: topPx + 'px' }"
       >
         <!-- Header -->
         <div class="px-3 pt-2.5 pb-2 border-b border-neutral-800/80">
