@@ -247,6 +247,39 @@ const lastSent    = ref(null)
 
 watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null })
 
+// Scroll the preset list to the entry matching the device's current pcProgram/pcMsb.
+// Uses the same progIdx formula as sendCatalogSound so bank offsets are respected.
+function scrollToCurrentProgram() {
+  const list = filteredSounds.value
+  if (!list.length || !bankConfig.value) return
+  const reg = selectedReg.value
+  if (!reg) return
+
+  const targetProg = reg.pcProgram ?? 0
+  const targetMsb  = reg.pcMsb  ?? 0
+  const pField = bankConfig.value.program_field ?? 'program'
+  const base   = bankConfig.value.program_base  ?? 0
+
+  const idx = list.findIndex(s => {
+    const progIdx = (s[pField] ?? 0) + base
+    const progNum = Math.max(0, Math.min(127, progIdx % 128))
+    const msb     = bankConfig.value.msb ? (s.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
+    return progNum === targetProg && msb === targetMsb
+  })
+  if (idx < 0) return
+
+  activeSound.value = list[idx]
+  nextTick(() => {
+    presetButtonsEl.value?.querySelectorAll('button')[idx]
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+// Auto-scroll when the sound list loads and no sound has been manually selected yet
+watch(filteredSounds, (list, prev) => {
+  if (list.length && !prev?.length && !activeSound.value) scrollToCurrentProgram()
+})
+
 // ── pcChannels persistence helper ──────────────────────────────
 function recordChannelState(ch, program, bank, soundName, category, msb = 0, lsb = 0) {
   const reg = selectedReg.value
@@ -380,10 +413,13 @@ function startScrollCCListener() {
     const cc  = event.data[1]
     const val = event.data[2]
 
+    // Always use CC#38 (NRPN Data Entry LSB) — handles lists > 127 items
+    if (cc !== 38) return
+
     if (isLearningScrollCC.value) {
       const inputId = event.target?.id
       const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
-      scrollCCMap.value = { cc, channel, device }
+      scrollCCMap.value = { cc: 38, channel, device }
       localStorage.setItem(LS_SCROLL_CC, JSON.stringify(scrollCCMap.value))
       isLearningScrollCC.value = false
       lastScrollCCVal.value = val
@@ -391,7 +427,7 @@ function startScrollCCListener() {
     }
 
     const m = scrollCCMap.value
-    if (!m || cc !== m.cc) return
+    if (!m) return
     if (m.device) {
       const inputId = event.target?.id
       const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
@@ -567,6 +603,8 @@ function recallSet(set) {
       }
     }
   })
+  // Scroll the preset list to reflect the recalled program for the selected device
+  nextTick(() => scrollToCurrentProgram())
 }
 
 function updateSet(id) {
@@ -1170,7 +1208,7 @@ function assignToPad(setId, padIdx) {
                     <div class="flex items-center justify-between mb-2 px-1">
                       <div class="flex items-center gap-2">
                         <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
-                        <span class="text-[7px] font-mono text-neutral-700 uppercase tracking-widest">· scroll or ↕ CC</span>
+                        <span class="text-[7px] font-mono text-neutral-700 uppercase tracking-widest">· scroll or NRPN/CC38</span>
                       </div>
                       <div class="flex items-center gap-1.5">
                         <span v-if="lastSent" class="flex items-center gap-1 text-[8px] font-mono text-violet-400 uppercase tracking-widest">
@@ -1179,7 +1217,7 @@ function assignToPad(setId, padIdx) {
                         <!-- MIDI Learn: learning state -->
                         <template v-if="isLearningScrollCC">
                           <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-400 text-[8px] font-black uppercase tracking-widest animate-pulse">
-                            <Radio class="w-2.5 h-2.5" />Move a CC…
+                            <Radio class="w-2.5 h-2.5" />Move CC#38…
                           </div>
                           <button @click="cancelScrollLearn" class="p-1 text-neutral-600 hover:text-neutral-400 transition-colors rounded">
                             <X class="w-3 h-3" />
@@ -1188,7 +1226,7 @@ function assignToPad(setId, padIdx) {
                         <!-- MIDI Learn: mapped state -->
                         <template v-else-if="scrollCCMap">
                           <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 text-[8px] font-black font-mono uppercase tracking-widest">
-                            <Radio class="w-2.5 h-2.5" />CC{{ scrollCCMap.cc }} CH{{ scrollCCMap.channel + 1 }}
+                            <Radio class="w-2.5 h-2.5" />NRPN/CC38 CH{{ scrollCCMap.channel + 1 }}{{ scrollCCMap.device ? ' · ' + scrollCCMap.device : '' }}
                           </div>
                           <button @click="clearScrollCC" title="Remove CC mapping" class="p-1 text-neutral-600 hover:text-red-400 transition-colors rounded">
                             <X class="w-3 h-3" />
@@ -1198,7 +1236,7 @@ function assignToPad(setId, padIdx) {
                         <button
                           v-else
                           @click="startScrollLearn"
-                          title="MIDI Learn: map a CC to scroll this list"
+                          title="MIDI Learn: move a NRPN/CC#38 knob to bind device + channel"
                           class="flex items-center gap-1 px-2 py-1 rounded-lg bg-black/40 border border-neutral-800 text-neutral-600 hover:text-orange-400 hover:border-orange-500/30 hover:bg-orange-500/10 transition-all text-[8px] font-black uppercase tracking-widest"
                         >
                           <Radio class="w-2.5 h-2.5" />MIDI
