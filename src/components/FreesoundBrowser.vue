@@ -329,15 +329,11 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="uiStore.isFreesoundBrowserOpen"
-      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-modal"
-      @click.self="uiStore.isFreesoundBrowserOpen = false"
-    >
-      <!-- Dialog shell -->
+      <!-- Dialog shell — no backdrop so AudioCapture remains interactive beneath -->
       <div
+        v-if="uiStore.isFreesoundBrowserOpen"
         class="fixed flex flex-col bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
-        :style="{ left: pos.x + 'px', top: pos.y + 'px', width: size.w + 'px', height: size.h + 'px' }"
+        :style="{ left: pos.x + 'px', top: pos.y + 'px', width: size.w + 'px', height: size.h + 'px', zIndex: 600 }"
       >
 
         <!-- ── Capture busy overlay ─────────────────────────────────── -->
@@ -870,7 +866,6 @@ onUnmounted(() => {
         </div>
 
       </div>
-    </div>
   </Teleport>
 </template>
 

@@ -1858,51 +1858,19 @@ onUnmounted(() => {
           <ListPlus class="w-3 h-3" />
           PL
         </button>
+        <button
+          @click="uiStore.isFreesoundBrowserOpen = true"
+          title="Open Freesound Browser"
+          class="shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors text-cyan-500 border-cyan-500/30 hover:bg-cyan-500/10 hover:border-cyan-500/50"
+        >
+          <Repeat class="w-3 h-3" />
+          Freesound
+        </button>
       </div>
       <div class="flex">
         <!--- Controls Left Column -->
         <div class="w-[120px] flex flex-col p-2 gap-2 border-r border-neutral-900">
-          <!-- Record / Stop / Armed -->
-          <div class="relative">
-            <span
-              v-if="mappingStore.learningParamName === 'audioCapture_record'"
-              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-10 pointer-events-none"
-            />
-            <button
-              v-if="!isRecording && !isArmed"
-              @click="handleRecordClick"
-              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
-              title="Start recording (right-click to MIDI map)"
-              :disabled="!isMonitoring"
-              :class="['w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
-                isMonitoring
-                  ? 'text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10'
-                  : 'text-neutral-700 border-neutral-800 cursor-default']"
-            >
-              <Circle class="w-3 h-3 fill-current" />
-              {{ hasBackingTrack ? 'Rec + Play' : 'Rec' }}
-            </button>
-            <button
-              v-else-if="isArmed"
-              @click="handleRecordClick"
-              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
-              title="Armed: Waiting for MIDI note. Click to cancel. Right-click to MIDI map."
-              class="w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 animate-pulse transition-colors"
-            >
-              <Zap class="w-3 h-3 fill-current" />
-              Armed...
-            </button>
-            <button
-              v-else
-              @click="handleRecordClick"
-              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
-              title="Stop recording (right-click to MIDI map)"
-              class="w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
-            >
-              <Square class="w-3 h-3 fill-current" />
-              Stop
-            </button>
-          </div>
+          
 
           <!-- MIDI Sync Toggle -->
           <button
@@ -1942,31 +1910,9 @@ onUnmounted(() => {
             />
           </button>
 
-          <!-- Playback preview -->
-          <button
-            v-if="recordedBlob && !isRecording"
-            @click="togglePlay"
-            title="Play/Pause recording"
-            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon transition-colors"
-          >
-            <Pause v-if="isPlaying" class="w-3 h-3" />
-            <Play v-else class="w-3 h-3" />
-            {{ isPlaying ? 'Pause' : 'Play' }}
-          </button>
+          
 
-          <!-- Export MP3 -->
-          <button
-            @click="handleExportMp3"
-            :disabled="!recordedBlob || isExportingMp3"
-            title="Export as MP3 (192kbps)"
-            :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
-              recordedBlob && !isExportingMp3
-                ? 'text-synth-neon border-synth-neon/30 hover:border-synth-neon/50 hover:text-white'
-                : 'text-neutral-700 border-neutral-800 cursor-default']"
-          >
-            <FileAudio class="w-3 h-3" />
-            {{ isExportingMp3 ? 'MP3…' : 'MP3' }}
-          </button>
+         
 
           <!-- Add to Playlist manually -->
           <div v-if="recordedBlob && !isRecording" class="flex items-center border border-neutral-700 rounded overflow-hidden">
@@ -2092,6 +2038,20 @@ onUnmounted(() => {
             </Transition>
           </Teleport>
 
+           <!-- Export MP3 -->
+          <button
+            @click="handleExportMp3"
+            :disabled="!recordedBlob || isExportingMp3"
+            title="Export as MP3 (192kbps)"
+            :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+              recordedBlob && !isExportingMp3
+                ? 'text-synth-neon border-synth-neon/30 hover:border-synth-neon/50 hover:text-white'
+                : 'text-neutral-700 border-neutral-800 cursor-default']"
+          >
+            <FileAudio class="w-3 h-3" />
+            {{ isExportingMp3 ? 'MP3…' : 'MP3' }}
+          </button>
+
           <!-- Save (original format / WAV cropped) -->
           <button
             @click="handleDownload"
@@ -2127,6 +2087,60 @@ onUnmounted(() => {
           >
             <RotateCcw class="w-3 h-3" />
             Reset
+          </button>
+
+          <!-- Record / Stop / Armed -->
+          <div class="relative mt-3">
+            <span
+              v-if="mappingStore.learningParamName === 'audioCapture_record'"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-10 pointer-events-none"
+            />
+            <button
+              v-if="!isRecording && !isArmed"
+              @click="handleRecordClick"
+              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
+              title="Start recording (right-click to MIDI map)"
+              :disabled="!isMonitoring"
+              :class="['w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+                isMonitoring
+                  ? 'text-white/40 border-orange-500/30 hover:bg-orange-500/10'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+            >
+              <Circle class="w-3 h-3 fill-current" />
+              {{ hasBackingTrack ? 'Rec + Play' : 'Rec' }}
+            </button>
+            <button
+              v-else-if="isArmed"
+              @click="handleRecordClick"
+              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
+              title="Armed: Waiting for MIDI note. Click to cancel. Right-click to MIDI map."
+              class="w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 animate-pulse transition-colors"
+            >
+              <Zap class="w-3 h-3 fill-current" />
+              Armed...
+            </button>
+            <button
+              v-else
+              @click="handleRecordClick"
+              @contextmenu.prevent="openMenu($event, { name: 'audioCapture_record', label: 'Record' })"
+              title="Stop recording (right-click to MIDI map)"
+              class="w-full flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+            >
+              <Square class="w-3 h-3 fill-current" />
+              Stop
+            </button>
+          </div>
+
+          <!-- Playback preview -->
+          <button
+            v-if="recordedBlob && !isRecording"
+            @click="togglePlay"
+            title="Play/Pause recording"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-white bg-synth-neon/20 hover:bg-synth-neon/60 transition-colors"
+          >
+            <Pause v-if="isPlaying" class="w-3 h-3" />
+            <Play v-else class="w-3 h-3" />
+            {{ isPlaying ? 'Pause' : 'Play' }}
           </button>
         </div>
         <!-- Right Column: Timeline & Waveform canvas -->

@@ -167,7 +167,7 @@ export const useUiStore = defineStore('ui', () => {
 
   // These modals coexist freely — they never trigger close-others and are
   // never closed when another modal opens.
-  const MODAL_EXCLUDED = new Set(['lfo1', 'lfo2', 'velocityMap', 'arp', 'history', 'types', 'sequencer'])
+  const MODAL_EXCLUDED = new Set(['lfo1', 'lfo2', 'velocityMap', 'arp', 'history', 'types', 'sequencer', 'freesoundBrowser'])
 
   // When a non-excluded modal opens, close all other non-excluded modals
   watch(openModalKeys, (newKeys, oldKeys) => {
