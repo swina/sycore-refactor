@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { Layers, X, Minus, Clock, Plus, Square } from 'lucide-vue-next'
+import { Layers, X, Minus, Clock, Plus, Square, Circle } from 'lucide-vue-next'
 import { useUiStore }           from '@/stores/useUiStore'
 import { useMidiStore }         from '@/stores/useMidiStore'
 import { useArpStore }          from '@/stores/useArpStore'
@@ -51,6 +51,18 @@ const pending = ref(Array(PAD_COUNT).fill(false))
 
 const syncEnabled = ref(localStorage.getItem('S1_LM_SYNC') !== '0')
 watch(syncEnabled, v => localStorage.setItem('S1_LM_SYNC', v ? '1' : '0'))
+
+// ── Capture recording integration ─────────────────────────────────
+const lmRecSync = ref(localStorage.getItem('S1_LM_REC_SYNC') === '1')
+watch(lmRecSync, v => localStorage.setItem('S1_LM_REC_SYNC', v ? '1' : '0'))
+
+function manualStartRec() {
+  window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
+}
+
+function manualStopRec() {
+  window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+}
 
 function _savePads() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(pads.value)) } catch {}
@@ -159,7 +171,13 @@ async function _startPad(idx) {
     midiStore.setBpm(pad.bpm)
   }
 
-  if (!_master) _setMaster(idx)
+  const isFirstPad = !_master
+  if (isFirstPad) {
+    _setMaster(idx)
+    if (lmRecSync.value) {
+      window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
+    }
+  }
 }
 
 function _stopPad(idx) {
@@ -205,8 +223,12 @@ function togglePad(idx) {
 }
 
 function stopAll() {
+  const wasLive = _anyLive()
   for (let i = 0; i < PAD_COUNT; i++) _stopPad(i)
   _master = null
+  if (wasLive && lmRecSync.value) {
+    window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+  }
 }
 
 // ── File import ───────────────────────────────────────────────────
@@ -288,10 +310,20 @@ function _startMidiListener() {
     const mapping = mappingStore.midiMappings[key]
     if (!mapping) return
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
-    if (!paramName?.startsWith('lm_pad_')) return
+    if (!paramName) return
 
-    const idx = parseInt(paramName.slice('lm_pad_'.length))
-    if (!isNaN(idx) && idx >= 0 && idx < PAD_COUNT) togglePad(idx)
+    if (paramName.startsWith('lm_pad_')) {
+      const idx = parseInt(paramName.slice('lm_pad_'.length))
+      if (!isNaN(idx) && idx >= 0 && idx < PAD_COUNT) togglePad(idx)
+    } else if (paramName === 'lm_sync') {
+      syncEnabled.value = !syncEnabled.value
+    } else if (paramName === 'lm_rec_sync') {
+      lmRecSync.value = !lmRecSync.value
+    } else if (paramName === 'lm_rec') {
+      uiStore.isCaptureRecording ? manualStopRec() : manualStartRec()
+    } else if (paramName === 'lm_stop_all') {
+      stopAll()
+    }
   })
 }
 
@@ -346,29 +378,73 @@ onUnmounted(() => {
 
         <div class="flex items-center gap-2 pointer-events-auto">
           <!-- Sync toggle -->
-          <button
-            @mousedown.stop
-            @click="syncEnabled = !syncEnabled"
-            :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
-              syncEnabled
-                ? 'bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-300'
-                : 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300']"
-            title="Sync: new pads start at master loop boundary"
-          >
-            <Clock class="w-3 h-3" />
-            Sync {{ syncEnabled ? 'ON' : 'OFF' }}
-          </button>
+          <div class="relative">
+            <button
+              @mousedown.stop
+              @click="syncEnabled = !syncEnabled"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_sync', label: 'Loop Machine: Sync' })"
+              :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+                syncEnabled
+                  ? 'bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-300'
+                  : 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300']"
+              title="Sync: new pads start at master loop boundary"
+            >
+              <Clock class="w-3 h-3" />
+              Sync {{ syncEnabled ? 'ON' : 'OFF' }}
+            </button>
+            <span v-if="mappingStore.learningParamName === 'lm_sync'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
+
+          <!-- Sync REC toggle -->
+          <div class="relative">
+            <button
+              @mousedown.stop
+              @click="lmRecSync = !lmRecSync"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_rec_sync', label: 'Loop Machine: Rec Sync' })"
+              :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+                lmRecSync
+                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+                  : 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300']"
+              title="Auto-start Audio Capture recording when first pad fires; auto-stop on Stop All"
+            >
+              <Circle class="w-3 h-3" :class="lmRecSync && uiStore.isCaptureRecording ? 'fill-rose-400 text-rose-400 animate-pulse' : ''" />
+              REC SYNC
+            </button>
+            <span v-if="mappingStore.learningParamName === 'lm_rec_sync'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
+
+          <!-- Manual REC button -->
+          <div class="relative">
+            <button
+              @mousedown.stop
+              @click="uiStore.isCaptureRecording ? manualStopRec() : manualStartRec()"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_rec', label: 'Loop Machine: Rec / Stop Rec' })"
+              :class="['flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+                uiStore.isCaptureRecording
+                  ? 'bg-rose-500/20 border-rose-400/60 text-rose-300 animate-pulse'
+                  : 'border-neutral-700 text-neutral-500 hover:border-rose-500/50 hover:text-rose-400']"
+              :title="uiStore.isCaptureRecording ? 'Stop Capture recording' : 'Start Capture recording now'"
+            >
+              <Circle class="w-2.5 h-2.5" :class="uiStore.isCaptureRecording ? 'fill-rose-400' : ''" />
+              {{ uiStore.isCaptureRecording ? 'Stop' : 'Rec' }}
+            </button>
+            <span v-if="mappingStore.learningParamName === 'lm_rec'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
 
           <!-- Stop all -->
-          <button
-            @mousedown.stop
-            @click="stopAll"
-            :disabled="!active.some(Boolean) && !pending.some(Boolean)"
-            class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-red-500/50 hover:text-red-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
-            title="Stop all loops"
-          >
-            <Square class="w-3 h-3 fill-current" /> Stop All
-          </button>
+          <div class="relative">
+            <button
+              @mousedown.stop
+              @click="stopAll"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_stop_all', label: 'Loop Machine: Stop All' })"
+              :disabled="!active.some(Boolean) && !pending.some(Boolean)"
+              class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-red-500/50 hover:text-red-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
+              title="Stop all loops"
+            >
+              <Square class="w-3 h-3 fill-current" /> Stop All
+            </button>
+            <span v-if="mappingStore.learningParamName === 'lm_stop_all'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
 
           <button @mousedown.stop @click="toggleMinimize" title="Minimize"
             class="p-1.5 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
@@ -394,10 +470,10 @@ onUnmounted(() => {
               !pad
                 ? 'border-dashed border-neutral-800 hover:border-neutral-600 hover:bg-neutral-900/60'
                 : active[idx]
-                  ? 'border-amber-400 bg-amber-500/10 shadow-[0_0_14px_rgba(232,121,249,0.25)]'
+                  ? 'border-amber-400 bg-amber-500/40 shadow-[0_0_14px_rgba(232,121,249,0.25)]'
                   : pending[idx]
                     ? 'border-amber-400/70 bg-amber-500/10'
-                    : 'border-neutral-700 bg-neutral-900/40 hover:border-amber-500/50 hover:bg-amber-500/5',
+                    : 'border-neutral-700 bg-amber-500/10 hover:border-amber-500/50 hover:bg-amber-500/5',
             ]"
           >
             <!-- Pad number badge -->
@@ -429,11 +505,11 @@ onUnmounted(() => {
             <!-- Loaded pad -->
             <template v-else>
               <span
-                class="text-[9px] font-bold text-center leading-tight px-1 break-all line-clamp-2"
+                class="text-[10px] font-bold text-center leading-tight px-1 break-all line-clamp-2"
                 :class="active[idx] ? 'text-fuchsia-200' : 'text-neutral-300'"
               >{{ pad.label }}</span>
               <div class="flex items-center gap-1 mt-1 flex-wrap justify-center">
-                <span v-if="pad.duration" class="text-[11px] font-mono text-neutral-600">{{ formatTime(pad.duration) }}</span>
+                <span v-if="pad.duration" class="text-[11px] font-mono text-neutral-400">{{ formatTime(pad.duration) }}</span>
                 <span v-if="pad.bpm" class="text-[11px] font-black text-violet-400/80 font-mono">{{ pad.bpm }}bpm</span>
               </div>
             </template>
