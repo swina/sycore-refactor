@@ -96,18 +96,21 @@ export const LaunchpadMiniMK1: ControllerProfile = {
             });
         }
 
-        // 3. MIDI-Learn param mappings for lpp_* pads (lpp_set_, lpp_devpc_, lpp_bt_)
+        // 3. MIDI-Learn param mappings for lpp_* and lm_* pads
         // green (60) = active / ON, amber (51) = inactive / OFF
         if (state.midiMappings) {
             Object.values(state.midiMappings).forEach((m: any) => {
                 if (
                     typeof m !== 'object' ||
                     m.note == null ||
-                    !m.paramName?.startsWith('lpp_') ||
                     !m.device?.toLowerCase().includes('launchpad')
                 ) return;
-                const isActive = state.getActionStatus(m.paramName);
-                send([noteOnStatus, m.note, isActive ? 60 : 51]);
+                const paramName: string = m.paramName ?? ''
+                if (!paramName.startsWith('lpp_') && !paramName.startsWith('lm_')) return;
+                const isActive = state.getActionStatus(paramName);
+                const onColor  = m.feedbackOn  ?? 60
+                const offColor = m.feedbackOff ?? 51
+                send([noteOnStatus, m.note, isActive ? onColor : offColor]);
             });
         }
     }

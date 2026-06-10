@@ -233,6 +233,18 @@ export function useMidiCCListener() {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: shouldPlay } }))
       return
     }
+    if (fieldName === 'save_preset') {
+      if (fromNote || val > 0) presetStore.savePreset()
+      return
+    }
+    if (fieldName === 'regenerate') {
+      if (fromNote || val > 0) presetStore.generate(true)
+      return
+    }
+    if (fieldName === 'toggle_sequencer') {
+      if (fromNote || val > 0) uiStore.isSequencerOpen = !uiStore.isSequencerOpen
+      return
+    }
     if (fieldName === 'ui_panel_collapse') {
       uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on
       return

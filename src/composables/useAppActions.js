@@ -31,11 +31,17 @@ export function useAppActions() {
       case 'last_preset': if (ccVal > 63) presetStore.navigateHistory('last'); break
 
       case 'new_sound':
-      case 'generate': if (ccVal > 63) presetStore.generate(false); break
-      case 'regenerate': if (ccVal > 63) presetStore.generate(true); break
+      case 'generate':
+        if (!presetStore.isGenerating) presetStore.generate(false).catch(err => console.error('[AppActions] generate failed', err))
+        break
+      case 'regenerate':
+        if (!presetStore.isGenerating) presetStore.generate(true).catch(err => console.error('[AppActions] regenerate failed', err))
+        break
 
       case 'save_preset':
-        if (ccVal > 63 && presetStore.showResults) presetStore.savePreset(); break
+        if (ccVal >= 0 && presetStore.lastPreset && !presetStore.isSaving)
+          presetStore.savePreset().catch(err => { if (err?.message !== 'slot_limit') console.error('[AppActions] save_preset failed', err) })
+        break
 
       case 'select_sound_a':
         if (ccVal > 63) presetStore.selectEngine('A'); break
@@ -163,7 +169,7 @@ export function useAppActions() {
       }
 
       case 'toggle_sequencer':
-        if (ccVal > 63) uiStore.isSequencerOpen = !uiStore.isSequencerOpen;
+        uiStore.isSequencerOpen = !uiStore.isSequencerOpen;
         break
       case 'seq_play':
         if (ccVal > 63) window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }));

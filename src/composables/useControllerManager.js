@@ -7,6 +7,7 @@ import { midiService }     from '@/core/midi/MidiService'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useAppActions }   from './useAppActions'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { loopMachineState } from '@/core/state/loopMachineState'
 
 // Profiles
 import { LaunchpadMiniMK1 } from '../core/controllers/profiles/LaunchpadMiniMK1'
@@ -105,6 +106,13 @@ export function useControllerManager() {
               const idx = parseInt(action.slice('lpp_loop_'.length), 10)
               return livePadStore.loopActivePads[idx] === true
             }
+            if (action.startsWith('lm_pad_')) {
+              const idx = parseInt(action.slice('lm_pad_'.length), 10)
+              return loopMachineState.activePads[idx] === true
+            }
+            if (action === 'lm_sync') return loopMachineState.syncEnabled
+            if (action === 'lm_rec_sync') return loopMachineState.recSyncEnabled
+            if (action === 'lm_rec') return uiStore.isCaptureRecording ?? false
             return false
         }
       },
@@ -302,11 +310,14 @@ export function useControllerManager() {
     })
   }
 
+  const _onLmStateChanged = () => updateFeedback()
+
   onMounted(() => {
     log('Mounted')
     // Set filter immediately
     midiService.setIngressFilter(handleIngress)
-    
+    window.addEventListener('lm-state-changed', _onLmStateChanged)
+
     // Force one initial check if already ready
     if (midiStore.midiReady) {
       log('MIDI already ready on mount, triggering setup')
@@ -352,6 +363,7 @@ export function useControllerManager() {
 
   onUnmounted(() => {
     log('Unmounted')
+    window.removeEventListener('lm-state-changed', _onLmStateChanged)
     if (stopWatch) stopWatch()
     midiService.setIngressFilter(null)
     initializedControllerIds.clear()

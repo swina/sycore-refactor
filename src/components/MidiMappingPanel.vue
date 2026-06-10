@@ -18,11 +18,26 @@ const targetParam  = ref('')
 const lastRawData  = ref('')
 const learnDevice  = ref('')
 
+const ACTION_PARAMS = [
+  { name: 'save_preset',      label: 'Save Preset',       category: 'ACTIONS' },
+  { name: 'regenerate',       label: 'Regenerate Sound',  category: 'ACTIONS' },
+  { name: 'toggle_sequencer', label: 'Toggle Sequencer',  category: 'ACTIONS' },
+  { name: 'seq_play_stop',    label: 'Seq Play / Stop',   category: 'ACTIONS' },
+  { name: 'engine_ab',        label: 'Engine A/B',        category: 'ACTIONS' },
+  { name: 'arp_active',       label: 'Arp On/Off',        category: 'ACTIONS' },
+  { name: 'arp_hold',         label: 'Arp Hold',          category: 'ACTIONS' },
+  { name: 'lfo1_active',      label: 'LFO 1 On/Off',      category: 'ACTIONS' },
+  { name: 'lfo2_active',      label: 'LFO 2 On/Off',      category: 'ACTIONS' },
+  { name: 'vel_active',       label: 'Velocity Mod On/Off', category: 'ACTIONS' },
+  { name: 'ui_panel_collapse',label: 'Panel Collapse',    category: 'ACTIONS' },
+  { name: 'ui_cat_grid',      label: 'Panel Tab: Grid',   category: 'ACTIONS' },
+]
+
 // Combine S-1 hardware parameters with "registered" controllers from the database
 const availableParams = computed(() => {
   const s1Params = Object.values(S1_CC_MAP).map(name => ({
     name,
-    label: name.replace(/([A-Z])/g, ' $1').toUpperCase(), // Simple label generation for S1 constants
+    label: name.replace(/([A-Z])/g, ' $1').toUpperCase(),
     category: 'S-1 HARDWARE'
   }))
 
@@ -32,11 +47,11 @@ const availableParams = computed(() => {
     category: c.category || 'REGISTERED'
   }))
 
-  // Merge and remove duplicates by name
-  const combined = [...s1Params, ...registeredParams]
+  // Actions first, then hardware + registered (deduplicated)
+  const combined = [...ACTION_PARAMS, ...s1Params, ...registeredParams]
   const unique = []
   const names = new Set()
-  
+
   combined.forEach(p => {
     if (!names.has(p.name)) {
       names.add(p.name)
@@ -44,7 +59,7 @@ const availableParams = computed(() => {
     }
   })
 
-  return unique.sort((a, b) => a.label.localeCompare(b.label))
+  return unique
 })
 
 // Use centralized raw listener for learning
@@ -216,9 +231,21 @@ function confirmLearn() {
                 class="w-full bg-black border border-neutral-700 rounded-lg p-3 text-neutral-300 font-mono text-sm focus:border-synth-neon outline-none"
               >
                 <option value="" disabled>Select a parameter...</option>
-                <option v-for="p in availableParams" :key="p.name" :value="p.name">
-                  {{ p.label }}
-                </option>
+                <optgroup label="── ACTIONS ──">
+                  <option v-for="p in availableParams.filter(p => p.category === 'ACTIONS')" :key="p.name" :value="p.name">
+                    {{ p.label }}
+                  </option>
+                </optgroup>
+                <optgroup label="── S-1 HARDWARE ──">
+                  <option v-for="p in availableParams.filter(p => p.category === 'S-1 HARDWARE')" :key="p.name" :value="p.name">
+                    {{ p.label }}
+                  </option>
+                </optgroup>
+                <optgroup label="── REGISTERED ──">
+                  <option v-for="p in availableParams.filter(p => p.category !== 'ACTIONS' && p.category !== 'S-1 HARDWARE')" :key="p.name" :value="p.name">
+                    {{ p.label }}
+                  </option>
+                </optgroup>
               </select>
               <p class="text-[8px] text-neutral-600 text-right uppercase font-mono">{{ availableParams.length }} parameters available</p>
             </div>

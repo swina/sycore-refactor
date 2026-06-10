@@ -9,6 +9,7 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useFreesoundCache }    from '@/composables/useFreesoundCache'
 import { useMidiContextMenu }   from '@/composables/useMidiContextMenu'
 import { midiService }          from '@/core/midi/MidiService'
+import { loopMachineState }     from '@/core/state/loopMachineState'
 
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
@@ -50,11 +51,25 @@ const active  = ref(Array(PAD_COUNT).fill(false))
 const pending = ref(Array(PAD_COUNT).fill(false))
 
 const syncEnabled = ref(localStorage.getItem('S1_LM_SYNC') !== '0')
-watch(syncEnabled, v => localStorage.setItem('S1_LM_SYNC', v ? '1' : '0'))
+watch(syncEnabled, v => {
+  localStorage.setItem('S1_LM_SYNC', v ? '1' : '0')
+  loopMachineState.syncEnabled = v
+  window.dispatchEvent(new CustomEvent('lm-state-changed'))
+})
 
 // ── Capture recording integration ─────────────────────────────────
 const lmRecSync = ref(localStorage.getItem('S1_LM_REC_SYNC') === '1')
-watch(lmRecSync, v => localStorage.setItem('S1_LM_REC_SYNC', v ? '1' : '0'))
+watch(lmRecSync, v => {
+  localStorage.setItem('S1_LM_REC_SYNC', v ? '1' : '0')
+  loopMachineState.recSyncEnabled = v
+  window.dispatchEvent(new CustomEvent('lm-state-changed'))
+})
+
+// Sync active pads to shared state so Launchpad LEDs can reflect them
+watch(active, v => {
+  loopMachineState.activePads = [...v]
+  window.dispatchEvent(new CustomEvent('lm-state-changed'))
+}, { deep: true })
 
 function manualStartRec() {
   window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))

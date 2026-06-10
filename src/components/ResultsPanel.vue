@@ -526,8 +526,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
           <div class="flex items-center gap-2">
             <!-- Save -->
             <button v-if="authStore.user" @click="handleSavePreset" :disabled="presetStore.isSaving"
-              class="w-10 h-10 rounded-full border border-emerald-500/30 flex items-center justify-center bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/30 hover:border-emerald-500 transition-all active:scale-90"
+              @contextmenu.prevent="openMenu($event, { name: 'save_preset', label: 'Save Preset' })"
+              class="relative w-10 h-10 rounded-full border border-emerald-500/30 flex items-center justify-center bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/30 hover:border-emerald-500 transition-all active:scale-90"
               title="Save Preset">
+              <span v-if="mappingStore.learningParamName === 'save_preset'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
               <Save class="w-5 h-5" />
             </button>
 
@@ -547,8 +549,10 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
             <!-- Regenerate -->
             <button @click="presetStore.generate(true)" :disabled="presetStore.isGenerating"
-              class="w-10 h-10 rounded-full bg-synth-neon text-black flex items-center justify-center shadow-[0_0_15px_rgba(0,255,136,0.4)] hover:bg-white transition-all active:scale-90 disabled:opacity-50"
+              @contextmenu.prevent="openMenu($event, { name: 'regenerate', label: 'Regenerate' })"
+              class="relative w-10 h-10 rounded-full bg-synth-neon text-black flex items-center justify-center shadow-[0_0_15px_rgba(0,255,136,0.4)] hover:bg-white transition-all active:scale-90 disabled:opacity-50"
               title="Regenerate">
+              <span v-if="mappingStore.learningParamName === 'regenerate'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
               <RefreshCw :class="['w-5 h-5', presetStore.isGenerating ? 'animate-spin' : '']" />
             </button>
 
@@ -577,13 +581,15 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
 
             <!-- Sequencer -->
             <button @click="uiStore.isSequencerOpen = !uiStore.isSequencerOpen"
-              :class="['w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 shadow-lg',
+              @contextmenu.prevent="openMenu($event, { name: 'toggle_sequencer', label: 'Toggle Sequencer' })"
+              :class="['relative w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 shadow-lg',
                 uiStore.isSequencerOpen
                   ? 'bg-amber-500/20 text-amber-400 border-amber-500 shadow-amber-500/20'
                   : hasLinkedSequence
                     ? 'bg-violet-600/20 text-violet-400 border-violet-500 shadow-violet-500/20'
                     : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500']"
               title="Toggle Sequencer">
+              <span v-if="mappingStore.learningParamName === 'toggle_sequencer'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
               <ListMusic class="w-5 h-5" />
             </button>
 
