@@ -84,7 +84,7 @@ export default defineConfig({
         target: 'https://freesound.org/apiv2',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/freesound-api/, ''),
-        secure: true,
+        secure: false,
       },
     },
   },

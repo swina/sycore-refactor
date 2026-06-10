@@ -3,7 +3,8 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import {
   Search, Play, Pause, Plus, Loader2, Music2,
   ChevronLeft, ChevronRight, Repeat, BadgeCheck, X,
-  Download, HardDrive, Trash2, FileAudio, KeyRound, DatabaseZap
+  Download, HardDrive, Trash2, FileAudio, KeyRound, DatabaseZap,
+  Tag, ChevronDown,
 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -27,10 +28,40 @@ const { isDownloaded, isDownloading, downloadSound, deleteCache, getCachedUrl, g
 
 const {
   query, minDur, maxDur, cc0Only,
+  category, subcategory, selectedTags,
   results, totalCount, isLoading, error,
   page, nextUrl, prevUrl,
   doSearch, onNext, onPrev,
 } = useFreesoundBrowserState()
+
+// ── Advanced search constants ─────────────────────────────────────
+const CATEGORIES = ['Sound effects', 'Music', 'Instrument samples', 'Soundscapes', 'Speech']
+const MUSIC_SUBCATEGORIES = ['Solo instrument', 'Solo percussion', 'Multiple instruments', 'Other']
+const SOUND_TAGS = [
+  'loop', 'drum', 'ambient', 'synth', 'music', 'industrial', 'soundtrack', 'samples',
+  'underground', 'beat', 'bass', 'dark', 'drums', 'electronic', 'weird', 'loopable',
+  'alien', 'piano', 'noise', 'guitar', 'percussion', 'dance', 'synthesizer', 'electro',
+  'loops', 'horror', 'techno', 'sci-fi', 'free', 'melody', 'sample', 'house',
+  'reverb', 'rhythm', 'glitch', 'games', 'effect sound', 'multisample', 'single-note',
+  'experimental', 'cinematic', 'drumloop', 'cyberpunk', 'trance', 'drum-loop',
+]
+
+const tagsOpen = ref(false)
+
+function toggleCategory(cat) {
+  if (category.value === cat) { category.value = ''; subcategory.value = '' }
+  else { category.value = cat; if (cat !== 'Music') subcategory.value = '' }
+}
+
+function toggleSubcategory(sub) {
+  subcategory.value = subcategory.value === sub ? '' : sub
+}
+
+function toggleTag(tag) {
+  const idx = selectedTags.value.indexOf(tag)
+  if (idx >= 0) selectedTags.value.splice(idx, 1)
+  else selectedTags.value.push(tag)
+}
 
 // ── Preview audio ──────────────────────────────────────────────────
 const previewAudio   = new Audio()
@@ -119,12 +150,13 @@ function openPadPicker(sound) {
   loopPadsSnapshot.value = readLoopPads()
   pickingPadFor.value    = sound
   pendingPadSlot.value   = null
-  pendingBpm.value       = ''
+  pendingBpm.value       = sound.bpm != null
+    ? String(sound.bpm)
+    : midiStore.currentBpm > 0 ? String(midiStore.currentBpm) : ''
 }
 
 function selectPadSlot(padIdx) {
   pendingPadSlot.value = padIdx
-  pendingBpm.value     = ''
   nextTick(() => bpmInput.value?.focus())
 }
 
@@ -392,6 +424,69 @@ onUnmounted(() => {
             <span v-if="localOnly" class="text-[9px] text-neutral-600 font-mono ml-auto">
               {{ filteredCachedSounds.length }} cached
             </span>
+          </div>
+
+          <!-- Category row -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0 mr-0.5">Type</span>
+            <button
+              v-for="cat in CATEGORIES" :key="cat"
+              @click="toggleCategory(cat)"
+              :class="['px-2 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest transition-all',
+                category === cat
+                  ? 'bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-400'
+                  : 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-400']"
+            >{{ cat }}</button>
+          </div>
+
+          <!-- Music subcategory row -->
+          <Transition name="fade-down">
+            <div v-if="category === 'Music'" class="flex items-center gap-1.5 flex-wrap pl-3">
+              <span class="text-[9px] text-neutral-600 shrink-0">↳</span>
+              <button
+                v-for="sub in MUSIC_SUBCATEGORIES" :key="sub"
+                @click="toggleSubcategory(sub)"
+                :class="['px-2 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest transition-all',
+                  subcategory === sub
+                    ? 'bg-fuchsia-500/10 border-fuchsia-400/30 text-fuchsia-300'
+                    : 'border-neutral-800 text-neutral-600 hover:border-neutral-600 hover:text-neutral-400']"
+              >{{ sub }}</button>
+            </div>
+          </Transition>
+
+          <!-- Tags row -->
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <button
+                @click="tagsOpen = !tagsOpen"
+                :class="['flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-black uppercase tracking-widest transition-all',
+                  selectedTags.length > 0
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                    : 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-400']"
+              >
+                <Tag class="w-2.5 h-2.5" />
+                Tags
+                <span v-if="selectedTags.length > 0" class="text-amber-300">{{ selectedTags.length }}</span>
+                <ChevronDown :class="['w-2.5 h-2.5 transition-transform duration-200', tagsOpen ? 'rotate-180' : '']" />
+              </button>
+              <button
+                v-if="selectedTags.length > 0"
+                @click="selectedTags.splice(0)"
+                class="text-[8px] text-neutral-600 hover:text-neutral-400 transition-colors"
+              >Clear</button>
+            </div>
+            <Transition name="fade-down">
+              <div v-if="tagsOpen" class="flex flex-wrap gap-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                <button
+                  v-for="tag in SOUND_TAGS" :key="tag"
+                  @click="toggleTag(tag)"
+                  :class="['px-1.5 py-0.5 rounded border text-[10px] font-mono transition-all',
+                    selectedTags.includes(tag)
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                      : 'border-neutral-800 text-neutral-600 hover:border-neutral-600 hover:text-neutral-400']"
+                >{{ tag }}</button>
+              </div>
+            </Transition>
           </div>
 
           <!-- Error -->

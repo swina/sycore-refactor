@@ -44,11 +44,15 @@ function mapSound(s) {
 
 async function fetchJson(url) {
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`Freesound API error ${res.status}`)
+  if (!res.ok) {
+    let detail = ''
+    try { const j = await res.json(); detail = j.detail || j.error || '' } catch {}
+    throw new Error(`Freesound API error ${res.status}${detail ? ': ' + detail : ''}`)
+  }
   return res.json()
 }
 
-export async function searchSounds(query, { page = 1, pageSize = 15, minDuration, maxDuration, cc0Only = false } = {}) {
+export async function searchSounds(query, { page = 1, pageSize = 15, minDuration, maxDuration, cc0Only = false, category = '', subcategory = '', tags = [] } = {}) {
   const token = getToken()
   if (!token) throw new Error('Freesound API key not configured')
 
@@ -57,6 +61,29 @@ export async function searchSounds(query, { page = 1, pageSize = 15, minDuration
   else if (minDuration != null) filters.push(`duration:[${minDuration} TO *]`)
   else if (maxDuration != null) filters.push(`duration:[* TO ${maxDuration}]`)
   if (cc0Only) filters.push(`license:"http://creativecommons.org/publicdomain/zero/1.0/"`)
+  if (category) {
+    // Freesound has no `category` filter field; map UI categories to known tags
+    const CAT_TAG = {
+      'Sound effects':      'sound-effect',
+      'Music':              'music',
+      'Instrument samples': 'instrument',
+      'Soundscapes':        'soundscape',
+      'Speech':             'speech',
+    }
+    const catTag = CAT_TAG[category]
+    if (catTag) filters.push(`tag:${catTag}`)
+    if (subcategory) {
+      const SUB_TAG = {
+        'Solo instrument':      'solo',
+        'Solo percussion':      'percussion',
+        'Multiple instruments': 'ensemble',
+        'Other':                null,
+      }
+      const subTag = SUB_TAG[subcategory]
+      if (subTag) filters.push(`tag:${subTag}`)
+    }
+  }
+  if (tags && tags.length > 0) tags.forEach(t => filters.push(t.includes(' ') ? `tag:"${t}"` : `tag:${t}`))
   const filter = filters.join(' ')
 
   const params = new URLSearchParams({

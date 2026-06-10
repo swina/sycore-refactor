@@ -2,17 +2,20 @@
 import { ref } from 'vue'
 import { searchSounds, fetchPage } from './useFreesound'
 
-const query      = ref('')
-const minDur     = ref('')
-const maxDur     = ref('')
-const cc0Only    = ref(false)
-const results    = ref([])
-const totalCount = ref(0)
-const isLoading  = ref(false)
-const error      = ref('')
-const page       = ref(1)
-const nextUrl    = ref(null)
-const prevUrl    = ref(null)
+const query        = ref('')
+const minDur       = ref('')
+const maxDur       = ref('')
+const cc0Only      = ref(false)
+const category     = ref('')
+const subcategory  = ref('')
+const selectedTags = ref([])
+const results      = ref([])
+const totalCount   = ref(0)
+const isLoading    = ref(false)
+const error        = ref('')
+const page         = ref(1)
+const nextUrl      = ref(null)
+const prevUrl      = ref(null)
 
 async function doSearch(url = null) {
   error.value = ''
@@ -30,6 +33,9 @@ async function doSearch(url = null) {
         minDuration: minDur.value !== '' ? Number(minDur.value) : undefined,
         maxDuration: maxDur.value !== '' ? Number(maxDur.value) : undefined,
         cc0Only: cc0Only.value,
+        category: category.value,
+        subcategory: subcategory.value,
+        tags: selectedTags.value,
       })
     }
     results.value    = data.results
@@ -56,5 +62,11 @@ function onPrev() {
 }
 
 export function useFreesoundBrowserState() {
-  return { query, minDur, maxDur, cc0Only, results, totalCount, isLoading, error, page, nextUrl, prevUrl, doSearch, onNext, onPrev }
+  return {
+    query, minDur, maxDur, cc0Only,
+    category, subcategory, selectedTags,
+    results, totalCount, isLoading, error,
+    page, nextUrl, prevUrl,
+    doSearch, onNext, onPrev,
+  }
 }
