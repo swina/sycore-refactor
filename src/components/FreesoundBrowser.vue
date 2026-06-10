@@ -859,7 +859,7 @@ onUnmounted(() => {
           <div v-if="results.length > 0" class="flex flex-col gap-1 p-4">
             <div
               v-for="sound in results" :key="sound.freesoundId"
-              class="group flex items-center gap-2 px-2 py-2 rounded-lg bg-neutral-950/60 border border-neutral-800 hover:border-neutral-700 transition-colors"
+              class="group flex items-center gap-2 px-2 py-2 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors" :class="previewingId === sound.freesoundId && previewPlaying ? 'bg-cyan-500/20' :'bg-neutral-950/60 '"
             >
               <!-- Preview button -->
               <button
@@ -876,10 +876,10 @@ onUnmounted(() => {
 
               <!-- Info -->
               <div class="flex-1 min-w-0">
-                <div class="text-[11px] font-bold text-neutral-200 truncate leading-none mb-0.5">{{ sound.label }}</div>
+                <div class="text-[11px] font-bold text-cyan-400 truncate leading-none mb-0.5">{{ sound.label }}</div>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-[9px] text-neutral-500 italic">{{ sound.author }}</span>
-                  <span class="text-[9px] font-mono text-neutral-600 bg-neutral-800 px-1 rounded">{{ formatTime(sound.duration) }}</span>
+                  <span class="text-[9px] text-neutral-200 italic">{{ sound.author }}</span>
+                  <span class="text-[9px] font-mono text-neutral-300 bg-neutral-800 px-1 rounded">{{ formatTime(sound.duration) }}</span>
                   <span v-if="sound.bpm"
                     class="text-[8px] font-black px-1 py-px rounded bg-violet-500/10 border border-violet-500/20 text-violet-400 font-mono tracking-tight">{{ sound.bpm }} BPM</span>
                   <span v-if="sound.isLoop"
@@ -887,7 +887,7 @@ onUnmounted(() => {
                   <span v-if="sound.license?.includes('zero')"
                     class="text-[7px] font-black px-1 py-px rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 uppercase tracking-widest">CC0</span>
                   <span v-for="tag in (sound.tags || []).slice(0, 3)" :key="tag"
-                    class="text-[8px] px-1 py-px rounded bg-neutral-800 text-neutral-600 font-mono">{{ tag }}</span>
+                    class="text-[8px] px-1 py-px rounded bg-neutral-800 text-amber-600 font-mono">{{ tag }}</span>
                 </div>
               </div>
 
@@ -914,8 +914,8 @@ onUnmounted(() => {
                 <button @click.stop="openLMPicker(sound)"
                   :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
                     pickingLMFor?.freesoundId === sound.freesoundId
-                      ? 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-300'
-                      : 'border-neutral-700 text-neutral-500 hover:border-fuchsia-500/50 hover:text-fuchsia-400']"
+                      ? 'bg-amber-500/20 border-amber-400/50 text-amber-300'
+                      : 'border-neutral-700 text-neutral-500 hover:border-amber-500/50 hover:text-amber-400']"
                   title="Assign to Loop Machine">
                   <Layers class="w-2.5 h-2.5" /> LM
                 </button>
