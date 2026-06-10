@@ -511,7 +511,7 @@ onUnmounted(() => {
                   :class="['px-1.5 py-0.5 rounded border text-[10px] font-mono transition-all',
                     selectedTags.includes(tag)
                       ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                      : 'border-neutral-800 text-neutral-600 hover:border-neutral-600 hover:text-neutral-400']"
+                      : 'border-neutral-800 text-neutral-300 hover:border-neutral-600 hover:text-amber-400 hover:bg-amber-500/10']"
                 >{{ tag }}</button>
               </div>
             </Transition>
