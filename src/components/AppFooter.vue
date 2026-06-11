@@ -159,6 +159,7 @@ onMounted(() => {
     if (!mapping) return
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
     if (paramName === 'globalTransport') midiStore.toggleGlobalTransport()
+    else if (paramName === 'panic') midiStore.panic()
   })
 })
 
@@ -344,14 +345,20 @@ function handleBpmChange(e) {
             class="bg-black border border-neutral-800 w-[60px] rounded px-1 py-0.5 text-center text-synth-neon text-[14px] focus:outline-none focus:border-synth-neon transition-colors"
           />
         </div>
-        <button
-          v-if="authStore.user"
-          @click="midiStore.panic()"
-          title="Panic (All Notes OFF)"
-          class="w-8 h-8 flex items-center justify-center rounded-full bg-red-950/30 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-90"
-        >
-          <AlertTriangle class="w-3.5 h-3.5" />
-        </button>
+        <div v-if="authStore.user" class="relative">
+          <button
+            @click="midiStore.panic()"
+            @contextmenu.prevent="openMenu($event, { name: 'panic', label: 'Panic (All Notes OFF)' })"
+            title="Panic (All Notes OFF) · Right-click to MIDI learn"
+            class="w-8 h-8 flex items-center justify-center rounded-full bg-red-950/30 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-90"
+          >
+            <AlertTriangle class="w-3.5 h-3.5" />
+          </button>
+          <span
+            v-if="mappingStore.learningParamName === 'panic'"
+            class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+          />
+        </div>
 
         <button
           v-if="authStore.user"
