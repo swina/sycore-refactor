@@ -88,7 +88,7 @@ function formatTime(t) {
 }
 
 function togglePreview(sound) {
-  if (previewingId.value === sound.freesoundId) {
+  if (previewingId.value === sound.id) {
     if (previewPlaying.value) {
       previewAudio.pause(); previewPlaying.value = false
     } else {
@@ -101,7 +101,7 @@ function togglePreview(sound) {
     previewAudio.src = blobUrl || sound.previews?.['preview-hq-mp3'] || sound.previews?.['preview-lq-mp3'] || ''
     previewAudio.play().catch(() => {})
   })
-  previewingId.value   = sound.freesoundId
+  previewingId.value   = sound.id
   previewPlaying.value = true
 }
 
@@ -246,12 +246,20 @@ const isCaptureDetecting = ref(false)
 
 const isPadDetecting     = ref(false)
 
-// Runs client-side BPM detection if the sound has no ac_tempo from Freesound.
-// bpmRef and detectingRef are the caller's reactive refs.
+// Runs client-side BPM detection for the given sound.
+// Always runs regardless of whether Freesound provided ac_tempo — the spinner
+// gives the user feedback that detection is happening.  Only overwrites bpmRef
+// when Freesound had no BPM, so the ac_tempo value remains the default for
+// tagged sounds while still validating it visually.
 // guardId is checked after async resolution to avoid races when the user
 // switches sounds before detection finishes.
+function _guardId(bpmRef) {
+  if (bpmRef === captureBpm)  return capturePickerFor.value?.freesoundId
+  if (bpmRef === pendingLMBpm) return pickingLMFor.value?.freesoundId
+  return pickingPadFor.value?.freesoundId
+}
+
 async function _autoDetectBpm(sound, bpmRef, detectingRef) {
-  if (sound.bpm != null) return
   const guardId = sound.freesoundId
   detectingRef.value = true
   try {
@@ -260,14 +268,13 @@ async function _autoDetectBpm(sound, bpmRef, detectingRef) {
       ?? sound.previews?.['preview-lq-mp3']
       ?? sound.url
     const detected = await detectBpmFromUrl(url)
-    // Only apply if the user hasn't switched to a different sound
-    if (detected && (bpmRef === captureBpm ? capturePickerFor.value?.freesoundId : pickingPadFor.value?.freesoundId) === guardId) {
+    if (detected && _guardId(bpmRef) === guardId && sound.bpm == null) {
       bpmRef.value = String(detected)
     }
   } catch {
     // detection failed silently — user can type BPM manually
   } finally {
-    if ((bpmRef === captureBpm ? capturePickerFor.value?.freesoundId : pickingPadFor.value?.freesoundId) === guardId) {
+    if (_guardId(bpmRef) === guardId) {
       detectingRef.value = false
     }
   }
@@ -781,11 +788,11 @@ onUnmounted(() => {
                 <button
                   @click="togglePreview(sound)"
                   :class="['shrink-0 w-6 h-6 flex items-center justify-center rounded-full border transition-colors',
-                    previewingId === sound.freesoundId && previewPlaying
+                    previewingId === sound.id && previewPlaying
                       ? 'bg-sky-500/20 border-sky-400 text-sky-400'
                       : 'border-neutral-700 text-neutral-500 hover:border-sky-500/50 hover:text-sky-400']"
                 >
-                  <Pause v-if="previewingId === sound.freesoundId && previewPlaying" class="w-2.5 h-2.5 fill-current" />
+                  <Pause v-if="previewingId === sound.id && previewPlaying" class="w-2.5 h-2.5 fill-current" />
                   <Play  v-else class="w-2.5 h-2.5 fill-current ml-px" />
                 </button>
 
@@ -859,18 +866,18 @@ onUnmounted(() => {
           <div v-if="results.length > 0" class="flex flex-col gap-1 p-4">
             <div
               v-for="sound in results" :key="sound.freesoundId"
-              class="group flex items-center gap-2 px-2 py-2 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors" :class="previewingId === sound.freesoundId && previewPlaying ? 'bg-cyan-500/20' :'bg-neutral-950/60 '"
+              class="group flex items-center gap-2 px-2 py-2 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors" :class="previewingId === sound.id && previewPlaying ? 'bg-cyan-500/20' :'bg-neutral-950/60 '"
             >
               <!-- Preview button -->
               <button
                 @click="togglePreview(sound)"
                 :class="['shrink-0 w-6 h-6 flex items-center justify-center rounded-full border transition-colors',
-                  previewingId === sound.freesoundId && previewPlaying
+                  previewingId === sound.id && previewPlaying
                     ? 'bg-cyan-500/20 border-cyan-400 text-cyan-400'
                     : 'border-neutral-700 text-neutral-500 hover:border-cyan-500/50 hover:text-cyan-400']"
-                :title="previewingId === sound.freesoundId && previewPlaying ? 'Pause preview' : 'Preview'"
+                :title="previewingId === sound.id && previewPlaying ? 'Pause preview' : 'Preview'"
               >
-                <Pause v-if="previewingId === sound.freesoundId && previewPlaying" class="w-2.5 h-2.5" />
+                <Pause v-if="previewingId === sound.id && previewPlaying" class="w-2.5 h-2.5" />
                 <Play  v-else class="w-2.5 h-2.5 ml-0.5" />
               </button>
 
@@ -897,7 +904,7 @@ onUnmounted(() => {
               </div>
 
               <!-- Hover actions -->
-              <div class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+              <div :class="['shrink-0 transition-opacity flex items-center gap-1', isDownloading(sound.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100']">
                 <button @click="addToPlaylist(sound)"
                   class="flex items-center gap-1 px-2 py-1 rounded bg-synth-neon/10 border border-synth-neon/30 text-synth-neon hover:bg-synth-neon/20 text-[9px] font-black uppercase tracking-widest transition-colors"
                   title="Add to playlist">

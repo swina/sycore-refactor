@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { Layers, X, Minus, Clock, Plus, Square, Circle } from 'lucide-vue-next'
+import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal } from 'lucide-vue-next'
 import { useUiStore }           from '@/stores/useUiStore'
 import { useMidiStore }         from '@/stores/useMidiStore'
 import { useArpStore }          from '@/stores/useArpStore'
@@ -34,7 +34,6 @@ watch(() => uiStore.isLoopMachineOpen, v => { if (v) bringToFront() })
 // ── Constants ─────────────────────────────────────────────────────
 const LS_KEY    = 'SYCORE_LOOP_MACHINE_PADS'
 const PAD_COUNT = 32
-const VOL       = 0.85
 
 // ── Pad state (module-level so it survives re-mounts) ─────────────
 function _loadPads() {
@@ -46,9 +45,13 @@ function _loadPads() {
   } catch { return Array(PAD_COUNT).fill(null) }
 }
 
-const pads    = ref(_loadPads())
-const active  = ref(Array(PAD_COUNT).fill(false))
-const pending = ref(Array(PAD_COUNT).fill(false))
+const pads       = ref(_loadPads())
+const active     = ref(Array(PAD_COUNT).fill(false))
+const pending    = ref(Array(PAD_COUNT).fill(false))
+const padVolumes = ref(Array(PAD_COUNT).fill(0.85))
+const showMixer  = ref(false)
+const fadeOutMs  = ref(parseInt(localStorage.getItem('S1_LM_FADE_MS') || '0'))
+watch(fadeOutMs, v => localStorage.setItem('S1_LM_FADE_MS', String(v)))
 
 const syncEnabled = ref(localStorage.getItem('S1_LM_SYNC') !== '0')
 watch(syncEnabled, v => {
@@ -146,7 +149,7 @@ function _loopTick(idx) {
 
   const now = _getCtx().currentTime
   gCur.gain.cancelScheduledValues(now); gCur.gain.setValueAtTime(0, now)
-  gNxt.gain.cancelScheduledValues(now); gNxt.gain.setValueAtTime(VOL, now)
+  gNxt.gain.cancelScheduledValues(now); gNxt.gain.setValueAtTime(padVolumes.value[idx], now)
 
   setTimeout(() => {
     cur.pause(); cur.currentTime = 0
@@ -157,10 +160,11 @@ function _loopTick(idx) {
 
 async function _startPad(idx) {
   const pad = pads.value[idx]
-  if (!pad?.url) { pending.value[idx] = false; return }
+  if (!pad) { pending.value[idx] = false; return }
 
   const url = await resolveUrl(pad.id, pad.url)
   if (!pads.value[idx]) return   // cleared while awaiting
+  if (!url) { pending.value[idx] = false; return }
 
   const wa  = _initWA(idx)
   if (wa.rafId) { cancelAnimationFrame(wa.rafId); wa.rafId = null }
@@ -177,7 +181,7 @@ async function _startPad(idx) {
 
   active.value[idx]  = true
   pending.value[idx] = false
-  wa.gainA.gain.setValueAtTime(VOL, _getCtx().currentTime)
+  wa.gainA.gain.setValueAtTime(padVolumes.value[idx], _getCtx().currentTime)
   wa.rafId = requestAnimationFrame(() => _loopTick(idx))
 
   if (pad.bpm) {
@@ -195,20 +199,37 @@ async function _startPad(idx) {
   }
 }
 
-function _stopPad(idx) {
+function _stopPad(idx, fadeSec = 0) {
   if (_pendingTimers[idx]) { clearTimeout(_pendingTimers[idx]); delete _pendingTimers[idx] }
+  // Mark inactive immediately so _loopTick won't restart the rAF loop
+  active.value[idx]  = false
+  pending.value[idx] = false
+
   const wa = _padWA[idx]
   if (wa) {
     if (wa.rafId) { cancelAnimationFrame(wa.rafId); wa.rafId = null }
     const ctx = _getCtx(); const now = ctx.currentTime
-    wa.gainA.gain.cancelScheduledValues(now); wa.gainA.gain.setValueAtTime(0, now)
-    wa.gainB.gain.cancelScheduledValues(now); wa.gainB.gain.setValueAtTime(0, now)
-    wa.a.pause(); wa.a.currentTime = 0
-    wa.b.pause(); wa.b.currentTime = 0
-    wa.crossing = false
+
+    if (fadeSec > 0) {
+      wa.gainA.gain.cancelScheduledValues(now)
+      wa.gainA.gain.setValueAtTime(wa.gainA.gain.value, now)
+      wa.gainA.gain.linearRampToValueAtTime(0, now + fadeSec)
+      wa.gainB.gain.cancelScheduledValues(now)
+      wa.gainB.gain.setValueAtTime(wa.gainB.gain.value, now)
+      wa.gainB.gain.linearRampToValueAtTime(0, now + fadeSec)
+      setTimeout(() => {
+        wa.a.pause(); wa.a.currentTime = 0
+        wa.b.pause(); wa.b.currentTime = 0
+        wa.crossing = false
+      }, fadeSec * 1000 + 50)
+    } else {
+      wa.gainA.gain.cancelScheduledValues(now); wa.gainA.gain.setValueAtTime(0, now)
+      wa.gainB.gain.cancelScheduledValues(now); wa.gainB.gain.setValueAtTime(0, now)
+      wa.a.pause(); wa.a.currentTime = 0
+      wa.b.pause(); wa.b.currentTime = 0
+      wa.crossing = false
+    }
   }
-  active.value[idx]  = false
-  pending.value[idx] = false
   if (!_anyLive()) _master = null
 }
 
@@ -239,10 +260,12 @@ function togglePad(idx) {
 
 function stopAll() {
   const wasLive = _anyLive()
-  for (let i = 0; i < PAD_COUNT; i++) _stopPad(i)
+  const fadeSec = fadeOutMs.value / 1000
+  for (let i = 0; i < PAD_COUNT; i++) _stopPad(i, fadeSec)
   _master = null
   if (wasLive && lmRecSync.value) {
-    window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+    const delay = fadeSec > 0 ? fadeOutMs.value + 50 : 0
+    setTimeout(() => window.dispatchEvent(new CustomEvent('capture-stop-rec')), delay)
   }
 }
 
@@ -298,6 +321,16 @@ function formatTime(s) {
   return s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 }
 
+function setPadVolume(idx, vol) {
+  padVolumes.value[idx] = vol
+  const wa = _padWA[idx]
+  if (!wa || !active.value[idx]) return
+  const ctx = _getCtx(); const now = ctx.currentTime
+  const gActive = wa.side === 'a' ? wa.gainA : wa.gainB
+  gActive.gain.cancelScheduledValues(now)
+  gActive.gain.setValueAtTime(vol, now)
+}
+
 function _startMidiListener() {
   _unsubMidi = midiService.addRawListener((event) => {
     if (!event.data || event.data.length < 3) return
@@ -310,7 +343,6 @@ function _startMidiListener() {
     const isCC   = type === 0xB0
     const isNote = type === 0x90 && byte2 > 0
     if (!isCC && !isNote) return
-    if (isCC && byte2 === 0) return
 
     const inputId   = event.target?.id
     const inputPort = midiService.getInputs().find(i => i.id === inputId)
@@ -326,6 +358,17 @@ function _startMidiListener() {
     if (!mapping) return
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
     if (!paramName) return
+
+    // Volume sliders accept the full CC range 0-127 (including 0 = mute)
+    if (paramName.startsWith('lm_vol_')) {
+      if (!isCC) return
+      const idx = parseInt(paramName.slice('lm_vol_'.length))
+      if (!isNaN(idx) && idx >= 0 && idx < PAD_COUNT) setPadVolume(idx, byte2 / 127)
+      return
+    }
+
+    // Toggle params: ignore zero-value CC (treat like note-off)
+    if (isCC && byte2 === 0) return
 
     if (paramName.startsWith('lm_pad_')) {
       const idx = parseInt(paramName.slice('lm_pad_'.length))
@@ -367,7 +410,7 @@ onUnmounted(() => {
     <div
       v-show="uiStore.isLoopMachineOpen && !isMinimized"
       :style="panelStyle"
-      class="bg-neutral-950 border border-amber-500/30 rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
+      class="relative bg-neutral-950 border border-amber-500/30 rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
     >
       <!-- Resize handles -->
       <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3  h-1  cursor-n-resize  z-50" />
@@ -446,19 +489,49 @@ onUnmounted(() => {
             <span v-if="mappingStore.learningParamName === 'lm_rec'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
           </div>
 
-          <!-- Stop all -->
-          <div class="relative">
-            <button
-              @mousedown.stop
-              @click="stopAll"
-              @contextmenu.prevent="openMenu($event, { name: 'lm_stop_all', label: 'Loop Machine: Stop All' })"
-              :disabled="!active.some(Boolean) && !pending.some(Boolean)"
-              class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-red-500/50 hover:text-red-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
-              title="Stop all loops"
-            >
-              <Square class="w-3 h-3 fill-current" /> Stop All
-            </button>
-            <span v-if="mappingStore.learningParamName === 'lm_stop_all'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          <!-- Mixer toggle -->
+          <button
+            @mousedown.stop
+            @click="showMixer = !showMixer"
+            :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+              showMixer
+                ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                : 'border-neutral-700 text-neutral-500 hover:border-sky-500/40 hover:text-sky-400']"
+            title="Open Mixer"
+          >
+            <SlidersHorizontal class="w-3 h-3" />
+            Mixer
+          </button>
+
+          <!-- Fade out + Stop all -->
+          <div class="flex items-center gap-1">
+            <!-- Fade ms input -->
+            <div class="flex items-center gap-1 px-2 py-1 rounded-lg border border-neutral-800 bg-neutral-900/60" title="Stop All fade-out duration (0 = instant, max 10 000 ms)">
+              <span class="text-[8px] text-neutral-600 font-mono uppercase tracking-widest shrink-0">Fade</span>
+              <input
+                type="number"
+                min="0" max="10000" step="100"
+                v-model.number="fadeOutMs"
+                @mousedown.stop
+                @click.stop
+                class="w-12 bg-transparent text-[9px] font-mono text-neutral-300 text-right outline-none border-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span class="text-[8px] text-neutral-600 font-mono shrink-0">ms</span>
+            </div>
+
+            <div class="relative">
+              <button
+                @mousedown.stop
+                @click="stopAll"
+                @contextmenu.prevent="openMenu($event, { name: 'lm_stop_all', label: 'Loop Machine: Stop All' })"
+                :disabled="!active.some(Boolean) && !pending.some(Boolean)"
+                class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-red-500/50 hover:text-red-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
+                title="Stop all loops"
+              >
+                <Square class="w-3 h-3 fill-current" /> Stop All
+              </button>
+              <span v-if="mappingStore.learningParamName === 'lm_stop_all'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+            </div>
           </div>
 
           <button @mousedown.stop @click="toggleMinimize" title="Minimize"
@@ -471,6 +544,80 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
+
+      <!-- Mixer overlay -->
+      <Transition name="sy-fade">
+        <div
+          v-if="showMixer"
+          class="absolute inset-x-0 top-[53px] bottom-[36px] z-40 bg-neutral-950/96 backdrop-blur-sm flex flex-col"
+          @mousedown.stop
+        >
+          <div class="shrink-0 px-4 py-2 border-b border-neutral-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <SlidersHorizontal class="w-3.5 h-3.5 text-sky-400" />
+              <span class="text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">Mixer</span>
+              <span class="text-[9px] text-neutral-500 font-mono ml-1">· per-pad volume</span>
+            </div>
+            <button @click="showMixer = false" class="p-1 rounded hover:bg-white/5 text-neutral-500 hover:text-white transition-colors">
+              <X class="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div class="flex-1 overflow-y-auto px-4 py-3">
+            <div v-if="pads.every(p => !p)" class="h-full flex items-center justify-center">
+              <span class="text-[10px] text-neutral-600 font-mono">No sounds loaded yet</span>
+            </div>
+            <div v-else class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))">
+              <template v-for="(pad, idx) in pads" :key="idx">
+                <div
+                  v-if="pad"
+                  @contextmenu.prevent="openMenu($event, { name: 'lm_vol_' + idx, label: 'Loop Machine: Volume Pad ' + (idx + 1) })"
+                  :class="[
+                    'relative flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors',
+                    mappingStore.learningParamName === 'lm_vol_' + idx
+                      ? 'border-orange-500/60 bg-orange-500/5'
+                      : active[idx]
+                        ? 'border-amber-500/40 bg-amber-500/5'
+                        : 'border-neutral-800 bg-neutral-900/40'
+                  ]"
+                  title="Right-click to MIDI learn"
+                >
+                  <!-- Pad number + active dot -->
+                  <div class="flex flex-col items-center gap-0.5 shrink-0 w-5">
+                    <span class="text-[8px] font-black text-neutral-500 leading-none">{{ idx + 1 }}</span>
+                    <span
+                      :class="['w-1.5 h-1.5 rounded-full transition-colors', active[idx] ? 'bg-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.7)]' : 'bg-neutral-700']"
+                    />
+                  </div>
+
+                  <!-- Label -->
+                  <span class="flex-1 text-[9px] text-neutral-300 font-mono truncate min-w-0" :title="pad.label">{{ pad.label }}</span>
+
+                  <!-- Slider -->
+                  <input
+                    type="range"
+                    min="0" max="1" step="0.01"
+                    :value="padVolumes[idx]"
+                    @input="setPadVolume(idx, parseFloat($event.target.value))"
+                    class="lm-vol-slider w-20 shrink-0"
+                  />
+
+                  <!-- Value -->
+                  <span class="text-[9px] font-mono text-neutral-400 w-8 text-right shrink-0">
+                    {{ Math.round(padVolumes[idx] * 100) }}%
+                  </span>
+
+                  <!-- MIDI learning indicator -->
+                  <span
+                    v-if="mappingStore.learningParamName === 'lm_vol_' + idx"
+                    class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+                  />
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </Transition>
 
       <!-- Pad grid -->
       <div class="flex-1 overflow-auto p-3 min-h-0">
@@ -529,6 +676,12 @@ onUnmounted(() => {
               </div>
             </template>
 
+            <!-- Volume badge (active pads only) -->
+            <span
+              v-if="active[idx]"
+              class="absolute bottom-1 left-1.5 text-[9px] font-mono text-cyan-300/80 leading-none bg-black p-1 rounded pointer-events-none"
+            >{{ Math.round(padVolumes[idx] * 100) }}%</span>
+
             <!-- Clear button (hover on loaded pad) -->
             <button
               v-if="pad"
@@ -563,3 +716,43 @@ onUnmounted(() => {
     @change="handleFileImport"
   />
 </template>
+
+<style scoped>
+.lm-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: #404040;
+  outline: none;
+  cursor: pointer;
+}
+.lm-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #38bdf8;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+}
+.lm-vol-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #38bdf8;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+}
+
+.sy-fade-enter-active,
+.sy-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.sy-fade-enter-from,
+.sy-fade-leave-to {
+  opacity: 0;
+}
+</style>

@@ -308,13 +308,7 @@ async function generateWaveformPeaks(blob) {
     const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
     const tempCtx = new audioCtxClass(1, 1, 44100)
     
-    const decoded = await new Promise((resolve, reject) => {
-      tempCtx.decodeAudioData(
-        arrayBuffer,
-        (buffer) => resolve(buffer),
-        (err) => reject(err || new Error('Failed to decode audio data'))
-      )
-    })
+    const decoded = await tempCtx.decodeAudioData(arrayBuffer)
     
     const channelData = decoded.getChannelData(0)
     const numPoints = waveformDetail.value
