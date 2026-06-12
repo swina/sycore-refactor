@@ -28,10 +28,10 @@ dist-website
 *.mp4
 *.webm
 *.wav
-.agent
+.agent/*
 .vercel
 .env
 .env*.local
 .claude
-.agents
+.agents/*
 src/data/program_change/junk*
