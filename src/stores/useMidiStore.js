@@ -360,10 +360,12 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.sendStart() 
   }
   
-  function sendStop() { 
+  function sendStop() {
     isTransportPlaying.value = false
-    midiService.sendStop() 
+    midiService.sendStop()
   }
+
+  function sendContinue() { midiService.sendContinue() }
   
   function panic() { midiService.panic() }
 
@@ -517,7 +519,7 @@ export const useMidiStore = defineStore('midi', () => {
     setRouting, toggleRouting, toggleBroadcastMode,
     sendProgramChange, sendCC, sendNRPN, sendAllCCs, sendControlValue,
     sendNoteOn, sendNoteOff, sendPitchBend,
-    allNotesOff, panic, startClock, stopClock, setBpm, sendStart, sendStop,
+    allNotesOff, panic, startClock, stopClock, setBpm, sendStart, sendStop, sendContinue,
     incomingBpm, sysexEnabled, toggleSysEx,
     sendClock, setSendClock, currentBpm,
     syncMidiTransport, setSyncMidiTransport,

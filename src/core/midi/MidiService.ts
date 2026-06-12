@@ -1181,8 +1181,8 @@ export class MidiService {
   }
 
   // Direct transport send — bypasses routing matrix / broadcastMode so that
-  // 0xFA / 0xFC always reach every registered output that has transport enabled.
-  private _sendTransportDirect(status: 0xFA | 0xFC) {
+  // 0xFA / 0xFB / 0xFC always reach every registered output that has transport enabled.
+  private _sendTransportDirect(status: 0xFA | 0xFB | 0xFC) {
     if (!this.midiAccess) return;
     this.midiAccess.outputs.forEach(outPort => {
       const config = this.routingConfig?.registrations[outPort.name];
@@ -1202,6 +1202,10 @@ export class MidiService {
   sendStop() {
     this.stopClock();
     this._sendTransportDirect(0xFC); // STOP
+  }
+
+  sendContinue() {
+    this._sendTransportDirect(0xFB); // CONTINUE — resync tempo without resetting position
   }
 }
 

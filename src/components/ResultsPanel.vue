@@ -706,16 +706,20 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
             <div v-if="!presetStore.hasUnsavedChanges" class="flex items-center gap-1.5 shrink-0">
               <button
                 @click="presetStore.navigateHistory('prev')"
+                @contextmenu.prevent="openMenu($event, { name: 'nav_prev', label: 'Previous Preset' })"
                 :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) >= presetStore.filteredHistory.length - 1"
-                class="w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
+                class="relative w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
               >
+                <span v-if="mappingStore.learningParamName === 'nav_prev'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 <ChevronLeft class="w-4 h-4" />
               </button>
               <button
                 @click="presetStore.navigateHistory('next')"
+                @contextmenu.prevent="openMenu($event, { name: 'nav_next', label: 'Next Preset' })"
                 :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) <= 0"
-                class="w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
+                class="relative w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
               >
+                <span v-if="mappingStore.learningParamName === 'nav_next'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 <ChevronRight class="w-4 h-4" />
               </button>
             </div>
@@ -1286,7 +1290,7 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
         :activeSlot="uiStore.seqActiveSlot"
         @close="uiStore.isSequencerOpen = false"
         @bpmChange="bpm => { arpStore.arpBpm = bpm }"
-        @transposeChange="val => { seqGlobalTranspose.value = val }"
+        @transposeChange="val => { seqGlobalTranspose = val }"
         @configChange="config => {
           if (uiStore.seqActiveSlot === 2) {
             uiStore.seqCurrentConfig2 = config

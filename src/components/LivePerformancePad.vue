@@ -303,6 +303,10 @@ const loopActive = ref(Array(16).fill(false))
 
 watch(loopActive, (v) => { livePadStore.loopActivePads = [...v] }, { deep: true })
 
+watch(() => midiStore.currentBpm, () => {
+  loopActive.value.forEach((active, idx) => { if (active) _applyPlaybackRate(idx) })
+})
+
 // Per-pad Web Audio state: { a, b, gainA, gainB, active:'a'|'b', rafId, isCrossfading }
 let _padCtx = null
 const _padWA = Array(16).fill(null)
@@ -427,6 +431,14 @@ function _stopPadInstant(idx) {
   loopActive.value[idx] = false
 }
 
+function _applyPlaybackRate(idx) {
+  const wa  = _padWA[idx]; if (!wa) return
+  const pad = loopPads.value[idx]
+  const rate = (pad?.bpm && midiStore.currentBpm) ? midiStore.currentBpm / pad.bpm : 1
+  wa.a.playbackRate = rate
+  wa.b.playbackRate = rate
+}
+
 function _fireSyncActions(starting) {
   if (syncStore.syncLoopPadsToMidi) {
     if (starting) midiStore.sendStart()
@@ -485,6 +497,7 @@ async function toggleLoopPad(idx) {
   try { await wa.a.play() } catch { loopActive.value[idx] = false; return }
 
   loopActive.value[idx] = true
+  _applyPlaybackRate(idx)
   if (instant) {
     wa.gainA.gain.setValueAtTime(LOOP_PAD_VOL, _getAudioCtx().currentTime)
   } else {
@@ -492,11 +505,6 @@ async function toggleLoopPad(idx) {
   }
   _startPadRaf(idx)
 
-  if (pad.bpm) {
-    arpStore.arpBpm      = pad.bpm
-    midiStore.currentBpm = pad.bpm
-    midiStore.setBpm(pad.bpm)
-  }
   _fireSyncActions(true)
 }
 
