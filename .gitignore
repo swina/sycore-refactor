@@ -21,11 +21,11 @@ dist-website
 .claude
 src/data/program_change/junk*
 .codegraph
-.openrouter/*.json
-.deepseek
+.openrouter
 .od-skills
 *.local
 scratch
+.deepseek
 
 # Editor directories and files
 .vscode/*
