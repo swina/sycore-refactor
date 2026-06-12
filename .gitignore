@@ -12,19 +12,20 @@ dist
 dist-ssr
 dist-site
 dist-website
-.agent/*
+.agent
+.agents
 .vercel
 .env
 .env*.local
 .env.website
 .claude
-.agents/*
 src/data/program_change/junk*
 .codegraph
 .openrouter/*.json
 .deepseek
 .od-skills
 *.local
+scratch
 
 # Editor directories and files
 .vscode/*
