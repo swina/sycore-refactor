@@ -198,9 +198,9 @@ function readLMPads() {
   try {
     const v = localStorage.getItem(LS_LM_PADS)
     const arr = v ? JSON.parse(v) : []
-    while (arr.length < 32) arr.push(null)
-    return arr.slice(0, 32)
-  } catch { return Array(32).fill(null) }
+    while (arr.length < 24) arr.push(null)
+    return arr.slice(0, 24)
+  } catch { return Array(24).fill(null) }
 }
 
 function openLMPicker(sound) {
@@ -833,6 +833,20 @@ onUnmounted(() => {
                         : 'border-neutral-700 text-neutral-500 hover:border-fuchsia-500/50 hover:text-fuchsia-400']"
                     title="Assign to Loop Machine">
                     <Layers class="w-2.5 h-2.5" /> LM
+                  </button>
+                  <button
+                    @click.stop="openCapturePicker(sound)"
+                    :disabled="isSendingToCapture"
+                    :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                      capturePickerFor?.freesoundId === sound.freesoundId
+                        ? 'bg-violet-500/20 border-violet-400/50 text-violet-300'
+                        : isSendingToCapture
+                          ? 'border-violet-500/40 bg-violet-500/10 text-violet-300 cursor-wait'
+                          : 'border-neutral-700 text-neutral-500 hover:border-violet-500/50 hover:text-violet-400']"
+                    title="Send to Audio Capture — set BPM and auto-discover loop"
+                  >
+                    <FileAudio class="w-2.5 h-2.5" />
+                    {{ isSendingToCapture ? '…' : 'Capture' }}
                   </button>
                   <button
                     @click.stop="deleteCache(sound.id)"

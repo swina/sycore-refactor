@@ -435,13 +435,11 @@ onMounted(() => {
       </div>
 
       <div :style="focusStyle('loopMachine')">
-        <Transition name="sy-modal">
-          <LoopMachine
-            v-show="uiStore.isLoopMachineOpen"
-            :isOpen="uiStore.isLoopMachineOpen"
-            @close="uiStore.isLoopMachineOpen = false"
-          />
-        </Transition>
+        <LoopMachine
+          v-show="uiStore.isLoopMachineOpen"
+          :isOpen="uiStore.isLoopMachineOpen"
+          @close="uiStore.isLoopMachineOpen = false"
+        />
       </div>
 
       <!-- Live Timeline -->

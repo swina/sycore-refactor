@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -48,6 +48,8 @@ const normalizeDbLimit = ref(-3.0)
 const normalizeGateDb  = ref(-60)
 const isImporting      = ref(false)
 const isDiscoveringLoop = ref(false)
+const isCalculatingBpm  = ref(false)
+const linkPlayStart     = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const appendMode       = ref(localStorage.getItem('S1_CAPTURE_APPEND') === '1')
 const error            = ref(null)
@@ -90,10 +92,10 @@ function openLMModal() {
   try {
     const v = localStorage.getItem('SYCORE_LOOP_MACHINE_PADS')
     const arr = v ? JSON.parse(v) : []
-    while (arr.length < 32) arr.push(null)
-    lmModalSlots.value = arr.slice(0, 32)
+    while (arr.length < 24) arr.push(null)
+    lmModalSlots.value = arr.slice(0, 24)
   } catch {
-    lmModalSlots.value = Array(32).fill(null)
+    lmModalSlots.value = Array(24).fill(null)
   }
   lmSoundName.value = lastCaptureLabel.value || `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
   showLMModal.value = true
@@ -443,16 +445,18 @@ async function refreshDevices() {
 }
 
 // ── Stop / cleanup ────────────────────────────────────────────────────────────
-function stopAll(keepBlob = false) {
+function stopAll(keepBlob = false, keepMonitor = false) {
   if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
   if (timerRef) { clearInterval(timerRef); timerRef = null }
   if (recorderRef && recorderRef.state !== 'inactive') recorderRef.stop()
   recorderRef = null
-  if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
-  if (ctxRef) { ctxRef.close().catch(() => {}); ctxRef = null }
-  analyserRef = null
+  if (!keepMonitor) {
+    if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
+    if (ctxRef) { ctxRef.close().catch(() => {}); ctxRef = null }
+    analyserRef = null
+    isMonitoring.value = false
+  }
   isRecordingRef = false
-  isMonitoring.value = false
   isRecording.value = false
   isPlaying.value = false
   isArmed.value = false
@@ -828,7 +832,7 @@ function handleImportClick() {
 }
 
 async function loadBlobToCapture(blob) {
-  stopAll(true)
+  stopAll(true, true)  // stop rec/play but keep mic monitor running
   recSecs.value = 0
   try {
     const AudioCtxClass = window.AudioContext || window.webkitAudioContext
@@ -846,7 +850,7 @@ async function loadBlobToCapture(blob) {
   zoomX.value = 1.0
   zoomY.value = 1.0
   panOffset.value = 0.0
-  startMonitor(selectedDeviceId.value)
+  if (!isMonitoring.value) startMonitor(selectedDeviceId.value)
 }
 
 async function handleFileImport(e) {
@@ -981,6 +985,97 @@ async function discoverSeamlessLoop() {
     console.error('[AudioCapture] discoverSeamlessLoop failed', e)
   } finally {
     isDiscoveringLoop.value = false
+  }
+}
+
+async function calculateBpm() {
+  if (!recordedBlob.value || isCalculatingBpm.value) return
+  isCalculatingBpm.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const OffCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext
+    const tmpCtx = new OffCtx(1, 1, 44100)
+    const decoded = await tmpCtx.decodeAudioData(arrayBuffer)
+
+    const sampleRate = decoded.sampleRate
+    const regionStart = Math.floor(loopStart.value * sampleRate)
+    const regionEnd = loopEnd.value > loopStart.value
+      ? Math.floor(loopEnd.value * sampleRate)
+      : decoded.length
+
+    const mono = new Float32Array(regionEnd - regionStart)
+    for (let c = 0; c < decoded.numberOfChannels; c++) {
+      const ch = decoded.getChannelData(c)
+      for (let i = 0; i < mono.length; i++) mono[i] += ch[regionStart + i]
+    }
+    if (decoded.numberOfChannels > 1) {
+      const inv = 1 / decoded.numberOfChannels
+      for (let i = 0; i < mono.length; i++) mono[i] *= inv
+    }
+
+    const FRAME_SIZE = 512
+    const HOP = 256
+    const numFrames = Math.floor((mono.length - FRAME_SIZE) / HOP)
+    if (numFrames < 4) return
+
+    const energies = new Float32Array(numFrames)
+    for (let f = 0; f < numFrames; f++) {
+      let e = 0
+      const off = f * HOP
+      for (let i = 0; i < FRAME_SIZE; i++) e += mono[off + i] ** 2
+      energies[f] = e / FRAME_SIZE
+    }
+
+    const onset = new Float32Array(numFrames)
+    for (let f = 1; f < numFrames; f++) {
+      onset[f] = Math.max(0, energies[f] - energies[f - 1])
+    }
+
+    const mean = onset.reduce((a, b) => a + b, 0) / numFrames
+    const threshold = mean * 1.5
+    const MIN_GAP = Math.floor(0.25 * sampleRate / HOP)
+
+    const peaks = []
+    let lastPeak = -MIN_GAP
+    for (let f = 2; f < numFrames - 2; f++) {
+      if (
+        onset[f] > threshold &&
+        onset[f] > onset[f - 1] && onset[f] > onset[f + 1] &&
+        onset[f] > onset[f - 2] && onset[f] > onset[f + 2] &&
+        f - lastPeak >= MIN_GAP
+      ) {
+        peaks.push(f)
+        lastPeak = f
+      }
+    }
+
+    if (peaks.length < 2) return
+
+    const bpmCandidates = []
+    for (let i = 1; i < peaks.length; i++) {
+      let bpm = 60 / ((peaks[i] - peaks[i - 1]) * HOP / sampleRate)
+      while (bpm > 180) bpm /= 2
+      while (bpm < 60) bpm *= 2
+      bpmCandidates.push(bpm)
+    }
+
+    const BIN = 5
+    const bins = {}
+    for (const b of bpmCandidates) {
+      const key = Math.round(b / BIN) * BIN
+      bins[key] = (bins[key] || 0) + 1
+    }
+
+    const [bestKey] = Object.entries(bins).sort((a, b) => b[1] - a[1])[0]
+    const estimated = Math.round(parseFloat(bestKey))
+    if (estimated >= 40 && estimated <= 240) {
+      midiStore.currentBpm = estimated
+      midiStore.setBpm(estimated)
+    }
+  } catch (e) {
+    console.error('[AudioCapture] BPM calculation failed', e)
+  } finally {
+    isCalculatingBpm.value = false
   }
 }
 
@@ -1387,6 +1482,25 @@ watch([loopStart, loopEnd], async () => {
 
 watch([isLooping, loopCrossfadeDur], async () => {
   if (isPlaying.value && decodedBuffer.value) await playAudio(getPlaybackTime())
+})
+
+async function handleRewind() {
+  if (!recordedBlob.value) return
+  if (isPlaying.value) {
+    stopAllSources()
+    await playAudio(0)
+  } else {
+    currentPlaybackTime.value = 0
+  }
+}
+
+// Keep Play Start and Loop Start in sync when linked
+watch(playbackStart, (val) => {
+  if (linkPlayStart.value) loopStart.value = val
+})
+
+watch(loopStart, (val) => {
+  if (linkPlayStart.value) playbackStart.value = val
 })
 
 function formatMmSs(s) {
@@ -2287,17 +2401,25 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <!-- Playback preview -->
-          <button
-            v-if="recordedBlob && !isRecording"
-            @click="togglePlay"
-            title="Play/Pause recording"
-            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-white bg-synth-neon/20 hover:bg-synth-neon/60 transition-colors"
-          >
-            <Pause v-if="isPlaying" class="w-3 h-3" />
-            <Play v-else class="w-3 h-3" />
-            {{ isPlaying ? 'Pause' : 'Play' }}
-          </button>
+          <!-- Rewind + Playback preview -->
+          <div v-if="recordedBlob && !isRecording" class="flex gap-1">
+            <button
+              @click="handleRewind"
+              title="Rewind to start"
+              class="flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1.5 rounded border text-neutral-400 border-neutral-700 hover:border-synth-neon/40 hover:text-white transition-colors shrink-0"
+            >
+              <SkipBack class="w-3 h-3" />
+            </button>
+            <button
+              @click="togglePlay"
+              title="Play/Pause recording"
+              class="flex-1 flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-white bg-synth-neon/20 hover:bg-synth-neon/60 transition-colors"
+            >
+              <Pause v-if="isPlaying" class="w-3 h-3" />
+              <Play v-else class="w-3 h-3" />
+              {{ isPlaying ? 'Pause' : 'Play' }}
+            </button>
+          </div>
         </div>
         <!-- Right Column: Timeline & Waveform canvas -->
         <div class="flex-1 flex flex-col min-h-0 bg-[#080808]">
@@ -2618,6 +2740,18 @@ onUnmounted(() => {
               <Magnet class="w-3 h-3" />
               {{ isDiscoveringLoop ? 'Analyzing…' : 'Auto Loop' }}
             </button>
+            <button
+              @click="calculateBpm"
+              :disabled="!recordedBlob || isCalculatingBpm"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isCalculatingBpm
+                  ? 'text-amber-300 border-amber-500/40 hover:bg-amber-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Detect BPM from audio (uses loop region if set)"
+            >
+              <Zap class="w-3 h-3" />
+              {{ isCalculatingBpm ? 'Detecting…' : 'Calc BPM' }}
+            </button>
             <span class="text-[10px] font-mono text-neutral-500">
               Range: {{ formatTimeSecs(loopStart) }} - {{ formatTimeSecs(loopEnd) }} / {{ formatTimeSecs(audioDuration) }}
             </span>
@@ -2635,7 +2769,18 @@ onUnmounted(() => {
         <div class="flex flex-col gap-1.5 mt-1">
           <!-- Play Start Slider -->
           <div class="flex items-center gap-3">
-            <span class="text-[8px] font-mono text-cyan-700 w-16">PLAY START</span>
+            <div class="flex items-center gap-1 w-16 shrink-0">
+              <span :class="['text-[8px] font-mono', linkPlayStart ? 'text-cyan-400' : 'text-cyan-700']">PLAY START</span>
+              <button
+                v-if="isLooping"
+                @click="linkPlayStart = !linkPlayStart"
+                :title="linkPlayStart ? 'Unlink Play Start from Loop Start' : 'Link Play Start to Loop Start'"
+                :class="['flex items-center justify-center w-3.5 h-3.5 rounded transition-colors shrink-0',
+                  linkPlayStart ? 'text-cyan-400' : 'text-neutral-700 hover:text-neutral-400']"
+              >
+                <Link2 class="w-3 h-3" />
+              </button>
+            </div>
             <input
               v-model.number="playbackStart"
               type="range"
@@ -2657,7 +2802,10 @@ onUnmounted(() => {
           <div v-if="isLooping" class="flex flex-row gap-3 mt-1">
             <!-- Loop Start Slider -->
             <div class="flex items-center gap-3 w-1/2">
-              <span class="text-[8px] font-mono text-synth-neon w-16">LOOP START</span>
+              <div class="flex items-center gap-1 w-16 shrink-0">
+                <span :class="['text-[8px] font-mono', linkPlayStart ? 'text-cyan-400' : 'text-synth-neon']">LOOP START</span>
+                <Link2 v-if="linkPlayStart" class="w-3 h-3 text-cyan-400 shrink-0" />
+              </div>
               <input
                 v-model.number="loopStart"
                 type="range"
