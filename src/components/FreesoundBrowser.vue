@@ -4,7 +4,7 @@ import {
   Search, Play, Pause, Plus, Loader2, Music2,
   ChevronLeft, ChevronRight, Repeat, BadgeCheck, X,
   Download, HardDrive, Trash2, FileAudio, KeyRound, DatabaseZap,
-  Tag, ChevronDown, Layers,
+  Tag, ChevronDown, Layers, Info, Activity, Shuffle, Star,
 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -13,6 +13,7 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useFreesoundBrowserState } from '@/composables/useFreesoundBrowserState'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
+import { fetchSoundDetail, fetchSimilarSounds, fetchSoundAnalysis } from '@/composables/useFreesound'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { detectBpmFromUrl } from '@/composables/useBpmDetector'
 
@@ -110,6 +111,96 @@ const localOnly       = ref(false)
 const cachedSounds    = ref([])
 const localQuery      = ref('')
 const localSortBy     = ref('date') // 'date' | 'name' | 'duration'
+const infoSound       = ref(null)
+
+function formatBytes(bytes) {
+  if (!bytes) return '—'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+function formatDate(iso) {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleString() } catch { return iso }
+}
+
+// ── Info dialog API data ─────────────────────────────────────────
+const infoDetail        = ref(null)   // { description, avg_rating, num_ratings }
+const infoDetailLoading = ref(false)
+const analysisData      = ref(null)
+const analysisLoading   = ref(false)
+const similarLoading    = ref(false)
+
+// ── Inline analysis for search results ──────────────────────────
+const searchAnalysisId      = ref(null)  // freesoundId of expanded row
+const searchAnalysisData    = ref(null)
+const searchAnalysisLoading = ref(false)
+
+async function toggleSearchAnalysis(sound) {
+  if (searchAnalysisId.value === sound.freesoundId) {
+    searchAnalysisId.value   = null
+    searchAnalysisData.value = null
+    return
+  }
+  searchAnalysisId.value      = sound.freesoundId
+  searchAnalysisData.value    = null
+  searchAnalysisLoading.value = true
+  try {
+    searchAnalysisData.value = await fetchSoundAnalysis(sound.freesoundId)
+  } catch { searchAnalysisData.value = { error: 'Analysis unavailable' } }
+  finally { searchAnalysisLoading.value = false }
+}
+
+watch(infoSound, async (sound) => {
+  infoDetail.value  = null
+  analysisData.value = null
+  if (!sound?.freesoundId) return
+  infoDetailLoading.value = true
+  try {
+    const d = await fetchSoundDetail(sound.freesoundId)
+    infoDetail.value = { description: d.description || '', avgRating: d.avg_rating, numRatings: d.num_ratings }
+  } catch { /* silently skip if API unavailable */ }
+  finally { infoDetailLoading.value = false }
+})
+
+async function loadAnalysis() {
+  if (!infoSound.value?.freesoundId || analysisLoading.value) return
+  analysisLoading.value = true
+  try {
+    analysisData.value = await fetchSoundAnalysis(infoSound.value.freesoundId)
+  } catch { analysisData.value = { error: 'Analysis unavailable' } }
+  finally { analysisLoading.value = false }
+}
+
+async function doSimilar(sound) {
+  if (!sound?.freesoundId || similarLoading.value) return
+  infoSound.value  = null
+  localOnly.value  = false
+  similarLoading.value = true
+  isLoading.value  = true
+  error.value      = ''
+  results.value    = []
+  try {
+    const data = await fetchSimilarSounds(sound.freesoundId)
+    results.value    = data.results
+    totalCount.value = data.count
+    nextUrl.value    = data.nextUrl
+    prevUrl.value    = data.previousUrl
+    page.value       = 1
+  } catch (e) {
+    error.value = e.message || 'Similar sounds search failed'
+  } finally {
+    isLoading.value     = false
+    similarLoading.value = false
+  }
+}
+
+function formatAnalysisValue(v) {
+  if (v == null) return '—'
+  if (typeof v === 'object') return JSON.stringify(v).slice(0, 40)
+  return typeof v === 'number' ? v.toFixed(2) : String(v)
+}
 
 async function loadCachedSounds() {
   cachedSounds.value = await getCachedSounds()
@@ -849,6 +940,22 @@ onUnmounted(() => {
                     {{ isSendingToCapture ? '…' : 'Capture' }}
                   </button>
                   <button
+                    @click.stop="infoSound = sound"
+                    class="flex items-center gap-1 px-2 py-1 rounded border border-neutral-700 text-neutral-500 hover:border-sky-500/50 hover:text-sky-400 text-[9px] font-black uppercase tracking-widest transition-colors"
+                    title="Sound info"
+                  >
+                    <Info class="w-2.5 h-2.5" />
+                  </button>
+                  <button
+                    @click.stop="doSimilar(sound)"
+                    :disabled="similarLoading"
+                    class="flex items-center gap-1 px-2 py-1 rounded border border-neutral-700 text-neutral-500 hover:border-cyan-500/50 hover:text-cyan-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                    title="Find similar sounds"
+                  >
+                    <Loader2 v-if="similarLoading" class="w-2.5 h-2.5 animate-spin" />
+                    <Shuffle v-else class="w-2.5 h-2.5" />
+                  </button>
+                  <button
                     @click.stop="deleteCache(sound.id)"
                     class="flex items-center gap-1 px-2 py-1 rounded border border-neutral-700 text-neutral-500 hover:border-red-500/50 hover:text-red-400 text-[9px] font-black uppercase tracking-widest transition-colors"
                     title="Remove from local cache"
@@ -858,6 +965,7 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
+
           </template>
 
           <!-- ── Search results view ───────────────────────────────── -->
@@ -878,9 +986,9 @@ onUnmounted(() => {
 
           <!-- Results list -->
           <div v-if="results.length > 0" class="flex flex-col gap-1 p-4">
+            <div v-for="sound in results" :key="sound.freesoundId" class="flex flex-col">
             <div
-              v-for="sound in results" :key="sound.freesoundId"
-              class="group flex items-center gap-2 px-2 py-2 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors" :class="previewingId === sound.id && previewPlaying ? 'bg-cyan-500/20' :'bg-neutral-950/60 '"
+              class="group flex items-center gap-2 px-2 py-2 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors" :class="[previewingId === sound.id && previewPlaying ? 'bg-cyan-500/20' :'bg-neutral-950/60', searchAnalysisId === sound.freesoundId ? 'border-b-0 rounded-b-none border-violet-500/30' : '']"
             >
               <!-- Preview button -->
               <button
@@ -980,8 +1088,54 @@ onUnmounted(() => {
                 >
                   <Download class="w-2.5 h-2.5" /> Save
                 </button>
+                <button
+                  @click.stop="doSimilar(sound)"
+                  :disabled="similarLoading"
+                  class="flex items-center gap-1 px-2 py-1 rounded border border-neutral-700 text-neutral-500 hover:border-cyan-500/50 hover:text-cyan-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                  title="Find similar sounds"
+                >
+                  <Loader2 v-if="similarLoading" class="w-2.5 h-2.5 animate-spin" />
+                  <Shuffle v-else class="w-2.5 h-2.5" />
+                </button>
+                <button
+                  @click.stop="toggleSearchAnalysis(sound)"
+                  :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                    searchAnalysisId === sound.freesoundId
+                      ? 'bg-violet-500/15 border-violet-500/40 text-violet-300'
+                      : 'border-neutral-700 text-neutral-500 hover:border-violet-500/50 hover:text-violet-400']"
+                  title="Audio analysis"
+                >
+                  <Loader2 v-if="searchAnalysisLoading && searchAnalysisId === sound.freesoundId" class="w-2.5 h-2.5 animate-spin" />
+                  <Activity v-else class="w-2.5 h-2.5" />
+                </button>
               </div>
             </div>
+
+            <!-- Inline analysis expansion -->
+            <Transition name="fade-down">
+              <div
+                v-if="searchAnalysisId === sound.freesoundId"
+                class="px-3 py-2.5 rounded-b-lg border border-t-0 border-violet-500/30 bg-violet-950/20"
+              >
+                <div v-if="searchAnalysisLoading" class="flex items-center gap-2 text-neutral-500 py-1">
+                  <Loader2 class="w-3 h-3 animate-spin" />
+                  <span class="text-[9px] font-mono">Fetching analysis…</span>
+                </div>
+                <div v-else-if="searchAnalysisData">
+                  <div v-if="searchAnalysisData.error" class="text-[9px] text-red-400 font-mono">{{ searchAnalysisData.error }}</div>
+                  <dl v-else class="grid grid-cols-3 gap-x-4 gap-y-1">
+                    <template v-for="(val, key) in searchAnalysisData" :key="key">
+                      <div class="flex items-center justify-between gap-1">
+                        <dt class="text-[8px] font-black uppercase tracking-widest text-neutral-500 capitalize">{{ key }}</dt>
+                        <dd class="text-[9px] text-violet-300 font-mono">{{ formatAnalysisValue(val) }}</dd>
+                      </div>
+                    </template>
+                  </dl>
+                </div>
+              </div>
+            </Transition>
+
+            </div><!-- end per-sound wrapper -->
           </div>
           </template><!-- end v-else (search results) -->
 
@@ -1002,6 +1156,126 @@ onUnmounted(() => {
         </div>
 
         </template><!-- end v-if="hasApiKey" -->
+
+        <!-- ── Cached sound info dialog ──────────────────────────── -->
+        <Transition name="fade">
+          <div
+            v-if="infoSound"
+            class="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-2xl"
+            @click.self="infoSound = null"
+          >
+            <div class="bg-neutral-900 border border-sky-500/30 rounded-2xl shadow-2xl w-80 max-h-[80%] flex flex-col overflow-hidden">
+
+              <!-- Dialog header -->
+              <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-800 shrink-0">
+                <span class="text-[10px] font-black uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
+                  <Info class="w-3 h-3" /> Sound Info
+                </span>
+                <div class="flex items-center gap-2">
+                  <!-- Analysis button -->
+                  <button
+                    @click="loadAnalysis"
+                    :disabled="analysisLoading || !infoSound.freesoundId"
+                    :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                      analysisData && !analysisData.error
+                        ? 'bg-violet-500/15 border-violet-500/40 text-violet-300'
+                        : 'border-neutral-700 text-neutral-500 hover:border-violet-500/50 hover:text-violet-400 disabled:opacity-30']"
+                    title="Fetch audio analysis"
+                  >
+                    <Loader2 v-if="analysisLoading" class="w-2.5 h-2.5 animate-spin" />
+                    <Activity v-else class="w-2.5 h-2.5" />
+                    Analysis
+                  </button>
+                  <!-- Similar button -->
+                  <button
+                    @click="doSimilar(infoSound)"
+                    :disabled="similarLoading || !infoSound.freesoundId"
+                    class="flex items-center gap-1 px-2 py-1 rounded border border-neutral-700 text-neutral-500 hover:border-cyan-500/50 hover:text-cyan-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
+                    title="Find similar sounds"
+                  >
+                    <Loader2 v-if="similarLoading" class="w-2.5 h-2.5 animate-spin" />
+                    <Shuffle v-else class="w-2.5 h-2.5" />
+                    Similar
+                  </button>
+                  <button @click="infoSound = null" class="text-neutral-600 hover:text-white transition-colors ml-1">
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Scrollable body -->
+              <div class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 flex flex-col gap-4">
+
+                <!-- Basic info table -->
+                <dl class="flex flex-col gap-2">
+                  <div class="flex gap-2">
+                    <dt class="text-[9px] font-black uppercase tracking-widest text-neutral-500 w-20 shrink-0">Name</dt>
+                    <dd class="text-[10px] text-white font-mono break-all leading-tight">{{ infoSound.label }}</dd>
+                  </div>
+                  <div class="flex gap-2">
+                    <dt class="text-[9px] font-black uppercase tracking-widest text-neutral-500 w-20 shrink-0">Author</dt>
+                    <dd class="text-[10px] text-neutral-300 font-mono">{{ infoSound.author || '—' }}</dd>
+                  </div>
+                  <div class="flex gap-2">
+                    <dt class="text-[9px] font-black uppercase tracking-widest text-neutral-500 w-20 shrink-0">Duration</dt>
+                    <dd class="text-[10px] text-neutral-300 font-mono">{{ formatTime(infoSound.duration) }}</dd>
+                  </div>
+                  <div class="flex gap-2">
+                    <dt class="text-[9px] font-black uppercase tracking-widest text-neutral-500 w-20 shrink-0">Size</dt>
+                    <dd class="text-[10px] text-neutral-300 font-mono">{{ formatBytes(infoSound.size) }}</dd>
+                  </div>
+                  <div class="flex gap-2">
+                    <dt class="text-[9px] font-black uppercase tracking-widest text-neutral-500 w-20 shrink-0">Cached</dt>
+                    <dd class="text-[10px] text-neutral-300 font-mono">{{ formatDate(infoSound.downloadedAt) }}</dd>
+                  </div>
+                  <div v-if="infoSound.freesoundId" class="flex gap-2">
+                    <dt class="text-[9px] font-black uppercase tracking-widest text-neutral-500 w-20 shrink-0">FS ID</dt>
+                    <dd class="text-[10px] text-sky-400 font-mono">#{{ infoSound.freesoundId }}</dd>
+                  </div>
+                </dl>
+
+                <!-- Rating + description (fetched from API) -->
+                <div v-if="infoDetailLoading" class="flex items-center gap-2 text-neutral-600">
+                  <Loader2 class="w-3 h-3 animate-spin" />
+                  <span class="text-[9px] font-mono">Loading details…</span>
+                </div>
+                <div v-else-if="infoDetail" class="flex flex-col gap-2">
+                  <!-- Rating -->
+                  <div v-if="infoDetail.avgRating != null" class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-0.5">
+                      <Star
+                        v-for="i in 5" :key="i"
+                        :class="['w-2.5 h-2.5', i <= Math.round(infoDetail.avgRating) ? 'text-amber-400 fill-amber-400' : 'text-neutral-700']"
+                      />
+                    </div>
+                    <span class="text-[9px] font-mono text-neutral-400">{{ infoDetail.avgRating?.toFixed(1) }}</span>
+                    <span class="text-[8px] text-neutral-600 font-mono">({{ infoDetail.numRatings }} ratings)</span>
+                  </div>
+                  <!-- Description -->
+                  <p v-if="infoDetail.description" class="text-[9px] text-neutral-400 leading-relaxed font-mono whitespace-pre-wrap break-words">{{ infoDetail.description }}</p>
+                </div>
+
+                <!-- Analysis section -->
+                <div v-if="analysisData" class="border-t border-neutral-800 pt-3">
+                  <div class="flex items-center gap-1.5 mb-2">
+                    <Activity class="w-3 h-3 text-violet-400" />
+                    <span class="text-[9px] font-black uppercase tracking-widest text-violet-400">Analysis</span>
+                  </div>
+                  <div v-if="analysisData.error" class="text-[9px] text-red-400 font-mono">{{ analysisData.error }}</div>
+                  <dl v-else class="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    <template v-for="(val, key) in analysisData" :key="key">
+                      <div class="flex justify-between gap-1">
+                        <dt class="text-[9px] font-black uppercase tracking-widest text-neutral-500 capitalize">{{ key }}</dt>
+                        <dd class="text-[9px] text-violet-300 font-mono">{{ formatAnalysisValue(val) }}</dd>
+                      </div>
+                    </template>
+                  </dl>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </Transition>
 
         <!-- ── Resize handle (SE corner) ──────────────────────────── -->
         <div

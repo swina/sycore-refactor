@@ -104,6 +104,33 @@ export async function searchSounds(query, { page = 1, pageSize = 15, minDuration
   }
 }
 
+export async function fetchSoundDetail(freesoundId) {
+  const token = getToken()
+  if (!token) throw new Error('Freesound API key not configured')
+  const params = new URLSearchParams({ token, fields: 'id,name,description,avg_rating,num_ratings' })
+  return fetchJson(`${BASE}/sounds/${freesoundId}/?${params}`)
+}
+
+export async function fetchSimilarSounds(freesoundId) {
+  const token = getToken()
+  if (!token) throw new Error('Freesound API key not configured')
+  const params = new URLSearchParams({ token, fields: FIELDS, page_size: 15 })
+  const data = await fetchJson(`${BASE}/sounds/${freesoundId}/similar/?${params}`)
+  return {
+    results: (data.results || []).map(mapSound),
+    count: data.count || 0,
+    nextUrl: data.next || null,
+    previousUrl: data.previous || null,
+  }
+}
+
+export async function fetchSoundAnalysis(freesoundId) {
+  const token = getToken()
+  if (!token) throw new Error('Freesound API key not configured')
+  const params = new URLSearchParams({ token, fields: 'bpm,bpm_confidence,brightness,warmth,depth' })
+  return fetchJson(`${BASE}/sounds/${freesoundId}/analysis/?${params}`)
+}
+
 export async function fetchPage(url) {
   // Freesound pagination URLs omit the token — re-attach it
   const token = getToken()
