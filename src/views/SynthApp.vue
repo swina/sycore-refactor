@@ -435,11 +435,7 @@ onMounted(() => {
       </div>
 
       <div :style="focusStyle('loopMachine')">
-        <LoopMachine
-          v-show="uiStore.isLoopMachineOpen"
-          :isOpen="uiStore.isLoopMachineOpen"
-          @close="uiStore.isLoopMachineOpen = false"
-        />
+        <LoopMachine />
       </div>
 
       <!-- Live Timeline -->

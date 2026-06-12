@@ -50,6 +50,9 @@ const isImporting      = ref(false)
 const isDiscoveringLoop = ref(false)
 const isCalculatingBpm  = ref(false)
 const linkPlayStart     = ref(false)
+const isFadingIn        = ref(false)
+const isFadingOut       = ref(false)
+const fadeDur           = ref(0)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const appendMode       = ref(localStorage.getItem('S1_CAPTURE_APPEND') === '1')
 const error            = ref(null)
@@ -304,42 +307,45 @@ async function decodeRecordedBlob(blob) {
   }
 }
 
+function computePeaks(channelData, numPoints) {
+  const step = Math.ceil(channelData.length / numPoints)
+  const peaks = []
+  for (let i = 0; i < numPoints; i++) {
+    const start = i * step
+    let maxVal = 0
+    let minVal = 0
+    for (let j = 0; j < step && (start + j) < channelData.length; j++) {
+      const val = channelData[start + j]
+      if (val > maxVal) maxVal = val
+      if (val < minVal) minVal = val
+    }
+    peaks.push({ max: maxVal, min: minVal })
+  }
+  return peaks
+}
+
 async function generateWaveformPeaks(blob) {
   try {
     const arrayBuffer = await blob.arrayBuffer()
     const audioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext
     const tempCtx = new audioCtxClass(1, 1, 44100)
-    
     const decoded = await tempCtx.decodeAudioData(arrayBuffer)
-    
-    const channelData = decoded.getChannelData(0)
-    const numPoints = waveformDetail.value
-    const step = Math.ceil(channelData.length / numPoints)
-    const peaks = []
-
-    for (let i = 0; i < numPoints; i++) {
-      const start = i * step
-      let maxVal = 0
-      let minVal = 0
-      for (let j = 0; j < step && (start + j) < channelData.length; j++) {
-        const val = channelData[start + j]
-        if (val > maxVal) maxVal = val
-        if (val < minVal) minVal = val
-      }
-      peaks.push({ max: maxVal, min: minVal })
-    }
-    waveformPeaks.value = peaks
+    waveformPeaks.value = computePeaks(decoded.getChannelData(0), waveformDetail.value)
   } catch (e) {
     console.error('Failed to generate waveform peaks', e)
     waveformPeaks.value = []
   }
 }
 
+let _skipNextPeakRegen = false
+
 watch(recordedBlob, async (newBlob) => {
   if (newBlob) {
+    const skip = _skipNextPeakRegen
+    _skipNextPeakRegen = false
     const [buf] = await Promise.all([
       decodeRecordedBlob(newBlob),
-      generateWaveformPeaks(newBlob),
+      skip ? Promise.resolve() : generateWaveformPeaks(newBlob),
     ])
     decodedBuffer.value = buf
   } else {
@@ -1079,6 +1085,102 @@ async function calculateBpm() {
   }
 }
 
+async function handleFadeIn() {
+  if (!recordedBlob.value || isFadingIn.value) return
+  isFadingIn.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new AudioCtxClass()
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+
+    const sampleRate = decoded.sampleRate
+    const loopStartSample = Math.floor(loopStart.value * sampleRate)
+    const loopEndSample   = Math.floor(loopEnd.value   * sampleRate)
+    const loopRegionSamples = loopEndSample - loopStartSample
+    // Ramp [loopStart → loopStart+fadeSamples] inside the loop region
+    const fadeSamples = Math.min(
+      Math.floor(fadeDur.value * sampleRate),
+      loopRegionSamples
+    )
+
+    if (fadeSamples > 0) {
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        const data = decoded.getChannelData(c)
+        for (let i = 0; i < fadeSamples; i++) {
+          data[loopStartSample + i] *= i / fadeSamples
+        }
+      }
+    }
+
+    if (isPlaying.value) {
+      currentPlaybackTime.value = getPlaybackTime()
+      stopAllSources()
+      isPlaying.value = false
+    }
+    waveformPeaks.value = computePeaks(decoded.getChannelData(0), waveformDetail.value)
+    _skipNextPeakRegen = true
+    recordedBlob.value = audioBufferToWav(decoded)
+  } catch (e) {
+    console.error('[AudioCapture] Fade in failed', e)
+  } finally {
+    isFadingIn.value = false
+  }
+}
+
+async function handleFadeOut() {
+  if (!recordedBlob.value || isFadingOut.value) return
+  isFadingOut.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new AudioCtxClass()
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+
+    const sampleRate = decoded.sampleRate
+    const loopStartSample   = Math.floor(loopStart.value * sampleRate)
+    const loopEndSample     = Math.floor(loopEnd.value   * sampleRate)
+    const loopRegionSamples = loopEndSample - loopStartSample
+    // Ramp [loopEnd-fadeSamples → loopEnd] inside the loop region
+    const fadeSamples = Math.min(
+      Math.floor(fadeDur.value * sampleRate),
+      loopRegionSamples
+    )
+
+    if (fadeSamples > 0) {
+      const fadeStart = loopEndSample - fadeSamples
+      // The last waveform peak bucket straddles loopEndSample — zero samples
+      // in the remainder of that bucket so the bar visually reaches silence.
+      const peakStep  = Math.ceil(decoded.length / waveformDetail.value)
+      const silenceEnd = Math.min(loopEndSample + peakStep, decoded.length)
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        const data = decoded.getChannelData(c)
+        for (let i = 0; i < fadeSamples; i++) {
+          data[fadeStart + i] *= 1 - i / fadeSamples
+        }
+        for (let s = loopEndSample; s < silenceEnd; s++) {
+          data[s] = 0
+        }
+      }
+    }
+
+    if (isPlaying.value) {
+      currentPlaybackTime.value = getPlaybackTime()
+      stopAllSources()
+      isPlaying.value = false
+    }
+    waveformPeaks.value = computePeaks(decoded.getChannelData(0), waveformDetail.value)
+    _skipNextPeakRegen = true
+    recordedBlob.value = audioBufferToWav(decoded)
+  } catch (e) {
+    console.error('[AudioCapture] Fade out failed', e)
+  } finally {
+    isFadingOut.value = false
+  }
+}
+
 async function handleNormalize() {
   if (!recordedBlob.value || isNormalizing.value) return
   isNormalizing.value = true
@@ -1502,6 +1604,11 @@ watch(playbackStart, (val) => {
 watch(loopStart, (val) => {
   if (linkPlayStart.value) playbackStart.value = val
 })
+
+// Auto-sync fade duration with loop region length
+watch([loopStart, loopEnd], () => {
+  fadeDur.value = Math.round(Math.max(0, loopEnd.value - loopStart.value) * 1000) / 1000
+}, { immediate: true })
 
 function formatMmSs(s) {
   const secs = Math.floor(s)
@@ -2360,7 +2467,7 @@ onUnmounted(() => {
           </button>
 
           <!-- Record / Stop / Armed -->
-          <div class="relative mt-4">
+          <div class="relative mt-2">
             <span
               v-if="mappingStore.learningParamName === 'audioCapture_record'"
               class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-10 pointer-events-none"
@@ -2752,6 +2859,39 @@ onUnmounted(() => {
               <Zap class="w-3 h-3" />
               {{ isCalculatingBpm ? 'Detecting…' : 'Calc BPM' }}
             </button>
+            <!-- Fade controls -->
+            <div class="flex flex-row gap-0.5 shrink-0 border border-neutral-800 rounded overflow-hidden">
+              <button
+                @click="handleFadeIn"
+                :disabled="!recordedBlob || isFadingIn || fadeDur <= 0"
+                :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 transition-colors border-b border-neutral-800',
+                  recordedBlob && !isFadingIn && fadeDur > 0
+                    ? 'text-sky-300 hover:bg-sky-500/15'
+                    : 'text-neutral-700 cursor-default']"
+                title="Fade in: ramp Loop Start → Loop Start+duration"
+              >▶ {{ isFadingIn ? '…' : 'Fade In' }}</button>
+              <button
+                @click="handleFadeOut"
+                :disabled="!recordedBlob || isFadingOut || fadeDur <= 0"
+                :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 transition-colors border-b border-neutral-800',
+                  recordedBlob && !isFadingOut && fadeDur > 0
+                    ? 'text-orange-300 hover:bg-orange-500/15'
+                    : 'text-neutral-700 cursor-default']"
+                title="Fade out: ramp Loop End−duration → Loop End"
+              >{{ isFadingOut ? '…' : 'Fade Out' }} ◀</button>
+              
+            </div>
+            <div class="flex items-center justify-center gap-0.5 px-1.5 py-0.5">
+                <input
+                  v-model.number="fadeDur"
+                  type="number"
+                  min="0"
+                  max="300"
+                  step="0.001"
+                  title="Fade duration (auto = Loop End − Loop Start)"
+                  class="w-12 text-[9px] font-mono text-neutral-400/70 bg-transparent pr-0.5 text-right focus:outline-none focus:text-neutral-300"
+                /><span class="text-[8px] font-mono text-neutral-600">s</span>
+              </div>
             <span class="text-[10px] font-mono text-neutral-500">
               Range: {{ formatTimeSecs(loopStart) }} - {{ formatTimeSecs(loopEnd) }} / {{ formatTimeSecs(audioDuration) }}
             </span>
@@ -2799,7 +2939,7 @@ onUnmounted(() => {
             />
           </div>
 
-          <div v-if="isLooping" class="flex flex-row gap-3 mt-1">
+          <div class="flex flex-row gap-3 mt-1">
             <!-- Loop Start Slider -->
             <div class="flex items-center gap-3 w-1/2">
               <div class="flex items-center gap-1 w-16 shrink-0">
