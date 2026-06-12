@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import {
   Radio, Cable, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music, Music2, ListMusic, Workflow,
-  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation, Settings, Infinity, Clock, User
+  Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation, Settings, Infinity, Clock, User, Globe
 } from 'lucide-vue-next'
 import SlideshowModal from '@/components/SlideshowModal.vue'
 import AboutModal from '@/components/AboutModal.vue'
@@ -23,6 +23,9 @@ const uiStore = useUiStore()
 const isSlideshowOpen = ref(false)
 const isHelpSlideshowOpen = ref(false)
 const isAdminPanelOpen = ref(false)
+
+// The marketing website is a separate build/deployment — set VITE_WEBSITE_URL to enable the link.
+const websiteUrl = import.meta.env.VITE_WEBSITE_URL || ''
 
 useMidiInit()
 
@@ -61,6 +64,18 @@ function goWorkspace() {
           <Settings class="w-3 h-3" />
           Admin
         </button>
+
+        <!-- Website Link (separate deployment) -->
+        <a
+          v-if="websiteUrl"
+          :href="websiteUrl"
+          target="_blank"
+          rel="noopener"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase font-mono border transition-colors bg-neutral-900/60 text-neutral-400 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon"
+        >
+          <Globe class="w-3 h-3" />
+          Website
+        </a>
 
         <!-- Presentation Link (Not logged in) -->
 

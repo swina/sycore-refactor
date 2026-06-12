@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:website": "vite --mode website",
+    "build:website": "vite build --mode website",
+    "preview:website": "vite preview --mode website --outDir dist-site",
+    "deploy:app": "vercel deploy --prod",
+    "deploy:website": "npm run build:website && vercel link --cwd dist-site --project sycore-website --yes && vercel deploy --cwd dist-site --prod"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",

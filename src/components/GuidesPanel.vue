@@ -77,9 +77,9 @@ const CATEGORIES = [
     color: 'text-emerald-400',
     items: [
       { id: 'audio-capture', label: 'Audio Capture',              file: 'SYCORE_AUDIO_CAPTURE' },
-      { id: 'looper',        label: 'Audio Looper',               file: 'SYCORE_LOOPER', badge: 'Beta' },
       { id: 'backing-track', label: 'Backing Track Player',       file: 'SYCORE_BACKING_TRACK_PLAYER' },
-      { id: 'freesound-browser', label: 'Freesound.org Browser',  file: 'SYCORE_FREESOUND_BROWSER' }
+      { id: 'freesound-browser', label: 'Freesound.org Browser',  file: 'SYCORE_FREESOUND_BROWSER' },
+      { id: 'looper',        label: 'Audio Looper',               file: 'SYCORE_LOOPER', badge: 'Beta' },
     ],
   },
 
@@ -87,8 +87,9 @@ const CATEGORIES = [
     label: 'Live Performance',
     color: 'text-pink-400',
     items: [
-      { id: 'live-pad',       label: 'Live Set',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },
       { id: 'live-timeline',  label: 'Live Timeline',         file: 'SYCORE_LIVE_TIMELINE' },
+      { id: 'loop-machine', label: 'Loop Machine',         file: 'SYCORE_LOOP_MACHINE' },
+      { id: 'live-pad',       label: 'Live Set',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },
       { id: 'step-sequencer', label: 'Step Sequencer',        file: 'SYCORE_STEP_SEQUENCER' },
       { id: 'chord-progression-sequencer', label: 'Chord Progression Sequencer', file: 'SYCORE_CHORD_PROG_SEQUENCER' },
     ],

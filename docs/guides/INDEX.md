@@ -28,6 +28,7 @@
 |-------|-------------|
 | [Audio Capture](./SYCORE_AUDIO_CAPTURE.md) | Record audio directly within SY.CORE via the mic toolbar panel |
 | [Audio Looper](./SYCORE_LOOPER.md) | Sample-accurate looper for live instrumental and digital performance *(Beta)* |
+| [Loop Machine](./SYCORE_LOOP_MACHINE.md) | 24-pad simultaneous loop player with sync-quantized starts, mixer, Performance Sets, and Capture integration |
 | [Backing Track Player](./SYCORE_BACKING_TRACK_PLAYER.md) | Dual-slot playback engine with crossfade, playlist, and MIDI sync |
 | [Freesound Browser](./SYCORE_FREESOUND_BROWSER.md) | Search, preview, and inject sounds from freesound.org into playlists, loop pads, or Audio Capture |
 
@@ -61,4 +62,4 @@
 
 ---
 
-*Last updated: 2026-06-08*
+*Last updated: 2026-06-13*
