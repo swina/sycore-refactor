@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen } from 'lucide-vue-next'
+import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic } from 'lucide-vue-next'
 import { useUiStore }           from '@/stores/useUiStore'
 import { useMidiStore }         from '@/stores/useMidiStore'
 import { useArpStore }          from '@/stores/useArpStore'
@@ -378,6 +378,23 @@ function clearPad(idx) {
   _savePads()
 }
 
+async function sendPadToCapture(idx) {
+  const pad = pads.value[idx]
+  if (!pad) return
+  const url = await resolveUrl(pad.id, pad.url)
+  if (!url) return
+  try {
+    const resp = await fetch(url)
+    const blob = await resp.blob()
+    uiStore.isAudioCaptureOpen = true
+    window.dispatchEvent(new CustomEvent('freesound-send-to-capture', {
+      detail: { blob, bpm: pad.bpm || null, label: pad.label }
+    }))
+  } catch (e) {
+    console.error('[LoopMachine] Failed to send pad to capture', e)
+  }
+}
+
 // ── Volume ────────────────────────────────────────────────────────
 function formatTime(s) {
   if (!s || isNaN(s)) return ''
@@ -717,6 +734,16 @@ onUnmounted(() => {
                   v-if="active[idx]"
                   class="absolute bottom-1 left-1.5 text-[8px] font-mono text-cyan-300/80 leading-none bg-black/60 px-0.5 rounded pointer-events-none"
                 >{{ Math.round(padVolumes[idx] * 100) }}%</span>
+
+                <!-- Send to Capture button -->
+                <button
+                  v-if="pad"
+                  @click.stop="sendPadToCapture(idx)"
+                  class="absolute bottom-0.5 right-5 opacity-0 group-hover:opacity-100 w-4 h-4 flex items-center justify-center rounded text-neutral-600 hover:text-sky-400 hover:bg-sky-500/10 transition-all"
+                  title="Send to Audio Capture"
+                >
+                  <Mic class="w-2.5 h-2.5" />
+                </button>
 
                 <!-- Clear button -->
                 <button
