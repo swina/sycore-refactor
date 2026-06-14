@@ -54,6 +54,7 @@ export const useUiStore = defineStore('ui', () => {
   const isSoundEngineOpen        = ref(false)
   const isGuidesOpen             = ref(false)
   const isChordProgOpen          = ref(false)
+  const isAudioMixerOpen         = ref(false)
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
   const midiActionsActiveTab = ref('mapper')
@@ -289,7 +290,7 @@ export const useUiStore = defineStore('ui', () => {
     isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
-    isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen,
+    isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen,
     isFreesoundBrowserOpen, isLoopMachineOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab,

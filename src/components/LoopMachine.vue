@@ -54,7 +54,7 @@ function _loadPads() {
 const pads       = ref(_loadPads())
 const active     = ref(Array(PAD_COUNT).fill(false))
 const pending    = ref(Array(PAD_COUNT).fill(false))
-const padVolumes = ref(Array(PAD_COUNT).fill(0.85))
+const padVolumes = ref(Array(PAD_COUNT).fill(0))
 const fadeOutMs  = ref(parseInt(localStorage.getItem('S1_LM_FADE_MS') || '0'))
 watch(fadeOutMs, v => localStorage.setItem('S1_LM_FADE_MS', String(v)))
 
@@ -470,8 +470,9 @@ function _startMidiListener() {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────
-let _assignHandler    = null
-let _lppSetAssignHandler = null
+let _assignHandler         = null
+let _lppSetAssignHandler   = null
+let _lmMasterVolumeHandler = null
 
 onMounted(() => {
   _loadPerfSets()
@@ -492,6 +493,13 @@ onMounted(() => {
   }
   window.addEventListener('lpp-set-assign', _lppSetAssignHandler)
 
+  _lmMasterVolumeHandler = e => {
+    if (e.detail == null) return
+    const scale = Math.max(0, Math.min(1, e.detail))
+    for (let i = 0; i < PAD_COUNT; i++) setPadVolume(i, scale)
+  }
+  window.addEventListener('lm-master-volume', _lmMasterVolumeHandler)
+
   _startMidiListener()
 })
 
@@ -500,6 +508,7 @@ onUnmounted(() => {
   if (_padCtx) { _padCtx.close().catch(() => {}); _padCtx = null }
   if (_assignHandler) window.removeEventListener('loop-machine-assign', _assignHandler)
   if (_lppSetAssignHandler) window.removeEventListener('lpp-set-assign', _lppSetAssignHandler)
+  if (_lmMasterVolumeHandler) window.removeEventListener('lm-master-volume', _lmMasterVolumeHandler)
   if (_unsubMidi) _unsubMidi()
 })
 </script>

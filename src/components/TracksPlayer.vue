@@ -826,6 +826,7 @@ onMounted(() => {
   window.addEventListener('playlist-loop-toggle', handleLoopToggle)
   window.addEventListener('tracks-player-open-freesound', handleOpenFreesound)
   window.addEventListener('freesound-add-to-playlist', handleFreesoundAdd)
+  window.addEventListener('tracks-player-volume', handleVolume)
 
   _handlers = { handleToggle, handlePlayStop, handleNext, handleAddFromCapture, handlePrev, handlePlaylistPlay, handleSeek, handleVolume, handlePlaylistMutate, handlePlaylistClear, handlePlayerStateRequest, handleLoopToggle, handleOpenFreesound, handleFreesoundAdd }
 })
@@ -847,6 +848,7 @@ onUnmounted(() => {
   window.removeEventListener('playlist-loop-toggle', _handlers.handleLoopToggle)
   window.removeEventListener('tracks-player-open-freesound', _handlers.handleOpenFreesound)
   window.removeEventListener('freesound-add-to-playlist', _handlers.handleFreesoundAdd)
+  window.removeEventListener('tracks-player-volume', _handlers.handleVolume)
 })
 </script>
 

@@ -1041,6 +1041,17 @@ export class MidiService {
     targets.forEach(out => { try { out.send(msg); } catch (e) {} });
   }
 
+  /** Send CC directly to a named output port, bypassing routing matrix. */
+  sendRawCC(portName: string, cc: number, value: number, channel: number = 0): void {
+    if (!this.midiAccess) return;
+    const status = 0xB0 | (channel & 0xF);
+    this.midiAccess.outputs.forEach(out => {
+      if (out.name === portName) {
+        try { out.send([status, cc & 0x7F, value & 0x7F]); } catch {}
+      }
+    });
+  }
+
   allNotesOff(channel: number = 0) {
     this.broadcast('allnotesoff', {}, channel, MidiSource.UI);
     this.sendCC(120, 0, channel, MidiSource.UI);

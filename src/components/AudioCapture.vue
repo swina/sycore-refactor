@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2 } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal } from 'lucide-vue-next'
+import AudioSettingsModal from '@/components/AudioSettingsModal.vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -67,6 +68,7 @@ const loopPadSoundName     = ref('')
 const lastCaptureLabel     = ref('')   // set when a Freesound sound is loaded
 
 // ── Loop Machine assignment ───────────────────────────────────────
+const showAudioSettings    = ref(false)
 const showLMModal          = ref(false)
 const lmModalSlots         = ref([])
 const lmSoundName          = ref('')
@@ -560,6 +562,10 @@ async function handleDeviceChange(id) {
   analyserRef = null
   isMonitoring.value = false
   await startMonitor(id)
+}
+
+function onAudioSettingsSelectInput(id) {
+  handleDeviceChange(id)
 }
 
 // ── Append helper ─────────────────────────────────────────────────────────────
@@ -2200,6 +2206,14 @@ onUnmounted(() => {
           </option>
         </select>
         <button
+          @click="showAudioSettings = true"
+          title="Audio Device Settings"
+          class="shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors text-amber-400 border-amber-400/30 hover:bg-amber-400/10 hover:border-amber-400/50"
+        >
+          <SlidersHorizontal class="w-3 h-3" />
+          Devices
+        </button>
+        <button
           @click="toPlaylist = !toPlaylist"
           :title="toPlaylist ? 'Auto-add to Playlist: ON' : 'Auto-add to Playlist: OFF'"
           :class="['shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors',
@@ -2491,6 +2505,14 @@ onUnmounted(() => {
               </div>
             </Transition>
           </Teleport>
+
+          <!-- Audio Settings Modal -->
+          <AudioSettingsModal
+            v-if="showAudioSettings"
+            :selected-input-id="selectedDeviceId"
+            @close="showAudioSettings = false"
+            @select-input="onAudioSettingsSelectInput"
+          />
 
            <!-- Export MP3 -->
           <button

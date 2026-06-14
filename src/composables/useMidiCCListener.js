@@ -100,7 +100,6 @@ export function useMidiCCListener() {
 
     if (mapping) {
       const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
-      console.log(`[MIDI Listener] Mapped input: ${deviceName || 'Unknown'} CH${chan+1} CC${cc} -> ${paramName} (${val})`)
       applyParam(paramName, val)
       return
     }
