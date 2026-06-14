@@ -1748,28 +1748,40 @@ function drawSingleFrame() {
     }
     ctx.shadowBlur = 0
 
-    // Draw loop bounds vertical dashed lines
+    // Draw loop bounds vertical lines with drag handles
     if (isLooping.value) {
-      ctx.lineWidth = 1 * dpr
-      ctx.setLineDash([4 * dpr, 3 * dpr])
-      
-      // Start bound (Green)
-      if (startX >= 0 && startX <= W) {
-        ctx.strokeStyle = '#00ff9d'
+      const drawBound = (x, color, isDragging) => {
+        if (x < 0 || x > W) return
+        ctx.lineWidth = (isDragging ? 2 : 1) * dpr
+        ctx.strokeStyle = color
+        ctx.shadowColor = isDragging ? color : 'transparent'
+        ctx.shadowBlur  = isDragging ? 6 * dpr : 0
+        ctx.setLineDash([4 * dpr, 3 * dpr])
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
+        ctx.setLineDash([])
+        ctx.shadowBlur = 0
+
+        // Triangle grip at top
+        const sz = 6 * dpr
+        ctx.fillStyle = color
         ctx.beginPath()
-        ctx.moveTo(startX, 0); ctx.lineTo(startX, H)
-        ctx.stroke()
+        ctx.moveTo(x - sz, 0)
+        ctx.lineTo(x + sz, 0)
+        ctx.lineTo(x, sz * 1.3)
+        ctx.closePath()
+        ctx.fill()
+
+        // Triangle grip at bottom
+        ctx.beginPath()
+        ctx.moveTo(x - sz, H)
+        ctx.lineTo(x + sz, H)
+        ctx.lineTo(x, H - sz * 1.3)
+        ctx.closePath()
+        ctx.fill()
       }
 
-      // End bound (Red)
-      if (endX >= 0 && endX <= W) {
-        ctx.strokeStyle = '#ef4444'
-        ctx.beginPath()
-        ctx.moveTo(endX, 0); ctx.lineTo(endX, H)
-        ctx.stroke()
-      }
-      
-      ctx.setLineDash([])
+      drawBound(startX, '#00ff9d', isDraggingLoopStart.value)
+      drawBound(endX,   '#ef4444', isDraggingLoopEnd.value)
     }
 
     // Draw playstart marker (Cyan dashed line)
@@ -1848,9 +1860,14 @@ function drawSingleFrame() {
   }
 }
 
-// ── Playhead scrub ───────────────────────────────────────────────────────────
-const isDraggingPlayhead = ref(false)
+// ── Playhead scrub & loop-handle drag ────────────────────────────────────────
+const isDraggingPlayhead   = ref(false)
+const isDraggingLoopStart  = ref(false)
+const isDraggingLoopEnd    = ref(false)
+const canvasHoverCursor    = ref('crosshair')
 let wasPlayingBeforeDrag = false
+
+const HANDLE_HIT_PX = 8
 
 function canvasXToTime(cssX) {
   if (!audioDuration.value) return 0
@@ -1859,11 +1876,43 @@ function canvasXToTime(cssX) {
   return frac * audioDuration.value
 }
 
+function timeToCanvasX(t) {
+  const W = canvasRef.value?.offsetWidth || 1
+  return (t / audioDuration.value - panOffset.value) * zoomX.value * W
+}
+
+function getLoopHandle(cssX) {
+  if (!audioDuration.value || !isLooping.value) return null
+  const startX = timeToCanvasX(loopStart.value)
+  const endX   = timeToCanvasX(loopEnd.value)
+  if (Math.abs(cssX - startX) <= HANDLE_HIT_PX) return 'loopStart'
+  if (Math.abs(cssX - endX)   <= HANDLE_HIT_PX) return 'loopEnd'
+  return null
+}
+
 function handleCanvasMousedown(e) {
   if (!recordedBlob.value || !audioDuration.value) return
   e.preventDefault()
   const rect = canvasRef.value.getBoundingClientRect()
-  currentPlaybackTime.value = canvasXToTime(e.clientX - rect.left)
+  const cssX = e.clientX - rect.left
+  const handle = getLoopHandle(cssX)
+
+  if (handle === 'loopStart') {
+    isDraggingLoopStart.value = true
+    startDrawLoop()
+    window.addEventListener('mousemove', onLoopHandleMove)
+    window.addEventListener('mouseup', onLoopHandleEnd)
+    return
+  }
+  if (handle === 'loopEnd') {
+    isDraggingLoopEnd.value = true
+    startDrawLoop()
+    window.addEventListener('mousemove', onLoopHandleMove)
+    window.addEventListener('mouseup', onLoopHandleEnd)
+    return
+  }
+
+  currentPlaybackTime.value = canvasXToTime(cssX)
   isDraggingPlayhead.value = true
   wasPlayingBeforeDrag = isPlaying.value
   if (isPlaying.value) {
@@ -1873,6 +1922,32 @@ function handleCanvasMousedown(e) {
   startDrawLoop()
   window.addEventListener('mousemove', onScrubMove)
   window.addEventListener('mouseup', onScrubEnd)
+}
+
+function onLoopHandleMove(e) {
+  const rect = canvasRef.value?.getBoundingClientRect()
+  if (!rect) return
+  const t = canvasXToTime(e.clientX - rect.left)
+  if (isDraggingLoopStart.value) {
+    loopStart.value = Math.max(0, Math.min(t, loopEnd.value - 0.001))
+  } else if (isDraggingLoopEnd.value) {
+    loopEnd.value = Math.min(audioDuration.value, Math.max(t, loopStart.value + 0.001))
+  }
+}
+
+function onLoopHandleEnd() {
+  window.removeEventListener('mousemove', onLoopHandleMove)
+  window.removeEventListener('mouseup', onLoopHandleEnd)
+  isDraggingLoopStart.value = false
+  isDraggingLoopEnd.value   = false
+}
+
+function handleCanvasMousemove(e) {
+  if (isDraggingPlayhead.value || isDraggingLoopStart.value || isDraggingLoopEnd.value) return
+  const rect = canvasRef.value?.getBoundingClientRect()
+  if (!rect) return
+  const handle = getLoopHandle(e.clientX - rect.left)
+  canvasHoverCursor.value = handle ? 'ew-resize' : 'crosshair'
 }
 
 function onScrubMove(e) {
@@ -1899,7 +1974,7 @@ function startDrawLoop() {
     const monitoring = isMonitoring.value
     const rec = isRecording.value
     const playing = isPlaying.value
-    const dragging = isDraggingPlayhead.value
+    const dragging = isDraggingPlayhead.value || isDraggingLoopStart.value || isDraggingLoopEnd.value
     const needsAnimation = monitoring || rec || playing || dragging
 
     if (playing) currentPlaybackTime.value = getPlaybackTime()
@@ -2056,6 +2131,8 @@ onUnmounted(() => {
   }
   window.removeEventListener('mousemove', onScrubMove)
   window.removeEventListener('mouseup', onScrubEnd)
+  window.removeEventListener('mousemove', onLoopHandleMove)
+  window.removeEventListener('mouseup', onLoopHandleEnd)
   navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
   window.removeEventListener('capture-start-rec', _startRecHandler)
@@ -2599,8 +2676,14 @@ onUnmounted(() => {
           <div class="relative flex-1 min-h-[60px] max-h-[50vh]">
             <canvas
               ref="canvasRef"
-              :class="['w-full h-full block', recordedBlob && !isRecording ? (isDraggingPlayhead ? 'cursor-col-resize' : 'cursor-crosshair') : '']"
+              :class="['w-full h-full block', recordedBlob && !isRecording
+                ? (isDraggingLoopStart || isDraggingLoopEnd ? 'cursor-ew-resize'
+                   : isDraggingPlayhead ? 'cursor-col-resize'
+                   : canvasHoverCursor === 'ew-resize' ? 'cursor-ew-resize'
+                   : 'cursor-crosshair')
+                : '']"
               @mousedown="handleCanvasMousedown"
+              @mousemove="handleCanvasMousemove"
             />
             
             <!-- Playback Time overlay in bottom-left corner of the canvas -->
