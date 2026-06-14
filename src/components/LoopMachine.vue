@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic } from 'lucide-vue-next'
+import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, Save, FolderOpen, Trash2 } from 'lucide-vue-next'
 import { useUiStore }           from '@/stores/useUiStore'
 import { useMidiStore }         from '@/stores/useMidiStore'
 import { useArpStore }          from '@/stores/useArpStore'
@@ -39,6 +39,7 @@ watch(() => uiStore.isLoopMachineOpen, v => { if (v) bringToFront() })
 const LS_KEY      = 'SYCORE_LOOP_MACHINE_PADS'
 const LS_PC_SETS  = 'SYCORE_PC_PERFORMANCE_SETS'
 const LS_LPP_SETS = 'SYCORE_LPP_SETS'
+const LS_PRESETS  = 'SYCORE_LM_PRESETS'
 const PAD_COUNT   = 24
 
 // ── Pad state (module-level so it survives re-mounts) ─────────────
@@ -87,6 +88,47 @@ function manualStopRec() {
 
 function _savePads() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(pads.value)) } catch {}
+}
+
+// ── Presets ───────────────────────────────────────────────────────
+const lmPresets       = ref([])
+const showPresetPanel = ref(false)
+const newPresetName   = ref('')
+
+function _loadPresets() {
+  try { lmPresets.value = JSON.parse(localStorage.getItem(LS_PRESETS) || '[]') } catch { lmPresets.value = [] }
+}
+
+function savePreset() {
+  const name = newPresetName.value.trim() || `Preset ${lmPresets.value.length + 1}`
+  const preset = {
+    id: `lm_preset_${Date.now()}`,
+    name,
+    savedAt: new Date().toISOString(),
+    pads: JSON.parse(JSON.stringify(pads.value)),
+    padVolumes: [...padVolumes.value],
+    fadeOutMs: fadeOutMs.value,
+    syncEnabled: syncEnabled.value,
+    lmRecSync: lmRecSync.value,
+  }
+  lmPresets.value.push(preset)
+  try { localStorage.setItem(LS_PRESETS, JSON.stringify(lmPresets.value)) } catch {}
+  newPresetName.value = ''
+}
+
+function loadPreset(preset) {
+  stopAll()
+  pads.value = JSON.parse(JSON.stringify(preset.pads))
+  preset.padVolumes.forEach((v, i) => { padVolumes.value[i] = v })
+  fadeOutMs.value   = preset.fadeOutMs   ?? 0
+  syncEnabled.value = preset.syncEnabled ?? true
+  lmRecSync.value   = preset.lmRecSync   ?? false
+  _savePads()
+}
+
+function deletePreset(id) {
+  lmPresets.value = lmPresets.value.filter(p => p.id !== id)
+  try { localStorage.setItem(LS_PRESETS, JSON.stringify(lmPresets.value)) } catch {}
 }
 
 // ── Performance Sets (shared with LivePerformancePad) ─────────────
@@ -475,6 +517,7 @@ let _lppSetAssignHandler   = null
 let _lmMasterVolumeHandler = null
 
 onMounted(() => {
+  _loadPresets()
   _loadPerfSets()
 
   _assignHandler = e => {
@@ -627,6 +670,20 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Presets toggle -->
+          <button
+            @mousedown.stop
+            @click="showPresetPanel = !showPresetPanel"
+            :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+              showPresetPanel
+                ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                : 'border-neutral-700 text-neutral-500 hover:border-sky-500/40 hover:text-sky-400']"
+            title="Save / Load presets"
+          >
+            <FolderOpen class="w-3 h-3" />
+            Presets
+          </button>
+
           <button @mousedown.stop @click="toggleMinimize" title="Minimize"
             class="p-1.5 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
             <Minus class="w-4 h-4" />
@@ -637,6 +694,63 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
+
+      <!-- Preset panel -->
+      <Transition name="lm-preset">
+        <div v-if="showPresetPanel" class="shrink-0 border-b border-sky-500/20 bg-sky-950/20 px-4 py-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Save row -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <input
+                v-model="newPresetName"
+                type="text"
+                placeholder="Preset name…"
+                maxlength="32"
+                @mousedown.stop
+                @keydown.enter="savePreset"
+                class="h-6 px-2 bg-neutral-900 border border-neutral-700 rounded text-[10px] font-mono text-neutral-200 placeholder-neutral-600 outline-none focus:border-sky-500/60 w-36"
+              />
+              <button
+                @mousedown.stop
+                @click="savePreset"
+                class="flex items-center gap-1 px-2.5 h-6 rounded border border-sky-500/40 bg-sky-500/10 text-sky-300 text-[9px] font-black uppercase tracking-widest hover:bg-sky-500/20 transition-all"
+                title="Save current state as preset"
+              >
+                <Save class="w-3 h-3" /> Save
+              </button>
+            </div>
+
+            <div class="h-4 w-px bg-neutral-800 shrink-0" />
+
+            <!-- Saved presets -->
+            <div v-if="lmPresets.length === 0" class="text-[9px] font-mono text-neutral-600 italic">No presets saved yet</div>
+            <div v-else class="flex items-center gap-1.5 flex-wrap">
+              <div
+                v-for="preset in lmPresets"
+                :key="preset.id"
+                class="flex items-center gap-0.5 rounded border border-neutral-700 bg-neutral-900/60 overflow-hidden"
+              >
+                <button
+                  @mousedown.stop
+                  @click="loadPreset(preset)"
+                  class="flex items-center gap-1 px-2 h-6 text-[9px] font-mono text-neutral-300 hover:text-sky-300 hover:bg-sky-500/10 transition-all"
+                  :title="`Load: ${preset.name} · saved ${new Date(preset.savedAt).toLocaleString()}`"
+                >
+                  {{ preset.name }}
+                </button>
+                <button
+                  @mousedown.stop
+                  @click="deletePreset(preset.id)"
+                  class="px-1 h-6 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-all border-l border-neutral-800"
+                  title="Delete preset"
+                >
+                  <Trash2 class="w-2.5 h-2.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
 
       <!-- Body: pads (left) + mixer (right, always visible) -->
       <div class="flex-1 flex min-h-0 overflow-hidden">
@@ -845,6 +959,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.lm-preset-enter-active,
+.lm-preset-leave-active { transition: max-height 0.18s ease, opacity 0.18s ease; overflow: hidden; max-height: 80px; }
+.lm-preset-enter-from,
+.lm-preset-leave-to { max-height: 0; opacity: 0; }
+
 .lm-vol-slider {
   -webkit-appearance: none;
   appearance: none;
