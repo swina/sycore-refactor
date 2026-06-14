@@ -401,6 +401,45 @@ const isSlider = (c) => !(c.type === 'SWITCH' || (c.max <= 1 && c.min === 0 && !
 const isSetting = (c) => (c.type === 'SWITCH' || (c.max <= 1 && c.min === 0 && !c.type)) || c.type === 'MULTI'
 const hasSliders = (controllers) => (controllers || []).some(isSlider)
 const hasSettings = (controllers) => (controllers || []).some(isSetting)
+
+// ─── Dial helpers ─────────────────────────────────────────────────────────────
+
+function startDialDrag(cfg, event) {
+  event.preventDefault()
+  const min = Number(cfg.min) || 0
+  const max = Number(cfg.max) || 127
+  const startY = event.clientY
+  const startVal = getVal(cfg)
+  const sensitivity = (max - min) / 150
+  const onMove = (e) => handleValueUpdate(cfg, startVal + (startY - e.clientY) * sensitivity)
+  const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
+function _dialPoint(angleDeg, r = 18) {
+  const rad = angleDeg * Math.PI / 180
+  return { x: 24 + r * Math.cos(rad), y: 24 + r * Math.sin(rad) }
+}
+
+function getDialBgPath() {
+  const s = _dialPoint(135), e = _dialPoint(45)
+  return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A 18 18 0 1 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`
+}
+
+function getDialFillPath(cfg) {
+  const pct = getPercent(cfg) / 100
+  if (pct <= 0) return ''
+  const s = _dialPoint(135)
+  const e = _dialPoint(135 + pct * 270)
+  const large = pct * 270 > 180 ? 1 : 0
+  return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A 18 18 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`
+}
+
+function getDialIndicator(cfg, r = 18) {
+  const pct = getPercent(cfg) / 100
+  return _dialPoint(135 + pct * 270, r)
+}
 </script>
 
 <template>
@@ -917,18 +956,21 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                     <div
                       v-if="isSlider(cfg)"
                       tabindex="0"
-                      @mousedown="startHDrag(cfg, $event)"
+                      @mousedown="startDialDrag(cfg, $event)"
                       @keydown="handleKeyNudge(cfg, $event)"
                       @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
-                      :class="['bg-black/60 border border-neutral-900 rounded-sm p-2 flex flex-col gap-2 cursor-ew-resize hover:border-neutral-700 transition-all group/sl', getHighlightClass(cfg)]"
+                      :class="['bg-black/60 border border-neutral-900 rounded-sm p-2 flex items-center gap-3 cursor-ns-resize hover:border-neutral-700 transition-all group/sl', getHighlightClass(cfg)]"
                     >
                       <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
-                      <div class="flex justify-between items-center">
+                      <svg viewBox="0 0 48 48" class="w-10 h-10 shrink-0">
+                        <path :d="getDialBgPath()" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4" stroke-linecap="round"/>
+                        <path :d="getDialFillPath(cfg)" fill="none" :stroke="cat.color" stroke-width="4" stroke-linecap="round" :style="{ filter: `drop-shadow(0 0 3px ${cat.color}88)` }"/>
+                        <circle cx="24" cy="24" r="10" fill="#0a0a0a" :stroke="cat.color + '22'" stroke-width="1"/>
+                        <circle :cx="getDialIndicator(cfg).x" :cy="getDialIndicator(cfg).y" r="2.5" fill="white" opacity="0.85"/>
+                      </svg>
+                      <div class="flex flex-1 justify-between items-center">
                         <span class="text-sm font-mono font-bold text-white uppercase tracking-tight">{{ cfg.label }}</span>
                         <span class="text-sm font-mono font-bold" :style="{ color: cat.color }">{{ Math.round(getVal(cfg)) }}</span>
-                      </div>
-                      <div class="h-4 bg-neutral-950 rounded-full p-1 border border-neutral-900 overflow-hidden shadow-inner">
-                        <div class="h-full rounded-full transition-all duration-75" :style="{ width: getPercent(cfg) + '%', backgroundColor: cat.color, boxShadow: `0 0 12px ${cat.color}88` }"></div>
                       </div>
                     </div>
                   </template>
@@ -1157,24 +1199,25 @@ const hasSettings = (controllers) => (controllers || []).some(isSetting)
                   </div>
                 </div>
 
-                <!-- HORIZONTAL SLIDER (default) -->
+                <!-- DIAL (default) -->
                 <div
                   v-else
                   tabindex="0"
-                  @mousedown="startHDrag(cfg, $event)"
+                  @mousedown="startDialDrag(cfg, $event)"
                   @keydown="handleKeyNudge(cfg, $event)"
                   @contextmenu.prevent="openMenu($event, { name: cfg.name, label: cfg.label })"
-                  :class="['bg-black/60 border border-neutral-900 rounded-xl p-3 flex flex-col gap-2 outline-none focus:ring-1 cursor-ew-resize select-none transition-all', getHighlightClass(cfg)]"
+                  :class="['bg-black/60 border border-neutral-900 rounded-xl p-3 flex flex-col items-center gap-1.5 outline-none focus:ring-1 cursor-ns-resize select-none transition-all', getHighlightClass(cfg)]"
                   :style="{ '--tw-ring-color': cat.color }"
                 >
                   <span v-if="mappingStore.learningParamName === cfg.name" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
-                  <div class="flex justify-between items-center">
-                    <span class="text-[12px] font-mono font-bold text-white uppercase truncate pr-2">{{ cfg.label }}</span>
-                    <span class="text-[12px] font-mono font-bold" :style="{ color: cat.color }">{{ Math.round(getVal(cfg)) }}</span>
-                  </div>
-                  <div class="h-3 bg-neutral-950 rounded-full overflow-hidden border border-neutral-900 pointer-events-none">
-                    <div class="h-full" :style="{ width: getPercent(cfg) + '%', backgroundColor: cat.color, boxShadow: `0 0 8px ${cat.color}99` }"></div>
-                  </div>
+                  <svg viewBox="0 0 48 48" class="w-14 h-14">
+                    <path :d="getDialBgPath()" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4" stroke-linecap="round"/>
+                    <path :d="getDialFillPath(cfg)" fill="none" :stroke="cat.color" stroke-width="4" stroke-linecap="round" :style="{ filter: `drop-shadow(0 0 4px ${cat.color}88)` }"/>
+                    <circle cx="24" cy="24" r="10" fill="#0a0a0a" :stroke="cat.color + '22'" stroke-width="1"/>
+                    <circle :cx="getDialIndicator(cfg).x" :cy="getDialIndicator(cfg).y" r="2.5" fill="white" opacity="0.85"/>
+                  </svg>
+                  <span class="text-[10px] font-mono font-bold text-white uppercase truncate max-w-full text-center">{{ cfg.label }}</span>
+                  <span class="text-[11px] font-mono font-bold" :style="{ color: cat.color }">{{ Math.round(getVal(cfg)) }}</span>
                 </div>
 
               </template>
