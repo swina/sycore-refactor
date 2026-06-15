@@ -1,8 +1,9 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, Save, FolderOpen, Trash2 } from 'lucide-vue-next'
-import { useUiStore }           from '@/stores/useUiStore'
-import { useMidiStore }         from '@/stores/useMidiStore'
+import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, Save, FolderOpen, Trash2, Play } from 'lucide-vue-next'
+import { useUiStore }              from '@/stores/useUiStore'
+import { useMidiStore }            from '@/stores/useMidiStore'
+import { useDrumMachineStore }     from '@/stores/useDrumMachineStore'
 import { useArpStore }          from '@/stores/useArpStore'
 import { useMappingStore }      from '@/stores/useMappingStore'
 import { usePresetStore }       from '@/stores/usePresetStore'
@@ -19,6 +20,18 @@ const arpStore     = useArpStore()
 const mappingStore = useMappingStore()
 const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
+const drumStore    = useDrumMachineStore()
+
+const DM_SEQS = ['A', 'B', 'C', 'D', 'E', 'F']
+
+function dmSelectPreset(id) {
+  const preset = drumStore.presets.find(p => p.id === id)
+  if (preset) drumStore.loadPreset(preset)
+}
+
+function dmSwitchSeq(seq) {
+  window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq } }))
+}
 const { openMenu } = useMidiContextMenu()
 const { resolveUrl, cacheFileBlob } = useFreesoundCache()
 
@@ -56,8 +69,47 @@ const pads       = ref(_loadPads())
 const active     = ref(Array(PAD_COUNT).fill(false))
 const pending    = ref(Array(PAD_COUNT).fill(false))
 const padVolumes = ref(Array(PAD_COUNT).fill(0))
-const fadeOutMs  = ref(parseInt(localStorage.getItem('S1_LM_FADE_MS') || '0'))
-watch(fadeOutMs, v => localStorage.setItem('S1_LM_FADE_MS', String(v)))
+const fadeOutMs      = ref(parseInt(localStorage.getItem('S1_LM_FADE_MS')         || '0'))
+const fadeInEnabled  = ref(localStorage.getItem('S1_LM_FADEIN_ENABLED') === 'true')
+const fadeInMs       = ref(parseInt(localStorage.getItem('S1_LM_FADEIN_MS')        || '1000'))
+const fadeInVol      = ref(parseFloat(localStorage.getItem('S1_LM_FADEIN_VOL')     || '0.8'))
+watch(fadeOutMs,     v => localStorage.setItem('S1_LM_FADE_MS',         String(v)))
+watch(fadeInEnabled, v => localStorage.setItem('S1_LM_FADEIN_ENABLED',  String(v)))
+watch(fadeInMs,      v => localStorage.setItem('S1_LM_FADEIN_MS',       String(v)))
+watch(fadeInVol,     v => localStorage.setItem('S1_LM_FADEIN_VOL',      String(v)))
+
+const lmUseSessionBpm  = ref(localStorage.getItem('S1_LM_USE_SESSION_BPM')  === 'true')
+const lmVolumeReset    = ref(localStorage.getItem('S1_LM_VOLUME_RESET')     === 'true')
+watch(lmUseSessionBpm, v => localStorage.setItem('S1_LM_USE_SESSION_BPM',  String(v)))
+watch(lmVolumeReset,   v => localStorage.setItem('S1_LM_VOLUME_RESET',     String(v)))
+
+// Computed two-way binding for the BPM input — v-model compatible
+const lmBpm = computed({
+  get: () => midiStore.currentBpm,
+  set: (v) => {
+    const bpm = Math.max(20, Math.min(300, Math.round(+v || 120)))
+    midiStore.currentBpm = bpm
+    midiStore.setBpm(bpm)
+    localStorage.setItem('S1_LM_SESSION_BPM', String(bpm))
+  },
+})
+
+function _applyPlaybackRate(idx) {
+  const wa  = _padWA[idx]; if (!wa) return
+  const pad = pads.value[idx]
+  const rate = (lmUseSessionBpm.value && pad?.bpm) ? midiStore.currentBpm / pad.bpm : 1
+  wa.a.playbackRate = rate
+  wa.b.playbackRate = rate
+}
+
+watch(lmUseSessionBpm, () => {
+  for (let i = 0; i < PAD_COUNT; i++) { if (active.value[i]) _applyPlaybackRate(i) }
+})
+watch(() => midiStore.currentBpm, (bpm) => {
+  if (!lmUseSessionBpm.value) return
+  localStorage.setItem('S1_LM_SESSION_BPM', String(bpm))
+  for (let i = 0; i < PAD_COUNT; i++) { if (active.value[i]) _applyPlaybackRate(i) }
+})
 
 const syncEnabled = ref(localStorage.getItem('S1_LM_SYNC') !== '0')
 watch(syncEnabled, v => {
@@ -219,7 +271,8 @@ function _setMaster(idx) {
 
 // ── Audio engine ──────────────────────────────────────────────────
 let _padCtx = null
-const _padWA = Array(PAD_COUNT).fill(null)
+const _padWA    = Array(PAD_COUNT).fill(null)
+const _padFadeIn = {} // { [idx]: { startTime, endTime, target } } — cleared when fade completes or pad stops
 
 function _getCtx() {
   if (!_padCtx) {
@@ -263,7 +316,15 @@ function _loopTick(idx) {
 
   const now = _getCtx().currentTime
   gCur.gain.cancelScheduledValues(now); gCur.gain.setValueAtTime(0, now)
-  gNxt.gain.cancelScheduledValues(now); gNxt.gain.setValueAtTime(padVolumes.value[idx], now)
+  gNxt.gain.cancelScheduledValues(now)
+  const _fi = _padFadeIn[idx]
+  if (_fi && now < _fi.endTime) {
+    const progress = Math.max(0, (now - _fi.startTime) / (_fi.endTime - _fi.startTime))
+    gNxt.gain.setValueAtTime(progress * _fi.target, now)
+    gNxt.gain.linearRampToValueAtTime(_fi.target, _fi.endTime)
+  } else {
+    gNxt.gain.setValueAtTime(padVolumes.value[idx], now)
+  }
 
   setTimeout(() => {
     cur.pause(); cur.currentTime = 0
@@ -295,10 +356,23 @@ async function _startPad(idx) {
 
   active.value[idx]  = true
   pending.value[idx] = false
-  wa.gainA.gain.setValueAtTime(padVolumes.value[idx], _getCtx().currentTime)
+  _applyPlaybackRate(idx)
+  const _startNow = _getCtx().currentTime
+  if (fadeInEnabled.value && padVolumes.value[idx] === 0) {
+    const target  = Math.max(0, Math.min(1, fadeInVol.value))
+    const dur     = Math.max(0.05, fadeInMs.value / 1000)
+    const endTime = _startNow + dur
+    _padFadeIn[idx] = { startTime: _startNow, endTime, target }
+    padVolumes.value[idx] = target
+    wa.gainA.gain.setValueAtTime(0, _startNow)
+    wa.gainA.gain.linearRampToValueAtTime(target, endTime)
+    setTimeout(() => { delete _padFadeIn[idx] }, fadeInMs.value + 150)
+  } else {
+    wa.gainA.gain.setValueAtTime(padVolumes.value[idx], _startNow)
+  }
   wa.rafId = requestAnimationFrame(() => _loopTick(idx))
 
-  if (pad.bpm) {
+  if (pad.bpm && !lmUseSessionBpm.value) {
     arpStore.arpBpm      = pad.bpm
     midiStore.currentBpm = pad.bpm
     midiStore.setBpm(pad.bpm)
@@ -314,26 +388,37 @@ async function _startPad(idx) {
 
 function _stopPad(idx, fadeSec = 0) {
   if (_pendingTimers[idx]) { clearTimeout(_pendingTimers[idx]); delete _pendingTimers[idx] }
+  delete _padFadeIn[idx]
   active.value[idx]  = false
   pending.value[idx] = false
+
+  // When volume reset is on, honour at least fadeOutMs so the audio ramps down visibly
+  const effectiveFade = lmVolumeReset.value
+    ? Math.max(fadeSec, fadeOutMs.value / 1000)
+    : fadeSec
+
+  if (lmVolumeReset.value) {
+    if (effectiveFade > 0) setTimeout(() => { padVolumes.value[idx] = 0 }, effectiveFade * 1000 + 50)
+    else padVolumes.value[idx] = 0
+  }
 
   const wa = _padWA[idx]
   if (wa) {
     if (wa.rafId) { cancelAnimationFrame(wa.rafId); wa.rafId = null }
     const ctx = _getCtx(); const now = ctx.currentTime
 
-    if (fadeSec > 0) {
+    if (effectiveFade > 0) {
       wa.gainA.gain.cancelScheduledValues(now)
       wa.gainA.gain.setValueAtTime(wa.gainA.gain.value, now)
-      wa.gainA.gain.linearRampToValueAtTime(0, now + fadeSec)
+      wa.gainA.gain.linearRampToValueAtTime(0, now + effectiveFade)
       wa.gainB.gain.cancelScheduledValues(now)
       wa.gainB.gain.setValueAtTime(wa.gainB.gain.value, now)
-      wa.gainB.gain.linearRampToValueAtTime(0, now + fadeSec)
+      wa.gainB.gain.linearRampToValueAtTime(0, now + effectiveFade)
       setTimeout(() => {
         wa.a.pause(); wa.a.currentTime = 0
         wa.b.pause(); wa.b.currentTime = 0
         wa.crossing = false
-      }, fadeSec * 1000 + 50)
+      }, effectiveFade * 1000 + 50)
     } else {
       wa.gainA.gain.cancelScheduledValues(now); wa.gainA.gain.setValueAtTime(0, now)
       wa.gainB.gain.cancelScheduledValues(now); wa.gainB.gain.setValueAtTime(0, now)
@@ -517,6 +602,12 @@ let _lppSetAssignHandler   = null
 let _lmMasterVolumeHandler = null
 
 onMounted(() => {
+  if (lmUseSessionBpm.value) {
+    const saved = parseInt(localStorage.getItem('S1_LM_SESSION_BPM') || '120')
+    midiStore.currentBpm = saved
+    midiStore.setBpm(saved)
+  }
+
   _loadPresets()
   _loadPerfSets()
 
@@ -640,21 +731,8 @@ onUnmounted(() => {
             <span v-if="mappingStore.learningParamName === 'lm_rec'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
           </div>
 
-          <!-- Fade out + Stop all -->
+          <!-- Stop all -->
           <div class="flex items-center gap-1">
-            <div class="flex items-center gap-1 px-2 py-1 rounded-lg border border-neutral-800 bg-neutral-900/60" title="Stop All fade-out duration (0 = instant, max 10 000 ms)">
-              <span class="text-[8px] text-neutral-600 font-mono uppercase tracking-widest shrink-0">Fade</span>
-              <input
-                type="number"
-                min="0" max="10000" step="100"
-                v-model.number="fadeOutMs"
-                @mousedown.stop
-                @click.stop
-                class="w-12 bg-transparent text-[9px] font-mono text-neutral-300 text-right outline-none border-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-              <span class="text-[8px] text-neutral-600 font-mono shrink-0">ms</span>
-            </div>
-
             <div class="relative">
               <button
                 @mousedown.stop
@@ -892,6 +970,103 @@ onUnmounted(() => {
             <span class="text-[8px] text-neutral-600 font-mono ml-auto">vol</span>
           </div>
 
+          <!-- Fade controls -->
+          <div class="shrink-0 px-2 py-1.5 border-b border-neutral-800 space-y-1">
+            <!-- Fade Out -->
+            <div class="flex items-center gap-1" title="Stop All fade-out duration (0 = instant, max 10 000 ms)">
+              <span class="text-[8px] text-neutral-600 font-mono uppercase tracking-widest w-14 shrink-0">Fade Out</span>
+              <input
+                type="number"
+                min="0" max="10000" step="100"
+                v-model.number="fadeOutMs"
+                @mousedown.stop @click.stop
+                class="flex-1 min-w-0 bg-neutral-900 text-[9px] font-mono text-neutral-300 text-right outline-none border border-neutral-800 rounded px-1 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span class="text-[8px] text-neutral-600 font-mono shrink-0">ms</span>
+            </div>
+            <!-- Fade In -->
+            <div
+              class="flex items-center gap-1 rounded transition-colors"
+              title="Auto fade-in: when a pad at volume 0 is triggered, ramp up to the target volume"
+            >
+              <button
+                @mousedown.stop @click.stop="fadeInEnabled = !fadeInEnabled"
+                class="text-[8px] font-mono uppercase tracking-widest w-14 shrink-0 text-left transition-colors"
+                :class="fadeInEnabled ? 'text-amber-400' : 'text-neutral-600'"
+              >Fade In</button>
+              <input
+                type="number"
+                min="0" max="10000" step="100"
+                v-model.number="fadeInMs"
+                :disabled="!fadeInEnabled"
+                @mousedown.stop @click.stop
+                class="flex-1 min-w-0 bg-neutral-900 text-[9px] font-mono text-neutral-300 text-right outline-none border border-neutral-800 rounded px-1 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-30"
+                title="Fade-in duration (ms)"
+              />
+              <span class="text-[8px] text-neutral-600 font-mono shrink-0">ms</span>
+            </div>
+            <!-- Fade In target volume -->
+            <div
+              v-if="fadeInEnabled"
+              class="flex items-center gap-1"
+              title="Target volume reached after fade-in (0–1)"
+            >
+              <span class="text-[8px] text-neutral-600 font-mono uppercase tracking-widest w-14 shrink-0">→ Vol</span>
+              <input
+                type="number"
+                min="0" max="1" step="0.01"
+                v-model.number="fadeInVol"
+                @mousedown.stop @click.stop
+                class="flex-1 min-w-0 bg-neutral-900 text-[9px] font-mono text-amber-300 text-right outline-none border border-amber-800/40 rounded px-1 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                title="Fade-in target volume"
+              />
+            </div>
+          </div>
+
+          <!-- BPM + session stretch -->
+          <div class="shrink-0 px-2 py-1.5 border-b border-neutral-800 space-y-1">
+            <div class="flex items-center gap-1" title="Session BPM — updates the global tempo">
+              <span class="text-[8px] text-neutral-600 font-mono uppercase tracking-widest w-14 shrink-0">BPM</span>
+              <input
+                type="number"
+                min="20" max="300" step="1"
+                v-model.number="lmBpm"
+                @mousedown.stop @click.stop
+                class="flex-1 min-w-0 bg-neutral-900 text-[9px] font-mono text-sky-300 text-right outline-none border border-neutral-800 rounded px-1 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </div>
+            <label
+              class="flex items-center gap-1.5 cursor-pointer select-none"
+              title="Time-stretch all loops with known BPM to match the session tempo"
+            >
+              <input
+                type="checkbox"
+                v-model="lmUseSessionBpm"
+                @mousedown.stop @click.stop
+                class="accent-sky-400 w-3 h-3 shrink-0"
+              />
+              <span
+                class="text-[8px] font-mono uppercase tracking-widest transition-colors"
+                :class="lmUseSessionBpm ? 'text-sky-400' : 'text-neutral-600'"
+              >Session BPM</span>
+            </label>
+            <label
+              class="flex items-center gap-1.5 cursor-pointer select-none"
+              title="Reset slot volume to 0 when a loop is stopped"
+            >
+              <input
+                type="checkbox"
+                v-model="lmVolumeReset"
+                @mousedown.stop @click.stop
+                class="accent-rose-400 w-3 h-3 shrink-0"
+              />
+              <span
+                class="text-[8px] font-mono uppercase tracking-widest transition-colors"
+                :class="lmVolumeReset ? 'text-rose-400' : 'text-neutral-600'"
+              >Vol Reset</span>
+            </label>
+          </div>
+
           <!-- 24 sliders (always shown) -->
           <div class="flex-1 overflow-y-auto px-2 py-1.5 space-y-0.5">
             <div
@@ -935,6 +1110,72 @@ onUnmounted(() => {
               />
             </div>
           </div>
+
+          <!-- DrumMachine controls -->
+          <div class="shrink-0 border-t border-neutral-800">
+
+            <!-- Section header -->
+            <div
+              class="px-3 py-1.5 border-b border-neutral-800 flex items-center gap-2 cursor-pointer select-none group"
+              @mousedown.stop
+              @click.stop="uiStore.isDrumMachineOpen = true"
+              title="Open Drum Machine"
+            >
+              <span class="text-[9px] font-black uppercase tracking-[0.2em] text-rose-300/80 group-hover:text-rose-300 transition-colors">Drum Machine</span>
+              <span class="ml-auto text-[8px] text-neutral-700 group-hover:text-neutral-500 transition-colors font-mono">↗</span>
+            </div>
+
+            <!-- Preset selector -->
+            <div class="px-2 py-1.5 border-b border-neutral-800">
+              <select
+                @change="dmSelectPreset($event.target.value)"
+                @mousedown.stop @click.stop
+                class="w-full bg-neutral-900 border border-neutral-800 rounded text-[9px] font-mono text-neutral-300 px-1 py-0.5 outline-none cursor-pointer"
+              >
+                <option value="" disabled selected class="text-neutral-600">— preset —</option>
+                <option
+                  v-for="p in drumStore.presets"
+                  :key="p.id"
+                  :value="p.id"
+                  class="bg-neutral-900"
+                >{{ p.name }}</option>
+              </select>
+            </div>
+
+            <!-- Pattern switches A–F -->
+            <div class="px-2 py-1.5 border-b border-neutral-800 flex gap-0.5">
+              <button
+                v-for="seq in DM_SEQS"
+                :key="seq"
+                @mousedown.stop
+                @click.stop="dmSwitchSeq(seq)"
+                :class="[
+                  'flex-1 py-0.5 rounded text-[9px] font-black uppercase border transition-colors',
+                  drumStore.activeSequence === seq
+                    ? 'bg-rose-500/15 border-rose-500/50 text-rose-300'
+                    : 'border-neutral-800 text-neutral-600 hover:border-neutral-600 hover:text-neutral-400'
+                ]"
+              >{{ seq }}</button>
+            </div>
+
+            <!-- Start / Stop sync -->
+            <div class="px-2 py-1.5">
+              <button
+                @mousedown.stop
+                @click.stop="drumStore.isPlaying = !drumStore.isPlaying"
+                :class="[
+                  'w-full flex items-center justify-center gap-1.5 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                  drumStore.isPlaying
+                    ? 'border-rose-500/50 text-rose-400 bg-rose-500/10 hover:bg-rose-500/20'
+                    : 'border-neutral-700 text-neutral-500 hover:border-rose-500/40 hover:text-rose-400'
+                ]"
+              >
+                <component :is="drumStore.isPlaying ? Square : Play" class="w-2.5 h-2.5" :class="drumStore.isPlaying ? 'fill-rose-400' : ''" />
+                {{ drumStore.isPlaying ? 'Stop Drums' : 'Play Drums' }}
+              </button>
+            </div>
+
+          </div>
         </div>
 
       </div>
@@ -943,6 +1184,10 @@ onUnmounted(() => {
       <div class="shrink-0 px-4 py-1.5 border-t border-neutral-800/60 bg-neutral-950/40 flex items-center gap-3">
         <span class="text-[9px] text-neutral-700 font-mono">
           Click empty pad to load · Right-click to MIDI learn · Assign from Freesound with <span class="text-fuchsia-500/70">LM</span>
+        </span>
+        <span v-if="lmUseSessionBpm" class="ml-auto text-[9px] font-mono text-sky-500/70 flex items-center gap-1">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0" />
+          ×{{ midiStore.currentBpm }}bpm · playback rate applied
         </span>
       </div>
     </div>

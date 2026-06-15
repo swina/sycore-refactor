@@ -45,7 +45,7 @@ const newPresetName  = ref('')
 
 // Init confirmation
 const initConfirm     = ref(false)
-const presetSavedToast = ref(false)
+const presetSavedToast  = ref(false)
 const fxCopiedToast    = ref(false)
 let _toastTimer    = null
 let _fxToastTimer  = null
@@ -553,7 +553,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
     >
       <!-- ── Header ──────────────────────────────────────────────────────────── -->
       <div
-        class="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-neutral-800 bg-neutral-900/60 cursor-grab active:cursor-grabbing"
+        class="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-neutral-800 bg-gradient-to-r from-sky-950/70 to-transparent cursor-grab active:cursor-grabbing"
         @mousedown.stop="onDragStart"
       >
         <Drum class="w-3.5 h-3.5 text-purple-400 shrink-0" />
@@ -562,72 +562,9 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         <!-- BPM display -->
         <span class="ml-2 text-[10px] font-mono text-neutral-400">{{ drumStore.bpm }} BPM</span>
 
-        <!-- Sequence tabs A-F -->
-        <div class="flex items-center gap-1 ml-3">
-          <div
-            v-for="seq in SEQUENCES"
-            :key="seq"
-            class="relative"
-          >
-            <button
-              @click.stop="clickSequenceTab(seq)"
-              @contextmenu.prevent="openMenu($event, { name: 'dm_seq_' + seq.toLowerCase(), label: 'Drum Machine: Seq ' + seq })"
-              :class="[
-                'w-6 h-5 text-[9px] font-black rounded border transition-colors',
-                drumStore.activeSequence === seq
-                  ? 'bg-amber-900 border-amber-400 text-white'
-                  : pendingSequence === seq
-                    ? 'bg-neutral-800 border-amber-400/60 text-purple-300 animate-pulse'
-                    : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-amber-500 hover:text-amber-300'
-              ]"
-              :title="pendingSequence === seq ? ('Switching to ' + seq + ' at next bar…') : seq"
-            >{{ seq }}</button>
-            <span
-              v-if="mappingStore.learningParamName === ('dm_seq_' + seq.toLowerCase())"
-              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
-            />
-          </div>
-        </div>
+        
 
-        <!-- Play / Stop -->
-        <div class="relative ml-3">
-          <button
-            @click.stop="drumStore.isPlaying = !drumStore.isPlaying"
-            @contextmenu.prevent="openMenu($event, { name: 'dm_play_stop', label: 'Drum Machine: Play/Stop' })"
-            :class="[
-              'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-colors',
-              drumStore.isPlaying
-                ? 'bg-red-600/30 border-red-500 text-red-300 hover:bg-red-600/50'
-                : 'bg-purple-600/20 border-purple-500 text-purple-300 hover:bg-purple-600/40'
-            ]"
-          >
-            <Square v-if="drumStore.isPlaying" class="w-2.5 h-2.5" />
-            <Play v-else class="w-2.5 h-2.5" />
-            <span>{{ drumStore.isPlaying ? 'STOP' : 'PLAY' }}</span>
-          </button>
-          <span
-            v-if="mappingStore.learningParamName === 'dm_play_stop'"
-            class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
-          />
-        </div>
-
-        <!-- REC SYNC -->
-        <button
-          @click.stop="toggleRecSync"
-          :class="[
-            'flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors',
-            recSyncActive
-              ? 'bg-red-600/40 border-red-400 text-red-300 animate-pulse'
-              : recSyncArmed
-                ? 'bg-orange-600/30 border-orange-400 text-orange-300 animate-pulse'
-                : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-red-500 hover:text-red-400'
-          ]"
-          :title="recSyncActive ? 'Recording 16 steps — click to stop' : recSyncArmed ? 'Waiting for bar start — click to cancel' : 'Rec Sync: record 16 steps from next bar'"
-        >
-          <span class="w-2 h-2 rounded-full shrink-0" :class="recSyncActive ? 'bg-red-400' : recSyncArmed ? 'bg-orange-400' : 'bg-neutral-600'" />
-          {{ recSyncActive ? 'REC' : recSyncArmed ? 'ARMED' : 'REC' }}
-        </button>
-
+        
         <!-- Style generator -->
         <div class="relative ml-2">
           <button
@@ -658,7 +595,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         </div>
 
         <div class="flex items-center gap-1">
-          <button
+          <!-- <button
             @click.stop="generateAsFill = !generateAsFill"
             :class="[
               'px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
@@ -667,7 +604,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
                 : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-white'
             ]"
             title="When active, Generate writes to Fill pattern instead of sequence"
-          >→Fill</button>
+          >→Fill</button> -->
           <div class="relative">
             <button
               @click.stop="generatePattern"
@@ -865,7 +802,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
               :title="drumStore.resolveTrackSound(trackIdx).soundLabel
                 ? `${track.label}: ${drumStore.resolveTrackSound(trackIdx).soundLabel}`
                 : `Load sample for ${track.label}`"
-              class="flex-1 min-w-0 cursor-pointer hover:text-purple-300 hover:bg-violet-800/70 bg-violet-800/30 p-1 rounded transition-colors"
+              class="flex-1 min-w-0 cursor-pointer hover:text-purple-300 hover:bg-indigo-800/70 bg-indigo-800/30 p-1 rounded transition-colors"
             >
               <div class="text-[11px] font-bold text-neutral-300 truncate leading-none">{{ track.label }}</div>
               <div
@@ -1083,6 +1020,80 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         </div>
       </div>
 
+
+      <div class="flex items-center gap-2 px-3 py-2 border-t border-neutral-800 bg-neutral-900/40">
+        <!-- Sequence tabs A-F -->
+        <div class="flex items-center gap-1 ml-3 mb-2">
+          <div
+            v-for="seq in SEQUENCES"
+            :key="seq"
+            class="relative"
+          >
+            <button
+              @click.stop="clickSequenceTab(seq)"
+              @contextmenu.prevent="openMenu($event, { name: 'dm_seq_' + seq.toLowerCase(), label: 'Drum Machine: Seq ' + seq })"
+              :class="[
+                'w-8 h-8 text-[11px] font-black rounded border transition-colors',
+                drumStore.activeSequence === seq
+                  ? 'bg-sky-900 border-sky-400 text-white'
+                  : pendingSequence === seq
+                    ? 'bg-neutral-800 border-sky-400/60 text-purple-300 animate-pulse'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-sky-500 hover:text-amber-300'
+              ]"
+              :title="pendingSequence === seq ? ('Switching to ' + seq + ' at next bar…') : seq"
+            >{{ seq }}</button>
+            <span
+              v-if="mappingStore.learningParamName === ('dm_seq_' + seq.toLowerCase())"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+            />
+          </div>
+        </div>
+        <!-- Play / Stop -->
+        <div class="relative ml-3">
+          <button
+            @click.stop="drumStore.isPlaying = !drumStore.isPlaying"
+            @contextmenu.prevent="openMenu($event, { name: 'dm_play_stop', label: 'Drum Machine: Play/Stop' })"
+            :class="[
+              'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-colors',
+              drumStore.isPlaying
+                ? 'bg-red-600/30 border-red-500 text-red-300 hover:bg-red-600/50'
+                : 'bg-purple-600/20 border-purple-500 text-purple-300 hover:bg-purple-600/40'
+            ]"
+          >
+            <Square v-if="drumStore.isPlaying" class="w-2.5 h-2.5" />
+            <Play v-else class="w-2.5 h-2.5" />
+            <span>{{ drumStore.isPlaying ? 'STOP' : 'PLAY' }}</span>
+          </button>
+          <span
+            v-if="mappingStore.learningParamName === 'dm_play_stop'"
+            class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+          />
+        </div>
+
+        <!-- REC SYNC -->
+        <button
+          @click.stop="toggleRecSync"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors',
+            recSyncActive
+              ? 'bg-red-600/40 border-red-400 text-red-300 animate-pulse'
+              : recSyncArmed
+                ? 'bg-orange-600/30 border-orange-400 text-orange-300 animate-pulse'
+                : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-red-500 hover:text-red-400'
+          ]"
+          :title="recSyncActive ? 'Recording 16 steps — click to stop' : recSyncArmed ? 'Waiting for bar start — click to cancel' : 'Rec Sync: record 16 steps from next bar'"
+        >
+          <span class="w-2 h-2 rounded-full shrink-0" :class="recSyncActive ? 'bg-red-400' : recSyncArmed ? 'bg-orange-400' : 'bg-neutral-600'" />
+          {{ recSyncActive ? 'REC' : recSyncArmed ? 'ARMED' : 'REC' }}
+        </button>
+
+        <span
+          v-if="drumStore.currentPresetName"
+          class="ml-auto text-[9px] font-mono text-neutral-500 truncate max-w-[120px]"
+          :title="drumStore.currentPresetName"
+        >{{ drumStore.currentPresetName }}</span>
+
+      </div>
       <!-- ── Footer ─────────────────────────────────────────────────────────── -->
       <div class="shrink-0 flex items-center gap-4 px-4 py-2 border-t border-neutral-800 bg-neutral-900/40">
         <!-- Swing -->

@@ -641,9 +641,12 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     _savePresets(presets.value)
   }
 
+  const currentPresetName = ref('')
+
   function loadPreset(preset) {
-    sequences.value    = mergeLoadedSequences(preset)
+    sequences.value      = mergeLoadedSequences(preset)
     activeSequence.value = preset.activeSequence ?? 'A'
+    currentPresetName.value = preset.name ?? ''
     _save()
   }
 
@@ -711,6 +714,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     generateDrumPatternRaw,
     randomizeVelocity,
     presets,
+    currentPresetName,
     savePreset,
     overwritePreset,
     loadPreset,
