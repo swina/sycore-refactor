@@ -46,7 +46,9 @@ const newPresetName  = ref('')
 // Init confirmation
 const initConfirm     = ref(false)
 const presetSavedToast = ref(false)
-let _toastTimer = null
+const fxCopiedToast    = ref(false)
+let _toastTimer    = null
+let _fxToastTimer  = null
 
 function overwritePresetWithToast(id) {
   drumStore.overwritePreset(id)
@@ -81,6 +83,44 @@ watch(masterVolume, v => drumEngine.setMasterVolume(v))
 
 // ── FX strip visibility per track ─────────────────────────────────────────────
 const showFx = ref(Array(8).fill(false))
+
+// ── FX clipboard (copy/paste across sequences for the same track slot) ────────
+const fxClipboard = ref(null) // { pan, pitch, filterFreq, reverbSend, delaySend }
+
+function copyTrackFx(track) {
+  fxClipboard.value = {
+    pan:        track.pan        ?? 0,
+    pitch:      track.pitch      ?? 0,
+    filterFreq: track.filterFreq ?? 20000,
+    reverbSend: track.reverbSend ?? 0,
+    delaySend:  track.delaySend  ?? 0,
+  }
+  fxCopiedToast.value = true
+  clearTimeout(_fxToastTimer)
+  _fxToastTimer = setTimeout(() => { fxCopiedToast.value = false }, 2000)
+}
+
+function pasteTrackFxTo(trackIdx, targetSeq) {
+  if (!fxClipboard.value) return
+  drumStore.pasteTrackFx(trackIdx, targetSeq, fxClipboard.value)
+  // sync engine for current sequence if target is active
+  if (targetSeq === drumStore.activeSequence) {
+    const t = drumStore.sequences[targetSeq][trackIdx]
+    drumEngine.setPadPan(trackIdx, t.pan ?? 0)
+    drumEngine.setPadPitch(trackIdx, t.pitch ?? 0)
+    drumEngine.setPadFilter(trackIdx, t.filterFreq ?? 20000)
+    drumEngine.setPadReverbSend(trackIdx, t.reverbSend ?? 0)
+    drumEngine.setPadDelaySend(trackIdx, t.delaySend ?? 0)
+  }
+}
+
+function trackHasFx(track) {
+  return (track.pan ?? 0) !== 0
+    || (track.pitch ?? 0) !== 0
+    || (track.filterFreq ?? 20000) !== 20000
+    || (track.reverbSend ?? 0) !== 0
+    || (track.delaySend ?? 0) !== 0
+}
 
 // ── Tone.js scheduling ────────────────────────────────────────────────────────
 const playStateRef = { current: null }
@@ -798,12 +838,12 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         <div
           v-for="(track, trackIdx) in drumStore.currentPattern"
           :key="trackIdx"
-          class="flex flex-col rounded bg-violet-700/20"
+          class="flex flex-col rounded bg-neutral-900/50 transition-colors"
         >
         <div class="flex items-center gap-2">
           <!-- Track label + load sample -->
           <div
-            class="flex items-center gap-1 shrink-0 p-2 rounded-lg"
+            class="flex items-center gap-1 shrink-0 p-1 rounded-lg"
             style="width: 92px;"
             @dragover.prevent
             @drop="handleTrackUrlDrop(trackIdx, $event)"
@@ -812,7 +852,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
               :title="drumStore.resolveTrackSound(trackIdx).soundLabel
                 ? `${track.label}: ${drumStore.resolveTrackSound(trackIdx).soundLabel}`
                 : `Load sample for ${track.label}`"
-              class="flex-1 min-w-0 cursor-pointer hover:text-purple-300 transition-colors"
+              class="flex-1 min-w-0 cursor-pointer hover:text-purple-300 hover:bg-violet-800/70 bg-violet-800/30 p-1 rounded transition-colors"
             >
               <div class="text-[11px] font-bold text-neutral-300 truncate leading-none">{{ track.label }}</div>
               <div
@@ -867,7 +907,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
           </div>
           <!-- Volume knob (compact fader) -->
           <div
-            class="relative shrink-0"
+            class="flex flex-col relative shrink-0 gap-2"
             @contextmenu.prevent="openMenu($event, { name: 'dm_vol_' + trackIdx, label: 'Drum Machine: ' + track.label + ' Vol' })"
           >
             <input
@@ -882,6 +922,19 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
               v-if="mappingStore.learningParamName === ('dm_vol_' + trackIdx)"
               class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
             />
+            <!-- FX toggle -->
+            <button
+              @click.stop="showFx[trackIdx] = !showFx[trackIdx]"
+              :class="[
+                'shrink-0 w-10 h-5 text-center rounded border text-[8px] font-black transition-colors',
+                showFx[trackIdx]
+                  ? 'bg-violet-600/30 border-violet-500 text-violet-300'
+                  : trackHasFx(track)
+                    ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 hover:bg-cyan-500/30'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-600 hover:border-violet-600 hover:text-violet-400'
+              ]"
+              title="Toggle FX strip"
+            >FX</button>
           </div>
           <div class="flex flex-col items-center gap-1">
             <!-- Randomize velocity for this row -->
@@ -901,17 +954,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
               :class="track.length < 16 ? 'text-purple-400 border-purple-700' : 'text-neutral-500'"
               title="Steps per bar · click +1 · right-click −1 · scroll"
             >{{ track.length }}</button>
-            <!-- FX toggle -->
-            <button
-              @click.stop="showFx[trackIdx] = !showFx[trackIdx]"
-              :class="[
-                'shrink-0 w-6 h-5 text-center rounded border text-[8px] font-black transition-colors',
-                showFx[trackIdx]
-                  ? 'bg-violet-600/30 border-violet-500 text-violet-300'
-                  : 'bg-neutral-800 border-neutral-700 text-neutral-600 hover:border-violet-600 hover:text-violet-400'
-              ]"
-              title="Toggle FX strip"
-            >FX</button>
+            
           </div>
           <!-- Step buttons -->
           <div class="flex-1 flex gap-2">
@@ -995,6 +1038,33 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
                 title="Delay send amount (1/8-note BPM-synced)"
               />
               <span class="text-[8px] font-mono text-neutral-600 w-5 text-right">{{ Math.round((track.delaySend ?? 0) * 100) }}</span>
+            </div>
+            <!-- FX copy / paste -->
+            <div class="flex items-center gap-1 ml-auto shrink-0">
+              <button
+                @click.stop="copyTrackFx(track)"
+                class="px-1.5 h-4 text-[7px] font-black rounded border border-neutral-600 bg-neutral-800 text-neutral-400 hover:border-cyan-500 hover:text-cyan-300 transition-colors"
+                title="Copy FX settings"
+              >COPY FX</button>
+              <template v-if="fxClipboard">
+                <button
+                  v-for="seq in ['A','B','C','D','E','F']"
+                  :key="seq"
+                  @click.stop="pasteTrackFxTo(trackIdx, seq)"
+                  :class="[
+                    'w-4 h-4 text-[7px] font-black rounded border transition-colors',
+                    seq === drumStore.activeSequence
+                      ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/40'
+                      : 'border-neutral-600 bg-neutral-800 text-neutral-400 hover:border-cyan-500 hover:text-cyan-300'
+                  ]"
+                  :title="'Paste FX to pattern ' + seq"
+                >{{ seq }}</button>
+                <button
+                  @click.stop="['A','B','C','D','E','F'].forEach(s => pasteTrackFxTo(trackIdx, s))"
+                  class="px-1 h-4 text-[7px] font-black rounded border border-cyan-600 bg-cyan-900/30 text-cyan-400 hover:bg-cyan-500/30 hover:text-cyan-200 transition-colors"
+                  title="Paste FX to all patterns"
+                >ALL</button>
+              </template>
             </div>
           </div>
         </div>
@@ -1201,6 +1271,15 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         </div>
 
         <button @click="closeStepContext" class="w-full text-[9px] text-neutral-600 hover:text-neutral-400 text-center pt-1">Close</button>
+      </div>
+    </Transition>
+
+    <!-- FX copied toast -->
+    <Transition name="fade">
+      <div v-if="fxCopiedToast" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[600] pointer-events-none">
+        <div class="flex items-center gap-2 bg-cyan-950/90 border border-cyan-700 text-cyan-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl">
+          <span>FX COPIED</span>
+        </div>
       </div>
     </Transition>
 

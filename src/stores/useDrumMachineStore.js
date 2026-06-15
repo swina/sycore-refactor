@@ -585,6 +585,17 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     _save()
   }
 
+  function pasteTrackFx(trackIdx, targetSequence, fx) {
+    const track = sequences.value[targetSequence]?.[trackIdx]
+    if (!track) return
+    track.pan        = fx.pan        ?? 0
+    track.pitch      = fx.pitch      ?? 0
+    track.filterFreq = fx.filterFreq ?? 20000
+    track.reverbSend = fx.reverbSend ?? 0
+    track.delaySend  = fx.delaySend  ?? 0
+    _save()
+  }
+
   function toggleTrackMute(trackIdx) {
     const t = sequences.value[activeSequence.value][trackIdx]
     t.muted = !t.muted
@@ -693,6 +704,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     setTrackVolume,
     setTrackLength,
     setTrackFx,
+    pasteTrackFx,
     toggleTrackMute,
     toggleTrackSolo,
     generateDrumPattern,
