@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 import { looperEngine } from '@/lib/looper-engine'
 import { midiService } from '@/core/midi/MidiService'
 
-const ALL_CHANNEL_IDS = ['backing', 'tracks', 'looper', 'lm']
+const ALL_CHANNEL_IDS = ['backing', 'tracks', 'looper', 'lm', 'drums']
 
 function loadFloat(key, def) {
   const v = localStorage.getItem(key)
@@ -43,17 +43,20 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   const tracksVol  = ref(loadFloat('S1_MIX_TRACKS',  0.8))
   const looperVol  = ref(loadFloat('S1_MIX_LOOPER',  0.9))
   const lmVol      = ref(loadFloat('S1_MIX_LM',      0.85))
+  const drumsVol   = ref(loadFloat('S1_MIX_DRUMS',   0.85))
   const masterVol  = ref(loadFloat('S1_MIX_MASTER',  1.0))
 
   const backingMuted = ref(false)
   const tracksMuted  = ref(false)
   const looperMuted  = ref(false)
   const lmMuted      = ref(false)
+  const drumsMuted   = ref(false)
 
   watch(backingVol, v => localStorage.setItem('S1_MIX_BACKING', String(v)))
   watch(tracksVol,  v => localStorage.setItem('S1_MIX_TRACKS',  String(v)))
   watch(looperVol,  v => localStorage.setItem('S1_MIX_LOOPER',  String(v)))
   watch(lmVol,      v => localStorage.setItem('S1_MIX_LM',      String(v)))
+  watch(drumsVol,   v => localStorage.setItem('S1_MIX_DRUMS',   String(v)))
   watch(masterVol,  v => localStorage.setItem('S1_MIX_MASTER',  String(v)))
 
   function effective(ch, muted) {
@@ -72,20 +75,25 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function _dispatchLM() {
     window.dispatchEvent(new CustomEvent('lm-master-volume', { detail: effective(lmVol.value, lmMuted.value) }))
   }
+  function _dispatchDrums() {
+    window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: effective(drumsVol.value, drumsMuted.value) }))
+  }
 
   function setBackingVol(v)    { backingVol.value = v; _dispatchBacking() }
   function setTracksVol(v)     { tracksVol.value  = v; _dispatchTracks() }
   function setLooperVol(v)     { looperVol.value  = v; _dispatchLooper() }
   function setLMVol(v)         { lmVol.value      = v; _dispatchLM() }
+  function setDrumsVol(v)      { drumsVol.value   = v; _dispatchDrums() }
   function setMasterVol(v)     {
     masterVol.value = v
-    _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM()
+    _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM(); _dispatchDrums()
   }
 
   function toggleBackingMute() { backingMuted.value = !backingMuted.value; _dispatchBacking() }
   function toggleTracksMute()  { tracksMuted.value  = !tracksMuted.value;  _dispatchTracks() }
   function toggleLooperMute()  { looperMuted.value  = !looperMuted.value;  _dispatchLooper() }
   function toggleLMMute()      { lmMuted.value      = !lmMuted.value;      _dispatchLM() }
+  function toggleDrumsMute()   { drumsMuted.value   = !drumsMuted.value;   _dispatchDrums() }
 
   // ── MIDI Instrument faders (CC7 per device) ───────────────────────────────
   function _loadInstVols() {
@@ -130,10 +138,10 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     enabledChannels,
     isChannelEnabled,
     toggleChannel,
-    backingVol, tracksVol, looperVol, lmVol, masterVol,
-    backingMuted, tracksMuted, looperMuted, lmMuted,
-    setBackingVol, setTracksVol, setLooperVol, setLMVol, setMasterVol,
-    toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute,
+    backingVol, tracksVol, looperVol, lmVol, drumsVol, masterVol,
+    backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted,
+    setBackingVol, setTracksVol, setLooperVol, setLMVol, setDrumsVol, setMasterVol,
+    toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute,
     instrumentVols, instrumentMuted,
     getInstrumentVol, isInstrumentMuted, setInstrumentVol, toggleInstrumentMute,
   }

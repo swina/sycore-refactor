@@ -59,7 +59,8 @@
 | [Live Timeline](./SYCORE_LIVE_TIMELINE.md) | Visual arrangement timeline — sequence segments, fire MIDI markers, and control transport |
 | [Step Sequencer](./SYCORE_STEP_SEQUENCER.md) | Algorithmic composition and MIDI sequencing engine with style-based generation |
 | [Chord Progression Sequencer](./SYCORE_CHORD_PROG_SEQUENCER.md) | Step-based harmonic sequencer with built-in chord library, arpeggio mode, and algorithmic generation |
+| [Drum Machine](./SYCORE_DRUM_MACHINE.md) | 8-track 16-step pattern sequencer with A–F sequence banks, Fill, Repeater, style generation, and REC SYNC |
 
 ---
 
-*Last updated: 2026-06-13*
+*Last updated: 2026-06-15*

@@ -77,6 +77,18 @@ const CATALOG = [
     setVol: v => mixer.setLMVol(v),
     mute:   () => mixer.toggleLMMute(),
   },
+  {
+    id:     'drums',
+    label:  'Drums',
+    sub:    'Drum Machine',
+    desc:   'Master gain for Drum Machine audio engine',
+    icon:   Layers,
+    color:  'orange',
+    vol:    () => mixer.drumsVol,
+    muted:  () => mixer.drumsMuted,
+    setVol: v => mixer.setDrumsVol(v),
+    mute:   () => mixer.toggleDrumsMute(),
+  },
 ]
 
 const activeChannels = computed(() =>

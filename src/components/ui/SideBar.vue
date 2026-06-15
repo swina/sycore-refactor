@@ -40,7 +40,8 @@ const ACTION_MAP = {
   'live-performance-pad':   () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
   'live-timeline':          () => uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen,
   'sound-engine':           () => uiStore.isSoundEngineOpen = !uiStore.isSoundEngineOpen,
-  'midi-manager': () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
+  'midi-manager':           () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
+  'drum-machine':           () => uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen,
 }
 
 const COLORS = [

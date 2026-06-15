@@ -61,7 +61,8 @@ import {
   Shield,
   Copy,
   X,
-  Captions
+  Captions,
+  Drum
 } from 'lucide-vue-next'
 
 export const lucideIcons = {
@@ -127,5 +128,6 @@ export const lucideIcons = {
   Shield,
   Copy,
   X,
-  Captions
+  Captions,
+  Drum
 }

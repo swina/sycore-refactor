@@ -7,6 +7,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useArpStore } from '@/stores/useArpStore'
+import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 
 function isS1Device(name) {
@@ -23,6 +24,7 @@ export function useMidiCCListener() {
   const configStore = useConfigStore()
   const lfoStore = useLfoStore()
   const arpStore = useArpStore()
+  const drumStore = useDrumMachineStore()
 
   const originalModValueMap = {}
 
@@ -244,6 +246,34 @@ export function useMidiCCListener() {
       if (fromNote || val > 0) uiStore.isSequencerOpen = !uiStore.isSequencerOpen
       return
     }
+    // ── Drum Machine ────────────────────────────────────────────────────────────
+    if (fieldName === 'dm_play_stop') {
+      drumStore.isPlaying = fromNote ? !drumStore.isPlaying : on
+      return
+    }
+    if (fieldName === 'dm_repeat') {
+      drumStore.repeaterActive = fromNote ? !drumStore.repeaterActive : on
+      return
+    }
+    if (fieldName === 'dm_fill') {
+      if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-trigger-fill'))
+      return
+    }
+    if (fieldName === 'dm_generate') {
+      if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-generate'))
+      return
+    }
+    if (fieldName.startsWith('dm_seq_')) {
+      const seq = fieldName.slice(7).toUpperCase() // 'dm_seq_a' → 'A'
+      if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq } }))
+      return
+    }
+    if (fieldName.startsWith('dm_vol_')) {
+      const idx = parseInt(fieldName.slice(7))
+      if (!isNaN(idx)) drumStore.setTrackVolume(idx, val / 127)
+      return
+    }
+    // ───────────────────────────────────────────────────────────────────────────
     if (fieldName === 'ui_panel_collapse') {
       uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on
       return

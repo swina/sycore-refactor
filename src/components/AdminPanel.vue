@@ -82,7 +82,7 @@ const ALL_AVAILABLE_ICONS = [
   'Activity','Sliders','Menu','MoreVertical','Plus','Minus','ChevronDown','ChevronUp',
   'Clock','Music','Volume2','Pause','Play','Square','Circle','Triangle',
   'Eye','EyeOff','Lock','Unlock','Trash2','Save','Download','Upload','Search','Filter',
-  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','GitCompareArrows','Grid3x3','RotateCw','RotateCcw','Network','ListTree','Music2',
+  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','GitCompareArrows','Grid3x3','RotateCw','RotateCcw','Network','ListTree','Music2','Drum',
 ]
 const AVAILABLE_ICONS = ALL_AVAILABLE_ICONS.sort()
 
@@ -123,6 +123,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'audio-looper',         label: 'Audio Looper',          icon: 'RotateCw'   },
   { id: 'freesound-browser',    label: 'Freesound Browser',     icon: 'Radio'      },
   { id: 'loop-machine',         label: 'Loop Machine',          icon: 'Layers'     },
+  { id: 'drum-machine',         label: 'Drum Machine',          icon: 'Drum'       },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

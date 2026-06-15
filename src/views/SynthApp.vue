@@ -68,6 +68,7 @@ import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
 import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePanel.vue'
 import LivePerformancePad from '@/components/LivePerformancePad.vue'
 import LoopMachine        from '@/components/LoopMachine.vue'
+import DrumMachine        from '@/components/DrumMachine.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
 import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -137,6 +138,7 @@ const toolbarButtonMap = {
   'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,   label: 'Device Program Change' },
   'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
   'loop-machine':           { state: 'isLoopMachineOpen',                icon: Layers,  label: 'Loop Machine' },
+  'drum-machine':           { state: 'isDrumMachineOpen',                icon: Layers,  label: 'Drum Machine' },
   'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
   'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
@@ -436,6 +438,10 @@ onMounted(() => {
 
       <div :style="focusStyle('loopMachine')">
         <LoopMachine />
+      </div>
+
+      <div :style="focusStyle('drumMachine')">
+        <DrumMachine />
       </div>
 
       <!-- Live Timeline -->

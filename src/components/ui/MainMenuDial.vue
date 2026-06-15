@@ -45,6 +45,7 @@ const ACTION_MAP = {
   'chord-prog':           () => uiStore.isChordProgOpen = !uiStore.isChordProgOpen,
   'live-performance-pad': () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
   'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
+  'drum-machine':         () => uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen,
 }
 
 const COLORS = [
