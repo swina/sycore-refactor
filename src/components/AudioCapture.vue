@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal } from 'lucide-vue-next'
 import AudioSettingsModal from '@/components/AudioSettingsModal.vue'
 import { useUiStore } from '@/stores/useUiStore'
@@ -11,6 +11,7 @@ import { Mp3Encoder } from '@breezystack/lamejs'
 import { midiService } from '@/core/midi/MidiService'
 import { looperEngine } from '@/lib/looper-engine'
 import { useLooperStore } from '@/stores/useLooperStore'
+import { useArpStore } from '@/stores/useArpStore'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
 
 const props = defineProps({
@@ -22,6 +23,9 @@ const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
 const looperStore  = useLooperStore()
+const arpStore     = useArpStore()
+// Global BPM — set by AppFooter, shared with drum machine and arpeggiator
+const activeBpm = computed(() => arpStore.arpBpm || 120)
 const { openMenu } = useMidiContextMenu()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
@@ -132,7 +136,7 @@ async function confirmLMAssign() {
     const duration = loopEnd.value - loopStart.value
     const url      = await cacheFileBlob(id, label, wav, { author: 'Audio Capture', duration })
 
-    const track = { id, label, url, author: 'Audio Capture', duration, bpm: midiStore.currentBpm || undefined }
+    const track = { id, label, url, author: 'Audio Capture', duration, bpm: activeBpm.value || undefined }
     window.dispatchEvent(new CustomEvent('loop-machine-assign', { detail: { padIdx: selectedLMPad.value, track } }))
     const updated = [...lmModalSlots.value]
     updated[selectedLMPad.value] = track
@@ -207,7 +211,7 @@ function snapValue(val, barSecs, anchor = 0) {
 }
 
 function snapToBarDivisions() {
-  const bpm = midiStore.currentBpm || 120
+  const bpm = activeBpm.value
   const barSecs = 4 * (60 / bpm)
   if (barSecs <= 0 || audioDuration.value <= 0) return
 
@@ -233,7 +237,7 @@ function startTimelineLoop() {
       timelineProgress.value = 0
       return
     }
-    const bpm = midiStore.currentBpm || 120
+    const bpm = activeBpm.value
     const totalSeconds = timelineMeasures.value * 4 * (60 / bpm)
     if (totalSeconds > 0) {
       if (timelineMode.value === 'synced' && isPlaying.value) {
@@ -389,7 +393,7 @@ watch(appendMode, v => {
 
 watch(loopStart, (ns) => {
   if (snapEnabled.value) {
-    const bpm = midiStore.currentBpm || 120
+    const bpm = activeBpm.value
     const barSecs = 4 * (60 / bpm)
     const anchor = playbackStart.value
     const snapped = snapValue(ns, barSecs, anchor)
@@ -400,7 +404,7 @@ watch(loopStart, (ns) => {
   }
 
   if (ns >= loopEnd.value) {
-    const bpm = midiStore.currentBpm || 120
+    const bpm = activeBpm.value
     const barSecs = 4 * (60 / bpm)
     const offset = snapEnabled.value ? barSecs : 0.05
     loopEnd.value = Math.min(audioDuration.value, ns + offset)
@@ -409,7 +413,7 @@ watch(loopStart, (ns) => {
 
 watch(loopEnd, (ne) => {
   if (snapEnabled.value) {
-    const bpm = midiStore.currentBpm || 120
+    const bpm = activeBpm.value
     const barSecs = 4 * (60 / bpm)
     const anchor = playbackStart.value
     const snapped = snapValue(ne, barSecs, anchor)
@@ -420,7 +424,7 @@ watch(loopEnd, (ne) => {
   }
 
   if (ne <= loopStart.value) {
-    const bpm = midiStore.currentBpm || 120
+    const bpm = activeBpm.value
     const barSecs = 4 * (60 / bpm)
     const offset = snapEnabled.value ? barSecs : 0.05
     loopStart.value = Math.max(0, ne - offset)
@@ -646,9 +650,10 @@ function startRecording() {
 
     recordedBlob.value = finalBlob
     audioDuration.value = finalDuration
-    loopStart.value = 0
-    loopEnd.value = finalDuration
-    playbackStart.value = 0
+    loopStart.value     = _recSyncPreRoll
+    loopEnd.value       = finalDuration
+    playbackStart.value = _recSyncPreRoll
+    _recSyncPreRoll     = 0
 
     if (toPlaylistRef) {
       const d = new Date()
@@ -660,7 +665,7 @@ function startRecording() {
           url: playlistUrl,
           label: `REC ${ts}`,
           duration: finalDuration,
-          bpm: midiStore.currentBpm
+          bpm: activeBpm.value
         }
       }))
     }
@@ -982,7 +987,7 @@ async function discoverSeamlessLoop() {
     isLooping.value = true
 
     // If a BPM is set, round the loop to the nearest whole number of bars
-    const bpm = midiStore.currentBpm
+    const bpm = activeBpm.value
     if (bpm > 0) {
       const barSecs = 4 * (60 / bpm)
       // Snap start to the nearest bar boundary (anchored at 0)
@@ -1337,7 +1342,7 @@ async function handleAddToPlaylist() {
         url: playlistUrl,
         label: `CROP ${ts}`,
         duration: duration,
-        bpm: midiStore.currentBpm,
+        bpm: activeBpm.value,
         repeats: playlistRepeat.value
       }
     }))
@@ -1411,7 +1416,7 @@ async function handleSendToLoopPad() {
     const duration = loopEnd.value - loopStart.value
     const url  = await cacheFileBlob(id, label, wav, { author: 'Audio Capture', duration })
 
-    const track = { id, label, url, author: 'Audio Capture', duration, bpm: midiStore.currentBpm || undefined }
+    const track = { id, label, url, author: 'Audio Capture', duration, bpm: activeBpm.value || undefined }
     window.dispatchEvent(new CustomEvent('loop-pad-assign', { detail: { padIdx: selectedLoopPad.value, track } }))
     // Update modal snapshot so the slot shows the new assignment immediately
     const updated = [...loopPadModalSlots.value]
@@ -1629,7 +1634,7 @@ watch([isMonitoring, recordedBlob, isPlaying, () => uiStore.isAudioCaptureOpen],
   startDrawLoop()
 }, { immediate: true })
 
-watch([loopStart, loopEnd, playbackStart, currentPlaybackTime, isLooping, zoomX, zoomY, panOffset, () => midiStore.currentBpm], () => {
+watch([loopStart, loopEnd, playbackStart, currentPlaybackTime, isLooping, zoomX, zoomY, panOffset, activeBpm], () => {
   if (!isPlaying.value && !isRecording.value && !isMonitoring.value) {
     drawSingleFrame()
   }
@@ -1676,33 +1681,43 @@ function drawSingleFrame() {
     ctx.lineWidth = 1
     ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke()
 
-    // Draw vertical bar divisions according to BPM/Tempo (light yellow dashed lines)
-    const bpm = midiStore.currentBpm || 120
-    const barSecs = 4 * (60 / bpm)
+    // Draw vertical bar and beat divisions according to BPM/Tempo
+    const bpm = activeBpm.value
+    const barSecs  = 4 * (60 / bpm)
+    const beatSecs = 60 / bpm
     if (barSecs > 0 && audioDuration.value > 0) {
-      ctx.lineWidth = 1 * dpr
-      ctx.strokeStyle = 'rgba(253, 224, 71, 0.25)' // Light yellow with transparency (yellow-300)
-      ctx.setLineDash([2 * dpr, 2 * dpr])
-      
       const gridAnchor = playbackStart.value
+
+      // Beat divisions (quarter notes) — lighter, shorter dashes
+      ctx.lineWidth = 1 * dpr
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.10)'
+      ctx.setLineDash([2 * dpr, 4 * dpr])
+      const beatMinI = Math.ceil((0 - gridAnchor) / beatSecs)
+      const beatMaxI = Math.floor((audioDuration.value - gridAnchor) / beatSecs)
+      for (let i = beatMinI; i <= beatMaxI; i++) {
+        const beatTime = gridAnchor + i * beatSecs
+        // Skip positions that coincide with bar lines (drawn separately below)
+        if (Math.abs(beatTime % barSecs) < 0.001) continue
+        if (Math.abs(beatTime) < 0.001) continue
+        const beatX = (beatTime / audioDuration.value - panOffset.value) * zoomX.value * W
+        if (beatX >= 0 && beatX <= W) {
+          ctx.beginPath(); ctx.moveTo(beatX, 0); ctx.lineTo(beatX, H); ctx.stroke()
+        }
+      }
+
+      // Bar divisions — brighter, solid dashes
+      ctx.lineWidth = 1 * dpr
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.25)'
+      ctx.setLineDash([2 * dpr, 2 * dpr])
       const minI = Math.ceil((0 - gridAnchor) / barSecs)
       const maxI = Math.floor((audioDuration.value - gridAnchor) / barSecs)
-      
       for (let i = minI; i <= maxI; i++) {
         const barTime = gridAnchor + i * barSecs
-        // Skip drawing exactly at the playback start to avoid overlapping with play start marker
         if (playbackStart.value > 0 && Math.abs(barTime - playbackStart.value) < 0.001) continue
-        // Skip t = 0 if it's the anchor to keep it clean
         if (Math.abs(barTime) < 0.001) continue
-        
-        const barPct = barTime / audioDuration.value
-        const barX = (barPct - panOffset.value) * zoomX.value * W
-        
+        const barX = (barTime / audioDuration.value - panOffset.value) * zoomX.value * W
         if (barX >= 0 && barX <= W) {
-          ctx.beginPath()
-          ctx.moveTo(barX, 0)
-          ctx.lineTo(barX, H)
-          ctx.stroke()
+          ctx.beginPath(); ctx.moveTo(barX, 0); ctx.lineTo(barX, H); ctx.stroke()
         }
       }
       ctx.setLineDash([])
@@ -2002,9 +2017,11 @@ function fmtTime(s) {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
+let _recSyncPreRoll = 0  // seconds of pre-roll to trim from loopStart after REC SYNC
 let _recToggleHandler = null
 let _startRecHandler = null
 let _stopRecHandler = null
+let _preArmHandler = null
 let _freesoundCaptureHandler = null
 let _recMidiUnsub = null
 let resizeObserver = null
@@ -2021,25 +2038,19 @@ onMounted(async () => {
 
   _startRecHandler = (e) => {
     const background = e?.detail?.background === true
-    if (!background && !uiStore.isAudioCaptureOpen) {
-      uiStore.isAudioCaptureOpen = true
-    }
-    if (background && !isMonitoring.value) {
-      startMonitor(selectedDeviceId.value)
-    }
-    let retries = 0
-    const checkAndStart = () => {
-      if (isMonitoring.value && streamRef) {
-        if (!isRecording.value) {
-          isArmed.value = false
-          startRecording()
-        }
-      } else if (retries < 50 && (uiStore.isAudioCaptureOpen || background)) {
-        retries++
-        setTimeout(checkAndStart, 100)
+    _recSyncPreRoll = background ? (e?.detail?.preRoll ?? 0) : 0
+    ;(async () => {
+      if (!background && !uiStore.isAudioCaptureOpen) {
+        uiStore.isAudioCaptureOpen = true
       }
-    }
-    checkAndStart()
+      if (!isMonitoring.value) {
+        await startMonitor(selectedDeviceId.value)
+      }
+      if (isMonitoring.value && streamRef && !isRecording.value) {
+        isArmed.value = false
+        startRecording()
+      }
+    })()
   }
 
   _stopRecHandler = () => {
@@ -2048,6 +2059,10 @@ onMounted(async () => {
     }
   }
 
+  _preArmHandler = () => {
+    if (!isMonitoring.value) startMonitor(selectedDeviceId.value)
+  }
+  window.addEventListener('capture-monitor-pre-arm', _preArmHandler)
   window.addEventListener('capture-start-rec', _startRecHandler)
   window.addEventListener('capture-stop-rec', _stopRecHandler)
 
@@ -2141,6 +2156,7 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', onLoopHandleEnd)
   navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
   window.removeEventListener('capture-rec-toggle', _recToggleHandler)
+  window.removeEventListener('capture-monitor-pre-arm', _preArmHandler)
   window.removeEventListener('capture-start-rec', _startRecHandler)
   window.removeEventListener('capture-stop-rec', _stopRecHandler)
   if (_freesoundCaptureHandler) window.removeEventListener('freesound-send-to-capture', _freesoundCaptureHandler)

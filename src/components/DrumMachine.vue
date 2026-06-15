@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { getTransport, getDraw, start as toneStart } from 'tone'
+import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDrumMachineStore, DRUM_STYLE_NAMES } from '@/stores/useDrumMachineStore'
@@ -185,8 +185,19 @@ function _scheduleCallback(time) {
     if (_recSyncArmed) {
       _recSyncArmed = false
       _recSyncRecording = true
+      // Fire capture-start-rec via setTimeout so the MediaRecorder codec has
+      // time to initialise before the beat hits. Pre-roll = 200ms; clamped to
+      // however long is left until the bar boundary.
+      const PRE_ROLL = 0.2
+      const timeUntilBeat = time - toneNow()
+      const actualPreRoll = Math.min(PRE_ROLL, Math.max(0, timeUntilBeat))
+      const delayMs = Math.max(0, (timeUntilBeat - PRE_ROLL) * 1000)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('capture-start-rec', {
+          detail: { background: true, preRoll: actualPreRoll },
+        }))
+      }, delayMs)
       getDraw().schedule(() => {
-        window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
         recSyncArmed.value = false
         recSyncActive.value = true
       }, time)
@@ -330,6 +341,8 @@ function toggleRecSync() {
     // Arm: will trigger at next bar start (step 0)
     _recSyncArmed = true
     recSyncArmed.value = true
+    // Pre-warm AudioCapture monitor so it's ready the moment recording starts
+    window.dispatchEvent(new CustomEvent('capture-monitor-pre-arm'))
   }
 }
 
