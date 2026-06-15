@@ -35,6 +35,7 @@ watch(() => uiStore.isDrumMachineOpen, v => { if (v) bringToFront() })
 const selectedStyle   = ref('House')
 const showStyleMenu   = ref(false)
 const generateAsFill  = ref(false)
+const masterVolume    = ref(0.85)
 const copySourceSeq   = ref(null)
 const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
 
@@ -75,6 +76,11 @@ const recSyncActive = ref(false)
 
 // ── Sync BPM from arpStore (global BPM) ───────────────────────────────────────
 watch(() => arpStore.arpBpm, v => { drumStore.bpm = v }, { immediate: true })
+watch(() => drumStore.bpm, v => drumEngine.setDelayTime(v))
+watch(masterVolume, v => drumEngine.setMasterVolume(v))
+
+// ── FX strip visibility per track ─────────────────────────────────────────────
+const showFx = ref(Array(8).fill(false))
 
 // ── Tone.js scheduling ────────────────────────────────────────────────────────
 const playStateRef = { current: null }
@@ -122,11 +128,9 @@ function _scheduleCallback(time) {
     }
     if (_fillAutoStop) {
       _fillAutoStop = false
-      state = { ...state, fillActive: false }
-      getDraw().schedule(() => {
-        fillActive.value = false
-        playStateRef.current = buildPlayState()
-      }, time)
+      playStateRef.current = { ...state, fillActive: false }
+      state = playStateRef.current
+      getDraw().schedule(() => { fillActive.value = false }, time)
     }
     // REC SYNC: stop first (completed 16 steps), then start if newly armed.
     // Both events are deferred via getDraw so they fire at actual playback
@@ -259,6 +263,7 @@ async function loadAllSamples(pattern) {
 watch(() => drumStore.activeSequence, async () => {
   await nextTick()
   await loadAllSamples(drumStore.currentPattern)
+  pushAllFxToEngine(drumStore.currentPattern)
 })
 
 // ── Master volume from mixer ───────────────────────────────────────────────────
@@ -288,9 +293,21 @@ function toggleRecSync() {
   }
 }
 
+function pushAllFxToEngine(pattern) {
+  pattern.forEach((track, i) => {
+    drumEngine.setPadPan(i, track.pan ?? 0)
+    drumEngine.setPadPitch(i, track.pitch ?? 0)
+    drumEngine.setPadFilter(i, track.filterFreq ?? 20000)
+    drumEngine.setPadReverbSend(i, track.reverbSend ?? 0)
+    drumEngine.setPadDelaySend(i, track.delaySend ?? 0)
+  })
+}
+
 onMounted(async () => {
   drumEngine.initDrumEngine()
+  drumEngine.setDelayTime(drumStore.bpm)
   await loadAllSamples(drumStore.currentPattern)
+  pushAllFxToEngine(drumStore.currentPattern)
   window.addEventListener('dm-master-volume',  _onMasterVolume)
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
@@ -760,7 +777,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         <div style="width: 92px" class="shrink-0" />
         <div class="flex flex-col shrink-0"><div class="w-5 h-1" /><div class="w-5 h-1" /></div>
         <div class="relative shrink-0"><div class="w-12 h-1" /></div>
-        <div class="flex flex-col shrink-0"><div class="w-6 h-1" /><div class="w-6 h-1" /></div>
+        <div class="flex flex-col shrink-0"><div class="w-6 h-1" /><div class="w-6 h-1" /><div class="w-6 h-1" /></div>
         <div class="flex-1 flex gap-2">
           <div v-for="g in 4" :key="g" class="flex-1 grid grid-cols-4 gap-1.5">
             <div
@@ -781,8 +798,9 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         <div
           v-for="(track, trackIdx) in drumStore.currentPattern"
           :key="trackIdx"
-          class="flex items-center gap-2 bg-violet-700/20"
+          class="flex flex-col rounded bg-violet-700/20"
         >
+        <div class="flex items-center gap-2">
           <!-- Track label + load sample -->
           <div
             class="flex items-center gap-1 shrink-0 p-2 rounded-lg"
@@ -866,24 +884,34 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
             />
           </div>
           <div class="flex flex-col items-center gap-1">
-          <!-- Randomize velocity for this row -->
-          <button
-            @click.stop="drumStore.randomizeVelocity(trackIdx)"
-            class="shrink-0 w-6 h-5 flex items-center justify-center rounded border border-neutral-700 bg-neutral-800 text-neutral-600 hover:text-purple-300 hover:border-purple-500 transition-colors"
-            title="Randomize velocity"
-          >
-            <Shuffle class="w-2.5 h-2.5" />
-          </button>
-
-          <!-- Step count (1-16) -->
-          <button
-            @click.stop="drumStore.setTrackLength(trackIdx, track.length < 16 ? track.length + 1 : 1)"
-            @contextmenu.prevent="drumStore.setTrackLength(trackIdx, track.length > 1 ? track.length - 1 : 16)"
-            @wheel.prevent="drumStore.setTrackLength(trackIdx, Math.max(1, Math.min(16, track.length - Math.sign($event.deltaY))))"
-            class="shrink-0 w-6 h-5 text-center bg-neutral-800 border border-neutral-700 rounded text-[9px] font-mono hover:border-purple-500 transition-colors"
-            :class="track.length < 16 ? 'text-purple-400 border-purple-700' : 'text-neutral-500'"
-            title="Steps per bar · click +1 · right-click −1 · scroll"
-          >{{ track.length }}</button>
+            <!-- Randomize velocity for this row -->
+            <button
+              @click.stop="drumStore.randomizeVelocity(trackIdx)"
+              class="shrink-0 w-6 h-5 flex items-center justify-center rounded border border-neutral-700 bg-neutral-800 text-neutral-600 hover:text-purple-300 hover:border-purple-500 transition-colors"
+              title="Randomize velocity"
+            >
+              <Shuffle class="w-2.5 h-2.5" />
+            </button>
+            <!-- Step count (1-16) -->
+            <button
+              @click.stop="drumStore.setTrackLength(trackIdx, track.length < 16 ? track.length + 1 : 1)"
+              @contextmenu.prevent="drumStore.setTrackLength(trackIdx, track.length > 1 ? track.length - 1 : 16)"
+              @wheel.prevent="drumStore.setTrackLength(trackIdx, Math.max(1, Math.min(16, track.length - Math.sign($event.deltaY))))"
+              class="shrink-0 w-6 h-5 text-center bg-neutral-800 border border-neutral-700 rounded text-[9px] font-mono hover:border-purple-500 transition-colors"
+              :class="track.length < 16 ? 'text-purple-400 border-purple-700' : 'text-neutral-500'"
+              title="Steps per bar · click +1 · right-click −1 · scroll"
+            >{{ track.length }}</button>
+            <!-- FX toggle -->
+            <button
+              @click.stop="showFx[trackIdx] = !showFx[trackIdx]"
+              :class="[
+                'shrink-0 w-6 h-5 text-center rounded border text-[8px] font-black transition-colors',
+                showFx[trackIdx]
+                  ? 'bg-violet-600/30 border-violet-500 text-violet-300'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-600 hover:border-violet-600 hover:text-violet-400'
+              ]"
+              title="Toggle FX strip"
+            >FX</button>
           </div>
           <!-- Step buttons -->
           <div class="flex-1 flex gap-2">
@@ -909,6 +937,67 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
             </div>
           </div>
         </div>
+
+          <!-- FX strip -->
+          <div v-if="showFx[trackIdx]" class="flex items-center gap-3 px-2 py-1.5 border-t border-violet-900/40 bg-black/20">
+            <span class="text-[8px] font-black uppercase tracking-widest text-violet-400 shrink-0 w-4">FX</span>
+            <!-- Pan -->
+            <div class="flex items-center gap-1">
+              <span class="text-[8px] text-neutral-500 shrink-0">Pan</span>
+              <input type="range" min="-1" max="1" step="0.01"
+                :value="track.pan ?? 0"
+                @input="drumStore.setTrackFx(trackIdx, 'pan', parseFloat($event.target.value)); drumEngine.setPadPan(trackIdx, parseFloat($event.target.value))"
+                class="w-16 h-1 accent-violet-500 cursor-pointer"
+                title="Pan (-1 left → +1 right)"
+              />
+              <span class="text-[8px] font-mono text-neutral-600 w-6 text-right">{{ ((track.pan ?? 0) * 100).toFixed(0) }}</span>
+            </div>
+            <!-- Pitch -->
+            <div class="flex items-center gap-1">
+              <span class="text-[8px] text-neutral-500 shrink-0">Pitch</span>
+              <input type="range" min="-12" max="12" step="1"
+                :value="track.pitch ?? 0"
+                @input="drumStore.setTrackFx(trackIdx, 'pitch', parseInt($event.target.value)); drumEngine.setPadPitch(trackIdx, parseInt($event.target.value))"
+                class="w-14 h-1 accent-violet-500 cursor-pointer"
+                title="Pitch (semitones)"
+              />
+              <span class="text-[8px] font-mono text-neutral-600 w-6 text-right">{{ (track.pitch ?? 0) > 0 ? '+' : '' }}{{ track.pitch ?? 0 }}st</span>
+            </div>
+            <!-- Filter -->
+            <div class="flex items-center gap-1">
+              <span class="text-[8px] text-neutral-500 shrink-0">Tone</span>
+              <input type="range" min="200" max="20000" step="100"
+                :value="track.filterFreq ?? 20000"
+                @input="drumStore.setTrackFx(trackIdx, 'filterFreq', parseInt($event.target.value)); drumEngine.setPadFilter(trackIdx, parseInt($event.target.value))"
+                class="w-16 h-1 accent-violet-500 cursor-pointer"
+                title="Low-pass filter frequency"
+              />
+              <span class="text-[8px] font-mono text-neutral-600 w-10 text-right">{{ (track.filterFreq ?? 20000) >= 1000 ? ((track.filterFreq ?? 20000)/1000).toFixed(1)+'k' : (track.filterFreq ?? 20000) }}Hz</span>
+            </div>
+            <!-- Reverb send -->
+            <div class="flex items-center gap-1">
+              <span class="text-[8px] text-neutral-500 shrink-0">Rev</span>
+              <input type="range" min="0" max="1" step="0.01"
+                :value="track.reverbSend ?? 0"
+                @input="drumStore.setTrackFx(trackIdx, 'reverbSend', parseFloat($event.target.value)); drumEngine.setPadReverbSend(trackIdx, parseFloat($event.target.value))"
+                class="w-14 h-1 accent-cyan-500 cursor-pointer"
+                title="Reverb send amount"
+              />
+              <span class="text-[8px] font-mono text-neutral-600 w-5 text-right">{{ Math.round((track.reverbSend ?? 0) * 100) }}</span>
+            </div>
+            <!-- Delay send -->
+            <div class="flex items-center gap-1">
+              <span class="text-[8px] text-neutral-500 shrink-0">Dly</span>
+              <input type="range" min="0" max="1" step="0.01"
+                :value="track.delaySend ?? 0"
+                @input="drumStore.setTrackFx(trackIdx, 'delaySend', parseFloat($event.target.value)); drumEngine.setPadDelaySend(trackIdx, parseFloat($event.target.value))"
+                class="w-14 h-1 accent-cyan-500 cursor-pointer"
+                title="Delay send amount (1/8-note BPM-synced)"
+              />
+              <span class="text-[8px] font-mono text-neutral-600 w-5 text-right">{{ Math.round((track.delaySend ?? 0) * 100) }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ── Footer ─────────────────────────────────────────────────────────── -->
@@ -923,6 +1012,21 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
             class="w-20 h-1 accent-purple-500 cursor-pointer"
           />
           <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ drumStore.swing }}%</span>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Master Volume -->
+        <div class="flex items-center gap-2">
+          <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Vol</span>
+          <input
+            type="range" min="0" max="1" step="0.01"
+            :value="masterVolume"
+            @input="masterVolume = parseFloat($event.target.value)"
+            class="w-20 h-1 accent-purple-500 cursor-pointer"
+            title="Master volume for all tracks"
+          />
+          <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ Math.round(masterVolume * 100) }}</span>
         </div>
 
         <div class="w-px h-4 bg-neutral-800 shrink-0" />

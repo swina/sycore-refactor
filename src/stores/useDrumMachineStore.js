@@ -19,10 +19,15 @@ function makeTrack(label = '') {
     soundId:    '',
     soundLabel: '',
     soundUrl:   '',
-    muted: false,
-    solo: false,
-    volume: 0.85,
-    length: 16,
+    muted:      false,
+    solo:       false,
+    volume:     0.85,
+    length:     16,
+    pan:        0,
+    pitch:      0,
+    filterFreq: 20000,
+    reverbSend: 0,
+    delaySend:  0,
     steps: Array(16).fill(null).map(() => DEFAULT_DRUM_STEP()),
   }
 }
@@ -36,7 +41,12 @@ function serializeTrack(t) {
     muted:      t.muted,
     solo:       t.solo,
     volume:     t.volume,
-    length:     t.length ?? 16,
+    length:     t.length     ?? 16,
+    pan:        t.pan        ?? 0,
+    pitch:      t.pitch      ?? 0,
+    filterFreq: t.filterFreq ?? 20000,
+    reverbSend: t.reverbSend ?? 0,
+    delaySend:  t.delaySend  ?? 0,
     steps:      t.steps.map(s => ({ ...s })),
   }
 }
@@ -435,10 +445,15 @@ function hydrateTrack(t, label) {
     soundId:    t.soundId    ?? '',
     soundLabel: t.soundLabel ?? '',
     soundUrl:   '',   // always starts empty; component resolves from IDB
-    muted:      t.muted  ?? false,
-    solo:       t.solo   ?? false,
-    volume:     t.volume ?? 0.85,
-    length:     t.length ?? 16,
+    muted:      t.muted      ?? false,
+    solo:       t.solo       ?? false,
+    volume:     t.volume     ?? 0.85,
+    length:     t.length     ?? 16,
+    pan:        t.pan        ?? 0,
+    pitch:      t.pitch      ?? 0,
+    filterFreq: t.filterFreq ?? 20000,
+    reverbSend: t.reverbSend ?? 0,
+    delaySend:  t.delaySend  ?? 0,
     steps: Array(16).fill(null).map((_, s) => {
       const step = t.steps?.[s]
       if (!step) return DEFAULT_DRUM_STEP()
@@ -563,6 +578,13 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     sequences.value[activeSequence.value][trackIdx].length = Math.max(1, Math.min(16, len))
   }
 
+  function setTrackFx(trackIdx, field, value) {
+    const track = sequences.value[activeSequence.value][trackIdx]
+    if (!track) return
+    track[field] = value
+    _save()
+  }
+
   function toggleTrackMute(trackIdx) {
     const t = sequences.value[activeSequence.value][trackIdx]
     t.muted = !t.muted
@@ -670,6 +692,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     resolveTrackSound,
     setTrackVolume,
     setTrackLength,
+    setTrackFx,
     toggleTrackMute,
     toggleTrackSolo,
     generateDrumPattern,
