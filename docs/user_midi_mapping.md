@@ -34,18 +34,18 @@ Channel 1 · 19 mappings
 | CC | 43 | `save_preset` | Save Preset |
 | CC | 118 | `seq_play_stop` | Sequencer Play/Stop |
 
-### Loop Machine — Track Volumes
+### Samples Machine — Track Volumes
 
 | Type | # | Target ID | Description |
 |------|---|-----------|-------------|
-| CC | 101 | `lm_vol_0` | Loop Machine Volume — Track 0 |
-| CC | 102 | `lm_vol_1` | Loop Machine Volume — Track 1 |
-| CC | 103 | `lm_vol_2` | Loop Machine Volume — Track 2 |
-| CC | 104 | `lm_vol_3` | Loop Machine Volume — Track 3 |
-| CC | 105 | `lm_vol_4` | Loop Machine Volume — Track 4 |
-| CC | 106 | `lm_vol_5` | Loop Machine Volume — Track 5 |
-| CC | 107 | `lm_vol_6` | Loop Machine Volume — Track 6 |
-| CC | 113 | `lm_vol_7` | Loop Machine Volume — Track 7 |
+| CC | 101 | `lm_vol_0` | Samples Machine Volume — Track 0 |
+| CC | 102 | `lm_vol_1` | Samples Machine Volume — Track 1 |
+| CC | 103 | `lm_vol_2` | Samples Machine Volume — Track 2 |
+| CC | 104 | `lm_vol_3` | Samples Machine Volume — Track 3 |
+| CC | 105 | `lm_vol_4` | Samples Machine Volume — Track 4 |
+| CC | 106 | `lm_vol_5` | Samples Machine Volume — Track 5 |
+| CC | 107 | `lm_vol_6` | Samples Machine Volume — Track 6 |
+| CC | 113 | `lm_vol_7` | Samples Machine Volume — Track 7 |
 
 ---
 
@@ -99,41 +99,41 @@ Channel 1 · 60 mappings
 | Note | 38 | `lpp_bt_6` | Backing Track Pad 6 |
 | Note | 39 | `lpp_bt_7` | Backing Track Pad 7 |
 
-### Loop Machine — Pads (Row 4: Notes 48–55)
+### Samples Machine — Pads (Row 4: Notes 48–55)
 
 | Type | # | Target ID | Description |
 |------|---|-----------|-------------|
-| Note | 48 | `lm_pad_0` | Loop Machine Pad 0 |
-| Note | 49 | `lm_pad_1` | Loop Machine Pad 1 |
-| Note | 50 | `lm_pad_2` | Loop Machine Pad 2 |
-| Note | 51 | `lm_pad_3` | Loop Machine Pad 3 |
-| Note | 52 | `lm_pad_4` | Loop Machine Pad 4 |
-| Note | 53 | `lm_pad_5` | Loop Machine Pad 5 |
-| Note | 54 | `lm_pad_6` | Loop Machine Pad 6 |
-| Note | 55 | `lm_pad_7` | Loop Machine Pad 7 |
+| Note | 48 | `lm_pad_0` | Samples Machine Pad 0 |
+| Note | 49 | `lm_pad_1` | Samples Machine Pad 1 |
+| Note | 50 | `lm_pad_2` | Samples Machine Pad 2 |
+| Note | 51 | `lm_pad_3` | Samples Machine Pad 3 |
+| Note | 52 | `lm_pad_4` | Samples Machine Pad 4 |
+| Note | 53 | `lm_pad_5` | Samples Machine Pad 5 |
+| Note | 54 | `lm_pad_6` | Samples Machine Pad 6 |
+| Note | 55 | `lm_pad_7` | Samples Machine Pad 7 |
 
-### Loop Machine — Pads (Row 5: Notes 64–71)
-
-| Type | # | Target ID | Description |
-|------|---|-----------|-------------|
-| Note | 64 | `lm_pad_8`  | Loop Machine Pad 8 |
-| Note | 65 | `lm_pad_9`  | Loop Machine Pad 9 |
-| Note | 66 | `lm_pad_10` | Loop Machine Pad 10 |
-| Note | 67 | `lm_pad_11` | Loop Machine Pad 11 |
-| Note | 68 | `lm_pad_12` | Loop Machine Pad 12 |
-| Note | 69 | `lm_pad_13` | Loop Machine Pad 13 |
-| Note | 70 | `lm_pad_14` | Loop Machine Pad 14 |
-| Note | 71 | `lm_pad_15` | Loop Machine Pad 15 |
-
-### Loop Machine — Pads (Row 6: Notes 80–84)
+### Samples Machine — Pads (Row 5: Notes 64–71)
 
 | Type | # | Target ID | Description |
 |------|---|-----------|-------------|
-| Note | 80 | `lm_pad_16` | Loop Machine Pad 16 |
-| Note | 81 | `lm_pad_17` | Loop Machine Pad 17 |
-| Note | 82 | `lm_pad_18` | Loop Machine Pad 18 |
-| Note | 83 | `lm_pad_19` | Loop Machine Pad 19 |
-| Note | 84 | `lm_pad_20` | Loop Machine Pad 20 |
+| Note | 64 | `lm_pad_8`  | Samples Machine Pad 8 |
+| Note | 65 | `lm_pad_9`  | Samples Machine Pad 9 |
+| Note | 66 | `lm_pad_10` | Samples Machine Pad 10 |
+| Note | 67 | `lm_pad_11` | Samples Machine Pad 11 |
+| Note | 68 | `lm_pad_12` | Samples Machine Pad 12 |
+| Note | 69 | `lm_pad_13` | Samples Machine Pad 13 |
+| Note | 70 | `lm_pad_14` | Samples Machine Pad 14 |
+| Note | 71 | `lm_pad_15` | Samples Machine Pad 15 |
+
+### Samples Machine — Pads (Row 6: Notes 80–84)
+
+| Type | # | Target ID | Description |
+|------|---|-----------|-------------|
+| Note | 80 | `lm_pad_16` | Samples Machine Pad 16 |
+| Note | 81 | `lm_pad_17` | Samples Machine Pad 17 |
+| Note | 82 | `lm_pad_18` | Samples Machine Pad 18 |
+| Note | 83 | `lm_pad_19` | Samples Machine Pad 19 |
+| Note | 84 | `lm_pad_20` | Samples Machine Pad 20 |
 
 ### Live Pad — Loop Slots (Row 7: Notes 96–103)
 

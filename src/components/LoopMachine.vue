@@ -38,7 +38,7 @@ const { resolveUrl, cacheFileBlob } = useFreesoundCache()
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
   useDraggableResizable({
     storageKey:    'S1_LOOP_MACHINE_DR',
-    minimizeLabel: 'Loop Machine',
+    minimizeLabel: 'Samples Machine',
     initialWidth:  1020,
     initialHeight: 600,
     minWidth:      720,
@@ -671,8 +671,8 @@ onUnmounted(() => {
             <Layers class="w-4 h-4 text-amber-400" />
           </div>
           <div>
-            <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-0.5">LOOP MACHINE</h2>
-            <p class="text-[9px] font-mono text-amber-500/60 uppercase tracking-widest leading-none">24 loops · 16 perf sets · simultaneous</p>
+            <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-0.5">SAMPLES MACHINE</h2>
+            <p class="text-[9px] font-mono text-amber-500/60 uppercase tracking-widest leading-none">24 samples · 16 perf sets · simultaneous</p>
           </div>
         </div>
 
@@ -682,7 +682,7 @@ onUnmounted(() => {
             <button
               @mousedown.stop
               @click="syncEnabled = !syncEnabled"
-              @contextmenu.prevent="openMenu($event, { name: 'lm_sync', label: 'Loop Machine: Sync' })"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_sync', label: 'Samples Machine: Sync' })"
               :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
                 syncEnabled
                   ? 'bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-300'
@@ -700,7 +700,7 @@ onUnmounted(() => {
             <button
               @mousedown.stop
               @click="lmRecSync = !lmRecSync"
-              @contextmenu.prevent="openMenu($event, { name: 'lm_rec_sync', label: 'Loop Machine: Rec Sync' })"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_rec_sync', label: 'Samples Machine: Rec Sync' })"
               :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
                 lmRecSync
                   ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
@@ -718,7 +718,7 @@ onUnmounted(() => {
             <button
               @mousedown.stop
               @click="uiStore.isCaptureRecording ? manualStopRec() : manualStartRec()"
-              @contextmenu.prevent="openMenu($event, { name: 'lm_rec', label: 'Loop Machine: Rec / Stop Rec' })"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_rec', label: 'Samples Machine: Rec / Stop Rec' })"
               :class="['flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
                 uiStore.isCaptureRecording
                   ? 'bg-rose-500/20 border-rose-400/60 text-rose-300 animate-pulse'
@@ -737,7 +737,7 @@ onUnmounted(() => {
               <button
                 @mousedown.stop
                 @click="stopAll"
-                @contextmenu.prevent="openMenu($event, { name: 'lm_stop_all', label: 'Loop Machine: Stop All' })"
+                @contextmenu.prevent="openMenu($event, { name: 'lm_stop_all', label: 'Samples Machine: Stop All' })"
                 :disabled="!active.some(Boolean) && !pending.some(Boolean)"
                 class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-red-500/50 hover:text-red-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
                 title="Stop all loops"
@@ -883,16 +883,16 @@ onUnmounted(() => {
                 v-for="(pad, idx) in pads"
                 :key="idx"
                 @click="pad ? togglePad(idx) : openFileForPad(idx)"
-                @contextmenu.prevent="openMenu($event, { name: 'lm_pad_' + idx, label: pad?.label || 'Loop Machine Pad ' + (idx + 1) })"
+                @contextmenu.prevent="openMenu($event, { name: 'lm_pad_' + idx, label: pad?.label || 'Samples Machine Pad ' + (idx + 1) })"
                 :class="[
                   'relative group rounded-lg border flex flex-col items-center justify-center cursor-pointer select-none overflow-hidden transition-all duration-150',
                   !pad
-                    ? 'border-dashed border-neutral-800 hover:border-neutral-600 hover:bg-neutral-900/60'
+                    ? 'border-dashed border-orange-800 hover:border-neutral-600 hover:bg-orange-900/30'
                     : active[idx]
-                      ? 'border-amber-400 bg-amber-500/40 shadow-[0_0_14px_rgba(232,121,249,0.25)]'
+                      ? 'border-amber-800 bg-orange-500/50 shadow-[0_0_14px_rgba(232,121,249,0.25)]'
                       : pending[idx]
-                        ? 'border-amber-400/70 bg-amber-500/10'
-                        : 'border-neutral-700 bg-amber-500/10 hover:border-amber-500/50 hover:bg-amber-500/5',
+                        ? 'border-amber-800/70 bg-orange-400/20'
+                        : 'border-orange-700 bg-orange-400/20 hover:border-amber-800/50 hover:bg-orange-500/30',
                 ]"
               >
                 <!-- Pad number -->
@@ -921,7 +921,7 @@ onUnmounted(() => {
                 <!-- Loaded pad -->
                 <template v-else>
                   <span
-                    class="text-[10px] font-bold text-center leading-tight px-1 break-all line-clamp-2"
+                    class="text-[10px] font-mono text-center leading-tight px-1 break-all line-clamp-2"
                     :class="active[idx] ? 'text-fuchsia-200' : 'text-neutral-300'"
                   >{{ pad.label }}</span>
                   <div class="flex items-center gap-1 mt-0.5 flex-wrap justify-center">
@@ -1072,7 +1072,7 @@ onUnmounted(() => {
             <div
               v-for="(pad, idx) in pads"
               :key="'vol-' + idx"
-              @contextmenu.prevent="openMenu($event, { name: 'lm_vol_' + idx, label: 'Loop Machine: Volume Pad ' + (idx + 1) })"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_vol_' + idx, label: 'Samples Machine: Volume Pad ' + (idx + 1) })"
               :class="[
                 'relative flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors cursor-default',
                 mappingStore.learningParamName === 'lm_vol_' + idx

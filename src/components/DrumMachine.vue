@@ -79,7 +79,6 @@ const recSyncActive = ref(false)
 // ── Sync BPM from arpStore (global BPM) ───────────────────────────────────────
 watch(() => arpStore.arpBpm, v => { drumStore.bpm = v }, { immediate: true })
 watch(() => drumStore.bpm, v => drumEngine.setDelayTime(v))
-watch(masterVolume, v => drumEngine.setMasterVolume(v))
 
 // ── FX strip visibility per track ─────────────────────────────────────────────
 const showFx = ref(Array(8).fill(false))
@@ -224,7 +223,7 @@ function _scheduleCallback(time) {
     }
     if (!step.active) return
 
-    drumEngine.setPadVolume(trackIdx, track.volume)
+    drumEngine.setPadVolume(trackIdx, track.volume * masterVolume.value)
 
     const divisions = state.repeaterActive
       ? state.repeaterDivision
@@ -317,7 +316,12 @@ watch(() => drumStore.activeSequence, async () => {
   pushAllFxToEngine(drumStore.currentPattern)
 })
 
-// ── Master volume from mixer ───────────────────────────────────────────────────
+// ── Master volume (footer) — applied as a multiplier on all track volumes at trigger time ─
+function _setMasterVolume(vol) {
+  masterVolume.value = Math.max(0, Math.min(1, vol))
+}
+
+// ── Master volume from AudioMixer — controls the engine's _masterGain node ───
 function _onMasterVolume(e) {
   drumEngine.setMasterVolume(e.detail)
 }
@@ -1111,16 +1115,23 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         <div class="w-px h-4 bg-neutral-800 shrink-0" />
 
         <!-- Master Volume -->
-        <div class="flex items-center gap-2">
+        <div
+          class="relative flex items-center gap-2"
+          @contextmenu.prevent="openMenu($event, { name: 'dm_master_vol', label: 'Drum Machine: Master Volume' })"
+        >
           <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Vol</span>
           <input
             type="range" min="0" max="1" step="0.01"
             :value="masterVolume"
-            @input="masterVolume = parseFloat($event.target.value)"
+            @input="_setMasterVolume(parseFloat($event.target.value))"
             class="w-20 h-1 accent-purple-500 cursor-pointer"
             title="Master volume for all tracks"
           />
           <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ Math.round(masterVolume * 100) }}</span>
+          <span
+            v-if="mappingStore.learningParamName === 'dm_master_vol'"
+            class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+          />
         </div>
 
         <div class="w-px h-4 bg-neutral-800 shrink-0" />

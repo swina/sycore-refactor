@@ -21,10 +21,12 @@ The panel opens as a floating, **draggable and resizable** window (initial 960 �
 
 | Area | Content |
 |------|---------|
-| **Header** | Title · BPM · Sequence tabs A–F · Play/Stop · Style picker · →Fill toggle · Generate · Presets · Init · minimize/close |
+| **Header** | Title · BPM · Style picker · Generate · Presets · Init · minimize/close |
 | **Step ruler** | Step numbers 1–16 grouped in four beats of four |
-| **Track grid** | 8 track rows — label, load, mute, solo, volume, randomize, step count, 16 step buttons |
-| **Footer** | Swing · Repeat (÷2/÷3/÷4) · REC SYNC · Fill (trigger / Gen / step range / Save) · sequence position display |
+| **Track grid** | 8 track rows — label, load, mute, solo, volume, FX toggle, randomize, step count, 16 step buttons |
+| **FX strip** | Per-track expandable row — Pan, Pitch, Tone, Reverb, Delay, Copy/Paste FX |
+| **Transport bar** | Sequence tabs A–F · Play/Stop · REC SYNC · active preset name |
+| **Footer** | Swing · Master Volume · Repeat (÷2/÷3/÷4) · Fill (trigger / Gen / step range / Save) · sequence position display |
 
 ---
 
@@ -56,8 +58,31 @@ Each row exposes the following controls from left to right:
 | **M** | Mute this track. Red when active |
 | **S** | Solo this track. Amber when active. Multiple solos stack |
 | **Volume slider** | Per-track gain (0–1). Right-click to MIDI-learn |
+| **FX** | Toggle the FX strip for this track. Cyan-outlined when the track has non-default FX |
 | **Shuffle icon** | Randomizes velocity of all active steps in this row (70–127 range) |
 | **Step count** | Sets the track's active step length (1–16). Click to increment, right-click to decrement, scroll to adjust. Tracks can have different lengths for polyrhythmic patterns. Highlighted purple when shorter than 16 |
+
+---
+
+## FX Strip
+
+Clicking the **FX** button on any track expands a horizontal FX strip below that row. Changes apply in real time.
+
+| Parameter | Range | Description |
+|-----------|-------|-------------|
+| **Pan** | −1 (L) → +1 (R) | Stereo placement |
+| **Pitch** | −12 → +12 semitones | Pitch shift in whole semitones |
+| **Tone** | 200 Hz → 20 kHz | Low-pass filter cut-off frequency |
+| **Rev** | 0 → 100 | Reverb send amount |
+| **Dly** | 0 → 100 | Delay send amount (1/8-note, BPM-synced) |
+
+### FX Copy / Paste
+
+- **COPY FX** — copies the current track's five FX values to a clipboard.
+- After copying, six sequence buttons (A–F) appear. Click any to paste those values into the same track slot in that sequence. Click **ALL** to paste to every sequence at once.
+- A **FX COPIED** toast confirms the copy. The active sequence is highlighted cyan; other sequences are dim.
+
+FX settings are stored per track per sequence and are included in presets.
 
 ---
 
@@ -107,13 +132,23 @@ Each track wraps independently at its configured step count. A track set to 12 s
 
 ---
 
-## Transport & BPM
+## Transport Bar
+
+Located between the track grid and the footer, the transport bar holds the main playback controls:
 
 | Control | Description |
 |---------|-------------|
-| **▶ / ■** | Start / Stop. BPM syncs from the global arpeggiator BPM on open |
+| **Sequence tabs A–F** | Switch patterns (quantized while playing). MIDI-learnable |
+| **▶ / ■** | Start / Stop the sequencer. BPM syncs from the global arpeggiator BPM on open |
 | **BPM display** | Read-only; reflects the current global tempo |
-| **Swing** | Delays odd-numbered steps by a fraction of the step time (0–100 %). Creates a shuffle feel |
+| **REC SYNC** | Arms a synchronized Audio Capture recording (see below) |
+| **Preset name** | Displays the currently loaded preset name (right side, truncated) |
+
+---
+
+## Master Volume
+
+A **Vol** slider in the footer controls the overall output gain of all 8 tracks simultaneously (0–100). This is separate from per-track volume and is not stored in presets.
 
 ---
 
@@ -126,10 +161,6 @@ Select a style from the dropdown next to the header, then click **Generate**.
 `House` · `Techno` · `HipHop` · `Trap` · `Funk` · `Jungle/DnB` · `Latin` · `Rock`
 
 Each style has multiple variants; one is chosen randomly on each press so repeated generates produce unique results within the genre feel.
-
-### →Fill toggle
-
-When the **→Fill** button is active (cyan), clicking **Generate** writes the styled pattern to both the main sequence **and** the Fill pattern simultaneously. The two rolls are independent so the fill is genre-matched but not identical to the sequence.
 
 ---
 
@@ -158,7 +189,7 @@ Arms a synchronized [Audio Capture](./SYCORE_AUDIO_CAPTURE.md) recording that st
 | **Armed** | Pulsing orange · "ARMED" |
 | **Recording** | Pulsing red · "REC" |
 
-Click once to arm. Click again to cancel. Recording fires and stops at actual audio playback time (not transport lookahead), ensuring sample-accurate capture.
+Click once to arm. Click again to cancel. Recording fires and stops at actual audio playback time (not transport lookahead), ensuring sample-accurate capture. AudioCapture is pre-warmed when REC SYNC is armed so the monitor is ready the moment recording starts.
 
 ---
 
@@ -187,7 +218,7 @@ Click the **Presets** button in the header to open the preset drawer.
 | **Overwrite** | Hover a preset row → click the amber save icon. A **PRESET SAVED** toast confirms the write |
 | **Delete** | Hover a preset row → click the red trash icon |
 
-Presets store all six sequences (A–F) including step data, per-track sound assignments, and the active sequence at save time.
+Presets store all six sequences (A–F) including step data, per-track sound assignments, per-track FX settings, and the active sequence at save time.
 
 ---
 
@@ -220,6 +251,7 @@ Triggers respond to Note On or any CC value > 0. Sequence switches are quantized
 |------|---------|-----------------|
 | All 6 sequences (steps, velocity, accent, ratchet, lengths) | `localStorage` | ✔ |
 | Sound assignments per sequence per track | `localStorage` (blob keys in IndexedDB) | ✔ |
+| FX settings (pan, pitch, tone, reverb, delay) per track per sequence | `localStorage` | ✔ |
 | BPM, Swing, Repeater settings | `localStorage` | ✔ |
 | Presets | `localStorage` | ✔ |
 | Panel position / size / minimized | `localStorage` | ✔ |
@@ -229,7 +261,7 @@ Triggers respond to Note On or any CC value > 0. Sequence switches are quantized
 ## Related Guides
 
 - [Audio Capture](./SYCORE_AUDIO_CAPTURE.md) — recorder driven by REC SYNC
-- [Loop Machine](./SYCORE_LOOP_MACHINE.md) — pad-based loop playback
+- [Samples Machine](./SYCORE_LOOP_MACHINE.md) — pad-based loop playback with DrumMachine automation controls
 - [Step Sequencer](./SYCORE_STEP_SEQUENCER.md) — melodic MIDI sequencing engine
 - [MIDI Mapping](./SYCORE_MIDI_MAPPING.md) — managing learned CC mappings
 - [Freesound Browser](./SYCORE_FREESOUND_BROWSER.md) — loading samples from freesound.org

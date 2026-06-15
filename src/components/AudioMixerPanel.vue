@@ -68,8 +68,8 @@ const CATALOG = [
   {
     id:     'lm',
     label:  'Loop Mch',
-    sub:    'Loop Machine',
-    desc:   'Master gain for all 24 Loop Machine pads',
+    sub:    'Samples Machine',
+    desc:   'Master gain for all 24 Samples Machine pads',
     icon:   Layers,
     color:  'fuchsia',
     vol:    () => mixer.lmVol,

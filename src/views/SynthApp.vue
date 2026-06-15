@@ -137,7 +137,7 @@ const toolbarButtonMap = {
   'program-change':         { state: 'isProgramChangeBrowserOpen',       icon: Music2, label: 'Program Change Browser' },
   'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,   label: 'Device Program Change' },
   'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
-  'loop-machine':           { state: 'isLoopMachineOpen',                icon: Layers,  label: 'Loop Machine' },
+  'loop-machine':           { state: 'isLoopMachineOpen',                icon: Layers,  label: 'Samples Machine' },
   'drum-machine':           { state: 'isDrumMachineOpen',                icon: Layers,  label: 'Drum Machine' },
   'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },

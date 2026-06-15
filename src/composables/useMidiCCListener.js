@@ -273,6 +273,10 @@ export function useMidiCCListener() {
       if (!isNaN(idx)) drumStore.setTrackVolume(idx, val / 127)
       return
     }
+    if (fieldName === 'dm_master_vol') {
+      window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: val / 127 }))
+      return
+    }
     // ───────────────────────────────────────────────────────────────────────────
     if (fieldName === 'ui_panel_collapse') {
       uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on

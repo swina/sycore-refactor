@@ -138,7 +138,7 @@ const liveTools = [
   },
   {
     icon: Repeat,
-    title: 'Loop Machine',
+    title: 'Samples Machine',
     tag: 'Loops',
     img: '/help/guides/sycore-loop-machine.png',
     text: '24 pads of simultaneous, gapless loops — fed from local files or Freesound. Sync-quantized starts locked to a master loop, automatic global BPM retune, an always-on 24-channel mixer, one-touch Performance Sets, and auto-recording of your jam via Audio Capture. Every pad, fader and toggle is MIDI-learnable.',

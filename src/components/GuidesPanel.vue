@@ -88,7 +88,7 @@ const CATEGORIES = [
     color: 'text-pink-400',
     items: [
       { id: 'live-timeline',  label: 'Live Timeline',         file: 'SYCORE_LIVE_TIMELINE' },
-      { id: 'loop-machine', label: 'Loop Machine',         file: 'SYCORE_LOOP_MACHINE' },
+      { id: 'loop-machine', label: 'Samples Machine',      file: 'SYCORE_LOOP_MACHINE' },
       { id: 'live-pad',       label: 'Live Set',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },
       { id: 'step-sequencer', label: 'Step Sequencer',        file: 'SYCORE_STEP_SEQUENCER' },
       { id: 'chord-progression-sequencer', label: 'Chord Progression Sequencer', file: 'SYCORE_CHORD_PROG_SEQUENCER' },

@@ -71,7 +71,7 @@ const loopPadModalSlots    = ref([])
 const loopPadSoundName     = ref('')
 const lastCaptureLabel     = ref('')   // set when a Freesound sound is loaded
 
-// ── Loop Machine assignment ───────────────────────────────────────
+// ── Samples Machine assignment ───────────────────────────────────────
 const showAudioSettings    = ref(false)
 const showLMModal          = ref(false)
 const lmModalSlots         = ref([])
@@ -143,7 +143,7 @@ async function confirmLMAssign() {
     lmModalSlots.value = updated
     showLMModal.value  = false
   } catch (e) {
-    console.error('Failed to send to Loop Machine', e)
+    console.error('Failed to send to Samples Machine', e)
   } finally {
     isSendingToLM.value = false
   }
@@ -2250,11 +2250,11 @@ onUnmounted(() => {
         </button>
         <button
           @click="uiStore.isLoopMachineOpen = true"
-          title="Open Loop Machine"
+          title="Open Samples Machine"
           class="shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors text-fuchsia-500 border-fuchsia-500/30 hover:bg-fuchsia-500/10 hover:border-fuchsia-500/50"
         >
           <Layers class="w-3 h-3" />
-          Loop Machine
+          Samples Machine
         </button>
       </div>
       <div class="flex">
@@ -2336,14 +2336,14 @@ onUnmounted(() => {
             <Repeat class="w-3 h-3" /> Loop Pad
           </button>
 
-          <!-- Send to Loop Machine — trigger button -->
+          <!-- Send to Samples Machine — trigger button -->
           <button
             v-if="recordedBlob && !isRecording"
             @click="openLMModal"
-            title="Send cropped audio to Loop Machine"
+            title="Send cropped audio to Samples Machine"
             class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-300 border-amber-500/40 hover:bg-amber-500/15 transition-colors"
           >
-            <Layers class="w-3 h-3" /> Loop Machine
+            <Layers class="w-3 h-3" /> Samples Machine
           </button>
 
           <!-- Loop Pad assignment modal -->
@@ -2439,7 +2439,7 @@ onUnmounted(() => {
             </Transition>
           </Teleport>
 
-          <!-- Loop Machine assignment modal -->
+          <!-- Samples Machine assignment modal -->
           <Teleport to="body">
             <Transition name="fade">
               <div
@@ -2453,7 +2453,7 @@ onUnmounted(() => {
                   <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-800 bg-neutral-950/60">
                     <div class="flex items-center gap-2">
                       <Layers class="w-4 h-4 text-amber-400" />
-                      <span class="text-sm font-black uppercase tracking-widest text-white">Send to Loop Machine</span>
+                      <span class="text-sm font-black uppercase tracking-widest text-white">Send to Samples Machine</span>
                     </div>
                     <button @click="showLMModal = false" class="text-neutral-500 hover:text-white transition-colors">
                       <X class="w-4 h-4" />

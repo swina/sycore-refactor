@@ -276,7 +276,7 @@ function confirmPadAssign() {
   pendingPadSlot.value = null; pendingBpm.value = ''; pickingPadFor.value = null
 }
 
-// ── Loop Machine assignment ──────────────────────────────────────
+// ── Samples Machine assignment ──────────────────────────────────────
 const LS_LM_PADS           = 'SYCORE_LOOP_MACHINE_PADS'
 const pickingLMFor         = ref(null)
 const pendingLMSlot        = ref(null)
@@ -782,12 +782,12 @@ onUnmounted(() => {
             </div>
           </Transition>
 
-          <!-- Loop Machine picker -->
+          <!-- Samples Machine picker -->
           <Transition name="fade-down">
             <div v-if="pickingLMFor" class="bg-neutral-950 border border-fuchsia-500/30 rounded-xl p-3 mt-2">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-[9px] font-black uppercase tracking-widest text-fuchsia-400 flex items-center gap-1.5">
-                  <Layers class="w-3 h-3" /> Assign to Loop Machine
+                  <Layers class="w-3 h-3" /> Assign to Samples Machine
                 </span>
                 <span class="text-[9px] text-neutral-500 truncate max-w-[200px] italic">{{ pickingLMFor.label }}</span>
                 <button @click="pickingLMFor = null; pendingLMSlot = null" class="text-neutral-600 hover:text-white transition-colors ml-2 shrink-0">
@@ -922,7 +922,7 @@ onUnmounted(() => {
                       pickingLMFor?.freesoundId === sound.freesoundId
                         ? 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-300'
                         : 'border-neutral-700 text-neutral-500 hover:border-fuchsia-500/50 hover:text-fuchsia-400']"
-                    title="Assign to Loop Machine">
+                    title="Assign to Samples Machine">
                     <Layers class="w-2.5 h-2.5" /> LM
                   </button>
                   <button
@@ -1045,7 +1045,7 @@ onUnmounted(() => {
                     pickingLMFor?.freesoundId === sound.freesoundId
                       ? 'bg-amber-500/20 border-amber-400/50 text-amber-300'
                       : 'border-neutral-700 text-neutral-500 hover:border-amber-500/50 hover:text-amber-400']"
-                  title="Assign to Loop Machine">
+                  title="Assign to Samples Machine">
                   <Layers class="w-2.5 h-2.5" /> LM
                 </button>
                 <button
