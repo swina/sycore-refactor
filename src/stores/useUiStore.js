@@ -172,19 +172,6 @@ export const useUiStore = defineStore('ui', () => {
     drumMachine:         isDrumMachineOpen,
   }
 
-  // These modals coexist freely — they never trigger close-others and are
-  // never closed when another modal opens.
-  const MODAL_EXCLUDED = new Set(['lfo1', 'lfo2', 'velocityMap', 'arp', 'history', 'types', 'sequencer', 'freesoundBrowser', 'loopMachine', 'drumMachine'])
-
-  // When a non-excluded modal opens, close all other non-excluded modals
-  watch(openModalKeys, (newKeys, oldKeys) => {
-    if (!oldKeys || newKeys.length <= oldKeys.length) return
-    const added = newKeys.find(k => !oldKeys.includes(k))
-    if (!added || MODAL_EXCLUDED.has(added)) return
-    for (const [key, r] of Object.entries(MODAL_REFS)) {
-      if (key !== added && !MODAL_EXCLUDED.has(key)) r.value = false
-    }
-  })
 
   function cycleFocusedModal(reverse = false) {
     const open = openModalKeys.value
