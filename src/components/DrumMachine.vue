@@ -444,8 +444,11 @@ async function handleLoadPreset(preset) {
 }
 
 // ── Quantized sequence switching ───────────────────────────────────────────────
+// Sync Retrig: TRUE = switch pattern on next first beat (quantized), FALSE = switch immediately on click
+const syncRetrig = ref(true)
+
 function clickSequenceTab(seq) {
-  if (drumStore.isPlaying && seq !== drumStore.activeSequence) {
+  if (syncRetrig.value && drumStore.isPlaying && seq !== drumStore.activeSequence) {
     _pendingSequence = seq
     pendingSequence.value = seq
   } else {
@@ -1079,6 +1082,16 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
             />
           </div>
         </div>
+
+        <!-- Sync Retrig -->
+        <label
+          class="flex items-center gap-1.5 mb-2 cursor-pointer select-none"
+          title="TRUE = switch pattern on next first beat. FALSE = switch pattern immediately on click."
+        >
+          <input type="checkbox" v-model="syncRetrig" class="w-3 h-3 accent-sky-500 cursor-pointer" />
+          <span class="text-[8px] font-mono uppercase tracking-widest text-neutral-400">Sync Retrig</span>
+        </label>
+
         <!-- Play / Stop -->
         <div class="relative ml-3">
           <button
