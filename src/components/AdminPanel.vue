@@ -125,6 +125,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'loop-machine',         label: 'Samples Machine',       icon: 'Layers'     },
   { id: 'drum-machine',         label: 'Drum Machine',          icon: 'Drum'       },
   { id: 'audio-mixer',          label: 'Audio Mixer',           icon: 'Volume2'    },
+  { id: 'sound-folder-browser', label: 'Sound Folder Browser',  icon: 'FolderOpen' },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

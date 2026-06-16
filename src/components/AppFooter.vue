@@ -65,6 +65,8 @@ const MENU_ACTION_MAP = {
   'drum-machine':         () => uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen,
   'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
   'freesound-browser':    () => uiStore.isFreesoundBrowserOpen = !uiStore.isFreesoundBrowserOpen,
+  'audio-mixer':          () => uiStore.isAudioMixerOpen = !uiStore.isAudioMixerOpen,
+  'sound-folder-browser': () => uiStore.isSoundFolderBrowserOpen = !uiStore.isSoundFolderBrowserOpen,
 }
 
 const MENU_COLORS = [

@@ -43,7 +43,7 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
@@ -58,6 +58,7 @@ const STORES: Record<string, string | null> = {
   support_tickets: 'id',
   timeline_sets: 'id',
   freesound_cache: 'id',           // downloaded Freesound preview blobs
+  sound_folder_handles: 'id',      // remembered FileSystemDirectoryHandle for the local Sound Folder Browser
 };
 
 let _db: IDBDatabase | null = null;
@@ -452,6 +453,31 @@ export async function idbCacheGetAll(): Promise<any[]> {
     const tx  = database.transaction('freesound_cache', 'readonly');
     const req = tx.objectStore('freesound_cache').getAll();
     req.onsuccess = () => resolve(req.result as any[]);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Sound Folder Browser — raw FileSystemDirectoryHandle storage (structured
+// clone, bypasses JSON serialisation since handles aren't JSON-safe)
+// ---------------------------------------------------------------------------
+
+export async function idbHandlePut(id: string, handle: any): Promise<void> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction('sound_folder_handles', 'readwrite');
+    tx.objectStore('sound_folder_handles').put({ id, handle });
+    tx.oncomplete = () => resolve();
+    tx.onerror   = () => reject(tx.error);
+  });
+}
+
+export async function idbHandleGet(id: string): Promise<any | undefined> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx  = database.transaction('sound_folder_handles', 'readonly');
+    const req = tx.objectStore('sound_folder_handles').get(id);
+    req.onsuccess = () => resolve(req.result?.handle);
     req.onerror   = () => reject(req.error);
   });
 }

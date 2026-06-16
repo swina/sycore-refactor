@@ -409,6 +409,23 @@ async function handleTrackUrlDrop(trackIdx, e) {
   await drumEngine.loadSample(trackIdx, url)
 }
 
+function openFolderBrowserForTrack(trackIdx) {
+  const track = drumStore.currentPattern[trackIdx]
+  uiStore.soundFolderAssignTarget = {
+    label: track?.label || `Track ${trackIdx + 1}`,
+    onAssign: async (file) => {
+      const soundId    = `dm_${Date.now()}_${trackIdx}`
+      const soundLabel = file.name.replace(/\.[^.]+$/, '')
+      const fileObj    = await file.handle.getFile()
+      const blob       = new Blob([await fileObj.arrayBuffer()], { type: fileObj.type || 'audio/wav' })
+      const soundUrl   = await cacheFileBlob(soundId, soundLabel, blob)
+      drumStore.setTrackSound(trackIdx, { soundId, soundLabel, soundUrl })
+      await drumEngine.loadSample(trackIdx, soundUrl)
+    },
+  }
+  uiStore.isSoundFolderBrowserOpen = true
+}
+
 function previewPad(trackIdx) {
   drumEngine.triggerPad(trackIdx, { velocity: 100, accent: false, time: 0 })
 }
@@ -804,6 +821,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
             @drop="handleTrackUrlDrop(trackIdx, $event)"
           >
             <label
+              @click.stop="openFolderBrowserForTrack(trackIdx)"
               :title="drumStore.resolveTrackSound(trackIdx).soundLabel
                 ? `${track.label}: ${drumStore.resolveTrackSound(trackIdx).soundLabel}`
                 : `Load sample for ${track.label}`"
@@ -811,14 +829,22 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
             >
               <div class="text-[11px] font-bold text-neutral-300 truncate leading-none">{{ track.label }}</div>
               <div
+                
                 v-if="drumStore.resolveTrackSound(trackIdx).soundLabel"
                 :class="[
                   'text-[9px] truncate leading-none mt-0.5',
                   drumStore.resolveTrackSound(trackIdx).own ? 'text-purple-400' : 'text-neutral-500'
                 ]"
               >{{ drumStore.resolveTrackSound(trackIdx).soundLabel }}</div>
-              <input type="file" accept="audio/*" class="hidden" @change="handleTrackFileLoad(trackIdx, $event)" />
+              <!-- <input type="file" accept="audio/*" class="hidden" @change="handleTrackFileLoad(trackIdx, $event)" /> -->
             </label>
+            <button
+              @click.stop="openFolderBrowserForTrack(trackIdx)"
+              class="shrink-0 w-3.5 h-3.5 flex items-center justify-center text-neutral-500 hover:text-purple-300 transition-colors"
+              title="Browse sound folder"
+            >
+              <FolderOpen class="w-2.5 h-2.5" />
+            </button>
             <button
               v-if="drumStore.resolveTrackSound(trackIdx).soundId"
               @click.stop="previewPad(trackIdx)"

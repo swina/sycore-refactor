@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal, Volume2, Scissors } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal, Volume2, Scissors, FolderOpen } from 'lucide-vue-next'
 import AudioSettingsModal from '@/components/AudioSettingsModal.vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -902,6 +902,24 @@ async function handleDownload() {
 
 function handleImportClick() {
   fileInputRef.value?.click()
+}
+
+function openFolderBrowserForImport() {
+  uiStore.soundFolderAssignTarget = {
+    label: 'Audio Capture',
+    onAssign: async (file) => {
+      const fileObj = await file.handle.getFile()
+      const blob    = new Blob([await fileObj.arrayBuffer()], { type: fileObj.type || 'audio/wav' })
+      isImporting.value = true
+      lastCaptureLabel.value = file.name.replace(/\.[^.]+$/, '')
+      try {
+        await loadBlobToCapture(blob)
+      } finally {
+        isImporting.value = false
+      }
+    },
+  }
+  uiStore.isSoundFolderBrowserOpen = true
 }
 
 async function loadBlobToCapture(blob) {
@@ -2718,6 +2736,18 @@ onUnmounted(() => {
           >
             <Upload class="w-3 h-3" />
             {{ isImporting ? '…' : 'Import' }}
+          </button>
+
+          <!-- Import from Sound Folder -->
+          <button
+            v-if="!isRecording"
+            @click="openFolderBrowserForImport"
+            :disabled="isImporting"
+            title="Import from sound folder"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-neutral-500 border-neutral-700 hover:text-synth-neon hover:border-synth-neon/30 transition-colors"
+          >
+            <FolderOpen class="w-3 h-3" />
+            Browse
           </button>
 
           <!-- Reset -->

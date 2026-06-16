@@ -5,6 +5,7 @@ import TracksPlayer from '@/components/TracksPlayer.vue'
 import GuidesPanel from '@/components/GuidesPanel.vue'
 import FreesoundBrowser from '@/components/FreesoundBrowser.vue'
 import AudioMixerPanel from '@/components/AudioMixerPanel.vue'
+import SoundFolderBrowser from '@/components/SoundFolderBrowser.vue'
 import { useUiStore } from '@/stores/useUiStore'
 
 const uiStore = useUiStore()
@@ -38,4 +39,5 @@ onUnmounted(() => {
   <GuidesPanel v-if="uiStore.isGuidesOpen" @close="uiStore.isGuidesOpen = false" />
   <FreesoundBrowser />
   <AudioMixerPanel v-if="uiStore.isAudioMixerOpen" @close="uiStore.isAudioMixerOpen = false" />
+  <SoundFolderBrowser />
 </template>

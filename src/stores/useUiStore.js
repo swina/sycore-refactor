@@ -56,6 +56,8 @@ export const useUiStore = defineStore('ui', () => {
   const isGuidesOpen             = ref(false)
   const isChordProgOpen          = ref(false)
   const isAudioMixerOpen         = ref(false)
+  const isSoundFolderBrowserOpen = ref(false)
+  const soundFolderAssignTarget  = ref(null) // { label: string, onAssign: (file) => Promise<void> } | null
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
   const midiActionsActiveTab = ref('mapper')
@@ -237,6 +239,8 @@ export const useUiStore = defineStore('ui', () => {
     isLoopMachineOpen.value        = false
     isDrumMachineOpen.value        = false
     isChordProgOpen.value          = false
+    isSoundFolderBrowserOpen.value = false
+    soundFolderAssignTarget.value  = null
     midiActionsActiveTab.value = 'mapper'
     midiActionsSelectedDevice.value = ''
     focusedModalKey.value = null
@@ -271,6 +275,10 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem('SYCORE_SEQ_AUTOSTART', String(v))
   })
 
+  watch(isSoundFolderBrowserOpen, (open) => {
+    if (!open) soundFolderAssignTarget.value = null
+  })
+
   return {
     isAppInitializing,
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen,
@@ -281,7 +289,7 @@ export const useUiStore = defineStore('ui', () => {
     isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
-    isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen,
+    isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab,
