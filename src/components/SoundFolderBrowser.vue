@@ -28,10 +28,19 @@ const filteredFiles = computed(() => {
 })
 
 // ── Recursive folder walk ────────────────────────────────────────
+function formatSize(bytes) {
+  if (bytes < 1024)        return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 async function* walk(dir, relPath = '') {
   for await (const [name, handle] of dir.entries()) {
     if (handle.kind === 'file') {
-      if (AUDIO_EXT_RE.test(name)) yield { name, relPath, handle }
+      if (AUDIO_EXT_RE.test(name)) {
+        const file = await handle.getFile()
+        yield { name, relPath, handle, size: file.size }
+      }
     } else if (handle.kind === 'directory') {
       yield* walk(handle, relPath ? `${relPath}/${name}` : name)
     }
@@ -373,7 +382,10 @@ onUnmounted(() => {
 
               <div class="flex-1 min-w-0">
                 <div class="text-[11px] font-bold text-white truncate leading-tight">{{ file.name }}</div>
-                <div v-if="file.relPath" class="text-[9px] text-neutral-500 font-mono truncate">{{ file.relPath }}</div>
+                <div class="flex items-center gap-1.5">
+                  <span v-if="file.relPath" class="text-[9px] text-neutral-500 font-mono truncate">{{ file.relPath }}</span>
+                  <span v-if="file.size != null" class="shrink-0 text-[9px] font-mono text-neutral-600">{{ formatSize(file.size) }}</span>
+                </div>
               </div>
 
               <button

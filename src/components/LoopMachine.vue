@@ -471,6 +471,31 @@ function openFileForPad(idx) {
   fileInputRef.value?.click()
 }
 
+function openFolderBrowserForPad(idx) {
+  uiStore.soundFolderAssignTarget = {
+    label: `Pad ${idx + 1}`,
+    onAssign: async (file) => {
+      const fileObj  = await file.handle.getFile()
+      const blob     = new Blob([await fileObj.arrayBuffer()], { type: fileObj.type || 'audio/wav' })
+      let duration   = 0
+      try {
+        const AC  = window.AudioContext || window.webkitAudioContext
+        const ctx = new AC()
+        const buf = await ctx.decodeAudioData(await blob.arrayBuffer())
+        duration  = buf.duration
+        await ctx.close()
+      } catch {}
+      const id    = `lm_${Date.now()}_${idx}`
+      const label = file.name.replace(/\.[^.]+$/, '')
+      const url   = await cacheFileBlob(id, label, blob, { author: 'Sound Folder', duration })
+      _stopPad(idx)
+      pads.value[idx] = { id, label, url, author: 'Sound Folder', duration }
+      _savePads()
+    },
+  }
+  uiStore.isSoundFolderBrowserOpen = true
+}
+
 async function handleFileImport(e) {
   const file = e.target?.files?.[0]
   if (!file || _importIdx < 0) return
@@ -882,7 +907,7 @@ onUnmounted(() => {
               <div
                 v-for="(pad, idx) in pads"
                 :key="idx"
-                @click="pad ? togglePad(idx) : openFileForPad(idx)"
+                @click="pad ? togglePad(idx) : openFolderBrowserForPad(idx)"
                 @contextmenu.prevent="openMenu($event, { name: 'lm_pad_' + idx, label: pad?.label || 'Samples Machine Pad ' + (idx + 1) })"
                 :class="[
                   'relative group rounded-lg border flex flex-col items-center justify-center cursor-pointer select-none overflow-hidden transition-all duration-150',
@@ -1183,7 +1208,7 @@ onUnmounted(() => {
       <!-- Footer -->
       <div class="shrink-0 px-4 py-1.5 border-t border-neutral-800/60 bg-neutral-950/40 flex items-center gap-3">
         <span class="text-[9px] text-neutral-700 font-mono">
-          Click empty pad to load · Right-click to MIDI learn · Assign from Freesound with <span class="text-fuchsia-500/70">LM</span>
+          Click empty pad to browse folder · Right-click to MIDI learn · Assign from Freesound with <span class="text-fuchsia-500/70">LM</span>
         </span>
         <span v-if="lmUseSessionBpm" class="ml-auto text-[9px] font-mono text-sky-500/70 flex items-center gap-1">
           <span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0" />

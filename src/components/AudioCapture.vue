@@ -55,6 +55,7 @@ const normalizeGateDb  = ref(-60)
 const isImporting      = ref(false)
 const isDiscoveringLoop = ref(false)
 const isCalculatingBpm  = ref(false)
+const bpmConfirm        = ref(null) // { detected: number, editable: number } | null
 const linkPlayStart     = ref(false)
 const isFadingIn        = ref(false)
 const isFadingOut       = ref(false)
@@ -914,6 +915,12 @@ function openFolderBrowserForImport() {
       lastCaptureLabel.value = file.name.replace(/\.[^.]+$/, '')
       try {
         await loadBlobToCapture(blob)
+        const detected = await detectBpmFromBlob(blob)
+        if (detected != null) {
+          bpmConfirm.value = { detected, editable: detected }
+        }
+      } catch (e) {
+        console.error('[AudioCapture] folder import failed', e)
       } finally {
         isImporting.value = false
       }
@@ -1079,87 +1086,92 @@ async function discoverSeamlessLoop() {
   }
 }
 
+async function detectBpmFromBlob(blob, regionStartSec = 0, regionEndSec = 0) {
+  const arrayBuffer = await blob.arrayBuffer()
+  const OffCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext
+  const tmpCtx = new OffCtx(1, 1, 44100)
+  const decoded = await tmpCtx.decodeAudioData(arrayBuffer)
+
+  const sampleRate = decoded.sampleRate
+  const regionStart = Math.floor(regionStartSec * sampleRate)
+  const regionEnd = regionEndSec > regionStartSec
+    ? Math.floor(regionEndSec * sampleRate)
+    : decoded.length
+
+  const mono = new Float32Array(regionEnd - regionStart)
+  for (let c = 0; c < decoded.numberOfChannels; c++) {
+    const ch = decoded.getChannelData(c)
+    for (let i = 0; i < mono.length; i++) mono[i] += ch[regionStart + i]
+  }
+  if (decoded.numberOfChannels > 1) {
+    const inv = 1 / decoded.numberOfChannels
+    for (let i = 0; i < mono.length; i++) mono[i] *= inv
+  }
+
+  const FRAME_SIZE = 512
+  const HOP = 256
+  const numFrames = Math.floor((mono.length - FRAME_SIZE) / HOP)
+  if (numFrames < 4) return null
+
+  const energies = new Float32Array(numFrames)
+  for (let f = 0; f < numFrames; f++) {
+    let e = 0
+    const off = f * HOP
+    for (let i = 0; i < FRAME_SIZE; i++) e += mono[off + i] ** 2
+    energies[f] = e / FRAME_SIZE
+  }
+
+  const onset = new Float32Array(numFrames)
+  for (let f = 1; f < numFrames; f++) {
+    onset[f] = Math.max(0, energies[f] - energies[f - 1])
+  }
+
+  const mean = onset.reduce((a, b) => a + b, 0) / numFrames
+  const threshold = mean * 1.5
+  const MIN_GAP = Math.floor(0.25 * sampleRate / HOP)
+
+  const peaks = []
+  let lastPeak = -MIN_GAP
+  for (let f = 2; f < numFrames - 2; f++) {
+    if (
+      onset[f] > threshold &&
+      onset[f] > onset[f - 1] && onset[f] > onset[f + 1] &&
+      onset[f] > onset[f - 2] && onset[f] > onset[f + 2] &&
+      f - lastPeak >= MIN_GAP
+    ) {
+      peaks.push(f)
+      lastPeak = f
+    }
+  }
+
+  if (peaks.length < 2) return null
+
+  const bpmCandidates = []
+  for (let i = 1; i < peaks.length; i++) {
+    let bpm = 60 / ((peaks[i] - peaks[i - 1]) * HOP / sampleRate)
+    while (bpm > 180) bpm /= 2
+    while (bpm < 60) bpm *= 2
+    bpmCandidates.push(bpm)
+  }
+
+  const BIN = 5
+  const bins = {}
+  for (const b of bpmCandidates) {
+    const key = Math.round(b / BIN) * BIN
+    bins[key] = (bins[key] || 0) + 1
+  }
+
+  const [bestKey] = Object.entries(bins).sort((a, b) => b[1] - a[1])[0]
+  const estimated = Math.round(parseFloat(bestKey))
+  return estimated >= 40 && estimated <= 240 ? estimated : null
+}
+
 async function calculateBpm() {
   if (!recordedBlob.value || isCalculatingBpm.value) return
   isCalculatingBpm.value = true
   try {
-    const arrayBuffer = await recordedBlob.value.arrayBuffer()
-    const OffCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext
-    const tmpCtx = new OffCtx(1, 1, 44100)
-    const decoded = await tmpCtx.decodeAudioData(arrayBuffer)
-
-    const sampleRate = decoded.sampleRate
-    const regionStart = Math.floor(loopStart.value * sampleRate)
-    const regionEnd = loopEnd.value > loopStart.value
-      ? Math.floor(loopEnd.value * sampleRate)
-      : decoded.length
-
-    const mono = new Float32Array(regionEnd - regionStart)
-    for (let c = 0; c < decoded.numberOfChannels; c++) {
-      const ch = decoded.getChannelData(c)
-      for (let i = 0; i < mono.length; i++) mono[i] += ch[regionStart + i]
-    }
-    if (decoded.numberOfChannels > 1) {
-      const inv = 1 / decoded.numberOfChannels
-      for (let i = 0; i < mono.length; i++) mono[i] *= inv
-    }
-
-    const FRAME_SIZE = 512
-    const HOP = 256
-    const numFrames = Math.floor((mono.length - FRAME_SIZE) / HOP)
-    if (numFrames < 4) return
-
-    const energies = new Float32Array(numFrames)
-    for (let f = 0; f < numFrames; f++) {
-      let e = 0
-      const off = f * HOP
-      for (let i = 0; i < FRAME_SIZE; i++) e += mono[off + i] ** 2
-      energies[f] = e / FRAME_SIZE
-    }
-
-    const onset = new Float32Array(numFrames)
-    for (let f = 1; f < numFrames; f++) {
-      onset[f] = Math.max(0, energies[f] - energies[f - 1])
-    }
-
-    const mean = onset.reduce((a, b) => a + b, 0) / numFrames
-    const threshold = mean * 1.5
-    const MIN_GAP = Math.floor(0.25 * sampleRate / HOP)
-
-    const peaks = []
-    let lastPeak = -MIN_GAP
-    for (let f = 2; f < numFrames - 2; f++) {
-      if (
-        onset[f] > threshold &&
-        onset[f] > onset[f - 1] && onset[f] > onset[f + 1] &&
-        onset[f] > onset[f - 2] && onset[f] > onset[f + 2] &&
-        f - lastPeak >= MIN_GAP
-      ) {
-        peaks.push(f)
-        lastPeak = f
-      }
-    }
-
-    if (peaks.length < 2) return
-
-    const bpmCandidates = []
-    for (let i = 1; i < peaks.length; i++) {
-      let bpm = 60 / ((peaks[i] - peaks[i - 1]) * HOP / sampleRate)
-      while (bpm > 180) bpm /= 2
-      while (bpm < 60) bpm *= 2
-      bpmCandidates.push(bpm)
-    }
-
-    const BIN = 5
-    const bins = {}
-    for (const b of bpmCandidates) {
-      const key = Math.round(b / BIN) * BIN
-      bins[key] = (bins[key] || 0) + 1
-    }
-
-    const [bestKey] = Object.entries(bins).sort((a, b) => b[1] - a[1])[0]
-    const estimated = Math.round(parseFloat(bestKey))
-    if (estimated >= 40 && estimated <= 240) {
+    const estimated = await detectBpmFromBlob(recordedBlob.value, loopStart.value, loopEnd.value)
+    if (estimated != null) {
       midiStore.currentBpm = estimated
       midiStore.setBpm(estimated)
     }
@@ -1168,6 +1180,19 @@ async function calculateBpm() {
   } finally {
     isCalculatingBpm.value = false
   }
+}
+
+function applyBpmConfirm() {
+  const bpm = Number(bpmConfirm.value?.editable)
+  if (bpm >= 40 && bpm <= 240) {
+    midiStore.currentBpm = bpm
+    midiStore.setBpm(bpm)
+  }
+  bpmConfirm.value = null
+}
+
+function dismissBpmConfirm() {
+  bpmConfirm.value = null
 }
 
 async function handleFadeIn() {
@@ -3371,6 +3396,49 @@ onUnmounted(() => {
   </Transition>
 
   <input ref="fileInputRef" type="file" accept=".mp3,.ogg,.wav,audio/*,.s1loop.json" @change="handleFileImport" class="hidden" />
+
+  <!-- BPM confirmation dialog (shown after folder-browser import) -->
+  <Teleport to="body">
+    <div
+      v-if="bpmConfirm"
+      class="fixed inset-0 z-[900] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      @click.self="dismissBpmConfirm"
+    >
+      <div class="bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl w-72 p-5 flex flex-col gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-synth-neon/10 border border-synth-neon/20 flex items-center justify-center shrink-0">
+            <span class="text-synth-neon text-[11px] font-black">BPM</span>
+          </div>
+          <div>
+            <p class="text-[11px] font-black uppercase tracking-widest text-white leading-none">BPM Detected</p>
+            <p class="text-[9px] font-mono text-neutral-400 mt-0.5">Detected <span class="text-synth-neon font-bold">{{ bpmConfirm.detected }}</span> BPM · current is <span class="text-neutral-300">{{ activeBpm }}</span></p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input
+            v-model.number="bpmConfirm.editable"
+            type="number"
+            min="40"
+            max="240"
+            class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-2 text-sm font-mono text-synth-neon text-center focus:border-synth-neon/60 outline-none"
+          />
+          <span class="text-[9px] font-mono text-neutral-500 uppercase">BPM</span>
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            @click="applyBpmConfirm"
+            class="flex-1 px-3 py-2 rounded-lg bg-synth-neon/10 border border-synth-neon/30 text-synth-neon text-[10px] font-black uppercase tracking-widest hover:bg-synth-neon/20 transition-colors"
+          >Apply</button>
+          <button
+            @click="dismissBpmConfirm"
+            class="flex-1 px-3 py-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-400 text-[10px] font-black uppercase tracking-widest hover:bg-neutral-700 transition-colors"
+          >Keep Current</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
