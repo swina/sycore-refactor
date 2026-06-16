@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal, Volume2 } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal, Volume2, Scissors } from 'lucide-vue-next'
 import AudioSettingsModal from '@/components/AudioSettingsModal.vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -59,6 +59,7 @@ const linkPlayStart     = ref(false)
 const isFadingIn        = ref(false)
 const isFadingOut       = ref(false)
 const fadeDur           = ref(0)
+const isCutting         = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const appendMode       = ref(localStorage.getItem('S1_CAPTURE_APPEND') === '1')
 const error            = ref(null)
@@ -1244,6 +1245,62 @@ async function handleFadeOut() {
     console.error('[AudioCapture] Fade out failed', e)
   } finally {
     isFadingOut.value = false
+  }
+}
+
+async function handleCut() {
+  if (!recordedBlob.value || isCutting.value) return
+  if (loopEnd.value <= loopStart.value) return
+  isCutting.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new AudioCtxClass()
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+
+    const sampleRate  = decoded.sampleRate
+    const startSample = Math.max(0, Math.floor(loopStart.value * sampleRate))
+    const endSample    = Math.min(decoded.length, Math.floor(loopEnd.value * sampleRate))
+    const cutSamples   = endSample - startSample
+    if (cutSamples <= 0) return
+
+    const newLength = decoded.length - cutSamples
+    if (newLength <= 0) return
+
+    const cutBuffer = new AudioBuffer({
+      numberOfChannels: decoded.numberOfChannels,
+      length: newLength,
+      sampleRate,
+    })
+
+    for (let chan = 0; chan < decoded.numberOfChannels; chan++) {
+      const src    = decoded.getChannelData(chan)
+      const merged = new Float32Array(newLength)
+      merged.set(src.subarray(0, startSample), 0)
+      merged.set(src.subarray(endSample), startSample)
+      cutBuffer.copyToChannel(merged, chan)
+    }
+
+    if (isPlaying.value) {
+      currentPlaybackTime.value = getPlaybackTime()
+      stopAllSources()
+      isPlaying.value = false
+    }
+
+    waveformPeaks.value = computePeaks(cutBuffer.getChannelData(0), waveformDetail.value)
+    _skipNextPeakRegen = true
+    recordedBlob.value = audioBufferToWav(cutBuffer)
+
+    const cutPoint = startSample / sampleRate
+    audioDuration.value      = cutBuffer.duration
+    loopStart.value           = Math.min(cutPoint, audioDuration.value)
+    loopEnd.value              = loopStart.value
+    currentPlaybackTime.value = Math.min(currentPlaybackTime.value, audioDuration.value)
+  } catch (e) {
+    console.error('[AudioCapture] Cut failed', e)
+  } finally {
+    isCutting.value = false
   }
 }
 
@@ -3093,8 +3150,20 @@ onUnmounted(() => {
                     : 'text-neutral-700 cursor-default']"
                 title="Fade out: ramp Loop End−duration → Loop End"
               >{{ isFadingOut ? '…' : 'Fade Out' }} ◀</button>
-              
+
             </div>
+            <button
+              @click="handleCut"
+              :disabled="!recordedBlob || isCutting || loopEnd <= loopStart"
+              :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isCutting && loopEnd > loopStart
+                  ? 'text-red-300 border-red-500/40 hover:bg-red-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Cut: remove the selected Loop Start - Loop End region from the recording"
+            >
+              <Scissors class="w-3 h-3" />
+              {{ isCutting ? 'Cutting…' : 'Cut' }}
+            </button>
             <div class="flex items-center justify-center gap-0.5 px-1.5 py-0.5">
                 <input
                   v-model.number="fadeDur"
