@@ -3,13 +3,14 @@ import { getContext } from 'tone'
 const ACCENT_BOOST = 1.35
 const NUM_PADS = 8
 
-let _masterGain    = null
-let _compressor    = null
-let _reverb        = null
-let _reverbReturn  = null
-let _delay         = null
-let _delayFeedback = null
-let _delayReturn   = null
+let _masterGain         = null
+let _compressor         = null
+let _captureDestination = null
+let _reverb             = null
+let _reverbReturn       = null
+let _delay              = null
+let _delayFeedback      = null
+let _delayReturn        = null
 
 const _buffers      = Array(NUM_PADS).fill(null)
 const _padGains     = Array(NUM_PADS).fill(null)
@@ -50,6 +51,8 @@ function _ensureGraph() {
   _compressor.attack.value    = 0.003
   _compressor.release.value   = 0.15
   _compressor.connect(ctx.destination)
+  _captureDestination = ctx.createMediaStreamDestination()
+  _compressor.connect(_captureDestination)
 
   _masterGain = ctx.createGain()
   _masterGain.gain.value = 0.85
@@ -220,3 +223,8 @@ export function stopAll() {
 }
 
 export function resumeContext() {}
+
+export function getCaptureStream() {
+  _ensureGraph()
+  return _captureDestination?.stream ?? null
+}

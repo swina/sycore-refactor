@@ -13,6 +13,7 @@ import { looperEngine } from '@/lib/looper-engine'
 import { useLooperStore } from '@/stores/useLooperStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
+import { getCaptureStream } from '@/lib/drum-engine'
 
 const props = defineProps({
   hasBackingTrack: { type: Boolean, default: false },
@@ -370,6 +371,11 @@ const canvasRef   = ref(null)
 const levelBarRef = ref(null)
 const fileInputRef = ref(null)
 
+// ── Recording gain controls ───────────────────────────────────────────────────
+const inputGain   = ref(parseFloat(localStorage.getItem('S1_CAP_INPUT_GAIN') ?? '1.0'))
+const dmGain      = ref(parseFloat(localStorage.getItem('S1_CAP_DM_GAIN')    ?? '0.75'))
+const hasDmStream = ref(false)
+
 // ── Plain mutable (Web Audio nodes) ──────────────────────────────────────────
 let streamRef      = null
 let ctxRef         = null
@@ -381,10 +387,21 @@ let rafRef         = null
 let isRecordingRef = false
 let toPlaylistRef  = toPlaylist.value
 let prevBlobRef    = null
+let micGainNodeRef = null
+let dmGainNodeRef  = null
+let recDestRef     = null
 
 watch(toPlaylist, v => {
   toPlaylistRef = v
   localStorage.setItem('S1_CAPTURE_TO_PLAYLIST', v ? '1' : '0')
+})
+watch(inputGain, v => {
+  if (micGainNodeRef) micGainNodeRef.gain.value = v
+  localStorage.setItem('S1_CAP_INPUT_GAIN', v)
+})
+watch(dmGain, v => {
+  if (dmGainNodeRef) dmGainNodeRef.gain.value = v
+  localStorage.setItem('S1_CAP_DM_GAIN', v)
 })
 
 watch(appendMode, v => {
@@ -466,6 +483,10 @@ function stopAll(keepBlob = false, keepMonitor = false) {
     if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
     if (ctxRef) { ctxRef.close().catch(() => {}); ctxRef = null }
     analyserRef = null
+    micGainNodeRef = null
+    dmGainNodeRef  = null
+    recDestRef     = null
+    hasDmStream.value = false
     isMonitoring.value = false
   }
   isRecordingRef = false
@@ -529,11 +550,40 @@ async function startMonitor(deviceId) {
     const actx = new AudioContext()
     ctxRef = actx
     const src = actx.createMediaStreamSource(stream)
+
+    // Input gain — scales mic/instruments level in recording
+    const micGain = actx.createGain()
+    micGain.gain.value = inputGain.value
+    micGainNodeRef = micGain
+
     const analyser = actx.createAnalyser()
     analyser.fftSize = 2048
     analyser.smoothingTimeConstant = 0.8
-    src.connect(analyser)
     analyserRef = analyser
+
+    // Level bar reads the mic bus (after input gain)
+    src.connect(micGain)
+    micGain.connect(analyser)
+
+    // Merged recording destination
+    const recDest = actx.createMediaStreamDestination()
+    recDestRef = recDest
+    micGain.connect(recDest)
+
+    // Drum engine stream tap — brings DM audio into the recording chain
+    const drumStream = getCaptureStream()
+    if (drumStream) {
+      const dmSrc = actx.createMediaStreamSource(drumStream)
+      const dmGainNode = actx.createGain()
+      dmGainNode.gain.value = dmGain.value
+      dmGainNodeRef = dmGainNode
+      dmSrc.connect(dmGainNode)
+      dmGainNode.connect(recDest)
+      hasDmStream.value = true
+    } else {
+      hasDmStream.value = false
+    }
+
     await refreshDevices()
     isMonitoring.value = true
   } catch (e) {
@@ -564,6 +614,10 @@ async function handleDeviceChange(id) {
   if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
   if (ctxRef) { ctxRef.close().catch(() => {}); ctxRef = null }
   analyserRef = null
+  micGainNodeRef = null
+  dmGainNodeRef  = null
+  recDestRef     = null
+  hasDmStream.value = false
   isMonitoring.value = false
   await startMonitor(id)
 }
@@ -625,7 +679,8 @@ function startRecording() {
   const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg']
     .find(t => MediaRecorder.isTypeSupported(t)) ?? ''
 
-  const recorder = new MediaRecorder(streamRef, mimeType ? { mimeType } : undefined)
+  const recStream = recDestRef ? recDestRef.stream : streamRef
+  const recorder = new MediaRecorder(recStream, mimeType ? { mimeType } : undefined)
   recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.push(e.data) }
   recorder.onstop = async () => {
     const newBlob = new Blob(chunksRef, { type: recorder.mimeType || 'audio/webm' })
@@ -2257,10 +2312,40 @@ onUnmounted(() => {
           Samples Machine
         </button>
       </div>
+
+      <!-- Recording gain controls -->
+      <div class="flex items-center gap-3 px-4 py-1 bg-neutral-900/30 border-b border-neutral-800/60 shrink-0">
+        <span class="text-[9px] font-black uppercase tracking-widest text-neutral-500 shrink-0">Rec Gain</span>
+        <div class="flex items-center gap-1.5 flex-1">
+          <span class="text-[9px] text-neutral-400 font-mono shrink-0 w-8">Input</span>
+          <input
+            type="range" min="0" max="2" step="0.01"
+            :value="inputGain"
+            @input="inputGain = parseFloat($event.target.value)"
+            :disabled="!isMonitoring"
+            class="flex-1 h-1 accent-synth-neon disabled:opacity-40"
+            title="Mic / instruments recording level"
+          />
+          <span class="text-[9px] font-mono text-neutral-400 w-8 text-right">{{ Math.round(inputGain * 100) }}%</span>
+        </div>
+        <div class="flex items-center gap-1.5 flex-1">
+          <span class="text-[9px] text-rose-400 font-mono shrink-0 w-5">DM</span>
+          <input
+            type="range" min="0" max="2" step="0.01"
+            :value="dmGain"
+            @input="dmGain = parseFloat($event.target.value)"
+            :disabled="!hasDmStream"
+            class="flex-1 h-1 accent-rose-400 disabled:opacity-40"
+            title="Drum Machine recording level"
+          />
+          <span class="text-[9px] font-mono text-neutral-400 w-8 text-right">{{ Math.round(dmGain * 100) }}%</span>
+        </div>
+      </div>
+
       <div class="flex">
         <!--- Controls Left Column -->
         <div class="w-[120px] flex flex-col p-2 gap-2 border-r border-neutral-900">
-          
+
 
           <!-- MIDI Sync Toggle -->
           <button
