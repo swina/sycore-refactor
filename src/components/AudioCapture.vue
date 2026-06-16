@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal, Volume2 } from 'lucide-vue-next'
 import AudioSettingsModal from '@/components/AudioSettingsModal.vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -2283,6 +2283,14 @@ onUnmounted(() => {
         >
           <SlidersHorizontal class="w-3 h-3" />
           Devices
+        </button>
+        <button
+          @click="uiStore.isAudioMixerOpen = true"
+          title="Open Audio Mixer"
+          class="shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors text-rose-400 border-rose-400/30 hover:bg-rose-400/10 hover:border-rose-400/50"
+        >
+          <Volume2 class="w-3 h-3" />
+          Mixer
         </button>
         <button
           @click="toPlaylist = !toPlaylist"

@@ -124,6 +124,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'freesound-browser',    label: 'Freesound Browser',     icon: 'Radio'      },
   { id: 'loop-machine',         label: 'Samples Machine',       icon: 'Layers'     },
   { id: 'drum-machine',         label: 'Drum Machine',          icon: 'Drum'       },
+  { id: 'audio-mixer',          label: 'Audio Mixer',           icon: 'Volume2'    },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

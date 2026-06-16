@@ -8,6 +8,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 
 function isS1Device(name) {
@@ -25,6 +26,7 @@ export function useMidiCCListener() {
   const lfoStore = useLfoStore()
   const arpStore = useArpStore()
   const drumStore = useDrumMachineStore()
+  const mixerStore = useAudioMixerStore()
 
   const originalModValueMap = {}
 
@@ -275,6 +277,10 @@ export function useMidiCCListener() {
     }
     if (fieldName === 'dm_master_vol') {
       window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: val / 127 }))
+      return
+    }
+    if (fieldName === 'dm_level_master') {
+      mixerStore.setDrumsLevelVol(val / 127)
       return
     }
     // ───────────────────────────────────────────────────────────────────────────

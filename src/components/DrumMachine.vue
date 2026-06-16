@@ -4,6 +4,7 @@ import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDrumMachineStore, DRUM_STYLE_NAMES } from '@/stores/useDrumMachineStore'
+import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -13,6 +14,7 @@ import * as drumEngine from '@/lib/drum-engine'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
+const mixer          = useAudioMixerStore()
 const mappingStore   = useMappingStore()
 const arpStore       = useArpStore()
 const { openMenu }   = useMidiContextMenu()
@@ -35,7 +37,6 @@ watch(() => uiStore.isDrumMachineOpen, v => { if (v) bringToFront() })
 const selectedStyle   = ref('House')
 const showStyleMenu   = ref(false)
 const generateAsFill  = ref(false)
-const masterVolume    = ref(0.85)
 const copySourceSeq   = ref(null)
 const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
 
@@ -223,7 +224,7 @@ function _scheduleCallback(time) {
     }
     if (!step.active) return
 
-    drumEngine.setPadVolume(trackIdx, track.volume * masterVolume.value)
+    drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
 
     const divisions = state.repeaterActive
       ? state.repeaterDivision
@@ -318,7 +319,7 @@ watch(() => drumStore.activeSequence, async () => {
 
 // ── Master volume (footer) — applied as a multiplier on all track volumes at trigger time ─
 function _setMasterVolume(vol) {
-  masterVolume.value = Math.max(0, Math.min(1, vol))
+  mixer.setDrumsLevelVol(Math.max(0, Math.min(1, vol)))
 }
 
 // ── Master volume from AudioMixer — controls the engine's _masterGain node ───
@@ -1117,19 +1118,19 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         <!-- Master Volume -->
         <div
           class="relative flex items-center gap-2"
-          @contextmenu.prevent="openMenu($event, { name: 'dm_master_vol', label: 'Drum Machine: Master Volume' })"
+          @contextmenu.prevent="openMenu($event, { name: 'dm_level_master', label: 'Drum Machine: Master Volume' })"
         >
           <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Vol</span>
           <input
             type="range" min="0" max="1" step="0.01"
-            :value="masterVolume"
+            :value="mixer.drumsLevelVol"
             @input="_setMasterVolume(parseFloat($event.target.value))"
             class="w-20 h-1 accent-purple-500 cursor-pointer"
             title="Master volume for all tracks"
           />
-          <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ Math.round(masterVolume * 100) }}</span>
+          <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ Math.round(mixer.drumsLevelVol * 100) }}</span>
           <span
-            v-if="mappingStore.learningParamName === 'dm_master_vol'"
+            v-if="mappingStore.learningParamName === 'dm_level_master'"
             class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
           />
         </div>

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
   LayoutGrid, Layers, Heart, ListMusic, User, BookOpen, Workflow,
-  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network, Home, Music2, X, SlidersHorizontal
+  Settings2, Gamepad2, AlertTriangle, Mail, HelpCircle, Activity, Disc3, Mic, Save, RotateCw, Cpu, Play, Square, KeyboardMusic, Cable, Network, Home, Music2, X, SlidersHorizontal, Volume2
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -144,6 +144,7 @@ const toolbarButtonMap = {
   'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
   'audio-looper':           { state: 'isLooperOpen',                     icon: RotateCw,           label: 'Audio Looper' },
   'freesound-browser':      { state: 'isFreesoundBrowserOpen',           icon: Radio,               label: 'Freesound Browser' },
+  'audio-mixer':            { state: 'isAudioMixerOpen',                 icon: Volume2,             label: 'Audio Mixer' },
 }
 
 function handleToolbarButtonClick(button) {

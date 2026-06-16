@@ -89,6 +89,18 @@ const CATALOG = [
     setVol: v => mixer.setDrumsVol(v),
     mute:   () => mixer.toggleDrumsMute(),
   },
+  {
+    id:     'drumsLevel',
+    label:  'DM Level',
+    sub:    'All 8 Slots',
+    desc:   'Master level multiplier for all 8 Drum Machine slot volumes (same control as the Drum Machine footer Vol)',
+    icon:   Layers,
+    color:  'rose',
+    vol:    () => mixer.drumsLevelVol,
+    muted:  () => mixer.drumsLevelMuted,
+    setVol: v => mixer.setDrumsLevelVol(v),
+    mute:   () => mixer.toggleDrumsLevelMute(),
+  },
 ]
 
 const activeChannels = computed(() =>
@@ -149,6 +161,7 @@ const C = {
   'synth-neon':{ track: 'bg-synth-neon', text: 'text-synth-neon',  muted: 'bg-green-400/20 text-green-300 border-green-500/30',    check: 'border-green-500 bg-green-500/10 text-green-300' },
   fuchsia:    { track: 'bg-fuchsia-400', text: 'text-fuchsia-400', muted: 'bg-fuchsia-400/20 text-fuchsia-300 border-fuchsia-500/30', check: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-300' },
   orange:     { track: 'bg-orange-400',  text: 'text-orange-400',  muted: 'bg-orange-400/20 text-orange-300 border-orange-500/30', check: '' },
+  rose:       { track: 'bg-rose-400',    text: 'text-rose-400',    muted: 'bg-rose-400/20 text-rose-300 border-rose-500/30',       check: 'border-rose-500 bg-rose-500/10 text-rose-300' },
 }
 </script>
 
