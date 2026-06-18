@@ -2524,7 +2524,7 @@ onUnmounted(() => {
 
       <div class="flex">
         <!--- Controls Left Column -->
-        <div class="w-[120px] flex flex-col p-2 gap-2 border-r border-neutral-900">
+        <div class="w-[120px] flex flex-col p-2 gap-2 border-r border-neutral-900 justify-between">
 
 
           <!-- MIDI Sync Toggle -->
@@ -2570,7 +2570,7 @@ onUnmounted(() => {
          
 
           <!-- Add to Playlist manually -->
-          <div v-if="recordedBlob && !isRecording" class="flex items-center border border-neutral-700 rounded overflow-hidden">
+          <!-- <div v-if="recordedBlob && !isRecording" class="flex items-center border border-neutral-700 rounded overflow-hidden">
             <button
               @click="handleAddToPlaylist"
               title="Send cropped audio to Playlist"
@@ -2589,7 +2589,7 @@ onUnmounted(() => {
                 class="px-1 text-[7px] font-bold text-neutral-500 hover:text-white leading-none"
               >-</button>
             </div>
-          </div>
+          </div> -->
 
           <!-- Send to Loop Pad — trigger button -->
           <button
@@ -2608,7 +2608,7 @@ onUnmounted(() => {
             title="Send cropped audio to Samples Machine"
             class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-amber-300 border-amber-500/40 hover:bg-amber-500/15 transition-colors"
           >
-            <Layers class="w-3 h-3" /> Samples Machine
+            <Layers class="w-3 h-3" /> Samples M
           </button>
 
           <!-- Loop Pad assignment modal -->
@@ -2824,7 +2824,7 @@ onUnmounted(() => {
           </button>  
 
            <!-- Import -->
-          <button
+          <!-- <button
             v-if="!isRecording"
             @click="handleImportClick"
             :disabled="isImporting"
@@ -2833,7 +2833,7 @@ onUnmounted(() => {
           >
             <Upload class="w-3 h-3" />
             {{ isImporting ? '…' : 'Import' }}
-          </button>
+          </button> -->
 
           <!-- Import from Sound Folder -->
           <button
@@ -2920,7 +2920,7 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
-        <!-- Right Column: Timeline & Waveform canvas -->
+        <!-- Center Column: Timeline & Waveform canvas -->
         <div class="flex-1 flex flex-col min-h-0 bg-[#080808]">
           <!-- Timeline Control Bar -->
           <div class="flex items-center justify-between px-3 py-1.5 border-b border-neutral-900 bg-neutral-950/80 gap-4 select-none shrink-0">
@@ -2988,7 +2988,7 @@ onUnmounted(() => {
           </div>
           
           <!-- Canvas container -->
-          <div class="relative flex-1 min-h-[60px] max-h-[50vh] mx-2 border border-sky-700">
+          <div class="relative flex-1 min-h-[45vh] max-h-[50vh] mx-2 border border-sky-700">
             <canvas
               ref="canvasRef"
               :class="['w-full h-full block', recordedBlob && !isRecording
@@ -3020,6 +3020,110 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        <!-- Right Column -->
+        <div class="flex flex-col border-t border-neutral-900 w-24 border-l p-1 pt-1.5 gap-1 justify-between">
+          <!-- Loop ON/OFF -->
+          <button
+              @click="isLooping = !isLooping"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                isLooping 
+                  ? 'bg-synth-neon/15 text-synth-neon border-synth-neon/40' 
+                  : 'text-neutral-500 border-neutral-800 hover:text-neutral-400 hover:border-neutral-700']"
+            >
+              <Repeat class="w-3 h-3" />
+              Loop {{ isLooping ? 'ON' : 'OFF' }}
+          </button>
+          <!-- Snap ON/OFF -->
+          <button
+              @click="snapEnabled = !snapEnabled"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                snapEnabled 
+                  ? 'bg-synth-neon/15 text-synth-neon border-synth-neon/40' 
+                  : 'text-neutral-500 border-neutral-800 hover:text-neutral-400 hover:border-neutral-700']"
+              title="Snap playback start, loop start, and loop end to bar divisions"
+            >
+              <Magnet class="w-3 h-3" />
+              Snap {{ snapEnabled ? 'ON' : 'OFF' }}
+            </button>
+          
+          <!-- Autoloop -->
+          <button
+              @click="discoverSeamlessLoop"
+              :disabled="!recordedBlob || isDiscoveringLoop"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isDiscoveringLoop
+                  ? 'text-violet-300 border-violet-500/40 hover:bg-violet-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Auto-discover seamless loop points"
+            >
+              <Magnet class="w-3 h-3" />
+              {{ isDiscoveringLoop ? 'Analyzing…' : 'Auto Loop' }}
+            </button>
+          
+          
+          <!-- FadeIn/FadeOut-->
+          <div class="flex flex-col gap-1 rounded border border-neutral-800 p-1">
+          <button
+              @click="handleFadeIn"
+              :disabled="!recordedBlob || isFadingIn || fadeDur <= 0"
+              :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 transition-colors',
+                recordedBlob && !isFadingIn && fadeDur > 0
+                  ? 'text-sky-300 hover:bg-sky-500/15'
+                  : 'text-neutral-700 cursor-default']"
+              title="Fade in: ramp Loop Start → Loop Start+duration"
+            >▶ {{ isFadingIn ? '…' : 'Fade In' }}</button>
+            <button
+              @click="handleFadeOut"
+              :disabled="!recordedBlob || isFadingOut || fadeDur <= 0"
+              :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 transition-colors',
+                recordedBlob && !isFadingOut && fadeDur > 0
+                  ? 'text-orange-300 hover:bg-orange-500/15'
+                  : 'text-neutral-700 cursor-default']"
+              title="Fade out: ramp Loop End−duration → Loop End"
+            >{{ isFadingOut ? '…' : 'Fade Out' }} ◀</button>
+
+          </div>
+
+          <!-- Cut / Crop-->
+          <button
+              @click="handleCut"
+              :disabled="!recordedBlob || isCutting || loopEnd <= loopStart"
+              :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isCutting && loopEnd > loopStart
+                  ? 'text-red-300 border-red-500/40 hover:bg-red-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Cut: remove the selected Loop Start - Loop End region from the recording"
+            >
+              <Scissors class="w-3 h-3" />
+              {{ isCutting ? 'Cutting…' : 'Cut' }}
+            </button>
+            <button
+              @click="handleCrop"
+              :disabled="!recordedBlob || isCropping || loopEnd <= loopStart"
+              :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isCropping && loopEnd > loopStart
+                  ? 'text-amber-300 border-amber-500/40 hover:bg-amber-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Crop: keep only the Loop Start → Loop End selection, discard everything outside"
+            >
+              <Scissors class="w-3 h-3" />
+              {{ isCropping ? 'Cropping…' : 'Crop' }}
+            </button> 
+            <!-- Calc BPM -->
+          <button
+              @click="calculateBpm"
+              :disabled="!recordedBlob || isCalculatingBpm"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isCalculatingBpm
+                  ? 'text-amber-300 border-amber-500/40 hover:bg-amber-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Detect BPM from audio (uses loop region if set)"
+            >
+              <Zap class="w-3 h-3" />
+              {{ isCalculatingBpm ? 'Detecting…' : 'Calc BPM' }}
+            </button>
+        </div>
+        
       </div>
       <!-- Footer controls -->
       <div class="flex items-center gap-2 px-4 py-1 bg-neutral-900/60 border-t border-neutral-800 shrink-0">
@@ -3209,10 +3313,11 @@ onUnmounted(() => {
       </div>
 
       <!-- Loop settings area -->
-      <div v-if="recordedBlob" class="px-4 py-2 bg-neutral-950 border-t border-neutral-900/60 flex flex-col gap-2 shrink-0">
+      <div v-if="recordedBlob" class="px-4 py-1 bg-neutral-950 border-t border-neutral-900/60 flex flex-col gap-1 shrink-0">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <button
+
+            <!-- <button
               @click="isLooping = !isLooping"
               :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
                 isLooping 
@@ -3221,8 +3326,9 @@ onUnmounted(() => {
             >
               <Repeat class="w-3 h-3" />
               Loop {{ isLooping ? 'ON' : 'OFF' }}
-            </button>
-            <button
+            </button> -->
+
+            <!-- <button
               @click="snapEnabled = !snapEnabled"
               :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
                 snapEnabled 
@@ -3232,8 +3338,9 @@ onUnmounted(() => {
             >
               <Magnet class="w-3 h-3" />
               Snap {{ snapEnabled ? 'ON' : 'OFF' }}
-            </button>
-            <button
+            </button> -->
+
+            <!-- <button
               @click="discoverSeamlessLoop"
               :disabled="!recordedBlob || isDiscoveringLoop"
               :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
@@ -3244,7 +3351,8 @@ onUnmounted(() => {
             >
               <Magnet class="w-3 h-3" />
               {{ isDiscoveringLoop ? 'Analyzing…' : 'Auto Loop' }}
-            </button>
+            </button> -->
+<!--             
             <button
               @click="calculateBpm"
               :disabled="!recordedBlob || isCalculatingBpm"
@@ -3256,8 +3364,9 @@ onUnmounted(() => {
             >
               <Zap class="w-3 h-3" />
               {{ isCalculatingBpm ? 'Detecting…' : 'Calc BPM' }}
-            </button>
+            </button> -->
             <!-- Fade controls -->
+<!--              
             <div class="flex flex-row gap-0.5 shrink-0 border border-neutral-800 rounded overflow-hidden">
               <button
                 @click="handleFadeIn"
@@ -3302,7 +3411,7 @@ onUnmounted(() => {
             >
               <Scissors class="w-3 h-3" />
               {{ isCropping ? 'Cropping…' : 'Crop' }}
-            </button>
+            </button> -->
             <div class="flex items-center justify-center gap-0.5 px-1.5 py-0.5">
                 <input
                   v-model.number="fadeDur"
@@ -3424,27 +3533,7 @@ onUnmounted(() => {
                     class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
                   />
                   <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ zoomX.toFixed(1) }}x</span>
-                </div>
-                
-                <!-- Pan -->
-                <div class="flex items-center gap-3" :class="{ 'opacity-30 pointer-events-none': zoomX <= 1 }">
-                  <span class="text-[8px] font-mono text-neutral-400 w-12">PAN</span>
-                  <input
-                    v-model.number="panOffset"
-                    type="range"
-                    min="0"
-                    :max="Math.max(0, 1 - 1 / zoomX)"
-                    step="0.001"
-                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
-                  />
-                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ (panOffset * 100).toFixed(0) }}%</span>
-                </div>
-              </div>
-              
-              <!-- Right col: Zoom V / Crossfade -->
-              <div class="flex flex-col gap-1.5">
-                <!-- Zoom V -->
-                <div class="flex items-center gap-3">
+
                   <span class="text-[8px] font-mono text-neutral-400 w-12">ZOOM V</span>
                   <input
                     v-model.number="zoomY"
@@ -3456,9 +3545,50 @@ onUnmounted(() => {
                   />
                   <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ zoomY.toFixed(1) }}x</span>
                 </div>
-
-                <!-- Crossfade Slider -->
-                <div class="flex items-center gap-3" :class="{ 'opacity-30 pointer-events-none': !isLooping }">
+                
+                <!-- Pan -->
+                <!-- <div class="flex items-center">
+                  <div class="flex items-center gap-3" :class="{ 'opacity-30 pointer-events-none': zoomX <= 1 }">
+                    <span class="text-[8px] font-mono text-neutral-400 w-12">PAN</span>
+                    <input
+                      v-model.number="panOffset"
+                      type="range"
+                      min="0"
+                      :max="Math.max(0, 1 - 1 / zoomX)"
+                      step="0.001"
+                      class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                    />
+                    <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ (panOffset * 100).toFixed(0) }}%</span>
+                  </div>
+                  <span class="text-[8px] font-mono text-neutral-400 w-12">CROSSFADE</span>
+                  <input
+                    v-model.number="loopCrossfadeDur"
+                    type="range"
+                    min="0"
+                    max="5"
+                    step="0.05"
+                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                  />
+                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ formatTimeSecs(loopCrossfadeDur) }}</span>
+                </div> -->
+              </div>
+              
+              <!-- Right col: Zoom V / Crossfade -->
+              <div class="flex flex-col gap-1.5">
+                <!-- Pan -->
+                <div class="flex items-center">
+                  <div class="flex items-center gap-3 mr-2" :class="{ 'opacity-30 pointer-events-none': zoomX <= 1 }">
+                    <span class="text-[8px] font-mono text-neutral-400 w-8">PAN</span>
+                    <input
+                      v-model.number="panOffset"
+                      type="range"
+                      min="0"
+                      :max="Math.max(0, 1 - 1 / zoomX)"
+                      step="0.001"
+                      class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                    />
+                    <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ (panOffset * 100).toFixed(0) }}%</span>
+                  </div>
                   <span class="text-[8px] font-mono text-neutral-400 w-12">CROSSFADE</span>
                   <input
                     v-model.number="loopCrossfadeDur"
@@ -3470,6 +3600,34 @@ onUnmounted(() => {
                   />
                   <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ formatTimeSecs(loopCrossfadeDur) }}</span>
                 </div>
+
+                <!-- Zoom V -->
+                <!-- <div class="flex items-center gap-3">
+                  <span class="text-[8px] font-mono text-neutral-400 w-12">ZOOM V</span>
+                  <input
+                    v-model.number="zoomY"
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.1"
+                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                  />
+                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ zoomY.toFixed(1) }}x</span>
+                </div> -->
+
+                <!-- Crossfade Slider -->
+                <!-- <div class="flex items-center gap-3" :class="{ 'opacity-30 pointer-events-none': !isLooping }">
+                  <span class="text-[8px] font-mono text-neutral-400 w-12">CROSSFADE</span>
+                  <input
+                    v-model.number="loopCrossfadeDur"
+                    type="range"
+                    min="0"
+                    max="5"
+                    step="0.05"
+                    class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+                  />
+                  <span class="text-[9px] font-mono text-neutral-500 w-8 text-right">{{ formatTimeSecs(loopCrossfadeDur) }}</span>
+                </div> -->
               </div>
             </div>
 
