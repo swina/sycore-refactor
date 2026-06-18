@@ -331,7 +331,7 @@ onUnmounted(() => {
         </div>
 
         <!-- ── Body ─────────────────────────────────────────────── -->
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-y-auto custom-scrollbar">
           <!-- No folder chosen yet -->
           <div v-if="!dirHandle" class="flex flex-col items-center gap-2 py-16 text-neutral-600">
             <FolderOpen class="w-8 h-8" />
@@ -400,7 +400,7 @@ onUnmounted(() => {
                 <Loader2 v-if="assigningPath === `${file.relPath}/${file.name}`" class="w-3 h-3 animate-spin" />
                 <CheckCircle2 v-else-if="assignedPath === `${file.relPath}/${file.name}`" class="w-3 h-3" />
                 <span v-if="assignedPath === `${file.relPath}/${file.name}` && assigningPath !== `${file.relPath}/${file.name}`">Assigned</span>
-                <span v-else-if="assigningPath !== `${file.relPath}/${file.name}`">Assign</span>
+                <span v-else-if="assigningPath !== `${file.relPath}/${file.name}`">{{ uiStore.soundFolderAssignTarget?.label === 'Audio Capture' ? 'Capture' : 'Assign' }}</span>
               </button>
             </div>
           </div>

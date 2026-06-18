@@ -71,11 +71,13 @@ const fillPattern = ref(
   Array(8).fill(null).map(() => Array(16).fill(null).map(() => ({ active: false, velocity: 100, accent: false, ratchet: 1 })))
 )
 
-// REC SYNC — arms at bar start, records 16 steps, auto-stops
-let _recSyncArmed     = false
-let _recSyncRecording = false
-const recSyncArmed  = ref(false)
-const recSyncActive = ref(false)
+// REC SYNC — arms at bar start, records 16 × multiplier steps, auto-stops
+let _recSyncArmed          = false
+let _recSyncRecording      = false
+let _recSyncBarsRemaining  = 0
+const recSyncArmed      = ref(false)
+const recSyncActive     = ref(false)
+const recSyncMultiplier = ref(1)
 
 // ── Sync BPM from arpStore (global BPM) ───────────────────────────────────────
 watch(() => arpStore.arpBpm, v => { drumStore.bpm = v }, { immediate: true })
@@ -176,15 +178,19 @@ function _scheduleCallback(time) {
     // Both events are deferred via getDraw so they fire at actual playback
     // time, not at Tone.js lookahead schedule time.
     if (_recSyncRecording) {
-      _recSyncRecording = false
-      getDraw().schedule(() => {
-        window.dispatchEvent(new CustomEvent('capture-stop-rec'))
-        recSyncActive.value = false
-      }, time)
+      _recSyncBarsRemaining--
+      if (_recSyncBarsRemaining <= 0) {
+        _recSyncRecording = false
+        getDraw().schedule(() => {
+          window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+          recSyncActive.value = false
+        }, time)
+      }
     }
     if (_recSyncArmed) {
       _recSyncArmed = false
       _recSyncRecording = true
+      _recSyncBarsRemaining = recSyncMultiplier.value
       // Fire capture-start-rec via setTimeout so the MediaRecorder codec has
       // time to initialise before the beat hits. Pre-roll = 200ms; clamped to
       // however long is left until the bar boundary.
@@ -258,8 +264,9 @@ watch(() => drumStore.isPlaying, (playing) => {
     if (_recSyncRecording) {
       window.dispatchEvent(new CustomEvent('capture-stop-rec'))
     }
-    _recSyncArmed = false
-    _recSyncRecording = false
+    _recSyncArmed         = false
+    _recSyncRecording     = false
+    _recSyncBarsRemaining = 0
     recSyncArmed.value  = false
     recSyncActive.value = false
     return
@@ -1115,21 +1122,32 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         </div>
 
         <!-- REC SYNC -->
-        <button
-          @click.stop="toggleRecSync"
-          :class="[
-            'flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors',
-            recSyncActive
-              ? 'bg-red-600/40 border-red-400 text-red-300 animate-pulse'
-              : recSyncArmed
-                ? 'bg-orange-600/30 border-orange-400 text-orange-300 animate-pulse'
-                : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-red-500 hover:text-red-400'
-          ]"
-          :title="recSyncActive ? 'Recording 16 steps — click to stop' : recSyncArmed ? 'Waiting for bar start — click to cancel' : 'Rec Sync: record 16 steps from next bar'"
-        >
-          <span class="w-2 h-2 rounded-full shrink-0" :class="recSyncActive ? 'bg-red-400' : recSyncArmed ? 'bg-orange-400' : 'bg-neutral-600'" />
-          {{ recSyncActive ? 'REC' : recSyncArmed ? 'ARMED' : 'REC' }}
-        </button>
+        <div class="flex items-center gap-1">
+          <button
+            @click.stop="toggleRecSync"
+            :class="[
+              'flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors',
+              recSyncActive
+                ? 'bg-red-600/40 border-red-400 text-red-300 animate-pulse'
+                : recSyncArmed
+                  ? 'bg-orange-600/30 border-orange-400 text-orange-300 animate-pulse'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-red-500 hover:text-red-400'
+            ]"
+            :title="recSyncActive ? `Recording ${16 * recSyncMultiplier} steps — click to stop` : recSyncArmed ? 'Waiting for bar start — click to cancel' : `Rec Sync: record ${16 * recSyncMultiplier} steps from next bar`"
+          >
+            <span class="w-2 h-2 rounded-full shrink-0" :class="recSyncActive ? 'bg-red-400' : recSyncArmed ? 'bg-orange-400' : 'bg-neutral-600'" />
+            {{ recSyncActive ? 'REC' : recSyncArmed ? 'ARMED' : 'REC' }}
+          </button>
+          <input
+            type="number"
+            v-model.number="recSyncMultiplier"
+            min="1"
+            max="24"
+            :disabled="recSyncArmed || recSyncActive"
+            class="w-8 text-center text-[10px] font-bold bg-neutral-800 border border-neutral-700 rounded px-0.5 py-0.5 text-neutral-400 disabled:opacity-40 focus:outline-none focus:border-red-500"
+            title="Bars to record (1–24) — total steps = 16 × bars"
+          />
+        </div>
 
         <span
           v-if="drumStore.currentPresetName"

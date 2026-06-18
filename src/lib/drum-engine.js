@@ -51,12 +51,19 @@ function _ensureGraph() {
   _compressor.attack.value    = 0.003
   _compressor.release.value   = 0.15
   _compressor.connect(ctx.destination)
+
+  // Capture bus — parallel path that bypasses the compressor so the
+  // recording gets the full uncompressed level (compressor has no makeup gain
+  // and would cause significant headroom in recordings).
   _captureDestination = ctx.createMediaStreamDestination()
-  _compressor.connect(_captureDestination)
+  const _captureBus = ctx.createGain()
+  _captureBus.gain.value = 1.0
+  _captureBus.connect(_captureDestination)
 
   _masterGain = ctx.createGain()
   _masterGain.gain.value = 0.85
   _masterGain.connect(_compressor)
+  _masterGain.connect(_captureBus)
 
   // Shared reverb send bus
   _reverb = ctx.createConvolver()

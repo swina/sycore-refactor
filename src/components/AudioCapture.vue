@@ -61,6 +61,7 @@ const isFadingIn        = ref(false)
 const isFadingOut       = ref(false)
 const fadeDur           = ref(0)
 const isCutting         = ref(false)
+const isCropping        = ref(false)
 const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
 const appendMode       = ref(localStorage.getItem('S1_CAPTURE_APPEND') === '1')
 const error            = ref(null)
@@ -375,7 +376,7 @@ const fileInputRef = ref(null)
 
 // ── Recording gain controls ───────────────────────────────────────────────────
 const inputGain   = ref(parseFloat(localStorage.getItem('S1_CAP_INPUT_GAIN') ?? '1.0'))
-const dmGain      = ref(parseFloat(localStorage.getItem('S1_CAP_DM_GAIN')    ?? '0.75'))
+const dmGain      = ref(parseFloat(localStorage.getItem('S1_CAP_DM_GAIN')    ?? '1.0'))
 const hasDmStream = ref(false)
 
 // ── Plain mutable (Web Audio nodes) ──────────────────────────────────────────
@@ -705,11 +706,34 @@ function startRecording() {
       prevBlobRef = null
     }
 
+    // Trim the pre-roll so the blob itself starts at beat 1
+    if (_recSyncPreRoll > 0) {
+      try {
+        const decoded = await decodeRecordedBlob(finalBlob)
+        const startSample = Math.round(_recSyncPreRoll * decoded.sampleRate)
+        const trimmedLength = decoded.length - startSample
+        if (trimmedLength > 0) {
+          const trimmed = new AudioBuffer({
+            numberOfChannels: decoded.numberOfChannels,
+            length: trimmedLength,
+            sampleRate: decoded.sampleRate,
+          })
+          for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+            trimmed.copyToChannel(decoded.getChannelData(ch).subarray(startSample), ch)
+          }
+          finalBlob = audioBufferToWav(trimmed)
+          finalDuration = trimmed.duration
+        }
+      } catch (e) {
+        console.error('[AudioCapture] Pre-roll trim failed', e)
+      }
+    }
+
     recordedBlob.value = finalBlob
     audioDuration.value = finalDuration
-    loopStart.value     = _recSyncPreRoll
+    loopStart.value     = 0
     loopEnd.value       = finalDuration
-    playbackStart.value = _recSyncPreRoll
+    playbackStart.value = 0
     _recSyncPreRoll     = 0
 
     if (toPlaylistRef) {
@@ -1185,6 +1209,7 @@ async function calculateBpm() {
 function applyBpmConfirm() {
   const bpm = Number(bpmConfirm.value?.editable)
   if (bpm >= 40 && bpm <= 240) {
+    arpStore.arpBpm = bpm
     midiStore.currentBpm = bpm
     midiStore.setBpm(bpm)
   }
@@ -1344,6 +1369,53 @@ async function handleCut() {
     console.error('[AudioCapture] Cut failed', e)
   } finally {
     isCutting.value = false
+  }
+}
+
+async function handleCrop() {
+  if (!recordedBlob.value || isCropping.value) return
+  if (loopEnd.value <= loopStart.value) return
+  isCropping.value = true
+  try {
+    const arrayBuffer = await recordedBlob.value.arrayBuffer()
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new AudioCtxClass()
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+
+    const sampleRate  = decoded.sampleRate
+    const startSample = Math.max(0, Math.floor(loopStart.value * sampleRate))
+    const endSample   = Math.min(decoded.length, Math.floor(loopEnd.value * sampleRate))
+    const newLength   = endSample - startSample
+    if (newLength <= 0) return
+
+    const cropBuffer = new AudioBuffer({
+      numberOfChannels: decoded.numberOfChannels,
+      length: newLength,
+      sampleRate,
+    })
+    for (let chan = 0; chan < decoded.numberOfChannels; chan++) {
+      cropBuffer.copyToChannel(decoded.getChannelData(chan).subarray(startSample, endSample), chan)
+    }
+
+    if (isPlaying.value) {
+      stopAllSources()
+      isPlaying.value = false
+    }
+
+    waveformPeaks.value = computePeaks(cropBuffer.getChannelData(0), waveformDetail.value)
+    _skipNextPeakRegen = true
+    recordedBlob.value = audioBufferToWav(cropBuffer)
+
+    audioDuration.value        = cropBuffer.duration
+    playbackStart.value        = 0
+    loopStart.value            = 0
+    loopEnd.value              = cropBuffer.duration
+    currentPlaybackTime.value  = 0
+  } catch (e) {
+    console.error('[AudioCapture] Crop failed', e)
+  } finally {
+    isCropping.value = false
   }
 }
 
@@ -2916,7 +2988,7 @@ onUnmounted(() => {
           </div>
           
           <!-- Canvas container -->
-          <div class="relative flex-1 min-h-[60px] max-h-[50vh]">
+          <div class="relative flex-1 min-h-[60px] max-h-[50vh] mx-2 border border-sky-700">
             <canvas
               ref="canvasRef"
               :class="['w-full h-full block', recordedBlob && !isRecording
@@ -3218,6 +3290,18 @@ onUnmounted(() => {
             >
               <Scissors class="w-3 h-3" />
               {{ isCutting ? 'Cutting…' : 'Cut' }}
+            </button>
+            <button
+              @click="handleCrop"
+              :disabled="!recordedBlob || isCropping || loopEnd <= loopStart"
+              :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors',
+                recordedBlob && !isCropping && loopEnd > loopStart
+                  ? 'text-amber-300 border-amber-500/40 hover:bg-amber-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+              title="Crop: keep only the Loop Start → Loop End selection, discard everything outside"
+            >
+              <Scissors class="w-3 h-3" />
+              {{ isCropping ? 'Cropping…' : 'Crop' }}
             </button>
             <div class="flex items-center justify-center gap-0.5 px-1.5 py-0.5">
                 <input
