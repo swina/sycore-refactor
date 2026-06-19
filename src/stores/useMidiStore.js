@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { deviceRegistry } from '@/core/midi/DeviceRegistry'
-// SplitConfig shape mirrors the TS interface — JS store does not import types
 import { FIELD_TO_CC } from '@/constants/s1-config'
+import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
 import { useMappingStore } from './useMappingStore'
 import {
   loadConfigPresets as fetchConfigPresets,
@@ -21,25 +22,28 @@ const LS_SYNC_SEQUENCER_TRANSPORT = 'midiSyncSequencerTransport'
 const LS_SYNC_CHORDPROG_TRANSPORT = 'midiSyncChordProgTransport'
 
 export const useMidiStore = defineStore('midi', () => {
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
+
   const midiReady = ref(false)
   const outputs = ref([])
   const inputs = ref([])
   const incomingBpm  = ref(0)
   const sysexEnabled = ref(midiService.isSysExEnabled())
-  const midiChannel = ref(parseInt(localStorage.getItem(LS_CHANNEL) || '1'))
-  const midiInputChannel = ref(parseInt(localStorage.getItem(LS_IN_CHANNEL) || '-1'))
-  const sendClock = ref(localStorage.getItem(LS_SEND_CLOCK) === 'true')
-  const syncMidiTransport = ref(localStorage.getItem(LS_SYNC_TRANSPORT) === 'true')
-  const syncSequencerTransport = ref(localStorage.getItem(LS_SYNC_SEQUENCER_TRANSPORT) === 'true')
-  const syncChordProgTransport = ref(localStorage.getItem(LS_SYNC_CHORDPROG_TRANSPORT) === 'true')
+  const midiChannel = ref(parseInt(localStorage.getItem(userKey(LS_CHANNEL)) || '1'))
+  const midiInputChannel = ref(parseInt(localStorage.getItem(userKey(LS_IN_CHANNEL)) || '-1'))
+  const sendClock = ref(localStorage.getItem(userKey(LS_SEND_CLOCK)) === 'true')
+  const syncMidiTransport = ref(localStorage.getItem(userKey(LS_SYNC_TRANSPORT)) === 'true')
+  const syncSequencerTransport = ref(localStorage.getItem(userKey(LS_SYNC_SEQUENCER_TRANSPORT)) === 'true')
+  const syncChordProgTransport = ref(localStorage.getItem(userKey(LS_SYNC_CHORDPROG_TRANSPORT)) === 'true')
   const isTransportPlaying = ref(false)
   const currentBpm = ref(120)
 
   // Smart Latch State
-  const isSmartLatchActive = ref(localStorage.getItem('SYCORE_SMARTLATCH_ACTIVE') === 'true')
-  const smartLatchMaxNotes = ref(parseInt(localStorage.getItem('SYCORE_SMARTLATCH_MAX') || '4'))
-  const smartLatchReplaceMode = ref(localStorage.getItem('SYCORE_SMARTLATCH_REPLACE') !== 'false')
-  const smartLatchFadeTime = ref(parseInt(localStorage.getItem('SYCORE_SMARTLATCH_FADE') || '0'))
+  const isSmartLatchActive = ref(localStorage.getItem(userKey('SYCORE_SMARTLATCH_ACTIVE')) === 'true')
+  const smartLatchMaxNotes = ref(parseInt(localStorage.getItem(userKey('SYCORE_SMARTLATCH_MAX')) || '4'))
+  const smartLatchReplaceMode = ref(localStorage.getItem(userKey('SYCORE_SMARTLATCH_REPLACE')) !== 'false')
+  const smartLatchFadeTime = ref(parseInt(localStorage.getItem(userKey('SYCORE_SMARTLATCH_FADE')) || '0'))
 
   // Keyboard Split Config
   const defaultSplit = () => ({
@@ -52,13 +56,13 @@ export const useMidiStore = defineStore('midi', () => {
   })
   let initialSplit = defaultSplit()
   try {
-    const raw = localStorage.getItem('SYCORE_KEYBOARD_SPLIT')
+    const raw = localStorage.getItem(userKey('SYCORE_KEYBOARD_SPLIT'))
     if (raw) initialSplit = { ...defaultSplit(), ...JSON.parse(raw) }
   } catch (e) {}
   const splitConfig = ref(initialSplit)
 
   watch(splitConfig, (val) => {
-    localStorage.setItem('SYCORE_KEYBOARD_SPLIT', JSON.stringify(val))
+    localStorage.setItem(userKey('SYCORE_KEYBOARD_SPLIT'), JSON.stringify(val))
     midiService.setSplitConfig(val.enabled ? val : null)
   }, { deep: true, immediate: true })
 
@@ -101,7 +105,7 @@ export const useMidiStore = defineStore('midi', () => {
   }
   
   try {
-    const saved = localStorage.getItem('SYCORE_ADVANCED_MIDI_ROUTING')
+    const saved = localStorage.getItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING'))
     if (saved) {
       initialConfig = JSON.parse(saved)
     }
@@ -121,7 +125,7 @@ export const useMidiStore = defineStore('midi', () => {
     [MidiSource.TRANSPORT]: midiService.getRouting(MidiSource.TRANSPORT)
   }
   try {
-    const rawMatrix = localStorage.getItem('S1_MIDI_ROUTING')
+    const rawMatrix = localStorage.getItem(userKey('S1_MIDI_ROUTING'))
     if (rawMatrix) {
       const data = JSON.parse(rawMatrix)
       Object.keys(data).forEach(key => {
@@ -135,7 +139,7 @@ export const useMidiStore = defineStore('midi', () => {
   // Watchers for service sync and persistence
   watch(routingConfig, (newVal) => {
     if (!newVal || !newVal.registrations) return
-    localStorage.setItem('SYCORE_ADVANCED_MIDI_ROUTING', JSON.stringify(newVal))
+    localStorage.setItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING'), JSON.stringify(newVal))
     midiService.setRoutingConfig(JSON.parse(JSON.stringify(newVal)))
   }, { deep: true, immediate: true })
 
@@ -145,21 +149,21 @@ export const useMidiStore = defineStore('midi', () => {
 
   // Smart Latch watchers
   watch(isSmartLatchActive, (val) => {
-    localStorage.setItem('SYCORE_SMARTLATCH_ACTIVE', val.toString())
+    localStorage.setItem(userKey('SYCORE_SMARTLATCH_ACTIVE'), val.toString())
     midiService.setSmartLatchActive(val)
   })
 
   watch([smartLatchMaxNotes, smartLatchReplaceMode, smartLatchFadeTime], ([max, replace, fade]) => {
-    localStorage.setItem('SYCORE_SMARTLATCH_MAX', max.toString())
-    localStorage.setItem('SYCORE_SMARTLATCH_REPLACE', replace.toString())
-    localStorage.setItem('SYCORE_SMARTLATCH_FADE', fade.toString())
+    localStorage.setItem(userKey('SYCORE_SMARTLATCH_MAX'), max.toString())
+    localStorage.setItem(userKey('SYCORE_SMARTLATCH_REPLACE'), replace.toString())
+    localStorage.setItem(userKey('SYCORE_SMARTLATCH_FADE'), fade.toString())
     midiService.setSmartLatchConfig(max, replace, fade)
   }, { immediate: true })
 
   function toggleSmartLatch(active) {
     if (typeof active === 'boolean') isSmartLatchActive.value = active
     else isSmartLatchActive.value = !isSmartLatchActive.value
-    localStorage.setItem('SYCORE_SMARTLATCH_ACTIVE', isSmartLatchActive.value)
+    localStorage.setItem(userKey('SYCORE_SMARTLATCH_ACTIVE'), isSmartLatchActive.value)
   }
 
   function toggleDeviceLatch(deviceName) {
@@ -246,17 +250,17 @@ export const useMidiStore = defineStore('midi', () => {
   function setMidiChannel(ch) {
     midiChannel.value = ch
     midiService.setGlobalChannel(ch - 1)
-    localStorage.setItem(LS_CHANNEL, String(ch))
+    localStorage.setItem(userKey(LS_CHANNEL), String(ch))
   }
 
   function setMidiInputChannel(ch) {
     midiInputChannel.value = ch
-    localStorage.setItem(LS_IN_CHANNEL, String(ch))
+    localStorage.setItem(userKey(LS_IN_CHANNEL), String(ch))
   }
 
   function setSendClock(enabled) {
     sendClock.value = enabled
-    localStorage.setItem(LS_SEND_CLOCK, String(enabled))
+    localStorage.setItem(userKey(LS_SEND_CLOCK), String(enabled))
     if (enabled) {
       midiService.setBpm(currentBpm.value)
       midiService.startClock()
@@ -267,17 +271,17 @@ export const useMidiStore = defineStore('midi', () => {
 
   function setSyncMidiTransport(enabled) {
     syncMidiTransport.value = enabled
-    localStorage.setItem(LS_SYNC_TRANSPORT, String(enabled))
+    localStorage.setItem(userKey(LS_SYNC_TRANSPORT), String(enabled))
   }
 
   function setSyncSequencerTransport(enabled) {
     syncSequencerTransport.value = enabled
-    localStorage.setItem(LS_SYNC_SEQUENCER_TRANSPORT, String(enabled))
+    localStorage.setItem(userKey(LS_SYNC_SEQUENCER_TRANSPORT), String(enabled))
   }
 
   function setSyncChordProgTransport(enabled) {
     syncChordProgTransport.value = enabled
-    localStorage.setItem(LS_SYNC_CHORDPROG_TRANSPORT, String(enabled))
+    localStorage.setItem(userKey(LS_SYNC_CHORDPROG_TRANSPORT), String(enabled))
   }
 
   function toggleGlobalTransport() {
@@ -382,7 +386,7 @@ export const useMidiStore = defineStore('midi', () => {
   // ─── Config Presets (Phase 6) ───────────────────────────────────────────────
 
   const configPresets = ref([])
-  const activeConfigPresetId = ref(localStorage.getItem(LS_ACTIVE_CONFIG_PRESET) || null)
+  const activeConfigPresetId = ref(localStorage.getItem(userKey(LS_ACTIVE_CONFIG_PRESET)) || null)
 
   async function loadConfigPresets() {
     configPresets.value = await fetchConfigPresets()
@@ -432,7 +436,7 @@ export const useMidiStore = defineStore('midi', () => {
     }
 
     activeConfigPresetId.value = snapshot.id
-    localStorage.setItem(LS_ACTIVE_CONFIG_PRESET, snapshot.id)
+    localStorage.setItem(userKey(LS_ACTIVE_CONFIG_PRESET), snapshot.id)
     await persistConfigPresets(configPresets.value)
     return snapshot.id
   }
@@ -478,14 +482,14 @@ export const useMidiStore = defineStore('midi', () => {
     }
 
     activeConfigPresetId.value = id
-    localStorage.setItem(LS_ACTIVE_CONFIG_PRESET, id)
+    localStorage.setItem(userKey(LS_ACTIVE_CONFIG_PRESET), id)
   }
 
   async function deleteConfigPreset(id) {
     configPresets.value = configPresets.value.filter(p => p.id !== id)
     if (activeConfigPresetId.value === id) {
       activeConfigPresetId.value = null
-      localStorage.removeItem(LS_ACTIVE_CONFIG_PRESET)
+      localStorage.removeItem(userKey(LS_ACTIVE_CONFIG_PRESET))
     }
     await persistConfigPresets(configPresets.value)
   }
@@ -509,6 +513,47 @@ export const useMidiStore = defineStore('midi', () => {
     _scheduleConfigAutoSave,
     { deep: true }
   )
+
+  watch(uid, async (newUid) => {
+    const defaultConfig = { registrations: {}, globalThruEnabled: true, thruFilters: { notes: true, cc: true } }
+    if (!newUid) {
+      setMidiChannel(1)
+      setMidiInputChannel(-1)
+      setSendClock(false)
+      setSyncMidiTransport(false)
+      setSyncSequencerTransport(false)
+      setSyncChordProgTransport(false)
+      isSmartLatchActive.value = false
+      smartLatchMaxNotes.value = 4
+      smartLatchReplaceMode.value = true
+      smartLatchFadeTime.value = 0
+      splitConfig.value = defaultSplit()
+      routingConfig.value = defaultConfig
+      activeConfigPresetId.value = null
+      configPresets.value = []
+    } else {
+      setMidiChannel(parseInt(localStorage.getItem(userKey(LS_CHANNEL)) || '1'))
+      setMidiInputChannel(parseInt(localStorage.getItem(userKey(LS_IN_CHANNEL)) || '-1'))
+      setSendClock(localStorage.getItem(userKey(LS_SEND_CLOCK)) === 'true')
+      setSyncMidiTransport(localStorage.getItem(userKey(LS_SYNC_TRANSPORT)) === 'true')
+      setSyncSequencerTransport(localStorage.getItem(userKey(LS_SYNC_SEQUENCER_TRANSPORT)) === 'true')
+      setSyncChordProgTransport(localStorage.getItem(userKey(LS_SYNC_CHORDPROG_TRANSPORT)) === 'true')
+      isSmartLatchActive.value = localStorage.getItem(userKey('SYCORE_SMARTLATCH_ACTIVE')) === 'true'
+      smartLatchMaxNotes.value = parseInt(localStorage.getItem(userKey('SYCORE_SMARTLATCH_MAX')) || '4')
+      smartLatchReplaceMode.value = localStorage.getItem(userKey('SYCORE_SMARTLATCH_REPLACE')) !== 'false'
+      smartLatchFadeTime.value = parseInt(localStorage.getItem(userKey('SYCORE_SMARTLATCH_FADE')) || '0')
+      try {
+        const raw = localStorage.getItem(userKey('SYCORE_KEYBOARD_SPLIT'))
+        splitConfig.value = raw ? { ...defaultSplit(), ...JSON.parse(raw) } : defaultSplit()
+      } catch { splitConfig.value = defaultSplit() }
+      try {
+        const saved = localStorage.getItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING'))
+        routingConfig.value = saved ? JSON.parse(saved) : defaultConfig
+      } catch { routingConfig.value = defaultConfig }
+      activeConfigPresetId.value = localStorage.getItem(userKey(LS_ACTIVE_CONFIG_PRESET)) || null
+      await loadConfigPresets()
+    }
+  })
 
   return {
     midiReady, outputs, inputs,

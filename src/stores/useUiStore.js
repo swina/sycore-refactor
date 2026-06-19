@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
 
 export const useUiStore = defineStore('ui', () => {
   const isAppInitializing = ref(true)
@@ -71,10 +73,13 @@ export const useUiStore = defineStore('ui', () => {
   const isPlayingPreview   = ref(false)
   const isPlayingBacking   = ref(false)
   const isSequencerPlaying = ref(false)
-  const seqAutoStart       = ref(localStorage.getItem('SYCORE_SEQ_AUTOSTART') !== 'false')
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
+
+  const seqAutoStart       = ref(localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false')
 
   const isAudioPlaying     = computed(() => isPlayingPreview.value || isPlayingBacking.value)
-  const lastPlaylistName   = ref(localStorage.getItem('S1_LAST_PLAYLIST') || '')
+  const lastPlaylistName   = ref(localStorage.getItem(userKey('S1_LAST_PLAYLIST')) || '')
   const activeVisualizerCategory = ref('FILTER')
   const seqCurrentConfig        = ref(null)
   const seqCurrentConfig2       = ref(null)
@@ -268,11 +273,21 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   watch(lastPlaylistName, (v) => {
-    localStorage.setItem('S1_LAST_PLAYLIST', v)
+    localStorage.setItem(userKey('S1_LAST_PLAYLIST'), v)
   })
 
   watch(seqAutoStart, (v) => {
-    localStorage.setItem('SYCORE_SEQ_AUTOSTART', String(v))
+    localStorage.setItem(userKey('SYCORE_SEQ_AUTOSTART'), String(v))
+  })
+
+  watch(uid, (newUid) => {
+    if (!newUid) {
+      lastPlaylistName.value = ''
+      seqAutoStart.value = false
+    } else {
+      lastPlaylistName.value = localStorage.getItem(userKey('S1_LAST_PLAYLIST')) || ''
+      seqAutoStart.value = localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false'
+    }
   })
 
   watch(isSoundFolderBrowserOpen, (open) => {

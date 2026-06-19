@@ -2,20 +2,21 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { looperEngine } from '@/lib/looper-engine'
 import { midiService } from '@/core/midi/MidiService'
+import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
 
 const ALL_CHANNEL_IDS = ['backing', 'tracks', 'looper', 'lm', 'drums', 'drumsLevel']
 
 function loadFloat(key, def) {
-  const v = localStorage.getItem(key)
+  const v = localStorage.getItem(userKey(key))
   return v !== null ? parseFloat(v) : def
 }
 
 function loadEnabledChannels() {
   try {
-    const raw = localStorage.getItem('S1_MIX_CHANNELS')
+    const raw = localStorage.getItem(userKey('S1_MIX_CHANNELS'))
     if (!raw) return [...ALL_CHANNEL_IDS]
     const parsed = JSON.parse(raw)
-    // keep only valid ids, preserve order
     return ALL_CHANNEL_IDS.filter(id => parsed.includes(id))
   } catch {
     return [...ALL_CHANNEL_IDS]
@@ -23,26 +24,26 @@ function loadEnabledChannels() {
 }
 
 export const useAudioMixerStore = defineStore('audioMixer', () => {
-  // Which channel strips are visible in the mixer (ordered subset of ALL_CHANNEL_IDS)
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
+
   const enabledChannels = ref(loadEnabledChannels())
 
-  watch(enabledChannels, v => localStorage.setItem('S1_MIX_CHANNELS', JSON.stringify(v)), { deep: true })
+  watch(enabledChannels, v => localStorage.setItem(userKey('S1_MIX_CHANNELS'), JSON.stringify(v)), { deep: true })
 
   function isChannelEnabled(id) { return enabledChannels.value.includes(id) }
   function toggleChannel(id) {
     if (enabledChannels.value.includes(id)) {
       enabledChannels.value = enabledChannels.value.filter(x => x !== id)
     } else {
-      // re-insert in canonical order
       enabledChannels.value = ALL_CHANNEL_IDS.filter(x => enabledChannels.value.includes(x) || x === id)
     }
   }
 
-  // Per-channel fader values (0–1)
-  const backingVol = ref(loadFloat('S1_MIX_BACKING', 0.8))
-  const tracksVol  = ref(loadFloat('S1_MIX_TRACKS',  0.8))
-  const looperVol  = ref(loadFloat('S1_MIX_LOOPER',  0.9))
-  const lmVol      = ref(loadFloat('S1_MIX_LM',      0.85))
+  const backingVol    = ref(loadFloat('S1_MIX_BACKING',     0.8))
+  const tracksVol     = ref(loadFloat('S1_MIX_TRACKS',      0.8))
+  const looperVol     = ref(loadFloat('S1_MIX_LOOPER',      0.9))
+  const lmVol         = ref(loadFloat('S1_MIX_LM',          0.85))
   const drumsVol      = ref(loadFloat('S1_MIX_DRUMS',       0.85))
   const drumsLevelVol = ref(loadFloat('S1_MIX_DRUMS_LEVEL', 0.85))
   const masterVol     = ref(loadFloat('S1_MIX_MASTER',      1.0))
@@ -54,20 +55,18 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   const drumsMuted      = ref(false)
   const drumsLevelMuted = ref(false)
 
-  watch(backingVol,    v => localStorage.setItem('S1_MIX_BACKING',     String(v)))
-  watch(tracksVol,     v => localStorage.setItem('S1_MIX_TRACKS',      String(v)))
-  watch(looperVol,     v => localStorage.setItem('S1_MIX_LOOPER',      String(v)))
-  watch(lmVol,         v => localStorage.setItem('S1_MIX_LM',          String(v)))
-  watch(drumsVol,      v => localStorage.setItem('S1_MIX_DRUMS',       String(v)))
-  watch(drumsLevelVol, v => localStorage.setItem('S1_MIX_DRUMS_LEVEL', String(v)))
-  watch(masterVol,     v => localStorage.setItem('S1_MIX_MASTER',      String(v)))
+  watch(backingVol,    v => localStorage.setItem(userKey('S1_MIX_BACKING'),     String(v)))
+  watch(tracksVol,     v => localStorage.setItem(userKey('S1_MIX_TRACKS'),      String(v)))
+  watch(looperVol,     v => localStorage.setItem(userKey('S1_MIX_LOOPER'),      String(v)))
+  watch(lmVol,         v => localStorage.setItem(userKey('S1_MIX_LM'),          String(v)))
+  watch(drumsVol,      v => localStorage.setItem(userKey('S1_MIX_DRUMS'),       String(v)))
+  watch(drumsLevelVol, v => localStorage.setItem(userKey('S1_MIX_DRUMS_LEVEL'), String(v)))
+  watch(masterVol,     v => localStorage.setItem(userKey('S1_MIX_MASTER'),      String(v)))
 
   function effective(ch, muted) {
     return muted ? 0 : Math.min(1, ch * masterVol.value)
   }
 
-  // Drum Machine trigger-level master (the per-pad fader multiplier) — read
-  // directly by DrumMachine.vue, no window event needed since it's in-process.
   const effectiveDrumsLevel = computed(() => effective(drumsLevelVol.value, drumsLevelMuted.value))
 
   function _dispatchBacking() {
@@ -104,9 +103,8 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function toggleDrumsMute()      { drumsMuted.value      = !drumsMuted.value;      _dispatchDrums() }
   function toggleDrumsLevelMute() { drumsLevelMuted.value = !drumsLevelMuted.value }
 
-  // ── MIDI Instrument faders (CC7 per device) ───────────────────────────────
   function _loadInstVols() {
-    try { return JSON.parse(localStorage.getItem('S1_MIX_INST_VOLS') || '{}') } catch { return {} }
+    try { return JSON.parse(localStorage.getItem(userKey('S1_MIX_INST_VOLS')) || '{}') } catch { return {} }
   }
 
   const instrumentVols  = ref(_loadInstVols())
@@ -115,10 +113,9 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function _sendInstCC(name) {
     const vol   = instrumentMuted.value[name] ? 0 : (instrumentVols.value[name] ?? 0.8)
     const cc7   = Math.round(vol * 127)
-    // Resolve per-device output channel from routingConfig stored in localStorage
     let outCh = 0
     try {
-      const raw = localStorage.getItem('SYCORE_ADVANCED_MIDI_ROUTING')
+      const raw = localStorage.getItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING'))
       if (raw) {
         const cfg = JSON.parse(raw)
         const ch  = cfg.registrations?.[name]?.outChannel
@@ -133,7 +130,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
 
   function setInstrumentVol(name, v) {
     instrumentVols.value = { ...instrumentVols.value, [name]: v }
-    localStorage.setItem('S1_MIX_INST_VOLS', JSON.stringify(instrumentVols.value))
+    localStorage.setItem(userKey('S1_MIX_INST_VOLS'), JSON.stringify(instrumentVols.value))
     _sendInstCC(name)
   }
 
@@ -141,6 +138,25 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     instrumentMuted.value = { ...instrumentMuted.value, [name]: !instrumentMuted.value[name] }
     _sendInstCC(name)
   }
+
+  watch(uid, (newUid) => {
+    if (!newUid) {
+      enabledChannels.value = [...ALL_CHANNEL_IDS]
+      backingVol.value = 0.8; tracksVol.value = 0.8; looperVol.value = 0.9
+      lmVol.value = 0.85; drumsVol.value = 0.85; drumsLevelVol.value = 0.85; masterVol.value = 1.0
+      instrumentVols.value = {}
+    } else {
+      enabledChannels.value = loadEnabledChannels()
+      backingVol.value    = loadFloat('S1_MIX_BACKING',     0.8)
+      tracksVol.value     = loadFloat('S1_MIX_TRACKS',      0.8)
+      looperVol.value     = loadFloat('S1_MIX_LOOPER',      0.9)
+      lmVol.value         = loadFloat('S1_MIX_LM',          0.85)
+      drumsVol.value      = loadFloat('S1_MIX_DRUMS',       0.85)
+      drumsLevelVol.value = loadFloat('S1_MIX_DRUMS_LEVEL', 0.85)
+      masterVol.value     = loadFloat('S1_MIX_MASTER',      1.0)
+      instrumentVols.value = _loadInstVols()
+    }
+  })
 
   return {
     ALL_CHANNEL_IDS,

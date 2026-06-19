@@ -1,24 +1,31 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
 
 const STORAGE_KEY = 'SYCORE_USER_PRESET_BANKS'
 
-// Stored shape: { [deviceName]: [{ name, createdAt, presets }] }
-
 export const useUserBanksStore = defineStore('userBanks', () => {
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
+
   const banks = ref(load())
 
   function load() {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+      return JSON.parse(localStorage.getItem(userKey(STORAGE_KEY)) ?? '{}')
     } catch {
       return {}
     }
   }
 
   watch(banks, val => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(val))
+    localStorage.setItem(userKey(STORAGE_KEY), JSON.stringify(val))
   }, { deep: true })
+
+  watch(uid, (newUid) => {
+    banks.value = newUid ? load() : {}
+  })
 
   function getBanksForDevice(deviceName) {
     return banks.value[deviceName] ?? []
@@ -26,7 +33,6 @@ export const useUserBanksStore = defineStore('userBanks', () => {
 
   function addBank(deviceName, bankName, presets) {
     if (!banks.value[deviceName]) banks.value[deviceName] = []
-    // Replace if same name exists
     const idx = banks.value[deviceName].findIndex(b => b.name === bankName)
     const entry = { name: bankName, createdAt: new Date().toISOString(), presets }
     if (idx >= 0) banks.value[deviceName].splice(idx, 1, entry)

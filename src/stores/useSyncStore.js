@@ -1,79 +1,86 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
+
+const KEYS = {
+  syncTrack:                   'S1_SYNC_TRACK',
+  syncRecordAudioCapture:      'S1_SYNC_REC_CAPTURE',
+  syncBackingTrackToLooper:    'S1_SYNC_TRACK_LOOPER',
+  syncSequencerToLooper:       'S1_SYNC_SEQ_LOOPER',
+  syncLooperToMidi:            'S1_SYNC_LOOPER_MIDI',
+  syncLooperToSequencer:       'S1_SYNC_LOOPER_SEQ',
+  syncLooperToBackingTrack:    'S1_SYNC_LOOPER_TRACK',
+  syncLooperToAudioCapture:    'S1_SYNC_LOOPER_CAPTURE',
+  syncTimelineToMidi:          'S1_SYNC_TIMELINE_MIDI',
+  syncTimelineToSequencer:     'S1_SYNC_TIMELINE_SEQ',
+  syncTimelineToBackingTrack:  'S1_SYNC_TIMELINE_TRACK',
+  syncTimelineToAudioCapture:  'S1_SYNC_TIMELINE_CAPTURE',
+  syncAudioCaptureToMidi:      'S1_SYNC_CAPTURE_MIDI',
+  syncAudioCaptureToSequencer: 'S1_SYNC_CAPTURE_SEQ',
+  syncAudioCaptureToBackingTrack: 'S1_SYNC_CAPTURE_TRACK',
+  syncAudioCaptureToLooper:    'S1_SYNC_CAPTURE_LOOPER',
+  syncChordProgToSequencer:    'S1_SYNC_CHORDPROG_SEQ',
+  syncChordProgToBackingTrack: 'S1_SYNC_CHORDPROG_TRACK',
+  syncChordProgToLooper:       'S1_SYNC_CHORDPROG_LOOPER',
+  syncChordProgToAudioCapture: 'S1_SYNC_CHORDPROG_CAPTURE',
+  syncLoopPadsToMidi:          'S1_SYNC_LOOPPADS_MIDI',
+  syncLoopPadsToSequencer:     'S1_SYNC_LOOPPADS_SEQ',
+  syncLoopPadsToBackingTrack:  'S1_SYNC_LOOPPADS_TRACK',
+  syncLoopPadsToLooper:        'S1_SYNC_LOOPPADS_LOOPER',
+  syncLoopPadsToAudioCapture:  'S1_SYNC_LOOPPADS_CAPTURE',
+}
+
+function readBool(k) { return localStorage.getItem(userKey(k)) === 'true' }
 
 export const useSyncStore = defineStore('sync', () => {
-  const syncTrack = ref(localStorage.getItem('S1_SYNC_TRACK') === 'true')
-  const syncRecordAudioCapture = ref(localStorage.getItem('S1_SYNC_REC_CAPTURE') === 'true')
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
 
-  // Backing Track → Looper
-  const syncBackingTrackToLooper = ref(localStorage.getItem('S1_SYNC_TRACK_LOOPER') === 'true')
-  // Sequencer → Looper
-  const syncSequencerToLooper = ref(localStorage.getItem('S1_SYNC_SEQ_LOOPER') === 'true')
+  const syncTrack                   = ref(readBool(KEYS.syncTrack))
+  const syncRecordAudioCapture      = ref(readBool(KEYS.syncRecordAudioCapture))
+  const syncBackingTrackToLooper    = ref(readBool(KEYS.syncBackingTrackToLooper))
+  const syncSequencerToLooper       = ref(readBool(KEYS.syncSequencerToLooper))
+  const syncLooperToMidi            = ref(readBool(KEYS.syncLooperToMidi))
+  const syncLooperToSequencer       = ref(readBool(KEYS.syncLooperToSequencer))
+  const syncLooperToBackingTrack    = ref(readBool(KEYS.syncLooperToBackingTrack))
+  const syncLooperToAudioCapture    = ref(readBool(KEYS.syncLooperToAudioCapture))
+  const syncTimelineToMidi          = ref(readBool(KEYS.syncTimelineToMidi))
+  const syncTimelineToSequencer     = ref(readBool(KEYS.syncTimelineToSequencer))
+  const syncTimelineToBackingTrack  = ref(readBool(KEYS.syncTimelineToBackingTrack))
+  const syncTimelineToAudioCapture  = ref(readBool(KEYS.syncTimelineToAudioCapture))
+  const syncAudioCaptureToMidi      = ref(readBool(KEYS.syncAudioCaptureToMidi))
+  const syncAudioCaptureToSequencer = ref(readBool(KEYS.syncAudioCaptureToSequencer))
+  const syncAudioCaptureToBackingTrack = ref(readBool(KEYS.syncAudioCaptureToBackingTrack))
+  const syncAudioCaptureToLooper    = ref(readBool(KEYS.syncAudioCaptureToLooper))
+  const syncChordProgToSequencer    = ref(readBool(KEYS.syncChordProgToSequencer))
+  const syncChordProgToBackingTrack = ref(readBool(KEYS.syncChordProgToBackingTrack))
+  const syncChordProgToLooper       = ref(readBool(KEYS.syncChordProgToLooper))
+  const syncChordProgToAudioCapture = ref(readBool(KEYS.syncChordProgToAudioCapture))
+  const syncLoopPadsToMidi          = ref(readBool(KEYS.syncLoopPadsToMidi))
+  const syncLoopPadsToSequencer     = ref(readBool(KEYS.syncLoopPadsToSequencer))
+  const syncLoopPadsToBackingTrack  = ref(readBool(KEYS.syncLoopPadsToBackingTrack))
+  const syncLoopPadsToLooper        = ref(readBool(KEYS.syncLoopPadsToLooper))
+  const syncLoopPadsToAudioCapture  = ref(readBool(KEYS.syncLoopPadsToAudioCapture))
 
-  // Audio Looper source → targets
-  const syncLooperToMidi = ref(localStorage.getItem('S1_SYNC_LOOPER_MIDI') === 'true')
-  const syncLooperToSequencer = ref(localStorage.getItem('S1_SYNC_LOOPER_SEQ') === 'true')
-  const syncLooperToBackingTrack = ref(localStorage.getItem('S1_SYNC_LOOPER_TRACK') === 'true')
-  const syncLooperToAudioCapture = ref(localStorage.getItem('S1_SYNC_LOOPER_CAPTURE') === 'true')
-
-  // Live Timeline source → targets
-  const syncTimelineToMidi          = ref(localStorage.getItem('S1_SYNC_TIMELINE_MIDI')    === 'true')
-  const syncTimelineToSequencer     = ref(localStorage.getItem('S1_SYNC_TIMELINE_SEQ')    === 'true')
-  const syncTimelineToBackingTrack  = ref(localStorage.getItem('S1_SYNC_TIMELINE_TRACK')  === 'true')
-  const syncTimelineToAudioCapture  = ref(localStorage.getItem('S1_SYNC_TIMELINE_CAPTURE') === 'true')
-
-  // Audio Capture source → targets
-  const syncAudioCaptureToMidi = ref(localStorage.getItem('S1_SYNC_CAPTURE_MIDI') === 'true')
-  const syncAudioCaptureToSequencer = ref(localStorage.getItem('S1_SYNC_CAPTURE_SEQ') === 'true')
-  const syncAudioCaptureToBackingTrack = ref(localStorage.getItem('S1_SYNC_CAPTURE_TRACK') === 'true')
-  const syncAudioCaptureToLooper = ref(localStorage.getItem('S1_SYNC_CAPTURE_LOOPER') === 'true')
-
-  // Chord Prog Sequencer source → targets
-  const syncChordProgToSequencer    = ref(localStorage.getItem('S1_SYNC_CHORDPROG_SEQ')     === 'true')
-  const syncChordProgToBackingTrack = ref(localStorage.getItem('S1_SYNC_CHORDPROG_TRACK')   === 'true')
-  const syncChordProgToLooper       = ref(localStorage.getItem('S1_SYNC_CHORDPROG_LOOPER')  === 'true')
-  const syncChordProgToAudioCapture = ref(localStorage.getItem('S1_SYNC_CHORDPROG_CAPTURE') === 'true')
-
-  // Loop Pads source → targets
-  const syncLoopPadsToMidi         = ref(localStorage.getItem('S1_SYNC_LOOPPADS_MIDI')    === 'true')
-  const syncLoopPadsToSequencer    = ref(localStorage.getItem('S1_SYNC_LOOPPADS_SEQ')     === 'true')
-  const syncLoopPadsToBackingTrack = ref(localStorage.getItem('S1_SYNC_LOOPPADS_TRACK')   === 'true')
-  const syncLoopPadsToLooper       = ref(localStorage.getItem('S1_SYNC_LOOPPADS_LOOPER')  === 'true')
-  const syncLoopPadsToAudioCapture = ref(localStorage.getItem('S1_SYNC_LOOPPADS_CAPTURE') === 'true')
-
-  watch(syncTrack, v => localStorage.setItem('S1_SYNC_TRACK', v ? 'true' : 'false'))
-  watch(syncRecordAudioCapture, v => localStorage.setItem('S1_SYNC_REC_CAPTURE', v ? 'true' : 'false'))
-  watch(syncBackingTrackToLooper, v => localStorage.setItem('S1_SYNC_TRACK_LOOPER', v ? 'true' : 'false'))
-  watch(syncSequencerToLooper, v => localStorage.setItem('S1_SYNC_SEQ_LOOPER', v ? 'true' : 'false'))
-  watch(syncLooperToMidi, v => localStorage.setItem('S1_SYNC_LOOPER_MIDI', v ? 'true' : 'false'))
-  watch(syncLooperToSequencer, v => localStorage.setItem('S1_SYNC_LOOPER_SEQ', v ? 'true' : 'false'))
-  watch(syncLooperToBackingTrack, v => localStorage.setItem('S1_SYNC_LOOPER_TRACK', v ? 'true' : 'false'))
-  watch(syncLooperToAudioCapture, v => localStorage.setItem('S1_SYNC_LOOPER_CAPTURE', v ? 'true' : 'false'))
-  watch(syncTimelineToMidi,          v => localStorage.setItem('S1_SYNC_TIMELINE_MIDI',    v ? 'true' : 'false'))
-  watch(syncTimelineToSequencer,     v => localStorage.setItem('S1_SYNC_TIMELINE_SEQ',    v ? 'true' : 'false'))
-  watch(syncTimelineToBackingTrack,  v => localStorage.setItem('S1_SYNC_TIMELINE_TRACK',  v ? 'true' : 'false'))
-  watch(syncTimelineToAudioCapture,  v => localStorage.setItem('S1_SYNC_TIMELINE_CAPTURE', v ? 'true' : 'false'))
-  watch(syncAudioCaptureToMidi, v => localStorage.setItem('S1_SYNC_CAPTURE_MIDI', v ? 'true' : 'false'))
-  watch(syncAudioCaptureToSequencer, v => localStorage.setItem('S1_SYNC_CAPTURE_SEQ', v ? 'true' : 'false'))
-  watch(syncAudioCaptureToBackingTrack, v => localStorage.setItem('S1_SYNC_CAPTURE_TRACK', v ? 'true' : 'false'))
-  watch(syncAudioCaptureToLooper, v => localStorage.setItem('S1_SYNC_CAPTURE_LOOPER', v ? 'true' : 'false'))
-  watch(syncChordProgToSequencer,    v => localStorage.setItem('S1_SYNC_CHORDPROG_SEQ',     v ? 'true' : 'false'))
-  watch(syncChordProgToBackingTrack, v => localStorage.setItem('S1_SYNC_CHORDPROG_TRACK',   v ? 'true' : 'false'))
-  watch(syncChordProgToLooper,       v => localStorage.setItem('S1_SYNC_CHORDPROG_LOOPER',  v ? 'true' : 'false'))
-  watch(syncChordProgToAudioCapture, v => localStorage.setItem('S1_SYNC_CHORDPROG_CAPTURE', v ? 'true' : 'false'))
-  watch(syncLoopPadsToMidi,         v => localStorage.setItem('S1_SYNC_LOOPPADS_MIDI',    v ? 'true' : 'false'))
-  watch(syncLoopPadsToSequencer,    v => localStorage.setItem('S1_SYNC_LOOPPADS_SEQ',     v ? 'true' : 'false'))
-  watch(syncLoopPadsToBackingTrack, v => localStorage.setItem('S1_SYNC_LOOPPADS_TRACK',   v ? 'true' : 'false'))
-  watch(syncLoopPadsToLooper,       v => localStorage.setItem('S1_SYNC_LOOPPADS_LOOPER',  v ? 'true' : 'false'))
-  watch(syncLoopPadsToAudioCapture, v => localStorage.setItem('S1_SYNC_LOOPPADS_CAPTURE', v ? 'true' : 'false'))
-
-  return {
-    syncTrack, syncRecordAudioCapture,
-    syncTimelineToMidi, syncTimelineToSequencer, syncTimelineToBackingTrack, syncTimelineToAudioCapture,
-    syncBackingTrackToLooper, syncSequencerToLooper,
+  const REFS = {
+    syncTrack, syncRecordAudioCapture, syncBackingTrackToLooper, syncSequencerToLooper,
     syncLooperToMidi, syncLooperToSequencer, syncLooperToBackingTrack, syncLooperToAudioCapture,
+    syncTimelineToMidi, syncTimelineToSequencer, syncTimelineToBackingTrack, syncTimelineToAudioCapture,
     syncAudioCaptureToMidi, syncAudioCaptureToSequencer, syncAudioCaptureToBackingTrack, syncAudioCaptureToLooper,
     syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
     syncLoopPadsToMidi, syncLoopPadsToSequencer, syncLoopPadsToBackingTrack, syncLoopPadsToLooper, syncLoopPadsToAudioCapture,
   }
+
+  Object.entries(REFS).forEach(([name, r]) => {
+    watch(r, v => localStorage.setItem(userKey(KEYS[name]), v ? 'true' : 'false'))
+  })
+
+  watch(uid, (newUid) => {
+    Object.entries(REFS).forEach(([name, r]) => {
+      r.value = newUid ? readBool(KEYS[name]) : false
+    })
+  })
+
+  return REFS
 })

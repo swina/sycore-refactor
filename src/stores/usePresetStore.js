@@ -2,6 +2,7 @@ import { ref, computed, watch, toRaw } from 'vue'
 import { defineStore } from 'pinia'
 import { db, doc, collection, query, onSnapshot, getDocs, setDoc, updateDoc, deleteDoc, deleteDocs, clearCollectionRange, serverTimestamp } from '@/lib/idb'
 import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
 import { useMidiStore } from './useMidiStore'
 import { useMappingStore } from './useMappingStore'
 import { useLfoStore } from './useLfoStore'
@@ -64,7 +65,7 @@ export const usePresetStore = defineStore('preset', () => {
   let initialLoadDone = false
 
   function restoreSession() {
-    const cached = localStorage.getItem('sycore_last_session')
+    const cached = localStorage.getItem(userKey('sycore_last_session'))
     if (cached) {
       try {
         const preset = JSON.parse(cached)
@@ -74,7 +75,7 @@ export const usePresetStore = defineStore('preset', () => {
           showResults.value = true
 
           // Restore filter if it was saved
-          const savedFilter = localStorage.getItem('sycore_history_filter')
+          const savedFilter = localStorage.getItem(userKey('sycore_history_filter'))
           if (savedFilter) {
             historyCategoryFilter.value = savedFilter
           }
@@ -87,7 +88,7 @@ export const usePresetStore = defineStore('preset', () => {
 
   // Watch for filter changes to persist
   watch(historyCategoryFilter, (val) => {
-    localStorage.setItem('sycore_history_filter', val)
+    localStorage.setItem(userKey('sycore_history_filter'), val)
   })
 
   let historyUnsubscribe = null
@@ -127,7 +128,7 @@ export const usePresetStore = defineStore('preset', () => {
       }
 
       // Auto-seed if empty and not already seeded in this session
-      const seededFlag = localStorage.getItem('sycore_bank_seeded')
+      const seededFlag = localStorage.getItem(userKey('sycore_bank_seeded'))
 
       if (presets.length === 0 && !seededFlag) {
         await seedDefaultBank(uid)
@@ -136,13 +137,13 @@ export const usePresetStore = defineStore('preset', () => {
   }
 
   async function seedDefaultBank(uid, force = false) {
-    if (!force && localStorage.getItem('sycore_bank_seeded')) {
+    if (!force && localStorage.getItem(userKey('sycore_bank_seeded'))) {
       console.log('[PresetStore] Default bank already seeded (flag found), skipping auto-seed.');
       return;
     }
 
     console.log(`[PresetStore] Seeding default bank for user: ${uid}`)
-    localStorage.setItem('sycore_bank_seeded', 'true')
+    localStorage.setItem(userKey('sycore_bank_seeded'), 'true')
 
     if (Array.isArray(BANK_DEFAULT)) {
       for (const preset of BANK_DEFAULT) {
@@ -332,7 +333,7 @@ export const usePresetStore = defineStore('preset', () => {
     applyPresetCCs(preset.aVariant)
 
     // Save to local cache for refresh persistence
-    localStorage.setItem('sycore_last_session', JSON.stringify(preset))
+    localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(preset))
 
     // Send Program Change if provided
     if (preset.pc !== undefined && preset.pc !== null) {
@@ -388,7 +389,7 @@ export const usePresetStore = defineStore('preset', () => {
       _applyMetadataToStores(target)
 
       // 5. Update session cache
-      localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
+      localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(lastPreset.value))
     }
   }
 
@@ -550,7 +551,7 @@ export const usePresetStore = defineStore('preset', () => {
     lastModifiedField.value = fieldName
 
     // Update cache
-    localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
+    localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(lastPreset.value))
 
     // Clear after a short delay
     const currentField = fieldName
@@ -571,7 +572,7 @@ export const usePresetStore = defineStore('preset', () => {
       }
 
       // Update session cache
-      localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
+      localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(lastPreset.value))
     }
   }
 
@@ -713,7 +714,7 @@ export const usePresetStore = defineStore('preset', () => {
         applyPresetCCs(newPreset.aVariant)
 
         // Save to cache
-        localStorage.setItem('sycore_last_session', JSON.stringify(newPreset))
+        localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(newPreset))
       } else {
         // REGENERATION
         if (!lastPreset.value) return
@@ -744,7 +745,7 @@ export const usePresetStore = defineStore('preset', () => {
         }
 
         // Update session cache
-        localStorage.setItem('sycore_last_session', JSON.stringify(lastPreset.value))
+        localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(lastPreset.value))
       }
 
       showResults.value = true

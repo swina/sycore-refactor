@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 
 export const DURATION_OPTIONS = [
@@ -35,7 +36,7 @@ const STORAGE_KEY = 'SYCORE_CHORD_PROG_STATE'
 
 function loadSaved() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    return JSON.parse(localStorage.getItem(userKey(STORAGE_KEY)) || 'null')
   } catch {
     return null
   }
@@ -43,6 +44,7 @@ function loadSaved() {
 
 export const useChordProgStore = defineStore('chordProg', () => {
   const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
   const saved = loadSaved()
 
   const steps = ref(
@@ -63,7 +65,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
 
   watch([steps, numSteps, selectedKey, playMode, arpRate, midiChannel], () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      localStorage.setItem(userKey(STORAGE_KEY), JSON.stringify({
         steps: steps.value,
         numSteps: numSteps.value,
         selectedKey: selectedKey.value,
@@ -177,6 +179,16 @@ export const useChordProgStore = defineStore('chordProg', () => {
     if (pattern.arpRate) arpRate.value = pattern.arpRate
     if (pattern.midiChannel) midiChannel.value = pattern.midiChannel
   }
+
+  watch(uid, (newUid) => {
+    const s = newUid ? loadSaved() : null
+    steps.value = s?.steps ?? Array(8).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
+    numSteps.value = s?.numSteps ?? 8
+    selectedKey.value = s?.selectedKey ?? 0
+    playMode.value = s?.playMode ?? 'chord'
+    arpRate.value = s?.arpRate ?? '16n'
+    midiChannel.value = s?.midiChannel ?? 1
+  })
 
   return {
     steps, numSteps, isPlaying, currentStep, selectedStepIdx,

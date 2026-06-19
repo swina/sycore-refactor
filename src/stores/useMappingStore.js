@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { db, getDoc, setDoc, doc } from '@/lib/idb'
+import { auth } from '@/lib/auth'
+import { userKey } from '@/lib/userKey'
+import { useAuthStore } from './useAuthStore'
 import { useMidiStore } from './useMidiStore'
 import { usePresetStore } from './usePresetStore'
 import { FIELD_TO_CC } from '@/constants/s1-config'
@@ -13,12 +16,16 @@ import {
 
 const LS_MIDI_MAPPINGS    = 'midiMappings'
 const LS_ACTIVE_PRESET_ID = 'midiMappingActivePresetId'
-const IDB_COLLECTION = 'system'
-const IDB_DOC_NAME   = 'appMidiMappings'
+
+function userAppMidiDoc() {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Not authenticated')
+  return doc(db, 'users', uid, 'system', 'appMidiMappings')
+}
 
 function loadMidiMappingsFromStorage() {
   try {
-    const raw = localStorage.getItem(LS_MIDI_MAPPINGS)
+    const raw = localStorage.getItem(userKey(LS_MIDI_MAPPINGS))
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
@@ -26,6 +33,9 @@ function loadMidiMappingsFromStorage() {
 }
 
 export const useMappingStore = defineStore('mapping', () => {
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
+
   // CC# (number key as string) → param field name
   const midiMappings    = ref(loadMidiMappingsFromStorage())
   // Hardware CC → AppAction bindings
@@ -39,7 +49,7 @@ export const useMappingStore = defineStore('mapping', () => {
 
   // Mapping Preset State
   const presets         = ref([])
-  const activePresetId  = ref(localStorage.getItem(LS_ACTIVE_PRESET_ID) || null)
+  const activePresetId  = ref(localStorage.getItem(userKey(LS_ACTIVE_PRESET_ID)) || null)
   
   // Velocity Modulation State (Refactored to match React original)
   const velocityConfig = ref({
@@ -63,7 +73,7 @@ export const useMappingStore = defineStore('mapping', () => {
   })
 
   function saveMidiMappings() {
-    localStorage.setItem(LS_MIDI_MAPPINGS, JSON.stringify(midiMappings.value))
+    localStorage.setItem(userKey(LS_MIDI_MAPPINGS), JSON.stringify(midiMappings.value))
   }
 
   // ── Mapping Preset CRUD ────────────────────────────────────────────────────
@@ -91,7 +101,7 @@ export const useMappingStore = defineStore('mapping', () => {
       const preset = createPreset(name, _currentSnapshot())
       presets.value.push(preset)
       activePresetId.value = preset.id
-      localStorage.setItem(LS_ACTIVE_PRESET_ID, preset.id)
+      localStorage.setItem(userKey(LS_ACTIVE_PRESET_ID), preset.id)
     }
     await persistMappingPresets(presets.value)
   }
@@ -105,7 +115,7 @@ export const useMappingStore = defineStore('mapping', () => {
     saveMidiMappings()
     if (preset.velocityConfig) velocityConfig.value = { ...preset.velocityConfig }
     activePresetId.value = id
-    localStorage.setItem(LS_ACTIVE_PRESET_ID, id)
+    localStorage.setItem(userKey(LS_ACTIVE_PRESET_ID), id)
     _isLoadingPreset = false
   }
 
@@ -113,7 +123,7 @@ export const useMappingStore = defineStore('mapping', () => {
     presets.value = presets.value.filter(p => p.id !== id)
     if (activePresetId.value === id) {
       activePresetId.value = null
-      localStorage.removeItem(LS_ACTIVE_PRESET_ID)
+      localStorage.removeItem(userKey(LS_ACTIVE_PRESET_ID))
     }
     await persistMappingPresets(presets.value)
   }
@@ -383,7 +393,7 @@ export const useMappingStore = defineStore('mapping', () => {
 
   async function loadAppMidiMappings() {
     try {
-      const snap = await getDoc(doc(db, IDB_COLLECTION, IDB_DOC_NAME))
+      const snap = await getDoc(userAppMidiDoc())
       if (snap.exists() && Array.isArray(snap.data().mappings)) {
         appMidiMappings.value = snap.data().mappings
       }
@@ -394,8 +404,22 @@ export const useMappingStore = defineStore('mapping', () => {
 
   async function saveAppMidiMappings(mappings) {
     appMidiMappings.value = mappings
-    await setDoc(doc(db, IDB_COLLECTION, IDB_DOC_NAME), { mappings })
+    await setDoc(userAppMidiDoc(), { mappings })
   }
+
+  watch(uid, async (newUid) => {
+    if (!newUid) {
+      midiMappings.value = {}
+      appMidiMappings.value = []
+      presets.value = []
+      activePresetId.value = null
+    } else {
+      midiMappings.value = loadMidiMappingsFromStorage()
+      activePresetId.value = localStorage.getItem(userKey(LS_ACTIVE_PRESET_ID)) || null
+      await loadPresets()
+      await loadAppMidiMappings()
+    }
+  })
 
   function toggleVelocityMapping() {
     velocityConfig.value.active = !velocityConfig.value.active

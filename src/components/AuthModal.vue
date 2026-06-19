@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { X, Mail, Lock } from 'lucide-vue-next'
 import { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '@/lib/auth'
+import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
 
 const emit = defineEmits(['close'])
@@ -37,7 +38,7 @@ async function handleSubmit() {
       }
       await createUserWithEmailAndPassword(auth, email.value, password.value)
       // Block the auto-seed (BANK_DEFAULT) so it doesn't race with our prompt
-      localStorage.setItem('sycore_bank_seeded', 'true')
+      localStorage.setItem(userKey('sycore_bank_seeded'), 'true')
       const meta = await fetch('/sycore-session-startup.json').then(r => r.json()).catch(() => null)
       starterPresetCount.value = meta?.presets?.length ?? 0
       showStarterPrompt.value = true

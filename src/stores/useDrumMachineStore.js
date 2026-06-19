@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
 
 const LS_KEY         = 'SYCORE_DRUM_MACHINE_V1'
 const LS_PRESETS_KEY = 'SYCORE_DM_PRESETS'
@@ -431,7 +433,7 @@ function resolveStep(v, velMin, velMax, ghostVelMax) {
 
 function loadFromLS() {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = localStorage.getItem(userKey(LS_KEY))
     if (!raw) return null
     return JSON.parse(raw)
   } catch {
@@ -483,6 +485,9 @@ function mergeLoadedSequences(loaded) {
 }
 
 export const useDrumMachineStore = defineStore('drumMachine', () => {
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
+
   const loaded = loadFromLS()
   const sequences = ref(mergeLoadedSequences(loaded))
   const activeSequence = ref(loaded?.activeSequence ?? 'A')
@@ -507,7 +512,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
 
   function _save() {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({
+      localStorage.setItem(userKey(LS_KEY), JSON.stringify({
         sequences: _serializeSequences(),
         activeSequence: activeSequence.value,
       }))
@@ -608,10 +613,10 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
 
   // ── Preset save / load ────────────────────────────────────────────────────
   function _loadPresets() {
-    try { return JSON.parse(localStorage.getItem(LS_PRESETS_KEY) || '[]') } catch { return [] }
+    try { return JSON.parse(localStorage.getItem(userKey(LS_PRESETS_KEY)) || '[]') } catch { return [] }
   }
   function _savePresets(list) {
-    try { localStorage.setItem(LS_PRESETS_KEY, JSON.stringify(list)) } catch {}
+    try { localStorage.setItem(userKey(LS_PRESETS_KEY), JSON.stringify(list)) } catch {}
   }
 
   const presets = ref(_loadPresets())
@@ -684,6 +689,12 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
       if (step.active) step.velocity = randInt(velMin, velMax)
     })
   }
+
+  watch(uid, (newUid) => {
+    const data = newUid ? loadFromLS() : null
+    sequences.value = mergeLoadedSequences(data)
+    activeSequence.value = data?.activeSequence ?? 'A'
+  })
 
   return {
     sequences,
