@@ -10,7 +10,7 @@ const { minimizedModals } = useMinimizedModals()
     <Transition name="bar-fade">
       <div
         v-if="minimizedModals.length > 0"
-        class="fixed right-3 top-1/2 -translate-y-1/2 z-[990] flex flex-col gap-2 pointer-events-auto"
+        class="fixed right-3 bottom-10 -translate-y-1/2 z-[990] flex flex-col gap-2 pointer-events-auto"
       >
         <TransitionGroup name="chip" tag="div" class="flex flex-col gap-2">
           <button

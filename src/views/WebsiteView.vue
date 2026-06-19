@@ -310,9 +310,9 @@ const audiences = [
     </header>
 
     <!-- ============ HERO ============ -->
-    <section id="top" class="relative overflow-hidden bg-grid-neon">
+    <section id="top" class="relative overflow-hidden ">
       <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-neutral-950/40 to-neutral-950"></div>
-      <div class="relative mx-auto max-w-6xl px-5 pb-16 pt-20 text-center">
+      <div class="relative mx-auto max-w-6xl px-5 pb-16 pt-20 text-center  bg-your-rig">
         <p class="hero-fade hero-fade-1 mb-4 font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">
           Performance Tools &amp; Sound Design Ecosystem
         </p>
@@ -322,7 +322,7 @@ const audiences = [
         </h1>
         <p class="hero-fade hero-fade-3 mx-auto mt-6 max-w-2xl text-base text-neutral-400 md:text-lg">
           SY.CORE is a local-first, web-native platform for music producers, synth lovers and dawless
-          performers. Generative sound design, granular MIDI control, audio tools and live performance
+          performers. Generative sound design for <span class="font-bold text-synth-neon">ROLAND S-1</span>, granular MIDI control, audio tools and live performance
           surfaces — in one always-reliable environment. Launch from a URL, go fully offline, and perform.
           <span class="font-bold text-neutral-200">Completely free, open source, donationware.</span>
         </p>
@@ -336,7 +336,7 @@ const audiences = [
           </button>
           <a
             href="#sound-engine"
-            class="flex items-center gap-2 rounded-lg border border-neutral-700 px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.2em] text-neutral-300 transition-colors hover:border-synth-neon/50 hover:text-synth-neon"
+            class="flex items-center gap-2 rounded-lg border border-neutral-700 px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.2em] text-neutral-300 transition-colors hover:border-synth-cyan/50 hover:text-synth-cyan hover:bg-synth-cyan/30 active:scale-95"
           >
             Explore Features
             <ArrowRight class="h-4 w-4" />
@@ -345,7 +345,7 @@ const audiences = [
         <div class="hero-fade hero-fade-5 mt-8 flex flex-wrap items-center justify-center gap-2">
           <span
             v-for="badge in heroBadges" :key="badge"
-            class="flex items-center gap-1.5 rounded-md border border-synth-neon/30 bg-synth-neon/10 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-synth-neon"
+            class="flex items-center gap-1.5 rounded-md border border-synth-cyan/30 bg-synth-cyan/10 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-synth-neon"
           >
             <Check class="h-3 w-3" />
             {{ badge }}
