@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Copy, Eye, EyeOff, Check } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/useAuthStore'
 import ModalShell from '@/components/ui/ModalShell.vue'
@@ -8,6 +9,7 @@ import SyButton from '@/components/ui/SyButton.vue'
 const emit = defineEmits(['close'])
 
 const authStore = useAuthStore()
+const router    = useRouter()
 const copied = ref(false)
 
 const freesoundKey      = ref(authStore.profile?.freesoundApiKey || '')
@@ -35,6 +37,7 @@ function copyToClipboard(text) {
 function logout() {
   authStore.logout()
   emit('close')
+  router.push('/')
 }
 </script>
 

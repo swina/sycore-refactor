@@ -43,7 +43,7 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 10;
+const DB_VERSION = 14;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
@@ -59,6 +59,9 @@ const STORES: Record<string, string | null> = {
   timeline_sets: 'id',
   freesound_cache: 'id',           // downloaded Freesound preview blobs
   sound_folder_handles: 'id',      // remembered FileSystemDirectoryHandle for the local Sound Folder Browser
+  user_backing_tracks: 'id',       // per-user backing tracks (uid__docId)
+  user_timeline_sets: 'id',        // per-user timeline sets (uid__docId)
+  user_system: 'id',               // per-user system docs e.g. midiConfigPresets, midiMappingPresets (uid__docId)
 };
 
 let _db: IDBDatabase | null = null;
@@ -118,6 +121,9 @@ function parsePath(segments: PathSegments): { store: string; key: string } {
       'playlists': 'user_playlists',
       'sequences': 'user_sequences',
       'chord_progressions': 'user_chord_progressions',
+      'backing_tracks': 'user_backing_tracks',
+      'timeline_sets': 'user_timeline_sets',
+      'system': 'user_system',
     };
     const store = storeMap[collectionName];
     if (!store) throw new Error(`Unsupported sub-collection: ${collectionName}`);

@@ -1,4 +1,5 @@
 import { getDoc, setDoc, doc, db } from '@/lib/idb'
+import { auth } from '@/lib/auth'
 
 export interface SmartLatchConfig {
   active: boolean
@@ -28,9 +29,15 @@ export interface MidiConfigSnapshot {
 const IDB_DOC = 'midiConfigPresets'
 export const AUTOSAVE_CONFIG_ID = '__autosave__'
 
+function userDoc() {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Not authenticated')
+  return doc(db, 'users', uid, 'system', IDB_DOC)
+}
+
 export async function loadConfigPresets(): Promise<MidiConfigSnapshot[]> {
   try {
-    const snap = await getDoc(doc(db, 'system', IDB_DOC))
+    const snap = await getDoc(userDoc())
     if (!snap.exists()) return []
     const data = snap.data()
     return Array.isArray(data?.presets) ? data.presets : []
@@ -40,7 +47,7 @@ export async function loadConfigPresets(): Promise<MidiConfigSnapshot[]> {
 }
 
 export async function persistConfigPresets(presets: MidiConfigSnapshot[]): Promise<void> {
-  await setDoc(doc(db, 'system', IDB_DOC), { presets })
+  await setDoc(userDoc(), { presets })
 }
 
 export function createConfigPreset(

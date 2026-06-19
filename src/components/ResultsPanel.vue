@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onUnmounted, onMounted, nextTick } from 'vue'
-import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical, List} from 'lucide-vue-next'
+import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical, List, Undo2} from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/MidiService'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -302,6 +302,56 @@ const uncategorizedCtrls = computed(() => {
   return configStore.midiConfig.filter(cfg => !cfg.category || !catIds.has(cfg.category))
 })
 
+const preRegenPreset = ref(null)
+const saveNewName = ref('')
+const showSaveNewInput = ref(false)
+
+function handleRegenerate() {
+  preRegenPreset.value = {
+    preset: JSON.parse(JSON.stringify(presetStore.lastPreset)),
+    wasUnsaved: presetStore.sessionGeneratedIds.includes(presetStore.lastPreset?.id)
+  }
+  presetStore.generate(true)
+}
+
+function navigate(dir) {
+  presetStore.navigateHistory(dir)
+  preRegenPreset.value = null
+}
+
+function handleUndo() {
+  if (!preRegenPreset.value) return
+  const { preset, wasUnsaved } = preRegenPreset.value
+  presetStore.recallPreset(preset)
+  if (!wasUnsaved) {
+    presetStore.sessionGeneratedIds = presetStore.sessionGeneratedIds.filter(id => id !== preset.id)
+  }
+  preRegenPreset.value = null
+  showSaveNewInput.value = false
+  saveNewName.value = ''
+}
+
+function handleSaveNew() {
+  saveNewName.value = (presetStore.currentName || 'Untitled') + ' alt'
+  showSaveNewInput.value = true
+}
+
+async function confirmSaveNew() {
+  const name = saveNewName.value.trim()
+  if (!name) return
+  const newId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  presetStore.lastPreset = { ...presetStore.lastPreset, id: newId }
+  await presetStore.savePreset(name)
+  showSaveNewInput.value = false
+  saveNewName.value = ''
+  preRegenPreset.value = null
+}
+
+function cancelSaveNew() {
+  showSaveNewInput.value = false
+  saveNewName.value = ''
+}
+
 function toggleVelocityMod() {
   if (!mappingStore.velocityConfig) return
   mappingStore.velocityConfig.active = !mappingStore.velocityConfig.active
@@ -587,7 +637,7 @@ function getDialIndicator(cfg, r = 18) {
             </button>
 
             <!-- Regenerate -->
-            <button @click="presetStore.generate(true)" :disabled="presetStore.isGenerating"
+            <button @click="handleRegenerate" :disabled="presetStore.isGenerating"
               @contextmenu.prevent="openMenu($event, { name: 'regenerate', label: 'Regenerate' })"
               class="relative w-10 h-10 rounded-full bg-synth-neon text-black flex items-center justify-center shadow-[0_0_15px_rgba(0,255,136,0.4)] hover:bg-white transition-all active:scale-90 disabled:opacity-50"
               title="Regenerate">
@@ -744,7 +794,7 @@ function getDialIndicator(cfg, r = 18) {
             <!-- History Circular Nav -->
             <div v-if="!presetStore.hasUnsavedChanges" class="flex items-center gap-1.5 shrink-0">
               <button
-                @click="presetStore.navigateHistory('prev')"
+                @click="navigate('prev')"
                 @contextmenu.prevent="openMenu($event, { name: 'nav_prev', label: 'Previous Preset' })"
                 :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) >= presetStore.filteredHistory.length - 1"
                 class="relative w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
@@ -753,7 +803,7 @@ function getDialIndicator(cfg, r = 18) {
                 <ChevronLeft class="w-4 h-4" />
               </button>
               <button
-                @click="presetStore.navigateHistory('next')"
+                @click="navigate('next')"
                 @contextmenu.prevent="openMenu($event, { name: 'nav_next', label: 'Next Preset' })"
                 :disabled="presetStore.filteredHistory.findIndex(p => p.id === selectedPreset?.id) <= 0"
                 class="relative w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-synth-neon hover:border-synth-neon hover:bg-synth-neon/10 disabled:opacity-20 transition-all active:scale-90"
@@ -761,6 +811,45 @@ function getDialIndicator(cfg, r = 18) {
                 <span v-if="mappingStore.learningParamName === 'nav_next'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
                 <ChevronRight class="w-4 h-4" />
               </button>
+            </div>
+            <!-- UNDO + SAVE NEW: shown when nav is hidden after a regenerate -->
+            <div v-else-if="preRegenPreset" class="flex items-center gap-2 shrink-0">
+              <!-- Inline name input state -->
+              <template v-if="showSaveNewInput">
+                <input
+                  v-model="saveNewName"
+                  @keydown.enter="confirmSaveNew"
+                  @keydown.esc="cancelSaveNew"
+                  autofocus
+                  class="h-8 px-2 rounded-lg bg-neutral-900 border border-emerald-500/50 text-white text-[11px] font-mono outline-none focus:border-emerald-400 w-36"
+                  placeholder="Preset name"
+                />
+                <button
+                  @click="confirmSaveNew"
+                  :disabled="presetStore.isSaving"
+                  class="flex items-center gap-1 px-3 h-8 rounded-lg border border-emerald-500 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[10px] font-black uppercase tracking-widest transition-all active:scale-90 disabled:opacity-50"
+                >
+                  <Save class="w-3 h-3" /> Save
+                </button>
+                <button @click="cancelSaveNew" class="w-8 h-8 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center text-[10px] transition-all active:scale-90">✕</button>
+              </template>
+              <!-- Default: UNDO + SAVE NEW -->
+              <template v-else>
+                <button
+                  @click="handleUndo"
+                  class="flex items-center gap-1.5 px-3 h-8 rounded-full border border-amber-500/50 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-400 text-[10px] font-black uppercase tracking-widest transition-all active:scale-90"
+                  title="Undo regenerate — restore previous preset"
+                >
+                  <Undo2 class="w-3.5 h-3.5" /> Undo
+                </button>
+                <button
+                  @click="handleSaveNew"
+                  class="flex items-center gap-1.5 px-3 h-8 rounded-full border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-400 text-[10px] font-black uppercase tracking-widest transition-all active:scale-90"
+                  title="Save regenerated sound as a new preset"
+                >
+                  <Save class="w-3.5 h-3.5" /> Save New
+                </button>
+              </template>
             </div>
 
             <div class="w-px h-5 bg-neutral-800/50 shrink-0"></div>

@@ -1,4 +1,5 @@
 import { db, getDoc, setDoc, doc } from '@/lib/idb'
+import { auth } from '@/lib/auth'
 
 export interface VelocityConfig {
   active: boolean
@@ -17,8 +18,13 @@ export interface MappingPreset {
   velocityConfig: VelocityConfig
 }
 
-const IDB_COLLECTION = 'system'
 const IDB_DOC_ID = 'midiMappingPresets'
+
+function userDoc() {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Not authenticated')
+  return doc(db, 'users', uid, 'system', IDB_DOC_ID)
+}
 const AUTOSAVE_ID = '__autosave__'
 
 function generateId(): string {
@@ -27,7 +33,7 @@ function generateId(): string {
 
 export async function loadMappingPresets(): Promise<MappingPreset[]> {
   try {
-    const snap = await getDoc(doc(db, IDB_COLLECTION, IDB_DOC_ID))
+    const snap = await getDoc(userDoc())
     if (snap.exists()) {
       const data = snap.data()
       return Array.isArray(data?.presets) ? data.presets : []
@@ -40,7 +46,7 @@ export async function loadMappingPresets(): Promise<MappingPreset[]> {
 
 export async function persistMappingPresets(presets: MappingPreset[]): Promise<void> {
   try {
-    await setDoc(doc(db, IDB_COLLECTION, IDB_DOC_ID), { presets })
+    await setDoc(userDoc(), { presets })
   } catch (e) {
     console.error('[MappingPresets] Failed to persist presets', e)
   }

@@ -22,6 +22,7 @@ import { useSyncStore } from '@/stores/useSyncStore'
 const uiStore = useUiStore()
 const midiStore = useMidiStore()
 const authStore = useAuthStore()
+const uid = computed(() => authStore.user?.uid)
 const configStore = useConfigStore()
 const syncStore = useSyncStore()
 const route = useRoute()
@@ -425,7 +426,7 @@ async function saveLocalFileToLibrary() {
           createdAt: serverTimestamp(),
           duration: isFinite(duration) ? duration : 0
         }
-        await addDoc(collection(db, 'backing_tracks'), data)
+        await addDoc(collection(db, 'users', uid.value, 'backing_tracks'), data)
         inputType.value = 'list'
         pendingLocalFile.value = null
       } catch (err) {
@@ -550,7 +551,7 @@ async function addTrack(e) {
       createdAt: serverTimestamp()
     }
     if (newTrackBpm.value !== '') data.bpm = Number(newTrackBpm.value)
-    await addDoc(collection(db, 'backing_tracks'), data)
+    await addDoc(collection(db, 'users', uid.value, 'backing_tracks'), data)
     cancelAdd()
   } catch (err) { console.error('Failed to add track:', err) }
 }
@@ -569,7 +570,7 @@ async function saveEditTrack(e) {
     }
 
     data.bpm = newTrackBpm.value !== '' ? Number(newTrackBpm.value) : deleteField()
-    await updateDoc(doc(db, 'backing_tracks', editingTrackId.value), data)
+    await updateDoc(doc(db, 'users', uid.value, 'backing_tracks', editingTrackId.value), data)
     cancelEdit()
   } catch (err) { console.error('Failed to edit track:', err) }
 }
@@ -589,7 +590,7 @@ function startEditTrack(track, e) {
 
 async function deleteTrack(id, e) {
   e.stopPropagation()
-  try { await deleteDoc(doc(db, 'backing_tracks', id)); deletingTrackId.value = null }
+  try { await deleteDoc(doc(db, 'users', uid.value, 'backing_tracks', id)); deletingTrackId.value = null }
   catch (err) { console.error('Failed to delete track:', err) }
 }
 
@@ -608,7 +609,7 @@ function onLoadedMeta(slot, d) {
     detail: { currentTime: 0, duration: resolvedDur }
   }))
   if (isAdmin.value && playingTrack.value && !playingTrack.value.duration && d && isFinite(d)) {
-    updateDoc(doc(db, 'backing_tracks', playingTrack.value.id), { duration: d }).catch(console.error)
+    updateDoc(doc(db, 'users', uid.value, 'backing_tracks', playingTrack.value.id), { duration: d }).catch(console.error)
   }
 }
 
@@ -673,13 +674,23 @@ watch(playlist, (newPlaylist) => {
 let _unsubTracks = null
 let _handlers = {}
 
-onMounted(() => {
-  const q = query(collection(db, 'backing_tracks'), orderBy('createdAt', 'desc'))
+watch(uid, (newUid) => {
+  if (_unsubTracks) { _unsubTracks(); _unsubTracks = null }
+  if (!newUid) { tracks.value = []; return }
+  // Clear in-memory playlist state so previous user's data doesn't bleed through
+  playlist.value = []
+  playlistRepeats.value = []
+  playlistIdx.value = -1
+  playlistCurrentRepeat.value = 1
+  const q = query(collection(db, 'users', newUid, 'backing_tracks'), orderBy('createdAt', 'desc'))
   _unsubTracks = onSnapshot(q, (snapshot) => {
     const ts = []
     snapshot.forEach(d => ts.push({ id: d.id, ...d.data() }))
     tracks.value = ts
   })
+}, { immediate: true })
+
+onMounted(() => {
 
   const handleToggle = (e) => {
     const audio = activeSlot === 'a' ? audioRefA.value : audioRefB.value

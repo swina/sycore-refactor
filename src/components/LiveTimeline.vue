@@ -13,6 +13,7 @@ import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useArpStore }     from '@/stores/useArpStore'
 import { useSyncStore }    from '@/stores/useSyncStore'
 import { useUiStore }      from '@/stores/useUiStore'
+import { useAuthStore }    from '@/stores/useAuthStore'
 import catalogIndex        from '@/data/program_change/program_change.json'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc } from '@/lib/idb'
@@ -35,6 +36,7 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 const midiStore    = useMidiStore()
 const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
+const authStore    = useAuthStore()
 
 const allDevicesPcState = computed(() => {
   if (!midiStore.routingConfig?.registrations) return []
@@ -134,7 +136,7 @@ const availPerfSets  = ref([])   // loaded from SYCORE_PC_PERFORMANCE_SETS when 
 const newMkrPerfSet  = ref({ setId: '', setName: '' })
 
 // ─── IDB Save / Load ───────────────────────────────────────────────────────
-const TL_COL         = () => collection(db, 'timeline_sets')
+const TL_COL         = () => collection(db, 'users', authStore.user?.uid, 'timeline_sets')
 const savedSets      = ref([])
 const currentSetId   = ref(null)
 const currentSetName = ref('')
