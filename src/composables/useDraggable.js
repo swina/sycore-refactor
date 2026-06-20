@@ -1,9 +1,10 @@
 import { ref } from 'vue'
+import { userKey } from '@/lib/userKey'
 
 export function useDraggable(defaultX, defaultY, storageKey = null) {
   function readSaved() {
     if (!storageKey) return null
-    try { return JSON.parse(localStorage.getItem(storageKey)) } catch { return null }
+    try { return JSON.parse(localStorage.getItem(userKey(storageKey))) } catch { return null }
   }
 
   const saved = readSaved()
@@ -23,7 +24,7 @@ export function useDraggable(defaultX, defaultY, storageKey = null) {
   function onUp() {
     window.removeEventListener('mousemove', onMove)
     window.removeEventListener('mouseup', onUp)
-    if (storageKey) localStorage.setItem(storageKey, JSON.stringify({ x: x.value, y: y.value }))
+    if (storageKey) localStorage.setItem(userKey(storageKey), JSON.stringify({ x: x.value, y: y.value }))
   }
 
   function startDrag(e) {

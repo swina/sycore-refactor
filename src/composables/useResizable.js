@@ -1,9 +1,10 @@
 import { ref } from 'vue'
+import { userKey } from '@/lib/userKey'
 
 export function useResizable(defaultW, defaultH, storageKey = null) {
   function readSaved() {
     if (!storageKey) return null
-    try { return JSON.parse(localStorage.getItem(storageKey)) } catch { return null }
+    try { return JSON.parse(localStorage.getItem(userKey(storageKey))) } catch { return null }
   }
 
   const saved = readSaved()
@@ -24,7 +25,7 @@ export function useResizable(defaultW, defaultH, storageKey = null) {
     window.removeEventListener('mousemove', onMove)
     window.removeEventListener('mouseup', onUp)
     if (storageKey) {
-      localStorage.setItem(storageKey, JSON.stringify({ w: width.value, h: height.value }))
+      localStorage.setItem(userKey(storageKey), JSON.stringify({ w: width.value, h: height.value }))
     }
   }
 

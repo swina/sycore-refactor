@@ -17,6 +17,7 @@ import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService }        from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { looperEngine }          from '@/lib/looper-engine'
+import { userKey }               from '@/lib/userKey'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
 import PlayList        from '@/components/PlayList.vue'
 
@@ -61,9 +62,9 @@ const LS_LPP_SNAPSHOTS  = 'SYCORE_LPP_SNAPSHOTS'
 const LS_LPP_LOOP_PADS  = 'SYCORE_LPP_LOOP_PADS'
 
 function getLS(key, def) {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def } catch { return def }
+  try { const v = localStorage.getItem(userKey(key)); return v ? JSON.parse(v) : def } catch { return def }
 }
-function setLS(key, val) { try { localStorage.setItem(key, JSON.stringify(val)) } catch {} }
+function setLS(key, val) { try { localStorage.setItem(userKey(key), JSON.stringify(val)) } catch {} }
 
 // ── Performance Sets (saved from MidiDeviceProgramChangePanel) ────
 const pcSets = ref([])

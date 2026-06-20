@@ -17,6 +17,7 @@ import { useAuthStore }    from '@/stores/useAuthStore'
 import catalogIndex        from '@/data/program_change/program_change.json'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc } from '@/lib/idb'
+import { userKey } from '@/lib/userKey'
 import { db } from '@/lib/firebase'
 
 const props = defineProps({ isOpen: Boolean })
@@ -75,8 +76,8 @@ const syncTimelineToAudioCapture = computed({
 // ─── localStorage ──────────────────────────────────────────────────────────
 const LS_SEGS  = 'SYCORE_TIMELINE_SEGMENTS'
 const LS_MARKS = 'SYCORE_TIMELINE_MARKERS'
-const getLS = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d } catch { return d } }
-const setLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
+const getLS = (k, d) => { try { const v = localStorage.getItem(userKey(k)); return v ? JSON.parse(v) : d } catch { return d } }
+const setLS = (k, v) => { try { localStorage.setItem(userKey(k), JSON.stringify(v)) } catch {} }
 
 
 // ─── Data ──────────────────────────────────────────────────────────────────
@@ -736,7 +737,7 @@ function openAddMarker() {
   }
   // Load saved performance sets
   try {
-    const raw = localStorage.getItem('SYCORE_PC_PERFORMANCE_SETS')
+    const raw = localStorage.getItem(userKey('SYCORE_PC_PERFORMANCE_SETS'))
     availPerfSets.value = raw ? JSON.parse(raw) : []
   } catch { availPerfSets.value = [] }
   newMkrPerfSet.value = {

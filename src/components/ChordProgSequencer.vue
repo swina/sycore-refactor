@@ -6,6 +6,7 @@ import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -501,7 +502,7 @@ const activePcSetId = ref(null)
 
 function loadPcSets() {
   try {
-    const raw = localStorage.getItem(LS_PC_SETS)
+    const raw = localStorage.getItem(userKey(LS_PC_SETS))
     pcSets.value = raw ? JSON.parse(raw) : []
   } catch { pcSets.value = [] }
 }

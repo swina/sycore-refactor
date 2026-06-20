@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -377,7 +378,7 @@ const presetListEl    = ref(null)
 const presetButtonsEl = ref(null)
 
 function loadScrollCC() {
-  try { return JSON.parse(localStorage.getItem(LS_SCROLL_CC)) ?? null } catch { return null }
+  try { return JSON.parse(localStorage.getItem(userKey(LS_SCROLL_CC))) ?? null } catch { return null }
 }
 
 const scrollCCMap         = ref(loadScrollCC()) // { cc, channel, device } | null
@@ -422,7 +423,7 @@ function startScrollCCListener() {
       const inputId = event.target?.id
       const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
       scrollCCMap.value = { cc: 38, channel, device }
-      localStorage.setItem(LS_SCROLL_CC, JSON.stringify(scrollCCMap.value))
+      localStorage.setItem(userKey(LS_SCROLL_CC),JSON.stringify(scrollCCMap.value))
       isLearningScrollCC.value = false
       lastScrollCCVal.value = val
       return
@@ -455,7 +456,7 @@ function cancelScrollLearn() {
 function clearScrollCC() {
   scrollCCMap.value = null
   lastScrollCCVal.value = null
-  localStorage.removeItem(LS_SCROLL_CC)
+  localStorage.removeItem(userKey(LS_SCROLL_CC))
 }
 
 let _pcNavHandler   = null
@@ -564,13 +565,13 @@ const newSetNameInput = ref(null)
 
 function loadSets() {
   try {
-    const raw = localStorage.getItem(LS_PC_SETS)
+    const raw = localStorage.getItem(userKey(LS_PC_SETS))
     if (raw) pcSets.value = JSON.parse(raw)
   } catch { pcSets.value = [] }
 }
 
 function persistSets() {
-  localStorage.setItem(LS_PC_SETS, JSON.stringify(pcSets.value))
+  localStorage.setItem(userKey(LS_PC_SETS),JSON.stringify(pcSets.value))
 }
 
 function openSaveDialog() {
@@ -687,7 +688,7 @@ const assigningSetId = ref(null)
 const lppSetPads     = ref([])   // mirrors LivePerformancePad's setPads from localStorage
 
 function refreshLppPads() {
-  try { lppSetPads.value = JSON.parse(localStorage.getItem(LS_LPP_SETS)) ?? [] }
+  try { lppSetPads.value = JSON.parse(localStorage.getItem(userKey(LS_LPP_SETS))) ?? [] }
   catch { lppSetPads.value = [] }
 }
 

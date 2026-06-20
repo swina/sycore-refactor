@@ -8,6 +8,7 @@ import {
 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { userKey } from '@/lib/userKey'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -235,7 +236,7 @@ const loopPadsSnapshot = ref(readLoopPads())
 
 function readLoopPads() {
   try {
-    const v = localStorage.getItem(LS_LPP_LOOP_PADS)
+    const v = localStorage.getItem(userKey(LS_LPP_LOOP_PADS))
     const arr = v ? JSON.parse(v) : []
     while (arr.length < 8) arr.push(null)
     return arr.slice(0, 8)
@@ -287,7 +288,7 @@ const isLMDetecting        = ref(false)
 
 function readLMPads() {
   try {
-    const v = localStorage.getItem(LS_LM_PADS)
+    const v = localStorage.getItem(userKey(LS_LM_PADS))
     const arr = v ? JSON.parse(v) : []
     while (arr.length < 24) arr.push(null)
     return arr.slice(0, 24)

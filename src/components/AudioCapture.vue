@@ -8,6 +8,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { Mp3Encoder } from '@breezystack/lamejs'
+import { userKey } from '@/lib/userKey'
 import { midiService } from '@/core/midi/MidiService'
 import { looperEngine } from '@/lib/looper-engine'
 import { useLooperStore } from '@/stores/useLooperStore'
@@ -42,7 +43,7 @@ watch(() => uiStore.isAudioCaptureOpen, (v) => { if (v) bringToFront() })
 
 // ── Reactive state ────────────────────────────────────────────────────────────
 const devices          = ref([])
-const selectedDeviceId = ref(localStorage.getItem('S1_CAPTURE_DEVICE') || 'default')
+const selectedDeviceId = ref(localStorage.getItem(userKey('S1_CAPTURE_DEVICE')) || 'default')
 const isMonitoring     = ref(false)
 const isRecording      = ref(false)
 const recSecs          = ref(0)
@@ -62,8 +63,8 @@ const isFadingOut       = ref(false)
 const fadeDur           = ref(0)
 const isCutting         = ref(false)
 const isCropping        = ref(false)
-const toPlaylist       = ref(localStorage.getItem('S1_CAPTURE_TO_PLAYLIST') === '1')
-const appendMode       = ref(localStorage.getItem('S1_CAPTURE_APPEND') === '1')
+const toPlaylist       = ref(localStorage.getItem(userKey('S1_CAPTURE_TO_PLAYLIST')) === '1')
+const appendMode       = ref(localStorage.getItem(userKey('S1_CAPTURE_APPEND')) === '1')
 const error            = ref(null)
 
 const selectedLooperTrack = ref(1)
@@ -85,7 +86,7 @@ const isSendingToLM        = ref(false)
 
 function openLoopPadModal() {
   try {
-    const v = localStorage.getItem('SYCORE_LPP_LOOP_PADS')
+    const v = localStorage.getItem(userKey('SYCORE_LPP_LOOP_PADS'))
     const arr = v ? JSON.parse(v) : []
     while (arr.length < 16) arr.push(null)
     loopPadModalSlots.value = arr.slice(0, 16)
@@ -103,7 +104,7 @@ async function confirmLoopPadAssign() {
 
 function openLMModal() {
   try {
-    const v = localStorage.getItem('SYCORE_LOOP_MACHINE_PADS')
+    const v = localStorage.getItem(userKey('SYCORE_LOOP_MACHINE_PADS'))
     const arr = v ? JSON.parse(v) : []
     while (arr.length < 24) arr.push(null)
     lmModalSlots.value = arr.slice(0, 24)
@@ -163,44 +164,44 @@ const playbackStart       = ref(0)
 const loopCrossfadeDur    = ref(0.5)
 const currentPlaybackTime = ref(0)
 const waveformPeaks = ref([])
-const waveformDetail = ref(parseInt(localStorage.getItem('S1_CAPTURE_WAVEFORM_DETAIL') || '512', 10))
+const waveformDetail = ref(parseInt(localStorage.getItem(userKey('S1_CAPTURE_WAVEFORM_DETAIL')) || '512', 10))
 const decodedBuffer = ref(null)
 const zoomX = ref(1.0)
 const zoomY = ref(1.0)
 const panOffset = ref(0.0)
 
 // ── Timeline State & Loop ──────────────────────────────────────────────────
-const timelineMeasures = ref(parseInt(localStorage.getItem('S1_CAPTURE_TIMELINE_MEASURES') || '4', 10))
-const timelineMode     = ref(localStorage.getItem('S1_CAPTURE_TIMELINE_MODE') || 'synced')
+const timelineMeasures = ref(parseInt(localStorage.getItem(userKey('S1_CAPTURE_TIMELINE_MEASURES')) || '4', 10))
+const timelineMode     = ref(localStorage.getItem(userKey('S1_CAPTURE_TIMELINE_MODE')) || 'synced')
 const timelineProgress = ref(0)
 const timelineActive   = ref(false)
 
 watch(timelineMeasures, (val) => {
-  localStorage.setItem('S1_CAPTURE_TIMELINE_MEASURES', val.toString())
+  localStorage.setItem(userKey('S1_CAPTURE_TIMELINE_MEASURES'),val.toString())
 })
 
 watch(timelineMode, (val) => {
-  localStorage.setItem('S1_CAPTURE_TIMELINE_MODE', val)
+  localStorage.setItem(userKey('S1_CAPTURE_TIMELINE_MODE'),val)
 })
 
 // ── Snap to Grid State & Functions ───────────────────────────────────────────
-const snapEnabled = ref(localStorage.getItem('S1_CAPTURE_SNAP_GRID') === '1')
+const snapEnabled = ref(localStorage.getItem(userKey('S1_CAPTURE_SNAP_GRID')) === '1')
 
 watch(snapEnabled, (val) => {
-  localStorage.setItem('S1_CAPTURE_SNAP_GRID', val ? '1' : '0')
+  localStorage.setItem(userKey('S1_CAPTURE_SNAP_GRID'),val ? '1' : '0')
   if (val) {
     snapToBarDivisions()
   }
 })
 
 // ── MIDI Sync Recording State ────────────────────────────────────────────────
-const midiTriggerEnabled = ref(localStorage.getItem('S1_CAPTURE_MIDI_TRIGGER') === '1')
+const midiTriggerEnabled = ref(localStorage.getItem(userKey('S1_CAPTURE_MIDI_TRIGGER')) === '1')
 const isArmed = ref(false)
 const midiPulse = ref(false)
 let midiCleanup = null
 
 watch(midiTriggerEnabled, (val) => {
-  localStorage.setItem('S1_CAPTURE_MIDI_TRIGGER', val ? '1' : '0')
+  localStorage.setItem(userKey('S1_CAPTURE_MIDI_TRIGGER'),val ? '1' : '0')
   if (!val) {
     isArmed.value = false
   }
@@ -365,7 +366,7 @@ watch(recordedBlob, async (newBlob) => {
 })
 
 watch(waveformDetail, async (val) => {
-  localStorage.setItem('S1_CAPTURE_WAVEFORM_DETAIL', val.toString())
+  localStorage.setItem(userKey('S1_CAPTURE_WAVEFORM_DETAIL'),val.toString())
   if (recordedBlob.value) await generateWaveformPeaks(recordedBlob.value)
 })
 
@@ -375,8 +376,8 @@ const levelBarRef = ref(null)
 const fileInputRef = ref(null)
 
 // ── Recording gain controls ───────────────────────────────────────────────────
-const inputGain   = ref(parseFloat(localStorage.getItem('S1_CAP_INPUT_GAIN') ?? '1.0'))
-const dmGain      = ref(parseFloat(localStorage.getItem('S1_CAP_DM_GAIN')    ?? '1.0'))
+const inputGain   = ref(parseFloat(localStorage.getItem(userKey('S1_CAP_INPUT_GAIN')) ?? '1.0'))
+const dmGain      = ref(parseFloat(localStorage.getItem(userKey('S1_CAP_DM_GAIN'))    ?? '1.0'))
 const hasDmStream = ref(false)
 
 // ── Plain mutable (Web Audio nodes) ──────────────────────────────────────────
@@ -396,19 +397,19 @@ let recDestRef     = null
 
 watch(toPlaylist, v => {
   toPlaylistRef = v
-  localStorage.setItem('S1_CAPTURE_TO_PLAYLIST', v ? '1' : '0')
+  localStorage.setItem(userKey('S1_CAPTURE_TO_PLAYLIST'),v ? '1' : '0')
 })
 watch(inputGain, v => {
   if (micGainNodeRef) micGainNodeRef.gain.value = v
-  localStorage.setItem('S1_CAP_INPUT_GAIN', v)
+  localStorage.setItem(userKey('S1_CAP_INPUT_GAIN'),v)
 })
 watch(dmGain, v => {
   if (dmGainNodeRef) dmGainNodeRef.gain.value = v
-  localStorage.setItem('S1_CAP_DM_GAIN', v)
+  localStorage.setItem(userKey('S1_CAP_DM_GAIN'),v)
 })
 
 watch(appendMode, v => {
-  localStorage.setItem('S1_CAPTURE_APPEND', v ? '1' : '0')
+  localStorage.setItem(userKey('S1_CAPTURE_APPEND'),v ? '1' : '0')
 })
 
 watch(loopStart, (ns) => {
@@ -537,7 +538,7 @@ async function startMonitor(deviceId) {
           video: false,
         })
         selectedDeviceId.value = 'default'
-        localStorage.setItem('S1_CAPTURE_DEVICE', 'default')
+        localStorage.setItem(userKey('S1_CAPTURE_DEVICE'),'default')
       } catch (fallbackErr) {
         handleMonitorError(fallbackErr)
         return
@@ -611,7 +612,7 @@ watch(() => uiStore.isAudioCaptureOpen, (open) => {
 // ── Device hot-swap ───────────────────────────────────────────────────────────
 async function handleDeviceChange(id) {
   selectedDeviceId.value = id
-  localStorage.setItem('S1_CAPTURE_DEVICE', id)
+  localStorage.setItem(userKey('S1_CAPTURE_DEVICE'),id)
   if (!isMonitoring.value) return
   if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
   if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }

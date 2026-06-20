@@ -1,11 +1,12 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { userKey } from '@/lib/userKey'
 
 export const useLivePadStore = defineStore('livePad', () => {
   // Helper for localStorage
   const getItem = (key, defaultValue) => {
     try {
-      const val = localStorage.getItem(key)
+      const val = localStorage.getItem(userKey(key))
       return val ? JSON.parse(val) : defaultValue
     } catch {
       return defaultValue
@@ -13,7 +14,7 @@ export const useLivePadStore = defineStore('livePad', () => {
   }
   const setItem = (key, val) => {
     try {
-      localStorage.setItem(key, JSON.stringify(val))
+      localStorage.setItem(userKey(key), JSON.stringify(val))
     } catch (e) {
       console.warn(`[Storage] Failed to save ${key} to localStorage:`, e)
     }

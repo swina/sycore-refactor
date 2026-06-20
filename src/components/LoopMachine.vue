@@ -13,6 +13,7 @@ import { useFreesoundCache }    from '@/composables/useFreesoundCache'
 import { useMidiContextMenu }   from '@/composables/useMidiContextMenu'
 import { midiService }          from '@/core/midi/MidiService'
 import { loopMachineState }     from '@/core/state/loopMachineState'
+import { userKey }              from '@/lib/userKey'
 
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
@@ -58,7 +59,7 @@ const PAD_COUNT   = 24
 // ── Pad state (module-level so it survives re-mounts) ─────────────
 function _loadPads() {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = localStorage.getItem(userKey(LS_KEY))
     const arr = raw ? JSON.parse(raw) : []
     while (arr.length < PAD_COUNT) arr.push(null)
     return arr.slice(0, PAD_COUNT)
@@ -69,19 +70,19 @@ const pads       = ref(_loadPads())
 const active     = ref(Array(PAD_COUNT).fill(false))
 const pending    = ref(Array(PAD_COUNT).fill(false))
 const padVolumes = ref(Array(PAD_COUNT).fill(0))
-const fadeOutMs      = ref(parseInt(localStorage.getItem('S1_LM_FADE_MS')         || '0'))
-const fadeInEnabled  = ref(localStorage.getItem('S1_LM_FADEIN_ENABLED') === 'true')
-const fadeInMs       = ref(parseInt(localStorage.getItem('S1_LM_FADEIN_MS')        || '1000'))
-const fadeInVol      = ref(parseFloat(localStorage.getItem('S1_LM_FADEIN_VOL')     || '0.8'))
-watch(fadeOutMs,     v => localStorage.setItem('S1_LM_FADE_MS',         String(v)))
-watch(fadeInEnabled, v => localStorage.setItem('S1_LM_FADEIN_ENABLED',  String(v)))
-watch(fadeInMs,      v => localStorage.setItem('S1_LM_FADEIN_MS',       String(v)))
-watch(fadeInVol,     v => localStorage.setItem('S1_LM_FADEIN_VOL',      String(v)))
+const fadeOutMs      = ref(parseInt(localStorage.getItem(userKey('S1_LM_FADE_MS'))         || '0'))
+const fadeInEnabled  = ref(localStorage.getItem(userKey('S1_LM_FADEIN_ENABLED')) === 'true')
+const fadeInMs       = ref(parseInt(localStorage.getItem(userKey('S1_LM_FADEIN_MS'))        || '1000'))
+const fadeInVol      = ref(parseFloat(localStorage.getItem(userKey('S1_LM_FADEIN_VOL'))     || '0.8'))
+watch(fadeOutMs,     v => localStorage.setItem(userKey('S1_LM_FADE_MS'),         String(v)))
+watch(fadeInEnabled, v => localStorage.setItem(userKey('S1_LM_FADEIN_ENABLED'),  String(v)))
+watch(fadeInMs,      v => localStorage.setItem(userKey('S1_LM_FADEIN_MS'),       String(v)))
+watch(fadeInVol,     v => localStorage.setItem(userKey('S1_LM_FADEIN_VOL'),      String(v)))
 
-const lmUseSessionBpm  = ref(localStorage.getItem('S1_LM_USE_SESSION_BPM')  === 'true')
-const lmVolumeReset    = ref(localStorage.getItem('S1_LM_VOLUME_RESET')     === 'true')
-watch(lmUseSessionBpm, v => localStorage.setItem('S1_LM_USE_SESSION_BPM',  String(v)))
-watch(lmVolumeReset,   v => localStorage.setItem('S1_LM_VOLUME_RESET',     String(v)))
+const lmUseSessionBpm  = ref(localStorage.getItem(userKey('S1_LM_USE_SESSION_BPM'))  === 'true')
+const lmVolumeReset    = ref(localStorage.getItem(userKey('S1_LM_VOLUME_RESET'))     === 'true')
+watch(lmUseSessionBpm, v => localStorage.setItem(userKey('S1_LM_USE_SESSION_BPM'),  String(v)))
+watch(lmVolumeReset,   v => localStorage.setItem(userKey('S1_LM_VOLUME_RESET'),     String(v)))
 
 // Computed two-way binding for the BPM input — v-model compatible
 const lmBpm = computed({
@@ -90,7 +91,7 @@ const lmBpm = computed({
     const bpm = Math.max(20, Math.min(300, Math.round(+v || 120)))
     midiStore.currentBpm = bpm
     midiStore.setBpm(bpm)
-    localStorage.setItem('S1_LM_SESSION_BPM', String(bpm))
+    localStorage.setItem(userKey('S1_LM_SESSION_BPM'), String(bpm))
   },
 })
 
@@ -107,21 +108,21 @@ watch(lmUseSessionBpm, () => {
 })
 watch(() => midiStore.currentBpm, (bpm) => {
   if (!lmUseSessionBpm.value) return
-  localStorage.setItem('S1_LM_SESSION_BPM', String(bpm))
+  localStorage.setItem(userKey('S1_LM_SESSION_BPM'), String(bpm))
   for (let i = 0; i < PAD_COUNT; i++) { if (active.value[i]) _applyPlaybackRate(i) }
 })
 
-const syncEnabled = ref(localStorage.getItem('S1_LM_SYNC') !== '0')
+const syncEnabled = ref(localStorage.getItem(userKey('S1_LM_SYNC')) !== '0')
 watch(syncEnabled, v => {
-  localStorage.setItem('S1_LM_SYNC', v ? '1' : '0')
+  localStorage.setItem(userKey('S1_LM_SYNC'), v ? '1' : '0')
   loopMachineState.syncEnabled = v
   window.dispatchEvent(new CustomEvent('lm-state-changed'))
 })
 
 // ── Capture recording integration ─────────────────────────────────
-const lmRecSync = ref(localStorage.getItem('S1_LM_REC_SYNC') === '1')
+const lmRecSync = ref(localStorage.getItem(userKey('S1_LM_REC_SYNC')) === '1')
 watch(lmRecSync, v => {
-  localStorage.setItem('S1_LM_REC_SYNC', v ? '1' : '0')
+  localStorage.setItem(userKey('S1_LM_REC_SYNC'), v ? '1' : '0')
   loopMachineState.recSyncEnabled = v
   window.dispatchEvent(new CustomEvent('lm-state-changed'))
 })
@@ -139,7 +140,7 @@ function manualStopRec() {
 }
 
 function _savePads() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(pads.value)) } catch {}
+  try { localStorage.setItem(userKey(LS_KEY), JSON.stringify(pads.value)) } catch {}
 }
 
 // ── Presets ───────────────────────────────────────────────────────
@@ -148,7 +149,7 @@ const showPresetPanel = ref(false)
 const newPresetName   = ref('')
 
 function _loadPresets() {
-  try { lmPresets.value = JSON.parse(localStorage.getItem(LS_PRESETS) || '[]') } catch { lmPresets.value = [] }
+  try { lmPresets.value = JSON.parse(localStorage.getItem(userKey(LS_PRESETS)) || '[]') } catch { lmPresets.value = [] }
 }
 
 function savePreset() {
@@ -164,7 +165,7 @@ function savePreset() {
     lmRecSync: lmRecSync.value,
   }
   lmPresets.value.push(preset)
-  try { localStorage.setItem(LS_PRESETS, JSON.stringify(lmPresets.value)) } catch {}
+  try { localStorage.setItem(userKey(LS_PRESETS), JSON.stringify(lmPresets.value)) } catch {}
   newPresetName.value = ''
 }
 
@@ -180,7 +181,7 @@ function loadPreset(preset) {
 
 function deletePreset(id) {
   lmPresets.value = lmPresets.value.filter(p => p.id !== id)
-  try { localStorage.setItem(LS_PRESETS, JSON.stringify(lmPresets.value)) } catch {}
+  try { localStorage.setItem(userKey(LS_PRESETS), JSON.stringify(lmPresets.value)) } catch {}
 }
 
 // ── Performance Sets (shared with LivePerformancePad) ─────────────
@@ -195,8 +196,8 @@ const activePerfSetIdx = computed({
 
 function _loadPerfSets() {
   try {
-    pcSets.value = JSON.parse(localStorage.getItem(LS_PC_SETS) || '[]')
-    const saved  = JSON.parse(localStorage.getItem(LS_LPP_SETS) || 'null')
+    pcSets.value = JSON.parse(localStorage.getItem(userKey(LS_PC_SETS)) || '[]')
+    const saved  = JSON.parse(localStorage.getItem(userKey(LS_LPP_SETS)) || 'null')
     if (Array.isArray(saved)) {
       const arr = [...saved]
       while (arr.length < 16) arr.push(emptySetPad())
@@ -628,7 +629,7 @@ let _lmMasterVolumeHandler = null
 
 onMounted(() => {
   if (lmUseSessionBpm.value) {
-    const saved = parseInt(localStorage.getItem('S1_LM_SESSION_BPM') || '120')
+    const saved = parseInt(localStorage.getItem(userKey('S1_LM_SESSION_BPM')) || '120')
     midiStore.currentBpm = saved
     midiStore.setBpm(saved)
   }

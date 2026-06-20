@@ -1,3 +1,5 @@
+import { userKey } from '@/lib/userKey'
+
 export type DeviceType =
   | 'controller'
   | 'instrument-single'
@@ -119,7 +121,7 @@ export class DeviceRegistry {
 
   private load(): void {
     try {
-      const raw = localStorage.getItem(LS_KEY)
+      const raw = localStorage.getItem(userKey(LS_KEY))
       if (raw) {
         const arr: MidiDeviceDescriptor[] = JSON.parse(raw)
         arr.forEach(d => this.descriptors.set(d.id, d))
@@ -131,7 +133,7 @@ export class DeviceRegistry {
 
   private save(): void {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify([...this.descriptors.values()]))
+      localStorage.setItem(userKey(LS_KEY), JSON.stringify([...this.descriptors.values()]))
     } catch {
       // storage quota — ignore
     }

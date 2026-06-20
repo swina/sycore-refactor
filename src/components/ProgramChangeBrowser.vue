@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Search, Send, ChevronDown, Music2, AlertTriangle, X, Loader2, Zap, Pencil } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { userKey } from '@/lib/userKey'
 import { useUiStore } from '@/stores/useUiStore'
 
 // ── catalog index ──────────────────────────────────────────────
@@ -217,13 +218,13 @@ const assignTarget = ref(null)
 
 function loadPads() {
   try {
-    const stored = localStorage.getItem(PADS_KEY)
+    const stored = localStorage.getItem(userKey(PADS_KEY))
     if (stored) padSeries.value = JSON.parse(stored)
   } catch {}
 }
 
 function savePads() {
-  localStorage.setItem(PADS_KEY, JSON.stringify(padSeries.value))
+  localStorage.setItem(userKey(PADS_KEY),JSON.stringify(padSeries.value))
 }
 
 function toggleAssignTarget(seriesIdx, padIdx) {

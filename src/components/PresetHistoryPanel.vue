@@ -4,6 +4,7 @@ import { X, Layers, Heart, Trash2, Download, Ghost, ChevronDown } from 'lucide-v
 import SyButton from '@/components/ui/SyButton.vue'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { userKey } from '@/lib/userKey'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 
@@ -173,7 +174,7 @@ function deleteAllPresets() {
 
 async function confirmDeleteAll() {
   // Mark as seeded BEFORE deleting to avoid immediate re-seeding by the store listener
-  localStorage.setItem('sycore_bank_seeded', 'true')
+  localStorage.setItem(userKey('sycore_bank_seeded'), 'true')
   await presetStore.deleteAllPresets()
   showDeleteConfirm.value = false
 }

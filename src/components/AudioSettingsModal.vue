@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Mic, Volume2, RefreshCw, CheckCircle2, Circle, SlidersHorizontal, X } from 'lucide-vue-next'
 import ModalShell from '@/components/ui/ModalShell.vue'
 import { useUiStore } from '@/stores/useUiStore'
+import { userKey } from '@/lib/userKey'
 
 const uiStore = useUiStore()
 
@@ -19,8 +20,8 @@ const isRefreshing = ref(false)
 const inputDevices  = computed(() => allDevices.value.filter(d => d.kind === 'audioinput'))
 const outputDevices = computed(() => allDevices.value.filter(d => d.kind === 'audiooutput'))
 
-const selectedInput  = ref(props.selectedInputId || localStorage.getItem('S1_CAPTURE_DEVICE') || 'default')
-const selectedOutput = ref(localStorage.getItem('S1_AUDIO_OUTPUT_DEVICE') || 'default')
+const selectedInput  = ref(props.selectedInputId || localStorage.getItem(userKey('S1_CAPTURE_DEVICE')) || 'default')
+const selectedOutput = ref(localStorage.getItem(userKey('S1_AUDIO_OUTPUT_DEVICE')) || 'default')
 
 async function refresh() {
   isRefreshing.value = true
@@ -34,13 +35,13 @@ async function refresh() {
 
 function selectInput(deviceId) {
   selectedInput.value = deviceId
-  localStorage.setItem('S1_CAPTURE_DEVICE', deviceId)
+  localStorage.setItem(userKey('S1_CAPTURE_DEVICE'), deviceId)
   emit('select-input', deviceId)
 }
 
 function selectOutput(deviceId) {
   selectedOutput.value = deviceId
-  localStorage.setItem('S1_AUDIO_OUTPUT_DEVICE', deviceId)
+  localStorage.setItem(userKey('S1_AUDIO_OUTPUT_DEVICE'), deviceId)
   emit('select-output', deviceId)
 }
 

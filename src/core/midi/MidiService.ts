@@ -2,6 +2,8 @@
  * MIDI Service per gestire l'accesso WebMIDI e l'invio di messaggi CC
  */
 
+import { userKey } from '@/lib/userKey'
+
 export interface DeviceRegistration {
   name: string;
   inEnabled: boolean;
@@ -462,12 +464,12 @@ export class MidiService {
     this.routingMatrix.forEach((targets, source) => {
       data[source] = Array.from(targets)
     })
-    localStorage.setItem(MIDI_ROUTING_KEY, JSON.stringify(data))
+    localStorage.setItem(userKey(MIDI_ROUTING_KEY), JSON.stringify(data))
   }
 
   private loadRoutingMatrix() {
     try {
-      const raw = localStorage.getItem(MIDI_ROUTING_KEY)
+      const raw = localStorage.getItem(userKey(MIDI_ROUTING_KEY))
       if (!raw) return
       const data = JSON.parse(raw)
       Object.entries(data).forEach(([source, targets]) => {
@@ -498,11 +500,11 @@ export class MidiService {
 
   public toggleBroadcastMode() {
     this.broadcastMode = !this.broadcastMode
-    localStorage.setItem(MIDI_BROADCAST_KEY, JSON.stringify(this.broadcastMode))
+    localStorage.setItem(userKey(MIDI_BROADCAST_KEY), JSON.stringify(this.broadcastMode))
   }
 
   private loadBroadcastMode() {
-    const raw = localStorage.getItem(MIDI_BROADCAST_KEY)
+    const raw = localStorage.getItem(userKey(MIDI_BROADCAST_KEY))
     if (raw) this.broadcastMode = JSON.parse(raw) === true
   }
 

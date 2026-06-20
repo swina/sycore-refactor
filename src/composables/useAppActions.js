@@ -8,6 +8,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { userKey } from '@/lib/userKey'
 
 /**
  * Dispatches AppAction strings to the appropriate store calls.
@@ -385,7 +386,7 @@ export function useAppActions() {
             const seriesIdx = m[1].toLowerCase() === 'a' ? 0 : 1
             const padIdx    = parseInt(m[2], 10) - 1
             try {
-              const stored = localStorage.getItem('SY_PC_PADS')
+              const stored = localStorage.getItem(userKey('SY_PC_PADS'))
               if (stored) {
                 const allSeries = JSON.parse(stored)
                 const series    = allSeries[seriesIdx]

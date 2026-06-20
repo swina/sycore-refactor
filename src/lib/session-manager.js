@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/useAuthStore'
+import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -126,7 +127,7 @@ export async function importSession(jsonContent) {
     // 3. Restore MIDI Mappings (localStorage)
     if (data.midiMappings) {
       mappingStore.midiMappings = data.midiMappings
-      localStorage.setItem('midiMappings', JSON.stringify(data.midiMappings))
+      localStorage.setItem(userKey('midiMappings'), JSON.stringify(data.midiMappings))
     }
 
     // 4. Restore App MIDI Mappings (IDB)

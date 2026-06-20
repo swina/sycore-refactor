@@ -12,6 +12,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { S1_CC_MAP, FIELD_TO_CC } from '@/constants/s1-config'
+import { userKey } from '@/lib/userKey'
 import AdsrEnvelope from '@/components/AdsrEnvelope.vue'
 import FilterEnvelope from '@/components/FilterEnvelope.vue'
 import WaveformVisualizer from '@/components/WaveformVisualizer.vue'
@@ -140,7 +141,7 @@ function toggleAB() {
 }
 
 function addToLiveSet() {
-  const raw = localStorage.getItem('S1_LIVESET_SOUNDS')
+  const raw = localStorage.getItem(userKey('S1_LIVESET_SOUNDS'))
   const stored = Array.isArray(JSON.parse(raw || 'null')) ? JSON.parse(raw) : []
   const slots = Array(16).fill(null).map((_, i) =>
     stored[i] || { id: `ls_slot_${i}`, name: '', paramValues: {} }
@@ -153,7 +154,7 @@ function addToLiveSet() {
     return
   }
 
-  const paramsRaw = localStorage.getItem('S1_LIVESET_PARAMS')
+  const paramsRaw = localStorage.getItem(userKey('S1_LIVESET_PARAMS'))
   const liveParams = Array.isArray(JSON.parse(paramsRaw || 'null')) ? JSON.parse(paramsRaw) : []
   const paramValues = {}
   liveParams.forEach((p, i) => {
@@ -175,7 +176,7 @@ function addToLiveSet() {
   slots[emptyIdx].category = presetStore.currentCategory
   slots[emptyIdx].ccData = ccData
   slots[emptyIdx].paramValues = paramValues
-  localStorage.setItem('S1_LIVESET_SOUNDS', JSON.stringify(slots))
+  localStorage.setItem(userKey('S1_LIVESET_SOUNDS'), JSON.stringify(slots))
 
   liveSetFeedback.value = `ok:${emptyIdx + 1}`
   setTimeout(() => { liveSetFeedback.value = '' }, 2500)

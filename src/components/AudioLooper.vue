@@ -7,6 +7,7 @@ import {
   MicOff, Settings, Download, ListPlus, Loader2
 } from 'lucide-vue-next'
 import { useLooperStore } from '@/stores/useLooperStore'
+import { userKey } from '@/lib/userKey'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
@@ -22,7 +23,7 @@ const presetStore = usePresetStore()
 const livePadStore = useLivePadStore()
 
 const devices = ref([])
-const selectedDeviceId = ref(localStorage.getItem('S1_LOOPER_DEVICE') || 'default')
+const selectedDeviceId = ref(localStorage.getItem(userKey('S1_LOOPER_DEVICE')) || 'default')
 const isMonitoring = ref(false)
 const midiPulse = ref(false)
 const error = ref(null)
@@ -77,7 +78,7 @@ async function startMonitor(deviceId) {
           }
         })
         selectedDeviceId.value = 'default'
-        localStorage.setItem('S1_LOOPER_DEVICE', 'default')
+        localStorage.setItem(userKey('S1_LOOPER_DEVICE'),'default')
       } catch (fallbackErr) {
         handleMonitorError(fallbackErr)
         return
@@ -118,7 +119,7 @@ function syncEngineParams() {
 
 async function handleDeviceChange(id) {
   selectedDeviceId.value = id
-  localStorage.setItem('S1_LOOPER_DEVICE', id)
+  localStorage.setItem(userKey('S1_LOOPER_DEVICE'),id)
   if (streamRef) {
     streamRef.getTracks().forEach(t => t.stop())
     streamRef = null

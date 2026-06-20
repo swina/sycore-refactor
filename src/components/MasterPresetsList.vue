@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { MidiSource } from '@/core/midi/MidiService'
 import catalogIndex from '@/data/program_change/program_change.json'
@@ -247,13 +248,13 @@ const newSetNameInput = ref(null)
 
 function loadSets() {
   try {
-    const raw = localStorage.getItem(LS_PC_SETS)
+    const raw = localStorage.getItem(userKey(LS_PC_SETS))
     if (raw) pcSets.value = JSON.parse(raw)
   } catch { pcSets.value = [] }
 }
 
 function persistSets() {
-  localStorage.setItem(LS_PC_SETS, JSON.stringify(pcSets.value))
+  localStorage.setItem(userKey(LS_PC_SETS),JSON.stringify(pcSets.value))
 }
 
 function openSaveDialog() {

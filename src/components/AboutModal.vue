@@ -1,5 +1,6 @@
 <script setup>
 import { ExternalLink, Github, Globe, Cpu, User, Package, Code, Settings } from 'lucide-vue-next'
+import { userKey } from '@/lib/userKey'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
@@ -29,7 +30,7 @@ function close() {
 function resetToWelcome() {
   presetStore.lastPreset = null
   presetStore.showResults = false
-  localStorage.removeItem('sycore_last_session')
+  localStorage.removeItem(userKey('sycore_last_session'))
   close()
 }
 </script>

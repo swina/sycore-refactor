@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { Settings, Download, Upload, AlertTriangle, Save, FolderOpen, Trash2 } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
+import { userKey } from '@/lib/userKey'
 
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
@@ -42,18 +43,18 @@ function exportConfig() {
   const snapshot = {
     version: 1,
     exportedAt: new Date().toISOString(),
-    routing: JSON.parse(localStorage.getItem('SYCORE_ADVANCED_MIDI_ROUTING') || '{}'),
-    matrix:  JSON.parse(localStorage.getItem('S1_MIDI_ROUTING') || '{}'),
-    split:   JSON.parse(localStorage.getItem('SYCORE_KEYBOARD_SPLIT') || '{}'),
+    routing: JSON.parse(localStorage.getItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING')) || '{}'),
+    matrix:  JSON.parse(localStorage.getItem(userKey('S1_MIDI_ROUTING')) || '{}'),
+    split:   JSON.parse(localStorage.getItem(userKey('SYCORE_KEYBOARD_SPLIT')) || '{}'),
     smartLatch: {
-      active:  localStorage.getItem('SYCORE_SMARTLATCH_ACTIVE'),
-      max:     localStorage.getItem('SYCORE_SMARTLATCH_MAX'),
-      replace: localStorage.getItem('SYCORE_SMARTLATCH_REPLACE'),
-      fade:    localStorage.getItem('SYCORE_SMARTLATCH_FADE'),
+      active:  localStorage.getItem(userKey('SYCORE_SMARTLATCH_ACTIVE')),
+      max:     localStorage.getItem(userKey('SYCORE_SMARTLATCH_MAX')),
+      replace: localStorage.getItem(userKey('SYCORE_SMARTLATCH_REPLACE')),
+      fade:    localStorage.getItem(userKey('SYCORE_SMARTLATCH_FADE')),
     },
-    mappings:  JSON.parse(localStorage.getItem('midiMappings') || '{}'),
-    channel:   localStorage.getItem('midiChannel'),
-    inChannel: localStorage.getItem('midiInputChannel'),
+    mappings:  JSON.parse(localStorage.getItem(userKey('midiMappings')) || '{}'),
+    channel:   localStorage.getItem(userKey('midiChannel')),
+    inChannel: localStorage.getItem(userKey('midiInputChannel')),
   }
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
   const url  = URL.createObjectURL(blob)
@@ -74,12 +75,12 @@ function importConfig(e) {
   reader.onload = (ev) => {
     try {
       const data = JSON.parse(ev.target.result)
-      if (data.routing) localStorage.setItem('SYCORE_ADVANCED_MIDI_ROUTING', JSON.stringify(data.routing))
-      if (data.matrix)  localStorage.setItem('S1_MIDI_ROUTING', JSON.stringify(data.matrix))
-      if (data.split)   localStorage.setItem('SYCORE_KEYBOARD_SPLIT', JSON.stringify(data.split))
-      if (data.mappings)localStorage.setItem('midiMappings', JSON.stringify(data.mappings))
-      if (data.channel) localStorage.setItem('midiChannel', data.channel)
-      if (data.inChannel) localStorage.setItem('midiInputChannel', data.inChannel)
+      if (data.routing) localStorage.setItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING'), JSON.stringify(data.routing))
+      if (data.matrix)  localStorage.setItem(userKey('S1_MIDI_ROUTING'), JSON.stringify(data.matrix))
+      if (data.split)   localStorage.setItem(userKey('SYCORE_KEYBOARD_SPLIT'), JSON.stringify(data.split))
+      if (data.mappings)localStorage.setItem(userKey('midiMappings'), JSON.stringify(data.mappings))
+      if (data.channel) localStorage.setItem(userKey('midiChannel'), data.channel)
+      if (data.inChannel) localStorage.setItem(userKey('midiInputChannel'), data.inChannel)
       window.location.reload()
     } catch {
       importError.value = 'Invalid config file.'
@@ -97,7 +98,7 @@ function resetDefaults() {
     'midiSendClock', 'midiSyncTransport', 'midiSyncSequencerTransport',
     'SYCORE_DEVICE_REGISTRY',
   ]
-  keys.forEach(k => localStorage.removeItem(k))
+  keys.forEach(k => localStorage.removeItem(userKey(k)))
   window.location.reload()
 }
 </script>

@@ -1,5 +1,6 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { registerMinimized, unregisterMinimized } from './useMinimizedModals'
+import { userKey } from '@/lib/userKey'
 
 // Shared counter for draggable panels. Capped at 399 so non-draggable
 // modals (z-[400]+) always layer above floating panels.
@@ -22,7 +23,7 @@ export function useDraggableResizable({
   function loadSaved() {
     if (!storageKey) return null
     try {
-      const v = JSON.parse(localStorage.getItem(storageKey))
+      const v = JSON.parse(localStorage.getItem(userKey(storageKey)))
       if (v && typeof v.x === 'number') return v
     } catch {}
     return null
@@ -69,7 +70,7 @@ export function useDraggableResizable({
 
   function persist() {
     if (storageKey) {
-      try { localStorage.setItem(storageKey, JSON.stringify(pos.value)) } catch {}
+      try { localStorage.setItem(userKey(storageKey), JSON.stringify(pos.value)) } catch {}
     }
   }
 
