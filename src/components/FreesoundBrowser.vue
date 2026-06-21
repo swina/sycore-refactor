@@ -262,13 +262,17 @@ function selectPadSlot(padIdx) {
   nextTick(() => bpmInput.value?.focus())
 }
 
-function confirmPadAssign() {
+async function confirmPadAssign() {
   if (pendingPadSlot.value == null || !pickingPadFor.value) return
   const bpm   = pendingBpm.value !== '' ? Number(pendingBpm.value) : undefined
   const track = {
     id: pickingPadFor.value.id, label: pickingPadFor.value.label,
     url: pickingPadFor.value.url, author: pickingPadFor.value.author,
     duration: pickingPadFor.value.duration, ...(bpm ? { bpm } : {}),
+  }
+  // Ensure blob is cached — CDN preview URLs are blocked by CORS in WebAudio MediaElementSource
+  if (!isDownloaded(pickingPadFor.value.id)) {
+    await downloadSound(pickingPadFor.value)
   }
   window.dispatchEvent(new CustomEvent('loop-pad-assign', { detail: { padIdx: pendingPadSlot.value, track } }))
   const updated = [...loopPadsSnapshot.value]

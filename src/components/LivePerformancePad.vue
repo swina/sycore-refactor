@@ -465,7 +465,7 @@ function _fireSyncActions(starting) {
 
 async function toggleLoopPad(idx) {
   const pad = loopPads.value[idx]
-  if (!pad?.url) return
+  if (!pad) return
   const instant = !!pad.noCrossfade
 
   if (loopActive.value[idx]) {
@@ -481,8 +481,8 @@ async function toggleLoopPad(idx) {
   })
 
   const url = await resolveFreesoundUrl(pad.id, pad.url)
-  // Guard: pad may have been cleared during async URL resolution
-  if (!loopPads.value[idx]?.url) return
+  // Guard: pad cleared during async URL resolution, or nothing resolved
+  if (!url) return
 
   const wa  = _initPadWA(idx)
   _stopPadRaf(idx)
