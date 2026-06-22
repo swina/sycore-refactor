@@ -42,6 +42,7 @@ const ACTION_MAP = {
   'sound-engine':           () => uiStore.isSoundEngineOpen = !uiStore.isSoundEngineOpen,
   'midi-manager':           () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
   'drum-machine':           () => uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen,
+  'sampler':                () => uiStore.isSamplerOpen = !uiStore.isSamplerOpen,
   'audio-mixer':            () => uiStore.isAudioMixerOpen = !uiStore.isAudioMixerOpen,
   'sound-folder-browser':   () => uiStore.isSoundFolderBrowserOpen = !uiStore.isSoundFolderBrowserOpen,
 }

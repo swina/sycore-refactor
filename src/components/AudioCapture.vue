@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal, Volume2, Scissors, FolderOpen } from 'lucide-vue-next'
+import { Mic, Circle, Square, Download, X, Minus, Play, Pause, RotateCcw, FileAudio, ListPlus, Repeat, Zap, Upload, Magnet, Layers, SkipBack, Link2, SlidersHorizontal, Volume2, Scissors, FolderOpen, Music2 } from 'lucide-vue-next'
 import AudioSettingsModal from '@/components/AudioSettingsModal.vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -75,6 +75,48 @@ const showLoopPadModal     = ref(false)
 const loopPadModalSlots    = ref([])
 const loopPadSoundName     = ref('')
 const lastCaptureLabel     = ref('')   // set when a Freesound sound is loaded
+
+// ── Sampler assignment ────────────────────────────────────────────────
+const showSamplerModal    = ref(false)
+const selectedSamplerPad  = ref(0)
+const samplerSoundName    = ref('')
+const isSendingToSampler  = ref(false)
+
+async function confirmSamplerAssign() {
+  if (!recordedBlob.value) return
+  isSendingToSampler.value = true
+  try {
+    const arrayBuf = await recordedBlob.value.arrayBuffer()
+    const tmpCtx   = new (window.AudioContext || window.webkitAudioContext)()
+    const decoded  = await tmpCtx.decodeAudioData(arrayBuf)
+    await tmpCtx.close()
+
+    const sampleRate  = decoded.sampleRate
+    const startSample = Math.floor(loopStart.value * sampleRate)
+    const endSample   = Math.floor(loopEnd.value   * sampleRate)
+    const length      = endSample - startSample
+    if (length <= 0) return
+
+    const cropped = new AudioBuffer({ numberOfChannels: decoded.numberOfChannels, length, sampleRate })
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++)
+      cropped.copyToChannel(decoded.getChannelData(ch).subarray(startSample, endSample), ch)
+
+    const wav      = audioBufferToWav(cropped)
+    const id       = `capture_sampler_${Date.now()}`
+    const label    = samplerSoundName.value.trim() || `Capture ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+    const duration = loopEnd.value - loopStart.value
+    const blobUrl  = await cacheFileBlob(id, label, wav, { author: 'Audio Capture', duration })
+
+    window.dispatchEvent(new CustomEvent('sampler-pad-assign', {
+      detail: { padIdx: selectedSamplerPad.value, track: { id, label, blobUrl, author: 'Audio Capture', duration } }
+    }))
+    showSamplerModal.value = false
+  } catch (e) {
+    console.error('Failed to send to Sampler', e)
+  } finally {
+    isSendingToSampler.value = false
+  }
+}
 
 // ── Samples Machine assignment ───────────────────────────────────────
 const showAudioSettings    = ref(false)
@@ -2612,6 +2654,16 @@ onUnmounted(() => {
             <Layers class="w-3 h-3" /> Samples M
           </button>
 
+          <!-- Send to Sampler — trigger button -->
+          <button
+            v-if="recordedBlob && !isRecording"
+            @click="samplerSoundName = lastCaptureLabel || ''; showSamplerModal = true"
+            title="Send cropped audio to Sampler pad"
+            class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-violet-300 border-violet-500/40 hover:bg-violet-500/15 transition-colors"
+          >
+            <Music2 class="w-3 h-3" /> Sampler
+          </button>
+
           <!-- Loop Pad assignment modal -->
           <Teleport to="body">
             <Transition name="fade">
@@ -2783,6 +2835,74 @@ onUnmounted(() => {
                     </div>
                   </div>
 
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+
+          <!-- Sampler assignment modal -->
+          <Teleport to="body">
+            <Transition name="fade">
+              <div
+                v-if="showSamplerModal"
+                class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[1200] flex items-center justify-center"
+                @click.self="showSamplerModal = false"
+              >
+                <div class="bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl w-[420px] max-w-[95vw] overflow-hidden">
+                  <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-800 bg-neutral-950/60">
+                    <div class="flex items-center gap-2">
+                      <Music2 class="w-4 h-4 text-violet-400" />
+                      <span class="text-sm font-black uppercase tracking-widest text-white">Send to Sampler</span>
+                    </div>
+                    <button @click="showSamplerModal = false" class="text-neutral-500 hover:text-white transition-colors">
+                      <X class="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div class="px-5 py-4 flex flex-col gap-4">
+                    <!-- Sound name -->
+                    <div class="flex flex-col gap-1">
+                      <label class="text-[9px] font-black uppercase tracking-widest text-neutral-500">Name</label>
+                      <input
+                        v-model="samplerSoundName"
+                        type="text"
+                        placeholder="Sample name…"
+                        class="bg-black border border-neutral-700 rounded-lg px-3 py-2 text-[11px] font-mono text-white outline-none focus:border-violet-500"
+                      />
+                    </div>
+
+                    <!-- Pad selector -->
+                    <div class="flex flex-col gap-2">
+                      <label class="text-[9px] font-black uppercase tracking-widest text-neutral-500">Pad</label>
+                      <div class="flex gap-1.5">
+                        <button
+                          v-for="i in 7" :key="i"
+                          @click="selectedSamplerPad = i - 1"
+                          :class="['w-10 h-10 rounded-lg border flex flex-col items-center justify-center text-[10px] font-black transition-all',
+                            selectedSamplerPad === i - 1
+                              ? 'border-violet-400 bg-violet-500/20 text-violet-200'
+                              : 'border-neutral-700 bg-neutral-900 hover:border-violet-500/40 text-neutral-400']"
+                        >
+                          {{ i }}<span v-if="i === 7" class="text-[6px] text-violet-400/50 leading-none">G</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        @click="showSamplerModal = false"
+                        class="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] font-bold uppercase tracking-widest transition-colors"
+                      >Cancel</button>
+                      <button
+                        @click="confirmSamplerAssign"
+                        :disabled="isSendingToSampler"
+                        class="px-4 py-2 rounded-lg bg-violet-500/20 border border-violet-500/40 hover:bg-violet-500/30 text-violet-300 text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                      >
+                        {{ isSendingToSampler ? '…' : `Assign to Pad ${selectedSamplerPad + 1}` }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Transition>

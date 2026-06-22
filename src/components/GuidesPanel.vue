@@ -80,6 +80,7 @@ const CATEGORIES = [
       { id: 'backing-track', label: 'Backing Track Player',       file: 'SYCORE_BACKING_TRACK_PLAYER' },
       { id: 'freesound-browser', label: 'Freesound.org Browser',  file: 'SYCORE_FREESOUND_BROWSER' },
       { id: 'looper',        label: 'Audio Looper',               file: 'SYCORE_LOOPER', badge: 'Beta' },
+      { id: 'sampler',       label: 'Sampler',                    file: 'SYCORE_SAMPLER' },
     ],
   },
 

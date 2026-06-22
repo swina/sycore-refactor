@@ -333,6 +333,34 @@ function confirmLMAssign() {
   pendingLMSlot.value = null; pendingLMBpm.value = ''; pickingLMFor.value = null
 }
 
+// ── Sampler pad assignment ──────────────────────────────────────
+const pickingSamplerFor  = ref(null)
+const pendingSamplerSlot = ref(null)
+const samplerBpmInput    = ref(null)
+
+function openSamplerPicker(sound) {
+  stopPreview()
+  if (pickingSamplerFor.value?.freesoundId === sound.freesoundId) {
+    pickingSamplerFor.value = null; pendingSamplerSlot.value = null; return
+  }
+  pickingSamplerFor.value  = sound
+  pendingSamplerSlot.value = null
+}
+
+async function assignSamplerSlot(padIdx) {
+  if (!pickingSamplerFor.value) return
+  pendingSamplerSlot.value = padIdx
+  const sound = pickingSamplerFor.value
+  if (!isDownloaded(sound.id)) await downloadSound(sound)
+  const blobUrl = await getCachedUrl(sound.id)
+  const track = {
+    id: sound.id, label: sound.label, blobUrl,
+    author: sound.author, duration: sound.duration,
+  }
+  window.dispatchEvent(new CustomEvent('sampler-pad-assign', { detail: { padIdx, track } }))
+  pendingSamplerSlot.value = null; pickingSamplerFor.value = null
+}
+
 // ── Send to AudioCapture ─────────────────────────────────────────
 const capturePickerFor   = ref(null)
 const captureBpm         = ref('')
@@ -839,6 +867,35 @@ onUnmounted(() => {
               </Transition>
             </div>
           </Transition>
+
+          <!-- Sampler pad picker -->
+          <Transition name="fade-down">
+            <div v-if="pickingSamplerFor" class="bg-neutral-950 border border-violet-500/30 rounded-xl p-3 mt-2">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-black uppercase tracking-widest text-violet-400 flex items-center gap-1.5">
+                  <Music2 class="w-3 h-3" /> Assign to Sampler
+                </span>
+                <span class="text-[9px] text-neutral-500 truncate max-w-[200px] italic">{{ pickingSamplerFor.label }}</span>
+                <button @click="pickingSamplerFor = null; pendingSamplerSlot = null" class="text-neutral-600 hover:text-white transition-colors ml-2 shrink-0">
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+              <div class="flex gap-1 mb-1">
+                <button
+                  v-for="i in 7" :key="i"
+                  @click="assignSamplerSlot(i - 1)"
+                  :class="['w-10 h-8 rounded border flex flex-col items-center justify-center transition-all text-[9px]',
+                    pendingSamplerSlot === i - 1
+                      ? 'border-violet-400 bg-violet-500/20 text-violet-200'
+                      : 'border-neutral-700 bg-neutral-900 hover:border-violet-500/50 hover:bg-violet-500/5 text-neutral-400']"
+                  :title="`Assign to Sampler pad ${i}${i === 7 ? ' (Granular)' : ''}`"
+                >
+                  <span class="font-black">{{ i }}</span>
+                  <span v-if="i === 7" class="text-[6px] text-violet-400/50 leading-none">G</span>
+                </button>
+              </div>
+            </div>
+          </Transition>
         </div>
 
         <!-- ── Scrollable results ─────────────────────────────────── -->
@@ -929,6 +986,14 @@ onUnmounted(() => {
                         : 'border-neutral-700 text-neutral-500 hover:border-fuchsia-500/50 hover:text-fuchsia-400']"
                     title="Assign to Samples Machine">
                     <Layers class="w-2.5 h-2.5" /> LM
+                  </button>
+                  <button @click.stop="openSamplerPicker(sound)"
+                    :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                      pickingSamplerFor?.freesoundId === sound.freesoundId
+                        ? 'bg-violet-500/20 border-violet-400/50 text-violet-300'
+                        : 'border-neutral-700 text-neutral-500 hover:border-violet-500/50 hover:text-violet-400']"
+                    title="Assign to Sampler">
+                    <Music2 class="w-2.5 h-2.5" /> Smp
                   </button>
                   <button
                     @click.stop="openCapturePicker(sound)"
@@ -1052,6 +1117,14 @@ onUnmounted(() => {
                       : 'border-neutral-700 text-neutral-500 hover:border-amber-500/50 hover:text-amber-400']"
                   title="Assign to Samples Machine">
                   <Layers class="w-2.5 h-2.5" /> LM
+                </button>
+                <button @click.stop="openSamplerPicker(sound)"
+                  :class="['flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                    pickingSamplerFor?.freesoundId === sound.freesoundId
+                      ? 'bg-violet-500/20 border-violet-400/50 text-violet-300'
+                      : 'border-neutral-700 text-neutral-500 hover:border-violet-500/50 hover:text-violet-400']"
+                  title="Assign to Sampler">
+                  <Music2 class="w-2.5 h-2.5" /> Smp
                 </button>
                 <button
                   @click.stop="openCapturePicker(sound)"

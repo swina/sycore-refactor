@@ -200,6 +200,24 @@ export const useConfigStore = defineStore('config', () => {
             }).catch(err => console.error('[ConfigStore] Migration guides failed', err))
           }
 
+          // Migration: Add sampler button
+          if (!toolbarConfig.value.find(b => b.id === 'sampler')) {
+            console.log('[ConfigStore] Migration: Adding sampler button to toolbar')
+            toolbarConfig.value.push({
+              id: 'sampler',
+              label: 'Sampler',
+              icon: 'Music2',
+              enabled: false,
+              fab: 'settings',
+              toolbar: 'main'
+            })
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData,
+              toolbar: toolbarConfig.value,
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.error('[ConfigStore] Migration sampler failed', err))
+          }
+
           // Migration: Add live-performance-pad button
           if (!toolbarConfig.value.find(b => b.id === 'live-performance-pad')) {
             console.log('[ConfigStore] Migration: Adding live-performance-pad button to toolbar')

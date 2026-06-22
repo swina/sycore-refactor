@@ -63,6 +63,7 @@ const MENU_ACTION_MAP = {
   'live-performance-pad': () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
   'loop-machine':         () => uiStore.isLoopMachineOpen = !uiStore.isLoopMachineOpen,
   'drum-machine':         () => uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen,
+  'sampler':              () => uiStore.isSamplerOpen = !uiStore.isSamplerOpen,
   'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
   'freesound-browser':    () => uiStore.isFreesoundBrowserOpen = !uiStore.isFreesoundBrowserOpen,
   'audio-mixer':          () => uiStore.isAudioMixerOpen = !uiStore.isAudioMixerOpen,

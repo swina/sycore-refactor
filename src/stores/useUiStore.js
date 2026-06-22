@@ -49,6 +49,7 @@ export const useUiStore = defineStore('ui', () => {
   const isFreesoundBrowserOpen   = ref(false)
   const isLoopMachineOpen        = ref(false)
   const isDrumMachineOpen        = ref(false)
+  const isSamplerOpen            = ref(false)
   const isLivePerformancePadOpen = ref(false)
   const isLiveTimelineOpen       = ref(false)
   const isCaptureRecording       = ref(false)
@@ -130,6 +131,7 @@ export const useUiStore = defineStore('ui', () => {
     freesoundBrowser:    () => isFreesoundBrowserOpen.value,
     loopMachine:         () => isLoopMachineOpen.value,
     drumMachine:         () => isDrumMachineOpen.value,
+    sampler:             () => isSamplerOpen.value,
   }
 
   const openModalKeys = computed(() =>
@@ -177,6 +179,7 @@ export const useUiStore = defineStore('ui', () => {
     freesoundBrowser:    isFreesoundBrowserOpen,
     loopMachine:         isLoopMachineOpen,
     drumMachine:         isDrumMachineOpen,
+    sampler:             isSamplerOpen,
   }
 
 
@@ -243,6 +246,7 @@ export const useUiStore = defineStore('ui', () => {
     isGuidesOpen.value             = false
     isLoopMachineOpen.value        = false
     isDrumMachineOpen.value        = false
+    isSamplerOpen.value            = false
     isChordProgOpen.value          = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -305,7 +309,7 @@ export const useUiStore = defineStore('ui', () => {
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
-    isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen,
+    isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab,
     midiActionsActiveTab, midiActionsSelectedDevice,

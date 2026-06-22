@@ -46,6 +46,7 @@ const ACTION_MAP = {
   'live-performance-pad': () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
   'device-program-change':() => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
   'drum-machine':         () => uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen,
+  'sampler':              () => uiStore.isSamplerOpen = !uiStore.isSamplerOpen,
   'audio-mixer':          () => uiStore.isAudioMixerOpen = !uiStore.isAudioMixerOpen,
   'sound-folder-browser': () => uiStore.isSoundFolderBrowserOpen = !uiStore.isSoundFolderBrowserOpen,
 }
