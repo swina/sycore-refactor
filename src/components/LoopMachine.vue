@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, Save, FolderOpen, Trash2, Play } from 'lucide-vue-next'
+import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, Save, FolderOpen, Trash2, Play, Search } from 'lucide-vue-next'
 import { useUiStore }              from '@/stores/useUiStore'
 import { useMidiStore }            from '@/stores/useMidiStore'
 import { useDrumMachineStore }     from '@/stores/useDrumMachineStore'
@@ -177,6 +177,21 @@ function loadPreset(preset) {
   syncEnabled.value = preset.syncEnabled ?? true
   lmRecSync.value   = preset.lmRecSync   ?? false
   _savePads()
+}
+
+function overwritePreset(id) {
+  const idx = lmPresets.value.findIndex(p => p.id === id)
+  if (idx < 0) return
+  lmPresets.value[idx] = {
+    ...lmPresets.value[idx],
+    pads: JSON.parse(JSON.stringify(pads.value)),
+    padVolumes: [...padVolumes.value],
+    fadeOutMs: fadeOutMs.value,
+    syncEnabled: syncEnabled.value,
+    lmRecSync: lmRecSync.value,
+    savedAt: new Date().toISOString(),
+  }
+  try { localStorage.setItem(userKey(LS_PRESETS), JSON.stringify(lmPresets.value)) } catch {}
 }
 
 function deletePreset(id) {
@@ -704,7 +719,7 @@ onUnmounted(() => {
 
         <div class="flex items-center gap-2 pointer-events-auto">
           <!-- Sync toggle -->
-          <div class="relative">
+          <!-- <div class="relative">
             <button
               @mousedown.stop
               @click="syncEnabled = !syncEnabled"
@@ -719,10 +734,10 @@ onUnmounted(() => {
               Sync {{ syncEnabled ? 'ON' : 'OFF' }}
             </button>
             <span v-if="mappingStore.learningParamName === 'lm_sync'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
-          </div>
+          </div> -->
 
           <!-- Sync REC toggle -->
-          <div class="relative">
+          <!-- <div class="relative">
             <button
               @mousedown.stop
               @click="lmRecSync = !lmRecSync"
@@ -737,10 +752,10 @@ onUnmounted(() => {
               REC SYNC
             </button>
             <span v-if="mappingStore.learningParamName === 'lm_rec_sync'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
-          </div>
+          </div> -->
 
           <!-- Manual REC button -->
-          <div class="relative">
+          <!-- <div class="relative">
             <button
               @mousedown.stop
               @click="uiStore.isCaptureRecording ? manualStopRec() : manualStartRec()"
@@ -755,10 +770,10 @@ onUnmounted(() => {
               {{ uiStore.isCaptureRecording ? 'Stop' : 'Rec' }}
             </button>
             <span v-if="mappingStore.learningParamName === 'lm_rec'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
-          </div>
+          </div> -->
 
           <!-- Stop all -->
-          <div class="flex items-center gap-1">
+          <!-- <div class="flex items-center gap-1">
             <div class="relative">
               <button
                 @mousedown.stop
@@ -772,7 +787,18 @@ onUnmounted(() => {
               </button>
               <span v-if="mappingStore.learningParamName === 'lm_stop_all'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
             </div>
-          </div>
+          </div> -->
+
+          <!-- Freesound browser -->
+          <button
+            @mousedown.stop
+            @click="uiStore.isFreesoundBrowserOpen = true"
+            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-cyan-500/40 hover:text-cyan-400 text-[9px] font-black uppercase tracking-widest transition-all"
+            title="Browse Freesound"
+          >
+            <Search class="w-3 h-3" />
+            Freesound
+          </button>
 
           <!-- Presets toggle -->
           <button
@@ -841,6 +867,14 @@ onUnmounted(() => {
                   :title="`Load: ${preset.name} · saved ${new Date(preset.savedAt).toLocaleString()}`"
                 >
                   {{ preset.name }}
+                </button>
+                <button
+                  @mousedown.stop
+                  @click="overwritePreset(preset.id)"
+                  class="px-1 h-6 text-neutral-600 hover:text-sky-400 hover:bg-sky-500/10 transition-all border-l border-neutral-800"
+                  title="Overwrite with current state"
+                >
+                  <Save class="w-2.5 h-2.5" />
                 </button>
                 <button
                   @mousedown.stop
@@ -1094,7 +1128,7 @@ onUnmounted(() => {
           </div>
 
           <!-- 24 sliders (always shown) -->
-          <div class="flex-1 overflow-y-auto px-2 py-1.5 space-y-0.5">
+          <div class="flex-1 overflow-y-auto custom-scrollbar px-2 py-1.5 space-y-0.5">
             <div
               v-for="(pad, idx) in pads"
               :key="'vol-' + idx"
@@ -1206,16 +1240,108 @@ onUnmounted(() => {
 
       </div>
 
-      <!-- Footer -->
-      <div class="shrink-0 px-4 py-1.5 border-t border-neutral-800/60 bg-neutral-950/40 flex items-center gap-3">
-        <span class="text-[9px] text-neutral-700 font-mono">
-          Click empty pad to browse folder · Right-click to MIDI learn · Assign from Freesound with <span class="text-fuchsia-500/70">LM</span>
-        </span>
-        <span v-if="lmUseSessionBpm" class="ml-auto text-[9px] font-mono text-sky-500/70 flex items-center gap-1">
+      <div class="flex items-center justify-left gap-2 px-4 py-1.5 border-t border-neutral-800/60 bg-neutral-950/40">
+        <!-- Sync toggle -->
+          <div class="relative">
+            <button
+              @mousedown.stop
+              @click="syncEnabled = !syncEnabled"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_sync', label: 'Samples Machine: Sync' })"
+              :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+                syncEnabled
+                  ? 'bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-300'
+                  : 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300']"
+              title="Sync: new pads start at master loop boundary"
+            >
+              <Clock class="w-3 h-3" />
+              Sync {{ syncEnabled ? 'ON' : 'OFF' }}
+            </button>
+            <span v-if="mappingStore.learningParamName === 'lm_sync'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
+
+          <!-- Sync REC toggle -->
+          <div class="relative">
+            <button
+              @mousedown.stop
+              @click="lmRecSync = !lmRecSync"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_rec_sync', label: 'Samples Machine: Rec Sync' })"
+              :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+                lmRecSync
+                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+                  : 'border-neutral-700 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300']"
+              title="Auto-start Audio Capture recording when first pad fires; auto-stop on Stop All"
+            >
+              <Circle class="w-3 h-3" :class="lmRecSync && uiStore.isCaptureRecording ? 'fill-rose-400 text-rose-400 animate-pulse' : ''" />
+              REC SYNC
+            </button>
+            <span v-if="mappingStore.learningParamName === 'lm_rec_sync'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
+
+          <!-- Manual REC button -->
+          <div class="relative">
+            <button
+              @mousedown.stop
+              @click="uiStore.isCaptureRecording ? manualStopRec() : manualStartRec()"
+              @contextmenu.prevent="openMenu($event, { name: 'lm_rec', label: 'Samples Machine: Rec / Stop Rec' })"
+              :class="['flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
+                uiStore.isCaptureRecording
+                  ? 'bg-rose-500/20 border-rose-400/60 text-rose-300 animate-pulse'
+                  : 'border-neutral-700 text-neutral-500 hover:border-rose-500/50 hover:text-rose-400']"
+              :title="uiStore.isCaptureRecording ? 'Stop Capture recording' : 'Start Capture recording now'"
+            >
+              <Circle class="w-2.5 h-2.5" :class="uiStore.isCaptureRecording ? 'fill-rose-400' : ''" />
+              {{ uiStore.isCaptureRecording ? 'Stop' : 'Rec' }}
+            </button>
+            <span v-if="mappingStore.learningParamName === 'lm_rec'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
+
+          <!-- Stop all -->
+          <div class="flex items-center gap-1">
+            <div class="relative">
+              <button
+                @mousedown.stop
+                @click="stopAll"
+                @contextmenu.prevent="openMenu($event, { name: 'lm_stop_all', label: 'Samples Machine: Stop All' })"
+                :disabled="!active.some(Boolean) && !pending.some(Boolean)"
+                class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-red-500/50 hover:text-red-400 text-[9px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
+                title="Stop all loops"
+              >
+                <Square class="w-3 h-3 fill-current" /> Stop All
+              </button>
+              <span v-if="mappingStore.learningParamName === 'lm_stop_all'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+            </div>
+          </div>
+          <label
+              class="flex items-center ml-auto gap-1.5 cursor-pointer select-none"
+              title="Time-stretch all loops with known BPM to match the session tempo"
+            >
+              <input
+                type="checkbox"
+                v-model="lmUseSessionBpm"
+                @mousedown.stop @click.stop
+                class="accent-sky-400 w-3 h-3 shrink-0"
+              />
+              <span
+                class="text-[11px] font-mono uppercase tracking-widest transition-colors"
+                :class="lmUseSessionBpm ? 'text-sky-400' : 'text-neutral-600'"
+              >Session BPM</span>
+          </label>
+          <span v-if="lmUseSessionBpm" class="text-[11px] font-mono text-sky-500/70 flex items-center gap-1">
           <span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0" />
           ×{{ midiStore.currentBpm }}bpm · playback rate applied
         </span>
       </div>
+      <!-- Footer -->
+      <!-- <div class="shrink-0 px-4 py-1.5 border-t border-neutral-800/60 bg-neutral-950/40 flex items-center gap-3">
+        
+        <span class="text-[9px] text-neutral-700 font-mono">
+          Click empty pad to browse folder · Right-click to MIDI learn · Assign from Freesound with <span class="text-fuchsia-500/70">LM</span>
+        </span> -->
+        <!-- <span v-if="lmUseSessionBpm" class="ml-auto text-[9px] font-mono text-sky-500/70 flex items-center gap-1">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0" />
+          ×{{ midiStore.currentBpm }}bpm · playback rate applied
+        </span> -->
+      <!-- </div> -->
     </div>
   </Transition>
 

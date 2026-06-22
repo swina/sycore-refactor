@@ -1,8 +1,9 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import {
   Search, Play, Pause, Plus, Loader2, Music2,
-  ChevronLeft, ChevronRight, Repeat, BadgeCheck, X,
+  ChevronLeft, ChevronRight, Repeat, BadgeCheck, X, Minus,
   Download, HardDrive, Trash2, FileAudio, KeyRound, DatabaseZap,
   Tag, ChevronDown, Layers, Info, Activity, Shuffle, Star,
 } from 'lucide-vue-next'
@@ -318,17 +319,20 @@ function selectLMSlot(padIdx) {
   nextTick(() => lmBpmInput.value?.focus())
 }
 
-function confirmLMAssign() {
+async function confirmLMAssign() {
   if (pendingLMSlot.value == null || !pickingLMFor.value) return
-  const bpm   = pendingLMBpm.value !== '' ? Number(pendingLMBpm.value) : undefined
+  const sound  = pickingLMFor.value
+  const padIdx = pendingLMSlot.value
+  const bpm    = pendingLMBpm.value !== '' ? Number(pendingLMBpm.value) : undefined
+  if (!isDownloaded(sound.id)) await downloadSound(sound)
+  const url = await getCachedUrl(sound.id) || sound.url
   const track = {
-    id: pickingLMFor.value.id, label: pickingLMFor.value.label,
-    url: pickingLMFor.value.url, author: pickingLMFor.value.author,
-    duration: pickingLMFor.value.duration, ...(bpm ? { bpm } : {}),
+    id: sound.id, label: sound.label, url,
+    author: sound.author, duration: sound.duration, ...(bpm ? { bpm } : {}),
   }
-  window.dispatchEvent(new CustomEvent('loop-machine-assign', { detail: { padIdx: pendingLMSlot.value, track } }))
+  window.dispatchEvent(new CustomEvent('loop-machine-assign', { detail: { padIdx, track } }))
   const updated = [...lmPadsSnapshot.value]
-  updated[pendingLMSlot.value] = track
+  updated[padIdx] = track
   lmPadsSnapshot.value = updated
   pendingLMSlot.value = null; pendingLMBpm.value = ''; pickingLMFor.value = null
 }
@@ -446,63 +450,18 @@ async function confirmCaptureAndSend() {
 }
 
 // ── Drag & resize ─────────────────────────────────────────────────
-const MIN_W = 420
-const MIN_H = 320
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
+  useDraggableResizable({
+    storageKey:    'S1_FREESOUND_BROWSER',
+    minimizeLabel: 'Freesound',
+    initialWidth:  700,
+    initialHeight: 620,
+    minWidth:      420,
+    minHeight:     320,
+    zIndex:        300,
+  })
 
-const pos  = ref({ x: 0, y: 0 })
-const size = ref({ w: 700, h: 620 })
-
-let dragging = false
-let resizing = false
-let dragOffset  = { x: 0, y: 0 }
-let resizeStart = { mx: 0, my: 0, w: 0, h: 0 }
-
-function center() {
-  pos.value = {
-    x: Math.max(0, (window.innerWidth  - size.value.w) / 2),
-    y: Math.max(0, (window.innerHeight - size.value.h) / 2),
-  }
-}
-
-watch(() => uiStore.isFreesoundBrowserOpen, (open) => { if (open) center() })
-
-function startDrag(e) {
-  if (e.button !== 0) return
-  dragging   = true
-  dragOffset = { x: e.clientX - pos.value.x, y: e.clientY - pos.value.y }
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup',  onMouseUp)
-}
-
-function startResize(e) {
-  if (e.button !== 0) return
-  e.preventDefault()
-  resizing    = true
-  resizeStart = { mx: e.clientX, my: e.clientY, w: size.value.w, h: size.value.h }
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup',  onMouseUp)
-}
-
-function onMouseMove(e) {
-  if (dragging) {
-    pos.value = {
-      x: Math.max(0, Math.min(window.innerWidth  - size.value.w, e.clientX - dragOffset.x)),
-      y: Math.max(0, Math.min(window.innerHeight - size.value.h, e.clientY - dragOffset.y)),
-    }
-  }
-  if (resizing) {
-    size.value = {
-      w: Math.min(Math.max(MIN_W, resizeStart.w + e.clientX - resizeStart.mx), window.innerWidth  - pos.value.x),
-      h: Math.min(Math.max(MIN_H, resizeStart.h + e.clientY - resizeStart.my), window.innerHeight - pos.value.y),
-    }
-  }
-}
-
-function onMouseUp() {
-  dragging = false; resizing = false
-  document.removeEventListener('mousemove', onMouseMove)
-  document.removeEventListener('mouseup',  onMouseUp)
-}
+watch(() => uiStore.isFreesoundBrowserOpen, (open) => { if (open) bringToFront() })
 
 // ── ESC to close ──────────────────────────────────────────────────
 function onKeydown(e) {
@@ -513,8 +472,6 @@ function onKeydown(e) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => {
   previewAudio.pause(); previewAudio.src = ''
-  document.removeEventListener('mousemove', onMouseMove)
-  document.removeEventListener('mouseup',  onMouseUp)
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
@@ -523,9 +480,9 @@ onUnmounted(() => {
   <Teleport to="body">
       <!-- Dialog shell — no backdrop so AudioCapture remains interactive beneath -->
       <div
-        v-if="uiStore.isFreesoundBrowserOpen"
+        v-show="uiStore.isFreesoundBrowserOpen && !isMinimized"
         class="fixed flex flex-col bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
-        :style="{ left: pos.x + 'px', top: pos.y + 'px', width: size.w + 'px', height: size.h + 'px', zIndex: 600 }"
+        :style="panelStyle"
       >
 
         <!-- ── Capture busy overlay ─────────────────────────────────── -->
@@ -544,7 +501,7 @@ onUnmounted(() => {
 
         <!-- ── Header / drag handle ───────────────────────────────── -->
         <div
-          @mousedown="startDrag"
+          @mousedown="onDragStart"
           class="shrink-0 flex items-center justify-between px-5 py-3 border-b border-neutral-800 bg-neutral-950/60 cursor-grab active:cursor-grabbing select-none"
         >
           <div class="flex items-center gap-3 pointer-events-none">
@@ -556,13 +513,23 @@ onUnmounted(() => {
               <p class="text-[9px] font-mono text-cyan-500/60 uppercase tracking-widest leading-none mt-0.5">Browse · Preview · Add to Playlist or Loop Pad</p>
             </div>
           </div>
-          <button
-            @click="uiStore.isFreesoundBrowserOpen = false"
-            @mousedown.stop
-            class="ml-3 shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
-          >
-            <X class="w-4 h-4" />
-          </button>
+          <div class="flex items-center gap-1 ml-3">
+            <button
+              @click="toggleMinimize"
+              @mousedown.stop
+              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-yellow-400 transition-colors"
+              title="Minimize"
+            >
+              <Minus class="w-4 h-4" />
+            </button>
+            <button
+              @click="uiStore.isFreesoundBrowserOpen = false"
+              @mousedown.stop
+              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <!-- ── No API key gate ───────────────────────────────────── -->
@@ -1357,7 +1324,7 @@ onUnmounted(() => {
 
         <!-- ── Resize handle (SE corner) ──────────────────────────── -->
         <div
-          @mousedown="startResize"
+          @mousedown="e => onResizeStart(e, 'se')"
           class="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-end justify-end p-1.5 select-none"
           title="Resize"
         >
