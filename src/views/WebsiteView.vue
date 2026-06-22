@@ -5,7 +5,7 @@ import {
   Database, Wifi, ArrowRight, Check, Sparkles, Network, Disc3, Play,
   SlidersHorizontal, Repeat, Gauge, Workflow, Infinity as InfinityIcon,
   Search, Download, MonitorSmartphone, GitBranch, Menu, X,
-  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform
+  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum
 } from 'lucide-vue-next'
 
 const isMobileNavOpen = ref(false)
@@ -170,6 +170,13 @@ const liveTools = [
     tag: 'Beta',
     img: '/help/guides/sycore-looper.png',
     text: 'A sample-accurate 8-track looper with BPM-aligned recording, MIDI-triggered hands-free capture, autosync, autolimiting, a touch-optimized mixer, and one-tap rendering into your playlist.',
+  },
+  {
+    icon: Drum,
+    title: 'Drum Machine',
+    tag: 'Rhythm',
+    img: '/help/guides/sycore-drum-machine.png',
+    text: 'An 8-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, 8-slot pattern chain with BPM-synced sequential playback, and full preset save/load with per-preset tempo.',
   },
 ]
 
