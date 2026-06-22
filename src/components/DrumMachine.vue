@@ -52,7 +52,7 @@ let _toastTimer    = null
 let _fxToastTimer  = null
 
 function overwritePresetWithToast(id) {
-  drumStore.overwritePreset(id)
+  drumStore.overwritePreset(id, _chainExtra())
   presetSavedToast.value = true
   clearTimeout(_toastTimer)
   _toastTimer = setTimeout(() => { presetSavedToast.value = false }, 2000)
@@ -161,12 +161,31 @@ function _scheduleCallback(time) {
 
   // ── Bar boundary (step 0): pending sequence swap + fill auto-stop ──
   if (globalStep === 0) {
-    if (_pendingSequence !== null) {
+    if (_pendingStop) {
+      _pendingStop = false
+      getDraw().schedule(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
+      return
+    }
+    if (chainEnabled.value) {
+      const activeSlots = chain.value.reduce((acc, s, i) => { if (s) acc.push({ s, i }); return acc }, [])
+      if (activeSlots.length > 0) {
+        _chainSlotIdx = (_chainSlotIdx + 1) % activeSlots.length
+        drumStore.swapSequence(activeSlots[_chainSlotIdx].s)
+        _pendingSequence = null
+        playStateRef.current = buildPlayState()
+        state = playStateRef.current
+        getDraw().schedule(() => { pendingSequence.value = null; chainSlotRef.value = _chainSlotIdx }, time)
+      }
+    } else if (_pendingSequence !== null) {
       drumStore.swapSequence(_pendingSequence)
       _pendingSequence = null
       playStateRef.current = buildPlayState()
       state = playStateRef.current
       getDraw().schedule(() => { pendingSequence.value = null }, time)
+    }
+    _measureCount++
+    if (autofillEnabled.value && _measureCount % autofillEvery.value === 0) {
+      getDraw().schedule(() => { generateFill(); triggerFill() }, time)
     }
     if (_fillAutoStop) {
       _fillAutoStop = false
@@ -260,6 +279,9 @@ watch(() => drumStore.isPlaying, (playing) => {
     getTransport().stop()
     stepCounter = 0
     drumStore.currentStep = -1
+    chainSlotRef.value = -1
+    _pendingStop = false
+    pendingStop.value = false
     // Cancel any pending or active rec sync
     if (_recSyncRecording) {
       window.dispatchEvent(new CustomEvent('capture-stop-rec'))
@@ -273,6 +295,9 @@ watch(() => drumStore.isPlaying, (playing) => {
   }
 
   stepCounter = 0
+  _chainSlotIdx = -1
+  _measureCount = 0
+  chainSlotRef.value = -1
 
   toneStart().then(() => {
     getTransport().bpm.value = drumStore.bpm
@@ -438,13 +463,28 @@ function previewPad(trackIdx) {
 }
 
 // ── Preset save / load ────────────────────────────────────────────────────────
+function _chainExtra() {
+  return {
+    chain:            [...chain.value],
+    autofillEnabled:  autofillEnabled.value,
+    autofillEvery:    autofillEvery.value,
+    generatedStyle:   selectedStyle.value,
+    bpm:              drumStore.bpm,
+  }
+}
+
 function handleSavePreset() {
-  drumStore.savePreset(newPresetName.value)
+  drumStore.savePreset(newPresetName.value, _chainExtra())
   newPresetName.value = ''
 }
 
 async function handleLoadPreset(preset) {
   drumStore.loadPreset(preset)
+  chain.value           = preset.chain?.length === 8 ? [...preset.chain] : Array(8).fill(null)
+  autofillEnabled.value = preset.autofillEnabled ?? false
+  autofillEvery.value   = preset.autofillEvery   ?? 4
+  if (preset.generatedStyle) selectedStyle.value = preset.generatedStyle
+  if (preset.bpm)           arpStore.arpBpm = preset.bpm
   showPresets.value = false
   await nextTick()
   await loadAllSamples(drumStore.currentPattern)
@@ -486,29 +526,83 @@ function saveFillToPattern() {
 }
 
 function generateFill() {
-  const rnd = (lo, hi) => Math.floor(Math.random() * (hi - lo + 1)) + lo
+  const r    = Math.random
+  const rnd  = (lo, hi) => Math.floor(r() * (hi - lo + 1)) + lo
+  const pick = (...args) => args[Math.floor(r() * args.length)]
   const hit  = (vel) => ({ active: true, velocity: vel, accent: false, ratchet: 1 })
   const hitA = (vel) => ({ active: true, velocity: vel, accent: true,  ratchet: 1 })
-  const off  = () => ({ active: false, velocity: 100, accent: false, ratchet: 1 })
+  const off  = ()    => ({ active: false, velocity: 100, accent: false, ratchet: 1 })
+  const fp   = Array(8).fill(null).map(() => Array(16).fill(null).map(off))
 
-  const fp = Array(8).fill(null).map(() => Array(16).fill(null).map(off))
+  const archetype = rnd(0, 5)
 
-  fp[0][0]  = hitA(rnd(100, 127))      // kick on 1
-  fp[0][8]  = hit(rnd(80, 110))         // kick on 3
-  fp[1][4]  = hit(rnd(90, 115))         // snare on 2
-  fp[1][12] = hit(rnd(90, 115))         // snare on 4
-  fp[1][13] = hit(rnd(80, 110))         // snare +1
-  fp[1][14] = hit(rnd(90, 120))         // snare +2
-  fp[1][15] = hitA(127)                  // accented final snare
-  for (let s = 0; s < 8; s += 2)
-    fp[2][s] = hit(rnd(50, 72))          // CHH 8th notes first half
-  fp[5][8]  = hit(rnd(85, 110))          // tom1
-  fp[5][10] = hit(rnd(85, 110))
-  fp[6][11] = hit(rnd(85, 110))          // tom2
-  fp[6][13] = hit(rnd(90, 115))
-  fp[7][15] = hitA(rnd(100, 127))        // cymbal crash
-  if (Math.random() > 0.5) fp[1][11] = hit(rnd(55, 78)) // ghost snare before roll
-  if (Math.random() > 0.5) fp[5][14] = hit(rnd(80, 105))
+  if (archetype === 0) {
+    // Snare roll — density builds toward end, crash on 16
+    const density = pick(4, 6, 8) // how many snare hits
+    const pool = [8,9,10,11,12,13,14,15]
+    pool.sort(() => r() - 0.5)
+    pool.slice(0, density).sort((a,b)=>a-b).forEach((s, i) =>
+      fp[1][s] = i === density - 1 ? hitA(127) : hit(rnd(70 + i * 7, 100 + i * 4))
+    )
+    fp[0][0] = hitA(rnd(100, 120))
+    if (r() > 0.4) fp[0][pick(2,4)] = hit(rnd(80, 100))
+    fp[7][15] = hitA(rnd(105, 127))
+
+  } else if (archetype === 1) {
+    // Tom cascade — toms roll across the bar
+    const pairs = pick(
+      [[5,4],[5,6],[5,8],[6,9],[6,11],[7,14]],
+      [[5,2],[5,5],[6,8],[6,10],[6,12],[7,15]],
+      [[5,0],[5,3],[6,6],[6,9],[5,11],[6,13],[7,15]]
+    )
+    pairs.forEach(([t, s]) => fp[t][s] = hit(rnd(85, 115)))
+    fp[7][15] = hitA(rnd(100, 127))
+    fp[0][0]  = hit(rnd(90, 110))
+    if (r() > 0.5) fp[1][pick(4,8,12)] = hit(rnd(80, 105))
+
+  } else if (archetype === 2) {
+    // Kick frenzy — busy syncopated kick + accent snare on 4
+    const kicks = pick([0,3,5,7,9,12],[0,2,6,9,11,14],[0,4,6,8,10,13,15])
+    kicks.forEach(s => fp[0][s] = s === 0 ? hitA(rnd(105,127)) : hit(rnd(75,105)))
+    fp[1][12] = hitA(rnd(100, 120))
+    fp[1][15] = hit(rnd(90, 115))
+    for (let s = 0; s < 16; s += 2) if (r() > 0.4) fp[2][s] = hit(rnd(45, 70))
+    fp[7][15] = hitA(rnd(100, 127))
+
+  } else if (archetype === 3) {
+    // HH frenzy — 16th hats driving, open hat stabs
+    for (let s = 0; s < 16; s++) fp[2][s] = hit(rnd(55 + (s > 7 ? 15 : 0), 90 + (s > 11 ? 20 : 0)))
+    const opens = pick([3,7,15],[7,11,15],[5,10,15],[7,15])
+    opens.forEach(s => { fp[2][s] = off(); fp[3][s] = hitA(rnd(90, 120)) })
+    fp[0][0] = hitA(rnd(100, 120))
+    if (r() > 0.5) fp[0][pick(8,9,10)] = hit(rnd(75, 100))
+    fp[1][pick(12,13,14)] = hitA(rnd(95, 120))
+    fp[7][15] = hitA(rnd(105, 127))
+
+  } else if (archetype === 4) {
+    // Broken/syncopated — ghost snares + clap + scattered kick
+    const ghosts = pick([1,3,5,9,11,13],[2,5,7,10,13],[1,4,7,9,12,14])
+    ghosts.forEach(s => fp[1][s] = hit(rnd(35, 58)))
+    fp[1][pick(12,13,14)] = hitA(rnd(100, 120))
+    fp[1][15] = hitA(127)
+    fp[0][0]  = hitA(rnd(100, 120))
+    if (r() > 0.4) fp[0][pick(6,7,9,10)] = hit(rnd(70, 95))
+    fp[4][pick(4,8)] = hit(rnd(85, 110))
+    fp[3][pick(7,11,15)] = hit(rnd(80, 105))
+    fp[7][15] = hitA(rnd(100, 127))
+
+  } else {
+    // Crash & build — sparse start, dense finish, big crash
+    const snStart = pick(8, 9, 10)
+    for (let s = snStart; s < 16; s++) fp[1][s] = s < 15 ? hit(rnd(60 + (s-snStart)*8, 95 + (s-snStart)*3)) : hitA(127)
+    fp[0][0]  = hitA(rnd(100, 120))
+    fp[0][8]  = hit(rnd(85, 110))
+    fp[5][pick(10,11,12)] = hit(rnd(85, 110))
+    fp[6][pick(12,13,14)] = hit(rnd(90, 115))
+    fp[7][0]  = hit(rnd(70, 90))
+    fp[7][15] = hitA(127)
+    for (let s = 2; s < snStart; s += 2) if (r() > 0.5) fp[2][s] = hit(rnd(45, 68))
+  }
 
   fillPattern.value = fp
 }
@@ -572,6 +666,39 @@ function stepClass(step, stepIdx, isCurrentStep, trackLength) {
 }
 
 const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
+
+// ── Pattern chain ───────────────────────────────────────────────────────────────
+const showChain      = ref(false)
+const chainEnabled   = ref(false)
+const chain          = ref(Array(8).fill(null))
+const chainSlotRef   = ref(-1)
+let _chainSlotIdx    = -1
+
+const autofillEnabled = ref(false)
+const autofillEvery   = ref(4)
+let _measureCount     = 0
+
+const stopAtEnd    = ref(false)
+const endWithFill  = ref(false)
+const pendingStop  = ref(false)
+let   _pendingStop = false
+
+function handlePlayStop() {
+  if (!drumStore.isPlaying) { drumStore.isPlaying = true; return }
+  if (_pendingStop) { _pendingStop = false; pendingStop.value = false; drumStore.isPlaying = false; return }
+  if (stopAtEnd.value) {
+    _pendingStop = true
+    pendingStop.value = true
+    if (endWithFill.value) { generateFill(); triggerFill() }
+  } else {
+    drumStore.isPlaying = false
+  }
+}
+
+function cycleChainSlot(i) {
+  const order = [null, 'A', 'B', 'C', 'D', 'E', 'F']
+  chain.value[i] = order[(order.indexOf(chain.value[i]) + 1) % order.length]
+}
 </script>
 
 <template>
@@ -1099,21 +1226,58 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
           <span class="text-[8px] font-mono uppercase tracking-widest text-neutral-400">Sync Retrig</span>
         </label>
 
+        <!-- Chain ON -->
+        <label class="flex items-center gap-1 mb-2 cursor-pointer select-none" title="Enable chain playback">
+          <input type="checkbox" v-model="chainEnabled" class="w-3 h-3 accent-sky-500 cursor-pointer" />
+          <span class="text-[8px] font-mono uppercase tracking-widest" :class="chainEnabled ? 'text-sky-400' : 'text-neutral-500'">Chain ON</span>
+        </label>
+
+        <!-- Autofill -->
+        <label class="flex items-center gap-1 mb-2 cursor-pointer select-none" title="Auto-generate and trigger a fill every N measures">
+          <input type="checkbox" v-model="autofillEnabled" class="w-3 h-3 accent-cyan-500 cursor-pointer" />
+          <span class="text-[8px] font-mono uppercase tracking-widest" :class="autofillEnabled ? 'text-cyan-400' : 'text-neutral-500'">Autofill</span>
+          <input
+            type="number"
+            v-model.number="autofillEvery"
+            min="1" max="128"
+            @change="autofillEvery = Math.max(1, Math.min(128, autofillEvery || 1))"
+            class="w-8 text-center text-[9px] font-bold bg-neutral-800 border border-neutral-700 rounded px-0.5 py-0.5 ml-1 text-neutral-400 focus:outline-none focus:border-cyan-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+            title="Trigger fill every N measures"
+          />
+        </label>
+
+        <!-- Chain panel toggle -->
+        <button
+          @click.stop="showChain = !showChain"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 mb-2 rounded-lg border text-[10px] font-bold transition-colors',
+            showChain || chainEnabled
+              ? 'bg-sky-600/30 border-sky-500 text-sky-300'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-sky-500 hover:text-sky-300'
+          ]"
+          title="Pattern chain"
+        >
+          <Layers class="w-2.5 h-2.5" />
+          Chain
+        </button>
+
         <!-- Play / Stop -->
-        <div class="relative ml-3">
+        <div class="relative ml-3 mb-2">
           <button
-            @click.stop="drumStore.isPlaying = !drumStore.isPlaying"
+            @click.stop="handlePlayStop"
             @contextmenu.prevent="openMenu($event, { name: 'dm_play_stop', label: 'Drum Machine: Play/Stop' })"
             :class="[
               'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-colors',
-              drumStore.isPlaying
-                ? 'bg-red-600/30 border-red-500 text-red-300 hover:bg-red-600/50'
-                : 'bg-purple-600/20 border-purple-500 text-purple-300 hover:bg-purple-600/40'
+              pendingStop
+                ? 'bg-orange-600/30 border-orange-400 text-orange-300 animate-pulse hover:bg-orange-600/50'
+                : drumStore.isPlaying
+                  ? 'bg-red-600/30 border-red-500 text-red-300 hover:bg-red-600/50'
+                  : 'bg-purple-600/20 border-purple-500 text-purple-300 hover:bg-purple-600/40'
             ]"
           >
             <Square v-if="drumStore.isPlaying" class="w-2.5 h-2.5" />
             <Play v-else class="w-2.5 h-2.5" />
-            <span>{{ drumStore.isPlaying ? 'STOP' : 'PLAY' }}</span>
+            <span>{{ pendingStop ? 'ENDING…' : drumStore.isPlaying ? 'STOP' : 'PLAY' }}</span>
           </button>
           <span
             v-if="mappingStore.learningParamName === 'dm_play_stop'"
@@ -1121,8 +1285,20 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
           />
         </div>
 
+        <!-- Stop at end options -->
+        <div class="flex flex-col gap-0.5 mb-2">
+          <label class="flex items-center gap-1 cursor-pointer select-none" title="Let the current pattern finish before stopping">
+            <input type="checkbox" v-model="stopAtEnd" class="w-3 h-3 accent-red-500 cursor-pointer" />
+            <span class="text-[8px] font-mono uppercase tracking-widest" :class="stopAtEnd ? 'text-red-400' : 'text-neutral-500'">Stop@end</span>
+          </label>
+          <label v-if="stopAtEnd" class="flex items-center gap-1 cursor-pointer select-none" title="Play a fill on the last bar before stopping">
+            <input type="checkbox" v-model="endWithFill" class="w-3 h-3 accent-cyan-500 cursor-pointer" />
+            <span class="text-[8px] font-mono uppercase tracking-widest" :class="endWithFill ? 'text-cyan-400' : 'text-neutral-500'">+Fill</span>
+          </label>
+        </div>
+
         <!-- REC SYNC -->
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 mb-2">
           <button
             @click.stop="toggleRecSync"
             :class="[
@@ -1156,6 +1332,36 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
         >{{ drumStore.currentPresetName }}</span>
 
       </div>
+
+      <!-- ── Chain row ─────────────────────────────────────────────────────── -->
+      <div v-if="showChain" class="shrink-0 flex items-center gap-2 px-3 py-1.5 border-t border-neutral-800 bg-neutral-900/60">
+        <div class="flex gap-1">
+          <button
+            v-for="(slot, i) in chain"
+            :key="i"
+            @click.stop="cycleChainSlot(i)"
+            @contextmenu.prevent="chain[i] = null"
+            :class="[
+              'w-7 h-6 rounded border text-[10px] font-black transition-colors',
+              chainEnabled && chainSlotRef === i && drumStore.isPlaying
+                ? 'bg-sky-500/40 border-sky-400 text-white ring-1 ring-sky-400'
+                : slot
+                  ? 'bg-sky-900/40 border-sky-700 text-sky-300 hover:border-sky-500'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-600 hover:border-neutral-500 hover:text-neutral-400'
+            ]"
+            :title="'Slot ' + (i + 1) + ': ' + (slot ?? 'empty') + ' — click to cycle, right-click to clear'"
+          >{{ slot ?? '–' }}</button>
+        </div>
+        <button
+          @click.stop="chain = Array(8).fill(null)"
+          class="px-1.5 py-0.5 text-[8px] font-black rounded border border-neutral-700 bg-neutral-800 text-neutral-500 hover:border-red-600 hover:text-red-400 transition-colors shrink-0"
+          title="Clear all chain slots"
+        >CLR</button>
+        <span v-if="chainEnabled && drumStore.isPlaying && chainSlotRef >= 0" class="text-[8px] font-mono text-sky-400 ml-1">
+          slot {{ chainSlotRef + 1 }}
+        </span>
+      </div>
+
       <!-- ── Footer ─────────────────────────────────────────────────────────── -->
       <div class="shrink-0 flex items-center gap-4 px-4 py-2 border-t border-neutral-800 bg-neutral-900/40">
         <!-- Swing -->
