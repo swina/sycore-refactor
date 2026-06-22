@@ -6,7 +6,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import {
-  Radio, Cable, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Layers, Music, Music2, ListMusic, Workflow,
+  Radio, Cable, Cpu, Info, Zap, LayoutGrid, CircleQuestionMark, Drum, Layers, Music, Music2, ListMusic, Workflow,
   Gamepad2, Network, Disc3, RotateCw, Mic, Play, LogIn, X, Presentation, Settings, Infinity, Clock, User, Globe
 } from 'lucide-vue-next'
 import SlideshowModal from '@/components/SlideshowModal.vue'
@@ -190,11 +190,11 @@ function goWorkspace() {
         </div>
 
          <!-- Box 2-2 -->
-        <div @click="uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-midi-knob">
+        <!-- <div @click="uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-midi-knob">
           <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
             <Cable class="w-5 h-5 text-synth-neon" />
             <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Multi Sounds</span>
-          </div>
+          </div> -->
           <!-- <div class="flex-1 flex flex-col items-end justify-center gap-2 p-3">
             <button
               @click="uiStore.isAudioCaptureOpen = true; goWorkspace()"
@@ -204,6 +204,22 @@ function goWorkspace() {
               Open
             </button>
           </div> -->
+        <!-- </div> -->
+
+        <!-- Box 2-3 -->
+        <div class="flex h-1/4 gap-3">
+          <div @click="uiStore.isDrumMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-drum-machine">
+            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+              <Drum class="h-5 w-5 text-synth-neon"/>
+              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Drum Machine</span>            
+            </div>
+          </div>
+          <div @click="uiStore.isLoopMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-loop-machine">
+            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
+              <Infinity class="h-5 w-5 text-synth-neon"/>
+              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Samples Machine</span>            
+            </div>
+          </div>
         </div>
 
         <!-- Box 2-3 -->
@@ -214,10 +230,10 @@ function goWorkspace() {
               <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Tracks</span>            
             </div>
           </div>
-          <div @click="uiStore.isLoopMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-loop-machine">
+          <div @click="uiStore.isLoopMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-midi-knob">
             <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Infinity class="h-5 w-5 text-synth-neon"/>
-              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Samples Machine</span>            
+              <Cable class="w-5 h-5 text-synth-neon" />
+              <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Multi Sounds</span>
             </div>
           </div>
         </div>
