@@ -1,11 +1,13 @@
 <script setup>
 import { computed } from 'vue'
-import { Gamepad2, Music, Layers, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink } from 'lucide-vue-next'
+import { Gamepad2, Music, Layers, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink, Wand2 } from 'lucide-vue-next'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useUiStore } from '@/stores/useUiStore'
 
 const { devices, setDeviceType, removeDevice, clearOffline } = useDeviceRegistry()
 const midiStore = useMidiStore()
+const uiStore   = useUiStore()
 
 const DEVICE_TYPES = [
   { value: 'controller',        label: 'Controller' },
@@ -70,6 +72,11 @@ const sortedDevices = computed(() =>
         {{ devices.filter(d => d.online).length }} online · {{ devices.length }} known
       </span>
       <div class="flex gap-2">
+        <button @click="uiStore.isMidiWizardOpen = true"
+          class="text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-synth-neon/40 text-synth-neon/70 hover:text-synth-neon hover:border-synth-neon transition-colors"
+        >
+          <Wand2 class="w-3 h-3" /> Setup Wizard
+        </button>
         <button @click="midiStore.refreshDevices()"
           class="text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-neutral-700 text-neutral-400 hover:text-emerald-400 hover:border-emerald-700 transition-colors"
         >

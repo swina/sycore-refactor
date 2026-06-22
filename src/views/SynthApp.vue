@@ -69,6 +69,7 @@ import MidiDeviceProgramChangePanel from '@/components/MidiDeviceProgramChangePa
 import LivePerformancePad from '@/components/LivePerformancePad.vue'
 import LoopMachine        from '@/components/LoopMachine.vue'
 import DrumMachine        from '@/components/DrumMachine.vue'
+import MidiWizard         from '@/components/MidiWizard.vue'
 import SamplerPanel       from '@/components/SamplerPanel.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
 import SoundEngine        from '@/components/SoundEngine.vue'
@@ -451,6 +452,8 @@ onMounted(() => {
       <div :style="focusStyle('sampler')">
         <SamplerPanel />
       </div>
+
+      <MidiWizard v-if="uiStore.isMidiWizardOpen" />
 
       <!-- Live Timeline -->
       <div :style="focusStyle('liveTimeline')">
