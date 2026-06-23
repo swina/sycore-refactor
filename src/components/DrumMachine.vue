@@ -719,20 +719,20 @@ function cycleChainSlot(i) {
         <span class="text-[11px] font-black uppercase tracking-widest text-white">Drum Machine</span>
 
         <!-- BPM display -->
-        <span class="ml-2 text-[10px] font-mono text-neutral-400">{{ drumStore.bpm }} BPM</span>
+        <span class="ml-2 text-[12px] font-mono bg-black p-1 rounded-lg px-2 text-synth-neon">{{ drumStore.bpm }} BPM</span>
 
         
 
         
         <!-- Style generator -->
-        <div class="relative ml-2">
+        <div class="relative ml-2 flex items-center gap-1" title="Style generator">
           <button
             @click.stop="showStyleMenu = !showStyleMenu"
-            class="flex items-center gap-1 px-2 py-1 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-300 text-[10px] font-bold hover:border-neutral-500 transition-colors"
+            class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-300 text-[10px] font-bold hover:border-neutral-500 transition-colors"
           >
-            <Zap class="w-2.5 h-2.5 text-amber-400" />
+            <Zap class="w-3.5 h-3.5 text-amber-400" />
             {{ selectedStyle }}
-            <ChevronDown class="w-2.5 h-2.5 ml-0.5" />
+            <ChevronDown class="w-3.5 h-3.5 ml-0.5" />
           </button>
           <div
             v-if="showStyleMenu"
@@ -744,7 +744,7 @@ function cycleChainSlot(i) {
               :key="style"
               @click="selectedStyle = style; showStyleMenu = false"
               :class="[
-                'block w-full text-left px-3 py-1.5 text-[10px] font-bold transition-colors',
+                'block w-full text-left px-3 py-2 text-[11px] font-bold transition-colors',
                 selectedStyle === style
                   ? 'bg-purple-600/30 text-purple-300'
                   : 'text-neutral-300 hover:bg-neutral-800'
@@ -764,12 +764,12 @@ function cycleChainSlot(i) {
             ]"
             title="When active, Generate writes to Fill pattern instead of sequence"
           >→Fill</button> -->
-          <div class="relative">
+          <div class="relative -mt-0.5">
             <button
               @click.stop="generatePattern"
               @contextmenu.prevent="openMenu($event, { name: 'dm_generate', label: 'Drum Machine: Generate' })"
               :class="[
-                'px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-colors',
+                'px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors',
                 generateAsFill
                   ? 'border-cyan-500 bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/40'
                   : 'border-amber-600 bg-amber-600/20 text-amber-300 hover:bg-amber-600/40'
@@ -1227,39 +1227,51 @@ function cycleChainSlot(i) {
         </label>
 
         <!-- Chain ON -->
-        <label class="flex items-center gap-1 mb-2 cursor-pointer select-none" title="Enable chain playback">
+        <!-- <label class="flex items-center gap-1 mb-2 cursor-pointer select-none" title="Enable chain playback">
           <input type="checkbox" v-model="chainEnabled" class="w-3 h-3 accent-sky-500 cursor-pointer" />
           <span class="text-[8px] font-mono uppercase tracking-widest" :class="chainEnabled ? 'text-sky-400' : 'text-neutral-500'">Chain ON</span>
-        </label>
-
-        <!-- Autofill -->
-        <label class="flex items-center gap-1 mb-2 cursor-pointer select-none" title="Auto-generate and trigger a fill every N measures">
-          <input type="checkbox" v-model="autofillEnabled" class="w-3 h-3 accent-cyan-500 cursor-pointer" />
-          <span class="text-[8px] font-mono uppercase tracking-widest" :class="autofillEnabled ? 'text-cyan-400' : 'text-neutral-500'">Autofill</span>
-          <input
-            type="number"
-            v-model.number="autofillEvery"
-            min="1" max="128"
-            @change="autofillEvery = Math.max(1, Math.min(128, autofillEvery || 1))"
-            class="w-8 text-center text-[9px] font-bold bg-neutral-800 border border-neutral-700 rounded px-0.5 py-0.5 ml-1 text-neutral-400 focus:outline-none focus:border-cyan-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-            title="Trigger fill every N measures"
-          />
-        </label>
+        </label> -->
 
         <!-- Chain panel toggle -->
         <button
-          @click.stop="showChain = !showChain"
+          @click.stop="showChain = chainEnabled;chainEnabled = !chainEnabled"
           :class="[
             'flex items-center gap-1 px-2 py-1 mb-2 rounded-lg border text-[10px] font-bold transition-colors',
-            showChain || chainEnabled
+            chainEnabled
               ? 'bg-sky-600/30 border-sky-500 text-sky-300'
               : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-sky-500 hover:text-sky-300'
           ]"
           title="Pattern chain"
         >
-          <Layers class="w-2.5 h-2.5" />
+          <Layers class="w-3.5 h-3.5" />
           Chain
         </button>
+
+        <!-- Autofill -->
+        <label class="flex items-center gap-1 mb-2 cursor-pointer select-none" title="Auto-generate and trigger a fill every N measures">
+          <!-- <input type="checkbox" v-model="autofillEnabled" class="w-3 h-3 accent-cyan-500 cursor-pointer" /> -->
+          <button @click.stop="autofillEnabled=!autofillEnabled" 
+            :class="[
+            'flex items-center gap-1 px-2 py-1  rounded-lg border text-[10px] font-bold transition-colors',
+            autofillEnabled
+              ? 'bg-sky-600/30 border-sky-500 text-sky-300'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-sky-500 hover:text-sky-300'
+          ]"
+          title="Auto-generate and trigger a fill every N measures"
+          ><Drum class="w-3.5 h-3.5" />Auto Fill</button>
+          <!-- <span class="text-[8px] font-mono uppercase tracking-widest" :class="autofillEnabled ? 'text-cyan-400' : 'text-neutral-500'">Autofill</span> -->
+          <input
+            v-if="autofillEnabled"
+            type="number"
+            v-model.number="autofillEvery"
+            min="1" max="128"
+            @change="autofillEvery = Math.max(1, Math.min(128, autofillEvery || 1))"
+            class="w-8 text-center text-[11px] font-bold bg-neutral-800 border border-neutral-700 rounded px-0.5 py-0.5 ml-1 text-neutral-400 focus:outline-none focus:border-cyan-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+            title="Trigger fill every N measures"
+          />
+        </label>
+
+        
 
         <!-- Play / Stop -->
         <div class="relative ml-3 mb-2">
@@ -1276,7 +1288,7 @@ function cycleChainSlot(i) {
             ]"
           >
             <Square v-if="drumStore.isPlaying" class="w-2.5 h-2.5" />
-            <Play v-else class="w-2.5 h-2.5" />
+            <Play v-else class="w-3.5 h-3.5" />
             <span>{{ pendingStop ? 'ENDING…' : drumStore.isPlaying ? 'STOP' : 'PLAY' }}</span>
           </button>
           <span
@@ -1311,7 +1323,7 @@ function cycleChainSlot(i) {
             ]"
             :title="recSyncActive ? `Recording ${16 * recSyncMultiplier} steps — click to stop` : recSyncArmed ? 'Waiting for bar start — click to cancel' : `Rec Sync: record ${16 * recSyncMultiplier} steps from next bar`"
           >
-            <span class="w-2 h-2 rounded-full shrink-0" :class="recSyncActive ? 'bg-red-400' : recSyncArmed ? 'bg-orange-400' : 'bg-neutral-600'" />
+            <span class="w-3 h-3 rounded-full shrink-0" :class="recSyncActive ? 'bg-red-400' : recSyncArmed ? 'bg-orange-400' : 'bg-neutral-600'" />
             {{ recSyncActive ? 'REC' : recSyncArmed ? 'ARMED' : 'REC' }}
           </button>
           <input
@@ -1334,7 +1346,7 @@ function cycleChainSlot(i) {
       </div>
 
       <!-- ── Chain row ─────────────────────────────────────────────────────── -->
-      <div v-if="showChain" class="shrink-0 flex items-center gap-2 px-3 py-1.5 border-t border-neutral-800 bg-neutral-900/60">
+      <div v-if="chainEnabled" class="shrink-0 flex items-center gap-2 px-3 py-1.5 border-t border-neutral-800 bg-neutral-900/60">
         <div class="flex gap-1">
           <button
             v-for="(slot, i) in chain"
