@@ -11,3 +11,4 @@ The MIDI WIZARD is a component panel used to facilitate the user midi settings u
 5. Set the MIDI ROUTING for the MIDI OUTPUT DEVICE in order to ENABLE/DISABLE: SYNC, TRANSPORT, NOTE, CC, PC (Program Change). See the F:\sycore\src\components\MidiPortConfig.vue for reference.
 
 This workflow can be repeated for each MIDI INPUT DEVICE (source controller) based on the user choice (ADD MIDI CONTROLLER).
+
