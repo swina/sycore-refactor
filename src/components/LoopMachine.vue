@@ -641,6 +641,8 @@ function _startMidiListener() {
 let _assignHandler         = null
 let _lppSetAssignHandler   = null
 let _lmMasterVolumeHandler = null
+let _tlLmStartHandler      = null
+let _tlLmStopHandler       = null
 
 onMounted(() => {
   if (lmUseSessionBpm.value) {
@@ -675,6 +677,15 @@ onMounted(() => {
   }
   window.addEventListener('lm-master-volume', _lmMasterVolumeHandler)
 
+  _tlLmStartHandler = e => {
+    const { padIdx } = e.detail ?? {}
+    if (typeof padIdx === 'number' && padIdx >= 0 && padIdx < PAD_COUNT && !active.value[padIdx])
+      togglePad(padIdx)
+  }
+  _tlLmStopHandler = () => stopAll()
+  window.addEventListener('timeline-lm-start', _tlLmStartHandler)
+  window.addEventListener('timeline-lm-stop',  _tlLmStopHandler)
+
   _startMidiListener()
 })
 
@@ -684,6 +695,8 @@ onUnmounted(() => {
   if (_assignHandler) window.removeEventListener('loop-machine-assign', _assignHandler)
   if (_lppSetAssignHandler) window.removeEventListener('lpp-set-assign', _lppSetAssignHandler)
   if (_lmMasterVolumeHandler) window.removeEventListener('lm-master-volume', _lmMasterVolumeHandler)
+  if (_tlLmStartHandler)      window.removeEventListener('timeline-lm-start', _tlLmStartHandler)
+  if (_tlLmStopHandler)       window.removeEventListener('timeline-lm-stop',  _tlLmStopHandler)
   if (_unsubMidi) _unsubMidi()
 })
 </script>

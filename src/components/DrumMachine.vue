@@ -393,6 +393,18 @@ function pushAllFxToEngine(pattern) {
   })
 }
 
+async function _tlDmStartHandler(e) {
+  const { presetName, seqKey, chainEnabled: ce } = e.detail ?? {}
+  if (presetName) {
+    const preset = drumStore.presets.find(p => p.name === presetName)
+    if (preset) await handleLoadPreset(preset)
+  }
+  if (seqKey) drumStore.swapSequence(seqKey)
+  if (ce != null) chainEnabled.value = ce
+  if (!drumStore.isPlaying) drumStore.isPlaying = true
+}
+function _tlDmStopHandler() { drumStore.isPlaying = false }
+
 onMounted(async () => {
   drumEngine.initDrumEngine()
   drumEngine.setDelayTime(drumStore.bpm)
@@ -402,6 +414,8 @@ onMounted(async () => {
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
   window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
+  window.addEventListener('timeline-dm-start', _tlDmStartHandler)
+  window.addEventListener('timeline-dm-stop',  _tlDmStopHandler)
 })
 
 onUnmounted(() => {
@@ -416,6 +430,8 @@ onUnmounted(() => {
   window.removeEventListener('dm-trigger-fill',   _onMidiFill)
   window.removeEventListener('dm-generate',       _onMidiGenerate)
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
+  window.removeEventListener('timeline-dm-start', _tlDmStartHandler)
+  window.removeEventListener('timeline-dm-stop',  _tlDmStopHandler)
 })
 
 // ── File / URL loading ─────────────────────────────────────────────────────────
