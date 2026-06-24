@@ -394,11 +394,13 @@ function pushAllFxToEngine(pattern) {
 }
 
 async function _tlDmStartHandler(e) {
-  const { presetName, seqKey, chainEnabled: ce } = e.detail ?? {}
+  const { presetName, seqKey, chainEnabled: ce, bpm } = e.detail ?? {}
   if (presetName) {
     const preset = drumStore.presets.find(p => p.name === presetName)
     if (preset) await handleLoadPreset(preset)
   }
+  // Restore timeline BPM — preset load may have overwritten arpStore.arpBpm
+  if (bpm) { arpStore.arpBpm = bpm; drumStore.bpm = bpm }
   if (seqKey) drumStore.swapSequence(seqKey)
   if (ce != null) chainEnabled.value = ce
   if (!drumStore.isPlaying) drumStore.isPlaying = true

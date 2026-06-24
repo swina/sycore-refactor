@@ -678,9 +678,15 @@ onMounted(() => {
   window.addEventListener('lm-master-volume', _lmMasterVolumeHandler)
 
   _tlLmStartHandler = e => {
-    const { padIdx } = e.detail ?? {}
+    const { padIdx, bpm } = e.detail ?? {}
     if (typeof padIdx === 'number' && padIdx >= 0 && padIdx < PAD_COUNT && !active.value[padIdx])
       togglePad(padIdx)
+    // _startPad overrides BPM asynchronously after sample load — reassert timeline BPM
+    if (bpm) setTimeout(() => {
+      arpStore.arpBpm      = bpm
+      midiStore.currentBpm = bpm
+      midiStore.setBpm(bpm)
+    }, 300)
   }
   _tlLmStopHandler = () => stopAll()
   window.addEventListener('timeline-lm-start', _tlLmStartHandler)

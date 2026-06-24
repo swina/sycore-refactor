@@ -17,7 +17,7 @@ import { useAuthStore }    from '@/stores/useAuthStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import catalogIndex        from '@/data/program_change/program_change.json'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
-import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc } from '@/lib/idb'
+import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc, serverTimestamp } from '@/lib/idb'
 import { userKey } from '@/lib/userKey'
 import { db } from '@/lib/firebase'
 
@@ -88,7 +88,7 @@ const markers  = ref(getLS(LS_MARKS, []))
 
 // ─── UI ────────────────────────────────────────────────────────────────────
 const tab   = ref('timeline')  // 'timeline' | 'arrange'
-const scale = ref(15)          // px per second
+const scale = ref(0.5)         // px per second (min 0.5 = 1px/2s)
 
 const showAddSeg    = ref(false)
 const showAddMarker = ref(false)
@@ -102,6 +102,11 @@ const segSource       = ref('playlist')
 const libraryTracks   = ref([])
 const librarySearch   = ref('')
 const librarySelected = ref(null)   // track object from library, pending add
+
+// Folder source (SoundFolderBrowser pick)
+const folderPendingTrack = ref(null)  // { id, label, url, duration, author }
+const folderSaveToLib    = ref(false)
+const folderSaving       = ref(false)
 
 const libraryFiltered = computed(() => {
   const q = librarySearch.value.toLowerCase().trim()
@@ -400,7 +405,10 @@ function stop() {
     window.dispatchEvent(new CustomEvent('capture-stop-rec'))
     uiStore.isAudioCaptureOpen = true
   }
-  midiStore.sendStop()  // always send MIDI STOP on stop
+  midiStore.sendStop()
+  window.dispatchEvent(new CustomEvent('timeline-lm-stop'))
+  window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
+  window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false, source: 'timeline' } }))
 }
 
 function _tick() {
@@ -408,7 +416,8 @@ function _tick() {
 
   if (totalDuration.value > 0 && timelinePos.value >= totalDuration.value) {
     if (loopTimeline.value) {
-      // Loop back to start — re-fire all markers and segments
+      // Stop the backing track so playlist-play on the next tick restarts it cleanly
+      window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
       timelinePos.value    = 0
       _posAtStart          = 0
       _startedAt           = performance.now()
@@ -559,13 +568,13 @@ function _fireMarker(m) {
       midiStore.stopClock()
       break
     case 'lm-start':
-      window.dispatchEvent(new CustomEvent('timeline-lm-start', { detail: { padIdx: m.padIdx ?? 0 } }))
+      window.dispatchEvent(new CustomEvent('timeline-lm-start', { detail: { padIdx: m.padIdx ?? 0, bpm: midiStore.currentBpm } }))
       break
     case 'lm-stop':
       window.dispatchEvent(new CustomEvent('timeline-lm-stop'))
       break
     case 'dm-start':
-      window.dispatchEvent(new CustomEvent('timeline-dm-start', { detail: { presetName: m.presetName, seqKey: m.seqKey, chainEnabled: m.chainEnabled } }))
+      window.dispatchEvent(new CustomEvent('timeline-dm-start', { detail: { presetName: m.presetName, seqKey: m.seqKey, chainEnabled: m.chainEnabled, bpm: midiStore.currentBpm } }))
       break
     case 'dm-stop':
       window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
@@ -694,15 +703,54 @@ function _onPlayheadDragEnd() {
 }
 
 // ─── Segment ops ───────────────────────────────────────────────────────────
+function probeDuration(url) {
+  return new Promise(res => {
+    const a = new Audio(url)
+    a.addEventListener('loadedmetadata', () => res(isFinite(a.duration) ? a.duration : 0), { once: true })
+    a.addEventListener('error', () => res(0), { once: true })
+  })
+}
+
 function openAddSeg() {
-  segSource.value       = playlist.value.length ? 'playlist' : 'library'
-  librarySearch.value   = ''
-  librarySelected.value = null
+  segSource.value          = playlist.value.length ? 'playlist' : 'library'
+  librarySearch.value      = ''
+  librarySelected.value    = null
+  folderPendingTrack.value = null
+  folderSaveToLib.value    = false
   if (playlist.value.length) {
     const t = playlist.value[0]
     newSeg.value = { trackIdx: 0, segStart: 0, segEnd: t?.duration || 60, label: t?.label || '' }
   }
   showAddSeg.value = true
+}
+
+function openFolderForTimeline() {
+  uiStore.soundFolderAssignTarget = {
+    label: 'Add to Timeline',
+    onAssign: async (file) => {
+      const raw      = await file.handle.getFile()
+      const url      = URL.createObjectURL(raw)
+      const duration = await probeDuration(url)
+      const track    = {
+        id:     `folder_${Date.now()}`,
+        label:  file.name.replace(/\.[^.]+$/, ''),
+        url,
+        author: 'Sound Folder',
+        duration,
+      }
+      livePadStore.playlist = [...playlist.value, track]
+      const trackIdx = playlist.value.length - 1
+      segments.value.push({
+        id:       `s${Date.now()}`,
+        trackIdx,
+        segStart: 0,
+        segEnd:   Math.max(1, duration || 60),
+        label:    track.label,
+      })
+      uiStore.soundFolderAssignTarget = null
+    },
+  }
+  uiStore.isSoundFolderBrowserOpen = true
 }
 
 function selectLibraryTrack(track) {
@@ -715,7 +763,7 @@ function onSegTrackChange() {
   if (t) { newSeg.value.segEnd = t.duration || 60; newSeg.value.label = t.label || '' }
 }
 
-function confirmAddSeg() {
+async function confirmAddSeg() {
   let trackIdx = Number(newSeg.value.trackIdx)
 
   // Library source: ensure the track is in the playlist first
@@ -726,6 +774,47 @@ function confirmAddSeg() {
       trackIdx = existIdx
     } else {
       livePadStore.playlist = [...playlist.value, libTrack]
+      trackIdx = playlist.value.length - 1
+    }
+  }
+
+  // Folder source: add file to playlist, optionally save to library
+  if (segSource.value === 'folder' && folderPendingTrack.value) {
+    const track = { ...folderPendingTrack.value }
+
+    if (folderSaveToLib.value) {
+      folderSaving.value = true
+      try {
+        const blob    = await fetch(track.url).then(r => r.blob())
+        const dataUrl = await new Promise((res, rej) => {
+          const reader = new FileReader()
+          reader.onload  = () => res(reader.result)
+          reader.onerror = rej
+          reader.readAsDataURL(blob)
+        })
+        const ref = await addDoc(collection(db, 'backing_tracks'), {
+          url:       dataUrl,
+          label:     track.label,
+          author:    'Sound Folder',
+          duration:  track.duration,
+          genre:     'Local',
+          createdAt: serverTimestamp(),
+        })
+        // Use the IDB doc ID so library can find it later
+        track.id = ref._segments[ref._segments.length - 1]
+        track.url = dataUrl
+      } catch (e) {
+        console.error('[Timeline] saveToLibrary', e)
+      } finally {
+        folderSaving.value = false
+      }
+    }
+
+    const existIdx = playlist.value.findIndex(p => p.id === track.id)
+    if (existIdx >= 0) {
+      trackIdx = existIdx
+    } else {
+      livePadStore.playlist = [...playlist.value, track]
       trackIdx = playlist.value.length - 1
     }
   }
@@ -1044,17 +1133,17 @@ onUnmounted(() => {
       <div class="flex items-center gap-3 px-4 py-2 border-b border-neutral-900/50 shrink-0">
         <!-- Zoom -->
         <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Zoom</span>
-        <button @click="scale = Math.max(5, scale - 10)" class="p-1 text-neutral-500 hover:text-white transition-colors">
+        <button @click="scale = Math.max(0.5, scale - (scale <= 2 ? 0.5 : 5))" class="p-1 text-neutral-500 hover:text-white transition-colors">
           <ZoomOut class="w-3.5 h-3.5" />
         </button>
         <input
-          type="range" v-model.number="scale" min="5" max="200" step="5"
-          class="w-24 h-1 bg-neutral-800 rounded-full appearance-none cursor-pointer accent-[#00ff88]"
+          type="range" v-model.number="scale" min="0.5" max="200" step="0.5"
+          class="w-64 h-1 bg-neutral-800 rounded-full appearance-none cursor-pointer accent-[#00ff88]"
         />
-        <button @click="scale = Math.min(200, scale + 10)" class="p-1 text-neutral-500 hover:text-white transition-colors">
+        <button @click="scale = Math.min(200, scale + (scale < 2 ? 0.5 : 5))" class="p-1 text-neutral-500 hover:text-white transition-colors">
           <ZoomIn class="w-3.5 h-3.5" />
         </button>
-        <span class="text-[9px] font-mono text-neutral-600">{{ scale }}px/s</span>
+        <span class="text-[9px] font-mono text-neutral-600">{{ scale < 1 ? `1px/${(1/scale).toFixed(0)}s` : `${scale}px/s` }}</span>
 
         <!-- Reset playhead -->
         <button @click="stop" title="Reset to start" class="p-1 text-neutral-600 hover:text-white transition-colors ml-1">
@@ -1106,9 +1195,8 @@ onUnmounted(() => {
         <div class="flex-1" />
 
         <button
-          @click="openAddSeg"
-          :disabled="!playlist.length"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-synth-neon/60 text-neutral-400 hover:text-synth-neon text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+          @click="openFolderForTimeline"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-synth-neon/60 text-neutral-400 hover:text-synth-neon text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95"
         >
           <Plus class="w-3 h-3" /> Segment
         </button>
@@ -1542,9 +1630,8 @@ onUnmounted(() => {
         <div class="flex items-center justify-between mb-3 shrink-0">
           <h3 class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono">Segments</h3>
           <button
-            @click="openAddSeg"
-            :disabled="!playlist.length"
-            class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-synth-neon/60 text-neutral-400 hover:text-synth-neon text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-40 active:scale-95"
+            @click="openFolderForTimeline"
+            class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-synth-neon/60 text-neutral-400 hover:text-synth-neon text-[9px] font-bold uppercase tracking-widest transition-all active:scale-95"
           >
             <Plus class="w-3 h-3" /> Add
           </button>
@@ -1669,146 +1756,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- ── Add Segment Dialog ──────────────────────────────────────────────── -->
-    <Teleport to="body">
-      <div
-        v-if="showAddSeg"
-        class="fixed inset-0 z-[600] bg-black/75 flex items-center justify-center"
-        @click.self="showAddSeg = false"
-      >
-        <div class="bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden" style="max-width: 480px; max-height: 82vh">
 
-          <!-- Dialog header -->
-          <div class="px-6 pt-5 pb-4 border-b border-neutral-800 shrink-0">
-            <h3 class="text-sm font-black uppercase tracking-[0.25em] text-white mb-3">Add Segment</h3>
-            <!-- Source tabs -->
-            <div class="flex items-center gap-1 bg-neutral-900 rounded-lg p-0.5">
-              <button
-                @click="segSource = 'playlist'"
-                :class="['flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all',
-                  segSource === 'playlist' ? 'bg-synth-neon/10 text-synth-neon border border-synth-neon/30' : 'text-neutral-500 hover:text-neutral-300']"
-              >
-                <ListMusic class="w-3 h-3" /> Playlist
-              </button>
-              <button
-                @click="segSource = 'library'"
-                :class="['flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all',
-                  segSource === 'library' ? 'bg-violet-500/10 text-violet-400 border border-violet-500/30' : 'text-neutral-500 hover:text-neutral-300']"
-              >
-                <Library class="w-3 h-3" /> Library
-              </button>
-            </div>
-          </div>
-
-          <!-- Content area (scrollable) -->
-          <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4 space-y-4 min-h-0">
-
-            <!-- ─ Playlist source ─ -->
-            <template v-if="segSource === 'playlist'">
-              <div v-if="!playlist.length" class="text-[10px] font-mono text-neutral-600 text-center py-6 italic">
-                No tracks in playlist — add tracks to the Backing Track Player first, or switch to Library.
-              </div>
-              <div v-else>
-                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">Track</label>
-                <select
-                  v-model.number="newSeg.trackIdx"
-                  @change="onSegTrackChange"
-                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-synth-neon outline-none"
-                >
-                  <option v-for="(t, i) in playlist" :key="i" :value="i">
-                    {{ i + 1 }}. {{ t.label || `Track ${i + 1}` }}
-                    {{ t.bpm ? `— ${t.bpm} BPM` : '' }}
-                    ({{ formatTime(t.duration || 0) }})
-                  </option>
-                </select>
-              </div>
-            </template>
-
-            <!-- ─ Library source ─ -->
-            <template v-if="segSource === 'library'">
-              <input
-                v-model="librarySearch"
-                placeholder="Search by name, genre or BPM…"
-                class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-violet-500 outline-none"
-              />
-              <div v-if="!libraryTracks.length" class="text-[10px] font-mono text-neutral-600 text-center py-6 italic">
-                Loading library…
-              </div>
-              <div v-else-if="!libraryFiltered.length" class="text-[10px] font-mono text-neutral-600 text-center py-6 italic">
-                No tracks match "{{ librarySearch }}"
-              </div>
-              <div v-else class="space-y-1.5">
-                <button
-                  v-for="t in libraryFiltered"
-                  :key="t.id"
-                  @click="selectLibraryTrack(t)"
-                  :class="[
-                    'w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all group',
-                    librarySelected?.id === t.id
-                      ? 'border-violet-500/60 bg-violet-500/10 text-white'
-                      : 'border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-white'
-                  ]"
-                >
-                  <div class="flex-1 min-w-0">
-                    <div class="text-[11px] font-bold truncate">{{ t.label }}</div>
-                    <div class="text-[9px] font-mono text-neutral-600 mt-0.5">
-                      <span v-if="t.genre" class="mr-2">{{ t.genre }}</span>
-                      <span v-if="t.bpm" class="text-emerald-500 font-bold mr-2">{{ t.bpm }} BPM</span>
-                      <span>{{ formatTime(t.duration || 0) }}</span>
-                    </div>
-                  </div>
-                  <div v-if="librarySelected?.id === t.id" class="w-2 h-2 rounded-full bg-violet-400 shrink-0" />
-                </button>
-              </div>
-            </template>
-
-            <!-- ─ In / Out / Label (shared) ─ -->
-            <template v-if="segSource === 'playlist' ? playlist.length : librarySelected">
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">In (s)</label>
-                  <input
-                    v-model.number="newSeg.segStart"
-                    type="number" min="0" step="1"
-                    class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-synth-neon outline-none"
-                  />
-                </div>
-                <div>
-                  <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">Out (s)</label>
-                  <input
-                    v-model.number="newSeg.segEnd"
-                    type="number" min="1" step="1"
-                    class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-synth-neon outline-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">Label (optional)</label>
-                <input
-                  v-model="newSeg.label"
-                  type="text" placeholder="e.g. Intro, Verse, Chorus…"
-                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-synth-neon outline-none"
-                />
-              </div>
-            </template>
-          </div>
-
-          <!-- Dialog footer -->
-          <div class="flex gap-3 px-6 py-4 border-t border-neutral-800 shrink-0">
-            <button @click="showAddSeg = false" class="flex-1 py-2 rounded-lg border border-neutral-800 text-neutral-500 hover:text-white text-sm transition-colors">
-              Cancel
-            </button>
-            <button
-              @click="confirmAddSeg"
-              :disabled="segSource === 'library' ? !librarySelected : !playlist.length"
-              class="flex-1 py-2 rounded-lg bg-synth-neon text-black font-black text-sm hover:bg-synth-neon/90 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Add
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <!-- ── Add Marker Dialog ───────────────────────────────────────────────── -->
     <Teleport to="body">
