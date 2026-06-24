@@ -1,15 +1,17 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { X, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers } from 'lucide-vue-next'
+import { X, Minus, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { MidiSource } from '@/core/midi/MidiService'
+import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 
-const midiStore = useMidiStore()
-const uiStore   = useUiStore()
+const midiStore  = useMidiStore()
+const uiStore    = useUiStore()
+const activeTab  = ref('routing')  // 'routing' | 'sync'
 
-const { panelStyle, onDragStart, onResizeStart, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
   storageKey:    'SYCORE_POS_MIDI_FLOW',
   initialWidth:  900,
   initialHeight: 580,
@@ -54,6 +56,7 @@ const MIDI_APPS = [
   { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music     },
   { name: 'Transport / Clock', sourceId: MidiSource.TRANSPORT,  icon: Zap       },
   { name: 'UI / Preview',      sourceId: MidiSource.UI,         icon: Layers    },
+  { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum    },
 ]
 
 // ── Sidebar drag-to-canvas ──
@@ -272,7 +275,7 @@ function pendingPath() {
 </script>
 
 <template>
-  <div class="fixed select-none" :style="panelStyle" @mousedown="bringToFront">
+  <div v-show="uiStore.isMidiFlowOpen && !isMinimized" class="fixed select-none" :style="panelStyle" @mousedown="bringToFront">
     <!-- resize handles -->
     <div class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-50" @mousedown.stop="onResizeStart($event, 'se')" />
     <div class="absolute bottom-0 left-3 right-4 h-1.5 cursor-s-resize z-50"  @mousedown.stop="onResizeStart($event, 's')" />
@@ -282,20 +285,44 @@ function pendingPath() {
 
       <!-- Header -->
       <div
-        class="flex items-center justify-between px-4 py-3 bg-neutral-900/60 border-b border-neutral-800 cursor-grab active:cursor-grabbing shrink-0"
+        class="flex items-center gap-3 px-4 py-3 bg-neutral-900/60 border-b border-neutral-800 cursor-grab active:cursor-grabbing shrink-0"
         @mousedown.stop="onDragStart"
       >
-        <span class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-synth-neon">
+        <span class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-synth-neon shrink-0">
           <Network class="w-4 h-4" /> MIDI FLOW
         </span>
-        <span class="text-[9px] font-mono text-neutral-600">Drag devices → canvas &nbsp;·&nbsp; OUT● → ●IN to connect &nbsp;·&nbsp; click cable to remove</span>
-        <button @click="uiStore.isMidiFlowOpen = false" class="p-1 text-neutral-400 hover:text-white transition-colors">
+        <!-- Tabs -->
+        <div class="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5" @mousedown.stop>
+          <button
+            @click="activeTab = 'routing'"
+            class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-colors"
+            :class="activeTab === 'routing' ? 'bg-synth-neon text-black' : 'text-neutral-500 hover:text-white'"
+          >Routing</button>
+          <button
+            @click="activeTab = 'sync'"
+            class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-colors"
+            :class="activeTab === 'sync' ? 'bg-synth-neon text-black' : 'text-neutral-500 hover:text-white'"
+          >Sync Flow</button>
+        </div>
+        <span v-if="activeTab === 'routing'" class="text-[9px] font-mono text-neutral-600 flex-1 truncate">
+          Drag devices → canvas &nbsp;·&nbsp; OUT● → ●IN to connect &nbsp;·&nbsp; click cable to remove
+        </span>
+        <span class="flex-1" v-else />
+        <button @click="toggleMinimize" class="p-1 text-neutral-400 hover:text-white transition-colors shrink-0">
+          <Minus class="w-4 h-4" />
+        </button>
+        <button @click="uiStore.isMidiFlowOpen = false" class="p-1 text-neutral-400 hover:text-white transition-colors shrink-0">
           <X class="w-4 h-4" />
         </button>
       </div>
 
-      <!-- Body -->
-      <div class="flex flex-1 overflow-hidden">
+      <!-- Sync Flow tab -->
+      <div v-show="activeTab === 'sync'" class="flex-1 overflow-hidden">
+        <MidiSyncFlow />
+      </div>
+
+      <!-- Routing tab body -->
+      <div v-show="activeTab === 'routing'" class="flex flex-1 overflow-hidden">
 
         <!-- Sidebar -->
         <div class="w-44 shrink-0 bg-neutral-900/40 border-r border-neutral-800 flex flex-col overflow-y-auto custom-scrollbar p-3 gap-1.5">
@@ -463,8 +490,8 @@ function pendingPath() {
         </div>
       </div>
 
-      <!-- Footer -->
-      <div class="flex items-center justify-between px-4 py-2.5 border-t border-neutral-800 bg-neutral-900/40 shrink-0">
+      <!-- Footer (routing tab only) -->
+      <div v-show="activeTab === 'routing'" class="flex items-center justify-between px-4 py-2.5 border-t border-neutral-800 bg-neutral-900/40 shrink-0">
         <span class="text-[9px] font-mono text-neutral-600">
           {{ cables.length }} connection{{ cables.length !== 1 ? 's' : '' }}
         </span>

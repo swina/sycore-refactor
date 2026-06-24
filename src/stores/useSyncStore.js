@@ -29,6 +29,11 @@ const KEYS = {
   syncLoopPadsToBackingTrack:  'S1_SYNC_LOOPPADS_TRACK',
   syncLoopPadsToLooper:        'S1_SYNC_LOOPPADS_LOOPER',
   syncLoopPadsToAudioCapture:  'S1_SYNC_LOOPPADS_CAPTURE',
+  syncDrumMachineToMidi:         'S1_SYNC_DRUM_MIDI',
+  syncDrumMachineToSequencer:    'S1_SYNC_DRUM_SEQ',
+  syncDrumMachineToBackingTrack: 'S1_SYNC_DRUM_TRACK',
+  syncDrumMachineToLooper:       'S1_SYNC_DRUM_LOOPER',
+  syncDrumMachineToAudioCapture: 'S1_SYNC_DRUM_CAPTURE',
 }
 
 function readBool(k) { return localStorage.getItem(userKey(k)) === 'true' }
@@ -62,6 +67,11 @@ export const useSyncStore = defineStore('sync', () => {
   const syncLoopPadsToBackingTrack  = ref(readBool(KEYS.syncLoopPadsToBackingTrack))
   const syncLoopPadsToLooper        = ref(readBool(KEYS.syncLoopPadsToLooper))
   const syncLoopPadsToAudioCapture  = ref(readBool(KEYS.syncLoopPadsToAudioCapture))
+  const syncDrumMachineToMidi         = ref(readBool(KEYS.syncDrumMachineToMidi))
+  const syncDrumMachineToSequencer    = ref(readBool(KEYS.syncDrumMachineToSequencer))
+  const syncDrumMachineToBackingTrack = ref(readBool(KEYS.syncDrumMachineToBackingTrack))
+  const syncDrumMachineToLooper       = ref(readBool(KEYS.syncDrumMachineToLooper))
+  const syncDrumMachineToAudioCapture = ref(readBool(KEYS.syncDrumMachineToAudioCapture))
 
   const REFS = {
     syncTrack, syncRecordAudioCapture, syncBackingTrackToLooper, syncSequencerToLooper,
@@ -70,6 +80,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncAudioCaptureToMidi, syncAudioCaptureToSequencer, syncAudioCaptureToBackingTrack, syncAudioCaptureToLooper,
     syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
     syncLoopPadsToMidi, syncLoopPadsToSequencer, syncLoopPadsToBackingTrack, syncLoopPadsToLooper, syncLoopPadsToAudioCapture,
+    syncDrumMachineToMidi, syncDrumMachineToSequencer, syncDrumMachineToBackingTrack, syncDrumMachineToLooper, syncDrumMachineToAudioCapture,
   }
 
   Object.entries(REFS).forEach(([name, r]) => {

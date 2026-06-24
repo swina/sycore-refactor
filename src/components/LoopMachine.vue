@@ -1095,7 +1095,7 @@ onUnmounted(() => {
                 class="flex-1 min-w-0 bg-neutral-900 text-[9px] font-mono text-sky-300 text-right outline-none border border-neutral-800 rounded px-1 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
-            <label
+            <!-- <label
               class="flex items-center gap-1.5 cursor-pointer select-none"
               title="Time-stretch all loops with known BPM to match the session tempo"
             >
@@ -1109,7 +1109,7 @@ onUnmounted(() => {
                 class="text-[8px] font-mono uppercase tracking-widest transition-colors"
                 :class="lmUseSessionBpm ? 'text-sky-400' : 'text-neutral-600'"
               >Session BPM</span>
-            </label>
+            </label> -->
             <label
               class="flex items-center gap-1.5 cursor-pointer select-none"
               title="Reset slot volume to 0 when a loop is stopped"
@@ -1315,21 +1315,28 @@ onUnmounted(() => {
               class="flex items-center ml-auto gap-1.5 cursor-pointer select-none"
               title="Time-stretch all loops with known BPM to match the session tempo"
             >
-              <input
+            <button @click.stop="lmUseSessionBpm = !lmUseSessionBpm" class="px-2 rounded border border-neutral-700 flex items-center justify-center transition-colors" :class="lmUseSessionBpm ? 'bg-sky-400 text-black':''">
+              <!-- <span v-if="lmUseSessionBpm" class="w-4.5 h-1.5 rounded-full bg-sky-400 shadow-[0_0_4px_rgba(56,189,248,0.7)]" /> -->
+              <span
+                class="text-[11px] font-mono uppercase tracking-widest transition-colors"
+                :class="lmUseSessionBpm ? 'bg-sky-400' : 'text-neutral-600'"
+              >Session BPM</span>
+            </button>
+              <!-- <input
                 type="checkbox"
                 v-model="lmUseSessionBpm"
                 @mousedown.stop @click.stop
                 class="accent-sky-400 w-3 h-3 shrink-0"
-              />
-              <span
-                class="text-[11px] font-mono uppercase tracking-widest transition-colors"
-                :class="lmUseSessionBpm ? 'text-sky-400' : 'text-neutral-600'"
-              >Session BPM</span>
+              /> -->
           </label>
           <span v-if="lmUseSessionBpm" class="text-[11px] font-mono text-sky-500/70 flex items-center gap-1">
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0" />
-          ×{{ midiStore.currentBpm }}bpm · playback rate applied
-        </span>
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0" />
+            ×{{ midiStore.currentBpm }}bpm · playback rate applied
+          </span>
+          <span v-else class="text-[11px] font-mono text-neutral-600/70 flex items-center gap-1">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-neutral-600 shrink-0" />
+            ×{{ midiStore.currentBpm }}bpm
+          </span>
       </div>
       <!-- Footer -->
       <!-- <div class="shrink-0 px-4 py-1.5 border-t border-neutral-800/60 bg-neutral-950/40 flex items-center gap-3">

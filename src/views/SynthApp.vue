@@ -455,7 +455,7 @@ onMounted(() => {
       </div>
 
       <MidiWizard     v-if="uiStore.isMidiWizardOpen" />
-      <MidiWizardFlow v-show="uiStore.isMidiFlowOpen" />
+      <MidiWizardFlow />
 
       <!-- Live Timeline -->
       <div :style="focusStyle('liveTimeline')">
