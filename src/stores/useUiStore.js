@@ -63,6 +63,8 @@ export const useUiStore = defineStore('ui', () => {
   const soundFolderAssignTarget  = ref(null) // { label: string, onAssign: (file) => Promise<void> } | null
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
+  const isMidiWizardOpen         = ref(false)
+  const isMidiFlowOpen           = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
 
@@ -311,7 +313,7 @@ export const useUiStore = defineStore('ui', () => {
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
-    showUnifiedMidiManager, unifiedMidiManagerTab,
+    showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
     isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, isAudioPlaying, lastPlaylistName,

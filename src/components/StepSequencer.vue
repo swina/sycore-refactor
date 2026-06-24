@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
+import { X, Minus, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { midiService, MidiSource } from '@/core/midi/MidiService'
 import { useArpStore } from '@/stores/useArpStore'
@@ -34,7 +34,7 @@ const props = defineProps({
   embedded: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['close', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'activeSlotChange'])
+const emit = defineEmits(['close', 'minimize', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'activeSlotChange'])
 
 const midiStore = useMidiStore()
 const presetStore = usePresetStore()
@@ -1656,6 +1656,9 @@ let generateHidden = ref(false)
             <Save class="w-4 h-4" />
           </button>
 
+          <button @click="emit('minimize')" class="p-2 text-neutral-500 hover:text-white transition-colors">
+            <Minus class="w-5 h-5" />
+          </button>
           <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors">
             <X class="w-5 h-5" />
           </button>

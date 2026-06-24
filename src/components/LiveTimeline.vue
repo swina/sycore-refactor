@@ -14,6 +14,7 @@ import { useArpStore }     from '@/stores/useArpStore'
 import { useSyncStore }    from '@/stores/useSyncStore'
 import { useUiStore }      from '@/stores/useUiStore'
 import { useAuthStore }    from '@/stores/useAuthStore'
+import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import catalogIndex        from '@/data/program_change/program_change.json'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc } from '@/lib/idb'
@@ -64,6 +65,7 @@ const allDevicesPcState = computed(() => {
 const arpStore     = useArpStore()
 const syncStore    = useSyncStore()
 const uiStore      = useUiStore()
+const drumStore    = useDrumMachineStore()
 
 const syncTimelineToAudioCapture = computed({
   get: () => syncStore.syncTimelineToAudioCapture,
@@ -135,6 +137,8 @@ const pcBrowserLoading = ref(false)
 // Performance set picker state
 const availPerfSets  = ref([])   // loaded from SYCORE_PC_PERFORMANCE_SETS when dialog opens
 const newMkrPerfSet  = ref({ setId: '', setName: '' })
+const newMkrLm       = ref({ padIdx: 0 })
+const newMkrDm       = ref({ presetName: '', seqKey: '', chainEnabled: null })
 
 // ─── IDB Save / Load ───────────────────────────────────────────────────────
 const TL_COL         = () => collection(db, 'users', authStore.user?.uid, 'timeline_sets')
@@ -157,6 +161,10 @@ const MARKER_TYPES = [
   { value: 'transport-stop',   label: 'MIDI Sync Stop',           hasValue: false },
   { value: 'clock-start',      label: 'Start Clock (ticks only)', hasValue: false },
   { value: 'clock-stop',       label: 'Stop Clock (ticks only)',  hasValue: false },
+  { value: 'lm-start',         label: 'Start Loop Machine Pad',   hasValue: false },
+  { value: 'lm-stop',          label: 'Stop Loop Machine',        hasValue: false },
+  { value: 'dm-start',         label: 'Start Drum Machine',       hasValue: false },
+  { value: 'dm-stop',          label: 'Stop Drum Machine',        hasValue: false },
 ]
 
 const newMkrType = computed(() => MARKER_TYPES.find(t => t.value === newMkr.value.type))
@@ -233,6 +241,10 @@ const MKR_COLORS = {
   'transport-stop':  '#fb923c',
   'clock-start':     '#10b981',
   'clock-stop':      '#ef4444',
+  'lm-start':        '#f59e0b',
+  'lm-stop':         '#d97706',
+  'dm-start':        '#ec4899',
+  'dm-stop':         '#be185d',
 }
 
 const MKR_ICONS = {
@@ -247,6 +259,10 @@ const MKR_ICONS = {
   'transport-stop':  '◻',
   'clock-start':     '⏱',
   'clock-stop':      '⏹',
+  'lm-start':        '⊕',
+  'lm-stop':         '⊗',
+  'dm-start':        '⬡',
+  'dm-stop':         '⬢',
 }
 
 const MKR_ABBREV = {
@@ -261,6 +277,10 @@ const MKR_ABBREV = {
   'transport-stop':  'SYN■',
   'clock-start':     'CLK▶',
   'clock-stop':      'CLK■',
+  'lm-start':        'LM▶',
+  'lm-stop':         'LM■',
+  'dm-start':        'DM▶',
+  'dm-stop':         'DM■',
 }
 
 function segColor(idx)    { return SEG_COLORS[segments.value[idx]?.trackIdx % SEG_COLORS.length ?? idx % SEG_COLORS.length] }
@@ -286,6 +306,8 @@ function mDisplayValue(m) {
     case 'load-perf-set':  return m.setName || m.setId || '—'
     case 'crossfade':      return `${m.value} ms`
     case 'program-change': return m.soundName ? m.soundName : `PC ${m.value}`
+    case 'lm-start':       return `Pad ${(m.padIdx ?? 0) + 1}`
+    case 'dm-start':       return [m.presetName, m.seqKey ? `Seq ${m.seqKey}` : ''].filter(Boolean).join(' / ') || '(current)'
     default:               return ''
   }
 }
@@ -536,6 +558,18 @@ function _fireMarker(m) {
     case 'clock-stop':
       midiStore.stopClock()
       break
+    case 'lm-start':
+      window.dispatchEvent(new CustomEvent('timeline-lm-start', { detail: { padIdx: m.padIdx ?? 0 } }))
+      break
+    case 'lm-stop':
+      window.dispatchEvent(new CustomEvent('timeline-lm-stop'))
+      break
+    case 'dm-start':
+      window.dispatchEvent(new CustomEvent('timeline-dm-start', { detail: { presetName: m.presetName, seqKey: m.seqKey, chainEnabled: m.chainEnabled } }))
+      break
+    case 'dm-stop':
+      window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
+      break
   }
 }
 
@@ -744,6 +778,8 @@ function openAddMarker() {
     setId:   availPerfSets.value[0]?.id   || '',
     setName: availPerfSets.value[0]?.name || '',
   }
+  newMkrLm.value = { padIdx: 0 }
+  newMkrDm.value = { presetName: '', seqKey: '', chainEnabled: null }
   showAddMarker.value = true
 }
 
@@ -772,6 +808,14 @@ function confirmAddMarker() {
       setName: newMkrPerfSet.value.setName,
     }
     val = 0
+  } else if (type === 'lm-start') {
+    extra = { padIdx: Math.max(0, Math.min(23, Number(newMkrLm.value.padIdx))) }
+  } else if (type === 'dm-start') {
+    extra = {
+      presetName:   newMkrDm.value.presetName || '',
+      seqKey:       newMkrDm.value.seqKey     || '',
+      chainEnabled: newMkrDm.value.chainEnabled,
+    }
   }
 
   markers.value.push({
@@ -1607,6 +1651,14 @@ onUnmounted(() => {
                 <span :class="m.soundName ? 'ml-1 text-neutral-600' : ''">PC {{ m.value }}</span>
                 <span v-if="m.device" class="ml-1 text-neutral-600">→ {{ m.device }} CH{{ Number(m.channel ?? 0) + 1 }}</span>
               </div>
+              <!-- Loop Machine start -->
+              <div v-if="m.type === 'lm-start'" class="text-[9px] font-mono text-neutral-500">Pad {{ (m.padIdx ?? 0) + 1 }}</div>
+              <!-- Drum Machine start -->
+              <div v-if="m.type === 'dm-start'" class="text-[9px] font-mono text-neutral-500">
+                <span v-if="m.presetName" class="text-neutral-300 font-bold">{{ m.presetName }}</span>
+                <span v-if="m.seqKey" class="ml-1">Seq {{ m.seqKey }}</span>
+                <span v-if="!m.presetName && !m.seqKey" class="text-neutral-700 italic">current state</span>
+              </div>
             </div>
             <span class="text-[9px] font-mono text-neutral-600 shrink-0">{{ formatTime(m.position) }}</span>
             <button @click="removeMarker(m.id)" class="p-1 text-neutral-600 hover:text-rose-500 transition-colors shrink-0">
@@ -1845,6 +1897,58 @@ onUnmounted(() => {
                 = {{ (newMkr.value / 1000).toFixed(2) }}s — updates the backing track crossfade duration
               </div>
             </div>
+
+            <!-- Loop Machine Pad -->
+            <div v-if="newMkr.type === 'lm-start'">
+              <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">Pad</label>
+              <select
+                v-model.number="newMkrLm.padIdx"
+                class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-amber-500 outline-none"
+              >
+                <option v-for="i in 24" :key="i - 1" :value="i - 1">Pad {{ i }}</option>
+              </select>
+            </div>
+
+            <!-- Drum Machine start -->
+            <template v-if="newMkr.type === 'dm-start'">
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Preset <span class="text-neutral-600">(optional)</span>
+                </label>
+                <select
+                  v-model="newMkrDm.presetName"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-pink-500 outline-none"
+                >
+                  <option value="">— Keep current preset —</option>
+                  <option v-for="p in drumStore.presets" :key="p.id" :value="p.name">{{ p.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Sequence <span class="text-neutral-600">(optional)</span>
+                </label>
+                <select
+                  v-model="newMkrDm.seqKey"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-pink-500 outline-none"
+                >
+                  <option value="">— Keep current sequence —</option>
+                  <option v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" :value="k">Sequence {{ k }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Chain <span class="text-neutral-600">(optional)</span>
+                </label>
+                <select
+                  v-model="newMkrDm.chainEnabled"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-pink-500 outline-none"
+                >
+                  <option :value="null">— No change —</option>
+                  <option :value="true">Enable chain</option>
+                  <option :value="false">Disable chain</option>
+                </select>
+              </div>
+            </template>
 
             <!-- Program Change — device + channel + PC -->
             <template v-if="newMkr.type === 'program-change'">
