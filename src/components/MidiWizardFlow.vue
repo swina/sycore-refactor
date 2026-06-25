@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { X, Minus, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum } from 'lucide-vue-next'
+import { X, Minus, RefreshCw, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -58,6 +58,8 @@ const MIDI_APPS = [
   { name: 'UI / Preview',      sourceId: MidiSource.UI,         icon: Layers    },
   { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum    },
 ]
+
+const appIconMap = Object.fromEntries(MIDI_APPS.map(a => [a.sourceId, a.icon]))
 
 // ── Sidebar drag-to-canvas ──
 function onSidebarDragStart(e, device) {
@@ -193,39 +195,41 @@ function initFromStore() {
   const matrix = midiStore.routingMatrix ?? {}
   if (!Object.keys(regs).length && !Object.values(matrix).some(v => v?.length)) return
 
-  const appNames = new Set(MIDI_APPS.map(a => a.name))
-  const nodeMap  = new Map()   // name or sourceId → canvas node id
-  let col = 0
+  const appNames   = new Set(MIDI_APPS.map(a => a.name))
+  const nodeMap    = new Map()
+  const sourceKeys = new Set(Object.keys(matrix).filter(k => matrix[k]?.length))
+  const destNames  = new Set(Object.values(matrix).flat().filter(Boolean))
 
-  function placeNode(node) {
-    const ROW_H = 140, COL_W = NODE_W + 50, COLS = 3
-    node.x = 20 + (col % COLS) * COL_W
-    node.y = 20 + Math.floor(col / COLS) * ROW_H
-    col++
-    canvasNodes.value.push(node)
-  }
+  const sourceNodes = []  // left column — things that send MIDI out
+  const destNodes   = []  // right column — things that receive MIDI in
 
-  // Hardware device nodes from registrations (skip any app names leaked in)
+  // Hardware device nodes — skip unconnected ones and any app names leaked in
   for (const reg of Object.values(regs)) {
     if (appNames.has(reg.name)) { midiStore.removeRegistration(reg.name); continue }
+    const isSource = sourceKeys.has(reg.name)
+    const isDest   = destNames.has(reg.name)
+    if (!isSource && !isDest) continue
+
     const id = nextId++
     nodeMap.set(reg.name, id)
-    placeNode({
+    const node = {
       id, name: reg.name, sourceId: null,
       hasIn: reg.inEnabled, hasOut: reg.outEnabled,
       x: 0, y: 0,
       inChannel: reg.inChannel ?? -1, outChannel: reg.outChannel ?? -1,
       sync: reg.clock ?? true, transport: reg.transport ?? true,
       notes: reg.notes ?? true, cc: reg.cc ?? true, pc: reg.pc ?? true,
-    })
+    }
+    if (isDest) destNodes.push(node)
+    else sourceNodes.push(node)
   }
 
-  // MIDI App nodes — only if they have active routing
+  // MIDI App nodes — only if they have active routing (always sources)
   for (const app of MIDI_APPS) {
-    if (!matrix[app.sourceId]?.length) continue
+    if (!sourceKeys.has(app.sourceId)) continue
     const id = nextId++
     nodeMap.set(app.sourceId, id)
-    placeNode({
+    sourceNodes.push({
       id, name: app.name, sourceId: app.sourceId,
       hasIn: false, hasOut: true,
       x: 0, y: 0,
@@ -233,6 +237,20 @@ function initFromStore() {
       sync: true, transport: true, notes: true, cc: true, pc: true,
     })
   }
+
+  // Layout: sources on left, destinations on right
+  const HW_ROW_H  = 140
+  const APP_ROW_H = 52
+  const LEFT_X    = 20
+  const RIGHT_X   = NODE_W + 140
+
+  let leftY = 20
+  sourceNodes.forEach(node => {
+    node.x = LEFT_X; node.y = leftY
+    leftY += node.sourceId ? APP_ROW_H : HW_ROW_H
+    canvasNodes.value.push(node)
+  })
+  destNodes.forEach((node, i) => { node.x = RIGHT_X; node.y = 20 + i * HW_ROW_H; canvasNodes.value.push(node) })
 
   // Cables from routing matrix
   for (const [sourceKey, outputNames] of Object.entries(matrix)) {
@@ -243,6 +261,13 @@ function initFromStore() {
       if (toId) cables.value.push({ id: nextId++, fromId, toId })
     }
   }
+}
+
+function reloadConfig() {
+  canvasNodes.value = []
+  cables.value = []
+  nextId = 1
+  initFromStore()
 }
 
 onMounted(() => {
@@ -263,6 +288,10 @@ function cablePath(cable) {
   if (!from || !to) return ''
   const p1 = outPos(from), p2 = inPos(to)
   return bezier(p1.x, p1.y, p2.x, p2.y)
+}
+
+function isAppCable(cable) {
+  return !!canvasNodes.value.find(n => n.id === cable.fromId)?.sourceId
 }
 
 function pendingPath() {
@@ -308,6 +337,9 @@ function pendingPath() {
           Drag devices → canvas &nbsp;·&nbsp; OUT● → ●IN to connect &nbsp;·&nbsp; click cable to remove
         </span>
         <span class="flex-1" v-else />
+        <button v-if="activeTab === 'routing'" @click="reloadConfig" title="Reload config" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors shrink-0">
+          <RefreshCw class="w-4 h-4" />
+        </button>
         <button @click="toggleMinimize" class="p-1 text-neutral-400 hover:text-white transition-colors shrink-0">
           <Minus class="w-4 h-4" />
         </button>
@@ -391,7 +423,7 @@ function pendingPath() {
               <!-- visible cable -->
               <path
                 :d="cablePath(cable)"
-                fill="none" stroke="#a3e635" stroke-width="2" stroke-opacity="0.65"
+                fill="none" :stroke="isAppCable(cable) ? '#8b5cf6' : '#a3e635'" stroke-width="2" stroke-opacity="0.65"
                 style="pointer-events:none;"
               />
             </g>
@@ -434,9 +466,12 @@ function pendingPath() {
                 class="flex items-center justify-between px-3 py-2 border-b"
                 :class="node.sourceId ? 'bg-purple-900/30 border-purple-900/50' : 'bg-neutral-800/50 border-neutral-800'"
               >
-                <span class="text-[9px] font-mono font-bold truncate flex-1 pr-2 leading-tight"
-                  :class="node.sourceId ? 'text-purple-200' : 'text-white'"
-                >{{ node.name }}</span>
+                <span class="flex items-center gap-1.5 flex-1 pr-2 min-w-0">
+                  <component v-if="node.sourceId" :is="appIconMap[node.sourceId]" class="w-3 h-3 text-purple-400 shrink-0" />
+                  <span class="text-[9px] font-mono font-bold truncate leading-tight"
+                    :class="node.sourceId ? 'text-purple-200' : 'text-white'"
+                  >{{ node.name }}</span>
+                </span>
                 <button
                   @click.stop="removeNode(node.id)"
                   class="text-neutral-600 hover:text-red-400 transition-colors shrink-0"
@@ -471,10 +506,6 @@ function pendingPath() {
                   </div>
                 </div>
               </template>
-              <!-- App node: source-only label -->
-              <div v-else class="px-3 py-1.5">
-                <span class="text-[7px] font-mono text-purple-400/60 uppercase tracking-widest">MIDI Source</span>
-              </div>
             </div>
 
             <!-- OUT port -->
