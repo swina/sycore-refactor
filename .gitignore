@@ -26,7 +26,7 @@ src/data/program_change/junk*
 *.local
 scratch
 .deepseek
-
+graphify-out
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
