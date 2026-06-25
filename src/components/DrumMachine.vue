@@ -43,6 +43,7 @@ const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
 // Preset panel
 const showPresets    = ref(false)
 const newPresetName  = ref('')
+const currentPresetId = ref(null)
 
 // Init confirmation
 const initConfirm     = ref(false)
@@ -407,17 +408,30 @@ async function _tlDmStartHandler(e) {
 }
 function _tlDmStopHandler() { drumStore.isPlaying = false }
 
+function _onPadTrigger(e) {
+  const { trackIdx, velocity } = e.detail ?? {}
+  if (typeof trackIdx === 'number' && trackIdx >= 0 && trackIdx < 8) {
+    drumEngine.triggerPad(trackIdx, { velocity: velocity ?? 100, accent: false, time: 0 })
+  }
+}
+
 onMounted(async () => {
   drumEngine.initDrumEngine()
   drumEngine.setDelayTime(drumStore.bpm)
-  await loadAllSamples(drumStore.currentPattern)
-  pushAllFxToEngine(drumStore.currentPattern)
+  if (drumStore.presets.length) {
+    const last = drumStore.presets[drumStore.presets.length - 1]
+    await handleLoadPreset(last)
+  } else {
+    await loadAllSamples(drumStore.currentPattern)
+    pushAllFxToEngine(drumStore.currentPattern)
+  }
   window.addEventListener('dm-master-volume',  _onMasterVolume)
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
   window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.addEventListener('timeline-dm-start', _tlDmStartHandler)
   window.addEventListener('timeline-dm-stop',  _tlDmStopHandler)
+  window.addEventListener('dm-pad-trigger',    _onPadTrigger)
 })
 
 onUnmounted(() => {
@@ -434,6 +448,7 @@ onUnmounted(() => {
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.removeEventListener('timeline-dm-start', _tlDmStartHandler)
   window.removeEventListener('timeline-dm-stop',  _tlDmStopHandler)
+  window.removeEventListener('dm-pad-trigger',    _onPadTrigger)
 })
 
 // ── File / URL loading ─────────────────────────────────────────────────────────
@@ -498,6 +513,7 @@ function handleSavePreset() {
 
 async function handleLoadPreset(preset) {
   drumStore.loadPreset(preset)
+  currentPresetId.value = preset.id
   chain.value           = preset.chain?.length === 8 ? [...preset.chain] : Array(8).fill(null)
   autofillEnabled.value = preset.autofillEnabled ?? false
   autofillEvery.value   = preset.autofillEvery   ?? 4
@@ -782,7 +798,7 @@ function cycleChainSlot(i) {
             ]"
             title="When active, Generate writes to Fill pattern instead of sequence"
           >→Fill</button> -->
-          <div class="relative -mt-0.5">
+          <div class="relative -mt-0.5" :class="mappingStore.mappedParams.has('dm_generate') ? 'ring-1 ring-amber-500/60 rounded-lg' : ''">
             <button
               @click.stop="generatePattern"
               @contextmenu.prevent="openMenu($event, { name: 'dm_generate', label: 'Drum Machine: Generate' })"
@@ -970,10 +986,12 @@ function cycleChainSlot(i) {
         <div class="flex items-center gap-2">
           <!-- Track label + load sample -->
           <div
-            class="flex items-center gap-1 shrink-0 p-1 rounded-lg"
+            class="relative flex items-center gap-1 shrink-0 p-1 rounded-lg"
             style="width: 92px;"
             @dragover.prevent
             @drop="handleTrackUrlDrop(trackIdx, $event)"
+            @contextmenu.prevent="openMenu($event, { name: 'dm_pad_' + trackIdx, label: 'Drum Machine: ' + track.label })"
+            :class="mappingStore.mappedParams.has('dm_pad_' + trackIdx) ? 'ring-1 ring-amber-500/60' : ''"
           >
             <label
               @click.stop="openFolderBrowserForTrack(trackIdx)"
@@ -1014,6 +1032,10 @@ function cycleChainSlot(i) {
               class="w-1.5 h-1.5 rounded-full shrink-0 border bg-neutral-700 border-neutral-600"
               title="No sample loaded"
             />
+            <span
+              v-if="mappingStore.learningParamName === ('dm_pad_' + trackIdx)"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+            />
           </div>
 
           <!-- Mute / Solo -->
@@ -1044,6 +1066,7 @@ function cycleChainSlot(i) {
           <!-- Volume knob (compact fader) -->
           <div
             class="flex flex-col relative shrink-0 gap-2"
+            :class="mappingStore.mappedParams.has('dm_vol_' + trackIdx) ? 'ring-1 ring-amber-500/60 rounded' : ''"
             @contextmenu.prevent="openMenu($event, { name: 'dm_vol_' + trackIdx, label: 'Drum Machine: ' + track.label + ' Vol' })"
           >
             <input
@@ -1214,6 +1237,7 @@ function cycleChainSlot(i) {
             v-for="seq in SEQUENCES"
             :key="seq"
             class="relative"
+            :class="mappingStore.mappedParams.has('dm_seq_' + seq.toLowerCase()) ? 'ring-1 ring-amber-500/60 rounded' : ''"
           >
             <button
               @click.stop="clickSequenceTab(seq)"
@@ -1292,7 +1316,7 @@ function cycleChainSlot(i) {
         
 
         <!-- Play / Stop -->
-        <div class="relative ml-3 mb-2">
+        <div class="relative ml-3 mb-2" :class="mappingStore.mappedParams.has('dm_play_stop') ? 'ring-1 ring-amber-500/60 rounded-lg' : ''">
           <button
             @click.stop="handlePlayStop"
             @contextmenu.prevent="openMenu($event, { name: 'dm_play_stop', label: 'Drum Machine: Play/Stop' })"
@@ -1355,11 +1379,19 @@ function cycleChainSlot(i) {
           />
         </div>
 
-        <span
-          v-if="drumStore.currentPresetName"
-          class="ml-auto text-[9px] font-mono text-neutral-500 truncate max-w-[120px]"
-          :title="drumStore.currentPresetName"
-        >{{ drumStore.currentPresetName }}</span>
+        <div v-if="drumStore.currentPresetName" class="ml-auto flex items-center gap-1 min-w-0">
+          <span
+            class="text-[9px] font-mono text-neutral-500 truncate max-w-[120px]"
+            :title="drumStore.currentPresetName"
+          >{{ drumStore.currentPresetName }}</span>
+          <button
+            @click.stop="overwritePresetWithToast(currentPresetId)"
+            class="p-1 rounded text-neutral-600 hover:text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
+            title="Save (overwrite preset)"
+          >
+            <Save class="w-3 h-3" />
+          </button>
+        </div>
 
       </div>
 
@@ -1411,6 +1443,7 @@ function cycleChainSlot(i) {
         <!-- Master Volume -->
         <div
           class="relative flex items-center gap-2"
+          :class="mappingStore.mappedParams.has('dm_level_master') ? 'ring-1 ring-amber-500/60 rounded' : ''"
           @contextmenu.prevent="openMenu($event, { name: 'dm_level_master', label: 'Drum Machine: Master Volume' })"
         >
           <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Vol</span>
@@ -1432,7 +1465,7 @@ function cycleChainSlot(i) {
 
         <!-- Repeater -->
         <div class="flex items-center gap-2">
-          <div class="relative -mt-1">
+          <div class="relative -mt-1" :class="mappingStore.mappedParams.has('dm_repeat') ? 'ring-1 ring-amber-500/60 rounded' : ''">
             <button
               @click.stop="drumStore.repeaterActive = !drumStore.repeaterActive"
               @contextmenu.prevent="openMenu($event, { name: 'dm_repeat', label: 'Drum Machine: Repeat' })"
@@ -1470,7 +1503,7 @@ function cycleChainSlot(i) {
 
         <!-- Fill -->
         <div class="flex items-center gap-1">
-          <div class="relative">
+          <div class="relative" :class="mappingStore.mappedParams.has('dm_fill') ? 'ring-1 ring-amber-500/60 rounded' : ''">
             <button
               @click.stop="triggerFill"
               @contextmenu.prevent="openMenu($event, { name: 'dm_fill', label: 'Drum Machine: Fill' })"

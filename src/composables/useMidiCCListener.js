@@ -270,6 +270,13 @@ export function useMidiCCListener() {
       if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq } }))
       return
     }
+    if (fieldName.startsWith('dm_pad_')) {
+      const idx = parseInt(fieldName.slice(7))
+      if (!isNaN(idx)) {
+        window.dispatchEvent(new CustomEvent('dm-pad-trigger', { detail: { trackIdx: idx, velocity: val } }))
+      }
+      return
+    }
     if (fieldName.startsWith('dm_vol_')) {
       const idx = parseInt(fieldName.slice(7))
       if (!isNaN(idx)) drumStore.setTrackVolume(idx, val / 127)

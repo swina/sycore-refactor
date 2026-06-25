@@ -144,6 +144,7 @@ const availPerfSets  = ref([])   // loaded from SYCORE_PC_PERFORMANCE_SETS when 
 const newMkrPerfSet  = ref({ setId: '', setName: '' })
 const newMkrLm       = ref({ padIdx: 0 })
 const newMkrDm       = ref({ presetName: '', seqKey: '', chainEnabled: null })
+const newMkrGoto     = ref({ targetTime: '0:00', repeat: false })
 
 // ─── IDB Save / Load ───────────────────────────────────────────────────────
 const TL_COL         = () => collection(db, 'users', authStore.user?.uid, 'timeline_sets')
@@ -170,6 +171,7 @@ const MARKER_TYPES = [
   { value: 'lm-stop',          label: 'Stop Loop Machine',        hasValue: false },
   { value: 'dm-start',         label: 'Start Drum Machine',       hasValue: false },
   { value: 'dm-stop',          label: 'Stop Drum Machine',        hasValue: false },
+  { value: 'goto',             label: 'Go To Time',               hasValue: false },
 ]
 
 const newMkrType = computed(() => MARKER_TYPES.find(t => t.value === newMkr.value.type))
@@ -250,6 +252,7 @@ const MKR_COLORS = {
   'lm-stop':         '#d97706',
   'dm-start':        '#ec4899',
   'dm-stop':         '#be185d',
+  'goto':            '#a78bfa',
 }
 
 const MKR_ICONS = {
@@ -268,6 +271,7 @@ const MKR_ICONS = {
   'lm-stop':         '⊗',
   'dm-start':        '⬡',
   'dm-stop':         '⬢',
+  'goto':            '⏩',
 }
 
 const MKR_ABBREV = {
@@ -286,6 +290,7 @@ const MKR_ABBREV = {
   'lm-stop':         'LM■',
   'dm-start':        'DM▶',
   'dm-stop':         'DM■',
+  'goto':            'GOTO',
 }
 
 function segColor(idx)    { return SEG_COLORS[segments.value[idx]?.trackIdx % SEG_COLORS.length ?? idx % SEG_COLORS.length] }
@@ -313,6 +318,7 @@ function mDisplayValue(m) {
     case 'program-change': return m.soundName ? m.soundName : `PC ${m.value}`
     case 'lm-start':       return `Pad ${(m.padIdx ?? 0) + 1}`
     case 'dm-start':       return [m.presetName, m.seqKey ? `Seq ${m.seqKey}` : ''].filter(Boolean).join(' / ') || '(current)'
+    case 'goto':           return formatTime(m.targetSec ?? 0) + (m.repeat ? ' ↻' : '')
     default:               return ''
   }
 }
@@ -366,6 +372,8 @@ function formatTime(t) {
 function play() {
   if (isPlaying.value || totalDuration.value === 0) return
   const resumingFromPause = isPaused.value
+  // On fresh start (not pause-resume), reset the player so the same-idx guard doesn't block
+  if (!resumingFromPause) window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
   _posAtStart = timelinePos.value
   _startedAt  = performance.now()
   isPlaying.value = true
@@ -387,9 +395,12 @@ function pause() {
   isPlaying.value = false
   isPaused.value  = true
   window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
+  window.dispatchEvent(new CustomEvent('timeline-lm-stop'))
+  window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
+  window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false, source: 'timeline' } }))
   if (syncStore.syncTimelineToAudioCapture)
     window.dispatchEvent(new CustomEvent('capture-stop-rec'))
-  midiStore.sendStop()  // always send MIDI STOP on pause
+  midiStore.sendStop()
 }
 
 function stop() {
@@ -579,6 +590,27 @@ function _fireMarker(m) {
     case 'dm-stop':
       window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
       break
+    case 'goto': {
+      const target = m.targetSec ?? 0
+      // Stop current playback so the same-idx guard in BackingTrackPlayer doesn't block restart
+      window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
+      timelinePos.value = target
+      _posAtStart = target
+      _startedAt  = performance.now()
+      // Re-sync _fired to the new position
+      markers.value.forEach(mk => {
+        if (mk.id === m.id) return
+        if (mk.position < target) _fired.add(mk.id)
+        else _fired.delete(mk.id)
+      })
+      segBounds.value.forEach((b, i) => {
+        if (b.end <= target) _fired.add(`seg_${i}`)
+        else _fired.delete(`seg_${i}`)
+      })
+      // repeat: true → remove from _fired so it fires again next pass
+      if (m.repeat) _fired.delete(m.id)
+      break
+    }
   }
 }
 
@@ -867,8 +899,9 @@ function openAddMarker() {
     setId:   availPerfSets.value[0]?.id   || '',
     setName: availPerfSets.value[0]?.name || '',
   }
-  newMkrLm.value = { padIdx: 0 }
-  newMkrDm.value = { presetName: '', seqKey: '', chainEnabled: null }
+  newMkrLm.value   = { padIdx: 0 }
+  newMkrDm.value   = { presetName: '', seqKey: '', chainEnabled: null }
+  newMkrGoto.value = { targetTime: '0:00', repeat: false }
   showAddMarker.value = true
 }
 
@@ -904,6 +937,11 @@ function confirmAddMarker() {
       presetName:   newMkrDm.value.presetName || '',
       seqKey:       newMkrDm.value.seqKey     || '',
       chainEnabled: newMkrDm.value.chainEnabled,
+    }
+  } else if (type === 'goto') {
+    extra = {
+      targetSec: parseTimeStr(newMkrGoto.value.targetTime),
+      repeat:    newMkrGoto.value.repeat,
     }
   }
 
@@ -1209,7 +1247,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Timeline canvas -->
-      <div class="shrink-0 overflow-hidden relative bg-neutral-950 pl-8" style="height: 158px;">
+      <div class="shrink-0 overflow-hidden relative bg-neutral-950 pl-8 min-h-[30vh]" style="height: 158px;">
 
         <!-- Empty state -->
         <div v-if="!segments.length" class="absolute inset-0 flex flex-col items-center justify-center text-neutral-700 gap-2 pointer-events-none">
@@ -1293,7 +1331,7 @@ onUnmounted(() => {
               <div
                 v-for="(seg, idx) in segments"
                 :key="seg.id"
-                class="absolute top-1 bottom-1 rounded border-l-[3px] flex flex-col items-start justify-start overflow-hidden cursor-pointer select-none"
+                class="absolute top-1 bottom-1 rounded border-l-[3px] min-h-[20vh] flex flex-col items-start justify-start overflow-hidden cursor-pointer select-none"
                 :class="[
                   activeSegIdx === idx ? 'ring-1 ring-white/30' : '',
                   selectedSegIdx === idx ? 'ring-2 ring-white/60 brightness-125' : ''
@@ -1442,9 +1480,18 @@ onUnmounted(() => {
               </template>
             </div>
           </div>
-          <button @click="selectedMarkerId = null" class="ml-auto shrink-0 text-neutral-700 hover:text-neutral-400 transition-colors p-1">
-            <X class="w-3 h-3" />
-          </button>
+          <div class="ml-auto flex items-center gap-1 shrink-0">
+            <button
+              @click="removeMarker(selectedMarkerId); selectedMarkerId = null"
+              class="text-neutral-700 hover:text-red-400 transition-colors p-1"
+              title="Delete marker"
+            >
+              <Trash2 class="w-3 h-3" />
+            </button>
+            <button @click="selectedMarkerId = null" class="text-neutral-700 hover:text-neutral-400 transition-colors p-1">
+              <X class="w-3 h-3" />
+            </button>
+          </div>
         </div>
         </div><!-- /left column -->
 
@@ -1895,6 +1942,34 @@ onUnmounted(() => {
                   <option :value="true">Enable chain</option>
                   <option :value="false">Disable chain</option>
                 </select>
+              </div>
+            </template>
+
+            <!-- Go To Time -->
+            <template v-if="newMkr.type === 'goto'">
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Target Time <span class="text-neutral-600">(mm:ss)</span>
+                </label>
+                <input
+                  v-model="newMkrGoto.targetTime"
+                  type="text" placeholder="e.g. 1:30"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-violet-500 outline-none font-mono"
+                />
+                <div class="mt-1 text-[9px] font-mono text-neutral-600">
+                  = {{ parseTimeStr(newMkrGoto.targetTime).toFixed(1) }}s
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <input
+                  id="mkr-goto-repeat"
+                  v-model="newMkrGoto.repeat"
+                  type="checkbox"
+                  class="w-4 h-4 accent-violet-500 rounded"
+                />
+                <label for="mkr-goto-repeat" class="text-xs text-neutral-300 cursor-pointer select-none">
+                  Repeat <span class="text-neutral-600">(fires every time playhead crosses this position)</span>
+                </label>
               </div>
             </template>
 

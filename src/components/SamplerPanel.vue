@@ -32,16 +32,20 @@
 
       <!-- Bank selector A–H -->
       <div class="flex items-center gap-1 px-3 pt-2 pb-1 shrink-0">
-        <button
-          v-for="b in BANKS" :key="b"
-          @click="samplerStore.activeBank = b"
-          :class="[
-            'w-7 h-7 rounded text-[10px] font-black uppercase tracking-widest transition-colors border',
-            activeBank === b
-              ? 'bg-violet-600 border-violet-500 text-white'
-              : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-violet-500/50 hover:text-white'
-          ]"
-        >{{ b }}</button>
+        <div v-for="b in BANKS" :key="b" class="relative">
+          <button
+            @click="samplerStore.activeBank = b"
+            @contextmenu.prevent="openMenu($event, { name: 'sampler_bank_' + b, label: 'Sampler: Bank ' + b })"
+            :class="[
+              'w-7 h-7 rounded text-[10px] font-black uppercase tracking-widest transition-colors border',
+              activeBank === b
+                ? 'bg-violet-600 border-violet-500 text-white'
+                : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-violet-500/50 hover:text-white',
+              mappingStore.mappedParams?.has('sampler_bank_' + b) ? 'ring-1 ring-amber-500/60' : ''
+            ]"
+          >{{ b }}</button>
+          <span v-if="mappingStore.learningParamName === 'sampler_bank_' + b" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+        </div>
       </div>
 
       <!-- Pad grid: 7 pads -->
@@ -60,13 +64,15 @@
                   : 'border-neutral-700 bg-neutral-900/50 hover:border-neutral-600',
             selectedPad === i ? 'ring-1 ring-violet-400/60 bg-orange-500/20' : '',
             i === 6 ? 'border-dashed' : '',
+            mappingStore.mappedParams?.has('sampler_pad_' + i) ? 'ring-1 ring-amber-500/60' : '',
           ]"
           style="height: 72px"
           @click="handlePadClick(i)"
-          @contextmenu.prevent="handlePadRightClick(i)"
+          @contextmenu.prevent="handlePadRightClick($event, i)"
         >
           <span class="text-[8px] font-mono text-neutral-600 absolute top-1 left-1.5">{{ i + 1 }}</span>
           <span v-if="i === 6" class="text-[7px] font-mono text-violet-400/50 absolute top-1 right-1.5 uppercase tracking-widest">G</span>
+          <span v-if="mappingStore.learningParamName === 'sampler_pad_' + i" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
 
           <!-- Mute / Solo -->
           <div class="absolute bottom-1 left-0 right-0 flex justify-center gap-0.5">
@@ -152,8 +158,11 @@
           <!-- Clear pad -->
           <button
             @click="clearPad(selectedPad)"
-            class="text-[9px] font-mono text-red-500/60 hover:text-red-400 transition-colors px-1.5 py-0.5 border border-red-500/20 rounded hover:border-red-400/40"
-          >clear</button>
+            class="p-1.5 rounded border border-red-500/20 text-red-500/60 hover:text-red-400 hover:border-red-400/40 transition-colors"
+            title="Remove sound from pad"
+          >
+            <Trash2 class="w-3.5 h-3.5" />
+          </button>
         </div>
 
         <!-- Control panels -->
@@ -276,17 +285,21 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Music2, X, Minus } from 'lucide-vue-next'
+import { Music2, X, Minus, Trash2 } from 'lucide-vue-next'
 import { useUiStore }            from '@/stores/useUiStore'
 import { useSamplerStore }       from '@/stores/useSamplerStore'
+import { useMappingStore }       from '@/stores/useMappingStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useFreesoundCache }     from '@/composables/useFreesoundCache'
+import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
 import * as engine               from '@/lib/sampler-engine'
 import { midiService }           from '@/core/midi/MidiService'
 import KnobDial                  from '@/components/ui/KnobDial.vue'
 
 const uiStore      = useUiStore()
 const samplerStore = useSamplerStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 const { cacheFileBlob, resolveUrl } = useFreesoundCache()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
@@ -380,9 +393,10 @@ function handlePadClick(padIdx) {
   padArmed.value = padArmed.value.map((v, i) => i === padIdx ? true : v)
 }
 
-function handlePadRightClick(padIdx) {
+function handlePadRightClick(event, padIdx) {
   selectedPad.value = padIdx
-  if (activeBankData.value?.pads[padIdx]?.url) clearPad(padIdx)
+  const pad = activeBankData.value?.pads[padIdx]
+  openMenu(event, { name: `sampler_pad_${padIdx}`, label: pad?.label ? `Sampler: ${pad.label}` : `Sampler Pad ${padIdx + 1}` })
 }
 
 function clearPad(padIdx) {
@@ -497,8 +511,49 @@ function midiNoteName(n) {
 }
 
 let _unsubMidiNote = null
+let _unsubMidiRaw  = null
 // Tracks which MIDI note triggered each pad so Note OFF can match
 const _midiNotePlaying = new Map()
+
+function _startMidiMappingListener() {
+  _unsubMidiRaw = midiService.addRawListener((event) => {
+    if (!event.data || event.data.length < 3) return
+    const status  = event.data[0]
+    const type    = status & 0xF0
+    const channel = status & 0x0F
+    const byte1   = event.data[1]
+    const byte2   = event.data[2]
+
+    const isCC   = type === 0xB0
+    const isNote = type === 0x90 && byte2 > 0
+    if (!isCC && !isNote) return
+    if (isCC && byte2 === 0) return
+
+    const inputId   = event.target?.id
+    const inputPort = midiService.getInputs().find(i => i.id === inputId)
+    const device    = inputPort?.name || null
+
+    const keyParts = []
+    if (device) keyParts.push(device)
+    keyParts.push(`CH${channel + 1}`)
+    keyParts.push(isNote ? `NOTE${byte1}` : `CC${byte1}`)
+    const key = keyParts.join(':')
+
+    const mapping = mappingStore.midiMappings[key]
+    if (!mapping) return
+    const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+    if (!paramName) return
+
+    if (paramName.startsWith('sampler_bank_')) {
+      const bank = paramName.slice('sampler_bank_'.length)
+      if (samplerStore.BANKS.includes(bank)) samplerStore.activeBank = bank
+    } else if (paramName.startsWith('sampler_pad_')) {
+      const padIdx = parseInt(paramName.slice('sampler_pad_'.length))
+      if (!isNaN(padIdx) && padIdx >= 0 && padIdx < 7)
+        padArmed.value = padArmed.value.map((v, i) => i === padIdx ? !v : v)
+    }
+  })
+}
 
 async function _onMidiNote(type, note, velocity, _chan, inputId) {
   const bank = samplerStore.activeBankData
@@ -555,11 +610,13 @@ async function _onMidiNote(type, note, velocity, _chan, inputId) {
 onMounted(() => {
   window.addEventListener('sampler-pad-assign', _onSamplerPadAssign)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNote)
+  _startMidiMappingListener()
 })
 
 onUnmounted(() => {
   window.removeEventListener('sampler-pad-assign', _onSamplerPadAssign)
   _unsubMidiNote?.()
+  _unsubMidiRaw?.()
   engine.stopAll()
 })
 </script>
