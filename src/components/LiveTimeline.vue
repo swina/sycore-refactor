@@ -6,6 +6,7 @@ import {
   Save, FilePlus, FolderOpen, AudioLines
 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import { detectBpmFromUrl }      from '@/composables/useBpmDetector'
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { usePresetStore }  from '@/stores/usePresetStore'
 import { MidiSource }      from '@/core/midi/MidiService'
@@ -107,6 +108,13 @@ const librarySelected = ref(null)   // track object from library, pending add
 const folderPendingTrack = ref(null)  // { id, label, url, duration, author }
 const folderSaveToLib    = ref(false)
 const folderSaving       = ref(false)
+
+// Save-to-library prompt after direct folder→timeline assign
+const showSaveToLibPrompt = ref(false)
+const saveToLibCandidate  = ref(null)   // { url: dataUrl, label, duration, playlistIdx }
+const saveToLibSaving     = ref(false)
+const bpmDetecting        = ref(false)
+const bpmEditable         = ref('')
 
 const libraryFiltered = computed(() => {
   const q = librarySearch.value.toLowerCase().trim()
@@ -761,12 +769,19 @@ function openFolderForTimeline() {
     label: 'Add to Timeline',
     onAssign: async (file) => {
       const raw      = await file.handle.getFile()
-      const url      = URL.createObjectURL(raw)
-      const duration = await probeDuration(url)
+      const blobUrl  = URL.createObjectURL(raw)
+      const duration = await probeDuration(blobUrl)
+      // Keep blobUrl alive — reused for BPM detection below
+      const dataUrl  = await new Promise((res, rej) => {
+        const reader = new FileReader()
+        reader.onload  = () => res(reader.result)
+        reader.onerror = rej
+        reader.readAsDataURL(raw)
+      })
       const track    = {
         id:     `folder_${Date.now()}`,
         label:  file.name.replace(/\.[^.]+$/, ''),
-        url,
+        url:    dataUrl,
         author: 'Sound Folder',
         duration,
       }
@@ -780,6 +795,22 @@ function openFolderForTimeline() {
         label:    track.label,
       })
       uiStore.soundFolderAssignTarget = null
+      saveToLibCandidate.value  = { url: dataUrl, label: track.label, duration, playlistIdx: trackIdx }
+      showSaveToLibPrompt.value = true
+      bpmEditable.value         = ''
+      bpmDetecting.value        = true
+      detectBpmFromUrl(blobUrl)
+        .then(detected => {
+          URL.revokeObjectURL(blobUrl)
+          bpmDetecting.value = false
+          if (detected) {
+            bpmEditable.value = String(detected)
+            // Write BPM into the playlist entry so timeline segment tempo sync works
+            const pl = [...livePadStore.playlist]
+            if (pl[trackIdx]) { pl[trackIdx] = { ...pl[trackIdx], bpm: detected }; livePadStore.playlist = pl }
+          }
+        })
+        .catch(() => { URL.revokeObjectURL(blobUrl); bpmDetecting.value = false })
     },
   }
   uiStore.isSoundFolderBrowserOpen = true
@@ -873,6 +904,37 @@ function moveSeg(idx, dir) {
   if (t < 0 || t >= arr.length) return
   ;[arr[idx], arr[t]] = [arr[t], arr[idx]]
   segments.value = arr
+}
+
+async function confirmSaveToLib() {
+  const c = saveToLibCandidate.value
+  if (!c || !authStore.user?.uid) return
+  saveToLibSaving.value = true
+  try {
+    const bpmVal = Number(bpmEditable.value)
+    const data = {
+      url:       c.url,
+      label:     c.label,
+      genre:     'Local',
+      duration:  c.duration || 0,
+      createdAt: serverTimestamp(),
+    }
+    if (bpmVal > 0) data.bpm = bpmVal
+    await addDoc(collection(db, 'users', authStore.user.uid, 'backing_tracks'), data)
+    // Ensure playlist entry has BPM even if detection finished after prompt opened
+    if (bpmVal > 0 && c.playlistIdx != null) {
+      const pl = [...livePadStore.playlist]
+      if (pl[c.playlistIdx]) { pl[c.playlistIdx] = { ...pl[c.playlistIdx], bpm: bpmVal }; livePadStore.playlist = pl }
+    }
+  } catch (e) {
+    console.error('[Timeline] saveToLib', e)
+  } finally {
+    saveToLibSaving.value     = false
+    showSaveToLibPrompt.value = false
+    saveToLibCandidate.value  = null
+    bpmEditable.value         = ''
+    bpmDetecting.value        = false
+  }
 }
 
 // ─── Marker ops ────────────────────────────────────────────────────────────
@@ -2040,6 +2102,53 @@ onUnmounted(() => {
             <button @click="confirmAddMarker" class="flex-1 py-2 rounded-lg bg-violet-600 text-white font-black text-sm hover:bg-violet-500 transition-colors active:scale-95">
               Add
             </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── Save to Library Prompt ───────────────────────────────────────────── -->
+    <Teleport to="body">
+      <div
+        v-if="showSaveToLibPrompt"
+        class="fixed inset-0 z-[9999] flex items-center justify-center"
+        @click.self="showSaveToLibPrompt = false; saveToLibCandidate = null"
+      >
+        <div class="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 w-80 shadow-2xl flex flex-col gap-4">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-black uppercase tracking-widest text-synth-neon">Save to Library?</span>
+            <span class="text-sm text-neutral-300 truncate">{{ saveToLibCandidate?.label }}</span>
+            <span class="text-xs text-neutral-600">Also add this track to TracksPlayer library for reuse.</span>
+          </div>
+          <!-- BPM row -->
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-black uppercase tracking-widest text-neutral-500 w-10 shrink-0">BPM</span>
+            <div v-if="bpmDetecting" class="flex items-center gap-2 text-xs text-neutral-500">
+              <svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              Detecting…
+            </div>
+            <input
+              v-else
+              v-model="bpmEditable"
+              type="number"
+              min="20" max="300"
+              placeholder="—"
+              class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-synth-neon/50"
+            />
+          </div>
+          <div class="flex gap-2">
+            <button
+              @click="showSaveToLibPrompt = false; saveToLibCandidate = null; bpmEditable = ''; bpmDetecting = false"
+              class="flex-1 py-2 rounded-lg border border-neutral-800 text-neutral-500 hover:text-white text-sm transition-colors"
+            >Skip</button>
+            <button
+              @click="confirmSaveToLib"
+              :disabled="saveToLibSaving || bpmDetecting"
+              class="flex-1 py-2 rounded-lg bg-synth-neon/20 border border-synth-neon/40 text-synth-neon font-black text-sm hover:bg-synth-neon/30 transition-colors active:scale-95 disabled:opacity-50"
+            >{{ saveToLibSaving ? 'Saving…' : 'Save' }}</button>
           </div>
         </div>
       </div>
