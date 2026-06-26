@@ -1,6 +1,6 @@
 <template>
   <div
-    v-show="uiStore.isMidiControllerDesignerOpen"
+    v-show="uiStore.isMidiControllerDesignerOpen && !isMinimized"
     :style="panelStyle"
     class="fixed flex flex-col bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl"
     @mousedown="bringToFront"
@@ -24,13 +24,6 @@
         </button>
       </div>
     </div>
-
-    <!-- Minimized bar -->
-    <div v-if="isMinimized" class="px-3 py-1.5 text-[10px] text-neutral-500 font-mono">
-      Controller Designer · {{ activePreset?.controls.length ?? 0 }} controls
-    </div>
-
-    <template v-if="!isMinimized">
 
       <!-- Toolbar -->
       <div class="flex items-center gap-2 px-3 py-2 bg-neutral-900/60 border-b border-neutral-800 shrink-0 flex-wrap">
@@ -128,6 +121,38 @@
           <MousePointer2 class="w-3 h-3" />
           Design
         </button>
+
+        <!-- Simulate mode toggle -->
+        <button
+          @click="toggleSimulateMode"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors',
+            isSimulateMode
+              ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-emerald-500/40 hover:text-emerald-400'
+          ]"
+          title="Toggle simulate mode — controls fire their assigned actions"
+        >
+          <Zap class="w-3 h-3" />
+          Simulate
+        </button>
+
+        <div class="w-px h-4 bg-neutral-700 mx-1" />
+
+        <!-- MIDI monitor toggle -->
+        <button
+          @click="showMidiMonitor = !showMidiMonitor"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors',
+            showMidiMonitor
+              ? 'bg-sky-500/20 border-sky-500/60 text-sky-400'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-sky-500/40 hover:text-sky-400'
+          ]"
+          title="Toggle MIDI monitor"
+        >
+          <Activity class="w-3 h-3" />
+          Monitor
+        </button>
       </div>
 
       <!-- Bulk action bar (design mode) -->
@@ -177,6 +202,17 @@
         </template>
       </div>
 
+      <!-- Simulate mode info strip -->
+      <div
+        v-if="isSimulateMode"
+        class="flex items-center gap-2 px-3 py-1.5 bg-emerald-950/30 border-b border-emerald-800/30 shrink-0"
+      >
+        <Zap class="w-3 h-3 text-emerald-400 shrink-0" />
+        <span class="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">
+          Simulate — interact with controls to fire assigned actions
+        </span>
+      </div>
+
       <!-- Canvas + Drawer row -->
       <div class="flex flex-1 overflow-hidden">
 
@@ -184,7 +220,7 @@
       <div
         ref="canvasRef"
         class="relative flex-1 overflow-hidden bg-neutral-950"
-        :class="isDesignMode ? 'cursor-default' : 'cursor-crosshair'"
+        :class="isDesignMode ? 'cursor-default' : isSimulateMode ? 'cursor-pointer' : 'cursor-crosshair'"
         style="min-height: 300px"
         @mousedown="onCanvasMouseDown"
       >
@@ -364,8 +400,95 @@
         <!-- Drawer content -->
         <div class="flex-1 overflow-y-auto custom-scrollbar">
 
+          <!-- Pending assignment confirmation panel -->
+          <template v-if="pendingAssignment">
+            <div class="p-3 space-y-3">
+
+              <!-- Selected item -->
+              <div class="bg-violet-900/20 border border-violet-700/40 rounded-lg px-2.5 py-2">
+                <p class="text-[9px] text-violet-300 font-bold leading-tight">{{ pendingAssignment.label }}</p>
+              </div>
+
+              <!-- Trigger mode (actions only, not continuous) -->
+              <template v-if="pendingAssignment.type === 'action' && !isContinuousSelected">
+                <div>
+                  <p class="text-[9px] text-neutral-500 uppercase tracking-widest mb-1.5">Trigger on value</p>
+                  <div class="flex flex-col gap-1">
+                    <button
+                      @click="triggerMode = 'any'"
+                      :class="['px-2 py-1 rounded text-[9px] font-bold uppercase border transition-colors', triggerMode === 'any' ? 'bg-violet-500/20 border-violet-500/50 text-violet-300' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600']"
+                    >Any &gt; 63</button>
+                    <div class="flex items-center gap-1.5">
+                      <button
+                        @click="triggerMode = 'min'"
+                        :class="['flex-1 px-2 py-1 rounded text-[9px] font-bold uppercase border transition-colors', triggerMode === 'min' ? 'bg-violet-500/20 border-violet-500/50 text-violet-300' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600']"
+                      >Min ≥</button>
+                      <input
+                        type="number" min="1" max="127" :value="minValue"
+                        @click.stop="triggerMode = 'min'"
+                        @input="e => { triggerMode = 'min'; minValue = Math.max(1, Math.min(127, +e.target.value || 1)) }"
+                        class="w-12 bg-black border border-neutral-600 rounded px-1 py-0.5 text-center text-violet-300 font-mono text-[9px] focus:outline-none focus:border-violet-400"
+                      />
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <button
+                        @click="triggerMode = 'exact'"
+                        :class="['flex-1 px-2 py-1 rounded text-[9px] font-bold uppercase border transition-colors', triggerMode === 'exact' ? 'bg-violet-500/20 border-violet-500/50 text-violet-300' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600']"
+                      >Exact =</button>
+                      <input
+                        type="number" min="0" max="127" :value="exactValue"
+                        @click.stop="triggerMode = 'exact'"
+                        @input="e => { triggerMode = 'exact'; exactValue = Math.max(0, Math.min(127, +e.target.value || 0)) }"
+                        class="w-12 bg-black border border-neutral-600 rounded px-1 py-0.5 text-center text-violet-300 font-mono text-[9px] focus:outline-none focus:border-violet-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <p v-else-if="isContinuousSelected" class="text-[9px] text-violet-400/70 font-mono">Continuous — full CC range</p>
+
+              <!-- Consume -->
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" v-model="consume" class="w-3.5 h-3.5 accent-violet-500 rounded" />
+                <span class="text-[9px] text-neutral-400 uppercase tracking-wider font-bold">Consume MIDI</span>
+              </label>
+
+              <!-- LED Feedback (actions only) -->
+              <template v-if="pendingAssignment.type === 'action'">
+                <div class="border-t border-neutral-800 pt-2">
+                  <label class="flex items-center gap-2 cursor-pointer mb-2">
+                    <input type="checkbox" v-model="hasFeedback" class="w-3.5 h-3.5 accent-violet-500 rounded" />
+                    <span class="text-[9px] text-neutral-400 uppercase tracking-wider font-bold">LED Feedback</span>
+                  </label>
+                  <template v-if="hasFeedback">
+                    <div class="grid grid-cols-2 gap-1.5 mb-1.5">
+                      <div class="bg-black/40 rounded px-2 py-1 border border-neutral-700/50 flex items-center justify-between gap-1">
+                        <span class="text-[8px] text-green-500 font-black uppercase">ON</span>
+                        <input type="number" min="0" max="127" v-model.number="fbOn" class="w-10 bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-center text-[9px] font-mono text-white focus:border-green-500 outline-none" />
+                      </div>
+                      <div class="bg-black/40 rounded px-2 py-1 border border-neutral-700/50 flex items-center justify-between gap-1">
+                        <span class="text-[8px] text-red-500 font-black uppercase">OFF</span>
+                        <input type="number" min="0" max="127" v-model.number="fbOff" class="w-10 bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-center text-[9px] font-mono text-white focus:border-red-500 outline-none" />
+                      </div>
+                    </div>
+                    <button
+                      @click="testFeedback({ device: assignedDevice, note: drawerControl?.noteNumber, cc: drawerControl?.ccNumber, channel: (drawerControl?.channel ?? 1) - 1, feedbackOn: fbOn, feedbackOff: fbOff })"
+                      class="w-full bg-neutral-800 border border-neutral-700 rounded py-1 text-[8px] font-black uppercase text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+                    >Test LED</button>
+                  </template>
+                </div>
+              </template>
+
+              <!-- Confirm / Cancel -->
+              <div class="flex gap-1.5 pt-1">
+                <button @click="cancelAssignment" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-neutral-800 border border-neutral-700 rounded text-neutral-400 hover:text-white transition-colors">Cancel</button>
+                <button @click="confirmAssignment" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-violet-500 rounded text-white hover:bg-violet-400 transition-colors">Confirm</button>
+              </div>
+            </div>
+          </template>
+
           <!-- MIDI Actions tab -->
-          <template v-if="drawerTab === 'actions'">
+          <template v-else-if="drawerTab === 'actions'">
             <template v-for="(actions, group) in MIDI_ACTION_GROUPS" :key="group">
               <button
                 @click="collapsedActions.has(group) ? collapsedActions.delete(group) : collapsedActions.add(group); collapsedActions = new Set(collapsedActions)"
@@ -432,11 +555,21 @@
         />
         <div class="flex items-center gap-1">
           <span class="text-[9px] text-neutral-500">Color</span>
+          <button
+            v-for="c in COLOR_PALETTE" :key="c"
+            @click="selectedControl.color = c; debouncedSave()"
+            :style="{ background: c }"
+            :class="[
+              'w-4 h-4 rounded border-2 transition-all',
+              selectedControl.color === c ? 'border-white scale-125' : 'border-transparent hover:border-neutral-400'
+            ]"
+          />
           <input
             type="color"
             :value="selectedControl.color"
             @input="e => { selectedControl.color = e.target.value; debouncedSave() }"
-            class="w-6 h-6 rounded border border-neutral-700 cursor-pointer bg-transparent p-0"
+            class="w-4 h-4 rounded border border-neutral-700 cursor-pointer bg-transparent p-0"
+            title="Custom color"
           />
         </div>
         <div class="flex items-center gap-1">
@@ -477,12 +610,49 @@
         </span>
       </div>
 
+      <!-- MIDI monitor -->
+      <div
+        v-if="showMidiMonitor"
+        class="shrink-0 border-t border-sky-900/40 bg-black/60 flex flex-col"
+        style="max-height: 130px"
+      >
+        <div class="flex items-center justify-between px-3 py-1 border-b border-neutral-800 shrink-0">
+          <div class="flex items-center gap-1.5">
+            <Activity class="w-3 h-3 text-sky-400" />
+            <span class="text-[9px] font-black uppercase tracking-widest text-sky-400">MIDI Monitor</span>
+          </div>
+          <button @click="midiLog = []" class="text-[8px] text-neutral-600 hover:text-neutral-300 uppercase tracking-wider">Clear</button>
+        </div>
+        <div class="overflow-y-auto flex-1 custom-scrollbar px-2 py-1 space-y-0.5">
+          <div
+            v-if="midiLog.length === 0"
+            class="text-[9px] text-neutral-600 italic py-2 text-center"
+          >Waiting for MIDI…</div>
+          <div
+            v-for="(entry, i) in midiLog"
+            :key="i"
+            class="flex items-center gap-2 font-mono text-[9px] leading-tight"
+          >
+            <span
+              :class="[
+                'shrink-0 px-1 rounded font-black uppercase text-[8px]',
+                entry.type === 'cc'               ? 'bg-violet-900/60 text-violet-300' :
+                entry.type?.startsWith('note')    ? 'bg-emerald-900/60 text-emerald-300' :
+                                                    'bg-neutral-800 text-neutral-500'
+              ]"
+            >{{ entry.type }}</span>
+            <span class="text-neutral-500 shrink-0">ch{{ entry.channel }}</span>
+            <span class="text-neutral-300 truncate">{{ entry.decoded }}</span>
+            <span class="text-neutral-600 truncate text-[8px]">{{ entry.device }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Resize handle -->
       <div
         class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-0 hover:opacity-100"
         @mousedown.stop="e => onResizeStart(e, 'se')"
       />
-    </template>
   </div>
 
   <MidiMapContextMenu />
@@ -490,7 +660,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Cpu, Minus, X, Plus, Save, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2 } from 'lucide-vue-next'
+import { Cpu, Minus, X, Plus, Save, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity } from 'lucide-vue-next'
 import { useUiStore }            from '@/stores/useUiStore'
 import { useMidiStore }          from '@/stores/useMidiStore'
 import { useMappingStore }       from '@/stores/useMappingStore'
@@ -504,12 +674,17 @@ import {
   createControllerPreset,
   createControl,
 } from '@/lib/midi-controller-presets'
-import { APP_ACTION_LABELS, MIDI_ACTION_GROUPS } from '@/lib/app-midi-actions'
+import { APP_ACTION_LABELS, MIDI_ACTION_GROUPS, CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { useMidiFeedback } from '@/composables/useMidiFeedback'
+import { applyParamValue } from '@/composables/useMidiCCListener'
+import { useAppActions } from '@/composables/useAppActions'
 
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
+const { testFeedback } = useMidiFeedback()
+const { dispatchAction } = useAppActions()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
   useDraggableResizable({
@@ -560,7 +735,7 @@ const APP_SECTIONS = [
   {
     key: 'lpp', label: 'Live Performance Pad',
     items: [
-      { action: 'open_lpp', label: 'Open Live Pad' },
+      { action: 'open_lpp', label: 'Toggle Live Pad' },
       ...Array.from({ length: 16 }, (_, i) => ({ paramName: `lpp_set_${i}`,  label: `Set Pad ${i + 1}` })),
       ...Array.from({ length: 8 },  (_, i) => ({ paramName: `lpp_loop_${i}`, label: `Loop Pad ${i + 1}` })),
       ...Array.from({ length: 8 },  (_, i) => ({ paramName: `lpp_bt_${i}`,   label: `BT Pad ${i + 1}` })),
@@ -570,7 +745,7 @@ const APP_SECTIONS = [
   {
     key: 'sampler', label: 'Sampler',
     items: [
-      { action: 'open_sampler', label: 'Open Sampler' },
+      { action: 'open_sampler', label: 'Toggle Sampler' },
       ...['A','B','C','D','E','F','G','H'].map(b => ({ paramName: `sampler_bank_${b}`, label: `Bank ${b}` })),
       ...Array.from({ length: 7 }, (_, i) => ({ paramName: `sampler_pad_${i}`, label: `Pad ${i + 1}` })),
     ],
@@ -578,7 +753,7 @@ const APP_SECTIONS = [
   {
     key: 'dm', label: 'Drum Machine',
     items: [
-      { action: 'open_drum_machine', label: 'Open Drum Machine' },
+      { action: 'open_drum_machine', label: 'Toggle Drum Machine' },
       { paramName: 'dm_play_stop',    label: 'Play / Stop' },
       { paramName: 'dm_generate',     label: 'Generate' },
       { paramName: 'dm_repeat',       label: 'Repeat' },
@@ -592,7 +767,7 @@ const APP_SECTIONS = [
   {
     key: 'chord', label: 'Chord Prog Sequencer',
     items: [
-      { action: 'open_chord_prog', label: 'Open Chord Prog' },
+      { action: 'open_chord_prog', label: 'Toggle Chord Prog' },
       { action: 'seq_play',        label: 'Play' },
       { action: 'seq_stop',        label: 'Stop' },
       { action: 'seq_gen_trigger', label: 'Generate' },
@@ -606,9 +781,26 @@ const APP_SECTIONS = [
 const collapsedActions = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))
 const collapsedApp     = ref(new Set(APP_SECTIONS.map(s => s.key)))
 
+// Pending assignment — set when user clicks an action/param, confirmed before saving
+const pendingAssignment = ref(null) // { type: 'action'|'param', action?, paramName?, paramLabel?, label }
+const triggerMode       = ref('any')
+const exactValue        = ref(127)
+const minValue          = ref(1)
+const consume           = ref(true)
+const hasFeedback       = ref(false)
+const fbOn              = ref(127)
+const fbOff             = ref(0)
+
+const isContinuousSelected = computed(() =>
+  pendingAssignment.value?.action != null && CONTINUOUS_ACTIONS.has(pendingAssignment.value.action)
+)
+
 const selectedControlId = ref(null)
 const canvasRef         = ref(null)
 const isDesignMode      = ref(false)
+const isSimulateMode    = ref(false)
+const showMidiMonitor   = ref(false)
+const midiLog           = ref([])   // max 40 entries, newest first
 const selectedIds       = ref(new Set())
 const lassoStart        = ref(null)
 const lassoEnd          = ref(null)
@@ -638,6 +830,48 @@ const drawerControl = computed(() => {
     return controls.value.find(c => c.id === id) ?? null
   }
   return null
+})
+
+watch(drawerControl, () => { pendingAssignment.value = null })
+
+watch(showMidiMonitor, (on) => {
+  if (on) {
+    midiLog.value = []
+    _removeMonitorListener = midiService.addMonitorListener((entry) => {
+      if (entry.direction !== 'in') return
+      if (entry.type === 'clock') return
+      midiLog.value.unshift(entry)
+      if (midiLog.value.length > 40) midiLog.value.length = 40
+    })
+  } else {
+    _removeMonitorListener?.()
+    _removeMonitorListener = null
+    midiLog.value = []
+  }
+})
+
+// When MIDI Learn completes for a designer control (via context menu), the learned
+// CC/Note is stored in mappingStore.midiMappings but ctrl.ccNumber is never updated.
+// Back-propagate so onIncomingCC/onIncomingNote can match the control.
+watch(() => mappingStore.lastMappedParam, (paramName) => {
+  if (!paramName?.startsWith('ctrl_designer_')) return
+  const ctrl = controls.value.find(c => ctrlParamName(c) === paramName)
+  if (!ctrl) return
+  const mapping = Object.values(mappingStore.midiMappings).find(m => {
+    const name = typeof m === 'object' ? m.paramName : m
+    return name === paramName
+  })
+  if (!mapping || typeof mapping !== 'object') return
+  if (mapping.cc != null) {
+    ctrl.ccNumber   = mapping.cc
+    ctrl.noteNumber = undefined
+    ctrl.channel    = (mapping.channel ?? 0) + 1
+  } else if (mapping.note != null) {
+    ctrl.noteNumber = mapping.note
+    ctrl.ccNumber   = undefined
+    ctrl.channel    = (mapping.channel ?? 0) + 1
+  }
+  debouncedSave()
 })
 
 function ctrlParamName(ctrl) {
@@ -687,6 +921,7 @@ function newPreset() {
 
 function onCanvasMouseDown(e) {
   if (e.button !== 0) return
+  if (isSimulateMode.value) return
   if (isDesignMode.value) {
     if (!e.shiftKey) selectedIds.value = new Set()
     const rect = canvasRef.value.getBoundingClientRect()
@@ -781,42 +1016,55 @@ function onWindowMouseUp() {
   if (_dragging)  { _dragging  = null; debouncedSave() }
 }
 
-let _removeCCListener   = null
-let _removeNoteListener = null
+let _removeCCListener      = null
+let _removeNoteListener    = null
+let _removeMonitorListener = null
 
 function applyIncoming(ctrl, isHigh, velocity = 127) {
   if (ctrl.type === 'pad-switch') {
-    // Toggle controllers send a high+0 pair on every press — only react to the rising edge
-    if (isHigh) ctrl.value = ctrl.value ? 0 : 127
-    // 0 is intentionally ignored here
+    ctrl.value = isHigh ? 127 : 0
   } else if (ctrl.type === 'pad-momentary') {
     ctrl.value = isHigh ? velocity : 0
   } else {
-    // slider / encoder: pass the raw value
-    ctrl.value = isHigh ? velocity : 0
+    ctrl.value = velocity
   }
+}
+
+function fireAssignment(ctrl) {
+  if (!ctrl.assignment) return
+  const { type, action, paramName } = ctrl.assignment
+  if (type === 'midi-action') dispatchAction(action, ctrl.value)
+  else if (type === 'app-param') applyParamValue(paramName, ctrl.value)
+}
+
+function resolveInputName(inputId) {
+  return midiService.getInputs().find(i => i.id === inputId)?.name ?? null
 }
 
 function onIncomingCC(cc, val, chan, inputId) {
   if (!activePreset.value) return
+  const inputName = resolveInputName(inputId)
   for (const ctrl of controls.value) {
     if (ctrl.ccNumber !== cc) continue
     const ctrlCh = (ctrl.channel ?? 1) - 1
     if (ctrlCh !== chan) continue
-    if (assignedDevice.value && inputId && inputId !== assignedDevice.value) continue
+    if (assignedDevice.value && inputName && inputName !== assignedDevice.value) continue
     applyIncoming(ctrl, val > 0, val)
+    fireAssignment(ctrl)
   }
 }
 
 function onIncomingNote(type, note, velocity, chan, inputId) {
   if (!activePreset.value) return
+  const inputName = resolveInputName(inputId)
   const isOn = type === 'on' && velocity > 0
   for (const ctrl of controls.value) {
     if (ctrl.noteNumber !== note) continue
     const ctrlCh = (ctrl.channel ?? 1) - 1
     if (ctrlCh !== chan) continue
-    if (assignedDevice.value && inputId && inputId !== assignedDevice.value) continue
+    if (assignedDevice.value && inputName && inputName !== assignedDevice.value) continue
     applyIncoming(ctrl, isOn, velocity)
+    fireAssignment(ctrl)
   }
 }
 
@@ -829,8 +1077,9 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('mousemove', onWindowMouseMove)
   window.removeEventListener('mouseup', onWindowMouseUp)
-  if (_removeCCListener)   _removeCCListener()
-  if (_removeNoteListener) _removeNoteListener()
+  if (_removeCCListener)      _removeCCListener()
+  if (_removeNoteListener)    _removeNoteListener()
+  if (_removeMonitorListener) _removeMonitorListener()
   clearTimeout(_saveTimer)
 })
 
@@ -839,22 +1088,26 @@ onUnmounted(() => {
 function togglePadSwitch(ctrl) {
   ctrl.value = ctrl.value ? 0 : 127
   sendControl(ctrl, ctrl.value)
+  simulateCtrl(ctrl, ctrl.value)
   debouncedSave()
 }
 
 function onPadMomentaryDown(ctrl) {
   ctrl.value = 127
   sendControl(ctrl, 127)
+  simulateCtrl(ctrl, 127)
 }
 function onPadMomentaryUp(ctrl) {
   if (!ctrl.value) return
   ctrl.value = 0
   sendControl(ctrl, 0)
+  simulateCtrl(ctrl, 0)
 }
 
 function onSliderInput(ctrl, e) {
   ctrl.value = +e.target.value
   sendControl(ctrl, ctrl.value)
+  simulateCtrl(ctrl, ctrl.value)
 }
 
 // Encoder drag
@@ -866,7 +1119,8 @@ function onEncoderMouseDown(e, ctrl) {
   const onMove = (mv) => {
     const delta = Math.round((_encoderDrag.startY - mv.clientY) / 2)
     _encoderDrag.ctrl.value = Math.max(0, Math.min(127, _encoderDrag.startVal + delta))
-    sendCC(_encoderDrag.ctrl, _encoderDrag.ctrl.value)
+    sendControl(_encoderDrag.ctrl, _encoderDrag.ctrl.value)
+    simulateCtrl(_encoderDrag.ctrl, _encoderDrag.ctrl.value)
   }
   const onUp = () => {
     _encoderDrag = null
@@ -896,44 +1150,82 @@ function sendControl(ctrl, value) {
 
 function assignToMidiAction(ctrl, action) {
   if (!ctrl) return
-  const label = `Action: ${APP_ACTION_LABELS[action] ?? action}`
-  if (assignedDevice.value && (ctrl.ccNumber != null || ctrl.noteNumber != null)) {
-    const ch = (ctrl.channel ?? 1) - 1
-    const isNote = ctrl.noteNumber != null
-    const existing = mappingStore.appMidiMappings.filter(m => {
-      if (m.device !== assignedDevice.value) return true
-      return isNote ? m.note !== ctrl.noteNumber : m.cc !== ctrl.ccNumber
-    })
-    existing.push({
-      id: Math.random().toString(36).slice(2, 11),
-      device: assignedDevice.value,
-      ...(isNote ? { note: ctrl.noteNumber } : { cc: ctrl.ccNumber }),
-      channel: ch,
-      value: -1,
-      action,
-    })
-    mappingStore.saveAppMidiMappings(existing)
+  pendingAssignment.value = {
+    type: 'action',
+    action,
+    label: `Action: ${APP_ACTION_LABELS[action] ?? action}`,
   }
-  ctrl.assignment = { type: 'midi-action', action, label }
-  debouncedSave()
+  triggerMode.value = 'any'
+  exactValue.value  = 127
+  minValue.value    = 1
+  consume.value     = true
+  hasFeedback.value = false
 }
 
 function assignToAppParam(ctrl, paramName, paramLabel) {
   if (!ctrl) return
-  if (ctrl.ccNumber != null || ctrl.noteNumber != null) {
-    mappingStore.learnedDevice  = assignedDevice.value || null
-    mappingStore.learnedChannel = (ctrl.channel ?? 1) - 1
-    if (ctrl.ccNumber != null) {
-      mappingStore.learnedCC   = ctrl.ccNumber
-      mappingStore.learnedNote = null
-    } else {
-      mappingStore.learnedNote = ctrl.noteNumber
-      mappingStore.learnedCC   = null
-    }
-    mappingStore.confirmLearn(paramName)
+  pendingAssignment.value = {
+    type: 'param',
+    paramName,
+    paramLabel,
+    label: `→ ${paramLabel}`,
   }
-  ctrl.assignment = { type: 'app-param', paramName, label: `→ ${paramLabel}` }
+  consume.value     = true
+  hasFeedback.value = false
+}
+
+function confirmAssignment() {
+  const ctrl = drawerControl.value
+  if (!ctrl || !pendingAssignment.value) return
+  const pa = pendingAssignment.value
+
+  if (pa.type === 'action') {
+    if (assignedDevice.value && (ctrl.ccNumber != null || ctrl.noteNumber != null)) {
+      const ch = (ctrl.channel ?? 1) - 1
+      const isNote = ctrl.noteNumber != null
+      const isContinuous = CONTINUOUS_ACTIONS.has(pa.action)
+      const mappingValue = isContinuous ? -1 : (triggerMode.value === 'exact' ? exactValue.value : -1)
+      const existing = mappingStore.appMidiMappings.filter(m => {
+        if (m.device !== assignedDevice.value) return true
+        return isNote ? m.note !== ctrl.noteNumber : m.cc !== ctrl.ccNumber
+      })
+      existing.push({
+        id: Math.random().toString(36).slice(2, 11),
+        device: assignedDevice.value,
+        ...(isNote ? { note: ctrl.noteNumber } : { cc: ctrl.ccNumber }),
+        channel: ch,
+        value: mappingValue,
+        minValue: (!isContinuous && triggerMode.value === 'min') ? minValue.value : undefined,
+        action: pa.action,
+        feedbackOn:  hasFeedback.value ? fbOn.value  : undefined,
+        feedbackOff: hasFeedback.value ? fbOff.value : undefined,
+        consume: consume.value,
+      })
+      mappingStore.saveAppMidiMappings(existing)
+    }
+    ctrl.assignment = { type: 'midi-action', action: pa.action, label: pa.label }
+  } else {
+    if (ctrl.ccNumber != null || ctrl.noteNumber != null) {
+      mappingStore.learnedDevice  = assignedDevice.value || null
+      mappingStore.learnedChannel = (ctrl.channel ?? 1) - 1
+      if (ctrl.ccNumber != null) {
+        mappingStore.learnedCC   = ctrl.ccNumber
+        mappingStore.learnedNote = null
+      } else {
+        mappingStore.learnedNote = ctrl.noteNumber
+        mappingStore.learnedCC   = null
+      }
+      mappingStore.confirmLearn(pa.paramName)
+    }
+    ctrl.assignment = { type: 'app-param', paramName: pa.paramName, label: pa.label }
+  }
+
+  pendingAssignment.value = null
   debouncedSave()
+}
+
+function cancelAssignment() {
+  pendingAssignment.value = null
 }
 
 function clearAssignment(ctrl) {
@@ -942,10 +1234,32 @@ function clearAssignment(ctrl) {
   debouncedSave()
 }
 
+// ─── Simulate mode ────────────────────────────────────────────────────────────
+
+function simulateCtrl(ctrl, value) {
+  if (!isSimulateMode.value || !ctrl?.assignment) return
+  const { type, action, paramName } = ctrl.assignment
+  if (type === 'midi-action') {
+    dispatchAction(action, value)
+  } else if (type === 'app-param') {
+    applyParamValue(paramName, value)
+  }
+}
+
+function toggleSimulateMode() {
+  isSimulateMode.value = !isSimulateMode.value
+  if (isSimulateMode.value) {
+    isDesignMode.value = false
+    selectedIds.value  = new Set()
+    selectedControlId.value = null
+  }
+}
+
 // ─── Design mode ──────────────────────────────────────────────────────────────
 
 function toggleDesignMode() {
   isDesignMode.value = !isDesignMode.value
+  if (isDesignMode.value) isSimulateMode.value = false
   selectedIds.value  = new Set()
   selectedControlId.value = null
 }

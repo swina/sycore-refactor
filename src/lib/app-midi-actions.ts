@@ -120,7 +120,8 @@ export type AppAction =
   | 'open_lpp'
   | 'open_sampler'
   | 'open_drum_machine'
-  | 'open_chord_prog';
+  | 'open_chord_prog'
+  | 'open_sound_engine';
 
 export interface AppMidiMapping {
   id: string;
@@ -195,8 +196,8 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   panel_tab_poly:       'Select Poly Tab',
   panel_tab_advanced:    'Select Advanced Tab',
   panel_tab_dynamic:     'Select Dynamic Tab',
-  open_sound_types:    'Open Sound Types',
-  open_sound_history:  'Open Sound History',
+  open_sound_types:    'Toggle Sound Types',
+  open_sound_history:  'Toggle Sound History',
   transpose_cc:        'Global Transpose via CC  (−24…+24)',
   toggle_looper:       'Toggle Looper Panel',
   looper_record:       'Looper: Record/Stop',
@@ -205,7 +206,7 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   looper_mute_take_2:  'Looper: Mute/Unmute Take 2',
   looper_mute_take_3:  'Looper: Mute/Unmute Take 3',
   looper_mute_take_4:  'Looper: Mute/Unmute Take 4',
-  open_midi_matrix:    'Open MIDI MATRIX',
+  open_midi_matrix:    'Toggle MIDI MATRIX',
   playlist_volume_cc:  'Track Player Volume via CC',
   capture_rec_toggle:  'Capture: Record Start/Stop',
   arp_mode_cc:         'Arp: Mode via CC',
@@ -291,10 +292,11 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   channel_up:   'MIDI Channel +1 (wraps 16→1)',
   channel_down: 'MIDI Channel −1 (wraps 1→16)',
   channel_cc:   'MIDI Channel via CC (0–127 → Ch 1–16)',
-  open_lpp:          'Open Live Performance Pad',
-  open_sampler:      'Open Sampler',
-  open_drum_machine: 'Open Drum Machine',
-  open_chord_prog:   'Open Chord Prog Sequencer',
+  open_lpp:          'Toggle Live Performance Pad',
+  open_sampler:      'Toggle Sampler',
+  open_drum_machine: 'Toggle Drum Machine',
+  open_chord_prog:   'Toggle Chord Prog Sequencer',
+  open_sound_engine: 'Toggle Sound Engine',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -329,7 +331,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
     'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select',
     'focus_next_modal',
-    'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog',
+    'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog', 'open_sound_engine',
   ],
   'Transport & Performance': [
     'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',

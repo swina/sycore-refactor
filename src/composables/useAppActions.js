@@ -256,13 +256,14 @@ export function useAppActions() {
         if (window.SY_LOG) window.SY_LOG(`[AppActions] AUDIO CAPTURE: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
         uiStore.isAudioCaptureOpen = ccVal > 63;
         break
-      case 'open_sound_types': uiStore.isTypesOpen = !uiStore.isTypesOpen; break
-      case 'open_sound_history': uiStore.isHistoryOpen = !uiStore.isHistoryOpen; break
-      case 'open_midi_matrix': if (ccVal > 63) uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
-      case 'open_lpp':          if (ccVal > 63) uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen; break
-      case 'open_sampler':      if (ccVal > 63) uiStore.isSamplerOpen = !uiStore.isSamplerOpen; break
-      case 'open_drum_machine': if (ccVal > 63) uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen; break
-      case 'open_chord_prog':   if (ccVal > 63) uiStore.isChordProgOpen = !uiStore.isChordProgOpen; break
+      case 'open_sound_types':   uiStore.isTypesOpen                  = ccVal > 63; break
+      case 'open_sound_history': uiStore.isHistoryOpen                = ccVal > 63; break
+      case 'open_midi_matrix':   uiStore.isMidiMatrixOpen             = ccVal > 63; break
+      case 'open_lpp':           uiStore.isLivePerformancePadOpen     = ccVal > 63; break
+      case 'open_sampler':       uiStore.isSamplerOpen                = ccVal > 63; break
+      case 'open_drum_machine':  uiStore.isDrumMachineOpen            = ccVal > 63; break
+      case 'open_chord_prog':    uiStore.isChordProgOpen              = ccVal > 63; break
+      case 'open_sound_engine':  uiStore.isSoundEngineOpen            = ccVal > 63; break
       case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
       case 'toggle_main_menu':

@@ -17,6 +17,152 @@ function isS1Device(name) {
   return upper.includes('S-1') || upper.includes('ROLAND S-1')
 }
 
+// Standalone export so components like MidiControllerDesigner can call applyParam
+// without registering duplicate MIDI listeners.
+export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
+  const {
+    lfoStore     = useLfoStore(),
+    mappingStore = useMappingStore(),
+    uiStore      = useUiStore(),
+    presetStore  = usePresetStore(),
+    midiStore    = useMidiStore(),
+    arpStore     = useArpStore(),
+    drumStore    = useDrumMachineStore(),
+    mixerStore   = useAudioMixerStore(),
+    configStore  = useConfigStore(),
+  } = stores
+
+  const on = fromNote ? null : val >= 64
+
+  if (fieldName === 'lfo1_active') {
+    const target = fromNote ? !lfoStore.lfo1.active : on
+    if (target !== lfoStore.lfo1.active) lfoStore.toggleLfo(1)
+    return
+  }
+  if (fieldName === 'lfo2_active') {
+    const target = fromNote ? !lfoStore.lfo2.active : on
+    if (target !== lfoStore.lfo2.active) lfoStore.toggleLfo(2)
+    return
+  }
+  if (fieldName === 'lfo1_rate') {
+    lfoStore.lfo1.rate = parseFloat((0.01 + (val / 127) * (20 - 0.01)).toFixed(2))
+    return
+  }
+  if (fieldName === 'lfo2_rate') {
+    lfoStore.lfo2.rate = parseFloat((0.01 + (val / 127) * (20 - 0.01)).toFixed(2))
+    return
+  }
+  if (fieldName === 'lfo1_depth') {
+    lfoStore.lfo1.depth = Math.round((val / 127) * 100)
+    return
+  }
+  if (fieldName === 'lfo2_depth') {
+    lfoStore.lfo2.depth = Math.round((val / 127) * 100)
+    return
+  }
+  if (fieldName === 'vel_amount') {
+    mappingStore.velocityConfig.amount = Math.round((val / 127) * 200 - 100)
+    return
+  }
+  if (fieldName === 'vel_active') {
+    const target = fromNote ? !mappingStore.velocityConfig.active : on
+    mappingStore.velocityConfig.active = target
+    if (!target) mappingStore.restoreOriginalValues()
+    return
+  }
+  if (fieldName === 'arp_active') {
+    arpStore.arpEnabled = fromNote ? !arpStore.arpEnabled : on
+    return
+  }
+  if (fieldName === 'arp_hold') {
+    arpStore.arpHold = fromNote ? !arpStore.arpHold : on
+    return
+  }
+  if (fieldName === 'engine_ab') {
+    const useB = fromNote ? !presetStore.useAlternativeEngine : on
+    presetStore.selectEngine(useB ? 'B' : 'A')
+    return
+  }
+  if (fieldName === 'seq_play_stop') {
+    const shouldPlay = fromNote ? !uiStore.isSequencerPlaying : on
+    window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: shouldPlay } }))
+    return
+  }
+  if (fieldName === 'save_preset') {
+    if (fromNote || val > 0) presetStore.savePreset()
+    return
+  }
+  if (fieldName === 'regenerate') {
+    if (fromNote || val > 0) presetStore.generate(true)
+    return
+  }
+  if (fieldName === 'toggle_sequencer') {
+    if (fromNote || val > 0) uiStore.isSequencerOpen = !uiStore.isSequencerOpen
+    return
+  }
+  // ── Drum Machine ─────────────────────────────────────────────────────────────
+  if (fieldName === 'dm_play_stop') {
+    drumStore.isPlaying = fromNote ? !drumStore.isPlaying : on
+    return
+  }
+  if (fieldName === 'dm_repeat') {
+    drumStore.repeaterActive = fromNote ? !drumStore.repeaterActive : on
+    return
+  }
+  if (fieldName === 'dm_fill') {
+    if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-trigger-fill'))
+    return
+  }
+  if (fieldName === 'dm_generate') {
+    if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-generate'))
+    return
+  }
+  if (fieldName.startsWith('dm_seq_')) {
+    const seq = fieldName.slice(7).toUpperCase()
+    if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq } }))
+    return
+  }
+  if (fieldName.startsWith('dm_pad_')) {
+    const idx = parseInt(fieldName.slice(7))
+    if (!isNaN(idx)) window.dispatchEvent(new CustomEvent('dm-pad-trigger', { detail: { trackIdx: idx, velocity: val } }))
+    return
+  }
+  if (fieldName.startsWith('dm_vol_')) {
+    const idx = parseInt(fieldName.slice(7))
+    if (!isNaN(idx)) drumStore.setTrackVolume(idx, val / 127)
+    return
+  }
+  if (fieldName === 'dm_master_vol') {
+    window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: val / 127 }))
+    return
+  }
+  if (fieldName === 'dm_level_master') {
+    mixerStore.setDrumsLevelVol(val / 127)
+    return
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (fieldName === 'ui_panel_collapse') {
+    uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on
+    return
+  }
+  if (fieldName === 'ui_cat_grid') {
+    if (fromNote || on) uiStore.activeVisualizerCategory = null
+    return
+  }
+  if (fieldName.startsWith('ui_cat_')) {
+    if (fromNote || on) uiStore.activeVisualizerCategory = fieldName.slice(7)
+    return
+  }
+
+  if (!presetStore.lastPreset) return
+  presetStore.updateFieldValue(fieldName, val)
+
+  const cc = FIELD_TO_CC[fieldName] ?? configStore.midiConfig.find(m => m.name === fieldName)?.cc
+  if (cc !== undefined) {
+    midiStore.sendCC(cc, val, null, MidiSource.UI)
+  }
+}
+
 export function useMidiCCListener() {
   const midiStore = useMidiStore()
   const mappingStore = useMappingStore()
@@ -177,140 +323,8 @@ export function useMidiCCListener() {
     }
   }
 
-  // fromNote=true: Note On trigger → toggle semantics (flip state)
-  // fromNote=false: CC trigger → CC >= 64 = on, CC < 64 = off
   function applyParam(fieldName, val, fromNote = false) {
-    const on = fromNote ? null : val >= 64
-
-    if (fieldName === 'lfo1_active') {
-      const target = fromNote ? !lfoStore.lfo1.active : on
-      if (target !== lfoStore.lfo1.active) lfoStore.toggleLfo(1)
-      return
-    }
-    if (fieldName === 'lfo2_active') {
-      const target = fromNote ? !lfoStore.lfo2.active : on
-      if (target !== lfoStore.lfo2.active) lfoStore.toggleLfo(2)
-      return
-    }
-    if (fieldName === 'lfo1_rate') {
-      lfoStore.lfo1.rate = parseFloat((0.01 + (val / 127) * (20 - 0.01)).toFixed(2))
-      return
-    }
-    if (fieldName === 'lfo2_rate') {
-      lfoStore.lfo2.rate = parseFloat((0.01 + (val / 127) * (20 - 0.01)).toFixed(2))
-      return
-    }
-    if (fieldName === 'lfo1_depth') {
-      lfoStore.lfo1.depth = Math.round((val / 127) * 100)
-      return
-    }
-    if (fieldName === 'lfo2_depth') {
-      lfoStore.lfo2.depth = Math.round((val / 127) * 100)
-      return
-    }
-    if (fieldName === 'vel_amount') {
-      mappingStore.velocityConfig.amount = Math.round((val / 127) * 200 - 100)
-      return
-    }
-    if (fieldName === 'vel_active') {
-      const target = fromNote ? !mappingStore.velocityConfig.active : on
-      mappingStore.velocityConfig.active = target
-      if (!target) mappingStore.restoreOriginalValues()
-      return
-    }
-    if (fieldName === 'arp_active') {
-      arpStore.arpEnabled = fromNote ? !arpStore.arpEnabled : on
-      return
-    }
-    if (fieldName === 'arp_hold') {
-      arpStore.arpHold = fromNote ? !arpStore.arpHold : on
-      return
-    }
-    if (fieldName === 'engine_ab') {
-      const useB = fromNote ? !presetStore.useAlternativeEngine : on
-      presetStore.selectEngine(useB ? 'B' : 'A')
-      return
-    }
-    if (fieldName === 'seq_play_stop') {
-      const shouldPlay = fromNote ? !uiStore.isSequencerPlaying : on
-      window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: shouldPlay } }))
-      return
-    }
-    if (fieldName === 'save_preset') {
-      if (fromNote || val > 0) presetStore.savePreset()
-      return
-    }
-    if (fieldName === 'regenerate') {
-      if (fromNote || val > 0) presetStore.generate(true)
-      return
-    }
-    if (fieldName === 'toggle_sequencer') {
-      if (fromNote || val > 0) uiStore.isSequencerOpen = !uiStore.isSequencerOpen
-      return
-    }
-    // ── Drum Machine ────────────────────────────────────────────────────────────
-    if (fieldName === 'dm_play_stop') {
-      drumStore.isPlaying = fromNote ? !drumStore.isPlaying : on
-      return
-    }
-    if (fieldName === 'dm_repeat') {
-      drumStore.repeaterActive = fromNote ? !drumStore.repeaterActive : on
-      return
-    }
-    if (fieldName === 'dm_fill') {
-      if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-trigger-fill'))
-      return
-    }
-    if (fieldName === 'dm_generate') {
-      if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-generate'))
-      return
-    }
-    if (fieldName.startsWith('dm_seq_')) {
-      const seq = fieldName.slice(7).toUpperCase() // 'dm_seq_a' → 'A'
-      if (fromNote || val > 0) window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq } }))
-      return
-    }
-    if (fieldName.startsWith('dm_pad_')) {
-      const idx = parseInt(fieldName.slice(7))
-      if (!isNaN(idx)) {
-        window.dispatchEvent(new CustomEvent('dm-pad-trigger', { detail: { trackIdx: idx, velocity: val } }))
-      }
-      return
-    }
-    if (fieldName.startsWith('dm_vol_')) {
-      const idx = parseInt(fieldName.slice(7))
-      if (!isNaN(idx)) drumStore.setTrackVolume(idx, val / 127)
-      return
-    }
-    if (fieldName === 'dm_master_vol') {
-      window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: val / 127 }))
-      return
-    }
-    if (fieldName === 'dm_level_master') {
-      mixerStore.setDrumsLevelVol(val / 127)
-      return
-    }
-    // ───────────────────────────────────────────────────────────────────────────
-    if (fieldName === 'ui_panel_collapse') {
-      uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on
-      return
-    }
-    if (fieldName === 'ui_cat_grid') {
-      if (fromNote || on) uiStore.activeVisualizerCategory = null
-      return
-    }
-    if (fieldName.startsWith('ui_cat_')) {
-      if (fromNote || on) uiStore.activeVisualizerCategory = fieldName.slice(7)
-      return
-    }
-
-    if (!presetStore.lastPreset) return
-    presetStore.updateFieldValue(fieldName, val)
-
-    const cc = FIELD_TO_CC[fieldName] ?? configStore.midiConfig.find(m => m.name === fieldName)?.cc
-    if (cc !== undefined) {
-      midiStore.sendCC(cc, val, null, MidiSource.UI)
-    }
+    return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, drumStore, mixerStore, configStore })
   }
 
   let unsubCC, unsubNote, unsubPitch
