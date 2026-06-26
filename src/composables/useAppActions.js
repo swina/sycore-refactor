@@ -259,6 +259,10 @@ export function useAppActions() {
       case 'open_sound_types': uiStore.isTypesOpen = !uiStore.isTypesOpen; break
       case 'open_sound_history': uiStore.isHistoryOpen = !uiStore.isHistoryOpen; break
       case 'open_midi_matrix': if (ccVal > 63) uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen; break
+      case 'open_lpp':          if (ccVal > 63) uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen; break
+      case 'open_sampler':      if (ccVal > 63) uiStore.isSamplerOpen = !uiStore.isSamplerOpen; break
+      case 'open_drum_machine': if (ccVal > 63) uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen; break
+      case 'open_chord_prog':   if (ccVal > 63) uiStore.isChordProgOpen = !uiStore.isChordProgOpen; break
       case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
       case 'toggle_main_menu':

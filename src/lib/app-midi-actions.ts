@@ -116,7 +116,11 @@ export type AppAction =
   | 'focus_next_modal'
   | 'channel_up'
   | 'channel_down'
-  | 'channel_cc';
+  | 'channel_cc'
+  | 'open_lpp'
+  | 'open_sampler'
+  | 'open_drum_machine'
+  | 'open_chord_prog';
 
 export interface AppMidiMapping {
   id: string;
@@ -287,6 +291,10 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   channel_up:   'MIDI Channel +1 (wraps 16→1)',
   channel_down: 'MIDI Channel −1 (wraps 1→16)',
   channel_cc:   'MIDI Channel via CC (0–127 → Ch 1–16)',
+  open_lpp:          'Open Live Performance Pad',
+  open_sampler:      'Open Sampler',
+  open_drum_machine: 'Open Drum Machine',
+  open_chord_prog:   'Open Chord Prog Sequencer',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -320,7 +328,8 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'panel_tab_grid', 'panel_tab_flow', 'panel_tab_lfo', 'panel_tab_osc',
     'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
     'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select',
-    'focus_next_modal'
+    'focus_next_modal',
+    'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog',
   ],
   'Transport & Performance': [
     'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',

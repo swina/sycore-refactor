@@ -71,7 +71,8 @@ import LoopMachine        from '@/components/LoopMachine.vue'
 import DrumMachine        from '@/components/DrumMachine.vue'
 import MidiWizard         from '@/components/MidiWizard.vue'
 import MidiWizardFlow     from '@/components/MidiWizardFlow.vue'
-import SamplerPanel       from '@/components/SamplerPanel.vue'
+import SamplerPanel            from '@/components/SamplerPanel.vue'
+import MidiControllerDesigner from '@/components/MidiControllerDesigner.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
 import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -143,6 +144,7 @@ const toolbarButtonMap = {
   'loop-machine':           { state: 'isLoopMachineOpen',                icon: Layers,  label: 'Samples Machine' },
   'drum-machine':           { state: 'isDrumMachineOpen',                icon: Layers,  label: 'Drum Machine' },
   'sampler':                { state: 'isSamplerOpen',                    icon: Music2,  label: 'Sampler' },
+  'ctrl-designer':          { state: 'isMidiControllerDesignerOpen',     icon: Cpu,     label: 'Controller Designer' },
   'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
   'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
@@ -452,6 +454,10 @@ onMounted(() => {
 
       <div :style="focusStyle('sampler')">
         <SamplerPanel />
+      </div>
+
+      <div :style="focusStyle('midiControllerDesigner')">
+        <MidiControllerDesigner />
       </div>
 
       <MidiWizard     v-if="uiStore.isMidiWizardOpen" />

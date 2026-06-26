@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { X, Minus, RefreshCw, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum } from 'lucide-vue-next'
+import { X, Minus, RefreshCw, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -339,6 +339,14 @@ function pendingPath() {
         <span class="flex-1" v-else />
         <button v-if="activeTab === 'routing'" @click="reloadConfig" title="Reload config" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors shrink-0">
           <RefreshCw class="w-4 h-4" />
+        </button>
+        <button
+          @click="uiStore.isMidiControllerDesignerOpen = !uiStore.isMidiControllerDesignerOpen"
+          :class="uiStore.isMidiControllerDesignerOpen ? 'text-violet-400' : 'text-neutral-400 hover:text-violet-400'"
+          class="p-1 transition-colors shrink-0"
+          title="Controller Designer"
+        >
+          <Cpu class="w-4 h-4" />
         </button>
         <button @click="toggleMinimize" class="p-1 text-neutral-400 hover:text-white transition-colors shrink-0">
           <Minus class="w-4 h-4" />

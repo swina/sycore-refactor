@@ -63,8 +63,9 @@ export const useUiStore = defineStore('ui', () => {
   const soundFolderAssignTarget  = ref(null) // { label: string, onAssign: (file) => Promise<void> } | null
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
-  const isMidiWizardOpen         = ref(false)
-  const isMidiFlowOpen           = ref(false)
+  const isMidiWizardOpen              = ref(false)
+  const isMidiFlowOpen                = ref(false)
+  const isMidiControllerDesignerOpen  = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
 
@@ -134,6 +135,7 @@ export const useUiStore = defineStore('ui', () => {
     loopMachine:         () => isLoopMachineOpen.value,
     drumMachine:         () => isDrumMachineOpen.value,
     sampler:             () => isSamplerOpen.value,
+    midiControllerDesigner: () => isMidiControllerDesignerOpen.value,
   }
 
   const openModalKeys = computed(() =>
@@ -182,6 +184,7 @@ export const useUiStore = defineStore('ui', () => {
     loopMachine:         isLoopMachineOpen,
     drumMachine:         isDrumMachineOpen,
     sampler:             isSamplerOpen,
+    midiControllerDesigner: isMidiControllerDesignerOpen,
   }
 
 
@@ -248,8 +251,9 @@ export const useUiStore = defineStore('ui', () => {
     isGuidesOpen.value             = false
     isLoopMachineOpen.value        = false
     isDrumMachineOpen.value        = false
-    isSamplerOpen.value            = false
-    isChordProgOpen.value          = false
+    isSamplerOpen.value                   = false
+    isMidiControllerDesignerOpen.value    = false
+    isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
     midiActionsActiveTab.value = 'mapper'
@@ -311,7 +315,7 @@ export const useUiStore = defineStore('ui', () => {
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
-    isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen,
+    isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isMidiControllerDesignerOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice,
