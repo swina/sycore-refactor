@@ -121,7 +121,8 @@ export type AppAction =
   | 'open_sampler'
   | 'open_drum_machine'
   | 'open_chord_prog'
-  | 'open_sound_engine';
+  | 'open_sound_engine'
+  | 'open_live_timeline';
 
 export interface AppMidiMapping {
   id: string;
@@ -296,7 +297,8 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   open_sampler:      'Toggle Sampler',
   open_drum_machine: 'Toggle Drum Machine',
   open_chord_prog:   'Toggle Chord Prog Sequencer',
-  open_sound_engine: 'Toggle Sound Engine',
+  open_sound_engine:  'Toggle Sound Engine',
+  open_live_timeline: 'Toggle Live Timeline',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -331,7 +333,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
     'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select',
     'focus_next_modal',
-    'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog', 'open_sound_engine',
+    'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog', 'open_sound_engine', 'open_live_timeline',
   ],
   'Transport & Performance': [
     'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',

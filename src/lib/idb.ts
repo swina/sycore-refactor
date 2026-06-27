@@ -43,7 +43,7 @@ function resolveFieldValues(data: Record<string, any>, existing?: Record<string,
 // IndexedDB Setup
 // ---------------------------------------------------------------------------
 const DB_NAME = 's1core_db';
-const DB_VERSION = 15;
+const DB_VERSION = 16;
 
 const STORES: Record<string, string | null> = {
   // key → IDBKeyPath  (null = out-of-line key)
@@ -62,6 +62,7 @@ const STORES: Record<string, string | null> = {
   user_backing_tracks: 'id',       // per-user backing tracks (uid__docId)
   user_timeline_sets: 'id',        // per-user timeline sets (uid__docId)
   user_system: 'id',               // per-user system docs e.g. midiConfigPresets, midiMappingPresets (uid__docId)
+  timeline_audio_cache: 'id',      // data URLs for local folder tracks used in LiveTimeline
 };
 
 let _db: IDBDatabase | null = null;
@@ -485,6 +486,40 @@ export async function idbHandleGet(id: string): Promise<any | undefined> {
     const req = tx.objectStore('sound_folder_handles').get(id);
     req.onsuccess = () => resolve(req.result?.handle);
     req.onerror   = () => reject(req.error);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Timeline Audio Cache — data URLs for local folder tracks (too large for localStorage)
+// ---------------------------------------------------------------------------
+
+export async function idbTimelineAudioPut(id: string, dataUrl: string): Promise<void> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction('timeline_audio_cache', 'readwrite');
+    tx.objectStore('timeline_audio_cache').put({ id, dataUrl });
+    tx.oncomplete = () => resolve();
+    tx.onerror   = () => reject(tx.error);
+  });
+}
+
+export async function idbTimelineAudioGet(id: string): Promise<string | undefined> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx  = database.transaction('timeline_audio_cache', 'readonly');
+    const req = tx.objectStore('timeline_audio_cache').get(id);
+    req.onsuccess = () => resolve(req.result?.dataUrl);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+export async function idbTimelineAudioDelete(id: string): Promise<void> {
+  const database = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction('timeline_audio_cache', 'readwrite');
+    tx.objectStore('timeline_audio_cache').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror   = () => reject(tx.error);
   });
 }
 

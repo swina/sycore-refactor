@@ -180,6 +180,23 @@ export function useControllerManager() {
     })
   }
 
+  // Returns true if the CC or Note has a user MIDI-Learn mapping in midiMappings,
+  // meaning the ingress filter should not consume it so useMidiCCListener can fire too.
+  function hasMidiLearnMapping(midiMappings, cc, note, deviceName, chan) {
+    if (cc !== null) {
+      const preciseKey = deviceName ? `${deviceName}:CH${chan + 1}:CC${cc}` : `CH${chan + 1}:CC${cc}`
+      const deviceCCKey = deviceName ? `${deviceName}:${cc}` : null
+      return !!(midiMappings[preciseKey] || (deviceCCKey && midiMappings[deviceCCKey]) || midiMappings[String(cc)])
+    }
+    if (note !== null) {
+      const frag = `NOTE${note}`
+      const preciseKey = deviceName ? `${deviceName}:CH${chan + 1}:${frag}` : `CH${chan + 1}:${frag}`
+      const deviceKey = deviceName ? `${deviceName}:${frag}` : null
+      return !!(midiMappings[preciseKey] || (deviceKey && midiMappings[deviceKey]) || midiMappings[frag])
+    }
+    return false
+  }
+
   // Define the ingress filter once
   const handleIngress = (e) => {
     const input = e.target
@@ -272,6 +289,11 @@ export function useControllerManager() {
         dispatchAction(action, effectiveVal)
       }
       updateFeedback()
+
+      // If this CC/Note also has a MIDI Learn mapping, don't consume it —
+      // let it pass through to useMidiCCListener so both systems fire.
+      if (hasMidiLearnMapping(mappingStore.midiMappings, cc, note, deviceName, chan)) return false
+
       return matchedMapping.consume !== false
     }
 

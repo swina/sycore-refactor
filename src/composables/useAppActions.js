@@ -264,6 +264,7 @@ export function useAppActions() {
       case 'open_drum_machine':  uiStore.isDrumMachineOpen            = ccVal > 63; break
       case 'open_chord_prog':    uiStore.isChordProgOpen              = ccVal > 63; break
       case 'open_sound_engine':  uiStore.isSoundEngineOpen            = ccVal > 63; break
+      case 'open_live_timeline': uiStore.isLiveTimelineOpen           = ccVal > 63; break
       case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
       case 'toggle_main_menu':

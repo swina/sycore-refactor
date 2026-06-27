@@ -407,19 +407,33 @@ export const useMappingStore = defineStore('mapping', () => {
     await setDoc(userAppMidiDoc(), { mappings })
   }
 
-  watch(uid, async (newUid) => {
+  async function clearAppMidiMappings() {
+    await saveAppMidiMappings([])
+  }
+
+  function clearMidiMappings() {
+    midiMappings.value = {}
+    saveMidiMappings()
+  }
+
+  watch(uid, async (newUid, oldUid) => {
     if (!newUid) {
-      midiMappings.value = {}
-      appMidiMappings.value = []
-      presets.value = []
-      activePresetId.value = null
+      // Only clear on actual logout (oldUid was set), not on the initial null state
+      if (oldUid) {
+        midiMappings.value = {}
+        appMidiMappings.value = []
+        presets.value = []
+        activePresetId.value = null
+      }
     } else {
+      if (window.SY_LOG) window.SY_LOG(`Loading MIDI configuration for user...`)
       midiMappings.value = loadMidiMappingsFromStorage()
       activePresetId.value = localStorage.getItem(userKey(LS_ACTIVE_PRESET_ID)) || null
       await loadPresets()
       await loadAppMidiMappings()
+      if (window.SY_LOG) window.SY_LOG(`MIDI configuration loaded (${Object.keys(midiMappings.value).length} mappings, ${appMidiMappings.value.length} app actions)`)
     }
-  })
+  }, { immediate: true })
 
   function toggleVelocityMapping() {
     velocityConfig.value.active = !velocityConfig.value.active
@@ -435,7 +449,7 @@ export const useMappingStore = defineStore('mapping', () => {
     isMidiLearning, learnedCC, learnedNote, learnedNRPN, learnedDevice, learnedChannel,
     mappingCount, mappedParams, lastMappedParam, learningParamName,
     startLearn, cancelLearn, confirmLearn, learnForParam, removeMapping, incomingCC, incomingNote, incomingNRPN,
-    loadAppMidiMappings, saveAppMidiMappings,
+    loadAppMidiMappings, saveAppMidiMappings, clearAppMidiMappings, clearMidiMappings,
     velocityConfig, handleVelocity, restoreOriginalValues, toggleVelocityMapping,
     presets, activePresetId,
     loadPresets, savePreset, loadPreset, deletePreset, duplicatePreset,

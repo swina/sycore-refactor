@@ -16,6 +16,9 @@
         <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">{{ activePreset?.name }}</span>
       </div>
       <div class="flex items-center gap-1">
+        <button @click.stop="resetAllMappings" class="p-1 text-neutral-500 hover:text-red-400 transition-colors" title="Reset all app MIDI mappings">
+          <Trash2 class="w-3 h-3" />
+        </button>
         <button @click.stop="toggleMinimize" class="p-1 text-neutral-500 hover:text-white transition-colors" title="Minimize">
           <Minus class="w-3 h-3" />
         </button>
@@ -664,6 +667,7 @@ import { Cpu, Minus, X, Plus, Save, Trash2, LayoutTemplate, GripHorizontal, Chev
 import { useUiStore }            from '@/stores/useUiStore'
 import { useMidiStore }          from '@/stores/useMidiStore'
 import { useMappingStore }       from '@/stores/useMappingStore'
+import { useAuthStore }          from '@/stores/useAuthStore'
 import { midiService }           from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
@@ -682,6 +686,8 @@ import { useAppActions } from '@/composables/useAppActions'
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
+const authStore    = useAuthStore()
+const uid          = computed(() => authStore.user?.uid)
 const { openMenu } = useMidiContextMenu()
 const { testFeedback } = useMidiFeedback()
 const { dispatchAction } = useAppActions()
@@ -762,6 +768,12 @@ const APP_SECTIONS = [
       ...['a','b','c','d','e','f'].map(s => ({ paramName: `dm_seq_${s}`, label: `Seq ${s.toUpperCase()}` })),
       ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_pad_${i}`, label: `Pad: ${lbl}` })),
       ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_vol_${i}`, label: `Vol: ${lbl}` })),
+    ],
+  },
+  {
+    key: 'live_timeline', label: 'Live Timeline',
+    items: [
+      { action: 'open_live_timeline', label: 'Toggle Live Timeline' },
     ],
   },
   {
@@ -880,7 +892,13 @@ function ctrlParamName(ctrl) {
 
 // ─── Presets ──────────────────────────────────────────────────────────────────
 
-onMounted(async () => {
+watch(uid, async (newUid) => {
+  if (!newUid) {
+    const p = createControllerPreset('Default')
+    presets.value = [p]
+    activePresetId.value = p.id
+    return
+  }
   const loaded = await loadControllerPresets()
   if (loaded.length > 0) {
     presets.value = loaded
@@ -890,7 +908,7 @@ onMounted(async () => {
     presets.value = [p]
     activePresetId.value = p.id
   }
-})
+}, { immediate: true })
 
 async function savePresets() {
   if (saving.value) return
@@ -915,6 +933,12 @@ function newPreset() {
   presets.value.push(p)
   activePresetId.value = p.id
   debouncedSave()
+}
+
+async function resetAllMappings() {
+  if (!confirm('Reset all app MIDI mappings? This clears every controller assignment saved to this account.')) return
+  await mappingStore.clearAppMidiMappings()
+  if (window.SY_LOG) window.SY_LOG('[MidiControllerDesigner] All app MIDI mappings cleared.')
 }
 
 // ─── Canvas interaction ───────────────────────────────────────────────────────

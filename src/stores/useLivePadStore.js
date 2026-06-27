@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { userKey } from '@/lib/userKey'
+import { idbTimelineAudioPut, idbTimelineAudioGet } from '@/lib/idb'
 
 export const useLivePadStore = defineStore('livePad', () => {
   // Helper for localStorage
@@ -88,13 +89,12 @@ export const useLivePadStore = defineStore('livePad', () => {
   }
 
   function saveState() {
-    // Strip giant base64 data URLs from playlist to prevent QuotaExceededError
+    // Strip giant base64 data URLs from playlist to prevent QuotaExceededError,
+    // persisting them to IndexedDB so they survive reload.
     const cleanedPlaylist = (playlist.value || []).map(track => {
       if (track.url && (track.url.startsWith('data:') || track.url.length > 2048)) {
-        return {
-          ...track,
-          url: '' // Strip it, we will restore it from Firestore/IndexedDB on reload
-        }
+        idbTimelineAudioPut(track.id, track.url).catch(() => {})
+        return { ...track, url: '' }
       }
       return track
     })
@@ -106,6 +106,21 @@ export const useLivePadStore = defineStore('livePad', () => {
       crossfadeSec: crossfadeSec.value,
       loopPlaylist: loopPlaylist.value
     })
+  }
+
+  async function restorePlaylistAudio() {
+    const pl = playlist.value
+    if (!pl.length) return
+    const updated = await Promise.all(
+      pl.map(async track => {
+        if (!track.url && track.id) {
+          const dataUrl = await idbTimelineAudioGet(track.id).catch(() => undefined)
+          if (dataUrl) return { ...track, url: dataUrl }
+        }
+        return track
+      })
+    )
+    if (updated.some((t, i) => t.url !== pl[i].url)) playlist.value = updated
   }
 
   function getSnapshot() {
@@ -155,6 +170,9 @@ export const useLivePadStore = defineStore('livePad', () => {
     playlistRepeats.value = [...playlistRepeats.value, 1]
     return newTrack
   }
+
+  // Restore audio URLs from IDB on startup (they were stripped from localStorage)
+  restorePlaylistAudio()
 
   return {
     sounds,

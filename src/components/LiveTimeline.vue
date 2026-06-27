@@ -9,7 +9,10 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { detectBpmFromUrl }      from '@/composables/useBpmDetector'
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { usePresetStore }  from '@/stores/usePresetStore'
-import { MidiSource }      from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { useMappingStore }  from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import MidiMapContextMenu     from '@/components/ui/MidiMapContextMenu.vue'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useArpStore }     from '@/stores/useArpStore'
 import { useSyncStore }    from '@/stores/useSyncStore'
@@ -67,6 +70,8 @@ const arpStore     = useArpStore()
 const syncStore    = useSyncStore()
 const uiStore      = useUiStore()
 const drumStore    = useDrumMachineStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 const syncTimelineToAudioCapture = computed({
   get: () => syncStore.syncTimelineToAudioCapture,
@@ -94,7 +99,7 @@ const scale = ref(0.5)         // px per second (min 0.5 = 1px/2s)
 const showAddSeg    = ref(false)
 const showAddMarker = ref(false)
 
-const newSeg = ref({ trackIdx: 0, segStart: 0, segEnd: 0, label: '' })
+const newSeg = ref({ trackIdx: 0, segStart: 0, segEnd: 0, label: '', notes: '' })
 const newMkr   = ref({ position: 0, type: 'tempo', label: '', value: 120 })
 const newMkrPc = ref({ device: '', channel: 1, msb: null, lsb: null, soundName: '' })
 
@@ -479,7 +484,6 @@ function _checkSegments() {
     const seg = segments.value[next]
     if (seg) {
       const track = playlist.value[seg.trackIdx]
-      // Promote track BPM to global tempo (falls back to library data if playlist entry lacks bpm)
       const bpm = getTrackBpm(seg.trackIdx)
       if (bpm) {
         arpStore.arpBpm      = bpm
@@ -488,15 +492,22 @@ function _checkSegments() {
         window.dispatchEvent(new CustomEvent('bpm-update', { detail: { bpm } }))
       }
       window.dispatchEvent(new CustomEvent('playlist-play', { detail: { idx: seg.trackIdx, playlist: playlist.value, crossfade: crossfadeOnChange.value, source: 'timeline' } }))
-      if ((seg.segStart || 0) > 0) {
-        if (track?.duration > 0) {
-          const ratio = seg.segStart / track.duration
-          setTimeout(() => window.dispatchEvent(new CustomEvent('playlist-seek', { detail: ratio })), 150)
-        }
+      // Always seek: audio target = segStart + how far the cursor is into this segment's timeline window.
+      // This ensures correct playback whether starting from the segment's beginning or mid-segment,
+      // and whether segStart is 0 or non-zero.
+      if (track?.duration > 0) {
+        const bounds = segBounds.value[next]
+        const audioTarget = (seg.segStart || 0) + (pos - bounds.start)
+        const ratio = Math.max(0, Math.min(1, audioTarget / track.duration))
+        setTimeout(() => window.dispatchEvent(new CustomEvent('playlist-seek', { detail: ratio })), 150)
       }
     }
+  } else if (next >= 0) {
+    activeSegIdx.value = next
   } else if (next === -1 && activeSegIdx.value !== -1) {
+    // Cursor left the segment's bounds — stop the backing track so audio doesn't bleed into gaps
     activeSegIdx.value = -1
+    window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
   }
 }
 
@@ -892,6 +903,7 @@ async function confirmAddSeg() {
     segStart: start,
     segEnd:   end,
     label:    newSeg.value.label || t?.label || `Track ${trackIdx + 1}`,
+    notes:    newSeg.value.notes || '',
   })
   showAddSeg.value = false
 }
@@ -1083,14 +1095,39 @@ function openSaveAs() {
   showSaveAs.value = true
 }
 
+async function _snapshotPlaylist() {
+  const usedIdxs = new Set(segments.value.map(s => s.trackIdx))
+  const entries = []
+  for (const idx of [...usedIdxs].sort((a, b) => a - b)) {
+    const t = playlist.value[idx]
+    if (!t) continue
+    let url = t.url || ''
+    if (url.startsWith('blob:')) {
+      try {
+        const blob = await fetch(url).then(r => r.blob())
+        url = await new Promise((res, rej) => {
+          const reader = new FileReader()
+          reader.onload  = () => res(reader.result)
+          reader.onerror = rej
+          reader.readAsDataURL(blob)
+        })
+      } catch { url = '' }
+    }
+    entries.push({ _origIdx: idx, ...t, url })
+  }
+  return entries
+}
+
 async function confirmSaveAs() {
   const name = saveAsName.value.trim()
   if (!name) return
   try {
+    const snapshotPlaylist = await _snapshotPlaylist()
     const ref = await addDoc(TL_COL(), {
       name,
       segments: segments.value,
       markers:  markers.value,
+      playlist: snapshotPlaylist,
       savedAt:  new Date().toISOString(),
     })
     currentSetId.value   = ref._segments[ref._segments.length - 1]
@@ -1105,10 +1142,12 @@ async function confirmSaveAs() {
 async function saveUpdate() {
   if (!currentSetId.value) return
   try {
+    const snapshotPlaylist = await _snapshotPlaylist()
     await setDoc(doc(TL_COL(), currentSetId.value), {
       name:     currentSetName.value,
       segments: segments.value,
       markers:  markers.value,
+      playlist: snapshotPlaylist,
       savedAt:  new Date().toISOString(),
     })
     await loadSets()
@@ -1119,6 +1158,14 @@ async function saveUpdate() {
 
 function loadSet(set) {
   stop()
+  if (set.playlist?.length) {
+    // Rebuild playlist so trackIdx values in segments remain valid.
+    // _snapshotPlaylist stores _origIdx; place each entry at that index.
+    const maxIdx = Math.max(...set.playlist.map(t => t._origIdx ?? 0))
+    const rebuilt = new Array(maxIdx + 1).fill(null)
+    set.playlist.forEach(t => { rebuilt[t._origIdx ?? 0] = t })
+    livePadStore.playlist = rebuilt.filter(Boolean)
+  }
   segments.value       = set.segments || []
   markers.value        = (set.markers  || []).sort((a, b) => a.position - b.position)
   currentSetId.value   = set.id
@@ -1145,6 +1192,44 @@ watch([segments, markers], () => {
 watch(() => props.isOpen, (open) => { if (!open && isPlaying.value) stop() })
 
 let _unsubLib = null
+// ─── Transport MIDI Learn ─────────────────────────────────────────────────────
+
+function _resolveParamFromCC(cc, chan, deviceName) {
+  const preciseKey = deviceName ? `${deviceName}:CH${chan + 1}:CC${cc}` : `CH${chan + 1}:CC${cc}`
+  const deviceCCKey = deviceName ? `${deviceName}:${cc}` : null
+  const plainCCKey  = `${cc}`
+  const mapping = mappingStore.midiMappings[preciseKey] ||
+                  (deviceCCKey ? mappingStore.midiMappings[deviceCCKey] : null) ||
+                  mappingStore.midiMappings[plainCCKey]
+  return mapping ? (typeof mapping === 'object' ? mapping.paramName : mapping) : null
+}
+
+function _onTransportCC(cc, val, chan, inputId) {
+  const deviceName = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
+  const paramName  = _resolveParamFromCC(cc, chan, deviceName)
+  if (!paramName) return
+  if (paramName === 'live_timeline_play_stop' && val > 63) { isPlaying.value ? pause() : play() }
+  else if (paramName === 'live_timeline_stop' && val > 63) { stop() }
+}
+
+function _onTransportNote(type, note, velocity, chan, inputId) {
+  if (type !== 'on' || velocity === 0) return
+  const deviceName  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
+  const preciseKey  = deviceName ? `${deviceName}:CH${chan + 1}:Note${note}` : `CH${chan + 1}:Note${note}`
+  const deviceKey   = deviceName ? `${deviceName}:Note${note}` : null
+  const plainKey    = `Note${note}`
+  const mapping     = mappingStore.midiMappings[preciseKey] ||
+                      (deviceKey ? mappingStore.midiMappings[deviceKey] : null) ||
+                      mappingStore.midiMappings[plainKey]
+  const paramName   = mapping ? (typeof mapping === 'object' ? mapping.paramName : mapping) : null
+  if (!paramName) return
+  if (paramName === 'live_timeline_play_stop') { isPlaying.value ? pause() : play() }
+  else if (paramName === 'live_timeline_stop') { stop() }
+}
+
+let _removeTransportCC   = null
+let _removeTransportNote = null
+
 onMounted(() => {
   const q = query(collection(db, 'backing_tracks'), orderBy('createdAt', 'desc'))
   _unsubLib = onSnapshot(q, snap => {
@@ -1153,11 +1238,15 @@ onMounted(() => {
     libraryTracks.value = ts
   })
   loadSets()
+  _removeTransportCC   = midiService.addCCListener(_onTransportCC)
+  _removeTransportNote = midiService.addNoteListener(_onTransportNote)
 })
 
 onUnmounted(() => {
   if (_rafId) cancelAnimationFrame(_rafId)
   _unsubLib?.()
+  _removeTransportCC?.()
+  _removeTransportNote?.()
   document.removeEventListener('mousemove', _onPlayheadDrag)
   document.removeEventListener('mouseup',   _onPlayheadDragEnd)
 })
@@ -1165,7 +1254,6 @@ onUnmounted(() => {
 
 <template>
   <div
-    v-if="isOpen"
     v-show="!isMinimized"
     class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]"
     :style="panelStyle"
@@ -1417,6 +1505,7 @@ onUnmounted(() => {
                   {{ formatTime(seg.segStart) }}–{{ formatTime(seg.segEnd) }}
                   <span v-if="playlist[seg.trackIdx]?.duration" class="ml-1 opacity-60">[{{ formatTime(playlist[seg.trackIdx].duration) }}]</span>
                 </div>
+                <div v-if="seg.notes" class="text-[9px] italic px-1.5 pb-1 leading-tight opacity-60 truncate w-full">{{ seg.notes }}</div>
               </div>
 
               <!-- Marker vertical lines -->
@@ -1501,6 +1590,13 @@ onUnmounted(() => {
               <span class="ml-1 text-neutral-700">({{ formatTime(selectedSeg.segEnd - selectedSeg.segStart) }})</span>
               <span class="ml-2 text-neutral-600">@ {{ formatTime(segBounds[selectedSegIdx]?.start) }}</span>
             </div>
+            <input
+              :value="selectedSeg.notes || ''"
+              @change="selectedSeg.notes = $event.target.value; setLS(LS_SEGS, segments)"
+              @keyup.enter="$event.target.blur()"
+              placeholder="Notes…"
+              class="text-[11px] text-neutral-400 bg-transparent border-b border-transparent hover:border-neutral-700 focus:border-synth-neon/50 outline-none w-full placeholder-neutral-700 transition-colors italic"
+            />
           </div>
           <button @click="selectedSegIdx = -1" class="ml-auto shrink-0 text-neutral-700 hover:text-neutral-400 transition-colors p-1">
             <X class="w-3 h-3" />
@@ -1622,13 +1718,19 @@ onUnmounted(() => {
       <!-- Transport controls -->
       <div class="flex items-center gap-4 pointer-events-auto w-1/2" @mousedown.stop>
         <div class="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-xl px-2 py-1">
-          <button @click="stop" title="Stop" class="p-1.5 text-neutral-400 hover:text-white transition-colors active:scale-90">
+          <button
+            @click="stop"
+            @contextmenu.prevent="openMenu($event, { name: 'live_timeline_stop', label: 'Timeline Stop' })"
+            title="Stop · Right-click to MIDI Learn"
+            :class="['p-1.5 transition-colors active:scale-90 hover:text-white', mappingStore.mappedParams?.has('live_timeline_stop') ? 'text-amber-400' : 'text-neutral-400']"
+          >
             <Square class="w-4 h-4" />
           </button>
           <button
             @click="isPlaying ? pause() : play()"
-            :class="['p-1.5 transition-colors active:scale-90', isPlaying ? 'text-synth-neon' : 'text-neutral-400 hover:text-white']"
-            :title="isPlaying ? 'Pause' : (isPaused ? 'Resume' : 'Play')"
+            @contextmenu.prevent="openMenu($event, { name: 'live_timeline_play_stop', label: 'Timeline Play/Stop' })"
+            :class="['p-1.5 transition-colors active:scale-90', isPlaying ? 'text-synth-neon' : mappingStore.mappedParams?.has('live_timeline_play_stop') ? 'text-amber-400' : 'text-neutral-400 hover:text-white']"
+            :title="(isPlaying ? 'Pause' : (isPaused ? 'Resume' : 'Play')) + ' · Right-click to MIDI Learn'"
           >
             <Pause v-if="isPlaying" class="w-5 h-5" />
             <Play  v-else class="w-5 h-5" />
@@ -1776,6 +1878,13 @@ onUnmounted(() => {
                 <span class="ml-2 opacity-70">{{ formatTime(seg.segStart) }} → {{ formatTime(seg.segEnd) }}</span>
                 <span class="ml-2 text-neutral-700">({{ formatTime(seg.segEnd - seg.segStart) }})</span>
               </div>
+              <input
+                :value="seg.notes || ''"
+                @change="seg.notes = $event.target.value; setLS(LS_SEGS, segments)"
+                @keyup.enter="$event.target.blur()"
+                placeholder="Notes…"
+                class="mt-0.5 text-[9px] italic text-neutral-500 bg-transparent border-b border-transparent hover:border-neutral-700 focus:border-synth-neon/50 outline-none w-full placeholder-neutral-700 transition-colors"
+              />
             </div>
             <span class="text-[9px] font-mono text-neutral-600 shrink-0">@ {{ formatTime(segBounds[idx].start) }}</span>
             <div class="flex items-center gap-0.5 shrink-0">
@@ -2328,5 +2437,6 @@ onUnmounted(() => {
       </div>
     </Teleport>
 
+    <MidiMapContextMenu />
   </div>
 </template>
