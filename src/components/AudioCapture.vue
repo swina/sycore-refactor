@@ -7,6 +7,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { Mp3Encoder } from '@breezystack/lamejs'
 import { userKey } from '@/lib/userKey'
 import { midiService } from '@/core/midi/MidiService'
@@ -30,7 +31,7 @@ const arpStore     = useArpStore()
 const activeBpm = computed(() => arpStore.arpBpm || 120)
 const { openMenu } = useMidiContextMenu()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'S1_CAPTURE_DR',
   minimizeLabel: 'Audio Capture',
   initialWidth: 950,
@@ -2467,13 +2468,7 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="flex items-center gap-1">
-          <button @click="toggleMinimize" title="Minimize"
-            class="p-2 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
-            <Minus class="w-4 h-4" />
-          </button>
-          <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-            <X class="w-5 h-5" />
-          </button>
+          <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
         </div>
       </div>
 

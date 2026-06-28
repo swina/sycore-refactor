@@ -9,6 +9,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
 import * as drumEngine from '@/lib/drum-engine'
 
@@ -20,7 +21,7 @@ const arpStore       = useArpStore()
 const { openMenu }   = useMidiContextMenu()
 const { cacheFileBlob, resolveUrl } = useFreesoundCache()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
     storageKey:    'S1_DRUM_MACHINE_DR',
     minimizeLabel: 'Drum Machine',
@@ -888,12 +889,7 @@ function cycleChainSlot(i) {
           </template>
         </div>
 
-        <button @click.stop="toggleMinimize" class="p-1.5 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-          <Minus class="w-3.5 h-3.5" />
-        </button>
-        <button @click.stop="uiStore.isDrumMachineOpen = false" class="p-1.5 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-          <X class="w-3.5 h-3.5" />
-        </button>
+        <MacOsButtons @close="uiStore.isDrumMachineOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
 
       <!-- ── Preset panel ───────────────────────────────────────────────────── -->

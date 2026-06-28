@@ -16,6 +16,7 @@ import { useUiStore }         from '@/stores/useUiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService }        from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { looperEngine }          from '@/lib/looper-engine'
 import { userKey }               from '@/lib/userKey'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
@@ -24,7 +25,7 @@ import PlayList        from '@/components/PlayList.vue'
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_LIVE_PERF',
   minimizeLabel: 'Live Performance',
   initialWidth: 900,
@@ -788,13 +789,7 @@ function formatTime(t) {
         </span>
       </div>
       <div class="flex items-center gap-1">
-        <button @click="toggleMinimize" title="Minimize"
-          class="p-1 rounded-lg hover:bg-neutral-800 text-neutral-600 hover:text-yellow-400 transition-colors">
-          <Minus class="w-4 h-4" />
-        </button>
-        <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors p-1">
-          <X class="w-5 h-5" />
-        </button>
+        <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
     </div>
 

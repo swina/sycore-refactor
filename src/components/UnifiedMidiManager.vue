@@ -8,6 +8,7 @@ import { useMidiStore }    from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useSyncStore }    from '@/stores/useSyncStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 import DeviceListPanel      from './DeviceListPanel.vue'
 import MidiMatrix           from './MidiMatrix.vue'
@@ -23,7 +24,7 @@ const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
 const syncStore    = useSyncStore()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_UNIFIED_MIDI',
   minimizeLabel: 'MIDI Manager',
   initialWidth: 920,
@@ -247,18 +248,7 @@ function downloadCsv() {
             >
               <Download class="w-4 h-4" />
             </button>
-            <button @click="toggleMinimize"
-              class="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-yellow-400 transition-colors"
-              title="Minimize"
-            >
-              <Minus class="w-4 h-4" />
-            </button>
-            <button @click="close"
-              class="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
-              title="Close"
-            >
-              <X class="w-4 h-4" />
-            </button>
+            <MacOsButtons @close="close" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>
 

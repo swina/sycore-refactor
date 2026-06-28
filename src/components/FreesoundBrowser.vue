@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import {
   Search, Play, Pause, Plus, Loader2, Music2,
   ChevronLeft, ChevronRight, Repeat, BadgeCheck, X, Minus,
@@ -450,7 +451,7 @@ async function confirmCaptureAndSend() {
 }
 
 // ── Drag & resize ─────────────────────────────────────────────────
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
     storageKey:    'S1_FREESOUND_BROWSER',
     minimizeLabel: 'Freesound',
@@ -514,21 +515,7 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="flex items-center gap-1 ml-3">
-            <button
-              @click="toggleMinimize"
-              @mousedown.stop
-              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-yellow-400 transition-colors"
-              title="Minimize"
-            >
-              <Minus class="w-4 h-4" />
-            </button>
-            <button
-              @click="uiStore.isFreesoundBrowserOpen = false"
-              @mousedown.stop
-              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
-            >
-              <X class="w-4 h-4" />
-            </button>
+            <MacOsButtons @close="uiStore.isFreesoundBrowserOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>
 

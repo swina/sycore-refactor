@@ -7,8 +7,9 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useCaptureStore } from '@/stores/useCaptureStore'
 import { midiService } from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_MIDI_CAPTURE',
   minimizeLabel: 'MIDI Capture',
   initialWidth: 920,
@@ -1162,13 +1163,7 @@ onUnmounted(() => {
             </span>
           </div>
           <div class="flex items-center gap-1">
-            <button @click="toggleMinimize" title="Minimize"
-              class="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-yellow-400 transition-colors">
-              <Minus class="w-3.5 h-3.5" />
-            </button>
-            <button @click="emit('close')" class="p-1 text-neutral-500 hover:text-white transition-colors">
-              <X class="w-4 h-4" />
-            </button>
+            <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>
 

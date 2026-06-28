@@ -2,13 +2,14 @@
 import { ref, reactive, computed } from 'vue'
 import { Wand2, X, ChevronRight, ChevronLeft, Plus, Trash2, Check } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 
 const midiStore = useMidiStore()
 const uiStore   = useUiStore()
 
-const { panelStyle, onDragStart, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, bringToFront, toggleMinimize, maximize } = useDraggableResizable({
   storageKey:    'SYCORE_POS_MIDI_WIZARD',
   initialWidth:  480,
   initialHeight: 500,
@@ -125,9 +126,7 @@ const ROUTE_FLAGS = [
             :title="s"
           />
         </div>
-        <button @click="uiStore.isMidiWizardOpen = false" class="p-1 text-neutral-400 hover:text-white transition-colors">
-          <X class="w-4 h-4" />
-        </button>
+        <MacOsButtons @close="uiStore.isMidiWizardOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
 
       <!-- Body -->

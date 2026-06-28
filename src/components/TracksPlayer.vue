@@ -7,6 +7,7 @@ import {
   Save, GripVertical, Link,
 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import {
   collection, onSnapshot, query, orderBy, addDoc,
   serverTimestamp, deleteDoc, doc, updateDoc, deleteField
@@ -83,7 +84,7 @@ const syncRecordAudioCapture = computed({
   set: (v) => { syncStore.syncRecordAudioCapture = v },
 })
 
-const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'S1_TP_PANEL_DR',
   minimizeLabel: 'Backing Track',
   initialWidth: 904,
@@ -888,13 +889,7 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="flex items-center gap-1">
-            <button @click="toggleMinimize" title="Minimize"
-              class="p-2 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
-              <Minus class="w-4 h-4" />
-            </button>
-            <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-              <X class="w-5 h-5" />
-            </button>
+            <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>
 

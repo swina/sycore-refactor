@@ -9,13 +9,14 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { MidiSource, midiService } from '@/core/midi/MidiService'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_DEVICE_PC',
   minimizeLabel: 'Device PC',
   initialWidth: 900,
@@ -736,13 +737,7 @@ function assignToPad(setId, padIdx) {
             </div>
           </div>
           <div class="flex items-center gap-1">
-            <button @click="toggleMinimize" title="Minimize"
-              class="p-2 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
-              <Minus class="w-4 h-4" />
-            </button>
-            <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-              <X class="w-5 h-5" />
-            </button>
+            <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>
 

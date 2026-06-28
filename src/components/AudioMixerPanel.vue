@@ -6,6 +6,7 @@ import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const emit = defineEmits(['close'])
 
@@ -14,7 +15,7 @@ const mixer      = useAudioMixerStore()
 const midiStore  = useMidiStore()
 const { instruments } = useDeviceRegistry()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
     storageKey:    'S1_AUDIO_MIXER_DR',
     minimizeLabel: 'Audio Mixer',
@@ -188,12 +189,7 @@ const C = {
           >
             <Settings2 class="w-3.5 h-3.5" />
           </button>
-          <button @click="toggleMinimize" class="p-1.5 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-            <Minus class="w-3.5 h-3.5" />
-          </button>
-          <button @click="emit('close')" class="p-1.5 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
-            <X class="w-3.5 h-3.5" />
-          </button>
+          <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
         </div>
 
         <!-- Channel selector overlay ──────────────────────────────────── -->

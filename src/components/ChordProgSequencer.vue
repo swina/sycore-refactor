@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
@@ -30,7 +31,7 @@ const syncStore = useSyncStore()
 const uiStore = useUiStore()
 const { progressionData, progressionNames, loading: progLoading, loadByIndex } = useProgressionLoader()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_CHORD_PROG',
   minimizeLabel: 'Chord Prog Sequencer',
   initialWidth: 900,
@@ -622,15 +623,7 @@ function velBarColor(v) {
             </div>
           </div>
           
-          <!-- Minimize -->
-          <button @click.stop="toggleMinimize" class="text-neutral-500 hover:text-neutral-300 transition-colors">
-            <Minus class="w-4 h-4" />
-          </button>
-
-          <!-- Close -->
-          <button @click.stop="emit('close')" class="text-neutral-500 hover:text-red-400 transition-colors">
-            <X class="w-4 h-4" />
-          </button>
+          <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
         </div>
       </div>
 

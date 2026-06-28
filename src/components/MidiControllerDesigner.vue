@@ -19,12 +19,7 @@
         <button @click.stop="resetAllMappings" class="p-1 text-neutral-500 hover:text-red-400 transition-colors" title="Reset all app MIDI mappings">
           <Trash2 class="w-3 h-3" />
         </button>
-        <button @click.stop="toggleMinimize" class="p-1 text-neutral-500 hover:text-white transition-colors" title="Minimize">
-          <Minus class="w-3 h-3" />
-        </button>
-        <button @click.stop="uiStore.isMidiControllerDesignerOpen = false" class="p-1 text-neutral-500 hover:text-red-400 transition-colors">
-          <X class="w-3 h-3" />
-        </button>
+        <MacOsButtons @close="uiStore.isMidiControllerDesignerOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
     </div>
 
@@ -682,6 +677,7 @@ import { APP_ACTION_LABELS, MIDI_ACTION_GROUPS, CONTINUOUS_ACTIONS } from '@/lib
 import { useMidiFeedback } from '@/composables/useMidiFeedback'
 import { applyParamValue } from '@/composables/useMidiCCListener'
 import { useAppActions } from '@/composables/useAppActions'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
@@ -692,7 +688,7 @@ const { openMenu } = useMidiContextMenu()
 const { testFeedback } = useMidiFeedback()
 const { dispatchAction } = useAppActions()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
     storageKey:    'SYCORE_MIDI_CTRL_DESIGNER',
     initialWidth:  800,

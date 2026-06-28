@@ -15,6 +15,7 @@ import { useLivePadStore } from '@/stores/useLivePadStore'
 import { looperEngine } from '@/lib/looper-engine'
 import { midiService } from '@/core/midi/MidiService'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const looperStore = useLooperStore()
 const uiStore = useUiStore()
@@ -36,7 +37,7 @@ let streamRef = null
 
 const emit = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_AUDIO_LOOPER',
   minimizeLabel: 'Audio Looper',
   initialWidth: 1000,
@@ -434,13 +435,7 @@ const hasTakes = computed(() => looperStore.takes.some(t => !t.isEmpty))
         </div>
 
         <div class="flex items-center gap-2">
-          <button @click="toggleMinimize" title="Minimize"
-            class="p-2 hover:bg-white/5 rounded-full transition-all active:scale-90 text-neutral-500 hover:text-yellow-400">
-            <Minus class="w-4 h-4" />
-          </button>
-          <button @click="uiStore.isLooperOpen = false" class="p-2 hover:bg-white/5 rounded-full transition-all active:scale-90">
-            <X class="w-5 h-5 text-neutral-500 hover:text-white" />
-          </button>
+          <MacOsButtons @close="uiStore.isLooperOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
         </div>
       </div>
 

@@ -14,12 +14,7 @@
         <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest pointer-events-none">{{ activePattern?.name }}</span>
       </div>
       <div class="flex items-center gap-1">
-        <button @click.stop="toggleMinimize" class="p-1 text-neutral-500 hover:text-white transition-colors" title="Minimize">
-          <Minus class="w-3 h-3" />
-        </button>
-        <button @click.stop="uiStore.isSamplerOpen = false" class="p-1 text-neutral-500 hover:text-red-400 transition-colors">
-          <X class="w-3 h-3" />
-        </button>
+        <MacOsButtons @close="uiStore.isSamplerOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
     </div>
 
@@ -290,6 +285,7 @@ import { useUiStore }            from '@/stores/useUiStore'
 import { useSamplerStore }       from '@/stores/useSamplerStore'
 import { useMappingStore }       from '@/stores/useMappingStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useFreesoundCache }     from '@/composables/useFreesoundCache'
 import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
 import * as engine               from '@/lib/sampler-engine'
@@ -302,7 +298,7 @@ const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
 const { cacheFileBlob, resolveUrl } = useFreesoundCache()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
     storageKey:    'S1_SAMPLER_DR',
     minimizeLabel: 'Sampler',

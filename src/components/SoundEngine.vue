@@ -2,6 +2,7 @@
 import { watch } from 'vue'
 import { Cpu, Minus, X } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -9,7 +10,7 @@ const uiStore = useUiStore()
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey:    'SYCORE_POS_SOUND_ENGINE',
   initialWidth:  920,
   initialHeight: 720,
@@ -47,14 +48,7 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
           <span class="text-xs font-black uppercase tracking-widest text-neutral-300">Sound Engine</span>
         </div>
         <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
-          <button @click="toggleMinimize" title="Minimize"
-            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-yellow-400 transition-colors">
-            <Minus class="w-3.5 h-3.5" />
-          </button>
-          <button @click="emit('close');;uiStore.isSequencerOpen = false" title="Close"
-            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-white transition-colors">
-            <X class="w-3.5 h-3.5" />
-          </button>
+          <MacOsButtons @close="() => { emit('close'); uiStore.isSequencerOpen = false }" @minimize="toggleMinimize" @maximize="maximize" />
         </div>
       </div>
 

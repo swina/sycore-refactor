@@ -6,6 +6,7 @@ import {
   Save, FilePlus, FolderOpen, AudioLines
 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { detectBpmFromUrl }      from '@/composables/useBpmDetector'
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { usePresetStore }  from '@/stores/usePresetStore'
@@ -28,7 +29,7 @@ import { db } from '@/lib/firebase'
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_LIVE_TIMELINE',
   initialWidth: 1020,
   initialHeight: 580,
@@ -1303,13 +1304,7 @@ onUnmounted(() => {
       
       <div class="flex-1" />
       <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
-        <button @click="toggleMinimize" title="Minimize"
-          class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-600 hover:text-yellow-400 transition-colors">
-          <Minus class="w-4 h-4" />
-        </button>
-        <button @click="emit('close')" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-800 text-neutral-600 hover:text-white transition-colors ml-0.5">
-          <X class="w-4 h-4" />
-        </button>
+        <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
       
     </div>

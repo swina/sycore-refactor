@@ -1,4 +1,6 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
+
+const FOOTER_H = 40 // AppFooter h-10
 import { registerMinimized, unregisterMinimized } from './useMinimizedModals'
 import { userKey } from '@/lib/userKey'
 
@@ -58,6 +60,31 @@ export function useDraggableResizable({
 
   function toggleMinimize() {
     isMinimized.value = !isMinimized.value
+  }
+
+  let _preMaxSnap = null
+
+  const isMaximized = computed(() =>
+    pos.value.x === 0 && pos.value.y === 0 &&
+    pos.value.w === window.innerWidth &&
+    pos.value.h === window.innerHeight - FOOTER_H
+  )
+
+  function maximize() {
+    if (isMaximized.value) {
+      // Restore
+      if (_preMaxSnap) {
+        pos.value = { ...pos.value, ..._preMaxSnap }
+        _preMaxSnap = null
+      } else {
+        const d = getDefault()
+        pos.value = { ...pos.value, x: d.x, y: d.y, w: d.w, h: d.h }
+      }
+    } else {
+      _preMaxSnap = { x: pos.value.x, y: pos.value.y, w: pos.value.w, h: pos.value.h }
+      pos.value = { ...pos.value, x: 0, y: 0, w: window.innerWidth, h: window.innerHeight - FOOTER_H, minimized: false }
+    }
+    persist()
   }
 
   // Keep global minimized-modals registry in sync
@@ -155,5 +182,5 @@ export function useDraggableResizable({
     persist()
   }
 
-  return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront }
+  return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize, isMaximized }
 }
