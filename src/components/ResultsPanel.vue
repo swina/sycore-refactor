@@ -22,6 +22,7 @@ import SignalFlowVisualizer from '@/components/SignalFlowVisualizer.vue'
 import VisualizerPanel from '@/components/ui/VisualizerPanel.vue'
 import SyButton from '@/components/ui/SyButton.vue'
 import StepSequencer from '@/components/StepSequencer.vue'
+import { dispatch } from '@/types/events'
 
 const presetStore = usePresetStore()
 const midiStore = useMidiStore()

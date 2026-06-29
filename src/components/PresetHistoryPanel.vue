@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
+import { dispatch } from '@/types/events'
 
 const emit = defineEmits(['close'])
 

@@ -3,14 +3,79 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 
-const BANKS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-const PAD_COUNT = 7    // 6 standard + 1 granular (index 6)
-const STEP_COUNT = 64
-const LS_KEY = 'SYCORE_SAMPLER_PATTERNS'
-const LS_ACTIVE = 'SYCORE_SAMPLER_ACTIVE_PATTERN'
+// ── Constants ──────────────────────────────────────────────────────────────
 
-function defaultPad(bankId, padIdx) {
-  const base = {
+export const BANKS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const
+export type BankId = typeof BANKS[number]
+
+export const PAD_COUNT = 7
+export const STEP_COUNT = 64
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export interface SamplerPad {
+  id: string
+  label: string
+  url: string
+  author: string
+  duration: number
+  bpm: number | null
+  volume: number
+  pan: number
+  pitch: number
+  startPoint: number
+  endPoint: number
+  loopMode: boolean
+  filterFreq: number
+  reverbSend: number
+  delaySend: number
+  sampleRate: number
+  rootKey: number
+  minKey: number
+  maxKey: number
+  midiInput: string
+  attack: number
+  decay: number
+  sustain: number
+  release: number
+  chromatic: boolean
+  polyMode: boolean
+  // Granular (pad idx 6 only)
+  granular?: boolean
+  grainSize?: number
+  grainOverlap?: number
+  grainPosition?: number
+  grainPitch?: number
+}
+
+export interface SamplerStep {
+  active: boolean
+  velocity: number
+  accent: boolean
+  probability: number
+  microTiming: number
+  pitchOffset: number
+  automation: Record<string, number>
+}
+
+export interface SamplerBank {
+  pads: SamplerPad[]
+  steps: SamplerStep[][]
+}
+
+export interface SamplerPattern {
+  id: string
+  name: string
+  bpm: number
+  stepCount: number
+  activeBank: string
+  banks: Record<string, SamplerBank>
+}
+
+// ── Factory functions ──────────────────────────────────────────────────────
+
+function defaultPad(bankId: string, padIdx: number): SamplerPad {
+  const base: SamplerPad = {
     id: `sampler_${bankId}_${padIdx}`,
     label: '',
     url: '',
@@ -39,7 +104,6 @@ function defaultPad(bankId, padIdx) {
     polyMode: false,
   }
   if (padIdx === 6) {
-    // Granular pad extras
     base.granular = true
     base.grainSize = 0.1
     base.grainOverlap = 0.5
@@ -49,7 +113,7 @@ function defaultPad(bankId, padIdx) {
   return base
 }
 
-function defaultStep() {
+function defaultStep(): SamplerStep {
   return {
     active: false,
     velocity: 100,
@@ -61,7 +125,7 @@ function defaultStep() {
   }
 }
 
-function defaultBank(bankId) {
+function defaultBank(bankId: string): SamplerBank {
   return {
     pads: Array.from({ length: PAD_COUNT }, (_, i) => defaultPad(bankId, i)),
     steps: Array.from({ length: PAD_COUNT }, () =>
@@ -70,13 +134,18 @@ function defaultBank(bankId) {
   }
 }
 
-function defaultPattern(id = `pattern_${Date.now()}`) {
-  const banks = {}
+function defaultPattern(id = `pattern_${Date.now()}`): SamplerPattern {
+  const banks: Record<string, SamplerBank> = {}
   BANKS.forEach(b => { banks[b] = defaultBank(b) })
   return { id, name: 'Pattern 1', bpm: 120, stepCount: 16, activeBank: 'A', banks }
 }
 
-function _load() {
+// ── LocalStorage ───────────────────────────────────────────────────────────
+
+const LS_KEY = 'SYCORE_SAMPLER_PATTERNS'
+const LS_ACTIVE = 'SYCORE_SAMPLER_ACTIVE_PATTERN'
+
+function _load(): SamplerPattern[] {
   try {
     const raw = localStorage.getItem(userKey(LS_KEY))
     const arr = raw ? JSON.parse(raw) : null
@@ -85,61 +154,65 @@ function _load() {
   return [defaultPattern()]
 }
 
-function _loadActiveId() {
+function _loadActiveId(): string | null {
   return localStorage.getItem(userKey(LS_ACTIVE)) || null
 }
+
+// ── Store ──────────────────────────────────────────────────────────────────
 
 export const useSamplerStore = defineStore('sampler', () => {
   const authStore = useAuthStore()
   const uid = computed(() => authStore.user?.uid)
 
-  const patterns = ref(_load())
-  const activePatternId = ref(_loadActiveId() || patterns.value[0]?.id)
+  const patterns = ref<SamplerPattern[]>(_load())
+  const activePatternId = ref<string>(_loadActiveId() || patterns.value[0]?.id)
 
-  const activePattern = computed(() =>
+  const activePattern = computed<SamplerPattern | undefined>(() =>
     patterns.value.find(p => p.id === activePatternId.value) ?? patterns.value[0]
   )
 
   const activeBank = computed({
     get: () => activePattern.value?.activeBank ?? 'A',
-    set: (b) => { if (activePattern.value) activePattern.value.activeBank = b },
+    set: (b: string) => { if (activePattern.value) activePattern.value.activeBank = b },
   })
 
-  const activeBankData = computed(() => activePattern.value?.banks[activeBank.value])
+  const activeBankData = computed<SamplerBank | undefined>(() =>
+    activePattern.value?.banks[activeBank.value]
+  )
 
-  function setPad(bankId, padIdx, data) {
+  function setPad(bankId: string, padIdx: number, data: Partial<SamplerPad>) {
     const bank = activePattern.value?.banks[bankId]
     if (!bank) return
     bank.pads[padIdx] = { ...bank.pads[padIdx], ...data }
   }
 
-  function clearPad(bankId, padIdx) {
+  function clearPad(bankId: string, padIdx: number) {
     const bank = activePattern.value?.banks[bankId]
     if (!bank) return
     bank.pads[padIdx] = defaultPad(bankId, padIdx)
   }
 
-  function toggleStep(bankId, padIdx, stepIdx) {
+  function toggleStep(bankId: string, padIdx: number, stepIdx: number) {
     const bank = activePattern.value?.banks[bankId]
     if (!bank) return
     const s = bank.steps[padIdx][stepIdx]
     s.active = !s.active
   }
 
-  function setStep(bankId, padIdx, stepIdx, data) {
+  function setStep(bankId: string, padIdx: number, stepIdx: number, data: Partial<SamplerStep>) {
     const bank = activePattern.value?.banks[bankId]
     if (!bank) return
     Object.assign(bank.steps[padIdx][stepIdx], data)
   }
 
-  function addPattern() {
+  function addPattern(): SamplerPattern {
     const p = defaultPattern()
     patterns.value.push(p)
     activePatternId.value = p.id
     return p
   }
 
-  function removePattern(id) {
+  function removePattern(id: string) {
     if (patterns.value.length <= 1) return
     patterns.value = patterns.value.filter(p => p.id !== id)
     if (activePatternId.value === id) activePatternId.value = patterns.value[0].id

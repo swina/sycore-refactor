@@ -1,10 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+export type CapturePhase = 'idle' | 'review'
+
+export interface CaptureNote {
+  [key: string]: any
+}
+
 export const useCaptureStore = defineStore('capture', () => {
-  // Persists across panel open/close; cleared only by explicit user reset
-  const frozenNotes  = ref([])
-  const phase        = ref('idle')   // 'idle' | 'review' (never 'capturing' — not persisted)
+  const frozenNotes  = ref<CaptureNote[]>([])
+  const phase        = ref<CapturePhase>('idle')
   const rangeStartMs = ref(0)
   const rangeEndMs   = ref(0)
 

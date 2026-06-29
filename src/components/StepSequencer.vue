@@ -12,6 +12,7 @@ import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import { dispatch } from '@/types/events'
 
 const props = defineProps({
   isOpen: Boolean,

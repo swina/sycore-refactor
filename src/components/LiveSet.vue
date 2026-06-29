@@ -9,6 +9,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { S1_CC_MAP, FIELD_TO_CC } from '@/constants/s1-config'
 import PlayList from '@/components/PlayList.vue'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue' // Import the new component
+import { dispatch } from '@/types/events'
 
 const props = defineProps({
   isOpen: Boolean,

@@ -9,6 +9,8 @@ import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { userKey } from '@/lib/userKey'
+import { dispatch } from '@/types/events'
+
 
 /**
  * Dispatches AppAction strings to the appropriate store calls.

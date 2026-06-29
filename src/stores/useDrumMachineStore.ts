@@ -1,0 +1,572 @@
+import { defineStore } from 'pinia'
+import { ref, computed, watch } from 'vue'
+import { useAuthStore } from './useAuthStore'
+import { userKey } from '@/lib/userKey'
+import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumStyleName } from '@/types/drum-machine'
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
+const LS_KEY = 'SYCORE_DRUM_MACHINE_V1'
+const LS_PRESETS_KEY = 'SYCORE_DM_PRESETS'
+const TRACK_LABELS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal'] as const
+
+function DEFAULT_DRUM_STEP(): DrumStep {
+  return { active: false, velocity: 100, accent: false, ratchet: 1 }
+}
+
+function makeTrack(label = ''): DrumTrack {
+  return {
+    label,
+    soundId:    '',
+    soundLabel: '',
+    soundUrl:   '',
+    muted:      false,
+    solo:       false,
+    volume:     0.85,
+    length:     16,
+    pan:        0,
+    pitch:      0,
+    filterFreq: 20000,
+    reverbSend: 0,
+    delaySend:  0,
+    steps: Array.from({ length: 16 }, () => DEFAULT_DRUM_STEP()),
+  }
+}
+
+function serializeTrack(t: DrumTrack): SerializedDrumTrack {
+  return {
+    label:      t.label,
+    soundId:    t.soundId,
+    soundLabel: t.soundLabel,
+    muted:      t.muted,
+    solo:       t.solo,
+    volume:     t.volume,
+    length:     t.length     ?? 16,
+    pan:        t.pan        ?? 0,
+    pitch:      t.pitch      ?? 0,
+    filterFreq: t.filterFreq ?? 20000,
+    reverbSend: t.reverbSend ?? 0,
+    delaySend:  t.delaySend  ?? 0,
+    steps:      t.steps.map(s => ({ ...s })),
+  }
+}
+
+type DrumSequences = Record<string, DrumTrack[]>
+
+function makeDefaultSequences(): DrumSequences {
+  return (['A', 'B', 'C', 'D', 'E', 'F'] as const).reduce((acc, key) => {
+    acc[key] = TRACK_LABELS.map(label => makeTrack(label))
+    return acc
+  }, {} as DrumSequences)
+}
+
+// ── Style generation data ──────────────────────────────────────────────────
+
+const DRUM_STYLES: Record<string, any> = {
+  House: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0],  // Kick
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],  // Snare
+        [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],  // Closed HH
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],  // Open HH
+        [1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0],  // Clap
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],  // Tom 1
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],  // Tom 2
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],  // Cymbal
+      ],
+    ],
+    velMin: 80,
+    velMax: 110,
+    ghostVelMax: 50,
+  },
+  Techno: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 90,
+    velMax: 115,
+    ghostVelMax: 40,
+  },
+  HipHop: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,1],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 75,
+    velMax: 105,
+    ghostVelMax: 45,
+  },
+  Trap: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+        [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
+      ],
+    ],
+    velMin: 85,
+    velMax: 120,
+    ghostVelMax: 30,
+  },
+  Funk: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,1,0,1,0,1,0,0,0,1,0,1,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 70,
+    velMax: 100,
+    ghostVelMax: 40,
+  },
+  'Jungle/DnB': {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 85,
+    velMax: 115,
+    ghostVelMax: 50,
+  },
+  Latin: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 75,
+    velMax: 105,
+    ghostVelMax: 40,
+  },
+  Rock: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+        [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 85,
+    velMax: 115,
+    ghostVelMax: 35,
+  },
+  EDM: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 90,
+    velMax: 120,
+    ghostVelMax: 30,
+  },
+  Pop: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 75,
+    velMax: 100,
+    ghostVelMax: 40,
+  },
+  Jazz: {
+    variants: [
+      [
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+        [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+        [0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+        [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      ],
+    ],
+    velMin: 60,
+    velMax: 90,
+    ghostVelMax: 35,
+  },
+}
+
+export const DRUM_STYLE_NAMES = Object.keys(DRUM_STYLES)
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function rand() { return Math.random() }
+function randInt(min: number, max: number) { return min + Math.floor(rand() * (max - min + 1)) }
+
+function resolveStep(v: any, velMin: number, velMax: number, ghostVelMax: number): DrumStep {
+  if (v === 0) return DEFAULT_DRUM_STEP()
+  let active = true, accented = false, ratchetN = 1, probability = 1
+
+  if (Array.isArray(v)) {
+    probability = typeof v[0] === 'number' ? v[0] : 1
+    if (v[1] === 'A') accented = true
+    else if (typeof v[1] === 'number' && v[1] >= 2 && v[1] <= 4) ratchetN = v[1]
+  } else if (v === 'A') {
+    accented = true
+  } else if (typeof v === 'number' && v < 1) {
+    probability = v
+  }
+
+  if (probability < 1 && rand() > probability) return DEFAULT_DRUM_STEP()
+
+  if (accented) {
+    return { active: true, velocity: randInt(velMin, velMax), accent: true, ratchet: 1 }
+  }
+
+  if (ratchetN > 1) {
+    return { active: true, velocity: randInt(velMin, velMax), accent: false, ratchet: ratchetN }
+  }
+
+  const isGhost = probability < 0.5
+  const vel = isGhost ? randInt(20, ghostVelMax) : randInt(velMin, velMax)
+  return { active: true, velocity: vel, accent: false, ratchet: 1 }
+}
+
+// ── Serialization ──────────────────────────────────────────────────────────
+
+function loadFromLS(): any {
+  try {
+    const raw = localStorage.getItem(userKey(LS_KEY))
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch { return null }
+}
+
+function hydrateTrack(t: any, label: string): DrumTrack {
+  return {
+    label:      t.label      ?? label,
+    soundId:    t.soundId    ?? '',
+    soundLabel: t.soundLabel ?? '',
+    soundUrl:   '',
+    muted:      t.muted      ?? false,
+    solo:       t.solo       ?? false,
+    volume:     t.volume     ?? 0.85,
+    length:     t.length     ?? 16,
+    pan:        t.pan        ?? 0,
+    pitch:      t.pitch      ?? 0,
+    filterFreq: t.filterFreq ?? 20000,
+    reverbSend: t.reverbSend ?? 0,
+    delaySend:  t.delaySend  ?? 0,
+    steps: Array.from({ length: 16 }, (_, s) => {
+      const step = t.steps?.[s]
+      if (!step) return DEFAULT_DRUM_STEP()
+      return {
+        active:   step.active   ?? false,
+        velocity: step.velocity ?? 100,
+        accent:   step.accent   ?? false,
+        ratchet:  step.ratchet  ?? 1,
+      }
+    }),
+  }
+}
+
+function mergeLoadedSequences(loaded: any): DrumSequences {
+  const defaults = makeDefaultSequences()
+  if (!loaded?.sequences) return defaults
+  const merged: DrumSequences = {}
+  for (const key of ['A', 'B', 'C', 'D', 'E', 'F']) {
+    const loadedSeq = loaded.sequences[key]
+    if (!Array.isArray(loadedSeq)) { merged[key] = defaults[key]; continue }
+    merged[key] = TRACK_LABELS.map((label, i) => {
+      const t = loadedSeq[i]
+      return t ? hydrateTrack(t, label) : makeTrack(label)
+    })
+  }
+  return merged
+}
+
+// ── Store ──────────────────────────────────────────────────────────────────
+
+export const useDrumMachineStore = defineStore('drumMachine', () => {
+  const authStore = useAuthStore()
+  const uid = computed(() => authStore.user?.uid)
+
+  const bpm = ref(120)
+  const swing = ref(0)
+  const isPlaying = ref(false)
+  const currentStep = ref(-1)
+  const repeaterActive = ref(false)
+  const repeaterDivision = ref(2)
+
+  const loaded = loadFromLS()
+  const sequences = ref<DrumSequences>(
+    loaded ? mergeLoadedSequences(loaded) : makeDefaultSequences()
+  )
+  const activeSequence = ref<string>(loaded?.activeSequence ?? 'A')
+
+  const currentPattern = computed(() => sequences.value[activeSequence.value] ?? [])
+
+  function _serializeSequences(): Record<string, SerializedDrumTrack[]> {
+    const out: Record<string, SerializedDrumTrack[]> = {}
+    for (const [seqKey, tracks] of Object.entries(sequences.value)) {
+      out[seqKey] = tracks.map(serializeTrack)
+    }
+    return out
+  }
+
+  function _save() {
+    try {
+      localStorage.setItem(userKey(LS_KEY), JSON.stringify({
+        sequences: _serializeSequences(),
+        activeSequence: activeSequence.value,
+      }))
+    } catch {}
+  }
+
+  watch(sequences, _save, { deep: true })
+  watch(activeSequence, _save)
+
+  function setStep(trackIdx: number, stepIdx: number, patch: Partial<DrumStep>) {
+    const step = sequences.value[activeSequence.value]?.[trackIdx]?.steps[stepIdx]
+    if (step) Object.assign(step, patch)
+  }
+
+  function toggleStep(trackIdx: number, stepIdx: number) {
+    const step = sequences.value[activeSequence.value]?.[trackIdx]?.steps[stepIdx]
+    if (step) step.active = !step.active
+  }
+
+  function clearPattern(seqKey?: string) {
+    const key = seqKey ?? activeSequence.value
+    sequences.value[key] = TRACK_LABELS.map(label => makeTrack(label)) as any
+  }
+
+  function initDrumMachine() {
+    sequences.value = makeDefaultSequences()
+    activeSequence.value = 'A'
+    _save()
+  }
+
+  function copyPattern(fromKey: string, toKey: string) {
+    const src = sequences.value[fromKey]
+    if (!src) return
+    sequences.value[toKey] = src.map(track => ({
+      ...track,
+      steps: track.steps.map(s => ({ ...s })),
+    })) as any
+  }
+
+  function swapSequence(key: string) {
+    activeSequence.value = key
+  }
+
+  function setTrackSound(trackIdx: number, sound: { soundId?: string; soundLabel?: string; soundUrl?: string }) {
+    const t = sequences.value[activeSequence.value]?.[trackIdx]
+    if (!t) return
+    if (sound.soundId !== undefined) t.soundId = sound.soundId
+    if (sound.soundLabel !== undefined) t.soundLabel = sound.soundLabel
+    if (sound.soundUrl !== undefined) t.soundUrl = sound.soundUrl
+  }
+
+  function resolveTrackSound(trackIdx: number) {
+    const order = ['A', 'B', 'C', 'D', 'E', 'F']
+    let idx = order.indexOf(activeSequence.value)
+    while (idx >= 0) {
+      const t = sequences.value[order[idx]]?.[trackIdx]
+      if (t?.soundId) return {
+        soundId: t.soundId,
+        soundLabel: t.soundLabel,
+        soundUrl: t.soundUrl ?? '',
+        own: order[idx] === activeSequence.value,
+      }
+      idx--
+    }
+    return undefined
+  }
+
+  function setTrackVolume(trackIdx: number, vol: number) {
+    const t = sequences.value[activeSequence.value]?.[trackIdx]
+    if (t) t.volume = vol
+  }
+
+  function setTrackLength(trackIdx: number, len: number) {
+    const t = sequences.value[activeSequence.value]?.[trackIdx]
+    if (t) t.length = Math.max(1, Math.min(16, len))
+  }
+
+  function setTrackFx(trackIdx: number, field: string, value: any) {
+    const track = sequences.value[activeSequence.value]?.[trackIdx]
+    if (!track) return
+    ;(track as any)[field] = value
+    _save()
+  }
+
+  function pasteTrackFx(trackIdx: number, targetSequence: string, fx: Partial<DrumTrack>) {
+    const track = sequences.value[targetSequence]?.[trackIdx]
+    if (!track) return
+    track.pan        = fx.pan        ?? 0
+    track.pitch      = fx.pitch      ?? 0
+    track.filterFreq = fx.filterFreq ?? 20000
+    track.reverbSend = fx.reverbSend ?? 0
+    track.delaySend  = fx.delaySend  ?? 0
+    _save()
+  }
+
+  function toggleTrackMute(trackIdx: number) {
+    const t = sequences.value[activeSequence.value]?.[trackIdx]
+    if (t) t.muted = !t.muted
+  }
+
+  function toggleTrackSolo(trackIdx: number) {
+    const t = sequences.value[activeSequence.value]?.[trackIdx]
+    if (t) t.solo = !t.solo
+  }
+
+  // ── Presets ──────────────────────────────────────────────────────────────
+
+  function _loadPresets(): DrumPreset[] {
+    try { return JSON.parse(localStorage.getItem(userKey(LS_PRESETS_KEY)) || '[]') } catch { return [] }
+  }
+
+  function _savePresets(list: DrumPreset[]) {
+    try { localStorage.setItem(userKey(LS_PRESETS_KEY), JSON.stringify(list)) } catch {}
+  }
+
+  const presets = ref<DrumPreset[]>(_loadPresets())
+
+  function savePreset(name: string, extra: Record<string, any> = {}): DrumPreset {
+    const preset: DrumPreset = {
+      id:             `dm_preset_${Date.now()}`,
+      name:           name?.trim() || `Preset ${presets.value.length + 1}`,
+      savedAt:        new Date().toISOString(),
+      activeSequence: activeSequence.value,
+      sequences:      _serializeSequences(),
+      ...extra,
+    }
+    presets.value.push(preset)
+    _savePresets(presets.value)
+    return preset
+  }
+
+  function overwritePreset(id: string, extra: Record<string, any> = {}) {
+    const idx = presets.value.findIndex(p => p.id === id)
+    if (idx === -1) return
+    presets.value[idx] = {
+      ...presets.value[idx],
+      savedAt:        new Date().toISOString(),
+      activeSequence: activeSequence.value,
+      sequences:      _serializeSequences(),
+      ...extra,
+    } as DrumPreset
+    _savePresets(presets.value)
+  }
+
+  const currentPresetName = ref('')
+
+  function loadPreset(preset: DrumPreset) {
+    sequences.value      = mergeLoadedSequences(preset)
+    activeSequence.value = preset.activeSequence ?? 'A'
+    currentPresetName.value = preset.name ?? ''
+    _save()
+  }
+
+  function deletePreset(id: string) {
+    presets.value = presets.value.filter(p => p.id !== id)
+    _savePresets(presets.value)
+  }
+
+  function generateDrumPattern(style: DrumStyleName) {
+    const cfg = DRUM_STYLES[style]
+    if (!cfg) return
+    const variant = cfg.variants[Math.floor(rand() * cfg.variants.length)]
+    const pattern = sequences.value[activeSequence.value]
+    if (!pattern) return
+    variant.forEach((rolePattern: any[], trackIdx: number) => {
+      if (trackIdx >= pattern.length) return
+      pattern[trackIdx].steps = rolePattern.map((v: any) =>
+        resolveStep(v, cfg.velMin, cfg.velMax, cfg.ghostVelMax)
+      )
+    })
+  }
+
+  // ── Auth watcher ─────────────────────────────────────────────────────────
+  watch(uid, (newUid) => {
+    if (!newUid) {
+      sequences.value = makeDefaultSequences()
+      activeSequence.value = 'A'
+    } else {
+      const l = loadFromLS()
+      sequences.value = l ? mergeLoadedSequences(l) : makeDefaultSequences()
+      activeSequence.value = l?.activeSequence ?? 'A'
+    }
+  })
+
+  return {
+    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision,
+    sequences, activeSequence, currentPattern,
+    TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,
+    setStep, toggleStep, clearPattern, initDrumMachine,
+    copyPattern, swapSequence,
+    setTrackSound, resolveTrackSound, setTrackVolume, setTrackLength, setTrackFx,
+    pasteTrackFx, toggleTrackMute, toggleTrackSolo,
+    presets, currentPresetName,
+    savePreset, overwritePreset, loadPreset, deletePreset,
+    generateDrumPattern,
+  }
+})

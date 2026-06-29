@@ -10,29 +10,31 @@ import { useArpStore } from './useArpStore'
 import { useUiStore } from './useUiStore'
 import { S1_TYPES } from '@/constants/s1-config'
 import BANK_DEFAULT from '@/data/BANK_DEFAULT.json'
+import { dispatch } from '@/types/events'
+import type { Preset, PresetVariant, PresetImportOptions } from '@/types/preset'
 
 export const usePresetStore = defineStore('preset', () => {
   const authStore = useAuthStore()
 
   // --- State ---
-  const history = ref([])
-  const historyCategoryFilter = ref('all')
-  const currentCategory = ref('pad')
-  const lastPreset = ref(null)
+  const history = ref<Preset[]>([])
+  const historyCategoryFilter = ref<string>('all')
+  const currentCategory = ref<string>('pad')
+  const lastPreset = ref<Preset | null>(null)
   const isGenerating = ref(false)
   const isSaving = ref(false)
   const showResults = ref(false)
 
-  const engineCacheA = ref(null)
-  const engineCacheB = ref(null)
+  const engineCacheA = ref<PresetVariant | null>(null)
+  const engineCacheB = ref<PresetVariant | null>(null)
   const useAlternativeEngine = ref(false)
 
-  const sessionGeneratedIds = ref([])
+  const sessionGeneratedIds = ref<string[]>([])
 
   const currentName = ref('')
-  const currentPatchNotes = ref(null)
-  const lastModifiedField = ref(null)
-  const currentVariation = ref(null)
+  const currentPatchNotes = ref<string | null>(null)
+  const lastModifiedField = ref<string | null>(null)
+  const currentVariation = ref<{ name: string; values: Record<string, number> } | null>(null)
 
   // --- Getters ---
   const filteredHistory = computed(() => {
@@ -44,9 +46,9 @@ export const usePresetStore = defineStore('preset', () => {
       list = list.filter(p => p.category === historyCategoryFilter.value)
     }
 
-    // Fix: If the current preset is newly generated (not in history), 
+    // Fix: If the current preset is newly generated (not in history),
     // prepend it to the list so navigation (NEXT/PREV) works immediately.
-    if (lastPreset.value && !list.some(p => p.id === lastPreset.value.id)) {
+    if (lastPreset.value && !list.some(p => p.id === lastPreset.value!.id)) {
       list = [lastPreset.value, ...list]
     }
 
@@ -91,8 +93,8 @@ export const usePresetStore = defineStore('preset', () => {
     localStorage.setItem(userKey('sycore_history_filter'), val)
   })
 
-  let historyUnsubscribe = null
-  function loadHistory(uid) {
+  let historyUnsubscribe: (() => void) | null = null
+  function loadHistory(uid: string) {
     if (historyUnsubscribe) historyUnsubscribe()
 
     const colRef = collection(db, 'users', uid, 'presets')
@@ -100,11 +102,11 @@ export const usePresetStore = defineStore('preset', () => {
       const presets = snapshot.docs.map(d => ({
         ...d.data(),
         id: d.id
-      })).sort((a, b) => {
+      })).sort((a: any, b: any) => {
         const dateA = new Date(a.createdAt || 0).getTime()
         const dateB = new Date(b.createdAt || 0).getTime()
         return dateB - dateA
-      })
+      }) as Preset[]
 
       history.value = presets
 
@@ -115,7 +117,7 @@ export const usePresetStore = defineStore('preset', () => {
           showResults.value = true
         } else {
           // If we have a cached preset, try to find it in the new history to sync the object reference
-          const synced = presets.find(p => p.id === lastPreset.value.id)
+          const synced = presets.find(p => p.id === lastPreset.value!.id)
           if (synced) {
             lastPreset.value = synced
             // Ensure the filter includes this preset so nav buttons are active
@@ -136,7 +138,7 @@ export const usePresetStore = defineStore('preset', () => {
     })
   }
 
-  async function seedDefaultBank(uid, force = false) {
+  async function seedDefaultBank(uid: string, force = false) {
     if (!force && localStorage.getItem(userKey('sycore_bank_seeded'))) {
       console.log('[PresetStore] Default bank already seeded (flag found), skipping auto-seed.');
       return;
@@ -199,12 +201,7 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  /**
-   * @param {Record<string,number>} data
-   * @param {string} [patchNotes='']
-   * @returns {import('@/types/preset').PresetVariant}
-   */
-  function _createVariant(data, patchNotes = '') {
+  function _createVariant(data: Record<string, number>, patchNotes = ''): PresetVariant {
     const meta = _captureCurrentMetadata()
     return {
       data: data || {},
@@ -212,11 +209,14 @@ export const usePresetStore = defineStore('preset', () => {
       arpConfig: meta.arpConfig,
       velocityConfig: meta.velocityConfig,
       lfo1Config: meta.lfo1Config,
-      lfo2Config: meta.lfo2Config
+      lfo2Config: meta.lfo2Config,
+      seqConfig: null,
+      seqConfig2: null,
+      seqActiveSlot: 1
     }
   }
 
-  function _applyMetadataToStores(variant) {
+  function _applyMetadataToStores(variant: PresetVariant | null | undefined) {
     if (!variant) return
 
     // Arp
@@ -274,15 +274,13 @@ export const usePresetStore = defineStore('preset', () => {
   /**
    * Recall (load) a preset — restores synth data + metadata to all stores.
    * Automatically migrates legacy presets (pre-aVariant) to the symmetric A/B structure.
-   * @param {import('@/types/preset').Preset} preset
-   * @param {boolean} [shouldAutoPlay=false]
    */
-  function recallPreset(preset, shouldAutoPlay = false) {
+  function recallPreset(preset: Preset, shouldAutoPlay = false) {
     // Compatibility Layer: Migrate old structure to new symmetric A/B structure
     if (!preset.aVariant) {
       console.log(`[PresetStore] Migrating preset ${preset.id} to new symmetric structure`)
       const aData = preset.data || {}
-      const aMeta = {
+      const aMeta: Partial<PresetVariant> = {
         arpConfig: preset.arpConfig || null,
         velocityConfig: preset.velocityConfig || null,
         lfo1Config: preset.lfo1Config || null,
@@ -296,7 +294,7 @@ export const usePresetStore = defineStore('preset', () => {
         seqConfig: preset.seqConfig || null,
         seqConfig2: preset.seqConfig2 || null,
         seqActiveSlot: preset.seqActiveSlot || 1
-      }
+      } as PresetVariant
 
       if (preset.abVariant) {
         preset.bVariant = {
@@ -309,7 +307,7 @@ export const usePresetStore = defineStore('preset', () => {
           seqConfig: preset.abVariant.seqConfig || preset.seqConfig || null,
           seqConfig2: preset.abVariant.seqConfig2 || null,
           seqActiveSlot: preset.abVariant.seqActiveSlot || 1
-        }
+        } as PresetVariant
       } else {
         // Create B as a clone of A if it doesn't exist
         preset.bVariant = JSON.parse(JSON.stringify(preset.aVariant))
@@ -335,7 +333,7 @@ export const usePresetStore = defineStore('preset', () => {
 
     // Trigger auto-play on recall only if explicitly requested (not during navigation)
     if (shouldAutoPlay) {
-      window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
+      dispatch('toggle-sequencer', { play: true })
     }
 
     // Sync all metadata from aVariant (default)
@@ -357,7 +355,7 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  function applyPresetCCs(preset) {
+  function applyPresetCCs(preset: { data?: Record<string, number> } | null | undefined) {
     if (!preset?.data) return
     const midiStore = useMidiStore()
 
@@ -373,7 +371,7 @@ export const usePresetStore = defineStore('preset', () => {
     })
   }
 
-  function selectEngine(type) {
+  function selectEngine(type: string) {
     if (!lastPreset.value) return
     const isAlt = type === 'B'
     if (useAlternativeEngine.value === isAlt && initialLoadDone) return
@@ -406,19 +404,14 @@ export const usePresetStore = defineStore('preset', () => {
 
   /**
    * Save the current preset (create or update) in IndexedDB.
-   * @param {string} name
-   * @param {Record<string,number>} data
-   * @param {string} category
-   * @param {import('@/types/preset').PresetImportOptions} [options={}]
-   * @returns {Promise<void>}
    * @throws {Error} 'slot_limit' when user has reached max presets
    */
-  async function savePreset(name, data, category, options = {}) {
+  async function savePreset(name: string, data?: Record<string, number>, category?: string, options: PresetImportOptions = {}) {
     if (!authStore.user) return
 
     // Check limits
-    const limits = authStore.getLimits()
-    if (history.value.length >= limits.maxPresets && !lastPreset.value?.createdAt) {
+    const limits: any = authStore.getLimits()
+    if (history.value.length >= limits.slots && !lastPreset.value?.createdAt) {
       throw new Error('slot_limit')
     }
 
@@ -448,7 +441,7 @@ export const usePresetStore = defineStore('preset', () => {
             id: rawPreset.id,
             name: cleanName,
             category: category || currentCategory.value,
-            device: 'S-1',
+            device: 'S-1' as const,
             aVariant: rawPreset.aVariant,
             bVariant: rawPreset.bVariant,
             patchNotes: options.patchNotes || currentPatchNotes.value || rawPreset.patchNotes,
@@ -480,13 +473,8 @@ export const usePresetStore = defineStore('preset', () => {
 
   /**
    * Import a preset directly into IndexedDB (bulk seed / external import).
-   * @param {string} name
-   * @param {Record<string,number>} data
-   * @param {string} category
-   * @param {import('@/types/preset').PresetImportOptions} [options={}]
-   * @returns {Promise<void>}
    */
-  async function importPreset(name, data, category, options = {}) {
+  async function importPreset(name: string, data: Record<string, number>, category: string, options: PresetImportOptions = {}) {
     if (!authStore.user) return
     try {
       const uid = authStore.user.uid
@@ -497,7 +485,7 @@ export const usePresetStore = defineStore('preset', () => {
         id: presetId,
         name: name || 'Imported Preset',
         category: category || 'pad',
-        device: 'S-1',
+        device: 'S-1' as const,
         patchNotes: options.patchNotes || null,
         aVariant: options.aVariant || _createVariant(data || {}, options.patchNotes),
         bVariant: options.bVariant || _createVariant(data || {}, options.patchNotes),
@@ -510,7 +498,7 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  async function deletePreset(id) {
+  async function deletePreset(id: string) {
     if (!authStore.user) return
     try {
       const uid = authStore.user.uid
@@ -543,13 +531,13 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  async function toggleFavorite(presetId) {
+  async function toggleFavorite(presetId: string) {
     if (!authStore.user) return
     let preset = history.value.find(p => p.id === presetId)
 
     // If it's a session preset (not saved yet), save it first
     if (!preset && sessionGeneratedIds.value.includes(presetId)) {
-      await savePreset()
+      await savePreset('', undefined, undefined, {})
       // Re-fetch from history after save
       preset = history.value.find(p => p.id === presetId)
     }
@@ -561,11 +549,11 @@ export const usePresetStore = defineStore('preset', () => {
     })
   }
 
-  function setCategory(cat) {
+  function setCategory(cat: string) {
     currentCategory.value = cat
   }
 
-  function updateFieldValue(fieldName, value) {
+  function updateFieldValue(fieldName: string, value: number) {
     if (!lastPreset.value) return
 
     // Target the correct data object based on current engine
@@ -590,7 +578,7 @@ export const usePresetStore = defineStore('preset', () => {
     }, 1500)
   }
 
-  function updatePatchNotes(text) {
+  function updatePatchNotes(text: string) {
     currentPatchNotes.value = text
     if (lastPreset.value) {
       lastPreset.value.patchNotes = text
@@ -610,8 +598,8 @@ export const usePresetStore = defineStore('preset', () => {
     engineCacheB.value = null
   }
 
-  function _generateData(categoryConfig, variation = null) {
-    const ccValues = {}
+  function _generateData(categoryConfig: Record<string, any>, variation: { name: string; values: Record<string, number> } | null = null) {
+    const ccValues: Record<string, number> = {}
     for (const [field, range] of Object.entries(categoryConfig)) {
       if (!Array.isArray(range)) continue
       const [min, max] = range
@@ -642,8 +630,8 @@ export const usePresetStore = defineStore('preset', () => {
     return ccValues
   }
 
-  function _generatePatchNotes(data) {
-    const traits = []
+  function _generatePatchNotes(data: Record<string, number>) {
+    const traits: string[] = []
     const cat = currentCategory.value
 
     // Filter / Timbre
@@ -683,11 +671,7 @@ export const usePresetStore = defineStore('preset', () => {
     return `${description} ${cat} patch.`
   }
 
-  /**
-   * @param {Record<string,number>} data
-   * @returns {import('@/types/preset').Preset}
-   */
-  function _createPreset(data) {
+  function _createPreset(data: Record<string, number>): Preset {
     const presetId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     const notes = _generatePatchNotes(data)
     const variant = _createVariant(data, notes)
@@ -696,6 +680,7 @@ export const usePresetStore = defineStore('preset', () => {
       id: presetId,
       name: generateRandomName(currentCategory.value),
       category: currentCategory.value,
+      device: 'S-1',
       aVariant: variant,
       bVariant: JSON.parse(JSON.stringify(variant)), // Symmetric B
       patchNotes: notes,
@@ -707,7 +692,6 @@ export const usePresetStore = defineStore('preset', () => {
    * Generate a new preset (or regenerate one engine if isRegen is true).
    * Randomises synth parameters, patch notes, and metadata.
    * @param {boolean} [isRegen=false] — if true, only the active engine (A/B) is re-generated
-   * @returns {Promise<void>}
    */
   async function generate(isRegen = false) {
     if (limitReached.value) return
@@ -717,7 +701,7 @@ export const usePresetStore = defineStore('preset', () => {
     showResults.value = false
 
     try {
-      const categoryConfig = S1_TYPES[currentCategory.value] || S1_TYPES['experimental']
+      const categoryConfig = (S1_TYPES as Record<string, any>)[currentCategory.value] || (S1_TYPES as Record<string, any>)['experimental']
       const variation = currentVariation.value
 
       if (!isRegen) {
@@ -727,10 +711,11 @@ export const usePresetStore = defineStore('preset', () => {
         const notesA = _generatePatchNotes(dataA)
         const notesB = _generatePatchNotes(dataB)
 
-        const newPreset = {
+        const newPreset: Preset = {
           id: `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           name: generateRandomName(currentCategory.value),
           category: currentCategory.value,
+          device: 'S-1',
           aVariant: _createVariant(dataA, notesA),
           bVariant: _createVariant(dataB, notesB),
           patchNotes: notesA, // Default to A's notes
@@ -794,7 +779,7 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  function navigateHistory(direction) {
+  function navigateHistory(direction: 'first' | 'last' | 'next' | 'prev') {
     let list = filteredHistory.value
     let idx = list.findIndex(p => p.id === lastPreset.value?.id)
 
@@ -823,7 +808,7 @@ export const usePresetStore = defineStore('preset', () => {
     recallPreset(list[nextIdx], false)
   }
 
-  function generateRandomName(cat) {
+  function generateRandomName(cat: string) {
     const adjectives = ['Deep', 'Warm', 'Bright', 'Crunchy', 'Smooth', 'Sharp', 'Dirty', 'Clean', 'Cyber', 'Analog', 'Unit']
     const nouns = ['Bass', 'Lead', 'Pad', 'Pluck', 'Bell', 'Key', 'Synth', 'Atmosphere', 'Mix', 'Res', 'Raw']
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)]

@@ -1,23 +1,26 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { auth, onAuthStateChanged } from '@/lib/auth'
+import { auth, onAuthStateChanged, type LocalUser } from '@/lib/auth'
 import { db, getDoc, getDocs, collection, query, doc, setDoc } from '@/lib/idb'
-import { DEFAULT_ROLES_CONFIG } from '@/lib/roles'
+import { DEFAULT_ROLES_CONFIG, type RoleConfig } from '@/lib/roles'
+import type { UserProfile, UserRole } from '@/types/user'
+
+const ADMIN_EMAIL = 'swina.allen@gmail.com'
 
 export const useAuthStore = defineStore('auth', () => {
-  const user        = ref(null)
-  const profile     = ref(null)
+  const user = ref<LocalUser | null>(null)
+  const profile = ref<UserProfile | null>(null)
   const loadingAuth = ref(true)
 
-  const isAdmin = computed(() => true)
+  const isAdmin = computed(() => user.value?.email === ADMIN_EMAIL)
 
-  function getLimits(role) {
+  function getLimits(role?: UserRole): RoleConfig {
     const r = role || profile.value?.role || 'demo'
     const rolesConfig = DEFAULT_ROLES_CONFIG
-    return rolesConfig[r] || rolesConfig.demo
+    return rolesConfig[r as keyof typeof rolesConfig] || rolesConfig.demo
   }
 
-  async function loadProfile(firebaseUser) {
+  async function loadProfile(firebaseUser: LocalUser | null): Promise<void> {
     if (!firebaseUser) {
       profile.value = null
       loadingAuth.value = false
@@ -26,21 +29,22 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const userRef  = doc(db, 'users', firebaseUser.uid)
       const userSnap = await getDoc(userRef)
-      
+
       if (userSnap.exists()) {
-        profile.value = userSnap.data()
+        profile.value = userSnap.data() as UserProfile
       } else {
-        // If this is the first user ever, make them admin
         const usersCol = await getDocs(query(collection(db, 'users')))
         const isFirstUser = usersCol.docs.length === 0
-        
-        const newProfile = {
+
+        const newProfile: UserProfile = {
           uid:   firebaseUser.uid,
           email: firebaseUser.email || '',
           role:  isFirstUser ? 'admin' : 'demo',
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          id: firebaseUser.uid,
+          generationsCount: 0,
         }
-        await setDoc(userRef, newProfile)
+        await setDoc(userRef, newProfile as any)
         profile.value = newProfile
         console.log(`[AuthStore] New profile created. Role: ${newProfile.role}`)
       }
@@ -52,23 +56,23 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function init() {
+  function init(): () => void {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      user.value = firebaseUser
-      await loadProfile(firebaseUser)
+      user.value = firebaseUser as LocalUser | null
+      await loadProfile(firebaseUser as LocalUser | null)
     })
     return unsubscribe
   }
 
-  async function saveFreesoundApiKey(key) {
+  async function saveFreesoundApiKey(key: string): Promise<void> {
     if (!user.value) return
     const trimmed = (key || '').trim()
     const userRef = doc(db, 'users', user.value.uid)
-    await setDoc(userRef, { freesoundApiKey: trimmed }, { merge: true })
-    if (profile.value) profile.value = { ...profile.value, freesoundApiKey: trimmed }
+    await setDoc(userRef, { freesoundApiKey: trimmed } as any, { merge: true })
+    if (profile.value) profile.value = { ...profile.value, freesoundApiKey: trimmed } as any
   }
 
-  async function logout() {
+  async function logout(): Promise<void> {
     await auth.signOut()
     user.value    = null
     profile.value = null

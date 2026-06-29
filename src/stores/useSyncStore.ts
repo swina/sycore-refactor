@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 
-const KEYS = {
+// ── Storage keys ────────────────────────────────────────────────────────────
+
+const KEYS: Record<string, string> = {
   syncTrack:                   'S1_SYNC_TRACK',
   syncRecordAudioCapture:      'S1_SYNC_REC_CAPTURE',
   syncBackingTrackToLooper:    'S1_SYNC_TRACK_LOOPER',
@@ -36,7 +38,46 @@ const KEYS = {
   syncDrumMachineToAudioCapture: 'S1_SYNC_DRUM_CAPTURE',
 }
 
-function readBool(k) { return localStorage.getItem(userKey(k)) === 'true' }
+function readBool(k: string): boolean {
+  return localStorage.getItem(userKey(k)) === 'true'
+}
+
+// ── Exported type for external consumers ────────────────────────────────────
+
+export interface SyncFlags {
+  syncTrack: Ref<boolean>
+  syncRecordAudioCapture: Ref<boolean>
+  syncBackingTrackToLooper: Ref<boolean>
+  syncSequencerToLooper: Ref<boolean>
+  syncLooperToMidi: Ref<boolean>
+  syncLooperToSequencer: Ref<boolean>
+  syncLooperToBackingTrack: Ref<boolean>
+  syncLooperToAudioCapture: Ref<boolean>
+  syncTimelineToMidi: Ref<boolean>
+  syncTimelineToSequencer: Ref<boolean>
+  syncTimelineToBackingTrack: Ref<boolean>
+  syncTimelineToAudioCapture: Ref<boolean>
+  syncAudioCaptureToMidi: Ref<boolean>
+  syncAudioCaptureToSequencer: Ref<boolean>
+  syncAudioCaptureToBackingTrack: Ref<boolean>
+  syncAudioCaptureToLooper: Ref<boolean>
+  syncChordProgToSequencer: Ref<boolean>
+  syncChordProgToBackingTrack: Ref<boolean>
+  syncChordProgToLooper: Ref<boolean>
+  syncChordProgToAudioCapture: Ref<boolean>
+  syncLoopPadsToMidi: Ref<boolean>
+  syncLoopPadsToSequencer: Ref<boolean>
+  syncLoopPadsToBackingTrack: Ref<boolean>
+  syncLoopPadsToLooper: Ref<boolean>
+  syncLoopPadsToAudioCapture: Ref<boolean>
+  syncDrumMachineToMidi: Ref<boolean>
+  syncDrumMachineToSequencer: Ref<boolean>
+  syncDrumMachineToBackingTrack: Ref<boolean>
+  syncDrumMachineToLooper: Ref<boolean>
+  syncDrumMachineToAudioCapture: Ref<boolean>
+}
+
+// ── Store ───────────────────────────────────────────────────────────────────
 
 export const useSyncStore = defineStore('sync', () => {
   const authStore = useAuthStore()
@@ -73,7 +114,7 @@ export const useSyncStore = defineStore('sync', () => {
   const syncDrumMachineToLooper       = ref(readBool(KEYS.syncDrumMachineToLooper))
   const syncDrumMachineToAudioCapture = ref(readBool(KEYS.syncDrumMachineToAudioCapture))
 
-  const REFS = {
+  const REFS: SyncFlags = {
     syncTrack, syncRecordAudioCapture, syncBackingTrackToLooper, syncSequencerToLooper,
     syncLooperToMidi, syncLooperToSequencer, syncLooperToBackingTrack, syncLooperToAudioCapture,
     syncTimelineToMidi, syncTimelineToSequencer, syncTimelineToBackingTrack, syncTimelineToAudioCapture,
@@ -84,7 +125,7 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   Object.entries(REFS).forEach(([name, r]) => {
-    watch(r, v => localStorage.setItem(userKey(KEYS[name]), v ? 'true' : 'false'))
+    watch(r, (v: boolean) => localStorage.setItem(userKey(KEYS[name]), v ? 'true' : 'false'))
   })
 
   watch(uid, (newUid) => {

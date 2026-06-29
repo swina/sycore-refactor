@@ -10,6 +10,8 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
+import { dispatch } from '@/types/events'
+
 
 function isS1Device(name) {
   if (!name) return false

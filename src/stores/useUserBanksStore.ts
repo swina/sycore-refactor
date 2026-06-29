@@ -5,13 +5,23 @@ import { userKey } from '@/lib/userKey'
 
 const STORAGE_KEY = 'SYCORE_USER_PRESET_BANKS'
 
+export interface PresetBankEntry {
+  name: string
+  createdAt: string
+  presets: any[]
+}
+
+export interface PresetBanks {
+  [deviceName: string]: PresetBankEntry[]
+}
+
 export const useUserBanksStore = defineStore('userBanks', () => {
   const authStore = useAuthStore()
   const uid = computed(() => authStore.user?.uid)
 
-  const banks = ref(load())
+  const banks = ref<PresetBanks>(load())
 
-  function load() {
+  function load(): PresetBanks {
     try {
       return JSON.parse(localStorage.getItem(userKey(STORAGE_KEY)) ?? '{}')
     } catch {
@@ -27,29 +37,29 @@ export const useUserBanksStore = defineStore('userBanks', () => {
     banks.value = newUid ? load() : {}
   })
 
-  function getBanksForDevice(deviceName) {
+  function getBanksForDevice(deviceName: string): PresetBankEntry[] {
     return banks.value[deviceName] ?? []
   }
 
-  function addBank(deviceName, bankName, presets) {
+  function addBank(deviceName: string, bankName: string, presets: any[]) {
     if (!banks.value[deviceName]) banks.value[deviceName] = []
     const idx = banks.value[deviceName].findIndex(b => b.name === bankName)
-    const entry = { name: bankName, createdAt: new Date().toISOString(), presets }
+    const entry: PresetBankEntry = { name: bankName, createdAt: new Date().toISOString(), presets }
     if (idx >= 0) banks.value[deviceName].splice(idx, 1, entry)
     else banks.value[deviceName].push(entry)
   }
 
-  function removeBank(deviceName, bankName) {
+  function removeBank(deviceName: string, bankName: string) {
     if (!banks.value[deviceName]) return
     banks.value[deviceName] = banks.value[deviceName].filter(b => b.name !== bankName)
     if (banks.value[deviceName].length === 0) delete banks.value[deviceName]
   }
 
-  function getPresets(deviceName, bankName) {
+  function getPresets(deviceName: string, bankName: string): any[] {
     return banks.value[deviceName]?.find(b => b.name === bankName)?.presets ?? []
   }
 
-  function hasBank(deviceName, bankName) {
+  function hasBank(deviceName: string, bankName: string): boolean {
     return !!banks.value[deviceName]?.some(b => b.name === bankName)
   }
 

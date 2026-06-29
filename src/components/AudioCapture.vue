@@ -16,6 +16,7 @@ import { useLooperStore } from '@/stores/useLooperStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
 import { getCaptureStream } from '@/lib/drum-engine'
+import { dispatch } from '@/types/events'
 
 const props = defineProps({
   hasBackingTrack: { type: Boolean, default: false },

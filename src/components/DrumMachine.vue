@@ -330,7 +330,7 @@ watch(
 async function restoreSample(trackIdx, track) {
   // Use this track's own sound, or fall back to the nearest previous sequence's sound
   const resolved = drumStore.resolveTrackSound(trackIdx)
-  if (!resolved.soundId) return
+  if (!resolved?.soundId) return
   const url = await resolveUrl(resolved.soundId, '')
   if (!url) return
   // Only write soundUrl back into the track object if it owns the sound
@@ -990,20 +990,20 @@ function cycleChainSlot(i) {
           >
             <label
               @click.stop="openFolderBrowserForTrack(trackIdx)"
-              :title="drumStore.resolveTrackSound(trackIdx).soundLabel
-                ? `${track.label}: ${drumStore.resolveTrackSound(trackIdx).soundLabel}`
+              :title="drumStore.resolveTrackSound(trackIdx)?.soundLabel
+                ? `${track.label}: ${drumStore.resolveTrackSound(trackIdx)?.soundLabel}`
                 : `Load sample for ${track.label}`"
               class="flex-1 min-w-0 cursor-pointer hover:text-purple-300 hover:bg-indigo-800/70 bg-indigo-800/30 p-1 rounded transition-colors"
             >
               <div class="text-[11px] font-bold text-neutral-300 truncate leading-none">{{ track.label }}</div>
               <div
                 
-                v-if="drumStore.resolveTrackSound(trackIdx).soundLabel"
+                v-if="drumStore.resolveTrackSound(trackIdx)?.soundLabel"
                 :class="[
                   'text-[9px] truncate leading-none mt-0.5',
-                  drumStore.resolveTrackSound(trackIdx).own ? 'text-purple-400' : 'text-neutral-500'
+                  drumStore.resolveTrackSound(trackIdx)?.own ? 'text-purple-400' : 'text-neutral-500'
                 ]"
-              >{{ drumStore.resolveTrackSound(trackIdx).soundLabel }}</div>
+              >{{ drumStore.resolveTrackSound(trackIdx)?.soundLabel }}</div>
               <!-- <input type="file" accept="audio/*" class="hidden" @change="handleTrackFileLoad(trackIdx, $event)" /> -->
             </label>
             <button
@@ -1014,10 +1014,10 @@ function cycleChainSlot(i) {
               <FolderOpen class="w-2.5 h-2.5" />
             </button>
             <button
-              v-if="drumStore.resolveTrackSound(trackIdx).soundId"
+              v-if="drumStore.resolveTrackSound(trackIdx)?.soundId"
               @click.stop="previewPad(trackIdx)"
               class="shrink-0 w-3.5 h-3.5 flex items-center justify-center hover:text-purple-200 transition-colors"
-              :class="drumStore.resolveTrackSound(trackIdx).own ? 'text-purple-400' : 'text-neutral-500'"
+              :class="drumStore.resolveTrackSound(trackIdx)?.own ? 'text-purple-400' : 'text-neutral-500'"
               title="Preview sample"
             >
               <svg viewBox="0 0 8 8" class="w-2 h-2 fill-current"><polygon points="0,0 8,4 0,8"/></svg>

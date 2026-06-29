@@ -4,6 +4,33 @@ import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export type DurationOption = typeof DURATION_OPTIONS[number]
+
+export interface ChordStep {
+  active: boolean
+  chordName: string
+  notes: number[]
+  velocity: number
+  duration: DurationOption
+  gate: number
+  transpose: number
+}
+
+export type PlayMode = 'chord' | 'arp' | 'bass'
+
+export interface ChordProgSnapshot {
+  steps: ChordStep[]
+  numSteps: number
+  selectedKey: number
+  playMode: PlayMode
+  arpRate: DurationOption
+  midiChannel: number
+}
+
+// ── Constants ───────────────────────────────────────────────────────────────
+
 export const DURATION_OPTIONS = [
   '8m', '4m', '2m', '1m',
   '2n.', '2n',
@@ -11,9 +38,9 @@ export const DURATION_OPTIONS = [
   '8n.', '8n', '8t',
   '16n.', '16n', '16t',
   '32n', '64n', '128n',
-]
+] as const
 
-export const DURATION_LABELS = {
+export const DURATION_LABELS: Record<string, string> = {
   '8m': '8/1', '4m': '4/1', '2m': '2/1', '1m': '1/1',
   '2n.': '3/4', '2n': '1/2',
   '4n.': '3/8', '4n': '1/4', '4t': '1/4T',
@@ -22,7 +49,7 @@ export const DURATION_LABELS = {
   '32n': '1/32', '64n': '1/64', '128n': '1/128',
 }
 
-export const DEFAULT_CHORD_STEP = {
+export const DEFAULT_CHORD_STEP: ChordStep = {
   active: false,
   chordName: '—',
   notes: [],
@@ -32,9 +59,11 @@ export const DEFAULT_CHORD_STEP = {
   transpose: 0,
 }
 
+// ── Storage ─────────────────────────────────────────────────────────────────
+
 const STORAGE_KEY = 'SYCORE_CHORD_PROG_STATE'
 
-function loadSaved() {
+function loadSaved(): ChordProgSnapshot | null {
   try {
     return JSON.parse(localStorage.getItem(userKey(STORAGE_KEY)) || 'null')
   } catch {
@@ -42,12 +71,14 @@ function loadSaved() {
   }
 }
 
+// ── Store ───────────────────────────────────────────────────────────────────
+
 export const useChordProgStore = defineStore('chordProg', () => {
   const authStore = useAuthStore()
   const uid = computed(() => authStore.user?.uid)
   const saved = loadSaved()
 
-  const steps = ref(
+  const steps = ref<ChordStep[]>(
     saved?.steps
       ? saved.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s }))
       : Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
@@ -57,10 +88,10 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const currentStep = ref(0)
   const selectedStepIdx = ref(0)
   const selectedKey = ref(saved?.selectedKey ?? 0)
-  const playMode = ref(saved?.playMode ?? 'chord')
-  const arpRate = ref(saved?.arpRate ?? '16n')
+  const playMode = ref<PlayMode>(saved?.playMode ?? 'chord')
+  const arpRate = ref<DurationOption>(saved?.arpRate ?? '16n')
   const midiChannel = ref(saved?.midiChannel ?? 1)
-  const libraryPatterns = ref([])
+  const libraryPatterns = ref<any[]>([])
   const loadingLibrary = ref(false)
 
   watch([steps, numSteps, selectedKey, playMode, arpRate, midiChannel], () => {
@@ -76,22 +107,22 @@ export const useChordProgStore = defineStore('chordProg', () => {
     } catch {}
   }, { deep: true })
 
-  function setStep(idx, data) {
+  function setStep(idx: number, data: Partial<ChordStep>) {
     if (idx < 0 || idx >= 16) return
     steps.value[idx] = { ...steps.value[idx], ...data }
   }
 
-  function toggleStepActive(idx) {
+  function toggleStepActive(idx: number) {
     if (idx < 0 || idx >= 16) return
     steps.value[idx] = { ...steps.value[idx], active: !steps.value[idx].active }
   }
 
-  function assignChordToStep(idx, chordName, notes) {
+  function assignChordToStep(idx: number, chordName: string, notes: number[]) {
     if (idx < 0 || idx >= 16) return
     steps.value[idx] = { ...steps.value[idx], chordName, notes: [...notes], active: true }
   }
 
-  function cycleDuration(idx, reverse = false) {
+  function cycleDuration(idx: number, reverse = false) {
     const step = steps.value[idx]
     if (!step) return
     const cur = DURATION_OPTIONS.indexOf(step.duration)
@@ -101,7 +132,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     steps.value[idx] = { ...step, duration: DURATION_OPTIONS[next] }
   }
 
-  function loadProgressionByName(progressionData, name) {
+  function loadProgressionByName(progressionData: Record<string, any>, name: string) {
     const chords = progressionData[name]
     if (!chords?.length) return
     for (let i = 0; i < numSteps.value; i++) {
@@ -115,7 +146,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     }
   }
 
-  function generateAlgorithmic(progressionData) {
+  function generateAlgorithmic(progressionData: Record<string, any>) {
     const names = Object.keys(progressionData)
     if (!names.length) return
     const name = names[Math.floor(Math.random() * names.length)]
@@ -126,7 +157,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     steps.value = Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
   }
 
-  async function saveToLibrary(name) {
+  async function saveToLibrary(name: string): Promise<boolean> {
     if (!authStore.user) return false
     const uid = authStore.user.uid
     const id = `chordprog_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
@@ -141,7 +172,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
       arpRate: arpRate.value,
       midiChannel: midiChannel.value,
       createdAt: new Date().toISOString(),
-    })
+    } as any)
     await loadLibrary()
     return true
   }
@@ -155,7 +186,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
       const snap = await getDocs(colRef)
       libraryPatterns.value = snap.docs
         .map(d => d.data())
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
     } catch (e) {
       console.error('[ChordProgStore] loadLibrary error', e)
     } finally {
@@ -163,7 +194,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     }
   }
 
-  async function deleteFromLibrary(id) {
+  async function deleteFromLibrary(id: string) {
     if (!authStore.user) return
     const uid = authStore.user.uid
     const docRef = doc(db, 'users', uid, 'chord_progressions', id)
@@ -171,7 +202,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     await loadLibrary()
   }
 
-  function loadFromDocument(pattern) {
+  function loadFromDocument(pattern: Partial<ChordProgSnapshot>) {
     if (pattern.steps) steps.value = pattern.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s }))
     if (pattern.numSteps) numSteps.value = pattern.numSteps
     if (pattern.selectedKey !== undefined) selectedKey.value = pattern.selectedKey
@@ -181,7 +212,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   }
 
   watch(uid, (newUid) => {
-    const s = newUid ? loadSaved() : null
+    const s: ChordProgSnapshot | null = newUid ? loadSaved() : null
     steps.value = s?.steps ?? Array(8).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
     numSteps.value = s?.numSteps ?? 8
     selectedKey.value = s?.selectedKey ?? 0
