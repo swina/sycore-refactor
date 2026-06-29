@@ -199,6 +199,11 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
+  /**
+   * @param {Record<string,number>} data
+   * @param {string} [patchNotes='']
+   * @returns {import('@/types/preset').PresetVariant}
+   */
   function _createVariant(data, patchNotes = '') {
     const meta = _captureCurrentMetadata()
     return {
@@ -266,6 +271,12 @@ export const usePresetStore = defineStore('preset', () => {
     uiStore.seqActiveSlot = variant.seqActiveSlot || 1
   }
 
+  /**
+   * Recall (load) a preset — restores synth data + metadata to all stores.
+   * Automatically migrates legacy presets (pre-aVariant) to the symmetric A/B structure.
+   * @param {import('@/types/preset').Preset} preset
+   * @param {boolean} [shouldAutoPlay=false]
+   */
   function recallPreset(preset, shouldAutoPlay = false) {
     // Compatibility Layer: Migrate old structure to new symmetric A/B structure
     if (!preset.aVariant) {
@@ -393,6 +404,15 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
+  /**
+   * Save the current preset (create or update) in IndexedDB.
+   * @param {string} name
+   * @param {Record<string,number>} data
+   * @param {string} category
+   * @param {import('@/types/preset').PresetImportOptions} [options={}]
+   * @returns {Promise<void>}
+   * @throws {Error} 'slot_limit' when user has reached max presets
+   */
   async function savePreset(name, data, category, options = {}) {
     if (!authStore.user) return
 
@@ -458,6 +478,14 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
+  /**
+   * Import a preset directly into IndexedDB (bulk seed / external import).
+   * @param {string} name
+   * @param {Record<string,number>} data
+   * @param {string} category
+   * @param {import('@/types/preset').PresetImportOptions} [options={}]
+   * @returns {Promise<void>}
+   */
   async function importPreset(name, data, category, options = {}) {
     if (!authStore.user) return
     try {
@@ -655,6 +683,10 @@ export const usePresetStore = defineStore('preset', () => {
     return `${description} ${cat} patch.`
   }
 
+  /**
+   * @param {Record<string,number>} data
+   * @returns {import('@/types/preset').Preset}
+   */
   function _createPreset(data) {
     const presetId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     const notes = _generatePatchNotes(data)
@@ -671,6 +703,12 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
+  /**
+   * Generate a new preset (or regenerate one engine if isRegen is true).
+   * Randomises synth parameters, patch notes, and metadata.
+   * @param {boolean} [isRegen=false] — if true, only the active engine (A/B) is re-generated
+   * @returns {Promise<void>}
+   */
   async function generate(isRegen = false) {
     if (limitReached.value) return
     if (!authStore.user) return

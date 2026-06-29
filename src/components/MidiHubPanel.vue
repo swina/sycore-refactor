@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { X, Usb, Music, Settings2, Radio } from 'lucide-vue-next'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 
 const emit = defineEmits(['close'])

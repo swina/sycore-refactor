@@ -4,7 +4,7 @@ import { useUiStore }  from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 
 /**
  * Manages the full MIDI initialization lifecycle:

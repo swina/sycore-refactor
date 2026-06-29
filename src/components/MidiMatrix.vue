@@ -4,7 +4,7 @@ import { X, Usb, Activity, Zap, Cpu, Bell, Power, ArrowRightLeft, Music, Plus, T
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useUiStore } from '@/stores/useUiStore'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })
 const emit  = defineEmits(['close'])

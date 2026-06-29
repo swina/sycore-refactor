@@ -10,7 +10,7 @@ import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { detectBpmFromUrl }      from '@/composables/useBpmDetector'
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { usePresetStore }  from '@/stores/usePresetStore'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMappingStore }  from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import MidiMapContextMenu     from '@/components/ui/MidiMapContextMenu.vue'
@@ -22,9 +22,8 @@ import { useAuthStore }    from '@/stores/useAuthStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import catalogIndex        from '@/data/program_change/program_change.json'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
-import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc, serverTimestamp } from '@/lib/idb'
+import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc, serverTimestamp, db } from '@/lib/idb'
 import { userKey } from '@/lib/userKey'
-import { db } from '@/lib/firebase'
 
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])

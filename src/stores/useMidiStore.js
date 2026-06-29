@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { deviceRegistry } from '@/core/midi/DeviceRegistry'
 import { FIELD_TO_CC } from '@/constants/s1-config'
 import { useAuthStore } from './useAuthStore'

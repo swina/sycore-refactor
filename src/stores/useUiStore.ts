@@ -1,11 +1,93 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** All boolean panel-visibility flags exposed by the UI store */
+export interface PanelVisibility {
+  isHistoryOpen: boolean
+  isTypesOpen: boolean
+  isKeyboardOpen: boolean
+  isSequencerOpen: boolean
+  isArpOpen: boolean
+  isMidiPortOpen: boolean
+  isMidiMappingOpen: boolean
+  isProfileOpen: boolean
+  isAuthModalOpen: boolean
+  isAdminPanelOpen: boolean
+  isHelpOpen: boolean
+  isManualOpen: boolean
+  isSupportOpen: boolean
+  isVisualizerOpen: boolean
+  isCaptureOpen: boolean
+  isAudioCaptureOpen: boolean
+  isRoutingOpen: boolean
+  isBackingTrackOpen: boolean
+  isTracksPlayerOpen: boolean
+  isLiveSetOpen: boolean
+  isAppMidiMapperOpen: boolean
+  isPatchNotesOpen: boolean
+  isVelocityMapOpen: boolean
+  isLfo1Open: boolean
+  isLfo2Open: boolean
+  isAdminLoggerOpen: boolean
+  isFavoritesOpen: boolean
+  isPortalOpen: boolean
+  isMidiActionsOpen: boolean
+  isPanicOpen: boolean
+  isMainMenuOpen: boolean
+  isSideMenuOpen: boolean
+  isSessionOpen: boolean
+  isLooperOpen: boolean
+  isMidiMatrixOpen: boolean
+  isAboutOpen: boolean
+  isMidiPerformanceOpen: boolean
+  isProgramChangeBrowserOpen: boolean
+  isDeviceProgramChangePanelOpen: boolean
+  isFreesoundBrowserOpen: boolean
+  isLoopMachineOpen: boolean
+  isDrumMachineOpen: boolean
+  isSamplerOpen: boolean
+  isLivePerformancePadOpen: boolean
+  isLiveTimelineOpen: boolean
+  isCaptureRecording: boolean
+  isMidiMonitorOpen: boolean
+  isHelpSlideshowOpen: boolean
+  isSoundEngineOpen: boolean
+  isGuidesOpen: boolean
+  isChordProgOpen: boolean
+  isAudioMixerOpen: boolean
+  isSoundFolderBrowserOpen: boolean
+  showUnifiedMidiManager: boolean
+  isMidiWizardOpen: boolean
+  isMidiFlowOpen: boolean
+  isMidiControllerDesignerOpen: boolean
+}
+
+/** A sound-folder-assign target descriptor */
+interface SoundFolderAssignTarget {
+  label: string
+  onAssign: (file: File) => Promise<void>
+}
+
+/** Toolbar icon size options */
+type IconSize = 'sm' | 'md' | 'lg'
+
+/** Modal cycle registry entry — a key and its open-check function */
+type ModalRegistryEntry = () => boolean
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
 export const useUiStore = defineStore('ui', () => {
   const isAppInitializing = ref(true)
-  // Panel visibility
+
+  // ── Panel visibility ─────────────────────────────────────────────────────
   const isHistoryOpen      = ref(false)
   const isTypesOpen        = ref(false)
   const isKeyboardOpen     = ref(false)
@@ -60,7 +142,7 @@ export const useUiStore = defineStore('ui', () => {
   const isChordProgOpen          = ref(false)
   const isAudioMixerOpen         = ref(false)
   const isSoundFolderBrowserOpen = ref(false)
-  const soundFolderAssignTarget  = ref(null) // { label: string, onAssign: (file) => Promise<void> } | null
+  const soundFolderAssignTarget  = ref<SoundFolderAssignTarget | null>(null)
   const showUnifiedMidiManager   = ref(false)
   const unifiedMidiManagerTab    = ref('devices')
   const isMidiWizardOpen              = ref(false)
@@ -69,34 +151,34 @@ export const useUiStore = defineStore('ui', () => {
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
 
-  // UI state
+  // ── UI state ─────────────────────────────────────────────────────────────
   const isPanelCollapsed   = ref(true)
   const showFavoritesOnly  = ref(false)
-  const toolbarIconSize    = ref('md')   // 'sm' | 'md' | 'lg'
+  const toolbarIconSize    = ref<IconSize>('md')
   const isFullscreen       = ref(false)
   const isPlayingPreview   = ref(false)
   const isPlayingBacking   = ref(false)
   const isSequencerPlaying = ref(false)
   const authStore = useAuthStore()
-  const uid = computed(() => authStore.user?.uid)
+  const uid: ComputedRef<string | undefined> = computed(() => authStore.user?.uid)
 
-  const seqAutoStart       = ref(localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false')
+  const seqAutoStart: Ref<boolean> = ref(localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false')
 
-  const isAudioPlaying     = computed(() => isPlayingPreview.value || isPlayingBacking.value)
-  const lastPlaylistName   = ref(localStorage.getItem(userKey('S1_LAST_PLAYLIST')) || '')
-  const activeVisualizerCategory = ref('FILTER')
-  const seqCurrentConfig        = ref(null)
-  const seqCurrentConfig2       = ref(null)
-  const seqActiveSlot           = ref(1)
+  const isAudioPlaying: ComputedRef<boolean> = computed(() => isPlayingPreview.value || isPlayingBacking.value)
+  const lastPlaylistName: Ref<string> = ref(localStorage.getItem(userKey('S1_LAST_PLAYLIST')) || '')
+  const activeVisualizerCategory: Ref<string> = ref('FILTER')
+  const seqCurrentConfig: Ref<any> = ref(null)
+  const seqCurrentConfig2: Ref<any> = ref(null)
+  const seqActiveSlot: Ref<number> = ref(1)
 
   // Global MIDI modifiers (shared between VirtualKeyboard and ArpeggiatorPanel)
-  const globalModCC        = ref(1)   // CC number for mod wheel
-  const globalTranspose    = ref(0)   // semitones, -24..+24
+  const globalModCC: Ref<number> = ref(1)
+  const globalTranspose: Ref<number> = ref(0)   // semitones, -24..+24
 
-  // --- Modal focus cycling (Ctrl+Tab) ---
-  const focusedModalKey = ref(null)
+  // ── Modal focus cycling (Ctrl+Tab) ───────────────────────────────────────
+  const focusedModalKey = ref<string | null>(null)
 
-  const MODAL_CYCLE_REGISTRY = {
+  const MODAL_CYCLE_REGISTRY: Record<string, ModalRegistryEntry> = {
     auth:                () => isAuthModalOpen.value,
     types:               () => isTypesOpen.value,
     history:             () => isHistoryOpen.value,
@@ -138,14 +220,14 @@ export const useUiStore = defineStore('ui', () => {
     midiControllerDesigner: () => isMidiControllerDesignerOpen.value,
   }
 
-  const openModalKeys = computed(() =>
+  const openModalKeys: ComputedRef<string[]> = computed(() =>
     Object.entries(MODAL_CYCLE_REGISTRY)
       .filter(([, isOpen]) => isOpen())
       .map(([key]) => key)
   )
 
   // Refs keyed by MODAL_CYCLE_REGISTRY key — used to close others on open
-  const MODAL_REFS = {
+  const MODAL_REFS: Record<string, Ref<boolean>> = {
     auth:                isAuthModalOpen,
     types:               isTypesOpen,
     history:             isHistoryOpen,
@@ -186,7 +268,6 @@ export const useUiStore = defineStore('ui', () => {
     sampler:             isSamplerOpen,
     midiControllerDesigner: isMidiControllerDesignerOpen,
   }
-
 
   function cycleFocusedModal(reverse = false) {
     const open = openModalKeys.value
@@ -324,6 +405,6 @@ export const useUiStore = defineStore('ui', () => {
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqActiveSlot,
     globalModCC, globalTranspose,
     focusedModalKey, openModalKeys, cycleFocusedModal,
-    closeAll, toggleMainMenu, toggleSideMenu
+    closeAll, toggleMainMenu, toggleSideMenu,
   }
 })

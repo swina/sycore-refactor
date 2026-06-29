@@ -12,7 +12,7 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useFreesoundCache }    from '@/composables/useFreesoundCache'
 import { useMidiContextMenu }   from '@/composables/useMidiContextMenu'
-import { midiService }          from '@/core/midi/MidiService'
+import { midiService }          from '@/core/midi/midi-service'
 import { loopMachineState }     from '@/core/state/loopMachineState'
 import { userKey }              from '@/lib/userKey'
 

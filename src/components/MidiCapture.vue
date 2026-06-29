@@ -5,7 +5,7 @@ import { buildMidiFile } from '@/lib/midi-file'
 import { storeToRefs } from 'pinia'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useCaptureStore } from '@/stores/useCaptureStore'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 

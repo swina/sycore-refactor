@@ -11,7 +11,7 @@ import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { MidiSource, midiService } from '@/core/midi/MidiService'
+import { MidiSource, midiService } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])

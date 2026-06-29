@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted } from 'vue'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'

@@ -13,7 +13,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { looperEngine } from '@/lib/looper-engine'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 

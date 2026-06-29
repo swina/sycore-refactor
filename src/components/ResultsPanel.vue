@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onUnmounted, onMounted, nextTick } from 'vue'
 import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical, List, Undo2} from 'lucide-vue-next'
-import { MidiSource } from '@/core/midi/MidiService'
+import { MidiSource } from '@/core/midi/midi-service'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'

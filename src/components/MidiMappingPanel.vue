@@ -4,7 +4,7 @@ import { X, Radio, CheckCircle2, CircleDashed } from 'lucide-vue-next'
 import { useMidiStore }    from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useConfigStore }  from '@/stores/useConfigStore'
-import { midiService }     from '@/core/midi/MidiService'
+import { midiService }     from '@/core/midi/midi-service'
 import { S1_CC_MAP }       from '@/constants/s1-config'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })

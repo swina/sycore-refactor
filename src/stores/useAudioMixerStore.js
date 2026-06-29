@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { looperEngine } from '@/lib/looper-engine'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 

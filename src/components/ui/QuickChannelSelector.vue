@@ -2,7 +2,7 @@
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 import { ChevronUp, ChevronDown, Layers, Radio, X, CheckCircle2 } from 'lucide-vue-next'
 import { APP_ACTION_LABELS } from '@/lib/app-midi-actions'
 

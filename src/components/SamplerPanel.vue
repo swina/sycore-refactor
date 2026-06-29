@@ -289,7 +289,7 @@ import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useFreesoundCache }     from '@/composables/useFreesoundCache'
 import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
 import * as engine               from '@/lib/sampler-engine'
-import { midiService }           from '@/core/midi/MidiService'
+import { midiService }           from '@/core/midi/midi-service'
 import KnobDial                  from '@/components/ui/KnobDial.vue'
 
 const uiStore      = useUiStore()

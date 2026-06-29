@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useAuthStore } from '@/stores/useAuthStore'

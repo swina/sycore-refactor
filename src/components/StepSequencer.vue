@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { X, Minus, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'

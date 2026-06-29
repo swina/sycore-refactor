@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 import { useLocalStorage } from './useLocalStorage'
 
 const LS_CAPTURE_ENABLED  = 'S1_CAPTURE_ENABLED'

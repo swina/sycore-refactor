@@ -5,7 +5,7 @@ import {
 } from 'lucide-vue-next'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
 

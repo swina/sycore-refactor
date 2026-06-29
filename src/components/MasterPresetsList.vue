@@ -4,7 +4,7 @@ import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Laye
 import { useMidiStore } from '@/stores/useMidiStore'
 import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
-import { MidiSource } from '@/core/midi/MidiService'
+import { MidiSource } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])

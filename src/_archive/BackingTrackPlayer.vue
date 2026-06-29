@@ -8,9 +8,8 @@ import {
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import {
   collection, onSnapshot, query, orderBy, addDoc,
-  serverTimestamp, deleteDoc, doc, updateDoc, deleteField
+  serverTimestamp, deleteDoc, doc, updateDoc, deleteField, db
 } from '@/lib/idb'
-import { db } from '@/lib/firebase'
 import PlayList from '@/components/PlayList.vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'

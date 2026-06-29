@@ -4,7 +4,7 @@ import { RefreshCw, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon,
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
-import { MidiSource } from '@/core/midi/MidiService'
+import { MidiSource } from '@/core/midi/midi-service'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 

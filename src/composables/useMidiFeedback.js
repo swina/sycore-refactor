@@ -3,7 +3,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore }      from '@/stores/useUiStore'
 import { useArpStore }     from '@/stores/useArpStore'
 import { useMidiStore }    from '@/stores/useMidiStore'
-import { midiService }     from '@/core/midi/MidiService'
+import { midiService }     from '@/core/midi/midi-service'
 
 /**
  * Monitors application state and sends MIDI feedback (LEDs) 

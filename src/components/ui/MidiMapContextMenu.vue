@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
 import { Radio, X, Trash2, Loader2 } from 'lucide-vue-next'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useMappingStore }    from '@/stores/useMappingStore'
-import { midiService }        from '@/core/midi/MidiService'
+import { midiService }        from '@/core/midi/midi-service'
 
 const menu         = useMidiContextMenu()
 const mappingStore = useMappingStore()

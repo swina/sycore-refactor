@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Settings2, Trash2, RefreshCw, X } from 'lucide-vue-next'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 import { useUiStore } from '@/stores/useUiStore'
 
 const uiStore = useUiStore()

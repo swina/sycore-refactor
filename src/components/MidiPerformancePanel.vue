@@ -2,7 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { X, Network, Music, Music2, Keyboard, ListMusic, Zap, Radio, Globe, Layers, Usb, Cable, Lock, Check } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })
 const emit  = defineEmits(['close'])

@@ -15,6 +15,9 @@ const DEFAULT_DRUM_STEP = () => ({
   ratchet: 1,
 })
 
+/**
+ * @returns {import('@/types/drum-machine').DrumTrack}
+ */
 function makeTrack(label = '') {
   return {
     label,
@@ -35,6 +38,10 @@ function makeTrack(label = '') {
 }
 
 // Serialize a track for localStorage/presets — strips ephemeral soundUrl
+/**
+ * @param {import('@/types/drum-machine').DrumTrack} t
+ * @returns {import('@/types/drum-machine').SerializedDrumTrack}
+ */
 function serializeTrack(t) {
   return {
     label:      t.label,
@@ -639,6 +646,11 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   watch(sequences, _save, { deep: true })
   watch(activeSequence, _save)
 
+  /**
+   * @param {number} trackIdx
+   * @param {number} stepIdx
+   * @param {Partial<import('@/types/drum-machine').DrumStep>} patch
+   */
   function setStep(trackIdx, stepIdx, patch) {
     const step = sequences.value[activeSequence.value][trackIdx].steps[stepIdx]
     Object.assign(step, patch)
@@ -738,6 +750,12 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
 
   const presets = ref(_loadPresets())
 
+  /**
+   * Save the current drum pattern as a named preset (localStorage).
+   * @param {string} name
+   * @param {Record<string,any>} [extra={}]
+   * @returns {import('@/types/drum-machine').DrumPreset}
+   */
   function savePreset(name, extra = {}) {
     const preset = {
       id:             `dm_preset_${Date.now()}`,
@@ -767,6 +785,10 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
 
   const currentPresetName = ref('')
 
+  /**
+   * Load a drum preset — restores sequences and active sequence.
+   * @param {import('@/types/drum-machine').DrumPreset} preset
+   */
   function loadPreset(preset) {
     sequences.value      = mergeLoadedSequences(preset)
     activeSequence.value = preset.activeSequence ?? 'A'
@@ -779,6 +801,10 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     _savePresets(presets.value)
   }
 
+  /**
+   * Generate a new pattern for the active sequence using the given style.
+   * @param {import('@/types/drum-machine').DrumStyleName} style
+   */
   function generateDrumPattern(style) {
     const cfg = DRUM_STYLES[style]
     if (!cfg) return

@@ -11,7 +11,7 @@ import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Mu
 import { lucideIcons } from '@/lib/lucide-icons'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { midiService } from '@/core/midi/MidiService'
+import { midiService } from '@/core/midi/midi-service'
 
 const emit = defineEmits(['bpm-override'])
 

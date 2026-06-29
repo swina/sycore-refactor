@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ChevronUp, ChevronDown, X, Settings } from 'lucide-vue-next'
-import { midiService, MidiSource } from '@/core/midi/MidiService'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:refactor": "VITE_DEV_PORT=3999 VITE_DB_NAME=sycore_2 vite",
     "build": "vite build",
     "preview": "vite preview",
     "dev:website": "vite --mode website",
@@ -15,7 +16,6 @@
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
-    "@google/genai": "^1.52.0",
     "@tailwindcss/postcss": "^4.2.4",
     "@upstash/redis": "^1.38.0",
     "@vercel/kv": "^3.0.0",

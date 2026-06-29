@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { db, getDoc, setDoc, doc } from '@/lib/idb'
 import { auth } from '@/lib/auth'
 import { userKey } from '@/lib/userKey'
@@ -10,9 +10,63 @@ import { FIELD_TO_CC } from '@/constants/s1-config'
 import {
   loadMappingPresets,
   persistMappingPresets,
-  createPreset,
+  createPreset as createMappingPreset,
   AUTOSAVE_ID,
+  type MappingPreset,
 } from '@/lib/midi-mapping-presets'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** NRPN mapping entry */
+export interface NrpnMappingEntry {
+  nrpn: { msb: number; lsb: number }
+  device: string | null
+  channel: number | null
+  paramName: string
+}
+
+/** CC mapping entry */
+export interface CcMappingEntry {
+  cc: number
+  device: string | null
+  channel: number | null
+  paramName: string
+}
+
+/** Note mapping entry */
+export interface NoteMappingEntry {
+  note: number
+  device: string | null
+  channel: number | null
+  paramName: string
+}
+
+/** Union of all mapping entry variants */
+export type MappingEntry = NrpnMappingEntry | CcMappingEntry | NoteMappingEntry
+
+/** The full mapping dictionary keyed by mapping string key */
+export type MidiMappings = Record<string, MappingEntry | string>
+
+/** Velocity modulation configuration */
+export interface VelocityConfig {
+  active: boolean
+  targetParameter: string
+  amount: number
+  curve: 'linear' | 'exp' | 'log'
+}
+
+/** Snapshot used when saving/duplicating mapping presets */
+interface MappingSnapshot {
+  mappings: MidiMappings
+  appMappings: any[]
+  velocityConfig: VelocityConfig
+}
+
+// ---------------------------------------------------------------------------
+// LocalStorage helpers
+// ---------------------------------------------------------------------------
 
 const LS_MIDI_MAPPINGS    = 'midiMappings'
 const LS_ACTIVE_PRESET_ID = 'midiMappingActivePresetId'
@@ -23,7 +77,7 @@ function userAppMidiDoc() {
   return doc(db, 'users', uid, 'system', 'appMidiMappings')
 }
 
-function loadMidiMappingsFromStorage() {
+function loadMidiMappingsFromStorage(): MidiMappings {
   try {
     const raw = localStorage.getItem(userKey(LS_MIDI_MAPPINGS))
     return raw ? JSON.parse(raw) : {}
@@ -32,39 +86,44 @@ function loadMidiMappingsFromStorage() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
 export const useMappingStore = defineStore('mapping', () => {
   const authStore = useAuthStore()
-  const uid = computed(() => authStore.user?.uid)
+  const uid: ComputedRef<string | undefined> = computed(() => authStore.user?.uid)
 
-  // CC# (number key as string) → param field name
-  const midiMappings    = ref(loadMidiMappingsFromStorage())
-  // Hardware CC → AppAction bindings
-  const appMidiMappings = ref([])
-  const isMidiLearning  = ref(false)
-  const learnedCC       = ref(null)
-  const learnedNote     = ref(null)   // MIDI note number when learned via Note On
-  const learnedNRPN     = ref(null)   // { msb, lsb } when learning NRPN, else null
-  const learnedDevice   = ref(null)
-  const learnedChannel  = ref(null)
+  // ── Mappings ─────────────────────────────────────────────────────────────
+  const midiMappings: Ref<MidiMappings> = ref(loadMidiMappingsFromStorage())
+  const appMidiMappings: Ref<any[]> = ref([])
 
-  // Mapping Preset State
-  const presets         = ref([])
-  const activePresetId  = ref(localStorage.getItem(userKey(LS_ACTIVE_PRESET_ID)) || null)
-  
-  // Velocity Modulation State (Refactored to match React original)
-  const velocityConfig = ref({
+  // ── MIDI Learn state ─────────────────────────────────────────────────────
+  const isMidiLearning: Ref<boolean>  = ref(false)
+  const learnedCC: Ref<number | null>       = ref(null)
+  const learnedNote: Ref<number | null>     = ref(null)
+  const learnedNRPN: Ref<{ msb: number; lsb: number } | null> = ref(null)
+  const learnedDevice: Ref<string | null>   = ref(null)
+  const learnedChannel: Ref<number | null>  = ref(null)
+
+  // ── Mapping Preset State ─────────────────────────────────────────────────
+  const presets: Ref<MappingPreset[]> = ref([])
+  const activePresetId: Ref<string | null> = ref(localStorage.getItem(userKey(LS_ACTIVE_PRESET_ID)) || null)
+
+  // ── Velocity Modulation ──────────────────────────────────────────────────
+  const velocityConfig: Ref<VelocityConfig> = ref({
     active: false,
     targetParameter: 'cutoff',
     amount: 0,
-    curve: 'linear'
+    curve: 'linear',
   })
-  const velocityMemory = ref({}) // Map to store original values before modulation
+  const velocityMemory: Ref<Record<string, number>> = ref({})
 
-  const mappingCount = computed(() => Object.keys(midiMappings.value).length)
+  // ── Computed ─────────────────────────────────────────────────────────────
+  const mappingCount: ComputedRef<number> = computed(() => Object.keys(midiMappings.value).length)
 
-  // Set of param field names that have at least one active CC/NRPN mapping
-  const mappedParams = computed(() => {
-    const params = new Set()
+  const mappedParams: ComputedRef<Set<string>> = computed(() => {
+    const params = new Set<string>()
     Object.values(midiMappings.value).forEach(mapping => {
       const name = typeof mapping === 'object' ? mapping.paramName : mapping
       if (name) params.add(name)
@@ -72,17 +131,22 @@ export const useMappingStore = defineStore('mapping', () => {
     return params
   })
 
+  // ── Internal bookkeeping ─────────────────────────────────────────────────
+  let _isLoadingPreset = false
+  let _autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+  let _learnTimer: ReturnType<typeof setTimeout> | null = null
+
+  // ── Persistence ──────────────────────────────────────────────────────────
   function saveMidiMappings() {
     localStorage.setItem(userKey(LS_MIDI_MAPPINGS), JSON.stringify(midiMappings.value))
   }
 
-  // ── Mapping Preset CRUD ────────────────────────────────────────────────────
-
+  // ── Mapping Preset CRUD ──────────────────────────────────────────────────
   async function loadPresets() {
     presets.value = await loadMappingPresets()
   }
 
-  function _currentSnapshot() {
+  function _currentSnapshot(): MappingSnapshot {
     return {
       mappings: { ...midiMappings.value },
       appMappings: [...appMidiMappings.value],
@@ -90,7 +154,7 @@ export const useMappingStore = defineStore('mapping', () => {
     }
   }
 
-  async function savePreset(name) {
+  async function savePreset(name: string) {
     const existing = presets.value.find(p => p.name === name && p.id !== AUTOSAVE_ID)
     if (existing) {
       existing.mappings      = { ...midiMappings.value }
@@ -98,7 +162,7 @@ export const useMappingStore = defineStore('mapping', () => {
       existing.velocityConfig = { ...velocityConfig.value }
       existing.updatedAt     = Date.now()
     } else {
-      const preset = createPreset(name, _currentSnapshot())
+      const preset = createMappingPreset(name, _currentSnapshot())
       presets.value.push(preset)
       activePresetId.value = preset.id
       localStorage.setItem(userKey(LS_ACTIVE_PRESET_ID), preset.id)
@@ -106,20 +170,19 @@ export const useMappingStore = defineStore('mapping', () => {
     await persistMappingPresets(presets.value)
   }
 
-  async function loadPreset(id) {
+  async function loadPreset(id: string) {
     const preset = presets.value.find(p => p.id === id)
     if (!preset) return
-    // Suppress auto-save watcher during load
     _isLoadingPreset = true
-    midiMappings.value = { ...(preset.mappings || {}) }
+    midiMappings.value = { ...(preset.mappings || {}) } as MidiMappings
     saveMidiMappings()
-    if (preset.velocityConfig) velocityConfig.value = { ...preset.velocityConfig }
+    if (preset.velocityConfig) velocityConfig.value = { ...preset.velocityConfig } as VelocityConfig
     activePresetId.value = id
     localStorage.setItem(userKey(LS_ACTIVE_PRESET_ID), id)
     _isLoadingPreset = false
   }
 
-  async function deletePreset(id) {
+  async function deletePreset(id: string) {
     presets.value = presets.value.filter(p => p.id !== id)
     if (activePresetId.value === id) {
       activePresetId.value = null
@@ -128,45 +191,40 @@ export const useMappingStore = defineStore('mapping', () => {
     await persistMappingPresets(presets.value)
   }
 
-  async function duplicatePreset(id) {
+  async function duplicatePreset(id: string): Promise<string | undefined> {
     const src = presets.value.find(p => p.id === id)
     if (!src) return
-    const copy = createPreset(`${src.name} (copy)`, {
-      mappings: { ...src.mappings },
+    const copy = createMappingPreset(`${src.name} (copy)`, {
+      mappings: { ...src.mappings } as MidiMappings,
       appMappings: [...src.appMappings],
-      velocityConfig: { ...src.velocityConfig },
+      velocityConfig: { ...src.velocityConfig } as VelocityConfig,
     })
     presets.value.push(copy)
     await persistMappingPresets(presets.value)
     return copy.id
   }
 
-  // Auto-save current mappings to the active preset (debounced 500 ms)
-  let _isLoadingPreset = false
-  let _autoSaveTimer = null
-
+  // ── Auto-save watcher ────────────────────────────────────────────────────
   watch(midiMappings, () => {
     if (_isLoadingPreset || !activePresetId.value) return
-    clearTimeout(_autoSaveTimer)
+    clearTimeout(_autoSaveTimer!)
     _autoSaveTimer = setTimeout(async () => {
       const idx = presets.value.findIndex(p => p.id === activePresetId.value)
       if (idx === -1) return
       presets.value[idx] = {
         ...presets.value[idx],
-        mappings: { ...midiMappings.value },
+        mappings: { ...midiMappings.value } as any,
         updatedAt: Date.now(),
       }
       await persistMappingPresets(presets.value)
     }, 500)
   }, { deep: true })
 
-  const lastMappedParam    = ref(null)   // param name, set for 1 s after confirmLearn
-  const learningParamName  = ref(null)   // set when learn is triggered from context menu
-  let _learnTimer = null
+  // ── MIDI Learn ───────────────────────────────────────────────────────────
+  const lastMappedParam = ref<string | null>(null)
+  const learningParamName = ref<string | null>(null)
 
-  // Context-menu shortcut: arms learn pre-targeted to a specific param.
-  // The next incoming CC/NRPN auto-confirms to this param with no user action.
-  function learnForParam(name) {
+  function learnForParam(name: string) {
     learningParamName.value = name
     startLearn()
   }
@@ -180,19 +238,19 @@ export const useMappingStore = defineStore('mapping', () => {
     isMidiLearning.value = true
     if (typeof document !== 'undefined') document.body.classList.add('sy-midi-learn')
 
-    clearTimeout(_learnTimer)
+    clearTimeout(_learnTimer!)
     _learnTimer = setTimeout(() => {
       if (isMidiLearning.value) {
         cancelLearn()
         const msg = '[MIDI Learn] Timed out — no controller input received within 10s'
-        if (window.SY_LOG) window.SY_LOG(msg)
+        if ((window as any).SY_LOG) (window as any).SY_LOG(msg)
         window.dispatchEvent(new CustomEvent('app-system-log', { detail: msg }))
       }
     }, 10000)
   }
 
   function cancelLearn() {
-    clearTimeout(_learnTimer)
+    clearTimeout(_learnTimer!)
     learnedCC.value        = null
     learnedNote.value      = null
     learnedNRPN.value      = null
@@ -203,43 +261,40 @@ export const useMappingStore = defineStore('mapping', () => {
     if (typeof document !== 'undefined') document.body.classList.remove('sy-midi-learn')
   }
 
-  function confirmLearn(paramName) {
-    clearTimeout(_learnTimer)
+  function confirmLearn(paramName: string) {
+    clearTimeout(_learnTimer!)
     if (learnedNRPN.value !== null) {
-      // NRPN mapping — key format: Device:CH#:NRPN:MSB:LSB
       const { msb, lsb } = learnedNRPN.value
-      const keyParts = []
+      const keyParts: string[] = []
       if (learnedDevice.value) keyParts.push(learnedDevice.value)
       if (learnedChannel.value !== null) keyParts.push(`CH${learnedChannel.value + 1}`)
       keyParts.push(`NRPN:${msb}:${lsb}`)
       const key = keyParts.join(':')
       midiMappings.value = {
         ...midiMappings.value,
-        [key]: { nrpn: { msb, lsb }, device: learnedDevice.value, channel: learnedChannel.value, paramName }
+        [key]: { nrpn: { msb, lsb }, device: learnedDevice.value, channel: learnedChannel.value, paramName } as NrpnMappingEntry,
       }
       saveMidiMappings()
     } else if (learnedCC.value !== null) {
-      // CC mapping — key format: Device:CH#:CC#
-      const keyParts = []
+      const keyParts: string[] = []
       if (learnedDevice.value) keyParts.push(learnedDevice.value)
       if (learnedChannel.value !== null) keyParts.push(`CH${learnedChannel.value + 1}`)
       keyParts.push(`CC${learnedCC.value}`)
       const key = keyParts.join(':')
       midiMappings.value = {
         ...midiMappings.value,
-        [key]: { cc: learnedCC.value, device: learnedDevice.value, channel: learnedChannel.value, paramName }
+        [key]: { cc: learnedCC.value, device: learnedDevice.value, channel: learnedChannel.value, paramName } as CcMappingEntry,
       }
       saveMidiMappings()
     } else if (learnedNote.value !== null) {
-      // Note mapping — key format: Device:CH#:NOTE#
-      const keyParts = []
+      const keyParts: string[] = []
       if (learnedDevice.value) keyParts.push(learnedDevice.value)
       if (learnedChannel.value !== null) keyParts.push(`CH${learnedChannel.value + 1}`)
       keyParts.push(`NOTE${learnedNote.value}`)
       const key = keyParts.join(':')
       midiMappings.value = {
         ...midiMappings.value,
-        [key]: { note: learnedNote.value, device: learnedDevice.value, channel: learnedChannel.value, paramName }
+        [key]: { note: learnedNote.value, device: learnedDevice.value, channel: learnedChannel.value, paramName } as NoteMappingEntry,
       }
       saveMidiMappings()
     }
@@ -254,8 +309,7 @@ export const useMappingStore = defineStore('mapping', () => {
     setTimeout(() => { lastMappedParam.value = null }, 1000)
   }
 
-  // Called by useMidiCCListener when NRPN is assembled during learn mode
-  function incomingNRPN(msb, lsb, device = null, channel = null) {
+  function incomingNRPN(msb: number, lsb: number, device: string | null = null, channel: number | null = null) {
     if (!isMidiLearning.value) return
     learnedNRPN.value    = { msb, lsb }
     learnedCC.value      = null
@@ -269,14 +323,14 @@ export const useMappingStore = defineStore('mapping', () => {
     }
   }
 
-  function removeMapping(key) {
+  function removeMapping(key: string) {
     const next = { ...midiMappings.value }
     delete next[key]
     midiMappings.value = next
     saveMidiMappings()
   }
 
-  function incomingCC(cc, device = null, channel = null) {
+  function incomingCC(cc: number, device: string | null = null, channel: number | null = null) {
     if (!isMidiLearning.value) return
     learnedCC.value      = cc
     learnedNote.value    = null
@@ -289,7 +343,7 @@ export const useMappingStore = defineStore('mapping', () => {
     }
   }
 
-  function incomingNote(note, device = null, channel = null) {
+  function incomingNote(note: number, device: string | null = null, channel: number | null = null) {
     if (!isMidiLearning.value) return
     learnedNote.value    = note
     learnedCC.value      = null
@@ -303,72 +357,56 @@ export const useMappingStore = defineStore('mapping', () => {
     }
   }
 
-  /**
-   * Handle incoming velocity to modulate target CCs
-   */
-  function handleVelocity(velocity, channel = null) {
+  // ── Velocity modulation ──────────────────────────────────────────────────
+  function handleVelocity(velocity: number, channel: number | null = null) {
     if (!velocityConfig.value.active) return
 
     const midiStore = useMidiStore()
     const presetStore = usePresetStore()
     const lastPreset = presetStore.lastPreset
-    
+
     if (!lastPreset) {
-      if (window.SY_LOG) window.SY_LOG(`[VEL] Blocked: No active preset`);
+      if ((window as any).SY_LOG) (window as any).SY_LOG('[VEL] Blocked: No active preset')
       return
     }
 
     const field = velocityConfig.value.targetParameter
     const amount = velocityConfig.value.amount
-    
-    if (amount === 0) {
-      // Silence log if amount is 0 to avoid clutter
-      return
-    }
+    if (amount === 0) return
 
-    const cc = FIELD_TO_CC[field]
+    const cc = (FIELD_TO_CC as Record<string, number>)[field]
     if (cc === undefined) {
-      if (window.SY_LOG) window.SY_LOG(`[VEL] Blocked: Field ${field} has no CC mapping`);
+      if ((window as any).SY_LOG) (window as any).SY_LOG(`[VEL] Blocked: Field ${field} has no CC mapping`)
       return
     }
 
-    // Get base value from current preset data (account for AB engine with symmetric A/B variants)
     const activeVariant = presetStore.useAlternativeEngine ? lastPreset.bVariant : lastPreset.aVariant
-    const targetData = activeVariant?.data || lastPreset.data || {}
+    const targetData: Record<string, number> | undefined = activeVariant?.data || (lastPreset as any).data
 
     if (!targetData || Object.keys(targetData).length === 0) {
-      if (window.SY_LOG) window.SY_LOG(`[VEL] Blocked: No target data for engine`);
+      if ((window as any).SY_LOG) (window as any).SY_LOG('[VEL] Blocked: No target data for engine')
       return
     }
 
     const baseValue = targetData[field] ?? 64
-    
-    // Normalize velocity (0-127) to 0-1
     let x = velocity / 127
 
     const curve = velocityConfig.value.curve
-    // Apply Curve
     if (curve === 'exp') {
       x = Math.pow(x, 2)
     } else if (curve === 'log') {
       x = Math.sqrt(x)
     }
 
-    // Calculate modulation: amount is percentage (-100 to 100)
     const modulation = Math.round(x * (amount / 100) * 127)
-    
     const modulatedValue = Math.max(0, Math.min(127, baseValue + modulation))
-    
-    // Send CC
-    if (window.SY_LOG && velocity > 0) {
-      window.SY_LOG(`[VEL] Modulating ${field} (CC ${cc}): ${baseValue} -> ${modulatedValue} (vel: ${velocity})`);
+
+    if ((window as any).SY_LOG && velocity > 0) {
+      (window as any).SY_LOG(`[VEL] Modulating ${field} (CC ${cc}): ${baseValue} -> ${modulatedValue} (vel: ${velocity})`)
     }
     midiStore.sendCC(cc, modulatedValue)
   }
 
-  /**
-   * Restore original values from the preset for all modulated fields
-   */
   function restoreOriginalValues() {
     const midiStore = useMidiStore()
     const presetStore = usePresetStore()
@@ -376,14 +414,13 @@ export const useMappingStore = defineStore('mapping', () => {
     if (!lastPreset) return
 
     const field = velocityConfig.value.targetParameter
-    const cc = FIELD_TO_CC[field]
+    const cc = (FIELD_TO_CC as Record<string, number>)[field]
     if (cc === undefined) return
 
-    // Account for AB engine with symmetric A/B variants
     const activeVariant = presetStore.useAlternativeEngine ? lastPreset.bVariant : lastPreset.aVariant
-    const targetData = activeVariant?.data || lastPreset.data || {}
+    const targetData: Record<string, number> | undefined = activeVariant?.data || (lastPreset as any).data
 
-    if (!targetData) return;
+    if (!targetData) return
 
     const originalValue = targetData[field]
     if (originalValue !== undefined) {
@@ -391,18 +428,19 @@ export const useMappingStore = defineStore('mapping', () => {
     }
   }
 
+  // ── App MIDI Mappings ────────────────────────────────────────────────────
   async function loadAppMidiMappings() {
     try {
       const snap = await getDoc(userAppMidiDoc())
-      if (snap.exists() && Array.isArray(snap.data().mappings)) {
-        appMidiMappings.value = snap.data().mappings
+      if (snap.exists() && Array.isArray((snap.data() as any).mappings)) {
+        appMidiMappings.value = (snap.data() as any).mappings
       }
     } catch (e) {
       console.error('Failed to load app MIDI mappings', e)
     }
   }
 
-  async function saveAppMidiMappings(mappings) {
+  async function saveAppMidiMappings(mappings: any[]) {
     appMidiMappings.value = mappings
     await setDoc(userAppMidiDoc(), { mappings })
   }
@@ -416,9 +454,9 @@ export const useMappingStore = defineStore('mapping', () => {
     saveMidiMappings()
   }
 
+  // ── Auth watcher ─────────────────────────────────────────────────────────
   watch(uid, async (newUid, oldUid) => {
     if (!newUid) {
-      // Only clear on actual logout (oldUid was set), not on the initial null state
       if (oldUid) {
         midiMappings.value = {}
         appMidiMappings.value = []
@@ -426,12 +464,12 @@ export const useMappingStore = defineStore('mapping', () => {
         activePresetId.value = null
       }
     } else {
-      if (window.SY_LOG) window.SY_LOG(`Loading MIDI configuration for user...`)
+      if ((window as any).SY_LOG) (window as any).SY_LOG('Loading MIDI configuration for user...')
       midiMappings.value = loadMidiMappingsFromStorage()
       activePresetId.value = localStorage.getItem(userKey(LS_ACTIVE_PRESET_ID)) || null
       await loadPresets()
       await loadAppMidiMappings()
-      if (window.SY_LOG) window.SY_LOG(`MIDI configuration loaded (${Object.keys(midiMappings.value).length} mappings, ${appMidiMappings.value.length} app actions)`)
+      if ((window as any).SY_LOG) (window as any).SY_LOG(`MIDI configuration loaded (${Object.keys(midiMappings.value).length} mappings, ${appMidiMappings.value.length} app actions)`)
     }
   }, { immediate: true })
 
