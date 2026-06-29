@@ -156,6 +156,8 @@ const currentTime           = ref(0)
 const duration              = ref(0)
 const isPlaying             = ref(false)
 const volume                = ref(0.5)
+const _userVolume           = ref(0.5)   // raw user-set value before master multiplier
+const liveperfMasterVol     = ref(1.0)
 
 // When the local REC SYNC override is ON, mirror backing-track play/stop → capture.
 watch(isPlaying, (playing) => {
@@ -269,7 +271,11 @@ function handlePlaylistToggle(idx) {
   }
 }
 function seekTrack(pos)   { window.dispatchEvent(new CustomEvent('playlist-seek',   { detail: pos })) }
-function updateVolume(v)  { volume.value = v; window.dispatchEvent(new CustomEvent('playlist-volume', { detail: v })) }
+function updateVolume(v)  {
+  _userVolume.value = v
+  volume.value = v * liveperfMasterVol.value
+  window.dispatchEvent(new CustomEvent('playlist-volume', { detail: volume.value }))
+}
 
 function handleStateUpdate(e) {
   const d = e.detail
@@ -695,7 +701,15 @@ onMounted(() => {
   _startLppMidiListener()
   window.addEventListener('loop-pad-assign', _handleLoopPadAssign)
   window.addEventListener('lpp-set-assign', _onLppSetAssign)
+  window.addEventListener('liveperf-master-volume', _onLiveperfMasterVol)
 })
+
+function _onLiveperfMasterVol(e) {
+  liveperfMasterVol.value = e.detail
+  const effective = _userVolume.value * e.detail
+  volume.value = effective
+  window.dispatchEvent(new CustomEvent('playlist-volume', { detail: effective }))
+}
 
 onUnmounted(() => {
   window.removeEventListener('player-state-sync', handleStateUpdate)
@@ -703,6 +717,7 @@ onUnmounted(() => {
   window.removeEventListener('timeline-load-perf-set', _onTimelineLoadPerfSet)
   window.removeEventListener('loop-pad-assign', _handleLoopPadAssign)
   window.removeEventListener('lpp-set-assign', _onLppSetAssign)
+  window.removeEventListener('liveperf-master-volume', _onLiveperfMasterVol)
   if (_unsubLppMidi) _unsubLppMidi()
   _padWA.forEach((wa, i) => { if (wa) _stopPadInstant(i) })
   if (_padCtx) { _padCtx.close().catch(() => {}); _padCtx = null }

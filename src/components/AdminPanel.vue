@@ -127,6 +127,8 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'sampler',             label: 'Sampler',               icon: 'Music2'     },
   { id: 'audio-mixer',          label: 'Audio Mixer',           icon: 'Volume2'    },
   { id: 'sound-folder-browser', label: 'Sound Folder Browser',  icon: 'FolderOpen' },
+  { id: 'midi-flow',            label: 'MIDI Flow',             icon: 'Network'    },
+  { id: 'controller-designer',  label: 'Controller Designer',   icon: 'Cpu'        },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

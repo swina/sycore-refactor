@@ -228,6 +228,7 @@ onMounted(() => {
   checkAuth()
   const stopWatcher = watch(() => authStore.loadingAuth, checkAuth)
 
+  
   const handleBpmUpdate = (e) => {
     if (!sessionBpmOverride.value && e.detail?.bpm) {
       arpStore.arpBpm = e.detail.bpm
@@ -261,6 +262,8 @@ onMounted(() => {
     window.removeEventListener('bpm-update', handleBpmUpdate)
   }
 })
+
+
 </script>
 
 <template>

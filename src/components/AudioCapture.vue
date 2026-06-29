@@ -34,6 +34,7 @@ const { openMenu } = useMidiContextMenu()
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'S1_CAPTURE_DR',
   minimizeLabel: 'Audio Capture',
+  openRef: () => uiStore.isAudioCaptureOpen,
   initialWidth: 950,
   initialHeight: 720,
   minWidth: 700,

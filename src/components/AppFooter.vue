@@ -68,6 +68,8 @@ const MENU_ACTION_MAP = {
   'freesound-browser':    () => uiStore.isFreesoundBrowserOpen = !uiStore.isFreesoundBrowserOpen,
   'audio-mixer':          () => uiStore.isAudioMixerOpen = !uiStore.isAudioMixerOpen,
   'sound-folder-browser': () => uiStore.isSoundFolderBrowserOpen = !uiStore.isSoundFolderBrowserOpen,
+  'midi-flow':            () => uiStore.isMidiFlowOpen = !uiStore.isMidiFlowOpen,
+  'controller-designer':  () => uiStore.isMidiControllerDesignerOpen = !uiStore.isMidiControllerDesignerOpen,
 }
 
 const MENU_COLORS = [
@@ -170,6 +172,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('player-state-sync', onPlayerSync)
   if (_unsubFooterMidi) _unsubFooterMidi()
+  // uiStore.isMidiControllerDesignerOpen = !uiStore.isMidiControllerDesignerOpen
 })
 
 function handleBpmChange(e) {

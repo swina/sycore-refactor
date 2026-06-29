@@ -27,11 +27,11 @@ const syncStore    = useSyncStore()
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_UNIFIED_MIDI',
   minimizeLabel: 'MIDI Manager',
+  openRef: () => uiStore.showUnifiedMidiManager,
   initialWidth: 920,
   initialHeight: 720,
   zIndex: 100,
 })
-watch(() => uiStore.showUnifiedMidiManager, (v) => { if (v) bringToFront() })
 
 const TABS = [
   { id: 'devices',     label: 'Devices',     icon: Cpu     },

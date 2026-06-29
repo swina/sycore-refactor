@@ -85,7 +85,7 @@
         </button>
 
         <div class="w-px h-4 bg-neutral-700 mx-1" />
-
+        
         <!-- Selection controls -->
         <button
           v-if="selectedControlId && !isDesignMode"
@@ -101,6 +101,22 @@
           title="Clear all controls"
         >
           <LayoutTemplate class="w-3.5 h-3.5" />
+        </button>
+
+        <div class="w-full flex">
+        <!-- Simulate mode toggle -->
+        <button
+          @click="toggleSimulateMode"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors',
+            isSimulateMode
+              ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-emerald-500/40 hover:text-emerald-400'
+          ]"
+          title="Toggle simulate mode — controls fire their assigned actions"
+        >
+          <Zap class="w-3 h-3" />
+          Simulate
         </button>
 
         <div class="w-px h-4 bg-neutral-700 mx-1" />
@@ -120,20 +136,7 @@
           Design
         </button>
 
-        <!-- Simulate mode toggle -->
-        <button
-          @click="toggleSimulateMode"
-          :class="[
-            'flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors',
-            isSimulateMode
-              ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400'
-              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-emerald-500/40 hover:text-emerald-400'
-          ]"
-          title="Toggle simulate mode — controls fire their assigned actions"
-        >
-          <Zap class="w-3 h-3" />
-          Simulate
-        </button>
+        
 
         <div class="w-px h-4 bg-neutral-700 mx-1" />
 
@@ -151,6 +154,7 @@
           <Activity class="w-3 h-3" />
           Monitor
         </button>
+        </div>
       </div>
 
       <!-- Bulk action bar (design mode) -->
@@ -226,7 +230,7 @@
         <svg class="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="ctrl-grid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <circle cx="1" cy="1" r="0.5" fill="#404040" />
+              <circle cx="1" cy="1" r="0.5" fill="#212121" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#ctrl-grid)" />
@@ -696,6 +700,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minWidth:      480,
     minHeight:     320,
     minimizeLabel: 'Controller Designer',
+    openRef:       () => uiStore.isMidiControllerDesignerOpen,
   })
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -1200,18 +1205,23 @@ function confirmAssignment() {
   const pa = pendingAssignment.value
 
   if (pa.type === 'action') {
-    if (assignedDevice.value && (ctrl.ccNumber != null || ctrl.noteNumber != null)) {
+    if (ctrl.ccNumber != null || ctrl.noteNumber != null) {
+      const stableId = `designer_ctrl_${ctrl.id}`
       const ch = (ctrl.channel ?? 1) - 1
       const isNote = ctrl.noteNumber != null
       const isContinuous = CONTINUOUS_ACTIONS.has(pa.action)
       const mappingValue = isContinuous ? -1 : (triggerMode.value === 'exact' ? exactValue.value : -1)
+      // Filter out any previous entry for this control (by stable ID or same device+cc/note)
       const existing = mappingStore.appMidiMappings.filter(m => {
-        if (m.device !== assignedDevice.value) return true
+        if (m.id === stableId) return false
+        const mDev = (m.device || '').toLowerCase()
+        const aDev = (assignedDevice.value || '').toLowerCase()
+        if (mDev !== aDev) return true
         return isNote ? m.note !== ctrl.noteNumber : m.cc !== ctrl.ccNumber
       })
       existing.push({
-        id: Math.random().toString(36).slice(2, 11),
-        device: assignedDevice.value,
+        id: stableId,
+        device: assignedDevice.value, // '' matches any device in useControllerManager
         ...(isNote ? { note: ctrl.noteNumber } : { cc: ctrl.ccNumber }),
         channel: ch,
         value: mappingValue,
@@ -1248,8 +1258,17 @@ function cancelAssignment() {
   pendingAssignment.value = null
 }
 
+function _removeCtrlFromAppMappings(ctrl) {
+  const stableId = `designer_ctrl_${ctrl.id}`
+  const filtered = mappingStore.appMidiMappings.filter(m => m.id !== stableId)
+  if (filtered.length !== mappingStore.appMidiMappings.length) {
+    mappingStore.saveAppMidiMappings(filtered)
+  }
+}
+
 function clearAssignment(ctrl) {
   if (!ctrl) return
+  _removeCtrlFromAppMappings(ctrl)
   ctrl.assignment = undefined
   debouncedSave()
 }
@@ -1338,6 +1357,8 @@ function bulkDuplicate() {
 
 function bulkDelete() {
   if (!activePreset.value) return
+  const toDelete = controls.value.filter(c => selectedIds.value.has(c.id))
+  toDelete.forEach(_removeCtrlFromAppMappings)
   activePreset.value.controls = activePreset.value.controls.filter(c => !selectedIds.value.has(c.id))
   selectedIds.value = new Set()
   debouncedSave()
@@ -1347,6 +1368,8 @@ function bulkDelete() {
 
 function deleteSelected() {
   if (!activePreset.value || !selectedControlId.value) return
+  const ctrl = controls.value.find(c => c.id === selectedControlId.value)
+  if (ctrl) _removeCtrlFromAppMappings(ctrl)
   activePreset.value.controls = activePreset.value.controls.filter(c => c.id !== selectedControlId.value)
   selectedControlId.value = null
   debouncedSave()
@@ -1355,6 +1378,7 @@ function deleteSelected() {
 function clearCanvas() {
   if (!activePreset.value) return
   if (!confirm('Clear all controls?')) return
+  controls.value.forEach(_removeCtrlFromAppMappings)
   activePreset.value.controls = []
   selectedControlId.value = null
   debouncedSave()

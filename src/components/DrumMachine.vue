@@ -25,14 +25,13 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   useDraggableResizable({
     storageKey:    'S1_DRUM_MACHINE_DR',
     minimizeLabel: 'Drum Machine',
+    openRef:       () => uiStore.isDrumMachineOpen,
     initialWidth:  960,
     initialHeight: 520,
     minWidth:      720,
     minHeight:     380,
     zIndex:        210,
   })
-
-watch(() => uiStore.isDrumMachineOpen, v => { if (v) bringToFront() })
 
 // ── Local UI state ─────────────────────────────────────────────────────────────
 const selectedStyle   = ref('House')

@@ -1,17 +1,18 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { X, Minus, RefreshCw, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu } from 'lucide-vue-next'
+import { RefreshCw, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { MidiSource } from '@/core/midi/MidiService'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const midiStore  = useMidiStore()
 const uiStore    = useUiStore()
 const activeTab  = ref('routing')  // 'routing' | 'sync'
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey:    'SYCORE_POS_MIDI_FLOW',
   initialWidth:  900,
   initialHeight: 580,
@@ -19,6 +20,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minHeight:     400,
   zIndex:        130,
   minimizeLabel: 'MIDI Flow',
+  openRef:       () => uiStore.isMidiFlowOpen,
 })
 
 // ── Registered devices (matches DeviceListPanel source of truth) ──
@@ -321,7 +323,7 @@ function pendingPath() {
           <Network class="w-4 h-4" /> MIDI FLOW
         </span>
         <!-- Tabs -->
-        <div class="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5" @mousedown.stop>
+        <!-- <div class="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5" @mousedown.stop>
           <button
             @click="activeTab = 'routing'"
             class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-colors"
@@ -332,7 +334,7 @@ function pendingPath() {
             class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-colors"
             :class="activeTab === 'sync' ? 'bg-synth-neon text-black' : 'text-neutral-500 hover:text-white'"
           >Sync Flow</button>
-        </div>
+        </div> -->
         <span v-if="activeTab === 'routing'" class="text-[9px] font-mono text-neutral-600 flex-1 truncate">
           Drag devices → canvas &nbsp;·&nbsp; OUT● → ●IN to connect &nbsp;·&nbsp; click cable to remove
         </span>
@@ -348,12 +350,7 @@ function pendingPath() {
         >
           <Cpu class="w-4 h-4" />
         </button>
-        <button @click="toggleMinimize" class="p-1 text-neutral-400 hover:text-white transition-colors shrink-0">
-          <Minus class="w-4 h-4" />
-        </button>
-        <button @click="uiStore.isMidiFlowOpen = false" class="p-1 text-neutral-400 hover:text-white transition-colors shrink-0">
-          <X class="w-4 h-4" />
-        </button>
+        <MacOsButtons @close="uiStore.isMidiFlowOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
 
       <!-- Sync Flow tab -->

@@ -87,6 +87,7 @@ const syncRecordAudioCapture = computed({
 const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: startPanelResize, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'S1_TP_PANEL_DR',
   minimizeLabel: 'Backing Track',
+  openRef: () => uiStore.isTracksPlayerOpen,
   initialWidth: 904,
   initialHeight: Math.min(500, window.innerHeight - 60),
   minWidth: 904,

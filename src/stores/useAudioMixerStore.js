@@ -5,7 +5,7 @@ import { midiService } from '@/core/midi/MidiService'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 
-const ALL_CHANNEL_IDS = ['backing', 'tracks', 'looper', 'lm', 'drums', 'drumsLevel']
+const ALL_CHANNEL_IDS = ['backing', 'tracks', 'looper', 'lm', 'drums', 'drumsLevel', 'sampler', 'liveperf']
 
 function loadFloat(key, def) {
   const v = localStorage.getItem(userKey(key))
@@ -54,6 +54,10 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   const lmMuted         = ref(false)
   const drumsMuted      = ref(false)
   const drumsLevelMuted = ref(false)
+  const samplerVol      = ref(loadFloat('S1_MIX_SAMPLER',   0.85))
+  const samplerMuted    = ref(false)
+  const liveperfVol     = ref(loadFloat('S1_MIX_LIVEPERF',  0.85))
+  const liveperfMuted   = ref(false)
 
   watch(backingVol,    v => localStorage.setItem(userKey('S1_MIX_BACKING'),     String(v)))
   watch(tracksVol,     v => localStorage.setItem(userKey('S1_MIX_TRACKS'),      String(v)))
@@ -61,6 +65,8 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   watch(lmVol,         v => localStorage.setItem(userKey('S1_MIX_LM'),          String(v)))
   watch(drumsVol,      v => localStorage.setItem(userKey('S1_MIX_DRUMS'),       String(v)))
   watch(drumsLevelVol, v => localStorage.setItem(userKey('S1_MIX_DRUMS_LEVEL'), String(v)))
+  watch(samplerVol,    v => localStorage.setItem(userKey('S1_MIX_SAMPLER'),     String(v)))
+  watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),    String(v)))
   watch(masterVol,     v => localStorage.setItem(userKey('S1_MIX_MASTER'),      String(v)))
 
   function effective(ch, muted) {
@@ -84,6 +90,12 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function _dispatchDrums() {
     window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: effective(drumsVol.value, drumsMuted.value) }))
   }
+  function _dispatchSampler() {
+    window.dispatchEvent(new CustomEvent('sampler-master-volume', { detail: effective(samplerVol.value, samplerMuted.value) }))
+  }
+  function _dispatchLiveperf() {
+    window.dispatchEvent(new CustomEvent('liveperf-master-volume', { detail: effective(liveperfVol.value, liveperfMuted.value) }))
+  }
 
   function setBackingVol(v)    { backingVol.value = v; _dispatchBacking() }
   function setTracksVol(v)     { tracksVol.value  = v; _dispatchTracks() }
@@ -91,9 +103,12 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function setLMVol(v)         { lmVol.value      = v; _dispatchLM() }
   function setDrumsVol(v)      { drumsVol.value   = v; _dispatchDrums() }
   function setDrumsLevelVol(v) { drumsLevelVol.value = v }
+  function setSamplerVol(v)    { samplerVol.value    = v; _dispatchSampler() }
+  function setLiveperfVol(v)   { liveperfVol.value   = v; _dispatchLiveperf() }
   function setMasterVol(v)     {
     masterVol.value = v
     _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM(); _dispatchDrums()
+    _dispatchSampler(); _dispatchLiveperf()
   }
 
   function toggleBackingMute()    { backingMuted.value    = !backingMuted.value;    _dispatchBacking() }
@@ -102,6 +117,8 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function toggleLMMute()         { lmMuted.value         = !lmMuted.value;         _dispatchLM() }
   function toggleDrumsMute()      { drumsMuted.value      = !drumsMuted.value;      _dispatchDrums() }
   function toggleDrumsLevelMute() { drumsLevelMuted.value = !drumsLevelMuted.value }
+  function toggleSamplerMute()   { samplerMuted.value    = !samplerMuted.value;  _dispatchSampler() }
+  function toggleLiveperfMute()  { liveperfMuted.value   = !liveperfMuted.value; _dispatchLiveperf() }
 
   function _loadInstVols() {
     try { return JSON.parse(localStorage.getItem(userKey('S1_MIX_INST_VOLS')) || '{}') } catch { return {} }
@@ -144,6 +161,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
       enabledChannels.value = [...ALL_CHANNEL_IDS]
       backingVol.value = 0.8; tracksVol.value = 0.8; looperVol.value = 0.9
       lmVol.value = 0.85; drumsVol.value = 0.85; drumsLevelVol.value = 0.85; masterVol.value = 1.0
+      samplerVol.value = 0.85; liveperfVol.value = 0.85
       instrumentVols.value = {}
     } else {
       enabledChannels.value = loadEnabledChannels()
@@ -153,6 +171,8 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
       lmVol.value         = loadFloat('S1_MIX_LM',          0.85)
       drumsVol.value      = loadFloat('S1_MIX_DRUMS',       0.85)
       drumsLevelVol.value = loadFloat('S1_MIX_DRUMS_LEVEL', 0.85)
+      samplerVol.value    = loadFloat('S1_MIX_SAMPLER',     0.85)
+      liveperfVol.value   = loadFloat('S1_MIX_LIVEPERF',    0.85)
       masterVol.value     = loadFloat('S1_MIX_MASTER',      1.0)
       instrumentVols.value = _loadInstVols()
     }
@@ -163,11 +183,11 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     enabledChannels,
     isChannelEnabled,
     toggleChannel,
-    backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, masterVol,
-    backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted, drumsLevelMuted,
+    backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, samplerVol, liveperfVol, masterVol,
+    backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted, drumsLevelMuted, samplerMuted, liveperfMuted,
     effectiveDrumsLevel,
-    setBackingVol, setTracksVol, setLooperVol, setLMVol, setDrumsVol, setDrumsLevelVol, setMasterVol,
-    toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute, toggleDrumsLevelMute,
+    setBackingVol, setTracksVol, setLooperVol, setLMVol, setDrumsVol, setDrumsLevelVol, setSamplerVol, setLiveperfVol, setMasterVol,
+    toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute, toggleDrumsLevelMute, toggleSamplerMute, toggleLiveperfMute,
     instrumentVols, instrumentMuted,
     getInstrumentVol, isInstrumentMuted, setInstrumentVol, toggleInstrumentMute,
   }

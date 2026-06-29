@@ -455,6 +455,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   useDraggableResizable({
     storageKey:    'S1_FREESOUND_BROWSER',
     minimizeLabel: 'Freesound',
+    openRef:       () => uiStore.isFreesoundBrowserOpen,
     initialWidth:  700,
     initialHeight: 620,
     minWidth:      420,

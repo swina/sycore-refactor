@@ -140,6 +140,24 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     mixerStore.setDrumsLevelVol(val / 127)
     return
   }
+  // ── Audio Mixer channel volumes ───────────────────────────────────────────────
+  if (fieldName === 'mix_master_vol')       { mixerStore.setMasterVol(val / 127); return }
+  if (fieldName === 'mix_backing_vol')      { mixerStore.setBackingVol(val / 127); return }
+  if (fieldName === 'mix_tracks_vol')       { mixerStore.setTracksVol(val / 127); return }
+  if (fieldName === 'mix_looper_vol')       { mixerStore.setLooperVol(val / 127); return }
+  if (fieldName === 'mix_lm_vol')           { mixerStore.setLMVol(val / 127); return }
+  if (fieldName === 'mix_drums_vol')        { mixerStore.setDrumsVol(val / 127); return }
+  if (fieldName === 'mix_drums_level_vol')  { mixerStore.setDrumsLevelVol(val / 127); return }
+  if (fieldName === 'mix_sampler_vol')      { mixerStore.setSamplerVol(val / 127); return }
+  if (fieldName === 'mix_liveperf_vol')     { mixerStore.setLiveperfVol(val / 127); return }
+  if (fieldName === 'mix_backing_mute')     { if (fromNote || val > 63) mixerStore.toggleBackingMute(); return }
+  if (fieldName === 'mix_tracks_mute')      { if (fromNote || val > 63) mixerStore.toggleTracksMute(); return }
+  if (fieldName === 'mix_looper_mute')      { if (fromNote || val > 63) mixerStore.toggleLooperMute(); return }
+  if (fieldName === 'mix_lm_mute')          { if (fromNote || val > 63) mixerStore.toggleLMMute(); return }
+  if (fieldName === 'mix_drums_mute')       { if (fromNote || val > 63) mixerStore.toggleDrumsMute(); return }
+  if (fieldName === 'mix_drums_level_mute') { if (fromNote || val > 63) mixerStore.toggleDrumsLevelMute(); return }
+  if (fieldName === 'mix_sampler_mute')     { if (fromNote || val > 63) mixerStore.toggleSamplerMute(); return }
+  if (fieldName === 'mix_liveperf_mute')    { if (fromNote || val > 63) mixerStore.toggleLiveperfMute(); return }
   // ─────────────────────────────────────────────────────────────────────────────
   if (fieldName === 'ui_panel_collapse') {
     uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Layers, X, Minus, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, Save, FolderOpen, Trash2, Play, Search } from 'lucide-vue-next'
+import { Layers, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, Save, FolderOpen, Trash2, Play, Search } from 'lucide-vue-next'
 import { useUiStore }              from '@/stores/useUiStore'
 import { useMidiStore }            from '@/stores/useMidiStore'
 import { useDrumMachineStore }     from '@/stores/useDrumMachineStore'
@@ -9,6 +9,7 @@ import { useMappingStore }      from '@/stores/useMappingStore'
 import { usePresetStore }       from '@/stores/usePresetStore'
 import { useLivePadStore }      from '@/stores/useLivePadStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useFreesoundCache }    from '@/composables/useFreesoundCache'
 import { useMidiContextMenu }   from '@/composables/useMidiContextMenu'
 import { midiService }          from '@/core/midi/MidiService'
@@ -36,10 +37,11 @@ function dmSwitchSeq(seq) {
 const { openMenu } = useMidiContextMenu()
 const { resolveUrl, cacheFileBlob } = useFreesoundCache()
 
-const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront } =
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
     storageKey:    'S1_LOOP_MACHINE_DR',
     minimizeLabel: 'Samples Machine',
+    openRef:       () => uiStore.isLoopMachineOpen,
     initialWidth:  1020,
     initialHeight: 600,
     minWidth:      720,
@@ -47,7 +49,6 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     zIndex:        200,
   })
 
-watch(() => uiStore.isLoopMachineOpen, v => { if (v) bringToFront() })
 
 // ── Constants ─────────────────────────────────────────────────────
 const LS_KEY      = 'SYCORE_LOOP_MACHINE_PADS'
@@ -833,14 +834,7 @@ onUnmounted(() => {
             Presets
           </button>
 
-          <button @mousedown.stop @click="toggleMinimize" title="Minimize"
-            class="p-1.5 rounded-full hover:bg-white/5 text-neutral-500 hover:text-yellow-400 transition-colors">
-            <Minus class="w-4 h-4" />
-          </button>
-          <button @mousedown.stop @click="uiStore.isLoopMachineOpen = false"
-            class="p-1.5 rounded-full hover:bg-white/5 text-neutral-500 hover:text-white transition-colors">
-            <X class="w-4 h-4" />
-          </button>
+          <MacOsButtons @close="uiStore.isLoopMachineOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
         </div>
       </div>
 

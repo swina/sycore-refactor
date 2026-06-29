@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { SlidersHorizontal, X, Minus, Volume2, VolumeX, Music, Layers, Radio, Mic2, Settings2, CheckSquare, Square, Piano } from 'lucide-vue-next'
+import { SlidersHorizontal, Volume2, VolumeX, Music, Layers, Radio, Mic2, Settings2, CheckSquare, Square, Piano, Disc, Zap } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const emit = defineEmits(['close'])
@@ -13,12 +15,15 @@ const emit = defineEmits(['close'])
 const uiStore    = useUiStore()
 const mixer      = useAudioMixerStore()
 const midiStore  = useMidiStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 const { instruments } = useDeviceRegistry()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
     storageKey:    'S1_AUDIO_MIXER_DR',
     minimizeLabel: 'Audio Mixer',
+    openRef:       () => uiStore.isAudioMixerOpen,
     initialWidth:  480,
     initialHeight: 420,
     minWidth:      280,
@@ -31,76 +36,116 @@ const showConfig = ref(false)
 // ── Catalog of all controllable audio sources ─────────────────────────────────
 const CATALOG = [
   {
-    id:     'backing',
-    label:  'Backing',
-    sub:    'Track Player',
-    desc:   'Backing Track Player playlist volume',
-    icon:   Music,
-    color:  'cyan',
+    id:       'backing',
+    label:    'Backing',
+    sub:      'Track Player',
+    desc:     'Backing Track Player playlist volume',
+    icon:     Music,
+    color:    'cyan',
+    volParam: 'mix_backing_vol',
+    muteParam:'mix_backing_mute',
     vol:    () => mixer.backingVol,
     muted:  () => mixer.backingMuted,
     setVol: v => mixer.setBackingVol(v),
     mute:   () => mixer.toggleBackingMute(),
   },
   {
-    id:     'tracks',
-    label:  'Tracks',
-    sub:    'Tracks Player',
-    desc:   'Tracks Player playlist volume',
-    icon:   Radio,
-    color:  'violet',
+    id:       'tracks',
+    label:    'Tracks',
+    sub:      'Tracks Player',
+    desc:     'Tracks Player playlist volume',
+    icon:     Radio,
+    color:    'violet',
+    volParam: 'mix_tracks_vol',
+    muteParam:'mix_tracks_mute',
     vol:    () => mixer.tracksVol,
     muted:  () => mixer.tracksMuted,
     setVol: v => mixer.setTracksVol(v),
     mute:   () => mixer.toggleTracksMute(),
   },
   {
-    id:     'looper',
-    label:  'Looper',
-    sub:    '8-Track Looper',
-    desc:   'Master gain for all looper tracks combined',
-    icon:   Mic2,
-    color:  'synth-neon',
+    id:       'looper',
+    label:    'Looper',
+    sub:      '8-Track Looper',
+    desc:     'Master gain for all looper tracks combined',
+    icon:     Mic2,
+    color:    'synth-neon',
+    volParam: 'mix_looper_vol',
+    muteParam:'mix_looper_mute',
     vol:    () => mixer.looperVol,
     muted:  () => mixer.looperMuted,
     setVol: v => mixer.setLooperVol(v),
     mute:   () => mixer.toggleLooperMute(),
   },
   {
-    id:     'lm',
-    label:  'Loop Mch',
-    sub:    'Samples Machine',
-    desc:   'Master gain for all 24 Samples Machine pads',
-    icon:   Layers,
-    color:  'fuchsia',
+    id:       'lm',
+    label:    'Loop Mch',
+    sub:      'Samples Machine',
+    desc:     'Master gain for all 24 Samples Machine pads',
+    icon:     Layers,
+    color:    'fuchsia',
+    volParam: 'mix_lm_vol',
+    muteParam:'mix_lm_mute',
     vol:    () => mixer.lmVol,
     muted:  () => mixer.lmMuted,
     setVol: v => mixer.setLMVol(v),
     mute:   () => mixer.toggleLMMute(),
   },
   {
-    id:     'drums',
-    label:  'Drums',
-    sub:    'Drum Machine',
-    desc:   'Master gain for Drum Machine audio engine',
-    icon:   Layers,
-    color:  'orange',
+    id:       'drums',
+    label:    'Drums',
+    sub:      'Drum Machine',
+    desc:     'Master gain for Drum Machine audio engine',
+    icon:     Layers,
+    color:    'orange',
+    volParam: 'mix_drums_vol',
+    muteParam:'mix_drums_mute',
     vol:    () => mixer.drumsVol,
     muted:  () => mixer.drumsMuted,
     setVol: v => mixer.setDrumsVol(v),
     mute:   () => mixer.toggleDrumsMute(),
   },
   {
-    id:     'drumsLevel',
-    label:  'DM Level',
-    sub:    'All 8 Slots',
-    desc:   'Master level multiplier for all 8 Drum Machine slot volumes (same control as the Drum Machine footer Vol)',
-    icon:   Layers,
-    color:  'rose',
+    id:       'drumsLevel',
+    label:    'DM Level',
+    sub:      'All 8 Slots',
+    desc:     'Master level multiplier for all 8 Drum Machine slot volumes (same control as the Drum Machine footer Vol)',
+    icon:     Layers,
+    color:    'rose',
+    volParam: 'mix_drums_level_vol',
+    muteParam:'mix_drums_level_mute',
     vol:    () => mixer.drumsLevelVol,
     muted:  () => mixer.drumsLevelMuted,
     setVol: v => mixer.setDrumsLevelVol(v),
     mute:   () => mixer.toggleDrumsLevelMute(),
+  },
+  {
+    id:       'sampler',
+    label:    'Sampler',
+    sub:      'Sampler Engine',
+    desc:     'Master gain for all Sampler pads (multiplied with per-pad volume)',
+    icon:     Disc,
+    color:    'emerald',
+    volParam: 'mix_sampler_vol',
+    muteParam:'mix_sampler_mute',
+    vol:    () => mixer.samplerVol,
+    muted:  () => mixer.samplerMuted,
+    setVol: v => mixer.setSamplerVol(v),
+    mute:   () => mixer.toggleSamplerMute(),
+  },
+  {
+    id:       'liveperf',
+    label:    'Live Perf',
+    sub:      'Performance Pad',
+    desc:     'Master volume multiplier for Live Performance Pad',
+    icon:     Zap,
+    color:    'sky',
+    volParam: 'mix_liveperf_vol',
+    muteParam:'mix_liveperf_mute',
+    vol:    () => mixer.liveperfVol,
+    muted:  () => mixer.liveperfMuted,
+    setVol: v => mixer.setLiveperfVol(v),
+    mute:   () => mixer.toggleLiveperfMute(),
   },
 ]
 
@@ -163,6 +208,8 @@ const C = {
   fuchsia:    { track: 'bg-fuchsia-400', text: 'text-fuchsia-400', muted: 'bg-fuchsia-400/20 text-fuchsia-300 border-fuchsia-500/30', check: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-300' },
   orange:     { track: 'bg-orange-400',  text: 'text-orange-400',  muted: 'bg-orange-400/20 text-orange-300 border-orange-500/30', check: '' },
   rose:       { track: 'bg-rose-400',    text: 'text-rose-400',    muted: 'bg-rose-400/20 text-rose-300 border-rose-500/30',       check: 'border-rose-500 bg-rose-500/10 text-rose-300' },
+  emerald:    { track: 'bg-emerald-400', text: 'text-emerald-400', muted: 'bg-emerald-400/20 text-emerald-300 border-emerald-500/30', check: 'border-emerald-500 bg-emerald-500/10 text-emerald-300' },
+  sky:        { track: 'bg-sky-400',     text: 'text-sky-400',     muted: 'bg-sky-400/20 text-sky-300 border-sky-500/30',           check: 'border-sky-500 bg-sky-500/10 text-sky-300' },
 }
 </script>
 
@@ -261,9 +308,10 @@ const C = {
               <!-- ── Fader track (pointer-capture drag) ── -->
               <div class="flex-1 flex items-center justify-center w-full">
                 <div
-                  class="relative cursor-ns-resize"
+                  :class="['relative cursor-ns-resize rounded', mappingStore.mappedParams?.has(ch.volParam) ? 'ring-1 ring-amber-500/50' : '']"
                   style="height: 140px; width: 28px; touch-action: none;"
                   @pointerdown="startFaderDrag($event, ch.setVol, ch.muted)"
+                  @contextmenu.prevent="openMenu($event, { name: ch.volParam, label: ch.label + ': Volume' })"
                 >
                   <!-- Groove -->
                   <div class="absolute rounded-full bg-neutral-800"
@@ -278,6 +326,11 @@ const C = {
                     :class="['absolute rounded-sm border border-neutral-500 shadow-md pointer-events-none', ch.muted() ? 'bg-neutral-700 opacity-40' : 'bg-neutral-200']"
                     :style="{ width: '20px', height: '10px', bottom: thumbBottom(ch.vol()) + 'px', left: '50%', transform: 'translateX(-50%)' }"
                   />
+                  <!-- MIDI learn pulse -->
+                  <span
+                    v-if="mappingStore.learningParamName === ch.volParam"
+                    class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+                  />
                 </div>
               </div>
 
@@ -285,17 +338,25 @@ const C = {
               <div class="text-[9px] font-mono text-neutral-500 select-none">{{ toPct(ch.vol()) }}</div>
 
               <!-- Mute button -->
-              <button
-                @click="ch.mute()"
-                :class="['flex items-center justify-center w-8 h-8 rounded-lg border transition-colors',
-                  ch.muted()
-                    ? (C[ch.color]?.muted ?? 'bg-red-500/20 text-red-300 border-red-500/30')
-                    : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
-                :title="ch.muted() ? 'Unmute' : 'Mute'"
-              >
-                <VolumeX v-if="ch.muted()" class="w-3.5 h-3.5" />
-                <Volume2 v-else            class="w-3.5 h-3.5" />
-              </button>
+              <div class="relative">
+                <button
+                  @click="ch.mute()"
+                  @contextmenu.prevent="openMenu($event, { name: ch.muteParam, label: ch.label + ': Mute' })"
+                  :class="['flex items-center justify-center w-8 h-8 rounded-lg border transition-colors',
+                    mappingStore.mappedParams?.has(ch.muteParam) ? 'ring-1 ring-amber-500/50' : '',
+                    ch.muted()
+                      ? (C[ch.color]?.muted ?? 'bg-red-500/20 text-red-300 border-red-500/30')
+                      : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
+                  :title="ch.muted() ? 'Unmute (right-click: MIDI learn)' : 'Mute (right-click: MIDI learn)'"
+                >
+                  <VolumeX v-if="ch.muted()" class="w-3.5 h-3.5" />
+                  <Volume2 v-else            class="w-3.5 h-3.5" />
+                </button>
+                <span
+                  v-if="mappingStore.learningParamName === ch.muteParam"
+                  class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+                />
+              </div>
             </div>
 
             <!-- MIDI Instrument channels ─────────────────────────────── -->
@@ -369,9 +430,10 @@ const C = {
 
               <div class="flex-1 flex items-center justify-center w-full">
                 <div
-                  class="relative cursor-ns-resize"
+                  :class="['relative cursor-ns-resize rounded', mappingStore.mappedParams?.has('mix_master_vol') ? 'ring-1 ring-amber-500/50' : '']"
                   style="height: 140px; width: 28px; touch-action: none;"
                   @pointerdown="startFaderDrag($event, v => mixer.setMasterVol(v), () => false)"
+                  @contextmenu.prevent="openMenu($event, { name: 'mix_master_vol', label: 'Master: Volume' })"
                 >
                   <div class="absolute rounded-full bg-neutral-800"
                     style="width:6px; top:4px; bottom:4px; left:50%; transform:translateX(-50%)" />
@@ -382,6 +444,10 @@ const C = {
                   <div
                     class="absolute rounded-sm border border-amber-600 bg-amber-100 shadow-md pointer-events-none"
                     :style="{ width: '20px', height: '10px', bottom: thumbBottom(mixer.masterVol) + 'px', left: '50%', transform: 'translateX(-50%)' }"
+                  />
+                  <span
+                    v-if="mappingStore.learningParamName === 'mix_master_vol'"
+                    class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
                   />
                 </div>
               </div>

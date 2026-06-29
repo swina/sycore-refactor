@@ -18,6 +18,7 @@ export function useDraggableResizable({
   zIndex = 100,
   minimizedHeight = 44,
   minimizeLabel = 'Modal',
+  openRef = null,
 } = {}) {
 
   const _id = storageKey || `modal_${Math.random().toString(36).slice(2)}`
@@ -180,6 +181,12 @@ export function useDraggableResizable({
     window.removeEventListener('mousemove', _onResizeMove)
     window.removeEventListener('mouseup', _onResizeEnd)
     persist()
+  }
+
+  // When an open-state ref is provided, restore from minimize whenever the panel is opened.
+  // { immediate: true } handles v-if panels that mount while already open.
+  if (openRef) {
+    watch(openRef, (v) => { if (v) { isMinimized.value = false; bringToFront() } }, { immediate: true })
   }
 
   return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize, isMaximized }

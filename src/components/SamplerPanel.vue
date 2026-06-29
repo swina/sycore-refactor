@@ -302,6 +302,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   useDraggableResizable({
     storageKey:    'S1_SAMPLER_DR',
     minimizeLabel: 'Sampler',
+    openRef:       () => uiStore.isSamplerOpen,
     initialWidth:  720,
     initialHeight: 460,
     minWidth:      520,
@@ -321,6 +322,8 @@ const selectedPad    = ref(null)
 const selectedPadData = computed(() =>
   selectedPad.value !== null ? activeBankData.value?.pads[selectedPad.value] : null
 )
+const samplerMasterVol = ref(1.0)
+
 const padActive = ref(Array(7).fill(false))  // currently playing (audio)
 const padArmed  = ref(Array(7).fill(false))  // armed = responds to MIDI IN
 const padMuted  = ref(Array(7).fill(false))
@@ -578,7 +581,7 @@ async function _onMidiNote(type, note, velocity, _chan, inputId) {
     } else if (type === 'on') {
       const rootKey    = pad.rootKey ?? 72
       const pitchShift = chromatic ? (note - rootKey) : 0
-      const volScaled  = (pad.volume ?? 0.85) * (velocity / 127)
+      const volScaled  = (pad.volume ?? 0.85) * (velocity / 127) * samplerMasterVol.value
       const effectivePad = { ...pad, volume: volScaled, pitch: (pad.pitch ?? 0) + pitchShift, _midiNote: note }
 
       let blobUrl = _blobUrlCache[padIdx]
@@ -603,14 +606,18 @@ async function _onMidiNote(type, note, velocity, _chan, inputId) {
   }
 }
 
+function _onSamplerMasterVol(e) { samplerMasterVol.value = e.detail }
+
 onMounted(() => {
   window.addEventListener('sampler-pad-assign', _onSamplerPadAssign)
+  window.addEventListener('sampler-master-volume', _onSamplerMasterVol)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNote)
   _startMidiMappingListener()
 })
 
 onUnmounted(() => {
   window.removeEventListener('sampler-pad-assign', _onSamplerPadAssign)
+  window.removeEventListener('sampler-master-volume', _onSamplerMasterVol)
   _unsubMidiNote?.()
   _unsubMidiRaw?.()
   engine.stopAll()
