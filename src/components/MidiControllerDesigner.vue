@@ -154,6 +154,23 @@
           <Activity class="w-3 h-3" />
           Monitor
         </button>
+
+        <div class="w-px h-4 bg-neutral-700 mx-1" />
+
+        <!-- Sweep mode toggle -->
+        <button
+          @click="showSweep = !showSweep"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors',
+            showSweep
+              ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-400'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-cyan-500/40 hover:text-cyan-400'
+          ]"
+          title="Sweep MIDI controls to auto-discover pads, sliders, and encoders"
+        >
+          <Radio class="w-3 h-3" />
+          Sweep
+        </button>
         </div>
       </div>
 
@@ -365,7 +382,13 @@
 
       <!-- Right drawer -->
       <div
-        v-if="drawerControl"
+        v-if="showSweep"
+        class="w-72 flex flex-col bg-neutral-950 border-l border-neutral-800 overflow-hidden shrink-0"
+      >
+        <MidiControlSweep @add="onSweepAdd" @close="showSweep = false" />
+      </div>
+      <div
+        v-else-if="drawerControl"
         class="w-56 flex flex-col bg-neutral-900 border-l border-neutral-800 overflow-hidden shrink-0"
       >
         <!-- Drawer header -->
@@ -662,7 +685,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Cpu, Minus, X, Plus, Save, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity } from 'lucide-vue-next'
+import { Cpu, Minus, X, Plus, Save, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio } from 'lucide-vue-next'
 import { useUiStore }            from '@/stores/useUiStore'
 import { useMidiStore }          from '@/stores/useMidiStore'
 import { useMappingStore }       from '@/stores/useMappingStore'
@@ -671,6 +694,7 @@ import { midiService }           from '@/core/midi/midi-service'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
 import MidiMapContextMenu        from '@/components/ui/MidiMapContextMenu.vue'
+import MidiControlSweep          from '@/components/MidiControlSweep.vue'
 import {
   loadControllerPresets,
   persistControllerPresets,
@@ -813,6 +837,7 @@ const canvasRef         = ref(null)
 const isDesignMode      = ref(false)
 const isSimulateMode    = ref(false)
 const showMidiMonitor   = ref(false)
+const showSweep         = ref(false)
 const midiLog           = ref([])   // max 40 entries, newest first
 const selectedIds       = ref(new Set())
 const lassoStart        = ref(null)
@@ -1381,6 +1406,14 @@ function clearCanvas() {
   controls.value.forEach(_removeCtrlFromAppMappings)
   activePreset.value.controls = []
   selectedControlId.value = null
+  debouncedSave()
+}
+
+function onSweepAdd(ctrl) {
+  if (!activePreset.value) return
+  activePreset.value.controls.push(ctrl)
+  selectedControlId.value = ctrl.id
+  selectedTool.value = ctrl.type
   debouncedSave()
 }
 </script>
