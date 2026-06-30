@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   Play, Upload, Music, X, Minus,
   Plus, Trash2, Edit2, ListPlus,
-  Save, GripVertical, Link,
+  Save, GripVertical, Link, FolderOpen,
 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -18,6 +18,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import { detectBpmFromUrl } from '@/composables/useBpmDetector'
 
 const uiStore = useUiStore()
 const midiStore = useMidiStore()
@@ -66,6 +67,9 @@ const newTrackBpm     = ref('')
 const playingTrack    = ref(null)
 const pendingLocalFile = ref(null)
 const triggerSource    = ref(null)
+const confirmDialog    = ref(null) // { label, url, bpm, genre?, author? }
+const pendingBrowser   = ref(null) // tracks which browser opened: 'freesound' | 'folder'
+const pendingFolderFile = ref(null) // raw File object for folder saves (read as dataUrl on confirm)
 
 const playlist            = ref([])
 const playlistRepeats     = ref([])
@@ -667,7 +671,105 @@ watch(playlist, (newPlaylist) => {
   }
 }, { deep: true })
 
+// ── Set SoundFolder assign target when folder tab is active ───────────
+watch(inputType, (tab) => {
+  if (tab === 'folder') {
+    uiStore.soundFolderAssignTarget = {
+      label: 'Backing Tracks Library',
+      onAssign: async (file) => {
+        const actualFile = await file.handle.getFile()
+        pendingFolderFile.value = actualFile
+        const label = file.name.replace(/\.[^.]+$/, '')
+        const url = URL.createObjectURL(actualFile)
+        let bpm = null
+        try {
+          bpm = await detectBpmFromUrl(url)
+        } catch {}
+        URL.revokeObjectURL(url)
+        showLibraryConfirm({ label, url: '', bpm, author: '', genre: 'Local' }, 'folder')
+      },
+    }
+  } else if (uiStore.soundFolderAssignTarget?.label === 'Backing Tracks Library') {
+    uiStore.soundFolderAssignTarget = null
+  }
+})
 
+// ── Library Confirm Dialog functions ────────────────────────────────────
+const handleFreesoundAdd = (e) => {
+  const track = e.detail
+  if (!track) return
+  showLibraryConfirm({ label: track.label, url: track.url, bpm: track.bpm, author: track.author, genre: track.genre || 'Freesound' }, 'freesound')
+}
+
+async function showLibraryConfirm(track, source) {
+  pendingBrowser.value = source
+  confirmDialog.value = { ...track }
+}
+
+const confirmingLib     = ref(false)
+
+async function confirmLibrarySave() {
+  if (!confirmDialog.value || !uid.value) return
+  confirmingLib.value = true
+  const d = confirmDialog.value
+  let trackUrl = d.url
+  const file = pendingFolderFile.value
+  if (file && !trackUrl) {
+    trackUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = reject
+      reader.onload = () => resolve(reader.result)
+      reader.readAsDataURL(file)
+    })
+  }
+  const data = {
+    label: d.label || 'Untitled',
+    url: trackUrl,
+    genre: d.genre || 'Library',
+    author: d.author || '',
+    createdAt: serverTimestamp(),
+  }
+  if (d.bpm) data.bpm = Math.round(d.bpm)
+  if (!data.bpm && trackUrl && (trackUrl.startsWith('http') || trackUrl.startsWith('blob'))) {
+    try {
+      const bpm = await Promise.race([
+        detectBpmFromUrl(trackUrl),
+        new Promise(r => setTimeout(() => r(null), 8000)),
+      ])
+      if (bpm) data.bpm = Math.round(bpm)
+    } catch {}
+  }
+  if (trackUrl && (trackUrl.startsWith('http') || trackUrl.startsWith('blob') || trackUrl.startsWith('data:'))) {
+    try {
+      await Promise.race([
+        new Promise((resolve) => {
+          const audio = new Audio(trackUrl)
+          audio.addEventListener('loadedmetadata', () => {
+            const dur = audio.duration
+            if (isFinite(dur)) data.duration = dur
+            audio.remove()
+            resolve()
+          }, { once: true })
+          audio.addEventListener('error', () => { audio.remove(); resolve() }, { once: true })
+        }),
+        new Promise(r => setTimeout(r, 8000)),
+      ])
+    } catch {}
+  }
+  await addDoc(collection(db, 'users', uid.value, 'backing_tracks'), data)
+  if (!d.bpm && data.bpm) d.bpm = data.bpm
+  confirmDialog.value = null
+  pendingBrowser.value = null
+  pendingFolderFile.value = null
+  confirmingLib.value = false
+  inputType.value = 'list'
+}
+
+function cancelLibraryConfirm() {
+  confirmDialog.value = null
+  pendingBrowser.value = null
+  pendingFolderFile.value = null
+}
 
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -816,13 +918,6 @@ onMounted(() => {
   }
   const handleLoopToggle = () => { isLooping.value = !isLooping.value }
   const handleOpenFreesound = () => { uiStore.isFreesoundBrowserOpen = true }
-  const handleFreesoundAdd = (e) => {
-    const track = e.detail
-    if (!track) return
-    addToPlaylist(track)
-    inputType.value = 'playlist'
-    isOpen.value = true
-  }
 
   window.addEventListener('toggle-backing-track', handleToggle)
   window.addEventListener('playlist-play-stop', handlePlayStop)
@@ -910,10 +1005,14 @@ onUnmounted(() => {
               </template>
             </button>
             <template v-if="isAdmin">
-              <button v-for="tab in ['url', 'file']" :key="tab"
-                @click="inputType = tab"
-                :class="['flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded transition-all', inputType === tab ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300']"
-              >{{ tab }}</button>
+              <button
+                @click="inputType = 'freesound'; uiStore.isFreesoundBrowserOpen = true"
+                :class="['flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded transition-all', inputType === 'freesound' ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300']"
+              >Freesound</button>
+              <button
+                @click="inputType = 'folder'; uiStore.isSoundFolderBrowserOpen = true"
+                :class="['flex-1 text-[9px] font-black uppercase tracking-widest py-1.5 rounded transition-all', inputType === 'folder' ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300']"
+              >Folder</button>
             </template>
           </div>
 
@@ -1022,11 +1121,11 @@ onUnmounted(() => {
                     @click="playTrack(track)"
                     :class="['group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border', src === track.url && !isPlaylistMode ? 'bg-synth-neon/10 border-synth-neon text-synth-neon' : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:border-neutral-700']"
                   >
-                    <div class="flex flex-col overflow-hidden">
-                      <span class="text-xs font-bold truncate flex items-center gap-2">
-                        {{ track.label }}
-                        <span v-if="track.bpm" class="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }} BPM</span>
-                        <span v-if="track.duration" class="text-[9px] font-mono text-neutral-400 bg-neutral-800 px-1 rounded">{{ formatTime(track.duration) }}</span>
+                    <div class="flex flex-col overflow-hidden min-w-0">
+                      <span class="text-xs font-bold flex items-center gap-2 min-w-0">
+                        <span class="truncate">{{ track.label }}</span>
+                        <span v-if="track.bpm" class="shrink-0 text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }} BPM</span>
+                        <span v-if="track.duration" class="shrink-0 text-[9px] font-mono text-neutral-400 bg-neutral-800 px-1 rounded">{{ formatTime(track.duration) }}</span>
                       </span>
                       <span class="text-[10px] text-neutral-500 uppercase tracking-wider flex items-center gap-2">
                         {{ track.genre }}
@@ -1082,43 +1181,24 @@ onUnmounted(() => {
               @update:volume="v => volume = v"
             />
 
-            <!-- ── URL (admin) ── -->
-            <form v-if="inputType === 'url'" @submit="handleUrlSubmit" class="flex gap-2 items-start mt-2">
-              <input type="url" placeholder="https://..." v-model="urlInput"
-                class="flex-1 bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none font-mono" />
-              <button type="submit" class="p-1.5 px-3 bg-neutral-800 text-synth-neon rounded hover:bg-neutral-700 transition">
-                <Link class="w-3.5 h-3.5" />
-              </button>
-            </form>
+            <!-- ── FREESOUND (admin) ── -->
+            <div v-if="inputType === 'freesound'" class="flex flex-col items-center justify-center gap-3 mt-4 text-neutral-500">
+              <Music class="w-8 h-8 text-amber-500/60" />
+              <span class="text-[10px] font-bold uppercase tracking-widest">Freesound Browser</span>
+              <span class="text-[9px] text-neutral-600 text-center max-w-xs">Browse and search sounds from Freesound.org. Assign to your library with auto BPM detection.</span>
+              <button @click="uiStore.isFreesoundBrowserOpen = true"
+                class="px-4 py-2 bg-amber-500/20 border border-amber-500/60 rounded text-amber-400 hover:bg-amber-500/30 text-[10px] font-black uppercase tracking-wider transition-colors"
+              >Open Freesound Browser</button>
+            </div>
 
-            <!-- ── FILE (admin) ── -->
-            <div v-if="inputType === 'file'" class="flex flex-col gap-3 mt-2">
-              <label class="flex items-center justify-center gap-2 w-full border border-dashed border-neutral-700 hover:border-synth-neon text-neutral-500 hover:text-white rounded-lg p-4 cursor-pointer transition-colors">
-                <Upload class="w-4 h-4" />
-                <span class="text-xs font-black uppercase tracking-widest">{{ pendingLocalFile ? 'Change File' : 'Select MP3 / WAV / OGG' }}</span>
-                <input type="file" accept="audio/mp3,audio/wav,audio/ogg" @change="handleFileChange" class="hidden" />
-              </label>
-              <div v-if="pendingLocalFile" class="flex flex-col gap-2 bg-neutral-900 border border-neutral-800 rounded-lg p-3">
-                <div class="flex items-center gap-2">
-                  <Music class="w-3.5 h-3.5 text-synth-neon shrink-0" />
-                  <span class="text-xs text-neutral-300 font-mono truncate flex-1">{{ pendingLocalFile.name }}</span>
-                </div>
-                <div class="flex gap-2">
-                  <button @click="loadLocalFile"
-                    class="flex-1 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-white border-neutral-700 hover:border-synth-neon hover:text-synth-neon transition-colors">
-                    <Play class="w-3 h-3" /> Load
-                  </button>
-                  <button @click="addLocalFileToPlaylist"
-                    class="flex-1 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10 transition-colors">
-                    <ListPlus class="w-3 h-3" /> Add to Playlist
-                  </button>
-                  <button @click="saveLocalFileToLibrary"
-                    class="flex-1 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border text-purple-400 border-purple-400/30 hover:bg-purple-400/10 transition-colors"
-                    title="Save persistently for offline playback">
-                    <Save class="w-3 h-3" /> Save to Library
-                  </button>
-                </div>
-              </div>
+            <!-- ── FOLDER (admin) ── -->
+            <div v-if="inputType === 'folder'" class="flex flex-col items-center justify-center gap-3 mt-4 text-neutral-500">
+              <FolderOpen class="w-8 h-8 text-cyan-500/60" />
+              <span class="text-[10px] font-bold uppercase tracking-widest">Local Folder Browser</span>
+              <span class="text-[9px] text-neutral-600 text-center max-w-xs">Browse audio files on your local machine. Assign to your library with auto BPM detection.</span>
+              <button @click="uiStore.isSoundFolderBrowserOpen = true"
+                class="px-4 py-2 bg-cyan-500/20 border border-cyan-500/60 rounded text-cyan-400 hover:bg-cyan-500/30 text-[10px] font-black uppercase tracking-wider transition-colors"
+              >Open Folder Browser</button>
             </div>
 
           </div>
@@ -1137,6 +1217,56 @@ onUnmounted(() => {
         </div>
       </div>
     </Transition>
+  </Teleport>
+
+  <!-- ── Library Save Confirmation ── -->
+  <Teleport to="body">
+    <div
+      v-if="confirmDialog"
+      class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      @click.self="cancelLibraryConfirm"
+    >
+      <div class="bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 bg-neutral-800 border-b border-neutral-700">
+          <span class="text-[10px] font-black uppercase tracking-widest text-white">Save to Library</span>
+          <button @click="cancelLibraryConfirm" class="text-neutral-500 hover:text-white">
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div class="p-4 space-y-3">
+          <div>
+            <label class="text-[8px] uppercase tracking-widest text-neutral-500 font-bold">Label</label>
+            <input v-model="confirmDialog.label" class="w-full bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none mt-1" />
+          </div>
+          <div class="flex gap-3">
+            <div class="flex-1">
+              <label class="text-[8px] uppercase tracking-widest text-neutral-500 font-bold">Genre</label>
+              <input v-model="confirmDialog.genre" class="w-full bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none mt-1" />
+            </div>
+            <div class="flex-1">
+              <label class="text-[8px] uppercase tracking-widest text-neutral-500 font-bold">Author</label>
+              <input v-model="confirmDialog.author" class="w-full bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none mt-1" />
+            </div>
+          </div>
+          <div>
+            <label class="text-[8px] uppercase tracking-widest text-neutral-500 font-bold">BPM <span class="text-neutral-600">(optional — auto-detected in background if empty)</span></label>
+            <div class="flex items-center gap-2 mt-1">
+              <input v-model.number="confirmDialog.bpm" type="number" min="20" max="300"
+                class="w-20 bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:border-synth-neon outline-none"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-2 px-4 py-3 bg-neutral-800/50 border-t border-neutral-700">
+          <button @click="cancelLibraryConfirm"
+            class="flex-1 py-2 text-[9px] font-black uppercase tracking-wider bg-neutral-700 rounded text-neutral-300 hover:bg-neutral-600 transition-colors"
+          >Cancel</button>
+          <button @click="confirmLibrarySave" :disabled="confirmingLib"
+            class="flex-1 py-2 text-[9px] font-black uppercase tracking-wider bg-synth-neon rounded text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-wait transition-colors"
+          >{{ confirmingLib ? 'Analyzing…' : 'Save to Library' }}</button>
+        </div>
+      </div>
+    </div>
   </Teleport>
 
   <!-- ── Dual audio elements ── -->
