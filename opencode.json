@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "web-dev-helper": {
+      "type": "local",
+      "command": [
+        "node",
+        "--no-warnings",
+        "/home/antonio/personal/mcp/web-dev-mcp/dist/index.js"
+      ],
+      "enabled": true
+    }
+  }
+}

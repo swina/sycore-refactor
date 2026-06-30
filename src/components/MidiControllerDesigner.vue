@@ -80,6 +80,9 @@
         <button @click="newPreset" class="p-1 text-neutral-500 hover:text-violet-400 transition-colors" title="New preset">
           <Plus class="w-3.5 h-3.5" />
         </button>
+        <button @click="duplicatePreset" :disabled="!activePreset" class="p-1 text-neutral-500 hover:text-violet-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Duplicate preset">
+          <Copy class="w-3.5 h-3.5" />
+        </button>
         <button @click="savePresets" :disabled="saving" class="p-1 text-neutral-500 hover:text-emerald-400 transition-colors" title="Save presets">
           <Save class="w-3.5 h-3.5" />
         </button>
@@ -685,7 +688,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Cpu, Minus, X, Plus, Save, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio } from 'lucide-vue-next'
+import { Cpu, Minus, X, Plus, Save, Copy, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio } from 'lucide-vue-next'
 import { useUiStore }            from '@/stores/useUiStore'
 import { useMidiStore }          from '@/stores/useMidiStore'
 import { useMappingStore }       from '@/stores/useMappingStore'
@@ -972,6 +975,22 @@ function newPreset() {
   const name = prompt('Preset name:')
   if (!name) return
   const p = createControllerPreset(name)
+  presets.value.push(p)
+  activePresetId.value = p.id
+  if (!uiStore.enabledControllerDesignerPresetIds.includes(p.id)) {
+    uiStore.enabledControllerDesignerPresetIds.push(p.id)
+  }
+  debouncedSave()
+}
+
+function duplicatePreset() {
+  if (!activePreset.value) return
+  const name = prompt('Duplicate preset name:', activePreset.value.name + ' (copy)')
+  if (!name) return
+  const p = createControllerPreset(name, {
+    assignedDevice: activePreset.value.assignedDevice,
+    controls: activePreset.value.controls.map(c => ({ ...c, id: Math.random().toString(36).slice(2, 11) })),
+  })
   presets.value.push(p)
   activePresetId.value = p.id
   if (!uiStore.enabledControllerDesignerPresetIds.includes(p.id)) {
