@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router'
 import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X } from 'lucide-vue-next'
 import { lucideIcons } from '@/lib/lucide-icons'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
+import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/midi-service'
 
@@ -340,6 +341,7 @@ function handleBpmChange(e) {
             </button>
           </div>
           <QuickChannelSelector v-if="showPartSelector" />
+          <ActiveMidiControllers />
         </div>
 
         <div v-if="authStore.user" class="flex items-center gap-1 relative group">

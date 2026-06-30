@@ -802,6 +802,12 @@ const APP_SECTIONS = [
     ],
   },
   {
+    key: 'backing_tracks', label: 'Backing Tracks',
+    items: [
+      { action: 'open_tracks_player', label: 'Toggle Tracks Library' },
+    ],
+  },
+  {
     key: 'chord', label: 'Chord Prog Sequencer',
     items: [
       { action: 'open_chord_prog', label: 'Toggle Chord Prog' },
@@ -854,6 +860,10 @@ const lassoRect = computed(() => {
 
 const activePreset = computed(() => presets.value.find(p => p.id === activePresetId.value) ?? null)
 const controls     = computed(() => activePreset.value?.controls ?? [])
+
+const enabledPresets = computed(() =>
+  presets.value.filter(p => uiStore.enabledControllerDesignerPresetIds.includes(p.id))
+)
 const assignedDevice = computed({
   get: () => activePreset.value?.assignedDevice ?? '',
   set: (v) => { if (activePreset.value) { activePreset.value.assignedDevice = v; debouncedSave() } },
@@ -923,16 +933,22 @@ watch(uid, async (newUid) => {
     const p = createControllerPreset('Default')
     presets.value = [p]
     activePresetId.value = p.id
+    uiStore.enabledControllerDesignerPresetIds = [p.id]
     return
   }
   const loaded = await loadControllerPresets()
   if (loaded.length > 0) {
     presets.value = loaded
     activePresetId.value = loaded[0].id
+    // Enable any presets that don't have an enabled state yet (first-time load)
+    if (uiStore.enabledControllerDesignerPresetIds.length === 0) {
+      uiStore.enabledControllerDesignerPresetIds = loaded.map(p => p.id)
+    }
   } else {
     const p = createControllerPreset('Default')
     presets.value = [p]
     activePresetId.value = p.id
+    uiStore.enabledControllerDesignerPresetIds = [p.id]
   }
 }, { immediate: true })
 
@@ -958,6 +974,9 @@ function newPreset() {
   const p = createControllerPreset(name)
   presets.value.push(p)
   activePresetId.value = p.id
+  if (!uiStore.enabledControllerDesignerPresetIds.includes(p.id)) {
+    uiStore.enabledControllerDesignerPresetIds.push(p.id)
+  }
   debouncedSave()
 }
 
@@ -1092,29 +1111,31 @@ function resolveInputName(inputId) {
 }
 
 function onIncomingCC(cc, val, chan, inputId) {
-  if (!activePreset.value) return
   const inputName = resolveInputName(inputId)
-  for (const ctrl of controls.value) {
-    if (ctrl.ccNumber !== cc) continue
-    const ctrlCh = (ctrl.channel ?? 1) - 1
-    if (ctrlCh !== chan) continue
-    if (assignedDevice.value && inputName && inputName !== assignedDevice.value) continue
-    applyIncoming(ctrl, val > 0, val)
-    fireAssignment(ctrl)
+  for (const preset of enabledPresets.value) {
+    for (const ctrl of preset.controls) {
+      if (ctrl.ccNumber !== cc) continue
+      const ctrlCh = (ctrl.channel ?? 1) - 1
+      if (ctrlCh !== chan) continue
+      if (preset.assignedDevice && inputName && inputName !== preset.assignedDevice) continue
+      applyIncoming(ctrl, val > 0, val)
+      fireAssignment(ctrl)
+    }
   }
 }
 
 function onIncomingNote(type, note, velocity, chan, inputId) {
-  if (!activePreset.value) return
   const inputName = resolveInputName(inputId)
   const isOn = type === 'on' && velocity > 0
-  for (const ctrl of controls.value) {
-    if (ctrl.noteNumber !== note) continue
-    const ctrlCh = (ctrl.channel ?? 1) - 1
-    if (ctrlCh !== chan) continue
-    if (assignedDevice.value && inputName && inputName !== assignedDevice.value) continue
-    applyIncoming(ctrl, isOn, velocity)
-    fireAssignment(ctrl)
+  for (const preset of enabledPresets.value) {
+    for (const ctrl of preset.controls) {
+      if (ctrl.noteNumber !== note) continue
+      const ctrlCh = (ctrl.channel ?? 1) - 1
+      if (ctrlCh !== chan) continue
+      if (preset.assignedDevice && inputName && inputName !== preset.assignedDevice) continue
+      applyIncoming(ctrl, isOn, velocity)
+      fireAssignment(ctrl)
+    }
   }
 }
 

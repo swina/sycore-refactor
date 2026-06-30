@@ -150,6 +150,7 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiControllerDesignerOpen  = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
+  const enabledControllerDesignerPresetIds = ref<string[]>([])
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const isPanelCollapsed   = ref(true)
@@ -339,6 +340,7 @@ export const useUiStore = defineStore('ui', () => {
     soundFolderAssignTarget.value  = null
     midiActionsActiveTab.value = 'mapper'
     midiActionsSelectedDevice.value = ''
+    enabledControllerDesignerPresetIds.value = []
     focusedModalKey.value = null
   }
 
@@ -399,7 +401,7 @@ export const useUiStore = defineStore('ui', () => {
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isMidiControllerDesignerOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
-    midiActionsActiveTab, midiActionsSelectedDevice,
+    midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
     isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqActiveSlot,

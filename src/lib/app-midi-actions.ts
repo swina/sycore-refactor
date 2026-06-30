@@ -122,7 +122,8 @@ export type AppAction =
   | 'open_drum_machine'
   | 'open_chord_prog'
   | 'open_sound_engine'
-  | 'open_live_timeline';
+  | 'open_live_timeline'
+  | 'open_tracks_player';
 
 export interface AppMidiMapping {
   id: string;
@@ -299,6 +300,7 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   open_chord_prog:   'Toggle Chord Prog Sequencer',
   open_sound_engine:  'Toggle Sound Engine',
   open_live_timeline: 'Toggle Live Timeline',
+  open_tracks_player: 'Toggle Tracks Library',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -356,6 +358,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'liveset_pad_13', 'liveset_pad_14', 'liveset_pad_15', 'liveset_pad_16'
   ],
   'Backing Tracks': [
+    'open_tracks_player',
     'backing_track_pad_1',  'backing_track_pad_2',  'backing_track_pad_3',  'backing_track_pad_4',
     'backing_track_pad_5',  'backing_track_pad_6',  'backing_track_pad_7',  'backing_track_pad_8',
     'backing_track_pad_9',  'backing_track_pad_10', 'backing_track_pad_11', 'backing_track_pad_12',
