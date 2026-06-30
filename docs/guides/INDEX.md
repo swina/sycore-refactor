@@ -48,6 +48,7 @@
 | [Actions](./SYCORE_MIDI_ACTIONS.md) | Per-device app action binding — maps MIDI CC/Note inputs to high-level SY.CORE actions (e.g. start sequencer, toggle looper, change preset). |
 | [Sync](./SYCORE_MIDI_SYNC.md) | Cross-subsystem transport synchronization matrix |
 | [MIDI Capture](./SYCORE_MIDI_CAPTURE.md) | Record, view, and export MIDI events in real time |
+| [Controller Designer](./SYCORE_MIDI_CONTROLLER_DESIGNER.md) | Visual canvas for designing custom MIDI controller layouts with draggable controls and preset management |
 | [Multi Sound — Program Change Browser](./SYCORE_DEVICE_PROGRAM_CHANGE.md) | Browse and send Program Change messages to connected devices |
 
 ---

@@ -70,6 +70,7 @@ const CATEGORIES = [
       { id: 'midi-sync',    label: 'MIDI Sync',         file: 'SYCORE_MIDI_SYNC' },
       { id: 'midi-capture',    label: 'MIDI Capture',         file: 'SYCORE_MIDI_CAPTURE' },
       { id: 'program-change',  label: 'Multi Sound',          file: 'SYCORE_DEVICE_PROGRAM_CHANGE' },
+      { id: 'controller-designer',  label: 'Controller Designer',          file: 'SYCORE_MIDI_CONTROLLER_DESIGNER' },
     ],
   },
   {
