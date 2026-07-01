@@ -63,6 +63,7 @@ const CATEGORIES = [
       { id: 'midi-setup',       label: 'Connecting MIDI Devices', file: 'SYCORE_MIDI_SETUP' },
       { id: 'midi-manager',    label: 'MIDI Manager',         file: 'SYCORE_MIDI MANAGER' },
       { id: 'midi-devices',    label: 'Devices',         file: 'SYCORE_MIDI_DEVICES' },
+      { id: 'midi-flow',    label: 'MIDI Flow',         file: 'SYCORE_MIDI_FLOW' },
       { id: 'midi-routing',    label: 'Routing',         file: 'SYCORE_MIDI_ROUTING' },
       { id: 'midi-performance',  label: 'Performance',         file: 'SYCORE_MIDI_PERFORMANCE' },
       { id: 'midi-mapping',      label: 'CC Mapping',         file: 'SYCORE_MIDI_MAPPING' },
