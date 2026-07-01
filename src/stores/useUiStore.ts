@@ -67,6 +67,7 @@ export interface PanelVisibility {
   isMidiWizardOpen: boolean
   isMidiFlowOpen: boolean
   isMidiControllerDesignerOpen: boolean
+  isMidiDevicesOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -150,6 +151,7 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiWizardOpen              = ref(false)
   const isMidiFlowOpen                = ref(false)
   const isMidiControllerDesignerOpen  = ref(false)
+  const isMidiDevicesOpen             = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
@@ -222,6 +224,7 @@ export const useUiStore = defineStore('ui', () => {
     drumMachine:         () => isDrumMachineOpen.value,
     sampler:             () => isSamplerOpen.value,
     midiControllerDesigner: () => isMidiControllerDesignerOpen.value,
+    midiDevices:           () => isMidiDevicesOpen.value,
   }
 
   const openModalKeys: ComputedRef<string[]> = computed(() =>
@@ -272,6 +275,7 @@ export const useUiStore = defineStore('ui', () => {
     drumMachine:         isDrumMachineOpen,
     sampler:             isSamplerOpen,
     midiControllerDesigner: isMidiControllerDesignerOpen,
+    midiDevices:           isMidiDevicesOpen,
   }
 
   function cycleFocusedModal(reverse = false) {
@@ -340,6 +344,7 @@ export const useUiStore = defineStore('ui', () => {
     isDrumMachineOpen.value        = false
     isSamplerOpen.value                   = false
     isMidiControllerDesignerOpen.value    = false
+    isMidiDevicesOpen.value               = false
     isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -404,6 +409,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isMidiControllerDesignerOpen,
+    isMidiDevicesOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,

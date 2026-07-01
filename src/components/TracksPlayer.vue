@@ -983,7 +983,7 @@ onUnmounted(() => {
               <p class="text-[9px] font-mono text-emerald-500/60 uppercase tracking-widest">Audio Library & Playlist Player</p>
             </div>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex items-start h-full gap-1">
             <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>

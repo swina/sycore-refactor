@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { X, Trash2, GripVertical, ListMusic, ClockArrowDown, SkipBack, Play, Pause, SkipForward, ChevronLeft, ChevronRight, Bookmark } from 'lucide-vue-next'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
@@ -21,6 +23,17 @@ const midiStore = useMidiStore()
 const presetStore = usePresetStore()
 const configStore = useConfigStore()
 const livePadStore = useLivePadStore()
+
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
+  storageKey: 'S1_LIVESET',
+  minimizeLabel: 'Live Pad',
+  openRef: () => props.isOpen,
+  initialWidth: 1000,
+  initialHeight: 720,
+  minWidth: 640,
+  minHeight: 480,
+  zIndex: 500,
+})
 
 const { state: paramsStorage } = useLocalStorage('S1_LIVESET_PARAMS', Array(8).fill(null).map(() => ({ label: '', cc: -1 })))
 const { state: sliderModeStorage } = useLocalStorage('S1_LIVESET_SLIDER_MODE', 'vertical')
@@ -422,17 +435,32 @@ function formatTime(t) {
 
 <template>
   <div v-if="isOpen"
-    class="fixed z-[500] bg-neutral-950 border border-neutral-900 rounded-2xl top-[100px] bottom-[60px] left-1/2 -translate-x-1/2 w-full max-w-4xl flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
+    v-show="!isMinimized"
+    :style="panelStyle"
+    class="flex flex-col overflow-hidden select-none"
+    @mousedown="bringToFront"
   >
-        <div class="px-6 py-2 border-b border-neutral-900 flex items-center shrink-0 bg-black/40 backdrop-blur-md">
-          <div class="flex items-center gap-8">
+    <!-- Resize handles -->
+    <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3 h-1   cursor-n-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3 h-1   cursor-s-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3 right-0  w-1   cursor-e-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3 left-0   w-1   cursor-w-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'ne')" class="absolute top-0    right-0  w-3 h-3 cursor-ne-resize z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'nw')" class="absolute top-0    left-0   w-3 h-3 cursor-nw-resize z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-3 h-3 cursor-sw-resize z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-0 right-0  w-3 h-3 cursor-se-resize z-50" />
+
+    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden h-full">
+        <div class="px-4 py-2 border-b border-neutral-900 flex items-center shrink-0 bg-black/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
+          
+          <div class="flex items-center gap-8 ml-4">
             <div class="flex flex-col">
               <h2 class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Live Pad</h2>
               <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Jam Mode / Controller</span>
             </div>
-            
+
             <!-- Tabs -->
-            <nav class="flex items-center gap-6 ml-4">
+            <nav class="flex items-center gap-6">
               <button @click="tab = 'perf'"
                 :class="['relative py-1 text-[11px] font-black uppercase tracking-[0.2em] transition-all', 
                   tab === 'perf' ? 'text-white' : 'text-neutral-600 hover:text-neutral-400']"
@@ -467,11 +495,9 @@ function formatTime(t) {
                 {{ sendPcEnabled ? "ON" : "OFF" }}
               </span>
             </div>
-            
-            <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors">
-              <X class="w-5 h-5" />
-            </button>
+            <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
+
         </div>
 
 
@@ -701,8 +727,8 @@ function formatTime(t) {
               </div>
             </div> -->
           </div>
-         
-        <!-- </div> -->
+
+        </div>
     </div>
 </template>
 

@@ -73,6 +73,7 @@ import MidiWizard         from '@/components/MidiWizard.vue'
 import MidiWizardFlow     from '@/components/MidiWizardFlow.vue'
 import SamplerPanel            from '@/components/SamplerPanel.vue'
 import MidiControllerDesigner from '@/components/MidiControllerDesigner.vue'
+import MidiDevices from '@/components/MidiDevices.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
 import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -146,6 +147,7 @@ const toolbarButtonMap = {
   'drum-machine':           { state: 'isDrumMachineOpen',                icon: Layers,  label: 'Drum Machine' },
   'sampler':                { state: 'isSamplerOpen',                    icon: Music2,  label: 'Sampler' },
   'ctrl-designer':          { state: 'isMidiControllerDesignerOpen',     icon: Cpu,     label: 'Controller Designer' },
+  'midi-devices':           { state: 'isMidiDevicesOpen',                 icon: Cpu,     label: 'MIDI Devices' },
   'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
   'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
   'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
@@ -466,6 +468,7 @@ onMounted(() => {
 
       <MidiWizard     v-if="uiStore.isMidiWizardOpen" />
       <MidiWizardFlow />
+      <MidiDevices    v-if="uiStore.isMidiDevicesOpen" />
 
       <!-- Live Timeline -->
       <div :style="focusStyle('liveTimeline')">

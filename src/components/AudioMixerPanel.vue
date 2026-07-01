@@ -224,19 +224,22 @@ const C = {
       >
         <!-- Header ────────────────────────────────────────────────────── -->
         <div
-          class="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-neutral-800 bg-neutral-900/60 cursor-grab active:cursor-grabbing"
+          class="shrink-0 flex items-center gap-2 px-4 py-4 border-b border-neutral-800 bg-neutral-900/60 cursor-grab active:cursor-grabbing"
           @mousedown.stop="onDragStart"
         >
+          
           <SlidersHorizontal class="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span class="flex-1 text-[11px] font-black uppercase tracking-widest text-white select-none">Audio Mixer</span>
+          <span class="flex-1 text-[14px] font-mono font-bold uppercase tracking-widest text-synth-neon select-none">Audio Mixer</span>
           <button
             @click.stop="showConfig = !showConfig"
             :class="['p-1.5 transition-colors rounded-full hover:bg-white/5', showConfig ? 'text-amber-400' : 'text-neutral-500 hover:text-white']"
             title="Configure channels"
           >
-            <Settings2 class="w-3.5 h-3.5" />
-          </button>
-          <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
+        </button>
+        <div class="flex items-center gap-1 pointer-events-auto"  @mousedown.stop>
+            <Settings2 class="w-3.5 h-3.5 mr-2 cursor-pointer" title="Settings" />
+            <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
+          </div>
         </div>
 
         <!-- Channel selector overlay ──────────────────────────────────── -->
@@ -465,15 +468,15 @@ const C = {
             class="text-[8px] font-mono text-neutral-700 select-none">{{ label }}</span>
         </div>
 
-        <!-- Resize handle ─────────────────────────────────────────────── -->
-        <div
-          class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-30 hover:opacity-60 transition-opacity"
-          @mousedown.stop="onResizeStart"
-        >
-          <svg viewBox="0 0 16 16" class="w-full h-full text-neutral-400 fill-current">
-            <path d="M11 5l5 5v1h-1l-5-5V5zm0 4l1 1v1h-1V9zm4 0l1 1v1h-1V9z"/>
-          </svg>
-        </div>
+        <!-- Resize handles -->
+        <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3 h-1   cursor-n-resize  z-50" />
+        <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3 h-1   cursor-s-resize  z-50" />
+        <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3 right-0  w-1   cursor-e-resize  z-50" />
+        <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3 left-0   w-1   cursor-w-resize  z-50" />
+        <div @mousedown.stop="e => onResizeStart(e, 'ne')" class="absolute top-0    right-0  w-3 h-3 cursor-ne-resize z-50" />
+        <div @mousedown.stop="e => onResizeStart(e, 'nw')" class="absolute top-0    left-0   w-3 h-3 cursor-nw-resize z-50" />
+        <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-3 h-3 cursor-sw-resize z-50" />
+        <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-0 right-0  w-3 h-3 cursor-se-resize z-50" />
       </div>
     </Transition>
   </Teleport>

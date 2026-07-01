@@ -27,7 +27,7 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
     <div
       v-if="isOpen"
       v-show="!isMinimized"
-      class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+      class="bg-neutral-950 border border-synth-neon/30 rounded-2xl overflow-hidden flex flex-col"
       :style="panelStyle"
     >
       <!-- Resize handles -->
@@ -40,16 +40,20 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
       <!-- ── Header (drag handle) ─────────────────────────────────── -->
       <div
-        class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between gap-4 shrink-0 bg-black/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none"
+        class="px-4 py-4 border-b border-neutral-900 flex items-center justify-between gap-4 shrink-0 bg-black/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none"
         @mousedown="onDragStart"
       >
+        <!-- <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+        </div> -->
         <div class="flex items-center gap-2 pointer-events-none">
-          <Cpu class="w-4 h-4 text-synth-neon" />
-          <span class="text-xs font-black uppercase tracking-widest text-neutral-300">Sound Engine</span>
+          <Cpu class="ml-4 w-4 h-4 text-synth-neon" />
+          <span class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Sound Engine</span>
         </div>
         <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+
           <MacOsButtons @close="() => { emit('close'); uiStore.isSequencerOpen = false }" @minimize="toggleMinimize" @maximize="maximize" />
         </div>
+        
       </div>
 
       <!-- ── Content ──────────────────────────────────────────────── -->

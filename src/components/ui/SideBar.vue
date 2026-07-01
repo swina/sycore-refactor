@@ -46,6 +46,7 @@ const ACTION_MAP = {
   'sampler':                () => uiStore.isSamplerOpen = !uiStore.isSamplerOpen,
   'audio-mixer':            () => uiStore.isAudioMixerOpen = !uiStore.isAudioMixerOpen,
   'sound-folder-browser':   () => uiStore.isSoundFolderBrowserOpen = !uiStore.isSoundFolderBrowserOpen,
+  'midi-devices':           () => uiStore.isMidiDevicesOpen = !uiStore.isMidiDevicesOpen,
 }
 
 const COLORS = [
