@@ -130,6 +130,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'sound-folder-browser', label: 'Sound Folder Browser',  icon: 'FolderOpen' },
   { id: 'midi-flow',            label: 'MIDI Flow',             icon: 'Network'    },
   { id: 'controller-designer',  label: 'Controller Designer',   icon: 'Cpu'        },
+  { id: 'midi-devices',         label: 'MIDI Devices',          icon: 'Cpu'        },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────

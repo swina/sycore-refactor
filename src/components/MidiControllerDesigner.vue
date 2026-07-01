@@ -2,22 +2,22 @@
   <div
     v-show="uiStore.isMidiControllerDesignerOpen && !isMinimized"
     :style="panelStyle"
-    class="fixed flex flex-col bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl"
+    class="fixed flex flex-col bg-neutral-950 border border-synth-neon/30 rounded-xl overflow-hidden shadow-2xl"
     @mousedown="bringToFront"
   >
     <!-- Title bar -->
     <div
-      class="flex items-center justify-between px-3 py-2 bg-neutral-900 border-b border-neutral-800 cursor-move select-none shrink-0"
+      class="flex items-center justify-between px-3 py-4 bg-neutral-900 border-b border-synth-neon/30 cursor-move select-none shrink-0"
       @mousedown.self="onDragStart"
     >
       <div class="flex items-center gap-2 pointer-events-none">
-        <Cpu class="w-3.5 h-3.5 text-violet-400" />
-        <span class="text-[11px] font-black uppercase tracking-[0.2em] text-white">Controller Designer</span>
+        <Gamepad2 class="w-4.5 h-4.5 text-synth-neon" />
+        <span class="text-xs font-black uppercase tracking-widest text-synth-neon ">Controller Designer</span>
         <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">{{ activePreset?.name }}</span>
       </div>
       <div class="flex items-center gap-1">
-        <button @click.stop="resetAllMappings" class="p-1 text-neutral-500 hover:text-red-400 transition-colors" title="Reset all app MIDI mappings">
-          <Trash2 class="w-3 h-3" />
+        <button @click.stop="deletePreset" :disabled="!activePreset || activePreset.name === 'Default'" class="p-1 text-neutral-500 hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Delete preset">
+          <Trash2 class="w-4 h-4 mr-2" />
         </button>
         <MacOsButtons @close="uiStore.isMidiControllerDesignerOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
@@ -85,6 +85,18 @@
         </button>
         <button @click="savePresets" :disabled="saving" class="p-1 text-neutral-500 hover:text-emerald-400 transition-colors" title="Save presets">
           <Save class="w-3.5 h-3.5" />
+        </button>
+        <button @click="exportCsv" class="p-1 text-neutral-500 hover:text-cyan-400 transition-colors" title="Export presets as CSV">
+          <Download class="w-3.5 h-3.5" />
+        </button>
+        <button @click="exportMappingCatalogCsv" class="p-1 text-neutral-500 hover:text-amber-400 transition-colors" title="Export mapping catalog (all actions & app params)">
+          <Download class="w-3.5 h-3.5" />
+        </button>
+
+        <div class="w-px h-4 bg-neutral-700 mx-1" />
+
+        <button @click="showMidiMappingList = !showMidiMappingList" class="p-1 text-neutral-500 hover:text-sky-400 transition-colors" title="List all MIDI mapped controls">
+          <List class="w-3.5 h-3.5" />
         </button>
 
         <div class="w-px h-4 bg-neutral-700 mx-1" />
@@ -193,8 +205,8 @@
             <span class="text-[9px] text-neutral-500">Color</span>
             <input
               type="color"
-              :value="COLOR_PALETTE[0]"
-              @input="e => bulkSetColor(e.target.value)"
+              v-model="bulkColor"
+              @input="bulkSetColor(bulkColor)"
               class="w-6 h-6 rounded border border-neutral-700 cursor-pointer bg-transparent p-0"
             />
           </div>
@@ -215,12 +227,29 @@
             />
           </div>
           <div class="w-px h-4 bg-neutral-700" />
+          <div class="flex items-center gap-1">
+            <span class="text-[9px] text-neutral-500">Type</span>
+            <select
+              @change="e => bulkSetType(e.target.value)"
+              class="bg-neutral-800 border border-neutral-700 rounded text-[10px] text-neutral-300 px-1.5 py-0.5 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">—</option>
+              <option v-for="ct in CONTROL_TYPES" :key="ct.type" :value="ct.type">{{ ct.label }}</option>
+            </select>
+          </div>
+          <div class="w-px h-4 bg-neutral-700" />
           <button @click="bulkDuplicate" class="p-1 text-neutral-500 hover:text-violet-400 transition-colors" title="Duplicate selected">
             <Plus class="w-3.5 h-3.5" />
           </button>
           <button @click="bulkDelete" class="p-1 text-neutral-500 hover:text-red-400 transition-colors" title="Delete selected">
             <Trash2 class="w-3.5 h-3.5" />
           </button>
+          <div class="w-px h-4 bg-neutral-700" />
+          <span class="text-[9px] text-neutral-500">Align</span>
+          <button @click="alignLeft" class="text-[9px] text-neutral-400 hover:text-white transition-colors" title="Align left">L</button>
+          <button @click="alignRight" class="text-[9px] text-neutral-400 hover:text-white transition-colors" title="Align right">R</button>
+          <button @click="alignTop" class="text-[9px] text-neutral-400 hover:text-white transition-colors" title="Align top">T</button>
+          <button @click="alignBottom" class="text-[9px] text-neutral-400 hover:text-white transition-colors" title="Align bottom">B</button>
         </template>
       </div>
 
@@ -241,7 +270,7 @@
       <!-- Canvas -->
       <div
         ref="canvasRef"
-        class="relative flex-1 overflow-hidden bg-neutral-950"
+        class="relative flex-1 overflow-auto custom-scrollbar bg-neutral-950"
         :class="isDesignMode ? 'cursor-default' : isSimulateMode ? 'cursor-pointer' : 'cursor-crosshair'"
         style="min-height: 300px"
         @mousedown="onCanvasMouseDown"
@@ -278,7 +307,7 @@
               @click.stop="togglePadSwitch(ctrl)"
               :style="{ background: ctrl.value ? ctrl.color : 'transparent' }"
               :class="[
-                'w-full h-full rounded-lg border-2 flex items-center justify-center select-none transition-colors text-[10px] font-bold uppercase tracking-wider',
+                'w-full h-full rounded-lg border-2 flex items-center justify-center select-none transition-colors text-[9px] font-mono uppercase tracking-wider',
                 ctrl.value ? 'border-transparent text-white shadow-lg' : 'border-neutral-600 text-neutral-400 hover:border-neutral-500',
                 isDesignMode ? (selectedIds.has(ctrl.id) ? 'ring-2 ring-amber-400/80' : '') : (selectedControlId === ctrl.id ? 'ring-2 ring-violet-400/80' : ''),
                 mappingStore.mappedParams?.has(ctrlParamName(ctrl)) ? 'ring-1 ring-amber-500/60' : '',
@@ -684,11 +713,13 @@
   </div>
 
   <MidiMapContextMenu />
+
+  <MidiAppMappingList v-if="showMidiMappingList" @close="showMidiMappingList = false" />
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Cpu, Minus, X, Plus, Save, Copy, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio } from 'lucide-vue-next'
+import { Cpu, Minus, X, Plus, Gamepad2, Save, Copy, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio, Download, List } from 'lucide-vue-next'
 import { useUiStore }            from '@/stores/useUiStore'
 import { useMidiStore }          from '@/stores/useMidiStore'
 import { useMappingStore }       from '@/stores/useMappingStore'
@@ -698,6 +729,7 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
 import MidiMapContextMenu        from '@/components/ui/MidiMapContextMenu.vue'
 import MidiControlSweep          from '@/components/MidiControlSweep.vue'
+import MidiAppMappingList       from '@/components/ui/MidiAppMappingList.vue'
 import {
   loadControllerPresets,
   persistControllerPresets,
@@ -755,6 +787,7 @@ const activePresetId = ref('')
 const saving        = ref(false)
 const selectedTool  = ref('pad-switch')
 const activeColor   = ref(COLOR_PALETTE[0])
+const bulkColor     = ref(COLOR_PALETTE[0])
 const drawerTab = ref('actions')
 
 const _DM_TRACKS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal']
@@ -822,6 +855,14 @@ const APP_SECTIONS = [
       { action: 'seq_bpm_cc',      label: 'BPM via CC' },
     ],
   },
+  {
+    key: 'loop_machine', label: 'Loop Machine',
+    items: [
+      { action: 'open_loop_machine', label: 'Toggle Samples Machine' },
+      ...Array.from({ length: 24 }, (_, i) => ({ paramName: `lm_pad_${i}`, label: `Pad ${i + 1}` })),
+      ...Array.from({ length: 24 }, (_, i) => ({ paramName: `lm_vol_${i}`, label: `Vol ${i + 1}` })),
+    ],
+  },
 ]
 
 const collapsedActions = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))
@@ -846,11 +887,15 @@ const canvasRef         = ref(null)
 const isDesignMode      = ref(false)
 const isSimulateMode    = ref(false)
 const showMidiMonitor   = ref(false)
-const showSweep         = ref(false)
+const showSweep              = ref(false)
+const showMidiMappingList    = ref(false)
 const midiLog           = ref([])   // max 40 entries, newest first
 const selectedIds       = ref(new Set())
 const lassoStart        = ref(null)
 const lassoEnd          = ref(null)
+const _sweepCol         = ref(0)
+const _sweepRow         = ref(0)
+const _sweepBaseY       = ref(0)
 
 const lassoRect = computed(() => {
   if (!lassoStart.value || !lassoEnd.value) return null
@@ -884,6 +929,8 @@ const drawerControl = computed(() => {
 })
 
 watch(drawerControl, () => { pendingAssignment.value = null })
+
+watch(showSweep, (on) => { if (!on) { _sweepCol.value = 0; _sweepRow.value = 0; _sweepBaseY.value = 0 } })
 
 watch(showMidiMonitor, (on) => {
   if (on) {
@@ -999,10 +1046,16 @@ function duplicatePreset() {
   debouncedSave()
 }
 
-async function resetAllMappings() {
-  if (!confirm('Reset all app MIDI mappings? This clears every controller assignment saved to this account.')) return
-  await mappingStore.clearAppMidiMappings()
-  if (window.SY_LOG) window.SY_LOG('[MidiControllerDesigner] All app MIDI mappings cleared.')
+function deletePreset() {
+  if (!activePreset.value) return
+  if (activePreset.value.name === 'Default') return
+  if (!confirm(`Delete preset "${activePreset.value.name}"?`)) return
+  const id = activePreset.value.id
+  const idx = presets.value.findIndex(p => p.id === id)
+  if (idx === -1) return
+  presets.value.splice(idx, 1)
+  uiStore.enabledControllerDesignerPresetIds = uiStore.enabledControllerDesignerPresetIds.filter(pid => pid !== id)
+  activePresetId.value = presets.value[0]?.id ?? ''
 }
 
 // ─── Canvas interaction ───────────────────────────────────────────────────────
@@ -1405,6 +1458,13 @@ function bulkSetSize(dim, val) {
   debouncedSave()
 }
 
+function bulkSetType(type) {
+  for (const ctrl of controls.value) {
+    if (selectedIds.value.has(ctrl.id)) ctrl.type = type
+  }
+  debouncedSave()
+}
+
 function bulkDuplicate() {
   if (!activePreset.value || !selectedIds.value.size) return
   const newIds = new Set()
@@ -1426,6 +1486,42 @@ function bulkDelete() {
   toDelete.forEach(_removeCtrlFromAppMappings)
   activePreset.value.controls = activePreset.value.controls.filter(c => !selectedIds.value.has(c.id))
   selectedIds.value = new Set()
+  debouncedSave()
+}
+
+function _selectedControls() {
+  return controls.value.filter(c => selectedIds.value.has(c.id))
+}
+
+function alignLeft() {
+  const sel = _selectedControls()
+  if (sel.length < 2) return
+  const minX = Math.min(...sel.map(c => c.x))
+  sel.forEach(c => c.x = minX)
+  debouncedSave()
+}
+
+function alignRight() {
+  const sel = _selectedControls()
+  if (sel.length < 2) return
+  const maxRight = Math.max(...sel.map(c => c.x + c.w))
+  sel.forEach(c => c.x = maxRight - c.w)
+  debouncedSave()
+}
+
+function alignTop() {
+  const sel = _selectedControls()
+  if (sel.length < 2) return
+  const minY = Math.min(...sel.map(c => c.y))
+  sel.forEach(c => c.y = minY)
+  debouncedSave()
+}
+
+function alignBottom() {
+  const sel = _selectedControls()
+  if (sel.length < 2) return
+  const maxBottom = Math.max(...sel.map(c => c.y + c.h))
+  sel.forEach(c => c.y = maxBottom - c.h)
   debouncedSave()
 }
 
@@ -1451,9 +1547,104 @@ function clearCanvas() {
 
 function onSweepAdd(ctrl) {
   if (!activePreset.value) return
+
+  if (_sweepBaseY.value === 0) {
+    let lowest = 10
+    for (const c of controls.value) {
+      const bottom = c.y + c.h
+      if (bottom > lowest) lowest = bottom
+    }
+    _sweepBaseY.value = lowest
+  }
+
+  ctrl.x = 10 + _sweepCol.value * (ctrl.w + 10)
+  ctrl.y = _sweepBaseY.value + 10 + _sweepRow.value * (ctrl.h + 10)
+
   activePreset.value.controls.push(ctrl)
   selectedControlId.value = ctrl.id
   selectedTool.value = ctrl.type
+
+  _sweepCol.value++
+  if (_sweepCol.value >= 8) {
+    _sweepCol.value = 0
+    _sweepRow.value++
+  }
+
   debouncedSave()
+}
+
+function exportCsv() {
+  const BOM = '\uFEFF'
+  const rows = [['Preset','Assigned Device','Control ID','Type','Label','X','Y','Width','Height','Color','CC','Note','Channel','Assignment Type','Assignment Action','Assignment Param','Assignment Label']]
+  for (const preset of presets.value) {
+    for (const ctrl of preset.controls) {
+      rows.push([
+        preset.name,
+        preset.assignedDevice ?? '',
+        ctrl.id,
+        ctrl.type,
+        ctrl.label,
+        ctrl.x,
+        ctrl.y,
+        ctrl.w,
+        ctrl.h,
+        ctrl.color,
+        ctrl.ccNumber ?? '',
+        ctrl.noteNumber ?? '',
+        ctrl.channel ?? 1,
+        ctrl.assignment?.type ?? '',
+        ctrl.assignment?.action ?? '',
+        ctrl.assignment?.paramName ?? '',
+        ctrl.assignment?.label ?? '',
+      ])
+    }
+  }
+  const csv = BOM + rows.map(r => r.map(v => String(v).replace(/"/g, '""')).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'midi-controller-presets.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportMappingCatalogCsv() {
+  const BOM = '\uFEFF'
+  const rows = [['Type','Section','Action / Param Name','Label','Continuous']]
+
+  for (const [group, actions] of Object.entries(MIDI_ACTION_GROUPS)) {
+    for (const action of actions) {
+      rows.push([
+        'Action',
+        group,
+        action,
+        APP_ACTION_LABELS[action] ?? action,
+        CONTINUOUS_ACTIONS.has(action) ? 'Yes' : '',
+      ])
+    }
+  }
+
+  for (const section of APP_SECTIONS) {
+    for (const item of section.items) {
+      const name = item.action ?? item.paramName ?? ''
+      rows.push([
+        item.action ? 'Action' : 'App Param',
+        section.label,
+        name,
+        item.label,
+        item.action && CONTINUOUS_ACTIONS.has(item.action) ? 'Yes' : '',
+      ])
+    }
+  }
+
+  const csv = BOM + rows.map(r => r.map(v => String(v).replace(/"/g, '""')).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'midi-mapping-catalog.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>

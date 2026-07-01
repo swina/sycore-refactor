@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { RefreshCw, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -313,7 +313,7 @@ function pendingPath() {
     <div class="absolute bottom-0 left-3 right-4 h-1.5 cursor-s-resize z-50"  @mousedown.stop="onResizeStart($event, 's')" />
     <div class="absolute top-3 bottom-4 right-0 w-1.5 cursor-e-resize z-50"   @mousedown.stop="onResizeStart($event, 'e')" />
 
-    <div class="h-full flex flex-col bg-neutral-950 border border-synth-neon/30 glow-neon rounded-2xl overflow-hidden shadow-2xl">
+    <div class="h-full flex flex-col bg-neutral-950 border border-synth-neon/30 rounded-2xl overflow-hidden shadow-2xl">
 
       <!-- Header -->
       <div
@@ -321,7 +321,7 @@ function pendingPath() {
         @mousedown.stop="onDragStart"
       >
         <span class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-synth-neon shrink-0">
-          <Network class="w-4 h-4" /> MIDI FLOW
+          <Cable class="w-4 h-4" /> MIDI FLOW
         </span>
         <!-- Tabs -->
         <!-- <div class="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5" @mousedown.stop>
@@ -349,7 +349,7 @@ function pendingPath() {
           class="p-1 transition-colors shrink-0"
           title="Controller Designer"
         >
-          <Cpu class="w-4 h-4" />
+          <Gamepad2 class="w-4 h-4 hover:text-synth-neon" />
         </button>
         <MacOsButtons @close="uiStore.isMidiFlowOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>

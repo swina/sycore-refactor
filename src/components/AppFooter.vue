@@ -72,6 +72,7 @@ const MENU_ACTION_MAP = {
   'sound-folder-browser': () => uiStore.isSoundFolderBrowserOpen = !uiStore.isSoundFolderBrowserOpen,
   'midi-flow':            () => uiStore.isMidiFlowOpen = !uiStore.isMidiFlowOpen,
   'controller-designer':  () => uiStore.isMidiControllerDesignerOpen = !uiStore.isMidiControllerDesignerOpen,
+  'midi-devices':         () => uiStore.isMidiDevicesOpen = !uiStore.isMidiDevicesOpen,
 }
 
 const MENU_COLORS = [
