@@ -105,10 +105,10 @@ function discardAndGenerate() {
             >
               <template v-if="configStore.soundTypeBg[cat.id]">
                 <div
-                  class="absolute inset-0 bg-cover bg-center opacity-20 transition-opacity duration-300 group-hover:opacity-30"
-                  :style="{ backgroundImage: `url(${configStore.soundTypeBg[cat.id]})` }"
-                />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent" />
+                  class="absolute inset-0 bg-cover bg-center opacity-20 transition-opacity duration-300 group-hover:opacity-30"/>
+                  <!-- :style="{ backgroundImage: `url(${configStore.soundTypeBg[cat.id]})` }"
+                /> -->
+                <div class="absolute inset-0 bg-gradient-to-br from-synth-cyan/20 to-transparent to-transparent" />
               </template>
               <div class="relative z-10 flex flex-col gap-2">
                 <component

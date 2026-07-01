@@ -13,6 +13,7 @@ export interface PanelVisibility {
   isTypesOpen: boolean
   isKeyboardOpen: boolean
   isSequencerOpen: boolean
+  isSequencerModalOpen: boolean
   isArpOpen: boolean
   isMidiPortOpen: boolean
   isMidiMappingOpen: boolean
@@ -92,6 +93,7 @@ export const useUiStore = defineStore('ui', () => {
   const isTypesOpen        = ref(false)
   const isKeyboardOpen     = ref(false)
   const isSequencerOpen    = ref(false)
+  const isSequencerModalOpen = ref(false)
   const isArpOpen          = ref(false)
   const isMidiPortOpen     = ref(false)
   const isMidiMappingOpen  = ref(false)
@@ -185,6 +187,7 @@ export const useUiStore = defineStore('ui', () => {
     history:             () => isHistoryOpen.value,
     keyboard:            () => isKeyboardOpen.value,
     sequencer:           () => isSequencerOpen.value,
+    sequencerModal:      () => isSequencerModalOpen.value,
     arp:                 () => isArpOpen.value,
     midiMapping:         () => isMidiMappingOpen.value,
     midiActions:         () => isMidiActionsOpen.value,
@@ -234,6 +237,7 @@ export const useUiStore = defineStore('ui', () => {
     history:             isHistoryOpen,
     keyboard:            isKeyboardOpen,
     sequencer:           isSequencerOpen,
+    sequencerModal:      isSequencerModalOpen,
     arp:                 isArpOpen,
     midiMapping:         isMidiMappingOpen,
     midiActions:         isMidiActionsOpen,
@@ -292,6 +296,7 @@ export const useUiStore = defineStore('ui', () => {
     isTypesOpen.value        = false
     isKeyboardOpen.value     = false
     isSequencerOpen.value    = false
+    isSequencerModalOpen.value = false
     isArpOpen.value          = false
     isMidiPortOpen.value     = false
     isMidiMappingOpen.value  = false
@@ -389,7 +394,7 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     isAppInitializing,
-    isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen,
+    isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen, isSequencerModalOpen,
     isArpOpen, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
     isAuthModalOpen, isAdminPanelOpen, isHelpOpen, isManualOpen,
     isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,

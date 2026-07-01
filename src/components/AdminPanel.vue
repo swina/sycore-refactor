@@ -93,6 +93,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'history',        label: 'Sounds History',   icon: 'Layers'       },
   { id: 'keyboard',       label: 'Virtual Keyboard', icon: 'KeyboardMusic'},
   { id: 'sequencer',      label: 'Step Sequencer',   icon: 'ListMusic'    },
+  { id: 'sequencer-modal', label: 'Step Sequencer Modal', icon: 'ListMusic'    },
   { id: 'arp',            label: 'Arpeggiator',      icon: 'Activity'     },
   { id: 'audio-capture',  label: 'Audio Capture',    icon: 'Mic'          },
   { id: 'visualizer',     label: 'Audio Visualizer', icon: 'Activity'     },

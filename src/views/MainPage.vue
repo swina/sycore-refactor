@@ -230,7 +230,7 @@ function goWorkspace() {
               <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Tracks</span>            
             </div>
           </div>
-          <div @click="uiStore.isLoopMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-midi-knob">
+          <div @click="uiStore.isMultiSoundsOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden bg-midi-knob">
             <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
               <Cable class="w-5 h-5 text-synth-neon" />
               <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Multi Sounds</span>

@@ -21,7 +21,6 @@ import EfxMixerVisualizer from '@/components/EfxMixerVisualizer.vue'
 import SignalFlowVisualizer from '@/components/SignalFlowVisualizer.vue'
 import VisualizerPanel from '@/components/ui/VisualizerPanel.vue'
 import SyButton from '@/components/ui/SyButton.vue'
-import StepSequencer from '@/components/StepSequencer.vue'
 import { dispatch } from '@/types/events'
 
 const presetStore = usePresetStore()
@@ -52,23 +51,6 @@ const showSaveFeedback = ref(false)
 const liveSetFeedback = ref('')
 const _previewTimeouts = []
 const VISUALIZER_CATEGORIES = ['FLOW', 'LFO', 'OSCILLATOR', 'ENV', 'FILTER', 'EFX']
-
-const seqGlobalTranspose = ref(0)
-
-async function handleSeqSave(config) {
-  if (uiStore.seqActiveSlot === 2) {
-    uiStore.seqCurrentConfig2 = config
-  } else {
-    uiStore.seqCurrentConfig = config
-  }
-  if (presetStore.lastPreset) {
-    try {
-      await presetStore.savePreset()
-    } catch (e) {
-      console.error('Failed to save preset with sequencer data:', e)
-    }
-  }
-}
 
 const activeCategory = computed({
   get: () => uiStore.activeVisualizerCategory,
@@ -1400,45 +1382,6 @@ function getDialIndicator(cfg, r = 18) {
           Controls are currently hidden
         </p>
       </div>
-
-      <!-- ── EMBEDDED STEP SEQUENCER (opens below headers within this panel) ── -->
-      <StepSequencer
-        v-show="uiStore.isSequencerOpen"
-        :embedded="true"
-        :isOpen="uiStore.isSequencerOpen"
-        :bpm="midiStore.currentBpm || 120"
-        :channel="midiStore.midiChannel"
-        :currentSoundName="presetStore.currentName || ''"
-        :currentCategory="presetStore.currentCategory || 'pad'"
-        :polyModeString="'poly'"
-        :isKeyboardOpen="uiStore.isKeyboardOpen"
-        :globalTranspose="seqGlobalTranspose"
-        :seqStepsLimit="64"
-        :canUseSeqGen="authStore.profile?.features?.canUseSeqGen ?? true"
-        :canUseSeqParam2="true"
-        :canUseSeqGlobalTranspose="authStore.profile?.features?.canUseSeqGlobalTranspose ?? true"
-        :canUseSeqSyncTrack="authStore.profile?.features?.canUseSeqSyncTrack ?? false"
-        :midiMappings="mappingStore.appMidiMappings"
-        :initialConfig="uiStore.seqActiveSlot === 2 ? uiStore.seqCurrentConfig2 : uiStore.seqCurrentConfig"
-        :currentPresetCCValues="presetStore.lastPreset?.data || {}"
-        :activeSlot="uiStore.seqActiveSlot"
-        @close="uiStore.isSequencerOpen = false"
-        @bpmChange="bpm => { arpStore.arpBpm = bpm }"
-        @transposeChange="val => { seqGlobalTranspose = val }"
-        @configChange="config => {
-          if (uiStore.seqActiveSlot === 2) {
-            uiStore.seqCurrentConfig2 = config
-          } else {
-            uiStore.seqCurrentConfig = config
-          }
-        }"
-        @savePattern="handleSeqSave"
-        @openKeyboard="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
-        @prevSlot="presetStore.navigateHistory('prev')"
-        @nextSlot="presetStore.navigateHistory('next')"
-        @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
-        @stop="() => {}"
-      />
 
       </div><!-- end content area -->
 

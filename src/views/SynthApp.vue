@@ -42,7 +42,7 @@ import LiveSet from '@/components/LiveSet.vue'
 import MidiCapture from '@/components/MidiCapture.vue'
 import AudioCapture from '@/components/AudioCapture.vue'
 import AudioVisualizer from '@/components/AudioVisualizer.vue'
-import StepSequencerModal from '@/components/StepSequencerModal.vue'
+import StepSequencer from '@/components/StepSequencer.vue'
 import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
@@ -514,8 +514,8 @@ onMounted(() => {
 
       <!-- Step Sequencer -->
       <div :style="focusStyle('sequencer')">
-        <StepSequencerModal
-          :isOpen="uiStore.isSequencerOpen && !uiStore.isSoundEngineOpen"
+        <StepSequencer
+          :isOpen="uiStore.isSequencerOpen || uiStore.isSequencerModalOpen"
           :bpm="midiStore.currentBpm || 120"
           :channel="midiStore.midiChannel"
           :currentSoundName="presetStore.currentName || ''"
@@ -532,7 +532,7 @@ onMounted(() => {
           :initialConfig="uiStore.seqActiveSlot === 2 ? uiStore.seqCurrentConfig2 : uiStore.seqCurrentConfig"
           :currentPresetCCValues="presetStore.lastPreset?.data || {}"
           :activeSlot="uiStore.seqActiveSlot"
-          @close="uiStore.isSequencerOpen = false"
+          @close="uiStore.isSequencerOpen = false; uiStore.isSequencerModalOpen = false"
           @bpmChange="bpm => { arpStore.arpBpm = bpm; sessionBpmOverride = true }"
           @transposeChange="handleStepSequencerTranspose"
           @configChange="config => {

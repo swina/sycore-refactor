@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Minus, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, onUnmounted, toRef } from 'vue'
+import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useArpStore } from '@/stores/useArpStore'
@@ -13,6 +13,10 @@ import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { dispatch } from '@/types/events'
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+
+defineOptions({ inheritAttrs: false })
 
 const props = defineProps({
   isOpen: Boolean,
@@ -32,16 +36,27 @@ const props = defineProps({
   initialConfig: Object,
   currentPresetCCValues: Object,
   activeSlot: { type: Number, default: 1 },
-  embedded: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['close', 'minimize', 'bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'activeSlotChange'])
+const emit = defineEmits(['bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'activeSlotChange', 'close'])
 
 const midiStore = useMidiStore()
 const presetStore = usePresetStore()
 const authStore = useAuthStore()
 const syncStore = useSyncStore()
 const uiStore = useUiStore()
+
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
+  useDraggableResizable({
+    storageKey:    'S1_STEP_SEQ_MODAL',
+    minimizeLabel: 'Step Sequencer',
+    initialWidth:  1020,
+    initialHeight: 700,
+    minWidth:      760,
+    minHeight:     500,
+    zIndex:        120,
+    openRef:       toRef(props, 'isOpen'),
+  })
 
 const showSaveLibraryModal = ref(false)
 const showLoadLibraryModal = ref(false)
@@ -1571,12 +1586,34 @@ let generateHidden = ref(false)
 </script>
 
 <template>
-  <div v-if="isOpen" :class="[
-    embedded
-      ? 'absolute inset-0 z-[1500]'
-      : 'fixed inset-x-0 top-0 bottom-14 rounded-lg z-[600]',
-    'flex flex-col bg-neutral-950 font-sans text-white border-t-2 border-synth-amber overflow-hidden'
-  ]">
+  <div v-if="isOpen"
+    class="fixed bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden select-none"
+    :style="panelStyle"
+    @mousedown="bringToFront"
+  >
+    <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3  right-3  h-1.5  cursor-n-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3  right-3  h-1.5  cursor-s-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3   right-0  w-1.5  cursor-e-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3   left-0   w-1.5  cursor-w-resize  z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-0 right-0  w-4 h-4  cursor-se-resize z-50" />
+    <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-4 h-4  cursor-sw-resize z-50" />
+
+    <div
+      class="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-neutral-800 bg-gradient-to-r from-amber-950/70 to-transparent cursor-grab active:cursor-grabbing"
+      @mousedown.stop="onDragStart"
+    >
+      <div class="flex items-center gap-2 pointer-events-none">
+        <div class="w-5 h-5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+          <svg class="w-3 h-3 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 4v2M16 4v2"/></svg>
+        </div>
+        <span class="text-[11px] font-black uppercase tracking-widest text-white">Sequencer</span>
+      </div>
+      <div class="flex-1" />
+      <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+        <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
+      </div>
+    </div>
+
     <div class="w-full max-w-[1024px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
       
       <!-- ── HEADER: Compact & Responsive ── -->
@@ -1655,13 +1692,6 @@ let generateHidden = ref(false)
           <button @click="emit('savePattern', { numSteps, steps, param1CC, param2CC, param1Variation, param2Variation, transpose: globalTranspose, bpm })"
             class="p-2 bg-neutral-800 text-synth-neon rounded-lg border border-neutral-700 hover:text-white transition-colors" title="Save Pattern">
             <Save class="w-4 h-4" />
-          </button>
-
-          <button @click="emit('minimize')" class="p-2 text-neutral-500 hover:text-white transition-colors">
-            <Minus class="w-5 h-5" />
-          </button>
-          <button @click="emit('close')" class="p-2 text-neutral-500 hover:text-white transition-colors">
-            <X class="w-5 h-5" />
           </button>
         </div>
       </div>
