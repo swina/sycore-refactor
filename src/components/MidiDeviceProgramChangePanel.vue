@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
@@ -25,6 +26,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 })
 
 const midiStore      = useMidiStore()
+const { devices: registryDevices } = useDeviceRegistry()
 const uiStore        = useUiStore()
 watch(() => uiStore.isDeviceProgramChangePanelOpen, (v) => { if (v) bringToFront() })
 const presetStore    = usePresetStore()
@@ -35,8 +37,13 @@ const { openMenu }   = useMidiContextMenu()
 // ── Device list (left column) — only PC-enabled devices ────────
 const devices = computed(() => {
   if (!midiStore.routingConfig?.registrations) return []
+  const instrumentNames = new Set(
+    registryDevices.value
+      .filter(d => d.type === 'instrument-single' || d.type === 'instrument-multi')
+      .map(d => d.name)
+  )
   return Object.values(midiStore.routingConfig.registrations)
-    .filter(r => r.outEnabled && r.pcEnabled)
+    .filter(r => r.outEnabled && (r.pcEnabled || r.pc) && instrumentNames.has(r.name))
     .map(r => ({ ...r, isOnline: midiStore.outputs.some(o => o.name === r.name) }))
     .sort((a, b) => b.isOnline - a.isOnline || a.name.localeCompare(b.name))
 })

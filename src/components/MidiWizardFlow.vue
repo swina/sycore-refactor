@@ -169,6 +169,7 @@ function finish() {
       midiStore.updateRegistration(dst.name, 'notes',       dst.notes)
       midiStore.updateRegistration(dst.name, 'cc',          dst.cc)
       midiStore.updateRegistration(dst.name, 'pc',          dst.pc)
+      midiStore.updateRegistration(dst.name, 'pcEnabled',   dst.pc)
       outputNames.push(dst.name)
     }
 
