@@ -45,11 +45,19 @@ const showPresets    = ref(false)
 const newPresetName  = ref('')
 const currentPresetId = ref(null)
 
+// Drum Kit panel
+const showKits    = ref(false)
+const newKitName  = ref('')
+
 // Init confirmation
 const initConfirm     = ref(false)
 const presetSavedToast  = ref(false)
+const kitSavedToast     = ref(false)
+const kitOverwriteToast = ref(false)
 const fxCopiedToast    = ref(false)
 let _toastTimer    = null
+let _kitToastTimer = null
+let _kitOverwriteTimer = null
 let _fxToastTimer  = null
 
 function overwritePresetWithToast(id) {
@@ -524,6 +532,29 @@ async function handleLoadPreset(preset) {
   await loadAllSamples(drumStore.currentPattern)
 }
 
+function handleSaveKit() {
+  drumStore.saveDrumKit(newKitName.value)
+  newKitName.value = ''
+  kitSavedToast.value = true
+  clearTimeout(_kitToastTimer)
+  _kitToastTimer = setTimeout(() => { kitSavedToast.value = false }, 2000)
+}
+
+function overwriteKitWithToast(id) {
+  drumStore.overwriteDrumKit(id)
+  kitOverwriteToast.value = true
+  clearTimeout(_kitOverwriteTimer)
+  _kitOverwriteTimer = setTimeout(() => { kitOverwriteToast.value = false }, 2000)
+}
+
+async function handleApplyKit(id) {
+  drumStore.applyDrumKit(id)
+  showKits.value = false
+  await nextTick()
+  await loadAllSamples(drumStore.currentPattern)
+  pushAllFxToEngine(drumStore.currentPattern)
+}
+
 // ── Quantized sequence switching ───────────────────────────────────────────────
 // Sync Retrig: TRUE = switch pattern on next first beat (quantized), FALSE = switch immediately on click
 const syncRetrig = ref(true)
@@ -833,6 +864,21 @@ function cycleChainSlot(i) {
           Presets
         </button>
 
+        <!-- Kits button -->
+        <button
+          @click.stop="showKits = !showKits"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors',
+            showKits
+              ? 'bg-amber-600/30 border-amber-500 text-amber-300'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white'
+          ]"
+          title="Drum Kits — save/load sound assignments"
+        >
+          <Save class="w-2.5 h-2.5" />
+          Kits
+        </button>
+
         <!-- Copy pattern -->
         <div class="relative" title="Copy pattern">
           <button
@@ -947,6 +993,65 @@ function cycleChainSlot(i) {
             </div>
           </div>
           <p v-else class="text-[9px] text-neutral-600 font-mono text-center py-1">No presets saved yet</p>
+        </div>
+      </Transition>
+
+      <!-- ── Drum Kit panel ───────────────────────────────────────────────── -->
+      <Transition
+        enter-active-class="transition-all duration-200 ease-out"
+        enter-from-class="opacity-0 -translate-y-1"
+        leave-active-class="transition-all duration-150 ease-in"
+        leave-to-class="opacity-0 -translate-y-1"
+      >
+        <div v-if="showKits" class="shrink-0 border-b border-neutral-800 bg-neutral-900/80 px-4 py-3 space-y-2" @click.stop>
+          <!-- Save row -->
+          <div class="flex items-center gap-2">
+            <input
+              v-model="newKitName"
+              placeholder="Kit name…"
+              class="flex-1 bg-black/40 border border-neutral-700 rounded-lg px-3 py-1.5 text-[10px] text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500 font-mono"
+              @keydown.enter="handleSaveKit"
+            />
+            <button
+              @click="handleSaveKit"
+              class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber-600 bg-amber-600/20 text-amber-300 text-[10px] font-bold hover:bg-amber-600/40 transition-colors shrink-0"
+            >
+              <Save class="w-2.5 h-2.5" />
+              Save Kit
+            </button>
+          </div>
+
+          <!-- Kit list -->
+          <div v-if="drumStore.drumKits.length" class="space-y-1 max-h-36 overflow-y-auto pr-1">
+            <div
+              v-for="kit in [...drumStore.drumKits].reverse()"
+              :key="kit.id"
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 group"
+            >
+              <span class="flex-1 text-[10px] font-bold text-white truncate">{{ kit.name }}</span>
+              <span class="text-[8px] font-mono text-neutral-600 shrink-0">
+                {{ new Date(kit.savedAt).toLocaleDateString() }}
+              </span>
+              <button
+                @click="handleApplyKit(kit.id)"
+                class="shrink-0 px-2 py-0.5 rounded border border-amber-700 bg-amber-700/20 text-amber-300 text-[8px] font-bold hover:bg-amber-700/40 transition-colors"
+              >Load</button>
+              <button
+                @click="overwriteKitWithToast(kit.id)"
+                class="shrink-0 p-0.5 text-amber-600 hover:text-amber-300 transition-colors opacity-0 group-hover:opacity-100"
+                title="Overwrite with current sound assignments"
+              >
+                <Save class="w-3 h-3" />
+              </button>
+              <button
+                @click="drumStore.deleteDrumKit(kit.id)"
+                class="shrink-0 p-0.5 text-neutral-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+          <p v-else class="text-[9px] text-neutral-600 font-mono text-center py-1">No kits saved yet</p>
         </div>
       </Transition>
 
@@ -1646,6 +1751,26 @@ function cycleChainSlot(i) {
         <div class="flex items-center gap-2 bg-emerald-950/90 border border-emerald-800 text-emerald-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl">
           <Save class="w-4 h-4" />
           <span>PRESET SAVED</span>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Kit saved toast -->
+    <Transition name="fade">
+      <div v-if="kitSavedToast" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-[600] pointer-events-none">
+        <div class="flex items-center gap-2 bg-amber-950/90 border border-amber-800 text-amber-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl">
+          <Save class="w-4 h-4" />
+          <span>KIT SAVED</span>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Kit overwrite toast -->
+    <Transition name="fade">
+      <div v-if="kitOverwriteToast" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-[600] pointer-events-none">
+        <div class="flex items-center gap-2 bg-amber-950/90 border border-amber-800 text-amber-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl">
+          <Save class="w-4 h-4" />
+          <span>KIT OVERWRITTEN</span>
         </div>
       </div>
     </Transition>

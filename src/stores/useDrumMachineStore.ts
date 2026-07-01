@@ -2,12 +2,13 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
-import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumStyleName } from '@/types/drum-machine'
+import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const LS_KEY = 'SYCORE_DRUM_MACHINE_V1'
 const LS_PRESETS_KEY = 'SYCORE_DM_PRESETS'
+const LS_KITS_KEY = 'SYCORE_DM_KITS'
 const TRACK_LABELS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal'] as const
 
 function DEFAULT_DRUM_STEP(): DrumStep {
@@ -855,6 +856,75 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     _savePresets(presets.value)
   }
 
+  // ── Drum Kits ────────────────────────────────────────────────────────────
+
+  const drumKits = ref<DrumKit[]>(_loadDrumKits())
+
+  function _loadDrumKits(): DrumKit[] {
+    try { return JSON.parse(localStorage.getItem(userKey(LS_KITS_KEY)) || '[]') } catch { return [] }
+  }
+
+  function _saveDrumKits() {
+    try { localStorage.setItem(userKey(LS_KITS_KEY), JSON.stringify(drumKits.value)) } catch {}
+  }
+
+  function saveDrumKit(name: string) {
+    const sounds = TRACK_LABELS.map((_, i) => {
+      const resolved = resolveTrackSound(i)
+      return {
+        soundId: resolved?.soundId ?? '',
+        soundLabel: resolved?.soundLabel ?? '',
+      }
+    })
+    const kit: DrumKit = {
+      id:   `dm_kit_${Date.now()}`,
+      name: name?.trim() || `Kit ${drumKits.value.length + 1}`,
+      savedAt: new Date().toISOString(),
+      sounds,
+    }
+    drumKits.value.push(kit)
+    _saveDrumKits()
+    return kit
+  }
+
+  function deleteDrumKit(id: string) {
+    drumKits.value = drumKits.value.filter(k => k.id !== id)
+    _saveDrumKits()
+  }
+
+  function overwriteDrumKit(id: string) {
+    const idx = drumKits.value.findIndex(k => k.id === id)
+    if (idx === -1) return
+    const sounds = TRACK_LABELS.map((_, i) => {
+      const resolved = resolveTrackSound(i)
+      return {
+        soundId: resolved?.soundId ?? '',
+        soundLabel: resolved?.soundLabel ?? '',
+      }
+    })
+    drumKits.value[idx] = {
+      ...drumKits.value[idx],
+      savedAt: new Date().toISOString(),
+      sounds,
+    }
+    _saveDrumKits()
+  }
+
+  function applyDrumKit(id: string) {
+    const kit = drumKits.value.find(k => k.id === id)
+    if (!kit) return
+    const seq = sequences.value[activeSequence.value]
+    if (!seq) return
+    kit.sounds.forEach((s, i) => {
+      if (seq[i]) {
+        seq[i].soundId    = s.soundId
+        seq[i].soundLabel = s.soundLabel
+        seq[i].soundUrl   = '' // will be resolved by resolveTrackSound / restoreSample
+      }
+    })
+    _save()
+  }
+
   function generateDrumPattern(style: DrumStyleName) {
     const cfg = DRUM_STYLES[style]
     if (!cfg) return
@@ -908,6 +978,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     pasteTrackFx, toggleTrackMute, toggleTrackSolo,
     presets, currentPresetName,
     savePreset, overwritePreset, loadPreset, deletePreset,
+    drumKits, saveDrumKit, overwriteDrumKit, deleteDrumKit, applyDrumKit,
     generateDrumPattern,
     generateDrumPatternRaw,
   }

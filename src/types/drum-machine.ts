@@ -67,6 +67,14 @@ export interface DrumPreset {
   sequences: Record<string, SerializedDrumTrack[]>;
 }
 
+/** A named kit of 8 sound assignments (one per track) */
+export interface DrumKit {
+  id: string;
+  name: string;
+  savedAt: string;
+  sounds: { soundId: string; soundLabel: string }[];
+}
+
 /** Track label constants */
 export type DrumTrackLabel =
   | 'Kick' | 'Snare' | 'Closed HH' | 'Open HH'
