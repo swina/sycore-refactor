@@ -78,7 +78,8 @@ export interface DrumKit {
 /** Track label constants */
 export type DrumTrackLabel =
   | 'Kick' | 'Snare' | 'Closed HH' | 'Open HH'
-  | 'Clap' | 'Tom 1' | 'Tom 2' | 'Cymbal';
+  | 'Clap' | 'Tom 1' | 'Tom 2' | 'Cymbal'
+  | 'Rim Shot' | 'Cowbell' | 'Tambourine';
 
 /** Sequence key */
 export type SequenceKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
@@ -87,3 +88,18 @@ export type SequenceKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 export type DrumStyleName =
   | 'House' | 'Techno' | 'HipHop' | 'Trap' | 'Funk'
   | 'Jungle/DnB' | 'Latin' | 'Rock' | 'EDM' | 'Pop' | 'Jazz';
+
+/** A single pattern imported from the DrumMachinePatterns book collections */
+export interface ImportedPattern {
+  title: string;
+  signature: string;
+  length: number;
+  tracks: Record<string, string[]>;
+  accent?: string[];
+}
+
+/** A category grouping of imported patterns (e.g. "Rock", "Funk", "Blues") */
+export interface ImportedPatternCategory {
+  name: string;
+  patterns: ImportedPattern[];
+}

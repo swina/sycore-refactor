@@ -37,6 +37,9 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 const selectedStyle   = ref('House')
 const showStyleMenu   = ref(false)
 const generateAsFill  = ref(false)
+const showImportMenu  = ref(false)
+const selectedCategory = ref('Rock')
+const selectedPattern = ref(0)
 const copySourceSeq   = ref(null)
 const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
 
@@ -77,7 +80,7 @@ let _fillAutoStop   = false
 const fillSaveFrom  = ref(1)
 const fillSaveTo    = ref(16)
 const fillPattern = ref(
-  Array(8).fill(null).map(() => Array(16).fill(null).map(() => ({ active: false, velocity: 100, accent: false, ratchet: 1 })))
+  Array(drumStore.TRACK_LABELS.length).fill(null).map(() => Array(16).fill(null).map(() => ({ active: false, velocity: 100, accent: false, ratchet: 1 })))
 )
 
 // REC SYNC — arms at bar start, records 16 × multiplier steps, auto-stops
@@ -93,7 +96,7 @@ watch(() => arpStore.arpBpm, v => { drumStore.bpm = v }, { immediate: true })
 watch(() => drumStore.bpm, v => drumEngine.setDelayTime(v))
 
 // ── FX strip visibility per track ─────────────────────────────────────────────
-const showFx = ref(Array(8).fill(false))
+const showFx = ref(Array(drumStore.TRACK_LABELS.length).fill(false))
 
 // ── FX clipboard (copy/paste across sequences for the same track slot) ────────
 const fxClipboard = ref(null) // { pan, pitch, filterFreq, reverbSend, delaySend }
@@ -418,7 +421,7 @@ function _tlDmStopHandler() { drumStore.isPlaying = false }
 
 function _onPadTrigger(e) {
   const { trackIdx, velocity } = e.detail ?? {}
-  if (typeof trackIdx === 'number' && trackIdx >= 0 && trackIdx < 8) {
+  if (typeof trackIdx === 'number' && trackIdx >= 0 && trackIdx < drumStore.TRACK_LABELS.length) {
     drumEngine.triggerPad(trackIdx, { velocity: velocity ?? 100, accent: false, time: 0 })
   }
 }
@@ -597,7 +600,7 @@ function generateFill() {
   const hit  = (vel) => ({ active: true, velocity: vel, accent: false, ratchet: 1 })
   const hitA = (vel) => ({ active: true, velocity: vel, accent: true,  ratchet: 1 })
   const off  = ()    => ({ active: false, velocity: 100, accent: false, ratchet: 1 })
-  const fp   = Array(8).fill(null).map(() => Array(16).fill(null).map(off))
+  const fp   = Array(drumStore.TRACK_LABELS.length).fill(null).map(() => Array(16).fill(null).map(off))
 
   const archetype = rnd(0, 5)
 
@@ -683,6 +686,26 @@ function generatePattern() {
     }
   }
   showStyleMenu.value = false
+}
+
+// ── Imported patterns ───────────────────────────────────────────────────────────
+const currentCatPatterns = computed(() => {
+  return drumStore.IMPORTED_PATTERNS[selectedCategory.value] || []
+})
+
+function loadImportedPattern() {
+  drumStore.loadImportedPattern(selectedCategory.value, selectedPattern.value)
+  showImportMenu.value = false
+}
+
+function selectCategory(cat) {
+  selectedCategory.value = cat
+  selectedPattern.value = 0
+}
+
+function loadSelectedPattern() {
+  drumStore.loadImportedPattern(selectedCategory.value, selectedPattern.value)
+  showImportMenu.value = false
 }
 
 // ── Step right-click context ───────────────────────────────────────────────────
@@ -845,6 +868,105 @@ function cycleChainSlot(i) {
               class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
             />
           </div>
+        </div>
+
+        <!-- Imported patterns -->
+        <div class="relative ml-1" title="Import patterns from book collections">
+          <button
+            @click.stop="showImportMenu = !showImportMenu"
+            class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-300 text-[10px] font-bold hover:border-neutral-500 transition-colors"
+          >
+            <Layers class="w-3.5 h-3.5 text-cyan-400" />
+            Import
+          </button>
+
+          <!-- Modal dialog -->
+          <Teleport to="body">
+            <div
+              v-if="showImportMenu"
+              class="fixed inset-0 z-[9999] flex items-center justify-center"
+              @click.stop="showImportMenu = false"
+            >
+              <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <div
+                class="relative bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden w-[520px] max-h-[480px] flex flex-col"
+                @click.stop
+              >
+                <!-- Header -->
+                <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+                  <span class="text-[11px] font-black uppercase tracking-widest text-white">Import Pattern</span>
+                  <button
+                    @click="showImportMenu = false"
+                    class="p-1 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-white transition-colors"
+                  >
+                    <X class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <!-- Body: two columns -->
+                <div class="flex flex-1 overflow-hidden">
+                  <!-- Left column: categories -->
+                  <div class="w-1/2 border-r border-neutral-800 overflow-y-auto custom-scrollbar">
+                    <button
+                      v-for="cat in Object.keys(drumStore.IMPORTED_PATTERNS)"
+                      :key="cat"
+                      @click="selectCategory(cat)"
+                      :class="[
+                        'block w-full text-left px-4 py-2.5 text-[11px] font-bold transition-colors border-b border-neutral-800/50',
+                        selectedCategory === cat
+                          ? 'bg-cyan-600/20 text-cyan-300 border-l-2 border-l-cyan-400'
+                          : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                      ]"
+                    >
+                      <span>{{ cat }}</span>
+                      <span class="ml-1.5 text-[9px] font-mono text-neutral-600">({{ drumStore.IMPORTED_PATTERNS[cat].length }})</span>
+                    </button>
+                  </div>
+
+                  <!-- Right column: patterns -->
+                  <div class="w-1/2 overflow-y-auto custom-scrollbar">
+                    <button
+                      v-for="(p, idx) in currentCatPatterns"
+                      :key="idx"
+                      @click="selectedPattern = idx"
+                      :class="[
+                        'block w-full text-left px-4 py-2 text-[10px] font-medium transition-colors border-b border-neutral-800/30',
+                        selectedPattern === idx
+                          ? 'bg-cyan-600/15 text-cyan-200 border-l-2 border-l-cyan-400'
+                          : 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200'
+                      ]"
+                    >
+                      <span>{{ p.title }}</span>
+                      <span class="ml-1.5 text-[8px] font-mono text-neutral-700">{{ p.signature }}</span>
+                    </button>
+                    <div v-if="currentCatPatterns.length === 0" class="p-4 text-[10px] text-neutral-600 text-center">
+                      No patterns
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="flex items-center justify-between px-4 py-3 border-t border-neutral-800 bg-neutral-900">
+                  <span class="text-[9px] text-neutral-600 font-mono">
+                    {{ currentCatPatterns.length }} pattern{{ currentCatPatterns.length !== 1 ? 's' : '' }}
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <button
+                      @click="showImportMenu = false"
+                      class="px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-400 text-[10px] font-bold hover:bg-neutral-800 hover:text-white transition-colors"
+                    >Cancel</button>
+                    <button
+                      @click="loadSelectedPattern"
+                      class="px-3 py-1.5 rounded-lg border border-cyan-600 bg-cyan-600/20 text-cyan-300 text-[10px] font-bold hover:bg-cyan-600/40 transition-colors"
+                    >
+                      <Layers class="w-3 h-3 inline mr-1" />
+                      Load
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Teleport>
         </div>
 
         <div class="flex-1" />
@@ -1073,6 +1195,13 @@ function cycleChainSlot(i) {
               ]"
             >{{ (g-1)*4+l }}</div>
           </div>
+        </div>
+      </div>
+
+      <!-- ── Kit name header ─────────────────────────────────────────────────── -->
+      <div v-if="drumStore.currentKitName" class="shrink-0 px-3 pt-1.5 pb-0.5">
+        <div class="flex items-center gap-1.5" style="width: 92px;">
+          <span class="text-[8px] font-mono font-bold uppercase tracking-widest text-amber-500/80 truncate" :title="'DrumKit:' + drumStore.currentKitName">{{ drumStore.currentKitName }}</span>
         </div>
       </div>
 

@@ -3,13 +3,15 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
+import { IMPORTED_PATTERNS, patternToDrumSteps } from '@/data/imported-patterns'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const LS_KEY = 'SYCORE_DRUM_MACHINE_V1'
 const LS_PRESETS_KEY = 'SYCORE_DM_PRESETS'
 const LS_KITS_KEY = 'SYCORE_DM_KITS'
-const TRACK_LABELS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal'] as const
+const LS_CURRENT_KIT_KEY = 'SYCORE_DM_CURRENT_KIT'
+const TRACK_LABELS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal', 'Rim Shot', 'Cowbell', 'Tambourine'] as const
 
 function DEFAULT_DRUM_STEP(): DrumStep {
   return { active: false, velocity: 100, accent: false, ratchet: 1 }
@@ -714,7 +716,9 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
 
   function toggleStep(trackIdx: number, stepIdx: number) {
     const step = sequences.value[activeSequence.value]?.[trackIdx]?.steps[stepIdx]
-    if (step) step.active = !step.active
+    if (!step) return
+    step.active = !step.active
+    if (step.active && step.velocity <= 0) step.velocity = 60
   }
 
   function clearPattern(seqKey?: string) {
@@ -859,6 +863,15 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   // ── Drum Kits ────────────────────────────────────────────────────────────
 
   const drumKits = ref<DrumKit[]>(_loadDrumKits())
+  const currentKitName = ref(_loadCurrentKitName())
+
+  function _loadCurrentKitName(): string {
+    try { return localStorage.getItem(userKey(LS_CURRENT_KIT_KEY)) || '' } catch { return '' }
+  }
+
+  function _saveCurrentKitName(name: string) {
+    try { localStorage.setItem(userKey(LS_CURRENT_KIT_KEY), name) } catch {}
+  }
 
   function _loadDrumKits(): DrumKit[] {
     try { return JSON.parse(localStorage.getItem(userKey(LS_KITS_KEY)) || '[]') } catch { return [] }
@@ -884,6 +897,8 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     }
     drumKits.value.push(kit)
     _saveDrumKits()
+    currentKitName.value = kit.name
+    _saveCurrentKitName(kit.name)
     return kit
   }
 
@@ -908,6 +923,8 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
       sounds,
     }
     _saveDrumKits()
+    currentKitName.value = drumKits.value[idx].name
+    _saveCurrentKitName(drumKits.value[idx].name)
   }
 
   function applyDrumKit(id: string) {
@@ -923,6 +940,8 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
       }
     })
     _save()
+    currentKitName.value = kit.name
+    _saveCurrentKitName(kit.name)
   }
 
   function generateDrumPattern(style: DrumStyleName) {
@@ -956,6 +975,23 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     return result
   }
 
+  /** Load an imported pattern from the DrumMachinePatterns collections into the active sequence. */
+  function loadImportedPattern(categoryName: string, patternIndex: number) {
+    const cat = IMPORTED_PATTERNS[categoryName]
+    if (!cat) return
+    const pattern = cat[patternIndex]
+    if (!pattern) return
+    const steps = patternToDrumSteps(pattern)
+    const seq = sequences.value[activeSequence.value]
+    if (!seq) return
+    for (let t = 0; t < Math.min(steps.length, seq.length); t++) {
+      const track = seq[t]
+      const patternSteps = steps[t]
+      if (!track || !patternSteps) continue
+      track.steps = patternSteps.map(s => ({ ...s }))
+    }
+  }
+
   // ── Auth watcher ─────────────────────────────────────────────────────────
   watch(uid, (newUid) => {
     if (!newUid) {
@@ -979,7 +1015,10 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     presets, currentPresetName,
     savePreset, overwritePreset, loadPreset, deletePreset,
     drumKits, saveDrumKit, overwriteDrumKit, deleteDrumKit, applyDrumKit,
+    currentKitName,
     generateDrumPattern,
     generateDrumPatternRaw,
+    IMPORTED_PATTERNS,
+    loadImportedPattern,
   }
 })

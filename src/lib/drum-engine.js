@@ -1,7 +1,7 @@
 import { getContext } from 'tone'
 
 const ACCENT_BOOST = 1.35
-const NUM_PADS = 8
+const NUM_PADS = 11
 
 let _masterGain         = null
 let _compressor         = null
