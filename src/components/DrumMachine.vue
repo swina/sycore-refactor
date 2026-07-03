@@ -41,6 +41,8 @@ const showImportMenu  = ref(false)
 const selectedCategory = ref('Rock')
 const selectedPattern = ref(0)
 const lastImportedPattern = ref(null) // { category, title }
+let _importedCategoryIdx = 0
+let _importedPatternIdx = 0
 const copySourceSeq   = ref(null)
 const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
 
@@ -713,6 +715,10 @@ const currentCatPatterns = computed(() => {
   return drumStore.IMPORTED_PATTERNS[selectedCategory.value] || []
 })
 
+const sortedImportCats = computed(() =>
+  Object.keys(drumStore.IMPORTED_PATTERNS).sort()
+)
+
 function loadImportedPattern() {
   drumStore.loadImportedPattern(selectedCategory.value, selectedPattern.value)
   showImportMenu.value = false
@@ -725,9 +731,39 @@ function selectCategory(cat) {
 
 function loadSelectedPattern() {
   const p = currentCatPatterns.value[selectedPattern.value]
-  if (p) lastImportedPattern.value = { category: selectedCategory.value, title: p.title }
+  if (p) {
+    lastImportedPattern.value = { category: selectedCategory.value, title: p.title }
+    _importedCategoryIdx = sortedImportCats.value.indexOf(selectedCategory.value)
+    _importedPatternIdx = selectedPattern.value
+  }
   drumStore.loadImportedPattern(selectedCategory.value, selectedPattern.value)
   showImportMenu.value = false
+}
+
+function navigateImport(dir) {
+  const cats = sortedImportCats.value
+  if (!cats.length) return
+  const catPatterns = drumStore.IMPORTED_PATTERNS[cats[_importedCategoryIdx]]
+  if (!catPatterns?.length) return
+
+  _importedPatternIdx += dir
+
+  if (_importedPatternIdx < 0) {
+    _importedCategoryIdx = (_importedCategoryIdx - 1 + cats.length) % cats.length
+    const prevCat = drumStore.IMPORTED_PATTERNS[cats[_importedCategoryIdx]]
+    _importedPatternIdx = prevCat ? prevCat.length - 1 : 0
+  } else if (_importedPatternIdx >= catPatterns.length) {
+    _importedCategoryIdx = (_importedCategoryIdx + 1) % cats.length
+    _importedPatternIdx = 0
+  }
+
+  const cat = cats[_importedCategoryIdx]
+  const p = drumStore.IMPORTED_PATTERNS[cat]?.[_importedPatternIdx]
+  if (!p) return
+  lastImportedPattern.value = { category: cat, title: p.title }
+  selectedCategory.value = cat
+  selectedPattern.value = _importedPatternIdx
+  drumStore.loadImportedPattern(cat, _importedPatternIdx)
 }
 
 // ── Step right-click context ───────────────────────────────────────────────────
@@ -910,12 +946,25 @@ function cycleChainSlot(i) {
             <Layers class="w-3.5 h-3.5 text-cyan-400" />
             Import
           </button>
+          
+          <div v-if="lastImportedPattern" class="flex items-center gap-0.5 ml-1">
+            <button
+              @click.stop="navigateImport(-1)"
+              class="w-5 h-5 flex items-center justify-center rounded border border-neutral-700 bg-neutral-800 text-neutral-500 hover:text-cyan-300 hover:border-cyan-600 transition-colors text-[10px] font-black leading-none"
+              title="Previous pattern"
+            >‹</button>
+            <button
+              @click.stop="navigateImport(1)"
+              class="w-5 h-5 flex items-center justify-center rounded border border-neutral-700 bg-neutral-800 text-neutral-500 hover:text-cyan-300 hover:border-cyan-600 transition-colors text-[10px] font-black leading-none"
+              title="Next pattern"
+            >›</button>
+          </div>
           <span
-          v-if="lastImportedPattern"
-          class="ml-2 text-[11px] font-mono text-cyan-500/70 truncate max-w-[120px]"
-          :title="lastImportedPattern.category + ' · ' + lastImportedPattern.title"
-          >
-          {{ lastImportedPattern.title }}
+            v-if="lastImportedPattern"
+            class="ml-2 text-[11px] font-mono text-cyan-500/70 truncate max-w-[120px]"
+            :title="lastImportedPattern.category + ' · ' + lastImportedPattern.title"
+            >
+            {{ lastImportedPattern.title }}
           </span>
         </div>
 
@@ -947,7 +996,7 @@ function cycleChainSlot(i) {
                   <!-- Left column: categories -->
                   <div class="w-1/2 border-r border-neutral-800 overflow-y-auto custom-scrollbar">
                     <button
-                      v-for="cat in Object.keys(drumStore.IMPORTED_PATTERNS)"
+                      v-for="cat in sortedImportCats"
                       :key="cat"
                       @click="selectCategory(cat)"
                       :class="[
@@ -986,9 +1035,9 @@ function cycleChainSlot(i) {
 
                 <!-- Footer -->
                 <div class="flex items-center justify-between px-4 py-3 border-t border-neutral-800 bg-neutral-900">
-                  <span class="text-[9px] text-neutral-600 font-mono">
-                    {{ currentCatPatterns.length }} pattern{{ currentCatPatterns.length !== 1 ? 's' : '' }}
-                  </span>
+<span class="text-[9px] text-neutral-600 font-mono">
+  {{ currentCatPatterns.length }} pattern{{ currentCatPatterns.length !== 1 ? 's' : '' }} · {{ sortedImportCats.reduce((a, c) => a + (drumStore.IMPORTED_PATTERNS[c]?.length || 0), 0) }} total
+</span>
                   <div class="flex items-center gap-2">
                     <button
                       @click="showImportMenu = false"
