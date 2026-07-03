@@ -40,6 +40,7 @@ const generateAsFill  = ref(false)
 const showImportMenu  = ref(false)
 const selectedCategory = ref('Rock')
 const selectedPattern = ref(0)
+const lastImportedPattern = ref(null) // { category, title }
 const copySourceSeq   = ref(null)
 const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
 
@@ -80,7 +81,7 @@ let _fillAutoStop   = false
 const fillSaveFrom  = ref(1)
 const fillSaveTo    = ref(16)
 const fillPattern = ref(
-  Array(drumStore.TRACK_LABELS.length).fill(null).map(() => Array(16).fill(null).map(() => ({ active: false, velocity: 100, accent: false, ratchet: 1 })))
+  Array(drumStore.TRACK_LABELS.length).fill(null).map(() => Array(16).fill(null).map(() => ({ active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 })))
 )
 
 // REC SYNC — arms at bar start, records 16 × multiplier steps, auto-stops
@@ -140,6 +141,7 @@ function trackHasFx(track) {
 const playStateRef = { current: null }
 let repeatEventIdRef = null
 let stepCounter = 0
+let _tieCountdown = Array(11).fill(0)
 
 function buildPlayState() {
   return {
@@ -259,22 +261,38 @@ function _scheduleCallback(time) {
     if (state.fillActive && state.fillSteps?.[trackIdx]?.[trackStep]?.active) {
       step = state.fillSteps[trackIdx][trackStep]
     }
+
+    // Tie countdown: if > 0, skip this step and decrement
+    if (_tieCountdown[trackIdx] > 0) {
+      _tieCountdown[trackIdx]--
+      return
+    }
+
     if (!step.active) return
 
     drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
+
+    // Gate duration: tie=0 → 1 step, tie=N → N steps
+    const stepDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
 
     const divisions = state.repeaterActive
       ? state.repeaterDivision
       : step.ratchet
 
     if (divisions <= 1) {
-      drumEngine.triggerPad(trackIdx, { velocity: step.velocity, accent: step.accent, time: fireTime })
+      drumEngine.triggerPad(trackIdx, { velocity: step.velocity, accent: step.accent, time: fireTime, duration: stepDur })
     } else {
       drumEngine.triggerRatchet(trackIdx, stepTimeSec, divisions, {
         velocity: step.velocity,
         accent:   step.accent,
         baseTime: fireTime,
+        duration: stepDur,
       })
+    }
+
+    // Set tie countdown for subsequent steps
+    if (step.tie > 0) {
+      _tieCountdown[trackIdx] = step.tie
     }
   })
 
@@ -290,6 +308,7 @@ watch(() => drumStore.isPlaying, (playing) => {
     }
     getTransport().stop()
     stepCounter = 0
+    _tieCountdown = Array(11).fill(0)
     drumStore.currentStep = -1
     chainSlotRef.value = -1
     _pendingStop = false
@@ -307,6 +326,7 @@ watch(() => drumStore.isPlaying, (playing) => {
   }
 
   stepCounter = 0
+  _tieCountdown = Array(11).fill(0)
   _chainSlotIdx = -1
   _measureCount = 0
   chainSlotRef.value = -1
@@ -597,9 +617,9 @@ function generateFill() {
   const r    = Math.random
   const rnd  = (lo, hi) => Math.floor(r() * (hi - lo + 1)) + lo
   const pick = (...args) => args[Math.floor(r() * args.length)]
-  const hit  = (vel) => ({ active: true, velocity: vel, accent: false, ratchet: 1 })
-  const hitA = (vel) => ({ active: true, velocity: vel, accent: true,  ratchet: 1 })
-  const off  = ()    => ({ active: false, velocity: 100, accent: false, ratchet: 1 })
+  const hit  = (vel) => ({ active: true, velocity: vel, accent: false, ratchet: 1, tie: 0 })
+  const hitA = (vel) => ({ active: true, velocity: vel, accent: true,  ratchet: 1, tie: 0 })
+  const off  = ()    => ({ active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 })
   const fp   = Array(drumStore.TRACK_LABELS.length).fill(null).map(() => Array(16).fill(null).map(off))
 
   const archetype = rnd(0, 5)
@@ -704,6 +724,8 @@ function selectCategory(cat) {
 }
 
 function loadSelectedPattern() {
+  const p = currentCatPatterns.value[selectedPattern.value]
+  if (p) lastImportedPattern.value = { category: selectedCategory.value, title: p.title }
   drumStore.loadImportedPattern(selectedCategory.value, selectedPattern.value)
   showImportMenu.value = false
 }
@@ -711,7 +733,10 @@ function loadSelectedPattern() {
 // ── Step right-click context ───────────────────────────────────────────────────
 function openStepContext(trackIdx, stepIdx, event) {
   event.preventDefault()
-  stepContextMenu.value = { trackIdx, stepIdx, x: event.clientX, y: event.clientY }
+  const toolbarH = 48
+  const dialogH = 260
+  const maxY = window.innerHeight - toolbarH - dialogH
+  stepContextMenu.value = { trackIdx, stepIdx, x: event.clientX, y: Math.min(event.clientY, maxY) }
 }
 
 function closeStepContext() {
@@ -731,6 +756,11 @@ function setContextAccent(v) {
 function setContextRatchet(v) {
   if (!stepContextMenu.value) return
   drumStore.setStep(stepContextMenu.value.trackIdx, stepContextMenu.value.stepIdx, { ratchet: v })
+}
+
+function setContextTie(v) {
+  if (!stepContextMenu.value) return
+  drumStore.setStep(stepContextMenu.value.trackIdx, stepContextMenu.value.stepIdx, { tie: v })
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -872,13 +902,22 @@ function cycleChainSlot(i) {
 
         <!-- Imported patterns -->
         <div class="relative ml-1" title="Import patterns from book collections">
-          <button
+          <div class="flex items-center gap-1">
+            <button
             @click.stop="showImportMenu = !showImportMenu"
             class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-300 text-[10px] font-bold hover:border-neutral-500 transition-colors"
-          >
+            >
             <Layers class="w-3.5 h-3.5 text-cyan-400" />
             Import
           </button>
+          <span
+          v-if="lastImportedPattern"
+          class="ml-2 text-[11px] font-mono text-cyan-500/70 truncate max-w-[120px]"
+          :title="lastImportedPattern.category + ' · ' + lastImportedPattern.title"
+          >
+          {{ lastImportedPattern.title }}
+          </span>
+        </div>
 
           <!-- Modal dialog -->
           <Teleport to="body">
@@ -980,10 +1019,10 @@ function cycleChainSlot(i) {
               ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
               : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white'
           ]"
-          title="Presets"
+          title="Patterns"
         >
           <FolderOpen class="w-2.5 h-2.5" />
-          Presets
+          Patterns
         </button>
 
         <!-- Kits button -->
@@ -1071,7 +1110,7 @@ function cycleChainSlot(i) {
           <div class="flex items-center gap-2">
             <input
               v-model="newPresetName"
-              placeholder="Preset name…"
+              placeholder="Pattern name…"
               class="flex-1 bg-black/40 border border-neutral-700 rounded-lg px-3 py-1.5 text-[10px] text-white placeholder-neutral-600 focus:outline-none focus:border-emerald-500 font-mono"
               @keydown.enter="handleSavePreset"
             />
@@ -1085,7 +1124,7 @@ function cycleChainSlot(i) {
           </div>
 
           <!-- Preset list -->
-          <div v-if="drumStore.presets.length" class="space-y-1 max-h-36 overflow-y-auto pr-1">
+          <div v-if="drumStore.presets.length" class="space-y-1 max-h-36 overflow-y-auto custom-scrollbar pr-1">
             <div
               v-for="preset in [...drumStore.presets].reverse()"
               :key="preset.id"
@@ -1097,12 +1136,13 @@ function cycleChainSlot(i) {
               </span>
               <button
                 @click="handleLoadPreset(preset)"
+                title="Load patterns"
                 class="shrink-0 px-2 py-0.5 rounded border border-emerald-700 bg-emerald-700/20 text-emerald-300 text-[8px] font-bold hover:bg-emerald-700/40 transition-colors"
               >Load</button>
               <button
                 @click="overwritePresetWithToast(preset.id)"
                 class="shrink-0 p-0.5 text-amber-600 hover:text-amber-300 transition-colors opacity-0 group-hover:opacity-100"
-                title="Overwrite with current pattern"
+                title="Overwrite with current patterns"
               >
                 <Save class="w-3 h-3" />
               </button>
@@ -1114,7 +1154,7 @@ function cycleChainSlot(i) {
               </button>
             </div>
           </div>
-          <p v-else class="text-[9px] text-neutral-600 font-mono text-center py-1">No presets saved yet</p>
+          <p v-else class="text-[9px] text-neutral-600 font-mono text-center py-1">No patterns saved yet</p>
         </div>
       </Transition>
 
@@ -1144,7 +1184,7 @@ function cycleChainSlot(i) {
           </div>
 
           <!-- Kit list -->
-          <div v-if="drumStore.drumKits.length" class="space-y-1 max-h-36 overflow-y-auto pr-1">
+          <div v-if="drumStore.drumKits.length" class="space-y-1 max-h-36 overflow-y-auto custom-scrollbar pr-1">
             <div
               v-for="kit in [...drumStore.drumKits].reverse()"
               :key="kit.id"
@@ -1361,6 +1401,10 @@ function cycleChainSlot(i) {
                   class="absolute top-0 right-0 text-[6px] leading-none font-black text-white bg-purple-800 rounded-bl px-0.5"
                 >{{ track.steps[(g-1)*4+(l-1)].ratchet }}</span>
                 <span
+                  v-if="track.steps[(g-1)*4+(l-1)].active && track.steps[(g-1)*4+(l-1)].tie > 0 && (g-1)*4+(l-1) < track.length"
+                  class="absolute bottom-0 right-0 text-[6px] leading-none font-black text-white bg-cyan-800 rounded-tl px-0.5"
+                >T{{ track.steps[(g-1)*4+(l-1)].tie }}</span>
+                <span
                   v-if="l === 1 && (g-1)*4 < track.length"
                   class="absolute bottom-0 left-0 w-full h-px bg-white/20"
                 />
@@ -1370,68 +1414,68 @@ function cycleChainSlot(i) {
         </div>
 
           <!-- FX strip -->
-          <div v-if="showFx[trackIdx]" class="flex items-center gap-3 px-2 py-1.5 border-t border-violet-900/40 bg-black/20">
-            <span class="text-[8px] font-black uppercase tracking-widest text-violet-400 shrink-0 w-4">FX</span>
+          <div v-if="showFx[trackIdx]" class="flex items-center gap-3 px-2 py-1.5 border-t border-violet-900/40 bg-violet-700/70">
+            <span class="text-[9px] font-black uppercase tracking-widest text-white-400 shrink-0 w-4">FX</span>
             <!-- Pan -->
             <div class="flex items-center gap-1">
-              <span class="text-[8px] text-neutral-500 shrink-0">Pan</span>
+              <span class="text-[9px] text-neutral-400 shrink-0">Pan</span>
               <input type="range" min="-1" max="1" step="0.01"
                 :value="track.pan ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'pan', parseFloat($event.target.value)); drumEngine.setPadPan(trackIdx, parseFloat($event.target.value))"
                 class="w-16 h-1 accent-violet-500 cursor-pointer"
                 title="Pan (-1 left → +1 right)"
               />
-              <span class="text-[8px] font-mono text-neutral-600 w-6 text-right">{{ ((track.pan ?? 0) * 100).toFixed(0) }}</span>
+              <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ ((track.pan ?? 0) * 100).toFixed(0) }}</span>
             </div>
             <!-- Pitch -->
             <div class="flex items-center gap-1">
-              <span class="text-[8px] text-neutral-500 shrink-0">Pitch</span>
+              <span class="text-[9px] text-neutral-400 shrink-0">Pitch</span>
               <input type="range" min="-12" max="12" step="1"
                 :value="track.pitch ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'pitch', parseInt($event.target.value)); drumEngine.setPadPitch(trackIdx, parseInt($event.target.value))"
                 class="w-14 h-1 accent-violet-500 cursor-pointer"
                 title="Pitch (semitones)"
               />
-              <span class="text-[8px] font-mono text-neutral-600 w-6 text-right">{{ (track.pitch ?? 0) > 0 ? '+' : '' }}{{ track.pitch ?? 0 }}st</span>
+              <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ (track.pitch ?? 0) > 0 ? '+' : '' }}{{ track.pitch ?? 0 }}st</span>
             </div>
             <!-- Filter -->
             <div class="flex items-center gap-1">
-              <span class="text-[8px] text-neutral-500 shrink-0">Tone</span>
+              <span class="text-[9px] text-neutral-400 shrink-0">Tone</span>
               <input type="range" min="200" max="20000" step="100"
                 :value="track.filterFreq ?? 20000"
                 @input="drumStore.setTrackFx(trackIdx, 'filterFreq', parseInt($event.target.value)); drumEngine.setPadFilter(trackIdx, parseInt($event.target.value))"
                 class="w-16 h-1 accent-violet-500 cursor-pointer"
                 title="Low-pass filter frequency"
               />
-              <span class="text-[8px] font-mono text-neutral-600 w-10 text-right">{{ (track.filterFreq ?? 20000) >= 1000 ? ((track.filterFreq ?? 20000)/1000).toFixed(1)+'k' : (track.filterFreq ?? 20000) }}Hz</span>
+              <span class="text-[9px] font-mono text-neutral-400 w-10 text-right">{{ (track.filterFreq ?? 20000) >= 1000 ? ((track.filterFreq ?? 20000)/1000).toFixed(1)+'k' : (track.filterFreq ?? 20000) }}Hz</span>
             </div>
             <!-- Reverb send -->
             <div class="flex items-center gap-1">
-              <span class="text-[8px] text-neutral-500 shrink-0">Rev</span>
+              <span class="text-[9px] text-neutral-400 shrink-0">Rev</span>
               <input type="range" min="0" max="1" step="0.01"
                 :value="track.reverbSend ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'reverbSend', parseFloat($event.target.value)); drumEngine.setPadReverbSend(trackIdx, parseFloat($event.target.value))"
                 class="w-14 h-1 accent-cyan-500 cursor-pointer"
                 title="Reverb send amount"
               />
-              <span class="text-[8px] font-mono text-neutral-600 w-5 text-right">{{ Math.round((track.reverbSend ?? 0) * 100) }}</span>
+              <span class="text-[9px] font-mono text-neutral-400 w-5 text-right">{{ Math.round((track.reverbSend ?? 0) * 100) }}</span>
             </div>
             <!-- Delay send -->
             <div class="flex items-center gap-1">
-              <span class="text-[8px] text-neutral-500 shrink-0">Dly</span>
+              <span class="text-[9px] text-neutral-400 shrink-0">Dly</span>
               <input type="range" min="0" max="1" step="0.01"
                 :value="track.delaySend ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'delaySend', parseFloat($event.target.value)); drumEngine.setPadDelaySend(trackIdx, parseFloat($event.target.value))"
                 class="w-14 h-1 accent-cyan-500 cursor-pointer"
                 title="Delay send amount (1/8-note BPM-synced)"
               />
-              <span class="text-[8px] font-mono text-neutral-600 w-5 text-right">{{ Math.round((track.delaySend ?? 0) * 100) }}</span>
+              <span class="text-[9px] font-mono text-neutral-400 w-5 text-right">{{ Math.round((track.delaySend ?? 0) * 100) }}</span>
             </div>
             <!-- FX copy / paste -->
             <div class="flex items-center gap-1 ml-auto shrink-0">
               <button
                 @click.stop="copyTrackFx(track)"
-                class="px-1.5 h-4 text-[7px] font-black rounded border border-neutral-600 bg-neutral-800 text-neutral-400 hover:border-cyan-500 hover:text-cyan-300 transition-colors"
+                class="px-1.5 h-4 text-[8px] font-black rounded border border-neutral-600 bg-neutral-800 text-neutral-400 hover:border-cyan-500 hover:text-cyan-300 transition-colors"
                 title="Copy FX settings"
               >COPY FX</button>
               <template v-if="fxClipboard">
@@ -1858,6 +1902,24 @@ function cycleChainSlot(i) {
                   : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white'
               ]"
             >{{ r }}</button>
+          </div>
+        </div>
+
+        <!-- Tie -->
+        <div>
+          <span class="text-[9px] text-neutral-400 font-bold block mb-1">Tie steps</span>
+          <div class="flex gap-1">
+            <button
+              v-for="t in [0, 1, 2, 4, 8, 16]"
+              :key="t"
+              @click="setContextTie(t)"
+              :class="[
+                'flex-1 h-5 rounded border text-[8px] font-black transition-colors',
+                drumStore.currentPattern[stepContextMenu.trackIdx].steps[stepContextMenu.stepIdx].tie === t
+                  ? 'bg-cyan-600/40 border-cyan-400 text-cyan-300'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white'
+              ]"
+            >{{ t || '–' }}</button>
           </div>
         </div>
 

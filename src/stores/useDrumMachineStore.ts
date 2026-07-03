@@ -14,7 +14,7 @@ const LS_CURRENT_KIT_KEY = 'SYCORE_DM_CURRENT_KIT'
 const TRACK_LABELS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal', 'Rim Shot', 'Cowbell', 'Tambourine'] as const
 
 function DEFAULT_DRUM_STEP(): DrumStep {
-  return { active: false, velocity: 100, accent: false, ratchet: 1 }
+  return { active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 }
 }
 
 function makeTrack(label = ''): DrumTrack {
@@ -548,16 +548,16 @@ function resolveStep(v: any, velMin: number, velMax: number, ghostVelMax: number
   if (probability < 1 && rand() > probability) return DEFAULT_DRUM_STEP()
 
   if (accented) {
-    return { active: true, velocity: randInt(velMin, velMax), accent: true, ratchet: 1 }
+    return { active: true, velocity: randInt(velMin, velMax), accent: true, ratchet: 1, tie: 0 }
   }
 
   if (ratchetN > 1) {
-    return { active: true, velocity: randInt(velMin, velMax), accent: false, ratchet: ratchetN }
+    return { active: true, velocity: randInt(velMin, velMax), accent: false, ratchet: ratchetN, tie: 0 }
   }
 
   const isGhost = probability < 0.5
   const vel = isGhost ? randInt(20, ghostVelMax) : randInt(velMin, velMax)
-  return { active: true, velocity: vel, accent: false, ratchet: 1 }
+  return { active: true, velocity: vel, accent: false, ratchet: 1, tie: 0 }
 }
 
 /**
@@ -648,6 +648,7 @@ function hydrateTrack(t: any, label: string): DrumTrack {
         velocity: step.velocity ?? 100,
         accent:   step.accent   ?? false,
         ratchet:  step.ratchet  ?? 1,
+        tie:      step.tie      ?? 0,
       }
     }),
   }

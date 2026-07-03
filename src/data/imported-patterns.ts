@@ -32,6 +32,7 @@ export function patternToDrumSteps(pattern: ImportedPattern, defaultVelocity = 1
         velocity: isNote ? vel : 0,
         accent: false,
         ratchet: 1,
+        tie: 0,
       }
     }
   }
@@ -39,7 +40,7 @@ export function patternToDrumSteps(pattern: ImportedPattern, defaultVelocity = 1
   for (let t = 0; t < TRACK_COUNT; t++) {
     for (let i = 0; i < stepCount; i++) {
       if (!tracks[t][i]) {
-        tracks[t][i] = { active: false, velocity: 0, accent: false, ratchet: 1 }
+        tracks[t][i] = { active: false, velocity: 0, accent: false, ratchet: 1, tie: 0 }
       }
     }
   }

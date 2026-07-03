@@ -10,6 +10,7 @@ export interface DrumStep {
   velocity: number;
   accent: boolean;
   ratchet: number;
+  tie: number;
 }
 
 /** A single drum track (8 tracks per sequence) */

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { FolderOpen, X, Play, Pause, Search, RefreshCw, Loader2, Music2, AlertTriangle, CheckCircle2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { idbHandleGet, idbHandlePut } from '@/lib/idb'
+import { decodeAudioFile, loadFileAsPcmWavBlob } from '@/lib/decode-audio'
 
 const uiStore = useUiStore()
 
@@ -110,43 +111,49 @@ onMounted(async () => {
   }
 })
 
-// ── Preview audio ──────────────────────────────────────────────────
-const previewAudio    = new Audio()
+// ── Preview audio (uses AudioContext for broader codec support) ─────
+const previewCtx      = new (window.AudioContext || window.webkitAudioContext)()
 const previewingPath  = ref(null)
 const previewPlaying  = ref(false)
-let previewUrl = null
+let previewSource     = null
+let previewBuffer     = null
 
 function stopPreview() {
-  previewAudio.pause()
+  if (previewSource) { previewSource.stop(); previewSource.disconnect(); previewSource = null }
+  previewBuffer = null
   previewPlaying.value = false
   previewingPath.value = null
-  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null }
 }
 
-previewAudio.addEventListener('ended', () => {
-  previewPlaying.value = false
-  previewingPath.value = null
-})
+function playBuffer() {
+  if (!previewBuffer) return
+  previewSource = previewCtx.createBufferSource()
+  previewSource.buffer = previewBuffer
+  previewSource.connect(previewCtx.destination)
+  previewSource.start(0)
+  previewSource.onended = () => { previewPlaying.value = false; previewingPath.value = null; previewSource = null }
+  previewPlaying.value = true
+  if (previewCtx.state === 'suspended') previewCtx.resume()
+}
 
 async function togglePreview(file) {
   const path = `${file.relPath}/${file.name}`
   if (previewingPath.value === path) {
     if (previewPlaying.value) {
-      previewAudio.pause(); previewPlaying.value = false
+      if (previewSource) { previewSource.stop(); previewSource.disconnect(); previewSource = null }
+      previewPlaying.value = false
     } else {
-      previewAudio.play().catch(() => {}); previewPlaying.value = true
+      if (previewBuffer) playBuffer()
     }
     return
   }
-  previewAudio.pause()
-  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null }
+  stopPreview()
   try {
-    const blob = await file.handle.getFile()
-    previewUrl = URL.createObjectURL(blob)
-    previewAudio.src = previewUrl
+    const fileObj = await file.handle.getFile()
+    const arrayBuf = await fileObj.arrayBuffer()
+    previewBuffer = await decodeAudioFile(arrayBuf)
+    playBuffer()
     previewingPath.value = path
-    await previewAudio.play()
-    previewPlaying.value = true
   } catch (e) {
     console.error('[SoundFolderBrowser] preview failed', e)
     previewingPath.value = null
@@ -164,7 +171,18 @@ async function assignFile(file) {
   const path = `${file.relPath}/${file.name}`
   assigningPath.value = path
   try {
-    await target.onAssign(file)
+    const fileObj = await file.handle.getFile()
+    let assignedFile = fileObj
+    // Convert Opus-in-WAV and other non-standard codecs to PCM WAV
+    if (!fileObj.type || fileObj.type === 'audio/wav' || /\.wav$/i.test(fileObj.name)) {
+      try {
+        const wavBlob = await loadFileAsPcmWavBlob(fileObj)
+        assignedFile = new File([wavBlob], fileObj.name.replace(/\.[^.]+$/, '') + '.wav', { type: 'audio/wav' })
+      } catch {
+        // Not all WAVs are problematic — use original if conversion fails
+      }
+    }
+    await target.onAssign({ ...file, handle: { ...file.handle, getFile: () => assignedFile } })
     assignedPath.value = path
   } catch (e) {
     console.error('[SoundFolderBrowser] assign failed', e)

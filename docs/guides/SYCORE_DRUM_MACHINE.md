@@ -1,6 +1,17 @@
 # Drum Machine
 
-The **Drum Machine** is an 8-track, 16-step pattern sequencer built for live electronic performance. Each track holds a loaded sample and an independent step sequence with per-step velocity, accent, and ratchet. Six pattern banks (A–F) let you switch between arrangements on the fly, a Fill system overlays a one-bar variation without interrupting the main loop, and a Generate engine produces style-aware patterns in one click. Every control is MIDI-learnable with a right-click.
+The **Drum Machine** is 
+
+- **11-tracks · 16-steps pattern sequencer** built for live performance. Each track holds a loaded sample and an independent step sequence with per-step velocity, accent, and ratchet. 
+- **Track FX**: Pan, Pitch, Tone, Reverb, Delay (Copy/Paste FX to patterns)
+- **6 pattern banks** (A–F) let you switch between arrangements on the fly, 
+- **Chain Mode**: chain up to 8 patterns with autofill support
+- **Fill & Autofill**: system overlays a 1-4 bars variation without interrupting the main loop, can be automated every N bars
+- **Generate**: engine produces style-aware patterns in one click (11 styles)
+- **Import**: from different styles/patterns (about 250)
+- **Presets**: save your pattern banks for immediate recall (unlimited)
+- **DrumKits**: create your custom drum kits, save and recall when you need (unlimited)
+- **MIDI Learn** available on almost all controls
 
 ---
 
@@ -11,7 +22,7 @@ The **Drum Machine** is an 8-track, 16-step pattern sequencer built for live ele
 | **Home page** | Click the **Drum Machine** tile |
 | **Toolbar / Main Menu** | Add "Drum Machine" via Toolbar Settings |
 
-The panel opens as a floating, **draggable and resizable** window (initial 960 × 520 px, minimum 720 × 380 px). Drag any free area of the header to reposition; drag any edge or corner to resize. Position and size persist in `localStorage`.
+The panel opens as a floating, **draggable and resizable** window (initial 960 × 520 px, minimum 720 × 380 px). Drag any free area of the header to reposition; drag any edge or corner to resize. Position and size persist thru sessions.
 
 ---
 
@@ -21,12 +32,12 @@ The panel opens as a floating, **draggable and resizable** window (initial 960 �
 
 | Area | Content |
 |------|---------|
-| **Header** | Title · BPM · Style picker · Generate · Presets · Init · minimize/close |
+| **Header** | Title · BPM · Style picker · Generate · Import · Presets · Kits · Init · minimize/close |
 | **Step ruler** | Step numbers 1–16 grouped in four beats of four |
-| **Track grid** | 8 track rows — label, load, mute, solo, volume, FX toggle, randomize, step count, 16 step buttons |
+| **Track grid** | 11 track rows — label, load, preview, mute, solo, volume, FX toggle, randomize velocity, step count, 16 step buttons |
 | **FX strip** | Per-track expandable row — Pan, Pitch, Tone, Reverb, Delay, Copy/Paste FX |
-| **Transport bar** | Sequence tabs A–F · Play/Stop · REC SYNC · active preset name |
-| **Footer** | Swing · Master Volume · Repeat (÷2/÷3/÷4) · Fill (trigger / Gen / step range / Save) · sequence position display |
+| **Transport bar** | Sequence tabs A–F · Play/Stop (with Stop@end + Fill) · REC SYNC (with bar multiplier) · Sync Retrig toggle · Chain toggle · Autofill toggle · active preset name |
+| **Footer** | Swing · Master Volume · Repeater (÷2/÷3/÷4) · Fill (trigger / Gen / step range / Save) · sequence position display |
 
 ---
 
@@ -53,7 +64,7 @@ Each row exposes the following controls from left to right:
 
 | Control | Description |
 |---------|-------------|
-| **Label / load button** | Click the folder icon to pick a local audio file. Drag a URL onto the label to load from a link. Hover for the full sample name |
+| **Label / load button** | Click the folder icon to pick a local audio file. Drag a URL onto the label to load from a link. Hover for the full sample name. Right-click to load from the **Sound Folder Browser** |
 | **Preview (▶)** | Plays the sample once at full volume for quick auditioning |
 | **M** | Mute this track. Red when active |
 | **S** | Solo this track. Amber when active. Multiple solos stack |
@@ -124,7 +135,6 @@ Right-clicking any active step opens a popover with:
 - **Accent** — toggle yellow boost
 - **Ratchet** — 1 / 2 / 3 / 4 hits per step slot
 
----
 
 ## Polymetry — Per-Track Step Count
 
@@ -138,29 +148,32 @@ Located between the track grid and the footer, the transport bar holds the main 
 
 | Control | Description |
 |---------|-------------|
-| **Sequence tabs A–F** | Switch patterns (quantized while playing). MIDI-learnable |
-| **▶ / ■** | Start / Stop the sequencer. BPM syncs from the global arpeggiator BPM on open |
+| **Sequence tabs A–F** | Switch patterns. Respects **Sync Retrig** (checkbox in transport bar): ON = quantized to bar boundary while playing; OFF = immediate switch. MIDI-learnable |
+| **▶ / ■** | Start / Stop the sequencer. BPM syncs from the global arpeggiator BPM on open. **Stop@end** checkbox arms a pending stop at the next bar boundary; **+Fill** plays a fill on the final bar |
 | **BPM display** | Read-only; reflects the current global tempo |
-| **REC SYNC** | Arms a synchronized Audio Capture recording (see below) |
+| **Chain** | Toggle button to enable pattern chain playback. When active, a chain editor row appears below the transport bar with 8 slots. Click a slot to cycle through A–F (or null). The sequencer advances through the filled slots sequentially, wrapping at the end |
+| **Autofill** | Automatically triggers a fill every N bars. Toggle on/off and set the interval (1–128 bars) via the input field next to the toggle |
+| **Sync Retrig** | Checkbox. When ON (default), sequence tab clicks while playing are quantized to the next bar. When OFF, they switch immediately |
+| **REC SYNC** | Arms a synchronized Audio Capture recording (see below). The **bar multiplier** input (default 1) controls how many 16-step bars to record |
 | **Preset name** | Displays the currently loaded preset name (right side, truncated) |
 
 ---
 
 ## Master Volume
 
-A **Vol** slider in the footer controls the overall output gain of all 8 tracks simultaneously (0–100). This is separate from per-track volume and is not stored in presets.
+A **Vol** slider in the footer controls the overall output gain of all 11 tracks simultaneously (0–100). This is separate from per-track volume and is not stored in presets. Right-click to MIDI-learn.
 
 ---
 
 ## Generate
 
-Select a style from the dropdown next to the header, then click **Generate**.
+Select a style from the dropdown next to the header, then click **Generate**. The pattern replaces the active sequence's steps with a style-aware pattern. The **→Fill** toggle (small button next to Generate) redirects the output to the fill pattern instead.
 
 ### Styles
 
-`House` · `Techno` · `HipHop` · `Trap` · `Funk` · `Jungle/DnB` · `Latin` · `Rock`
+`House` · `Techno` · `HipHop` · `Trap` · `Funk` · `Jungle/DnB` · `Latin` · `Rock` · `EDM` · `Pop` · `Jazz`
 
-Each style has multiple variants; one is chosen randomly on each press so repeated generates produce unique results within the genre feel.
+Each style has multiple variants; one is chosen randomly on each press so repeated generates produce unique results within the genre feel. After the base variant is applied, **style-aware variation** adds musical unpredictability — ghost notes on empty steps, accent promotion/demotion, ratchet subdivision, and velocity jitter — all tuned per style (e.g., Jazz gets high ghost-note density and wide velocity jitter; EDM stays tight with minimal variation).
 
 ---
 
@@ -170,8 +183,8 @@ A one-bar overlay pattern that temporarily replaces (or augments) the main seque
 
 | Control | Description |
 |---------|-------------|
-| **Fill button** | Triggers the fill for one bar. Pulses cyan while active |
-| **Gen** | Generates a new random fill pattern (kick-on-1, snare hits, cymbal runs) |
+| **Fill button** | Triggers the fill for one bar. Pulses cyan while active. MIDI-learnable |
+| **Gen** | Generates a new random fill pattern using one of 6 musical archetypes (snare roll, tom cascade, kick frenzy, HH frenzy, broken/syncopated, crash & build) |
 | **Step range inputs** | Two number fields (default 1–16). Defines which steps are written when saving |
 | **Save icon** | Writes the fill steps within the configured range into the current active sequence |
 
@@ -181,7 +194,12 @@ A one-bar overlay pattern that temporarily replaces (or augments) the main seque
 
 ## REC SYNC
 
-Arms a synchronized [Audio Capture](./SYCORE_AUDIO_CAPTURE.md) recording that starts exactly on the next bar boundary and records for precisely 16 steps, then stops automatically.
+Arms a synchronized [Audio Capture](./SYCORE_AUDIO_CAPTURE.md) recording that starts exactly on the next bar boundary and records for precisely 16 steps (multiplied by the **bar multiplier** setting), then stops automatically.
+
+| Control | Description |
+|---------|-------------|
+| **Bar multiplier** | Small number field (default 1, range 1–8). Records N × 16 steps before auto-stopping |
+| **Toggle button** | Click once to arm. Click again to cancel |
 
 | State | Indicator |
 |-------|-----------|
@@ -189,7 +207,49 @@ Arms a synchronized [Audio Capture](./SYCORE_AUDIO_CAPTURE.md) recording that st
 | **Armed** | Pulsing orange · "ARMED" |
 | **Recording** | Pulsing red · "REC" |
 
-Click once to arm. Click again to cancel. Recording fires and stops at actual audio playback time (not transport lookahead), ensuring sample-accurate capture. AudioCapture is pre-warmed when REC SYNC is armed so the monitor is ready the moment recording starts.
+Recording fires and stops at actual audio playback time (not transport lookahead), ensuring sample-accurate capture. AudioCapture is pre-warmed when REC SYNC is armed so the monitor is ready the moment recording starts.
+
+---
+
+## Stop@end
+
+Located next to the Play/Stop button, two checkboxes control end-of-bar stop behavior:
+
+| Control | Description |
+|---------|-------------|
+| **Stop@end** | When checked, pressing stop arms a pending stop that fires at the next bar boundary. The button label changes to "ENDING…" while armed. Click again to cancel |
+| **+Fill** | Only visible when Stop@end is active. When checked, a fill pattern is generated and triggered on the final bar before stopping |
+
+---
+
+## Chain Mode
+
+Chain mode lets you sequence up to 8 pattern slots in order for continuous playback.
+
+Enable chain mode by clicking the **Chain** toggle in the transport bar. When active, a chain editor row appears below the transport bar showing 8 clickable slots.
+
+| Action | Result |
+|--------|--------|
+| **Click a slot** | Cycles through `null → A → B → C → D → E → F → null` |
+| **Right-click a slot** | Clears the slot to null |
+| **Clear all button** | Empties all 8 slots |
+
+While chain mode is active and the sequencer is playing, each slot is played for one bar before advancing to the next filled slot. Empty slots are skipped. A blue highlight on the slot indicates the currently playing position.
+
+Chain configuration (slots and autofill settings) is saved and restored with presets.
+
+---
+
+## Autofill
+
+When enabled, automatically triggers a generated fill at a regular interval.
+
+| Control | Description |
+|---------|-------------|
+| **Autofill toggle** | Enables/disables automatic fill generation |
+| **Interval input** | Number of bars between fills (1–128, default 4). A fill is triggered every N bars while the sequencer plays |
+
+Autofill works independently of manual fill triggering — both can operate simultaneously.
 
 ---
 
@@ -239,7 +299,10 @@ Right-click any labelled control to open the MIDI Learn context menu. An orange 
 | `dm_fill` | Trigger Fill | Trigger |
 | `dm_generate` | Generate pattern | Trigger |
 | `dm_repeat` | Toggle Repeater | Trigger or toggle CC |
-| `dm_vol_0` … `dm_vol_7` | Track volume 1–8 | Continuous CC (0–127) |
+| `dm_vol_0` … `dm_vol_10` | Track volume 1–11 | Continuous CC (0–127) |
+| `dm_pad_0` … `dm_pad_10` | Trigger pad 1–11 (preview / play sample) | Trigger |
+| `dm_master_vol` | Master (footer) volume | Continuous CC (0–127) |
+| `dm_level_master` | AudioMixer drum level | Continuous CC (0–127) |
 
 Triggers respond to Note On or any CC value > 0. Sequence switches are quantized to the bar when playing, exactly as when clicking the tabs.
 

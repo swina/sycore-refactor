@@ -134,7 +134,7 @@ export async function loadSample(padIdx, url) {
   }
 }
 
-export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0 } = {}) {
+export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0, duration = 0 } = {}) {
   const buf = _buffers[padIdx]
   if (!buf) return
   _ensureGraph()
@@ -148,6 +148,13 @@ export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0 } 
   const volScale = (velocity / 127) * _faderLevels[padIdx] * (accent ? ACCENT_BOOST : 1.0)
   gain.gain.value = Math.min(1.5, volScale)
 
+  // Gate the sound to the requested duration
+  if (duration > 0) {
+    const fireAt = Math.max(ctx.currentTime, time)
+    gain.gain.setValueAtTime(Math.min(1.5, volScale), fireAt)
+    gain.gain.linearRampToValueAtTime(0.001, fireAt + duration)
+  }
+
   src.connect(gain)
   gain.connect(_padGains[padIdx])
 
@@ -158,10 +165,10 @@ export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0 } 
   src.onended = () => { _activeSources = _activeSources.filter(s => s !== src) }
 }
 
-export function triggerRatchet(padIdx, stepTimeSec, divisions, { velocity = 100, accent = false, baseTime = 0 } = {}) {
+export function triggerRatchet(padIdx, stepTimeSec, divisions, { velocity = 100, accent = false, baseTime = 0, duration = 0 } = {}) {
   const buf = _buffers[padIdx]
   if (!buf || divisions <= 1) {
-    triggerPad(padIdx, { velocity, accent, time: baseTime })
+    triggerPad(padIdx, { velocity, accent, time: baseTime, duration })
     return
   }
   _ensureGraph()
@@ -178,6 +185,13 @@ export function triggerRatchet(padIdx, stepTimeSec, divisions, { velocity = 100,
     const volScale = (velocity / 127) * _faderLevels[padIdx] * (accent ? ACCENT_BOOST : 1.0) * taper
     const gain = ctx.createGain()
     gain.gain.value = Math.min(1.5, Math.max(0, volScale))
+
+    // Gate the sound to the requested duration
+    if (duration > 0) {
+      const fireAt = Math.max(ctx.currentTime, fireTime)
+      gain.gain.setValueAtTime(Math.min(1.5, Math.max(0, volScale)), fireAt)
+      gain.gain.linearRampToValueAtTime(0.001, fireAt + duration)
+    }
 
     src.connect(gain)
     gain.connect(_padGains[padIdx])
