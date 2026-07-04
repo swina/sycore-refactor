@@ -74,6 +74,7 @@ export interface PanelVisibility {
 interface SoundFolderAssignTarget {
   label: string
   onAssign: (file: File) => Promise<void>
+  onAssignRandom?: (files: File[]) => Promise<void>
 }
 
 /** Toolbar icon size options */

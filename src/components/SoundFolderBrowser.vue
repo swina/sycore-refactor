@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { FolderOpen, X, Play, Pause, Search, RefreshCw, Loader2, Music2, AlertTriangle, CheckCircle2 } from 'lucide-vue-next'
+import { FolderOpen, X, Play, Pause, Search, RefreshCw, Loader2, Music2, AlertTriangle, CheckCircle2, Shuffle } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { idbHandleGet, idbHandlePut } from '@/lib/idb'
 import { decodeAudioFile, loadFileAsPcmWavBlob } from '@/lib/decode-audio'
@@ -164,6 +164,22 @@ async function togglePreview(file) {
 // ── Assign to caller-supplied slot (e.g. Drum Machine track) ──────
 const assigningPath = ref(null)
 const assignedPath  = ref(null)
+const randomAssigning = ref(false)
+
+async function randomAssign() {
+  const target = uiStore.soundFolderAssignTarget
+  if (!target?.onAssignRandom || filteredFiles.value.length === 0) return
+  randomAssigning.value = true
+  try {
+    const shuffled = [...filteredFiles.value].sort(() => Math.random() - 0.5)
+    const picked = shuffled.slice(0, 11)
+    await target.onAssignRandom(picked)
+  } catch (e) {
+    console.error('[SoundFolderBrowser] randomAssign failed', e)
+  } finally {
+    randomAssigning.value = false
+  }
+}
 
 async function assignFile(file) {
   const target = uiStore.soundFolderAssignTarget
@@ -335,6 +351,16 @@ onUnmounted(() => {
             <span v-else-if="dirHandle" class="shrink-0 text-[9px] font-mono text-neutral-600">
               {{ files.length }} file{{ files.length !== 1 ? 's' : '' }}
             </span>
+            <button
+              v-if="uiStore.soundFolderAssignTarget?.onAssignRandom && filteredFiles.length > 0 && !needsPermission"
+              @click="randomAssign"
+              :disabled="randomAssigning"
+              class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/20 transition-colors disabled:opacity-40"
+            >
+              <Loader2 v-if="randomAssigning" class="w-3 h-3 animate-spin" />
+              <Shuffle v-else class="w-3 h-3" />
+              Random 11
+            </button>
           </div>
 
           <div v-if="dirHandle && !needsPermission" class="relative">

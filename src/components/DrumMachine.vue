@@ -520,6 +520,18 @@ function openFolderBrowserForTrack(trackIdx) {
       drumStore.setTrackSound(trackIdx, { soundId, soundLabel, soundUrl })
       await drumEngine.loadSample(trackIdx, soundUrl)
     },
+    onAssignRandom: async (files) => {
+      for (let i = 0; i < Math.min(files.length, 11); i++) {
+        const file = files[i]
+        const soundId    = `dm_${Date.now()}_${i}`
+        const soundLabel = file.name.replace(/\.[^.]+$/, '')
+        const fileObj    = await file.handle.getFile()
+        const blob       = new Blob([await fileObj.arrayBuffer()], { type: fileObj.type || 'audio/wav' })
+        const soundUrl   = await cacheFileBlob(soundId, soundLabel, blob)
+        drumStore.setTrackSound(i, { soundId, soundLabel, soundUrl })
+        await drumEngine.loadSample(i, soundUrl)
+      }
+    },
   }
   uiStore.isSoundFolderBrowserOpen = true
 }
