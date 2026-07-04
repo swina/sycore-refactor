@@ -258,6 +258,7 @@ export function useAppActions() {
         if (window.SY_LOG) window.SY_LOG(`[AppActions] AUDIO CAPTURE: ${ccVal > 63 ? 'ON' : 'OFF'} (val: ${ccVal})`);
         uiStore.isAudioCaptureOpen = ccVal > 63;
         break
+      case 'open_loop_machine':  uiStore.isLoopMachineOpen           = ccVal > 63; break
       case 'open_sound_types':   uiStore.isTypesOpen                  = ccVal > 63; break
       case 'open_sound_history': uiStore.isHistoryOpen                = ccVal > 63; break
       case 'open_midi_matrix':   uiStore.isMidiMatrixOpen             = ccVal > 63; break
