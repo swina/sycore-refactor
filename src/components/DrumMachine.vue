@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
-import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers } from 'lucide-vue-next'
+import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDrumMachineStore, DRUM_STYLE_NAMES } from '@/stores/useDrumMachineStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -43,7 +43,8 @@ const selectedPattern = ref(0)
 const lastImportedPattern = ref(null) // { category, title }
 let _importedCategoryIdx = 0
 let _importedPatternIdx = 0
-const copySourceSeq   = ref(null)
+const copySourceSeq       = ref(null)
+const copySoundsSourceSeq = ref(null)
 const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
 
 // Preset panel
@@ -183,10 +184,15 @@ function _scheduleCallback(time) {
       return
     }
     if (chainEnabled.value) {
-      const activeSlots = chain.value.reduce((acc, s, i) => { if (s) acc.push({ s, i }); return acc }, [])
-      if (activeSlots.length > 0) {
-        _chainSlotIdx = (_chainSlotIdx + 1) % activeSlots.length
-        drumStore.swapSequence(activeSlots[_chainSlotIdx].s)
+      _chainSlotIdx = (_chainSlotIdx + 1) % chainLength.value
+      let seq = chain.value[_chainSlotIdx]
+      if (!seq) {
+        for (let j = _chainSlotIdx - 1; j >= 0; j--) {
+          if (chain.value[j]) { seq = chain.value[j]; break }
+        }
+      }
+      if (seq) {
+        drumStore.swapSequence(seq)
         _pendingSequence = null
         playStateRef.current = buildPlayState()
         state = playStateRef.current
@@ -536,6 +542,17 @@ function openFolderBrowserForTrack(trackIdx) {
   uiStore.isSoundFolderBrowserOpen = true
 }
 
+async function copySoundsTo(targetSeq) {
+  const srcSeq = copySoundsSourceSeq.value
+  if (!srcSeq) return
+  drumStore.copySounds(srcSeq, targetSeq)
+  copySoundsSourceSeq.value = null
+  if (targetSeq === drumStore.activeSequence) {
+    await nextTick()
+    await loadAllSamples(drumStore.currentPattern)
+  }
+}
+
 function previewPad(trackIdx) {
   drumEngine.triggerPad(trackIdx, { velocity: 100, accent: false, time: 0 })
 }
@@ -544,6 +561,7 @@ function previewPad(trackIdx) {
 function _chainExtra() {
   return {
     chain:            [...chain.value],
+    chainLength:      chainLength.value,
     autofillEnabled:  autofillEnabled.value,
     autofillEvery:    autofillEvery.value,
     generatedStyle:   selectedStyle.value,
@@ -559,7 +577,9 @@ function handleSavePreset() {
 async function handleLoadPreset(preset) {
   drumStore.loadPreset(preset)
   currentPresetId.value = preset.id
-  chain.value           = preset.chain?.length === 8 ? [...preset.chain] : Array(8).fill(null)
+  const clen = preset.chainLength ?? 16
+  chainLength.value  = Math.max(2, Math.min(16, clen))
+  chain.value        = preset.chain?.length >= 2 ? (preset.chain.slice(0, chainLength.value).map(s => s ?? null)) : Array(chainLength.value).fill(null)
   autofillEnabled.value = preset.autofillEnabled ?? false
   autofillEvery.value   = preset.autofillEvery   ?? 4
   if (preset.generatedStyle) selectedStyle.value = preset.generatedStyle
@@ -836,9 +856,19 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
 // ── Pattern chain ───────────────────────────────────────────────────────────────
 const showChain      = ref(false)
 const chainEnabled   = ref(false)
-const chain          = ref(Array(8).fill(null))
+const chainLength    = ref(16)
+const chain          = ref(Array(16).fill(null))
 const chainSlotRef   = ref(-1)
 let _chainSlotIdx    = -1
+
+function resizeChain(len) {
+  const clamped = Math.max(2, Math.min(16, len))
+  const prev = chain.value
+  if (clamped === prev.length) return
+  chainLength.value = clamped
+  chain.value = Array.from({ length: clamped }, (_, i) => prev[i] ?? null)
+  if (_chainSlotIdx >= clamped) _chainSlotIdx = 0
+}
 
 const autofillEnabled = ref(false)
 const autofillEvery   = ref(4)
@@ -1120,6 +1150,30 @@ function cycleChainSlot(i) {
               class="w-5 h-5 text-[9px] font-black rounded border border-amber-500 bg-amber-600/20 text-amber-300 hover:bg-amber-600/40"
             >{{ seq }}</button>
             <button @click="copySourceSeq = null" class="p-0.5 text-neutral-500 hover:text-white">
+              <X class="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Copy sounds -->
+        <div class="relative" title="Copy sounds to another slot">
+          <button
+            v-if="!copySoundsSourceSeq"
+            @click.stop="copySoundsSourceSeq = drumStore.activeSequence"
+            class="p-1.5 text-neutral-500 hover:text-sky-300 transition-colors rounded-full hover:bg-sky-500/10"
+            title="Copy sounds to another slot"
+          >
+            <Music2 class="w-3.5 h-3.5" />
+          </button>
+          <div v-else class="flex items-center gap-1" @click.stop>
+            <span class="text-[9px] text-sky-400 font-mono">Sounds to:</span>
+            <button
+              v-for="seq in SEQUENCES.filter(s => s !== copySoundsSourceSeq)"
+              :key="seq"
+              @click="copySoundsTo(seq)"
+              class="w-5 h-5 text-[9px] font-black rounded border border-sky-500 bg-sky-600/20 text-sky-300 hover:bg-sky-600/40"
+            >{{ seq }}</button>
+            <button @click="copySoundsSourceSeq = null" class="p-0.5 text-neutral-500 hover:text-white">
               <X class="w-3 h-3" />
             </button>
           </div>
@@ -1749,10 +1803,23 @@ function cycleChainSlot(i) {
           >{{ slot ?? '–' }}</button>
         </div>
         <button
-          @click.stop="chain = Array(8).fill(null)"
+          @click.stop="chain = Array(chainLength).fill(null)"
           class="px-1.5 py-0.5 text-[8px] font-black rounded border border-neutral-700 bg-neutral-800 text-neutral-500 hover:border-red-600 hover:text-red-400 transition-colors shrink-0"
           title="Clear all chain slots"
         >CLR</button>
+        <div class="flex items-center gap-0.5 ml-1">
+          <button
+@click.stop="resizeChain(chainLength - 1)"
+             class="w-5 h-5 flex items-center justify-center rounded border border-neutral-700 bg-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-500 transition-colors text-[11px] font-black"
+             title="Decrease chain length"
+           >–</button>
+           <span class="w-6 text-center text-[9px] font-mono text-neutral-500">{{ chainLength }}</span>
+           <button
+             @click.stop="resizeChain(chainLength + 1)"
+            class="w-5 h-5 flex items-center justify-center rounded border border-neutral-700 bg-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-500 transition-colors text-[11px] font-black"
+            title="Increase chain length"
+          >+</button>
+        </div>
         <span v-if="chainEnabled && drumStore.isPlaying && chainSlotRef >= 0" class="text-[8px] font-mono text-sky-400 ml-1">
           slot {{ chainSlotRef + 1 }}
         </span>

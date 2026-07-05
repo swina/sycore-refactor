@@ -742,6 +742,17 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     })) as any
   }
 
+  function copySounds(fromKey: string, toKey: string) {
+    const src = sequences.value[fromKey]
+    const dst = sequences.value[toKey]
+    if (!src || !dst) return
+    for (let i = 0; i < Math.min(src.length, dst.length); i++) {
+      dst[i].soundId    = src[i].soundId
+      dst[i].soundLabel = src[i].soundLabel
+      dst[i].soundUrl   = src[i].soundUrl
+    }
+  }
+
   function swapSequence(key: string) {
     activeSequence.value = key
   }
@@ -1010,7 +1021,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     sequences, activeSequence, currentPattern,
     TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,
     setStep, toggleStep, clearPattern, initDrumMachine,
-    copyPattern, swapSequence,
+    copyPattern, copySounds, swapSequence,
     setTrackSound, resolveTrackSound, setTrackVolume, setTrackLength, setTrackFx,
     pasteTrackFx, toggleTrackMute, toggleTrackSolo,
     presets, currentPresetName,
