@@ -70,6 +70,13 @@ const toPlaylist       = ref(localStorage.getItem(userKey('S1_CAPTURE_TO_PLAYLIS
 const appendMode       = ref(localStorage.getItem(userKey('S1_CAPTURE_APPEND')) === '1')
 const error            = ref(null)
 
+const trimThreshold    = ref(parseFloat(localStorage.getItem(userKey('S1_CAP_TRIM_THRESHOLD')) ?? '-50'))
+const isTrimming       = ref(false)
+const isTrimmingStart  = ref(false)
+const isTrimmingEnd    = ref(false)
+const saveFolderHandle = ref(null)
+const saveFolderPath   = ref(localStorage.getItem(userKey('S1_CAP_SAVE_FOLDER')) || '')
+
 const selectedLooperTrack = ref(1)
 const isSendingToLooper   = ref(false)
 const selectedLoopPad      = ref(0)    // 0-based index
@@ -455,6 +462,10 @@ watch(dmGain, v => {
 
 watch(appendMode, v => {
   localStorage.setItem(userKey('S1_CAPTURE_APPEND'),v ? '1' : '0')
+})
+
+watch(trimThreshold, v => {
+  localStorage.setItem(userKey('S1_CAP_TRIM_THRESHOLD'), v.toString())
 })
 
 watch(loopStart, (ns) => {
@@ -1465,6 +1476,144 @@ async function handleCrop() {
   }
 }
 
+async function detectAudioRange(decoded, thresholdLinear) {
+  const sampleRate = decoded.sampleRate
+  const WINDOW = Math.floor(sampleRate * 0.01)
+  const numWindows = Math.ceil(decoded.length / WINDOW)
+  const channelData = []
+  for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+    channelData.push(decoded.getChannelData(ch))
+  }
+
+  let firstNonSilent = -1
+  let lastNonSilent = -1
+
+  for (let w = 0; w < numWindows; w++) {
+    const start = w * WINDOW
+    const end = Math.min(start + WINDOW, decoded.length)
+    let maxVal = 0
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+      for (let i = start; i < end; i++) {
+        const abs = Math.abs(channelData[ch][i])
+        if (abs > maxVal) maxVal = abs
+      }
+    }
+    if (maxVal > thresholdLinear) {
+      if (firstNonSilent === -1) firstNonSilent = start
+      lastNonSilent = end
+    }
+  }
+
+  return { firstSample: firstNonSilent >= 0 ? firstNonSilent : 0, lastSample: lastNonSilent >= 0 ? lastNonSilent : decoded.length }
+}
+
+async function handleTrimStart() {
+  if (!recordedBlob.value || isTrimmingStart.value) return
+  isTrimmingStart.value = true
+  try {
+    const arrayBuf = await recordedBlob.value.arrayBuffer()
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const ctx = new AudioCtxClass()
+    const decoded = await ctx.decodeAudioData(arrayBuf)
+    await ctx.close()
+
+    const thresholdLinear = Math.pow(10, trimThreshold.value / 20)
+    const { firstSample } = await detectAudioRange(decoded, thresholdLinear)
+    if (firstSample <= 0) return
+
+    const newLength = decoded.length - firstSample
+    const trimmed = new AudioBuffer({ numberOfChannels: decoded.numberOfChannels, length: newLength, sampleRate: decoded.sampleRate })
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+      trimmed.copyToChannel(decoded.getChannelData(ch).subarray(firstSample), ch)
+    }
+
+    if (isPlaying.value) { stopAllSources(); isPlaying.value = false }
+    waveformPeaks.value = computePeaks(trimmed.getChannelData(0), waveformDetail.value)
+    _skipNextPeakRegen = true
+    recordedBlob.value = audioBufferToWav(trimmed)
+    audioDuration.value = trimmed.duration
+    currentPlaybackTime.value = Math.max(0, currentPlaybackTime.value - firstSample / decoded.sampleRate)
+    loopStart.value = Math.max(0, loopStart.value - firstSample / decoded.sampleRate)
+    loopEnd.value = Math.min(trimmed.duration, loopEnd.value - firstSample / decoded.sampleRate)
+    playbackStart.value = Math.max(0, playbackStart.value - firstSample / decoded.sampleRate)
+  } catch (e) {
+    console.error('[AudioCapture] Trim start failed', e)
+  } finally {
+    isTrimmingStart.value = false
+  }
+}
+
+async function handleTrimEnd() {
+  if (!recordedBlob.value || isTrimmingEnd.value) return
+  isTrimmingEnd.value = true
+  try {
+    const arrayBuf = await recordedBlob.value.arrayBuffer()
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const ctx = new AudioCtxClass()
+    const decoded = await ctx.decodeAudioData(arrayBuf)
+    await ctx.close()
+
+    const thresholdLinear = Math.pow(10, trimThreshold.value / 20)
+    const { lastSample } = await detectAudioRange(decoded, thresholdLinear)
+    if (lastSample >= decoded.length) return
+
+    const trimmed = new AudioBuffer({ numberOfChannels: decoded.numberOfChannels, length: lastSample, sampleRate: decoded.sampleRate })
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+      trimmed.copyToChannel(decoded.getChannelData(ch).subarray(0, lastSample), ch)
+    }
+
+    if (isPlaying.value) { stopAllSources(); isPlaying.value = false }
+    waveformPeaks.value = computePeaks(trimmed.getChannelData(0), waveformDetail.value)
+    _skipNextPeakRegen = true
+    recordedBlob.value = audioBufferToWav(trimmed)
+    audioDuration.value = trimmed.duration
+    currentPlaybackTime.value = Math.min(currentPlaybackTime.value, audioDuration.value)
+    loopEnd.value = Math.min(trimmed.duration, loopEnd.value)
+  } catch (e) {
+    console.error('[AudioCapture] Trim end failed', e)
+  } finally {
+    isTrimmingEnd.value = false
+  }
+}
+
+async function handleTrimSilence() {
+  if (!recordedBlob.value || isTrimming.value) return
+  isTrimming.value = true
+  try {
+    const arrayBuf = await recordedBlob.value.arrayBuffer()
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+    const ctx = new AudioCtxClass()
+    const decoded = await ctx.decodeAudioData(arrayBuf)
+    await ctx.close()
+
+    const thresholdLinear = Math.pow(10, trimThreshold.value / 20)
+    const { firstSample, lastSample } = await detectAudioRange(decoded, thresholdLinear)
+    if (firstSample <= 0 && lastSample >= decoded.length) return
+
+    const newLength = lastSample - firstSample
+    if (newLength <= 0) return
+
+    const trimmed = new AudioBuffer({ numberOfChannels: decoded.numberOfChannels, length: newLength, sampleRate: decoded.sampleRate })
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+      trimmed.copyToChannel(decoded.getChannelData(ch).subarray(firstSample, lastSample), ch)
+    }
+
+    if (isPlaying.value) { stopAllSources(); isPlaying.value = false }
+    waveformPeaks.value = computePeaks(trimmed.getChannelData(0), waveformDetail.value)
+    _skipNextPeakRegen = true
+    recordedBlob.value = audioBufferToWav(trimmed)
+    audioDuration.value = trimmed.duration
+    currentPlaybackTime.value = 0
+    loopStart.value = 0
+    loopEnd.value = trimmed.duration
+    playbackStart.value = 0
+  } catch (e) {
+    console.error('[AudioCapture] Trim silence failed', e)
+  } finally {
+    isTrimming.value = false
+  }
+}
+
 async function handleNormalize() {
   if (!recordedBlob.value || isNormalizing.value) return
   isNormalizing.value = true
@@ -1565,13 +1714,83 @@ async function handleExportMp3() {
     if (tail.length > 0) mp3Parts.push(toAB(tail))
 
     const audioFilename = `s1-audio-${getTimestamp()}.mp3`
-    triggerDownload(new Blob(mp3Parts, { type: 'audio/mpeg' }), audioFilename)
+    const mp3Blob = new Blob(mp3Parts, { type: 'audio/mpeg' })
+    await saveViaPicker(mp3Blob, audioFilename, 'audio/mpeg')
     triggerMetaDownload(audioFilename)
   } catch (e) {
     console.error('MP3 export failed', e)
   } finally {
     isExportingMp3.value = false
   }
+}
+
+async function getWavBlob() {
+  const buf = decodedBuffer.value
+  if (!buf) throw new Error('No decoded audio available')
+  const hasCrop = (loopStart.value > 0 || loopEnd.value < audioDuration.value)
+  if (!hasCrop) return audioBufferToWav(buf)
+  const sampleRate = buf.sampleRate
+  const startSample = Math.floor(loopStart.value * sampleRate)
+  const endSample = Math.floor(loopEnd.value * sampleRate)
+  const croppedLength = endSample - startSample
+  if (croppedLength <= 0) return audioBufferToWav(buf)
+  const croppedBuffer = new AudioBuffer({ numberOfChannels: buf.numberOfChannels, length: croppedLength, sampleRate })
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    croppedBuffer.copyToChannel(buf.getChannelData(ch).subarray(startSample, endSample), ch)
+  }
+  return audioBufferToWav(croppedBuffer)
+}
+
+async function saveViaPicker(blob, suggestedName, mimeType) {
+  if (typeof window.showSaveFilePicker !== 'function') {
+    triggerDownload(blob, suggestedName)
+    return
+  }
+  try {
+    const opts = { suggestedName, types: [{ accept: { [mimeType]: [`.${suggestedName.split('.').pop()}`] } }] }
+    if (saveFolderHandle.value) opts.startIn = saveFolderHandle.value
+    const handle = await window.showSaveFilePicker(opts)
+    const writable = await handle.createWritable()
+    await writable.write(blob)
+    await writable.close()
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.error('Save failed', e)
+      triggerDownload(blob, suggestedName)
+    }
+  }
+}
+
+async function handleExportWav() {
+  if (!recordedBlob.value) return
+  try {
+    const wavBlob = await getWavBlob()
+    const ts = getTimestamp()
+    await saveViaPicker(wavBlob, `s1-audio-${ts}.wav`, 'audio/wav')
+  } catch (e) {
+    console.error('Failed to export WAV', e)
+  }
+}
+
+async function handleSetSaveFolder() {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    console.warn('File System Access API not available in this browser')
+    return
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
+    saveFolderHandle.value = handle
+    saveFolderPath.value = handle.name
+    localStorage.setItem(userKey('S1_CAP_SAVE_FOLDER'), handle.name)
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.error('Failed to pick save folder', e)
+    }
+  }
+}
+
+async function handleSaveToFolder() {
+  await handleExportWav()
 }
 
 async function handleAddToPlaylist() {
@@ -2456,9 +2675,9 @@ onUnmounted(() => {
         @mousedown="onDragStart"
       >
         <div class="flex items-center gap-4">
-          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
+          <!-- <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0"> -->
             <Mic :class="['w-5 h-5', isRecording ? 'text-red-400 animate-pulse' : 'text-cyan-400']" />
-          </div>
+          <!-- </div> -->
           <div>
             <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">AUDIO CAPTURE</h2>
             <p v-if="isRecording" class="flex items-center gap-1 text-[9px] font-mono text-red-400">
@@ -2466,7 +2685,7 @@ onUnmounted(() => {
               REC {{ fmtTime(recSecs) }}
             </p>
             <p v-else-if="recordedBlob" class="text-[9px] font-mono text-neutral-500">{{ fmtTime(recSecs) }} captured</p>
-            <p v-else class="text-[9px] font-mono text-cyan-500/60 uppercase tracking-widest">Multi-format recording & monitoring</p>
+            <!-- <p v-else class="text-[9px] font-mono text-cyan-500/60 uppercase tracking-widest">Multi-format recording & monitoring</p> -->
           </div>
         </div>
         <div class="flex items-center gap-1">
@@ -2488,14 +2707,14 @@ onUnmounted(() => {
             {{ d.label || `Input ${d.deviceId.slice(0, 8)}` }}
           </option>
         </select>
-        <button
+        <!-- <button
           @click="showAudioSettings = true"
           title="Audio Device Settings"
           class="shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors text-amber-400 border-amber-400/30 hover:bg-amber-400/10 hover:border-amber-400/50"
         >
           <SlidersHorizontal class="w-3 h-3" />
           Devices
-        </button>
+        </button> -->
         <button
           @click="uiStore.isAudioMixerOpen = true"
           title="Open Audio Mixer"
@@ -2504,7 +2723,7 @@ onUnmounted(() => {
           <Volume2 class="w-3 h-3" />
           Mixer
         </button>
-        <button
+        <!-- <button
           @click="toPlaylist = !toPlaylist"
           :title="toPlaylist ? 'Auto-add to Playlist: ON' : 'Auto-add to Playlist: OFF'"
           :class="['shrink-0 flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-black uppercase tracking-wider transition-colors',
@@ -2514,7 +2733,7 @@ onUnmounted(() => {
         >
           <ListPlus class="w-3 h-3" />
           PL
-        </button>
+        </button> -->
         <button
           @click="uiStore.isFreesoundBrowserOpen = true"
           title="Open Freesound Browser"
@@ -2927,19 +3146,46 @@ onUnmounted(() => {
             {{ isExportingMp3 ? 'MP3…' : 'MP3' }}
           </button>
 
-          <!-- Save (original format / WAV cropped) -->
+          <!-- Export WAV (no loop JSON) -->
           <button
-            @click="handleDownload"
+            @click="handleExportWav"
             :disabled="!recordedBlob"
-            title="Save recording (WAV if cropped, WebM if full)"
+            title="Export WAV (no loop info JSON)"
             :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
               recordedBlob
                 ? 'text-neutral-300 border-neutral-700 hover:border-synth-neon/40 hover:text-synth-neon'
                 : 'text-neutral-700 border-neutral-800 cursor-default']"
           >
             <Download class="w-3 h-3" />
-            Save
-          </button>  
+            WAV
+          </button>
+
+          <!-- Set save folder + auto-save -->
+          <div class="flex flex-col gap-1">
+            <button
+              @click="handleSetSaveFolder"
+              title="Select folder for auto-save"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+                saveFolderHandle
+                  ? 'text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/15'
+                  : 'text-neutral-500 border-neutral-700 hover:text-neutral-400 hover:border-neutral-600']"
+            >
+              <FolderOpen class="w-3 h-3" />
+              {{ saveFolderHandle ? saveFolderPath : 'Set Folder' }}
+            </button>
+            <button
+              @click="handleSaveToFolder"
+              :disabled="!recordedBlob"
+              title="Save WAV to selected folder"
+              :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-1.5 rounded border transition-colors',
+                recordedBlob
+                  ? 'text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/15'
+                  : 'text-neutral-700 border-neutral-800 cursor-default']"
+            >
+              <Download class="w-3 h-3" />
+              Save
+            </button>
+          </div>  
 
            <!-- Import -->
           <!-- <button
@@ -3227,6 +3473,37 @@ onUnmounted(() => {
               <Scissors class="w-3 h-3" />
               {{ isCropping ? 'Cropping…' : 'Crop' }}
             </button> 
+            <!-- Trim buttons -->
+            <div class="flex flex-col gap-0.5 rounded border border-neutral-800 p-1 mt-0.5">
+              <span class="text-[7px] font-black uppercase tracking-widest text-neutral-500 text-center">Trim</span>
+              <button
+                @click="handleTrimSilence"
+                :disabled="!recordedBlob || isTrimming"
+                :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded transition-colors',
+                  recordedBlob && !isTrimming
+                    ? 'text-emerald-300 hover:bg-emerald-500/15'
+                    : 'text-neutral-700 cursor-default']"
+                title="Trim silence from both start and end"
+              >{{ isTrimming ? '…' : 'Both' }}</button>
+              <button
+                @click="handleTrimStart"
+                :disabled="!recordedBlob || isTrimmingStart"
+                :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded transition-colors',
+                  recordedBlob && !isTrimmingStart
+                    ? 'text-cyan-300 hover:bg-cyan-500/15'
+                    : 'text-neutral-700 cursor-default']"
+                title="Trim silence from the start only"
+              >{{ isTrimmingStart ? '…' : 'Start' }}</button>
+              <button
+                @click="handleTrimEnd"
+                :disabled="!recordedBlob || isTrimmingEnd"
+                :class="['flex items-center justify-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded transition-colors',
+                  recordedBlob && !isTrimmingEnd
+                    ? 'text-violet-300 hover:bg-violet-500/15'
+                    : 'text-neutral-700 cursor-default']"
+                title="Trim silence from the end only"
+              >{{ isTrimmingEnd ? '…' : 'End' }}</button>
+            </div>
             <!-- Calc BPM -->
           <button
               @click="calculateBpm"
@@ -3296,6 +3573,19 @@ onUnmounted(() => {
               class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
             />
             <span class="text-[9px] font-mono text-synth-neon w-8 text-right">{{ normalizeGateDb }}dB</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[8px] font-mono text-neutral-500">TRIM</span>
+            <input
+              v-model.number="trimThreshold"
+              title="Trim silence threshold"
+              type="range"
+              min="-96"
+              max="-12"
+              step="1"
+              class="flex-1 h-1 accent-synth-neon bg-neutral-800 rounded appearance-none cursor-pointer"
+            />
+            <span class="text-[9px] font-mono text-synth-neon w-8 text-right">{{ trimThreshold }}dB</span>
           </div>
           <!-- Waveform detail presets -->
           <div class="flex items-center gap-1.5">
