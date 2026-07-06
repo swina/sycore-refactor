@@ -447,6 +447,21 @@ async function _tlDmStartHandler(e) {
 }
 function _tlDmStopHandler() { drumStore.isPlaying = false }
 
+// ── Timeline DM Rec Sync ─────────────────────────────────────────────────────
+function _tlDmRecSyncHandler(e) {
+  const measures = e.detail?.measures ?? 4
+  recSyncMultiplier.value = measures
+  // Ensure drum machine is playing — the scheduler must run for rec sync
+  // to trigger at the next bar boundary (step 0)
+  if (!drumStore.isPlaying) {
+    drumStore.isPlaying = true
+    // Call arm on next tick so the watch handler has time to start transport
+    setTimeout(() => toggleRecSync(), 0)
+  } else {
+    toggleRecSync()
+  }
+}
+
 function _onPadTrigger(e) {
   const { trackIdx, velocity } = e.detail ?? {}
   if (typeof trackIdx === 'number' && trackIdx >= 0 && trackIdx < drumStore.TRACK_LABELS.length) {
@@ -470,6 +485,7 @@ onMounted(async () => {
   window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.addEventListener('timeline-dm-start', _tlDmStartHandler)
   window.addEventListener('timeline-dm-stop',  _tlDmStopHandler)
+  window.addEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
   window.addEventListener('dm-pad-trigger',    _onPadTrigger)
 })
 
@@ -487,6 +503,7 @@ onUnmounted(() => {
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.removeEventListener('timeline-dm-start', _tlDmStartHandler)
   window.removeEventListener('timeline-dm-stop',  _tlDmStopHandler)
+  window.removeEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
   window.removeEventListener('dm-pad-trigger',    _onPadTrigger)
 })
 

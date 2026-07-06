@@ -24,6 +24,7 @@ import catalogIndex        from '@/data/program_change/program_change.json'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc, serverTimestamp, db } from '@/lib/idb'
 import { userKey } from '@/lib/userKey'
+import { on } from '@/types/events'
 
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
@@ -157,7 +158,21 @@ const availPerfSets  = ref([])   // loaded from SYCORE_PC_PERFORMANCE_SETS when 
 const newMkrPerfSet  = ref({ setId: '', setName: '' })
 const newMkrLm       = ref({ padIdx: 0 })
 const newMkrDm       = ref({ presetName: '', seqKey: '', chainEnabled: null })
+const newMkrDmRec    = ref({ measures: 4 })
+const newMkrAudioLoop = ref({ measures: 2 })
 const newMkrGoto     = ref({ targetTime: '0:00', repeat: false })
+
+// ─── Macro chain helper ─────────────────────────────────────────────────────
+const showMacroChain = ref(false)
+const macroChain = ref({
+  dmRecPos: 0,
+  dmRecMeasures: 4,
+  recDurationSec: 0,
+  chainTrim: true,
+  chainLoop: true,
+  chainLoopMeasures: 2,
+  chainCrop: true,
+})
 
 // ─── IDB Save / Load ───────────────────────────────────────────────────────
 const TL_COL         = () => collection(db, 'users', authStore.user?.uid, 'timeline_sets')
@@ -185,6 +200,12 @@ const MARKER_TYPES = [
   { value: 'dm-start',         label: 'Start Drum Machine',       hasValue: false },
   { value: 'dm-stop',          label: 'Stop Drum Machine',        hasValue: false },
   { value: 'goto',             label: 'Go To Time',               hasValue: false },
+  { value: 'dm-rec-sync',      label: 'DM Rec Sync (macro)',      hasValue: false },
+  { value: 'audio-trim-start', label: 'Audio Trim Start (macro)',  hasValue: false },
+  { value: 'audio-set-loop',   label: 'Audio Set Loop (macro)',   hasValue: true  },
+  { value: 'audio-crop',       label: 'Audio Crop (macro)',       hasValue: false },
+  { value: 'audio-save-wav',   label: 'Audio Save WAV (macro)',   hasValue: false },
+  { value: 'tl-stop',          label: 'Stop Timeline',           hasValue: false },
 ]
 
 const newMkrType = computed(() => MARKER_TYPES.find(t => t.value === newMkr.value.type))
@@ -266,6 +287,12 @@ const MKR_COLORS = {
   'dm-start':        '#ec4899',
   'dm-stop':         '#be185d',
   'goto':            '#a78bfa',
+  'dm-rec-sync':      '#ff6b35',
+  'audio-trim-start': '#38bdf8',
+  'audio-set-loop':   '#34d399',
+  'audio-crop':       '#f472b6',
+  'audio-save-wav':   '#fbbf24',
+  'tl-stop':          '#ef4444',
 }
 
 const MKR_ICONS = {
@@ -285,6 +312,12 @@ const MKR_ICONS = {
   'dm-start':        '⬡',
   'dm-stop':         '⬢',
   'goto':            '⏩',
+  'dm-rec-sync':      '⏺',
+  'audio-trim-start': '✂',
+  'audio-set-loop':   '↺',
+  'audio-crop':       '⊞',
+  'audio-save-wav':   '⬇',
+  'tl-stop':          '◼',
 }
 
 const MKR_ABBREV = {
@@ -304,6 +337,12 @@ const MKR_ABBREV = {
   'dm-start':        'DM▶',
   'dm-stop':         'DM■',
   'goto':            'GOTO',
+  'dm-rec-sync':      'REC⏺',
+  'audio-trim-start': 'TRM✂',
+  'audio-set-loop':   'LOP↺',
+  'audio-crop':       'CRP⊞',
+  'audio-save-wav':   'SAVE',
+  'tl-stop':          'TL■',
 }
 
 function segColor(idx)    { return SEG_COLORS[segments.value[idx]?.trackIdx % SEG_COLORS.length ?? idx % SEG_COLORS.length] }
@@ -332,6 +371,9 @@ function mDisplayValue(m) {
     case 'lm-start':       return `Pad ${(m.padIdx ?? 0) + 1}`
     case 'dm-start':       return [m.presetName, m.seqKey ? `Seq ${m.seqKey}` : ''].filter(Boolean).join(' / ') || '(current)'
     case 'goto':           return formatTime(m.targetSec ?? 0) + (m.repeat ? ' ↻' : '')
+    case 'dm-rec-sync':    return `${m.measures ?? 4} bars`
+    case 'audio-set-loop': return `${m.measures ?? 2} bars`
+    case 'audio-save-wav': return m.filename || 'drum_machine.wav'
     default:               return ''
   }
 }
@@ -350,8 +392,12 @@ const segBounds = computed(() => {
 })
 
 const totalDuration = computed(() => {
-  if (!segBounds.value.length) return 0
-  return segBounds.value[segBounds.value.length - 1].end
+  if (segBounds.value.length) return segBounds.value[segBounds.value.length - 1].end
+  if (markers.value.length) {
+    const lastPos = Math.max(...markers.value.map(m => m.position))
+    return lastPos + 10 // 10s of padding after the last marker
+  }
+  return 0
 })
 
 const timelineWidth = computed(() => Math.max(totalDuration.value * scale.value + 160, 800))
@@ -457,6 +503,9 @@ function _tick() {
     _lastTransportWasPlay = false
     midiStore.sendStop()
     window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
+    window.dispatchEvent(new CustomEvent('timeline-lm-stop'))
+    window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
+    window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false, source: 'timeline' } }))
     return
   }
 
@@ -470,7 +519,7 @@ function _tick() {
 
   _checkSegments()
   _checkMarkers()
-  _rafId = requestAnimationFrame(_tick)
+  if (isPlaying.value) _rafId = requestAnimationFrame(_tick)
 }
 
 function _checkSegments() {
@@ -608,6 +657,33 @@ function _fireMarker(m) {
       break
     case 'dm-stop':
       window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
+      break
+    case 'dm-rec-sync': {
+      const measures = m.measures ?? 4
+      window.dispatchEvent(new CustomEvent('timeline-dm-rec-sync', { detail: { measures } }))
+      break
+    }
+    case 'audio-trim-start':
+      window.dispatchEvent(new CustomEvent('timeline-audio-trim-start'))
+      break
+    case 'audio-set-loop': {
+      const loopMeasures = m.measures ?? 2
+      window.dispatchEvent(new CustomEvent('timeline-audio-set-loop', { detail: { measures: loopMeasures } }))
+      break
+    }
+    case 'audio-crop':
+      window.dispatchEvent(new CustomEvent('timeline-audio-crop'))
+      break
+    case 'audio-save-wav': {
+      const pName = drumStore.currentPresetName || 'preset'
+      const seq = drumStore.activeSequence || 'A'
+      const bpm = drumStore.bpm || 120
+      const filename = `sycore_dm_${pName.toLowerCase().replace(/\s+/g, '_')}_${seq}_${bpm}bpm.wav`
+      window.dispatchEvent(new CustomEvent('timeline-audio-save-wav', { detail: { filename } }))
+      break
+    }
+    case 'tl-stop':
+      stop()
       break
     case 'goto': {
       const target = m.targetSec ?? 0
@@ -975,6 +1051,8 @@ function openAddMarker() {
   }
   newMkrLm.value   = { padIdx: 0 }
   newMkrDm.value   = { presetName: '', seqKey: '', chainEnabled: null }
+  newMkrDmRec.value = { measures: 4 }
+  newMkrAudioLoop.value = { measures: 2 }
   newMkrGoto.value = { targetTime: '0:00', repeat: false }
   showAddMarker.value = true
 }
@@ -1017,6 +1095,12 @@ function confirmAddMarker() {
       targetSec: parseTimeStr(newMkrGoto.value.targetTime),
       repeat:    newMkrGoto.value.repeat,
     }
+  } else if (type === 'dm-rec-sync') {
+    extra = { measures: Math.max(1, Math.min(16, Number(newMkrDmRec.value.measures))) }
+  } else if (type === 'audio-set-loop') {
+    extra = { measures: Math.max(1, Math.min(16, Number(newMkrAudioLoop.value.measures))) }
+  } else if (type === 'audio-save-wav') {
+    extra = {}
   }
 
   markers.value.push({
@@ -1029,6 +1113,89 @@ function confirmAddMarker() {
   })
   markers.value.sort((a, b) => a.position - b.position)
   showAddMarker.value = false
+
+  // After adding dm-rec-sync, suggest chaining subsequent macro markers
+  if (type === 'dm-rec-sync') {
+    const bpm = midiStore.currentBpm || 120
+    const beatSec = 60 / bpm
+    const measures = extra.measures ?? 4
+    // Recording starts at next bar boundary (up to 1 bar latency), lasts N measures
+    // 1 bar = 4 beats = 4 * beatSec
+    const recDur = 4 * beatSec + measures * 4 * beatSec
+    macroChain.value = {
+      dmRecPos: Number(newMkr.value.position),
+      dmRecMeasures: measures,
+      recDurationSec: recDur,
+      chainTrim: true,
+      chainLoop: true,
+      chainLoopMeasures: 2,
+      chainCrop: true,
+      chainSave: true,
+    }
+    showMacroChain.value = true
+  }
+}
+
+function confirmMacroChain() {
+  const mc = macroChain.value
+  const bpm = midiStore.currentBpm || 120
+  const beatSec = 60 / bpm
+  // Recording starts at next bar boundary after marker fires (+1 bar worst case)
+  // 1 bar = 4 beats
+  const recEndPos = mc.dmRecPos + 4 * beatSec + mc.dmRecMeasures * 4 * beatSec
+  let offset = 0
+
+  if (mc.chainTrim) {
+    markers.value.push({
+      id: `m${Date.now()}_1`,
+      position: recEndPos + offset,
+      type: 'audio-trim-start',
+      label: '',
+      value: 0,
+    })
+    offset += 0.5
+  }
+  if (mc.chainLoop) {
+    markers.value.push({
+      id: `m${Date.now()}_2`,
+      position: recEndPos + offset,
+      type: 'audio-set-loop',
+      label: '',
+      value: mc.chainLoopMeasures,
+      measures: mc.chainLoopMeasures,
+    })
+    offset += 0.5
+  }
+  if (mc.chainCrop) {
+    markers.value.push({
+      id: `m${Date.now()}_3`,
+      position: recEndPos + offset,
+      type: 'audio-crop',
+      label: '',
+      value: 0,
+    })
+    offset += 0.5
+  }
+  if (mc.chainSave) {
+    markers.value.push({
+      id: `m${Date.now()}_4`,
+      position: recEndPos + offset,
+      type: 'audio-save-wav',
+      label: '',
+      value: 0,
+    })
+    offset += 0.5
+  }
+  // Always stop the timeline at the end of the macro chain
+  markers.value.push({
+    id: `m${Date.now()}_stop`,
+    position: recEndPos + offset,
+    type: 'tl-stop',
+    label: '',
+    value: 0,
+  })
+  markers.value.sort((a, b) => a.position - b.position)
+  showMacroChain.value = false
 }
 
 function removeMarker(id) { markers.value = markers.value.filter(m => m.id !== id) }
@@ -1229,6 +1396,11 @@ function _onTransportNote(type, note, velocity, chan, inputId) {
 
 let _removeTransportCC   = null
 let _removeTransportNote = null
+let _addMkrUnsubDmRec    = null
+let _addMkrUnsubTrimStart = null
+let _addMkrUnsubSetLoop  = null
+let _addMkrUnsubCrop     = null
+let _addMkrUnsubSaveWav  = null
 
 onMounted(() => {
   const q = query(collection(db, 'backing_tracks'), orderBy('createdAt', 'desc'))
@@ -1240,6 +1412,11 @@ onMounted(() => {
   loadSets()
   _removeTransportCC   = midiService.addCCListener(_onTransportCC)
   _removeTransportNote = midiService.addNoteListener(_onTransportNote)
+  _addMkrUnsubDmRec    = on('timeline-add-mkr-dm-rec-sync', () => { newMkr.value.position = timelinePos.value; newMkr.value.type = 'dm-rec-sync'; showAddMarker.value = true })
+  _addMkrUnsubTrimStart = on('timeline-add-mkr-audio-trim-start', () => { newMkr.value.position = timelinePos.value; newMkr.value.type = 'audio-trim-start'; showAddMarker.value = true })
+  _addMkrUnsubSetLoop  = on('timeline-add-mkr-audio-set-loop', () => { newMkr.value.position = timelinePos.value; newMkr.value.type = 'audio-set-loop'; showAddMarker.value = true })
+  _addMkrUnsubCrop     = on('timeline-add-mkr-audio-crop', () => { newMkr.value.position = timelinePos.value; newMkr.value.type = 'audio-crop'; showAddMarker.value = true })
+  _addMkrUnsubSaveWav  = on('timeline-add-mkr-audio-save-wav', () => { newMkr.value.position = timelinePos.value; newMkr.value.type = 'audio-save-wav'; showAddMarker.value = true })
 })
 
 onUnmounted(() => {
@@ -1247,6 +1424,11 @@ onUnmounted(() => {
   _unsubLib?.()
   _removeTransportCC?.()
   _removeTransportNote?.()
+  _addMkrUnsubDmRec?.()
+  _addMkrUnsubTrimStart?.()
+  _addMkrUnsubSetLoop?.()
+  _addMkrUnsubCrop?.()
+  _addMkrUnsubSaveWav?.()
   document.removeEventListener('mousemove', _onPlayheadDrag)
   document.removeEventListener('mouseup',   _onPlayheadDragEnd)
 })
@@ -1388,6 +1570,65 @@ onUnmounted(() => {
         >
           <Flag class="w-3 h-3" /> Marker
         </button>
+        <button
+          @click="segments = []; setLS(LS_SEGS, segments)"
+          title="Clear all segments"
+          class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-red-500/60 hover:bg-red-500/10 text-neutral-500 hover:text-red-400 text-[9px] font-bold uppercase tracking-widest transition-all active:scale-95"
+        >
+          <Trash2 class="w-3 h-3" /> Segs
+        </button>
+        <button
+          @click="markers = []; setLS(LS_MARKS, markers)"
+          title="Clear all markers"
+          class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-red-500/60 hover:bg-red-500/10 text-neutral-500 hover:text-red-400 text-[9px] font-bold uppercase tracking-widest transition-all active:scale-95 ml-1"
+        >
+          <Trash2 class="w-3 h-3" /> Mks
+        </button>
+
+        <!-- Quick Macro buttons -->
+        <div class="flex items-center gap-1 ml-2 pl-2 border-l border-neutral-800">
+          <span class="text-[8px] font-mono text-neutral-700 uppercase tracking-widest mr-1">Macro</span>
+          <button
+            @click="newMkr.position = timelinePos; newMkr.type = 'dm-rec-sync'; showAddMarker = true"
+            title="Insert DM Rec Sync → records 4 bars at playhead"
+            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
+            :style="{ borderColor: '#ff6b3566', color: '#ff6b35', background: '#ff6b3511' }"
+          >
+            ⏺ Rec
+          </button>
+          <button
+            @click="newMkr.position = timelinePos; newMkr.type = 'audio-trim-start'; showAddMarker = true"
+            title="Insert Audio Trim Start at playhead"
+            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
+            :style="{ borderColor: '#38bdf866', color: '#38bdf8', background: '#38bdf811' }"
+          >
+            ✂ Trim
+          </button>
+          <button
+            @click="newMkr.position = timelinePos; newMkr.type = 'audio-set-loop'; showAddMarker = true"
+            title="Insert Audio Set Loop (2 bars) at playhead"
+            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
+            :style="{ borderColor: '#34d39966', color: '#34d399', background: '#34d39911' }"
+          >
+            ↺ Loop
+          </button>
+          <button
+            @click="newMkr.position = timelinePos; newMkr.type = 'audio-crop'; showAddMarker = true"
+            title="Insert Audio Crop at playhead"
+            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
+            :style="{ borderColor: '#f472b666', color: '#f472b6', background: '#f472b611' }"
+          >
+            ⊞ Crop
+          </button>
+          <button
+            @click="newMkr.position = timelinePos; newMkr.type = 'audio-save-wav'; showAddMarker = true"
+            title="Insert Audio Save WAV at playhead"
+            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
+            :style="{ borderColor: '#fbbf2466', color: '#fbbf24', background: '#fbbf2411' }"
+          >
+            ⬇ Save
+          </button>
+        </div>
       </div>
 
       <!-- Timeline canvas -->
@@ -1958,6 +2199,30 @@ onUnmounted(() => {
                 <span v-if="m.seqKey" class="ml-1">Seq {{ m.seqKey }}</span>
                 <span v-if="!m.presetName && !m.seqKey" class="text-neutral-700 italic">current state</span>
               </div>
+              <!-- DM Rec Sync (macro) -->
+              <div v-if="m.type === 'dm-rec-sync'" class="text-[9px] font-mono text-neutral-500">
+                Record {{ m.measures ?? 4 }} bars
+              </div>
+              <!-- Audio Trim Start (macro) -->
+              <div v-if="m.type === 'audio-trim-start'" class="text-[9px] font-mono text-neutral-500">
+                Trim leading silence
+              </div>
+              <!-- Audio Set Loop (macro) -->
+              <div v-if="m.type === 'audio-set-loop'" class="text-[9px] font-mono text-neutral-500">
+                Set loop {{ m.measures ?? 2 }} bars
+              </div>
+              <!-- Audio Crop (macro) -->
+              <div v-if="m.type === 'audio-crop'" class="text-[9px] font-mono text-neutral-500">
+                Crop to loop region
+              </div>
+              <!-- Audio Save WAV (macro) -->
+              <div v-if="m.type === 'audio-save-wav'" class="text-[9px] font-mono text-neutral-500">
+                <span class="text-amber-400">⬇</span> {{ m.filename || 'drum_machine.wav' }}
+              </div>
+              <!-- Stop Timeline -->
+              <div v-if="m.type === 'tl-stop'" class="text-[9px] font-mono text-neutral-500">
+                Stop timeline playback
+              </div>
             </div>
             <span class="text-[9px] font-mono text-neutral-600 shrink-0">{{ formatTime(m.position) }}</span>
             <button @click="removeMarker(m.id)" class="p-1 text-neutral-600 hover:text-rose-500 transition-colors shrink-0">
@@ -2138,6 +2403,68 @@ onUnmounted(() => {
               </div>
             </template>
 
+            <!-- DM Rec Sync (macro) -->
+            <template v-if="newMkr.type === 'dm-rec-sync'">
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Bars to record <span class="text-neutral-600">(1–16)</span>
+                </label>
+                <input
+                  v-model.number="newMkrDmRec.measures"
+                  type="number" min="1" max="16"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                />
+                <div class="mt-1 text-[9px] font-mono text-neutral-600">
+                  Arms drum machine REC SYNC, records {{ newMkrDmRec.measures }} bars, then stops
+                </div>
+              </div>
+            </template>
+
+            <!-- Audio Trim Start (macro) -->
+            <template v-if="newMkr.type === 'audio-trim-start'">
+              <div class="text-[10px] font-mono text-neutral-500 py-2">
+                Trims leading silence from the Audio Capture recording. No configuration needed.
+              </div>
+            </template>
+
+            <!-- Audio Set Loop (macro) -->
+            <template v-if="newMkr.type === 'audio-set-loop'">
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Loop length <span class="text-neutral-600">(bars, 1–16)</span>
+                </label>
+                <input
+                  v-model.number="newMkrAudioLoop.measures"
+                  type="number" min="1" max="16"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
+                />
+                <div class="mt-1 text-[9px] font-mono text-neutral-600">
+                  Sets loop region from playback start to {{ newMkrAudioLoop.measures }} bars at current BPM
+                </div>
+              </div>
+            </template>
+
+            <!-- Audio Crop (macro) -->
+            <template v-if="newMkr.type === 'audio-crop'">
+              <div class="text-[10px] font-mono text-neutral-500 py-2">
+                Crops the Audio Capture recording to the current loop region. No configuration needed.
+              </div>
+            </template>
+
+            <!-- Audio Save WAV (macro) -->
+            <template v-if="newMkr.type === 'audio-save-wav'">
+              <div class="text-[10px] font-mono text-neutral-500 py-2">
+                Exports the cropped Audio Capture recording as a WAV file. The filename is auto-generated from the current drum machine preset, pattern, and BPM.
+              </div>
+            </template>
+
+            <!-- Stop Timeline -->
+            <template v-if="newMkr.type === 'tl-stop'">
+              <div class="text-[10px] font-mono text-neutral-500 py-2">
+                Stops the timeline playback when this marker is reached. Place at the end of your arrangement.
+              </div>
+            </template>
+
             <!-- Program Change — device + channel + PC -->
             <template v-if="newMkr.type === 'program-change'">
               <div>
@@ -2158,7 +2485,21 @@ onUnmounted(() => {
                     title="Browse presets catalog"
                   >
                     Browse
-                  </button>
+</button>
+        <button
+          @click="segments = []; setLS(LS_SEGS, segments)"
+          title="Clear all segments"
+          class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-red-500/60 hover:bg-red-500/10 text-neutral-500 hover:text-red-400 text-[9px] font-bold uppercase tracking-widest transition-all active:scale-95"
+        >
+          <Trash2 class="w-3 h-3" /> Segs
+        </button>
+        <button
+          @click="markers = []; setLS(LS_MARKS, markers)"
+          title="Clear all markers"
+          class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-900 hover:border-red-500/60 hover:bg-red-500/10 text-neutral-500 hover:text-red-400 text-[9px] font-bold uppercase tracking-widest transition-all active:scale-95 ml-1"
+        >
+          <Trash2 class="w-3 h-3" /> Mks
+        </button>
                 </div>
                 <!-- Selected sound indicator -->
                 <div v-if="newMkrPc.soundName" class="mt-1.5 flex items-center gap-1.5">
@@ -2252,6 +2593,73 @@ onUnmounted(() => {
               :disabled="saveToLibSaving || bpmDetecting"
               class="flex-1 py-2 rounded-lg bg-synth-neon/20 border border-synth-neon/40 text-synth-neon font-black text-sm hover:bg-synth-neon/30 transition-colors active:scale-95 disabled:opacity-50"
             >{{ saveToLibSaving ? 'Saving…' : 'Save' }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── Macro Chain Helper ─────────────────────────────────────────────────── -->
+    <Teleport to="body">
+      <div
+        v-if="showMacroChain"
+        class="fixed inset-0 z-[9999] flex items-center justify-center"
+        @click.self="showMacroChain = false"
+      >
+        <div class="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 w-96 shadow-2xl flex flex-col gap-4">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-black uppercase tracking-widest text-orange-400">Chain Macro Steps</span>
+            <span class="text-sm text-neutral-300">Add subsequent audio processing markers?</span>
+            <span class="text-xs text-neutral-600 mt-1">
+              Recording {{ macroChain.dmRecMeasures }} bars at {{ midiStore.currentBpm || 120 }} BPM will take ≈ {{ macroChain.recDurationSec.toFixed(1) }}s <span class="text-neutral-700">(incl. ~1 bar for bar-aligned start)</span>.
+              The remaining markers will be placed at {{ formatTime(macroChain.dmRecPos + macroChain.recDurationSec) }}.
+            </span>
+          </div>
+
+          <div class="flex flex-col gap-2.5">
+            <label class="flex items-center gap-3 cursor-pointer select-none">
+              <input type="checkbox" v-model="macroChain.chainTrim" class="w-4 h-4 accent-sky-500 rounded" />
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-neutral-200">✂ Audio Trim Start</span>
+                <span class="text-[10px] font-mono text-neutral-500">Trim leading silence</span>
+              </div>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer select-none">
+              <input type="checkbox" v-model="macroChain.chainLoop" class="w-4 h-4 accent-emerald-500 rounded" />
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-neutral-200">↺ Audio Set Loop</span>
+                <span class="text-[10px] font-mono text-neutral-500">Loop length in bars:</span>
+              </div>
+              <input
+                v-model.number="macroChain.chainLoopMeasures"
+                type="number" min="1" max="16"
+                class="w-14 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm text-white text-center focus:border-emerald-500 outline-none"
+              />
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer select-none">
+              <input type="checkbox" v-model="macroChain.chainCrop" class="w-4 h-4 accent-pink-500 rounded" />
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-neutral-200">⊞ Audio Crop</span>
+                <span class="text-[10px] font-mono text-neutral-500">Crop to loop region (slightly after trim/loop)</span>
+              </div>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer select-none">
+              <input type="checkbox" v-model="macroChain.chainSave" class="w-4 h-4 accent-amber-500 rounded" />
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-neutral-200">⬇ Audio Save WAV</span>
+                <span class="text-[10px] font-mono text-neutral-500">Export cropped WAV to save folder</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="flex gap-2 mt-1">
+            <button
+              @click="showMacroChain = false"
+              class="flex-1 py-2 rounded-lg border border-neutral-800 text-neutral-500 hover:text-white text-sm transition-colors"
+            >Skip</button>
+            <button
+              @click="confirmMacroChain"
+              class="flex-1 py-2 rounded-lg bg-orange-600 text-white font-black text-sm hover:bg-orange-500 transition-colors active:scale-95"
+            >Add {{ [macroChain.chainTrim, macroChain.chainLoop, macroChain.chainCrop, macroChain.chainSave].filter(Boolean).length }} markers</button>
           </div>
         </div>
       </div>

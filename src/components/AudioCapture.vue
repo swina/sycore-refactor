@@ -76,6 +76,9 @@ const isTrimmingStart  = ref(false)
 const isTrimmingEnd    = ref(false)
 const saveFolderHandle = ref(null)
 const saveFolderPath   = ref(localStorage.getItem(userKey('S1_CAP_SAVE_FOLDER')) || '')
+const savedToast       = ref(false)
+const savedToastMsg    = ref('')
+let _savedToastTimer   = null
 
 const selectedLooperTrack = ref(1)
 const isSendingToLooper   = ref(false)
@@ -213,7 +216,7 @@ const audioDuration       = ref(0)
 const loopStart           = ref(0)
 const loopEnd             = ref(0)
 const playbackStart       = ref(0)
-const loopCrossfadeDur    = ref(0.5)
+const loopCrossfadeDur    = ref(0)
 const currentPlaybackTime = ref(0)
 const waveformPeaks = ref([])
 const waveformDetail = ref(parseInt(localStorage.getItem(userKey('S1_CAPTURE_WAVEFORM_DETAIL')) || '512', 10))
@@ -2516,6 +2519,11 @@ let _stopRecHandler = null
 let _preArmHandler = null
 let _freesoundCaptureHandler = null
 let _recMidiUnsub = null
+let _tlTrimStartHandler = null
+let _tlSetLoopHandler = null
+let _tlCropHandler = null
+let _tlSaveWavHandler = null
+let _tlSaveWavBusy = false
 let resizeObserver = null
 
 onMounted(async () => {
@@ -2577,6 +2585,79 @@ onMounted(async () => {
     }
   }
   window.addEventListener('freesound-send-to-capture', _freesoundCaptureHandler)
+
+  _tlTrimStartHandler = () => {
+    if (recordedBlob.value && !isTrimmingStart.value) handleTrimStart()
+  }
+  window.addEventListener('timeline-audio-trim-start', _tlTrimStartHandler)
+
+  _tlSetLoopHandler = (e) => {
+    const measures = e.detail?.measures ?? 2
+    if (recordedBlob.value && audioDuration.value > 0) {
+      const beatSec = 60 / (activeBpm.value || 120)
+      const loopLen = measures * 4 * beatSec
+      loopStart.value = 0
+      loopEnd.value = Math.min(audioDuration.value, loopLen)
+    }
+  }
+  window.addEventListener('timeline-audio-set-loop', _tlSetLoopHandler)
+
+  _tlCropHandler = () => {
+    if (recordedBlob.value && !isCropping.value) handleCrop()
+  }
+  window.addEventListener('timeline-audio-crop', _tlCropHandler)
+
+  _tlSaveWavHandler = async (e) => {
+    if (_tlSaveWavBusy) return
+    _tlSaveWavBusy = true
+    const filename = e.detail?.filename ?? `drum_machine.wav`
+    if (!recordedBlob.value) {
+      console.warn('[AudioCapture] Timeline WAV export aborted — no recorded blob')
+      _tlSaveWavBusy = false
+      return
+    }
+    try {
+      const arrayBuf = await recordedBlob.value.arrayBuffer()
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext
+      const ctx = new AudioCtxClass()
+      const decoded = await ctx.decodeAudioData(arrayBuf)
+      await ctx.close()
+      const wavBlob = audioBufferToWav(decoded)
+      const doDownload = () => {
+        triggerDownload(wavBlob, filename)
+        savedToastMsg.value = `WAV SAVED — ${filename}`
+        savedToast.value = true
+        clearTimeout(_savedToastTimer)
+        _savedToastTimer = setTimeout(() => { savedToast.value = false }, 3000)
+      }
+      if (saveFolderHandle.value && typeof window.showSaveFilePicker === 'function') {
+        try {
+          const opts = { suggestedName: filename, types: [{ accept: { 'audio/wav': ['.wav'] } }], startIn: saveFolderHandle.value }
+          const handle = await window.showSaveFilePicker(opts)
+          const writable = await handle.createWritable()
+          await writable.write(wavBlob)
+          await writable.close()
+          doDownload()
+          _tlSaveWavBusy = false
+          return
+        } catch (pickErr) {
+          if (pickErr.name !== 'AbortError') {
+            console.warn('[AudioCapture] showSaveFilePicker failed, falling back to download', pickErr)
+          }
+        }
+      }
+      doDownload()
+      _tlSaveWavBusy = false
+    } catch (e) {
+      console.error('[AudioCapture] Timeline WAV export failed', e)
+      _tlSaveWavBusy = false
+      savedToastMsg.value = 'WAV EXPORT FAILED'
+      savedToast.value = true
+      clearTimeout(_savedToastTimer)
+      _savedToastTimer = setTimeout(() => { savedToast.value = false }, 3000)
+    }
+  }
+  window.addEventListener('timeline-audio-save-wav', _tlSaveWavHandler)
 
   midiService.reScanInputs()
   if (!midiService.isReady) {
@@ -2652,6 +2733,10 @@ onUnmounted(() => {
   window.removeEventListener('capture-start-rec', _startRecHandler)
   window.removeEventListener('capture-stop-rec', _stopRecHandler)
   if (_freesoundCaptureHandler) window.removeEventListener('freesound-send-to-capture', _freesoundCaptureHandler)
+  if (_tlTrimStartHandler) window.removeEventListener('timeline-audio-trim-start', _tlTrimStartHandler)
+  if (_tlSetLoopHandler) window.removeEventListener('timeline-audio-set-loop', _tlSetLoopHandler)
+  if (_tlCropHandler) window.removeEventListener('timeline-audio-crop', _tlCropHandler)
+  if (_tlSaveWavHandler) window.removeEventListener('timeline-audio-save-wav', _tlSaveWavHandler)
   if (_recMidiUnsub) _recMidiUnsub()
 })
 </script>
@@ -4089,6 +4174,16 @@ onUnmounted(() => {
       </div>
     </div>
   </Teleport>
+
+  <!-- Saved toast -->
+  <Transition name="fade">
+    <div v-if="savedToast" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none">
+      <div class="flex items-center gap-2 bg-amber-950/90 border border-amber-700 text-amber-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl whitespace-nowrap">
+        <Download class="w-4 h-4 shrink-0" />
+        <span class="truncate max-w-[300px]">{{ savedToastMsg }}</span>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>

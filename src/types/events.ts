@@ -61,8 +61,18 @@ export interface SyCoreEventMap {
   'timeline-lm-stop': void;
   'timeline-dm-start': { presetName: string; seqKey: string; chainEnabled: boolean; bpm: number };
   'timeline-dm-stop': void;
+  'timeline-dm-rec-sync': { measures: number };
+  'timeline-audio-trim-start': void;
+  'timeline-audio-set-loop': { measures: number };
+  'timeline-audio-crop': void;
+  'timeline-audio-save-wav': { filename: string };
   'timeline-trigger-perf-set': { idx: number };
   'timeline-load-perf-set': { setId: string };
+  'timeline-add-mkr-dm-rec-sync': void;
+  'timeline-add-mkr-audio-trim-start': void;
+  'timeline-add-mkr-audio-set-loop': void;
+  'timeline-add-mkr-audio-crop': void;
+  'timeline-add-mkr-audio-save-wav': void;
 
   // LiveSet / Performance pad
   'liveset-navigate': { dir: 'up' | 'down' };

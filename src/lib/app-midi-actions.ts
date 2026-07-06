@@ -123,7 +123,12 @@ export type AppAction =
   | 'open_chord_prog'
   | 'open_sound_engine'
   | 'open_live_timeline'
-  | 'open_tracks_player';
+  | 'open_tracks_player'
+  | 'timeline_add_dm_rec_sync'
+  | 'timeline_add_audio_trim_start'
+  | 'timeline_add_audio_set_loop'
+  | 'timeline_add_audio_crop'
+  | 'timeline_add_audio_save_wav';
 
 export interface AppMidiMapping {
   id: string;
@@ -301,6 +306,11 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   open_sound_engine:  'Toggle Sound Engine',
   open_live_timeline: 'Toggle Live Timeline',
   open_tracks_player: 'Toggle Tracks Library',
+  timeline_add_dm_rec_sync: 'TL Add Marker: DM Rec Sync',
+  timeline_add_audio_trim_start: 'TL Add Marker: Audio Trim Start',
+  timeline_add_audio_set_loop: 'TL Add Marker: Audio Set Loop',
+  timeline_add_audio_crop: 'TL Add Marker: Audio Crop',
+  timeline_add_audio_save_wav: 'TL Add Marker: Audio Save WAV',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -368,6 +378,13 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'midi_config_preset_1', 'midi_config_preset_2', 'midi_config_preset_3', 'midi_config_preset_4',
     'midi_config_preset_5', 'midi_config_preset_6', 'midi_config_preset_7', 'midi_config_preset_8',
     'sysex_send',
+  ],
+  'Timeline Macro': [
+    'timeline_add_dm_rec_sync',
+    'timeline_add_audio_trim_start',
+    'timeline_add_audio_set_loop',
+    'timeline_add_audio_crop',
+    'timeline_add_audio_save_wav',
   ],
 };
 

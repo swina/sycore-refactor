@@ -269,6 +269,16 @@ export function useAppActions() {
       case 'open_sound_engine':  uiStore.isSoundEngineOpen            = ccVal > 63; break
       case 'open_live_timeline': uiStore.isLiveTimelineOpen           = ccVal > 63; break
       case 'open_tracks_player': uiStore.isTracksPlayerOpen           = ccVal > 63; break
+      case 'timeline_add_dm_rec_sync':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('timeline-add-mkr-dm-rec-sync')); break
+      case 'timeline_add_audio_trim_start':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('timeline-add-mkr-audio-trim-start')); break
+      case 'timeline_add_audio_set_loop':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('timeline-add-mkr-audio-set-loop')); break
+      case 'timeline_add_audio_crop':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('timeline-add-mkr-audio-crop')); break
+      case 'timeline_add_audio_save_wav':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('timeline-add-mkr-audio-save-wav')); break
       case 'toggle_midi_performance': if (ccVal > 63) uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen; break
 
       case 'toggle_main_menu':
