@@ -166,14 +166,48 @@ const assigningPath = ref(null)
 const assignedPath  = ref(null)
 const randomAssigning = ref(false)
 
-async function randomAssign() {
+// Slot picker for random assign
+const showSlotPicker = ref(false)
+const selectedSlots  = ref([])
+const slotPickerIndices = ref([])
+
+function openSlotPicker() {
+  const target = uiStore.soundFolderAssignTarget
+  if (!target?.trackLabels?.length) return
+  const maxSlots = Math.min(target.trackLabels.length, filteredFiles.value.length)
+  slotPickerIndices.value = target.trackLabels.slice(0, maxSlots).map((_, i) => i)
+  selectedSlots.value = [...slotPickerIndices.value]
+  showSlotPicker.value = true
+}
+
+function toggleSlot(idx) {
+  const i = selectedSlots.value.indexOf(idx)
+  if (i === -1) selectedSlots.value.push(idx)
+  else selectedSlots.value.splice(i, 1)
+}
+
+function selectAllSlots() {
+  selectedSlots.value = [...slotPickerIndices.value]
+}
+
+function confirmSlotPicker() {
+  showSlotPicker.value = false
+  if (selectedSlots.value.length === 0) return
+  randomAssign(selectedSlots.value)
+}
+
+async function randomAssign(slotIndices) {
   const target = uiStore.soundFolderAssignTarget
   if (!target?.onAssignRandom || filteredFiles.value.length === 0) return
+  const defaultCount = target.trackLabels ? Math.min(target.trackLabels.length, 11) : filteredFiles.value.length
+  const indices = slotIndices || (slotPickerIndices.value.length > 0 ? slotPickerIndices.value : Array.from({ length: defaultCount }, (_, i) => i))
+  const count = Math.min(indices.length, filteredFiles.value.length)
+  const selected = indices.slice(0, count)
   randomAssigning.value = true
   try {
     const shuffled = [...filteredFiles.value].sort(() => Math.random() - 0.5)
-    const picked = shuffled.slice(0, 11)
-    await target.onAssignRandom(picked)
+    const picked = shuffled.slice(0, count)
+    await target.onAssignRandom(picked, selected)
   } catch (e) {
     console.error('[SoundFolderBrowser] randomAssign failed', e)
   } finally {
@@ -353,13 +387,21 @@ onUnmounted(() => {
             </span>
             <button
               v-if="uiStore.soundFolderAssignTarget?.onAssignRandom && filteredFiles.length > 0 && !needsPermission"
-              @click="randomAssign"
+              @click="randomAssign()"
               :disabled="randomAssigning"
               class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/20 transition-colors disabled:opacity-40"
             >
               <Loader2 v-if="randomAssigning" class="w-3 h-3 animate-spin" />
               <Shuffle v-else class="w-3 h-3" />
-              Random 11
+              Random
+            </button>
+            <button
+              v-if="uiStore.soundFolderAssignTarget?.trackLabels && filteredFiles.length > 0 && !needsPermission"
+              @click="openSlotPicker"
+              class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/20 transition-colors"
+            >
+              <Shuffle class="w-3 h-3" />
+              Custom
             </button>
           </div>
 
@@ -450,6 +492,65 @@ onUnmounted(() => {
           </div>
         </div>
       </template>
+
+      <!-- ── Slot picker dialog ─────────────────────────────── -->
+      <Teleport to="body">
+        <div
+          v-if="showSlotPicker && uiStore.soundFolderAssignTarget?.trackLabels"
+          class="fixed inset-0 z-[700] flex items-center justify-center"
+          @click.stop="showSlotPicker = false"
+        >
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            class="relative bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden w-[320px] max-h-[400px] flex flex-col"
+            @click.stop
+          >
+            <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+              <span class="text-[11px] font-black uppercase tracking-widest text-white">Select Slots</span>
+              <span class="text-[9px] font-mono text-neutral-600">{{ slotPickerIndices.length }} available · {{ filteredFiles.length }} files</span>
+              <button
+                @click="showSlotPicker = false"
+                class="p-1 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-white transition-colors"
+              >
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar px-3 py-2 space-y-1">
+              <label
+                v-for="idx in slotPickerIndices"
+                :key="idx"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-800 hover:border-violet-600/40 bg-neutral-950/60 cursor-pointer transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  :checked="selectedSlots.includes(idx)"
+                  @change="toggleSlot(idx)"
+                  class="w-4 h-4 accent-violet-500 cursor-pointer shrink-0"
+                />
+                <span class="text-[11px] font-bold text-white truncate">{{ uiStore.soundFolderAssignTarget.trackLabels[idx] }}</span>
+                <span class="ml-auto text-[8px] font-mono text-neutral-600">Slot {{ idx + 1 }}</span>
+              </label>
+            </div>
+            <div class="flex items-center justify-between px-4 py-3 border-t border-neutral-800 bg-neutral-950/40">
+              <span class="text-[9px] font-mono text-neutral-600">{{ selectedSlots.length }} selected</span>
+              <div class="flex items-center gap-2">
+                <button
+                  @click="selectAllSlots"
+                  class="px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-400 text-[9px] font-bold hover:bg-neutral-800 hover:text-white transition-colors"
+                >All</button>
+                <button
+                  @click="confirmSlotPicker"
+                  :disabled="selectedSlots.length === 0"
+                  class="px-3 py-1 rounded-lg border border-violet-600 bg-violet-600/20 text-violet-300 text-[9px] font-bold hover:bg-violet-600/40 transition-colors disabled:opacity-40"
+                >
+                  <Shuffle class="w-3 h-3 inline mr-1" />
+                  Assign Random
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- ── Resize handle (SE corner) ──────────────────────────── -->
       <div

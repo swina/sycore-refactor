@@ -534,6 +534,7 @@ function openFolderBrowserForTrack(trackIdx) {
   const track = drumStore.currentPattern[trackIdx]
   uiStore.soundFolderAssignTarget = {
     label: track?.label || `Track ${trackIdx + 1}`,
+    trackLabels: drumStore.TRACK_LABELS.slice(0, 11),
     onAssign: async (file) => {
       const soundId    = `dm_${Date.now()}_${trackIdx}`
       const soundLabel = file.name.replace(/\.[^.]+$/, '')
@@ -543,16 +544,19 @@ function openFolderBrowserForTrack(trackIdx) {
       drumStore.setTrackSound(trackIdx, { soundId, soundLabel, soundUrl })
       await drumEngine.loadSample(trackIdx, soundUrl)
     },
-    onAssignRandom: async (files) => {
-      for (let i = 0; i < Math.min(files.length, 11); i++) {
-        const file = files[i]
-        const soundId    = `dm_${Date.now()}_${i}`
+    onAssignRandom: async (files, slotIndices) => {
+      const indices = slotIndices ?? drumStore.TRACK_LABELS.slice(0, 11).map((_, i) => i)
+      const count = Math.min(files.length, indices.length)
+      for (let j = 0; j < count; j++) {
+        const slotIdx = indices[j]
+        const file = files[j]
+        const soundId    = `dm_${Date.now()}_${slotIdx}`
         const soundLabel = file.name.replace(/\.[^.]+$/, '')
         const fileObj    = await file.handle.getFile()
         const blob       = new Blob([await fileObj.arrayBuffer()], { type: fileObj.type || 'audio/wav' })
         const soundUrl   = await cacheFileBlob(soundId, soundLabel, blob)
-        drumStore.setTrackSound(i, { soundId, soundLabel, soundUrl })
-        await drumEngine.loadSample(i, soundUrl)
+        drumStore.setTrackSound(slotIdx, { soundId, soundLabel, soundUrl })
+        await drumEngine.loadSample(slotIdx, soundUrl)
       }
     },
   }
