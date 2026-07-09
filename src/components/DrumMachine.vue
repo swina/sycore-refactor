@@ -66,12 +66,12 @@ const euclideanVelocity = ref(100)
 const euclideanAccent = ref(false)
 const euclideanTrackSelection = ref([true, true, true, true, true, true, true, true, true, true, true])
 
-function toggleEuclideanTrack(idx: number) {
+function toggleEuclideanTrack(idx) {
   euclideanTrackSelection.value[idx] = !euclideanTrackSelection.value[idx]
 }
 
 function generateEuclidean() {
-  const indices: number[] = []
+    const indices = []
   euclideanTrackSelection.value.forEach((sel, i) => {
     if (sel) indices.push(i)
   })
@@ -108,6 +108,7 @@ const basslineRootNote = ref(24)
 function toggleShowBassline() {
   showBassline.value = !showBassline.value
   if (showBassline.value) drumStore.basslineEnabled = true
+  hideBasslineSlots.value = showBassline.value
 }
 
 function captureBasslineMidiNote(voiceIdx, stepIdx) {
@@ -1622,13 +1623,13 @@ function cycleChainSlot(i) {
               >{{ drumStore.resolveTrackSound(trackIdx)?.soundLabel }}</div>
               <!-- <input type="file" accept="audio/*" class="hidden" @change="handleTrackFileLoad(trackIdx, $event)" /> -->
             </label>
-            <button
+            <!-- <button
               @click.stop="openFolderBrowserForTrack(trackIdx)"
               class="shrink-0 w-3.5 h-3.5 flex items-center justify-center text-neutral-500 hover:text-purple-300 transition-colors"
               title="Browse sound folder"
             >
               <FolderOpen class="w-2.5 h-2.5" />
-            </button>
+            </button> -->
             <button
               v-if="drumStore.resolveTrackSound(trackIdx)?.soundId"
               @click.stop="previewPad(trackIdx)"
@@ -1636,7 +1637,7 @@ function cycleChainSlot(i) {
               :class="drumStore.resolveTrackSound(trackIdx)?.own ? 'text-purple-400' : 'text-neutral-500'"
               title="Preview sample"
             >
-              <svg viewBox="0 0 8 8" class="w-2 h-2 fill-current"><polygon points="0,0 8,4 0,8"/></svg>
+              <svg viewBox="0 0 8 8" class="w-3 h-3 fill-current"><polygon points="0,0 8,4 0,8"/></svg>
             </button>
             <div
               v-else
@@ -1905,7 +1906,27 @@ function cycleChainSlot(i) {
             >
               <!-- Voice label + source slot -->
               <div class="shrink-0 flex items-center gap-1" style="width: 86px;">
-                <span class="text-[10px] font-bold text-violet-300 truncate leading-none">{{ drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]] }} ({{ drumStore.basslineSourceSlots[vi] }})</span>
+                <label
+                  @click.stop="openFolderBrowserForTrack(drumStore.basslineSourceSlots[vi])"
+                  :title="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel
+                    ? `${drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]]}: ${drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel}`
+                    : `Load sample for ${drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]]}`"
+                  class="flex-1 min-w-0 cursor-pointer hover:text-violet-300 hover:bg-indigo-800/70 bg-indigo-800/30 p-1 rounded transition-colors"
+                >
+                  <div class="text-[10px] font-bold text-violet-300 truncate leading-none">{{ drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]] }}</div>
+                  <div
+                    v-if="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel"
+                    class="text-[8px] truncate leading-none mt-0.5 text-violet-400"
+                  >{{ drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel }}</div>
+                </label>
+                <button
+                  v-if="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundId"
+                  @click.stop="previewPad(drumStore.basslineSourceSlots[vi])"
+                  class="shrink-0 flex items-center justify-center w-3.5 h-3.5 rounded hover:bg-violet-600/30 text-violet-400 hover:text-violet-200 transition-colors"
+                  title="Preview"
+                >
+                  <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 fill-current"><polygon points="0,0 8,4 0,8"/></svg>
+                </button>
               </div>
 
               <!-- Mute / Solo -->
