@@ -649,6 +649,7 @@ function hydrateTrack(t: any, label: string): DrumTrack {
         accent:   step.accent   ?? false,
         ratchet:  step.ratchet  ?? 1,
         tie:      step.tie      ?? 0,
+        note:     step.note     ?? undefined,
       }
     }),
   }
@@ -690,9 +691,170 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
 
   const currentPattern = computed(() => sequences.value[activeSequence.value] ?? [])
 
+  // ── Bassline state ─────────────────────────────────────────────────────
+  const BASSLINE_SLOT_LABELS = ['Cymbal', 'Cowbell', 'Tambourine']
+  const NUM_BASSLINE_VOICES = 3
+
+  function makeBasslineTrack(idx = 0): DrumTrack {
+    return {
+      label: BASSLINE_SLOT_LABELS[idx] ?? `Bass ${idx + 1}`,
+      soundId:    '',
+      soundLabel: '',
+      soundUrl:   '',
+      muted:      false,
+      solo:       false,
+      volume:     0.85,
+      length:     16,
+      pan:        0,
+      pitch:      0,
+      filterFreq: 20000,
+      reverbSend: 0,
+      delaySend:  0,
+      steps: Array.from({ length: 16 }, () => ({ ...DEFAULT_DRUM_STEP(), note: undefined })),
+    }
+  }
+
+  function makeDefaultBasslineSequences(): Record<string, DrumTrack[]> {
+    return (['A', 'B', 'C', 'D', 'E', 'F'] as const).reduce((acc, key) => {
+      acc[key] = Array.from({ length: NUM_BASSLINE_VOICES }, (_, i) => makeBasslineTrack(i))
+      return acc
+    }, {} as Record<string, DrumTrack[]>)
+  }
+
+  function mergeLoadedBassline(loaded: any): Record<string, DrumTrack[]> {
+    const defaults = makeDefaultBasslineSequences()
+    if (!loaded?.basslineSequences) return defaults
+    const merged: Record<string, DrumTrack[]> = {}
+    for (const key of ['A', 'B', 'C', 'D', 'E', 'F']) {
+      const loadedSeq = loaded.basslineSequences[key]
+      if (!Array.isArray(loadedSeq)) { merged[key] = defaults[key]; continue }
+      merged[key] = Array.from({ length: NUM_BASSLINE_VOICES }, (_, i) => {
+        const t = loadedSeq[i]
+        return t ? hydrateTrack(t, BASSLINE_SLOT_LABELS[i]) : makeBasslineTrack(i)
+      })
+    }
+    return merged
+  }
+
+  const basslineEnabled = ref(loaded?.basslineEnabled ?? false)
+  const basslineSourceSlots = ref<number[]>(loaded?.basslineSourceSlots ?? [8, 9, 10])
+  const basslineActive = ref(loaded?.basslineActive ?? true)
+  const basslineSequences = ref<Record<string, DrumTrack[]>>(
+    loaded ? mergeLoadedBassline(loaded) : makeDefaultBasslineSequences()
+  )
+  const currentBasslinePattern = computed(() => basslineSequences.value[activeSequence.value] ?? [])
+
+  function toggleBasslineVoiceMute(voiceIdx: number) {
+    const t = basslineSequences.value[activeSequence.value]?.[voiceIdx]
+    if (t) t.muted = !t.muted
+    const drumIdx = basslineSourceSlots.value[voiceIdx]
+    if (drumIdx != null) {
+      const dt = sequences.value[activeSequence.value]?.[drumIdx]
+      if (dt) dt.muted = t?.muted ?? false
+    }
+  }
+
+  function toggleBasslineVoiceSolo(voiceIdx: number) {
+    const t = basslineSequences.value[activeSequence.value]?.[voiceIdx]
+    if (t) t.solo = !t.solo
+    const drumIdx = basslineSourceSlots.value[voiceIdx]
+    if (drumIdx != null) {
+      const dt = sequences.value[activeSequence.value]?.[drumIdx]
+      if (dt) dt.solo = t?.solo ?? false
+    }
+  }
+
+  function setBasslineStep(voiceIdx: number, stepIdx: number, patch: Partial<DrumStep>) {
+    const step = basslineSequences.value[activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
+    if (step) Object.assign(step, patch)
+  }
+
+  function toggleBasslineStep(voiceIdx: number, stepIdx: number) {
+    const step = basslineSequences.value[activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
+    if (!step) return
+    step.active = !step.active
+    if (step.active) {
+      if (!step.note) step.note = 36
+      if (step.velocity <= 0) step.velocity = 80
+    }
+  }
+
+  function setBasslineNote(voiceIdx: number, stepIdx: number, note: number) {
+    const step = basslineSequences.value[activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
+    if (step) { step.note = Math.max(24, Math.min(60, note)); step.active = true }
+  }
+
+  function setBasslineVoicePitch(voiceIdx: number, pitch: number) {
+    const t = basslineSequences.value[activeSequence.value]?.[voiceIdx]
+    if (t) t.pitch = Math.max(0, Math.min(24, pitch))
+  }
+
+  function setBasslineVoiceFilter(voiceIdx: number, freq: number) {
+    const t = basslineSequences.value[activeSequence.value]?.[voiceIdx]
+    if (t) t.filterFreq = Math.max(20, Math.min(20000, freq))
+  }
+
+  function setBasslineVoiceVolume(voiceIdx: number, vol: number) {
+    const t = basslineSequences.value[activeSequence.value]?.[voiceIdx]
+    if (t) t.volume = Math.max(0, Math.min(1, vol))
+  }
+
+  function setBasslineVoiceLength(voiceIdx: number, len: number) {
+    const t = basslineSequences.value[activeSequence.value]?.[voiceIdx]
+    if (t) t.length = Math.max(1, Math.min(16, len))
+  }
+
+  // ── Bassline generation ────────────────────────────────────────────────
+  function generateBassline(rootNote = 24) {
+    const pattern = basslineSequences.value[activeSequence.value]
+    if (!pattern) return
+    const r = Math.random
+    const rnd = (lo, hi) => Math.floor(r() * (hi - lo + 1)) + lo
+    const pick = (...args) => args[Math.floor(r() * args.length)]
+    const root = Math.max(12, Math.min(60, rootNote))
+    const fifth = root + 7
+    const octave = root + 12
+
+    pattern.forEach((voice, vi) => {
+      voice.steps = Array.from({ length: 16 }, (_, s) => {
+        const vel = rnd(72, 110)
+        const accent = r() > 0.85
+        if (vi === 0) {
+          // Voice 1: root on 1, fifth variation, octave walks
+          if (s % 4 === 0) return { active: true, velocity: rnd(90, 115), accent: true, ratchet: 1, tie: 0, note: root }
+          if (s === 6 || s === 14) return { active: true, velocity: vel, accent, ratchet: 1, tie: 0, note: fifth }
+          if (s === 10) return { active: true, velocity: vel, accent, ratchet: 1, tie: 0, note: octave }
+          if (r() > 0.6 && (s === 3 || s === 7 || s === 11 || s === 15))
+            return { active: true, velocity: rnd(60, 85), accent: false, ratchet: 1, tie: 0, note: pick(root, fifth) }
+          return { active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 }
+        } else if (vi === 1) {
+          // Voice 2: offbeat root, syncopated
+          if (s % 4 === 2) return { active: true, velocity: vel, accent, ratchet: 1, tie: 0, note: root }
+          if (s === 5 || s === 13) return { active: true, velocity: rnd(65, 90), accent: false, ratchet: 1, tie: 0, note: fifth }
+          if (r() > 0.7 && s > 8)
+            return { active: true, velocity: rnd(55, 80), accent: false, ratchet: 1, tie: 0, note: pick(root, octave) }
+          return { active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 }
+        } else {
+          // Voice 3: ghost notes, rhythmic variation
+          if (s % 8 === 3 || s % 8 === 7) return { active: true, velocity: rnd(50, 75), accent: false, ratchet: 1, tie: 0, note: pick(root, fifth) }
+          if (r() > 0.75) return { active: true, velocity: rnd(40, 65), accent: false, ratchet: 1, tie: 0, note: pick(root, octave) }
+          return { active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 }
+        }
+      })
+    })
+  }
+
   function _serializeSequences(): Record<string, SerializedDrumTrack[]> {
     const out: Record<string, SerializedDrumTrack[]> = {}
     for (const [seqKey, tracks] of Object.entries(sequences.value)) {
+      out[seqKey] = tracks.map(serializeTrack)
+    }
+    return out
+  }
+
+  function _serializeBassline(): Record<string, SerializedDrumTrack[]> {
+    const out: Record<string, SerializedDrumTrack[]> = {}
+    for (const [seqKey, tracks] of Object.entries(basslineSequences.value)) {
       out[seqKey] = tracks.map(serializeTrack)
     }
     return out
@@ -703,12 +865,18 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
       localStorage.setItem(userKey(LS_KEY), JSON.stringify({
         sequences: _serializeSequences(),
         activeSequence: activeSequence.value,
+        basslineEnabled: basslineEnabled.value,
+        basslineSourceSlots: basslineSourceSlots.value,
+        basslineActive: basslineActive.value,
+        basslineSequences: _serializeBassline(),
       }))
     } catch {}
   }
 
   watch(sequences, _save, { deep: true })
   watch(activeSequence, _save)
+  watch(basslineSequences, _save, { deep: true })
+  watch([basslineEnabled, basslineSourceSlots, basslineActive], _save, { deep: true })
 
   function setStep(trackIdx: number, stepIdx: number, patch: Partial<DrumStep>) {
     const step = sequences.value[activeSequence.value]?.[trackIdx]?.steps[stepIdx]
@@ -864,6 +1032,16 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     sequences.value      = mergeLoadedSequences(preset)
     activeSequence.value = preset.activeSequence ?? 'A'
     currentPresetName.value = preset.name ?? ''
+    // Restore bassline if present in preset
+    if ((preset as any).basslineSequences) {
+      basslineSequences.value = mergeLoadedBassline(preset)
+    }
+    if ((preset as any).basslineEnabled != null) {
+      basslineEnabled.value = (preset as any).basslineEnabled
+    }
+    if ((preset as any).basslineSourceSlots) {
+      basslineSourceSlots.value = (preset as any).basslineSourceSlots
+    }
     _save()
   }
 
@@ -1032,5 +1210,14 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     generateDrumPatternRaw,
     IMPORTED_PATTERNS,
     loadImportedPattern,
+    // Bassline
+    basslineEnabled, basslineSourceSlots, basslineActive,
+    basslineSequences, currentBasslinePattern,
+    BASSLINE_SLOT_LABELS, NUM_BASSLINE_VOICES,
+    toggleBasslineVoiceMute,
+    toggleBasslineVoiceSolo,
+    setBasslineStep, toggleBasslineStep, setBasslineNote,
+    setBasslineVoiceFilter, setBasslineVoicePitch, setBasslineVoiceVolume, setBasslineVoiceLength,
+    generateBassline,
   }
 })
