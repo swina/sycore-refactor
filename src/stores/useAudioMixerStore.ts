@@ -7,9 +7,9 @@ import { userKey } from '@/lib/userKey'
 
 export type MixerChannelId =
   | 'backing' | 'tracks' | 'looper' | 'lm'
-  | 'drums' | 'drumsLevel' | 'sampler' | 'liveperf'
+  | 'drums' | 'drumsLevel' | 'sampler' | 'liveperf' | 'bassline'
 
-const ALL_CHANNEL_IDS: MixerChannelId[] = ['backing', 'tracks', 'looper', 'lm', 'drums', 'drumsLevel', 'sampler', 'liveperf']
+const ALL_CHANNEL_IDS: MixerChannelId[] = ['backing', 'tracks', 'looper', 'lm', 'drums', 'drumsLevel', 'sampler', 'liveperf', 'bassline']
 
 function loadFloat(key: string, def: number): number {
   const v = localStorage.getItem(userKey(key))
@@ -63,6 +63,8 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   const samplerMuted    = ref(false)
   const liveperfVol     = ref(loadFloat('S1_MIX_LIVEPERF',  0.85))
   const liveperfMuted   = ref(false)
+  const basslineVol     = ref(loadFloat('S1_MIX_BASSLINE',   0.85))
+  const basslineMuted   = ref(false)
 
   watch(backingVol,    v => localStorage.setItem(userKey('S1_MIX_BACKING'),     String(v)))
   watch(tracksVol,     v => localStorage.setItem(userKey('S1_MIX_TRACKS'),      String(v)))
@@ -71,7 +73,8 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   watch(drumsVol,      v => localStorage.setItem(userKey('S1_MIX_DRUMS'),       String(v)))
   watch(drumsLevelVol, v => localStorage.setItem(userKey('S1_MIX_DRUMS_LEVEL'), String(v)))
   watch(samplerVol,    v => localStorage.setItem(userKey('S1_MIX_SAMPLER'),     String(v)))
-  watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),    String(v)))
+watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   String(v)))
+  watch(basslineVol,   v => localStorage.setItem(userKey('S1_MIX_BASSLINE'),   String(v)))
   watch(masterVol,     v => localStorage.setItem(userKey('S1_MIX_MASTER'),      String(v)))
 
   function effective(ch: number, muted: boolean): number {
@@ -98,6 +101,9 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function _dispatchSampler() {
     window.dispatchEvent(new CustomEvent('sampler-master-volume', { detail: effective(samplerVol.value, samplerMuted.value) }))
   }
+  function _dispatchBassline() {
+    window.dispatchEvent(new CustomEvent('bassline-master-volume', { detail: effective(basslineVol.value, basslineMuted.value) }))
+  }
   function _dispatchLiveperf() {
     window.dispatchEvent(new CustomEvent('liveperf-master-volume', { detail: effective(liveperfVol.value, liveperfMuted.value) }))
   }
@@ -110,6 +116,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function setDrumsLevelVol(v: number) { drumsLevelVol.value = v }
   function setSamplerVol(v: number)    { samplerVol.value    = v; _dispatchSampler() }
   function setLiveperfVol(v: number)   { liveperfVol.value   = v; _dispatchLiveperf() }
+  function setBasslineVol(v: number)   { basslineVol.value   = v; _dispatchBassline() }
   function setMasterVol(v: number) {
     masterVol.value = v
     _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM(); _dispatchDrums()
@@ -124,6 +131,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function toggleDrumsLevelMute() { drumsLevelMuted.value = !drumsLevelMuted.value }
   function toggleSamplerMute()   { samplerMuted.value    = !samplerMuted.value;  _dispatchSampler() }
   function toggleLiveperfMute()  { liveperfMuted.value   = !liveperfMuted.value; _dispatchLiveperf() }
+  function toggleBasslineMute()  { basslineMuted.value   = !basslineMuted.value; _dispatchBassline() }
 
   function _loadInstVols(): Record<string, number> {
     try { return JSON.parse(localStorage.getItem(userKey('S1_MIX_INST_VOLS')) || '{}') } catch { return {} }
@@ -166,7 +174,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
       enabledChannels.value = [...ALL_CHANNEL_IDS]
       backingVol.value = 0.8; tracksVol.value = 0.8; looperVol.value = 0.9
       lmVol.value = 0.85; drumsVol.value = 0.85; drumsLevelVol.value = 0.85; masterVol.value = 1.0
-      samplerVol.value = 0.85; liveperfVol.value = 0.85
+      samplerVol.value = 0.85; liveperfVol.value = 0.85; basslineVol.value = 0.85
       instrumentVols.value = {}
     } else {
       enabledChannels.value = loadEnabledChannels()
@@ -178,6 +186,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
       drumsLevelVol.value = loadFloat('S1_MIX_DRUMS_LEVEL', 0.85)
       samplerVol.value    = loadFloat('S1_MIX_SAMPLER',     0.85)
       liveperfVol.value   = loadFloat('S1_MIX_LIVEPERF',    0.85)
+      basslineVol.value   = loadFloat('S1_MIX_BASSLINE',    0.85)
       masterVol.value     = loadFloat('S1_MIX_MASTER',      1.0)
       instrumentVols.value = _loadInstVols()
     }
@@ -188,11 +197,11 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     enabledChannels,
     isChannelEnabled,
     toggleChannel,
-    backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, samplerVol, liveperfVol, masterVol,
-    backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted, drumsLevelMuted, samplerMuted, liveperfMuted,
+    backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, samplerVol, liveperfVol, basslineVol, masterVol,
+    backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted, drumsLevelMuted, samplerMuted, liveperfMuted, basslineMuted,
     effectiveDrumsLevel,
-    setBackingVol, setTracksVol, setLooperVol, setLMVol, setDrumsVol, setDrumsLevelVol, setSamplerVol, setLiveperfVol, setMasterVol,
-    toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute, toggleDrumsLevelMute, toggleSamplerMute, toggleLiveperfMute,
+    setBackingVol, setTracksVol, setLooperVol, setLMVol, setDrumsVol, setDrumsLevelVol, setSamplerVol, setLiveperfVol, setBasslineVol, setMasterVol,
+    toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute, toggleDrumsLevelMute, toggleSamplerMute, toggleLiveperfMute, toggleBasslineMute,
     instrumentVols, instrumentMuted,
     getInstrumentVol, isInstrumentMuted, setInstrumentVol, toggleInstrumentMute,
   }

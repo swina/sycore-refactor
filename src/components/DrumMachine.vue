@@ -46,6 +46,7 @@ let _importedPatternIdx = 0
 const copySourceSeq       = ref(null)
 const copySoundsSourceSeq = ref(null)
 const stepContextMenu = ref(null) // { trackIdx, stepIdx, x, y }
+const basslineStepContextMenu = ref(null) // { voiceIdx, stepIdx, x, y }
 
 // Preset panel
 const showPresets    = ref(false)
@@ -66,6 +67,30 @@ let _toastTimer    = null
 let _kitToastTimer = null
 let _kitOverwriteTimer = null
 let _fxToastTimer  = null
+
+// Bassline UI
+const showBassline = ref(false)
+const hideBasslineSlots = ref(false)
+const basslineMidiCapture = ref(-1) // voice index awaiting MIDI note, or -1
+const notePreviewTimer = ref(null)
+const basslineRootNote = ref(24)
+
+function toggleShowBassline() {
+  showBassline.value = !showBassline.value
+  if (showBassline.value) drumStore.basslineEnabled = true
+}
+
+function captureBasslineMidiNote(voiceIdx, stepIdx) {
+  basslineMidiCapture.value = voiceIdx * 16 + stepIdx
+}
+
+function clearBasslinePattern() {
+  const seq = drumStore.basslineSequences[drumStore.activeSequence]
+  if (!seq) return
+  seq.forEach(voice => {
+    voice.steps.forEach(s => { s.active = false; s.note = undefined })
+  })
+}
 
 function overwritePresetWithToast(id) {
   drumStore.overwritePreset(id, _chainExtra())
@@ -155,6 +180,17 @@ function buildPlayState() {
       length: t.length ?? 16,
       steps:  t.steps.map(s => ({ ...s })),
     })),
+    basslineEnabled: drumStore.basslineEnabled && showBassline.value,
+    basslineTracks: drumStore.currentBasslinePattern.map(t => ({
+      muted:  t.muted,
+      solo:   t.solo,
+      volume: t.volume,
+      pitch:  t.pitch ?? 0,
+      length: t.length ?? 16,
+      filterFreq: t.filterFreq ?? 20000,
+      steps:  t.steps.map(s => ({ ...s })),
+    })),
+    basslineSourceSlots: [...drumStore.basslineSourceSlots],
     bpm:              drumStore.bpm,
     swing:            drumStore.swing,
     repeaterActive:   drumStore.repeaterActive,
@@ -165,7 +201,8 @@ function buildPlayState() {
 }
 
 const hasSolo = computed(() =>
-  drumStore.currentPattern.some(t => t.solo)
+  drumStore.currentPattern.some(t => t.solo) ||
+  (showBassline.value && drumStore.currentBasslinePattern.some(t => t.solo))
 )
 
 function _scheduleCallback(time) {
@@ -263,6 +300,9 @@ function _scheduleCallback(time) {
     const audible = soloActive ? track.solo : !track.muted
     if (!audible) return
 
+    // When bassline is active, skip drum tracks that are assigned to bassline source slots
+    if (state.basslineEnabled && state.basslineSourceSlots?.includes(trackIdx)) return
+
     // Each track wraps at its own length
     const trackStep = stepCounter % (track.length || 16)
     let step = track.steps[trackStep]
@@ -306,6 +346,29 @@ function _scheduleCallback(time) {
 
   getDraw().schedule(() => { drumStore.currentStep = globalStep }, time)
   stepCounter++ // no wrap — each track uses its own modulo
+
+  // ── Bassline voices ──
+  if (state.basslineEnabled && state.basslineTracks) {
+    const bassSoloActive = state.basslineTracks.some(t => t.solo)
+    state.basslineTracks.forEach((voice, vi) => {
+      if (voice.muted) return
+      if (bassSoloActive && !voice.solo) return
+      const padIdx = state.basslineSourceSlots?.[vi]
+      if (padIdx == null || padIdx < 0 || padIdx >= 11) return
+      const trackStep = stepCounter % (voice.length || 16)
+      const step = voice.steps[trackStep]
+      if (!step.active) return
+      const bassDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
+      drumEngine.setPadPitch(padIdx, voice.pitch ?? 0)
+      drumEngine.triggerPadWithNote(padIdx, step.note ?? 36, {
+        velocity: step.velocity,
+        accent: step.accent ?? false,
+        time: fireTime,
+        duration: bassDur,
+        filterFreq: voice.filterFreq ?? 20000,
+      })
+    })
+  }
 }
 
 watch(() => drumStore.isPlaying, (playing) => {
@@ -487,7 +550,22 @@ onMounted(async () => {
   window.addEventListener('timeline-dm-stop',  _tlDmStopHandler)
   window.addEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
   window.addEventListener('dm-pad-trigger',    _onPadTrigger)
+
+  window.addEventListener('dm-bass-midi-note', _onBassMidiNote)
 })
+
+const _onBassMidiNote = (e) => {
+  if (basslineMidiCapture.value < 0) return
+  const note = e.detail?.note
+  if (typeof note !== 'number') return
+  const voiceIdx = Math.floor(basslineMidiCapture.value / 16)
+  const stepIdx = basslineMidiCapture.value % 16
+  drumStore.setBasslineNote(voiceIdx, stepIdx, note)
+  // Preview the note
+  const padIdx = drumStore.basslineSourceSlots[voiceIdx] ?? 8
+  drumEngine.triggerPadWithNote(padIdx, note, { velocity: 100, time: 0 })
+  basslineMidiCapture.value = -1
+}
 
 onUnmounted(() => {
   if (drumStore.isPlaying) drumStore.isPlaying = false
@@ -505,6 +583,7 @@ onUnmounted(() => {
   window.removeEventListener('timeline-dm-stop',  _tlDmStopHandler)
   window.removeEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
   window.removeEventListener('dm-pad-trigger',    _onPadTrigger)
+  window.removeEventListener('dm-bass-midi-note', _onBassMidiNote)
 })
 
 // ── File / URL loading ─────────────────────────────────────────────────────────
@@ -534,6 +613,7 @@ function openFolderBrowserForTrack(trackIdx) {
   const track = drumStore.currentPattern[trackIdx]
   uiStore.soundFolderAssignTarget = {
     label: track?.label || `Track ${trackIdx + 1}`,
+    trackLabels: drumStore.TRACK_LABELS.slice(0, 11),
     onAssign: async (file) => {
       const soundId    = `dm_${Date.now()}_${trackIdx}`
       const soundLabel = file.name.replace(/\.[^.]+$/, '')
@@ -543,16 +623,19 @@ function openFolderBrowserForTrack(trackIdx) {
       drumStore.setTrackSound(trackIdx, { soundId, soundLabel, soundUrl })
       await drumEngine.loadSample(trackIdx, soundUrl)
     },
-    onAssignRandom: async (files) => {
-      for (let i = 0; i < Math.min(files.length, 11); i++) {
-        const file = files[i]
-        const soundId    = `dm_${Date.now()}_${i}`
+    onAssignRandom: async (files, slotIndices) => {
+      const indices = slotIndices ?? drumStore.TRACK_LABELS.slice(0, 11).map((_, i) => i)
+      const count = Math.min(files.length, indices.length)
+      for (let j = 0; j < count; j++) {
+        const slotIdx = indices[j]
+        const file = files[j]
+        const soundId    = `dm_${Date.now()}_${slotIdx}`
         const soundLabel = file.name.replace(/\.[^.]+$/, '')
         const fileObj    = await file.handle.getFile()
         const blob       = new Blob([await fileObj.arrayBuffer()], { type: fileObj.type || 'audio/wav' })
         const soundUrl   = await cacheFileBlob(soundId, soundLabel, blob)
-        drumStore.setTrackSound(i, { soundId, soundLabel, soundUrl })
-        await drumEngine.loadSample(i, soundUrl)
+        drumStore.setTrackSound(slotIdx, { soundId, soundLabel, soundUrl })
+        await drumEngine.loadSample(slotIdx, soundUrl)
       }
     },
   }
@@ -583,6 +666,9 @@ function _chainExtra() {
     autofillEvery:    autofillEvery.value,
     generatedStyle:   selectedStyle.value,
     bpm:              drumStore.bpm,
+    basslineEnabled:  drumStore.basslineEnabled,
+    basslineSourceSlots: [...drumStore.basslineSourceSlots],
+    basslineSequences: drumStore.basslineSequences,
   }
 }
 
@@ -746,6 +832,29 @@ function generateFill() {
   fillPattern.value = fp
 }
 
+// ── Bassline helpers ──────────────────────────────────────────────────
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+
+function midiNoteName(note) {
+  const octave = Math.floor(note / 12) - 1
+  return `${NOTE_NAMES[note % 12]}${octave}`
+}
+
+function basslineStepTitle(voiceIdx, stepIdx) {
+  const step = drumStore.currentBasslinePattern[voiceIdx]?.steps[stepIdx]
+  if (!step?.active) return `Step ${stepIdx + 1} · empty`
+  return `Step ${stepIdx + 1} · ${midiNoteName(step.note ?? 36)} · vel ${step.velocity}`
+}
+
+function onBasslineStepWheel(voiceIdx, stepIdx, event) {
+  const step = drumStore.currentBasslinePattern[voiceIdx]?.steps[stepIdx]
+  if (!step) return
+  const dir = Math.sign(event.deltaY)
+  const current = step.note ?? 36
+  const next = Math.max(24, Math.min(60, current - dir))
+  drumStore.setBasslineNote(voiceIdx, stepIdx, next)
+}
+
 // ── Style generation ───────────────────────────────────────────────────────────
 function generatePattern() {
   drumStore.generateDrumPattern(selectedStyle.value)
@@ -826,6 +935,7 @@ function openStepContext(trackIdx, stepIdx, event) {
 
 function closeStepContext() {
   stepContextMenu.value = null
+  basslineStepContextMenu.value = null
 }
 
 function setContextVelocity(v) {
@@ -846,6 +956,47 @@ function setContextRatchet(v) {
 function setContextTie(v) {
   if (!stepContextMenu.value) return
   drumStore.setStep(stepContextMenu.value.trackIdx, stepContextMenu.value.stepIdx, { tie: v })
+}
+
+// ── Bassline step right-click context ──────────────────────────────────────────
+function openBasslineStepContext(voiceIdx, stepIdx, event) {
+  event.preventDefault()
+  const bottomMargin = 80
+  const dialogH = 300
+  let y = event.clientY
+  if (y + dialogH > window.innerHeight - bottomMargin) {
+    y = Math.max(bottomMargin, event.clientY - dialogH)
+  }
+  basslineStepContextMenu.value = { voiceIdx, stepIdx, x: event.clientX, y }
+}
+
+function closeBasslineStepContext() {
+  basslineStepContextMenu.value = null
+}
+
+function setBasslineContextVelocity(v) {
+  if (!basslineStepContextMenu.value) return
+  drumStore.setBasslineStep(basslineStepContextMenu.value.voiceIdx, basslineStepContextMenu.value.stepIdx, { velocity: parseInt(v) })
+}
+
+function setBasslineContextAccent(v) {
+  if (!basslineStepContextMenu.value) return
+  drumStore.setBasslineStep(basslineStepContextMenu.value.voiceIdx, basslineStepContextMenu.value.stepIdx, { accent: v })
+}
+
+function setBasslineContextRatchet(v) {
+  if (!basslineStepContextMenu.value) return
+  drumStore.setBasslineStep(basslineStepContextMenu.value.voiceIdx, basslineStepContextMenu.value.stepIdx, { ratchet: v })
+}
+
+function setBasslineContextTie(v) {
+  if (!basslineStepContextMenu.value) return
+  drumStore.setBasslineStep(basslineStepContextMenu.value.voiceIdx, basslineStepContextMenu.value.stepIdx, { tie: v })
+}
+
+function setBasslineContextNote(v) {
+  if (!basslineStepContextMenu.value) return
+  drumStore.setBasslineStep(basslineStepContextMenu.value.voiceIdx, basslineStepContextMenu.value.stepIdx, { note: parseInt(v) })
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -1148,6 +1299,21 @@ function cycleChainSlot(i) {
           Kits
         </button>
 
+        <!-- Bassline toggle -->
+        <button
+          @click.stop="toggleShowBassline"
+          :class="[
+            'flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors',
+            showBassline
+              ? 'bg-violet-600/30 border-violet-500 text-violet-300'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white'
+          ]"
+          title="Bassline — melodic sample sequencer (uses slots 8-10)"
+        >
+          <Music2 class="w-2.5 h-2.5" />
+          Bass
+        </button>
+
         <!-- Copy pattern -->
         <div class="relative" title="Copy pattern">
           <button
@@ -1382,6 +1548,7 @@ function cycleChainSlot(i) {
         <div
           v-for="(track, trackIdx) in drumStore.currentPattern"
           :key="trackIdx"
+          v-show="!(hideBasslineSlots && [8, 9, 10].includes(trackIdx))"
           class="flex flex-col rounded bg-neutral-900/50 transition-colors"
         >
         <div class="flex items-center gap-2">
@@ -1634,6 +1801,151 @@ function cycleChainSlot(i) {
         </div>
       </div>
 
+      <!-- ── Bassline section ────────────────────────────────────────────────── -->
+      <Transition
+        enter-active-class="transition-all duration-200 ease-out"
+        enter-from-class="opacity-0 -translate-y-1"
+        leave-active-class="transition-all duration-150 ease-in"
+        leave-to-class="opacity-0 -translate-y-1"
+      >
+        <div v-if="showBassline" class="shrink-0 border-t border-violet-900/30 bg-violet-950/20">
+          <!-- Header bar -->
+          <div class="flex items-center gap-2 px-4 py-1.5 border-b border-violet-900/20">
+            <Music2 class="w-3 h-3 text-violet-400" />
+            <span class="text-[10px] font-black uppercase tracking-widest text-violet-300">Bassline</span>
+            <span class="text-[8px] font-mono text-violet-600">slots {{ drumStore.basslineSourceSlots.join(', ') }}</span>
+            <button
+              @click.stop="hideBasslineSlots = !hideBasslineSlots"
+              :class="[
+                'px-1.5 py-0.5 rounded border text-[8px] font-black transition-colors',
+                hideBasslineSlots
+                  ? 'border-violet-600 bg-violet-600/20 text-violet-300'
+                  : 'border-neutral-700 bg-neutral-800 text-neutral-500 hover:border-violet-600 hover:text-violet-300'
+              ]"
+              :title="hideBasslineSlots ? 'Show drum tracks 8-10' : 'Hide drum tracks 8-10'"
+            >{{ hideBasslineSlots ? 'Show slots' : 'Hide slots' }}</button>
+            <div class="flex-1" />
+            <label class="flex items-center gap-1 text-[8px] text-neutral-500 cursor-pointer select-none">
+              <input type="checkbox" v-model="drumStore.basslineActive" class="w-3 h-3 accent-violet-500 cursor-pointer" />
+              Active
+            </label>
+            <button
+              @click.stop="clearBasslinePattern"
+              class="px-1.5 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-500 text-[8px] font-black hover:border-red-600 hover:text-red-400 transition-colors"
+              title="Clear bassline pattern"
+            >CLR</button>
+            <div class="flex items-center gap-1">
+              <span class="text-[8px] font-mono text-violet-600">Root</span>
+              <input
+                v-model.number="basslineRootNote"
+                type="number" min="12" max="60"
+                @change="basslineRootNote = Math.max(12, Math.min(60, basslineRootNote || 24))"
+                class="w-8 text-center text-[9px] font-bold bg-neutral-800 border border-neutral-700 rounded px-0.5 py-0.5 text-violet-300 focus:outline-none focus:border-violet-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                title="Root MIDI note (12 = C1, 24 = C2, 36 = C3, 48 = C4, 60 = C5)"
+              />
+            </div>
+            <button
+              @click.stop="drumStore.generateBassline(basslineRootNote)"
+              class="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-violet-600 bg-violet-600/20 text-violet-300 text-[9px] font-bold hover:bg-violet-600/40 transition-colors"
+            >
+              <Zap class="w-2.5 h-2.5 text-violet-300" />
+              Generate
+            </button>
+          </div>
+
+          <!-- Voice rows -->
+          <div class="max-h-[200px] overflow-y-auto custom-scrollbar px-3 py-1.5 space-y-1">
+            <div
+              v-for="(voice, vi) in drumStore.currentBasslinePattern"
+              :key="vi"
+              class="flex items-center gap-2 rounded bg-violet-900/10 px-2 py-1"
+            >
+              <!-- Voice label + source slot -->
+              <div class="shrink-0 flex items-center gap-1" style="width: 86px;">
+                <span class="text-[10px] font-bold text-violet-300 truncate leading-none">{{ drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]] }} ({{ drumStore.basslineSourceSlots[vi] }})</span>
+              </div>
+
+              <!-- Mute / Solo -->
+              <div class="flex flex-col items-center gap-1">
+                <button
+                  @click.stop="drumStore.toggleBasslineVoiceMute(vi)"
+                  :class="[
+                    'shrink-0 w-5 h-5 rounded border text-[11px] font-black transition-colors',
+                    voice.muted
+                      ? 'bg-red-600/30 border-red-500 text-red-300'
+                      : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white'
+                  ]"
+                  title="Mute"
+                >M</button>
+                <button
+                  @click.stop="drumStore.toggleBasslineVoiceSolo(vi)"
+                  :class="[
+                    'shrink-0 w-5 h-5 rounded border text-[11px] font-black transition-colors',
+                    voice.solo
+                      ? 'bg-amber-500/30 border-amber-400 text-amber-300'
+                      : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white'
+                  ]"
+                  title="Solo"
+                >S</button>
+              </div>
+
+              <!-- Pitch 0..24 -->
+              <div class="flex flex-col items-center gap-1">
+                <span class="text-[9px] font-mono text-violet-300 truncate leading-none">Pitch</span>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button
+                    @click.stop="drumStore.setBasslineVoicePitch(vi, (voice.pitch ?? 0) >= 24 ? 0 : (voice.pitch ?? 0) + 1)"
+                    @contextmenu.prevent="drumStore.setBasslineVoicePitch(vi, Math.max(0, (voice.pitch ?? 0) - 1))"
+                    @wheel.prevent="drumStore.setBasslineVoicePitch(vi, Math.max(0, Math.min(24, (voice.pitch ?? 0) - Math.sign($event.deltaY))))"
+                    class="shrink-0 w-7 h-5 text-center bg-neutral-800 border border-neutral-700 rounded text-[11px] font-mono hover:border-violet-500 transition-colors"
+                    :class="(voice.pitch ?? 0) > 0 ? 'text-violet-400 border-violet-700' : 'text-neutral-500'"
+                    :title="'Pitch: +' + (voice.pitch ?? 0) + ' semitones · click +1 · right-click −1 · scroll'"
+                  >+{{ voice.pitch ?? 0 }}</button>
+                </div>
+              </div>
+              <!-- Steps -->
+              <div class="flex flex-col items-center gap-1">
+                <span class="text-[9px] font-mono text-violet-300 truncate leading-none">Steps</span>
+              <button
+                @click.stop="drumStore.setBasslineVoiceLength(vi, voice.length < 16 ? voice.length + 1 : 1)"
+                @contextmenu.prevent="drumStore.setBasslineVoiceLength(vi, voice.length > 1 ? voice.length - 1 : 16)"
+                class="shrink-0 w-7 h-5 text-center bg-neutral-800 border border-neutral-700 rounded text-[11px] font-mono hover:border-violet-500 transition-colors"
+                :class="voice.length < 16 ? 'text-violet-400 border-violet-700' : 'text-neutral-500'"
+                :title="'Steps: ' + voice.length"
+              >{{ voice.length }}</button>
+            </div>
+              <!-- Step grid -->
+              <div class="flex-1 flex gap-1 ml-3.5">
+                <div v-for="g in 4" :key="g" class="flex-1 grid grid-cols-4 gap-0.5">
+                  <button
+                    v-for="l in 4" :key="l"
+                    :class="[
+                      'relative h-12 rounded-sm border text-[11px] font-mono transition-colors focus:outline-none',
+                      (g-1)*4+(l-1) < voice.length ? '' : 'bg-neutral-900/60 border-neutral-800/40 opacity-30 cursor-not-allowed',
+                      (g-1)*4+(l-1) < voice.length && drumStore.currentBasslinePattern[vi]?.steps[(g-1)*4+(l-1)]?.active
+                        ? 'bg-amber-600/40 border-amber-400 shadow-[0_0_6px_rgba(139,92,246,0.4)]'
+                        : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700'
+                    ]"
+                    @click.stop="(g-1)*4+(l-1) < voice.length && drumStore.toggleBasslineStep(vi, (g-1)*4+(l-1))"
+                    @contextmenu="(g-1)*4+(l-1) < voice.length && openBasslineStepContext(vi, (g-1)*4+(l-1), $event)"
+                    @wheel.prevent="(g-1)*4+(l-1) < voice.length && onBasslineStepWheel(vi, (g-1)*4+(l-1), $event)"
+                    @dblclick.stop="(g-1)*4+(l-1) < voice.length && captureBasslineMidiNote(vi, (g-1)*4+(l-1))"
+                    :title="basslineStepTitle(vi, (g-1)*4+(l-1))"
+                  >
+                    <span v-if="(g-1)*4+(l-1) < voice.length && drumStore.currentBasslinePattern[vi]?.steps[(g-1)*4+(l-1)]?.active">
+                      {{ midiNoteName(drumStore.currentBasslinePattern[vi]?.steps[(g-1)*4+(l-1)]?.note ?? 36) }}
+                    </span>
+                    <span
+                      v-if="basslineMidiCapture === vi * 16 + (g-1)*4+(l-1)"
+                      class="absolute inset-0 flex items-center justify-center text-[6px] font-black text-orange-400 bg-orange-500/20 rounded-sm"
+                    >MIDI</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
 
       <div class="flex items-center gap-2 px-3 py-2 border-t border-neutral-800 bg-neutral-900/40">
         <!-- Sequence tabs A-F -->
@@ -2069,6 +2381,107 @@ function cycleChainSlot(i) {
         </div>
 
         <button @click="closeStepContext" class="w-full text-[9px] text-neutral-600 hover:text-neutral-400 text-center pt-1">Close</button>
+      </div>
+    </Transition>
+
+    <!-- ── Bassline step context menu ───────────────────────────────────────── -->
+    <Transition name="sy-modal">
+      <div
+        v-if="basslineStepContextMenu"
+        class="fixed z-[500] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl p-3 space-y-3 min-w-[180px]"
+        :style="{ left: basslineStepContextMenu.x + 'px', top: basslineStepContextMenu.y + 'px' }"
+        @click.stop
+      >
+        <div class="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-1">
+          Voice {{ basslineStepContextMenu.voiceIdx + 1 }} · Step {{ basslineStepContextMenu.stepIdx + 1 }}
+        </div>
+
+        <!-- Velocity -->
+        <div>
+          <div class="flex justify-between mb-1">
+            <span class="text-[9px] text-neutral-400 font-bold">Velocity</span>
+            <span class="text-[9px] font-mono text-purple-300">
+              {{ drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.velocity }}
+            </span>
+          </div>
+          <input
+            type="range" min="1" max="127" step="1"
+            :value="drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.velocity"
+            @input="setBasslineContextVelocity($event.target.value)"
+            class="w-full h-1 accent-purple-500 cursor-pointer"
+          />
+        </div>
+
+        <!-- Note/Pitch -->
+        <div>
+          <div class="flex justify-between mb-1">
+            <span class="text-[9px] text-neutral-400 font-bold">Note</span>
+            <span class="text-[9px] font-mono text-violet-300">
+              {{ midiNoteName(drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.note ?? 36) }}
+              ({{ drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.note ?? 36 }})
+            </span>
+          </div>
+          <input
+            type="range" min="24" max="60" step="1"
+            :value="drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.note ?? 36"
+            @input="setBasslineContextNote($event.target.value)"
+            class="w-full h-1 accent-violet-500 cursor-pointer"
+          />
+        </div>
+
+        <!-- Accent -->
+        <div class="flex items-center justify-between">
+          <span class="text-[9px] text-neutral-400 font-bold">Accent</span>
+          <button
+            @click="setBasslineContextAccent(!drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.accent)"
+            :class="[
+              'w-7 h-4 rounded border text-[8px] font-black transition-colors',
+              drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.accent
+                ? 'bg-yellow-400/30 border-yellow-400 text-yellow-300'
+                : 'bg-neutral-800 border-neutral-700 text-neutral-500'
+            ]"
+          >
+            {{ drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.accent ? 'ON' : 'OFF' }}
+          </button>
+        </div>
+
+        <!-- Ratchet -->
+        <div>
+          <span class="text-[9px] text-neutral-400 font-bold block mb-1">Ratchet</span>
+          <div class="flex gap-1">
+            <button
+              v-for="r in [1, 2, 3, 4]"
+              :key="r"
+              @click="setBasslineContextRatchet(r)"
+              :class="[
+                'flex-1 h-5 rounded border text-[8px] font-black transition-colors',
+                drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.ratchet === r
+                  ? 'bg-purple-600/40 border-purple-400 text-purple-300'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white'
+              ]"
+            >{{ r }}</button>
+          </div>
+        </div>
+
+        <!-- Tie -->
+        <div>
+          <span class="text-[9px] text-neutral-400 font-bold block mb-1">Tie steps</span>
+          <div class="flex gap-1">
+            <button
+              v-for="t in [0, 1, 2, 4, 8, 16]"
+              :key="t"
+              @click="setBasslineContextTie(t)"
+              :class="[
+                'flex-1 h-5 rounded border text-[8px] font-black transition-colors',
+                drumStore.currentBasslinePattern[basslineStepContextMenu.voiceIdx]?.steps[basslineStepContextMenu.stepIdx]?.tie === t
+                  ? 'bg-cyan-600/40 border-cyan-400 text-cyan-300'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white'
+              ]"
+            >{{ t || '–' }}</button>
+          </div>
+        </div>
+
+        <button @click="closeBasslineStepContext" class="w-full text-[9px] text-neutral-600 hover:text-neutral-400 text-center pt-1">Close</button>
       </div>
     </Transition>
 

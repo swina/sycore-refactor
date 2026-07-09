@@ -73,8 +73,9 @@ export interface PanelVisibility {
 /** A sound-folder-assign target descriptor */
 interface SoundFolderAssignTarget {
   label: string
+  trackLabels?: string[]
   onAssign: (file: File) => Promise<void>
-  onAssignRandom?: (files: File[]) => Promise<void>
+  onAssignRandom?: (files: File[], slotIndices?: number[]) => Promise<void>
 }
 
 /** Toolbar icon size options */
