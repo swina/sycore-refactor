@@ -57,6 +57,36 @@ const currentPresetId = ref(null)
 const showKits    = ref(false)
 const newKitName  = ref('')
 
+// Euclidean dialog
+const showEuclidean = ref(false)
+const euclideanSteps = ref(16)
+const euclideanPulses = ref(8)
+const euclideanRotation = ref(0)
+const euclideanVelocity = ref(100)
+const euclideanAccent = ref(false)
+const euclideanTrackSelection = ref([true, true, true, true, true, true, true, true, true, true, true])
+
+function toggleEuclideanTrack(idx: number) {
+  euclideanTrackSelection.value[idx] = !euclideanTrackSelection.value[idx]
+}
+
+function generateEuclidean() {
+  const indices: number[] = []
+  euclideanTrackSelection.value.forEach((sel, i) => {
+    if (sel) indices.push(i)
+  })
+  if (indices.length === 0) return
+  drumStore.generateEuclideanPattern(
+    euclideanSteps.value,
+    euclideanPulses.value,
+    euclideanRotation.value,
+    indices,
+    euclideanVelocity.value,
+    euclideanAccent.value,
+  )
+  showEuclidean.value = false
+}
+
 // Init confirmation
 const initConfirm     = ref(false)
 const presetSavedToast  = ref(false)
@@ -1266,6 +1296,19 @@ function cycleChainSlot(i) {
             </div>
           </Teleport>
         </div>
+
+        <!-- Euclidean button -->
+        <button
+          @click.stop="showEuclidean = true"
+          :class="[
+            'flex items-center gap-1 px-2 py-1.5 rounded-lg border text-[10px] font-bold transition-colors',
+            'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white'
+          ]"
+          title="Euclidean rhythm generator"
+        >
+          <Shuffle class="w-3.5 h-3.5 text-green-400" />
+          Euclidean
+        </button>
 
         <div class="flex-1" />
 
@@ -2523,6 +2566,149 @@ function cycleChainSlot(i) {
         </div>
       </div>
     </Transition>
+
+    <!-- ── Euclidean dialog ── -->
+    <Teleport to="body">
+      <div
+        v-if="showEuclidean"
+        class="fixed inset-0 z-[9999] flex items-center justify-center"
+        @click.stop="showEuclidean = false"
+      >
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div
+          class="relative bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden w-[440px] max-h-[560px] flex flex-col"
+          @click.stop
+        >
+          <!-- Header -->
+          <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+            <span class="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+              <Shuffle class="w-3.5 h-3.5 text-green-400" />
+              Euclidean Rhythm
+            </span>
+            <button
+              @click="showEuclidean = false"
+              class="p-1 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-white transition-colors"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+            <!-- Steps -->
+            <div>
+              <label class="flex items-center justify-between text-[11px] font-bold text-neutral-400 mb-1">
+                <span>Steps</span>
+                <span class="font-mono text-white">{{ euclideanSteps }}</span>
+              </label>
+              <input
+                type="range"
+                v-model.number="euclideanSteps"
+                min="1" max="64" step="1"
+                class="w-full accent-green-500"
+              />
+            </div>
+
+            <!-- Pulses -->
+            <div>
+              <label class="flex items-center justify-between text-[11px] font-bold text-neutral-400 mb-1">
+                <span>Pulses</span>
+                <span class="font-mono text-white">{{ euclideanPulses }}</span>
+              </label>
+              <input
+                type="range"
+                v-model.number="euclideanPulses"
+                :min="0" :max="euclideanSteps" step="1"
+                class="w-full accent-green-500"
+              />
+            </div>
+
+            <!-- Rotation -->
+            <div>
+              <label class="flex items-center justify-between text-[11px] font-bold text-neutral-400 mb-1">
+                <span>Rotation</span>
+                <span class="font-mono text-white">{{ euclideanRotation }}</span>
+              </label>
+              <input
+                type="range"
+                v-model.number="euclideanRotation"
+                :min="0" :max="Math.max(0, euclideanSteps - 1)" step="1"
+                class="w-full accent-green-500"
+              />
+            </div>
+
+            <!-- Velocity -->
+            <div>
+              <label class="flex items-center justify-between text-[11px] font-bold text-neutral-400 mb-1">
+                <span>Velocity</span>
+                <span class="font-mono text-white">{{ euclideanVelocity }}</span>
+              </label>
+              <input
+                type="range"
+                v-model.number="euclideanVelocity"
+                min="1" max="127" step="1"
+                class="w-full accent-green-500"
+              />
+            </div>
+
+            <!-- Accent toggle -->
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-neutral-400">Accent</span>
+              <button
+                @click.stop="euclideanAccent = !euclideanAccent"
+                :class="[
+                  'px-3 py-1 rounded border text-[10px] font-bold transition-colors',
+                  euclideanAccent
+                    ? 'bg-yellow-500/30 border-yellow-400 text-yellow-300'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-500'
+                ]"
+              >{{ euclideanAccent ? 'ON' : 'OFF' }}</button>
+            </div>
+
+            <!-- Track selection -->
+            <div>
+              <span class="text-[11px] font-bold text-neutral-400 block mb-2">Apply to tracks</span>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button
+                  v-for="(sel, idx) in euclideanTrackSelection"
+                  :key="idx"
+                  @click.stop="toggleEuclideanTrack(idx)"
+                  :class="[
+                    'text-left px-2.5 py-1.5 rounded border text-[10px] font-medium transition-colors',
+                    sel
+                      ? 'bg-green-600/20 border-green-500 text-green-300'
+                      : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-neutral-300'
+                  ]"
+                >
+                  <span class="text-[9px] font-mono opacity-60 mr-1">{{ idx }}</span>
+                  {{ drumStore.TRACK_LABELS[idx] }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="flex items-center justify-between px-4 py-3 border-t border-neutral-800 bg-neutral-900">
+            <span class="text-[9px] text-neutral-600 font-mono">
+              {{ euclideanTrackSelection.filter(Boolean).length }} track{{ euclideanTrackSelection.filter(Boolean).length !== 1 ? 's' : '' }}
+            </span>
+            <div class="flex items-center gap-2">
+              <button
+                @click="showEuclidean = false"
+                class="px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-400 text-[10px] font-bold hover:bg-neutral-800 hover:text-white transition-colors"
+              >Cancel</button>
+              <button
+                @click="generateEuclidean"
+                class="px-3 py-1.5 rounded-lg border border-green-600 bg-green-600/20 text-green-300 text-[10px] font-bold hover:bg-green-600/40 transition-colors"
+              >
+                <Shuffle class="w-3 h-3 inline mr-1" />
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </Teleport>
 </template>
 

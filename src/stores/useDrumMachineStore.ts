@@ -1165,6 +1165,74 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     return result
   }
 
+  // ── Euclidean algorithm ────────────────────────────────────────────────
+  function getEuclidPattern(steps: number, pulses: number): number[] {
+    const s = Math.max(1, Math.min(64, steps))
+    const p = Math.max(0, Math.min(s, pulses))
+    const cacheKey = `${s}_${p}`
+    const cache: Record<string, number[]> = {}
+    if (cache[cacheKey]) return cache[cacheKey].slice()
+
+    // Bjorklund algorithm
+    let first: number[][] = Array.from({ length: p }, () => [1])
+    let second: number[][] = Array.from({ length: s - p }, () => [0])
+
+    while (second.length > 1) {
+      const merged: number[][] = []
+      const minLen = Math.min(first.length, second.length)
+      for (let i = 0; i < minLen; i++) {
+        merged.push([...first[i], ...second[i]])
+      }
+      if (first.length > minLen) {
+        second = first.slice(minLen)
+        first = merged
+      } else if (second.length > minLen) {
+        second = second.slice(minLen)
+        first = merged
+      } else {
+        first = merged
+        second = []
+      }
+    }
+
+    const result = [...first.flat(), ...second.flat()]
+    cache[cacheKey] = result
+    return result
+  }
+
+  function rotatePattern(pattern: number[], offset: number): number[] {
+    const len = pattern.length
+    if (len === 0) return pattern
+    const rot = ((offset % len) + len) % len
+    return [...pattern.slice(rot), ...pattern.slice(0, rot)]
+  }
+
+  /** Generate a Euclidean rhythm pattern and apply it to selected tracks. */
+  function generateEuclideanPattern(
+    steps: number,
+    pulses: number,
+    rotation: number,
+    trackIndices: number[],
+    velocity: number,
+    accent: boolean,
+  ) {
+    const pattern = rotatePattern(getEuclidPattern(steps, pulses), rotation)
+    const seq = sequences.value[activeSequence.value]
+    if (!seq) return
+
+    trackIndices.forEach((trackIdx) => {
+      const track = seq[trackIdx]
+      if (!track) return
+      track.steps = pattern.map((active) => ({
+        active: !!active,
+        velocity: active ? velocity + randInt(-5, 5) : 100,
+        accent: active ? accent : false,
+        ratchet: 1,
+        tie: 0,
+      }))
+    })
+  }
+
   /** Load an imported pattern from the DrumMachinePatterns collections into the active sequence. */
   function loadImportedPattern(categoryName: string, patternIndex: number) {
     const cat = IMPORTED_PATTERNS[categoryName]
@@ -1208,6 +1276,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     currentKitName,
     generateDrumPattern,
     generateDrumPatternRaw,
+    generateEuclideanPattern,
     IMPORTED_PATTERNS,
     loadImportedPattern,
     // Bassline
