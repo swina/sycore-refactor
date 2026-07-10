@@ -2003,6 +2003,7 @@ function cycleChainSlot(i) {
                   :class="(voice.pitch ?? 0) > 0 ? 'text-violet-400 border-violet-700' : 'text-neutral-500'"
                   :title="'Pitch: +' + (voice.pitch ?? 0) + ' semitones'"
                 />
+              </div>
               <!-- Steps -->
               <div class="flex flex-col items-center gap-1">
                 <span class="text-[9px] font-mono text-violet-300 truncate leading-none">Steps</span>
