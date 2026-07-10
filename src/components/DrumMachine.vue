@@ -1932,29 +1932,39 @@ function cycleChainSlot(i) {
               :key="vi"
               class="flex items-center gap-2 rounded bg-violet-900/10 px-2 py-1"
             >
-              <!-- Voice label + source slot -->
-              <div class="shrink-0 flex items-center gap-1" style="width: 86px;">
-                <label
-                  @click.stop="openFolderBrowserForTrack(drumStore.basslineSourceSlots[vi])"
-                  :title="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel
-                    ? `${drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]]}: ${drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel}`
-                    : `Load sample for ${drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]]}`"
-                  class="flex-1 min-w-0 cursor-pointer hover:text-violet-300 hover:bg-indigo-800/70 bg-indigo-800/30 p-1 rounded transition-colors"
-                >
-                  <div class="text-[10px] font-bold text-violet-300 truncate leading-none">{{ drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]] }}</div>
-                  <div
-                    v-if="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel"
-                    class="text-[8px] truncate leading-none mt-0.5 text-violet-400"
-                  >{{ drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel }}</div>
-                </label>
-                <button
-                  v-if="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundId"
-                  @click.stop="previewPad(drumStore.basslineSourceSlots[vi])"
-                  class="shrink-0 flex items-center justify-center w-3.5 h-3.5 rounded hover:bg-violet-600/30 text-violet-400 hover:text-violet-200 transition-colors"
-                  title="Preview"
-                >
-                  <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 fill-current"><polygon points="0,0 8,4 0,8"/></svg>
-                </button>
+              <!-- Voice label + source slot + volume -->
+              <div class="shrink-0 flex flex-col gap-1" style="width: 86px;">
+                <div class="flex items-center gap-1">
+                  <label
+                    @click.stop="openFolderBrowserForTrack(drumStore.basslineSourceSlots[vi])"
+                    :title="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel
+                      ? `${drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]]}: ${drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel}`
+                      : `Load sample for ${drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]]}`"
+                    class="flex-1 min-w-0 cursor-pointer hover:text-violet-300 hover:bg-indigo-800/70 bg-indigo-800/30 p-1 rounded transition-colors"
+                  >
+                    <div class="text-[10px] font-bold text-violet-300 truncate leading-none">{{ drumStore.TRACK_LABELS[drumStore.basslineSourceSlots[vi]] }}</div>
+                    <div
+                      v-if="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel"
+                      class="text-[8px] truncate leading-none mt-0.5 text-violet-400"
+                    >{{ drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundLabel }}</div>
+                  </label>
+                  <button
+                    v-if="drumStore.resolveTrackSound(drumStore.basslineSourceSlots[vi])?.soundId"
+                    @click.stop="previewPad(drumStore.basslineSourceSlots[vi])"
+                    class="shrink-0 flex items-center justify-center w-3.5 h-3.5 rounded hover:bg-violet-600/30 text-violet-400 hover:text-violet-200 transition-colors"
+                    title="Preview"
+                  >
+                    <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 fill-current"><polygon points="0,0 8,4 0,8"/></svg>
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min="0" max="1" step="0.01"
+                  :value="voice.volume ?? 0.85"
+                  @input="drumStore.setBasslineVoiceVolume(vi, parseFloat($event.target.value))"
+                  class="w-full h-1 accent-violet-500 cursor-pointer"
+                  title="Volume"
+                />
               </div>
 
               <!-- Mute / Solo -->
@@ -1984,17 +1994,15 @@ function cycleChainSlot(i) {
               <!-- Pitch 0..24 -->
               <div class="flex flex-col items-center gap-1">
                 <span class="text-[9px] font-mono text-violet-300 truncate leading-none">Pitch</span>
-                <div class="flex items-center gap-1 shrink-0">
-                  <button
-                    @click.stop="drumStore.setBasslineVoicePitch(vi, (voice.pitch ?? 0) >= 24 ? 0 : (voice.pitch ?? 0) + 1)"
-                    @contextmenu.prevent="drumStore.setBasslineVoicePitch(vi, Math.max(0, (voice.pitch ?? 0) - 1))"
-                    @wheel.prevent="drumStore.setBasslineVoicePitch(vi, Math.max(0, Math.min(24, (voice.pitch ?? 0) - Math.sign($event.deltaY))))"
-                    class="shrink-0 w-7 h-5 text-center bg-neutral-800 border border-neutral-700 rounded text-[11px] font-mono hover:border-violet-500 transition-colors"
-                    :class="(voice.pitch ?? 0) > 0 ? 'text-violet-400 border-violet-700' : 'text-neutral-500'"
-                    :title="'Pitch: +' + (voice.pitch ?? 0) + ' semitones · click +1 · right-click −1 · scroll'"
-                  >+{{ voice.pitch ?? 0 }}</button>
-                </div>
-              </div>
+                <input
+                  type="number"
+                  min="0" max="24" step="1"
+                  :value="voice.pitch ?? 0"
+                  @input="drumStore.setBasslineVoicePitch(vi, Math.max(0, Math.min(24, parseInt($event.target.value) || 0)))"
+                  class="shrink-0 w-7 h-5 text-center bg-neutral-800 border border-neutral-700 rounded text-[11px] font-mono hover:border-violet-500 transition-colors [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                  :class="(voice.pitch ?? 0) > 0 ? 'text-violet-400 border-violet-700' : 'text-neutral-500'"
+                  :title="'Pitch: +' + (voice.pitch ?? 0) + ' semitones'"
+                />
               <!-- Steps -->
               <div class="flex flex-col items-center gap-1">
                 <span class="text-[9px] font-mono text-violet-300 truncate leading-none">Steps</span>
