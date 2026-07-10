@@ -408,6 +408,7 @@ function _scheduleCallback(time) {
       const step = voice.steps[trackStep]
       if (!step.active) return
       const bassDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
+      drumEngine.setPadVolume(padIdx, (voice.volume ?? 0.85) * mixer.effectiveDrumsLevel)
       drumEngine.setPadPitch(padIdx, voice.pitch ?? 0)
       drumEngine.triggerPadWithNote(padIdx, step.note ?? 36, {
         velocity: step.velocity,

@@ -952,6 +952,12 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   function setTrackVolume(trackIdx: number, vol: number) {
     const t = sequences.value[activeSequence.value]?.[trackIdx]
     if (t) t.volume = vol
+    // Sync to bassline voice if this track is a bassline source slot
+    const vi = basslineSourceSlots.value.indexOf(trackIdx)
+    if (vi >= 0) {
+      const v = basslineSequences.value[activeSequence.value]?.[vi]
+      if (v) v.volume = vol
+    }
   }
 
   function setTrackLength(trackIdx: number, len: number) {
