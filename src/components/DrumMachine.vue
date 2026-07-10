@@ -65,13 +65,14 @@ const euclideanRotation = ref(0)
 const euclideanVelocity = ref(100)
 const euclideanAccent = ref(false)
 const euclideanTrackSelection = ref([true, true, true, true, true, true, true, true, true, true, true])
+const euclideanHasRun = ref(false)
 
 function toggleEuclideanTrack(idx) {
   euclideanTrackSelection.value[idx] = !euclideanTrackSelection.value[idx]
 }
 
 function generateEuclidean() {
-    const indices = []
+  const indices = []
   euclideanTrackSelection.value.forEach((sel, i) => {
     if (sel) indices.push(i)
   })
@@ -84,7 +85,24 @@ function generateEuclidean() {
     euclideanVelocity.value,
     euclideanAccent.value,
   )
+  euclideanHasRun.value = true
   showEuclidean.value = false
+}
+
+function regenEuclidean() {
+  const indices = []
+  euclideanTrackSelection.value.forEach((sel, i) => {
+    if (sel) indices.push(i)
+  })
+  if (indices.length === 0) return
+  drumStore.generateEuclideanPattern(
+    euclideanSteps.value,
+    euclideanPulses.value,
+    euclideanRotation.value,
+    indices,
+    euclideanVelocity.value,
+    euclideanAccent.value,
+  )
 }
 
 // Init confirmation
@@ -1309,6 +1327,15 @@ function cycleChainSlot(i) {
         >
           <Shuffle class="w-3.5 h-3.5 text-green-400" />
           Euclidean
+        </button>
+        <button
+          v-if="euclideanHasRun"
+          @click.stop="regenEuclidean"
+          class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-green-700 bg-green-800/20 text-green-400 text-[10px] font-bold hover:bg-green-700/40 transition-colors"
+          title="Re-generate with last Euclidean settings"
+        >
+          <Shuffle class="w-3 h-3" />
+          Regen
         </button>
 
         <div class="flex-1" />
