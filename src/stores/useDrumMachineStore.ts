@@ -1219,15 +1219,15 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     const seq = sequences.value[activeSequence.value]
     if (!seq) return
 
-    // Per-track pulse multiplier so each instrument gets a musically appropriate rhythm
-    const PULSE_FACTORS = [1.0, 0.5, 1.5, 0.25, 0.4, 0.3, 0.3, 0.15, 0.3, 0.25, 0.5]
-
     trackIndices.forEach((trackIdx) => {
       const track = seq[trackIdx]
       if (!track) return
-      const factor = PULSE_FACTORS[trackIdx] ?? 0.5
-      const trackPulses = Math.max(1, Math.min(steps, Math.round(pulses * factor)))
-      const trackRotation = (rotation + trackIdx * 3) % steps
+      // Each track gets its own pulse count + rotation so patterns differ per instrument
+      const offset = (rotation + trackIdx * 7 + 3) % steps
+      const density = Math.max(0.15, Math.min(1, pulses / steps))
+      const jitter = 0.3 + rand() * 0.5
+      const trackPulses = Math.max(1, Math.min(steps, Math.round(steps * density * jitter)))
+      const trackRotation = Math.floor(rand() * steps)
       const pattern = rotatePattern(getEuclidPattern(steps, trackPulses), trackRotation)
       track.steps = pattern.map((active) => ({
         active: !!active,
