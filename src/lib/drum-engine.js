@@ -165,6 +165,45 @@ export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0, d
   src.onended = () => { _activeSources = _activeSources.filter(s => s !== src) }
 }
 
+export function triggerPadWithNote(padIdx, midiNote, { velocity = 100, accent = false, time = 0, duration = 0, filterFreq = null } = {}) {
+  const buf = _buffers[padIdx]
+  if (!buf) return
+  _ensureGraph()
+  const ctx = _getCtx()
+  const semitoneOffset = midiNote - 60 + _pitchOffsets[padIdx]
+  const playbackRate = 2 ** (semitoneOffset / 12)
+
+  const src = ctx.createBufferSource()
+  src.buffer = buf
+  src.playbackRate.value = playbackRate
+
+  const gain = ctx.createGain()
+  const volScale = (velocity / 127) * _faderLevels[padIdx] * (accent ? ACCENT_BOOST : 1.0)
+  gain.gain.value = Math.min(1.5, volScale)
+
+  if (duration > 0) {
+    const fireAt = Math.max(ctx.currentTime, time)
+    gain.gain.setValueAtTime(Math.min(1.5, volScale), fireAt)
+    gain.gain.linearRampToValueAtTime(0.001, fireAt + duration)
+  }
+
+  // Per-trigger filter override
+  if (filterFreq != null && _filters[padIdx]) {
+    const cur = _filters[padIdx].frequency.value
+    _filters[padIdx].frequency.setValueAtTime(cur, ctx.currentTime)
+    _filters[padIdx].frequency.linearRampToValueAtTime(Math.max(20, Math.min(20000, filterFreq)), Math.max(ctx.currentTime, time))
+  }
+
+  src.connect(gain)
+  gain.connect(_padGains[padIdx])
+
+  const fireAt = Math.max(ctx.currentTime, time)
+  src.start(fireAt)
+
+  _activeSources.push(src)
+  src.onended = () => { _activeSources = _activeSources.filter(s => s !== src) }
+}
+
 export function triggerRatchet(padIdx, stepTimeSec, divisions, { velocity = 100, accent = false, baseTime = 0, duration = 0 } = {}) {
   const buf = _buffers[padIdx]
   if (!buf || divisions <= 1) {

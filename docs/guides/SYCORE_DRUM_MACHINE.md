@@ -8,6 +8,8 @@ The **Drum Machine** is
 - **Chain Mode**: chain up to 8 patterns with autofill support
 - **Fill & Autofill**: system overlays a 1-4 bars variation without interrupting the main loop, can be automated every N bars
 - **Generate**: engine produces style-aware patterns in one click (11 styles)
+- **Euclidean**: Bjorklund-algorithm rhythm generator with per-track randomization (Steps/Pulses/Rotation)
+- **Bassline**: 3-voice monophonic sequencer assigned to the last 3 drum slots with per-step MIDI note control
 - **Import**: from different styles/patterns (about 250)
 - **Presets**: save your pattern banks for immediate recall (unlimited)
 - **DrumKits**: create your custom drum kits, save and recall when you need (unlimited)
@@ -32,7 +34,7 @@ The panel opens as a floating, **draggable and resizable** window (initial 960 �
 
 | Area | Content |
 |------|---------|
-| **Header** | Title · BPM · Style picker · Generate · Import · Presets · Kits · Init · minimize/close |
+| **Header** | Title · BPM · Style picker · Generate · Import · **Euclidean · Regen** · Presets · Kits · **Bass** · Init · minimize/close |
 | **Step ruler** | Step numbers 1–16 grouped in four beats of four |
 | **Track grid** | 11 track rows — label, load, preview, mute, solo, volume, FX toggle, randomize velocity, step count, 16 step buttons |
 | **FX strip** | Per-track expandable row — Pan, Pitch, Tone, Reverb, Delay, Copy/Paste FX |
@@ -129,11 +131,13 @@ Active steps reflect their velocity visually:
 
 ### Right-click step context menu
 
-Right-clicking any active step opens a popover with:
+Right-clicking any active drum step opens a popover with:
 
 - **Velocity** — drag slider (0–127)
 - **Accent** — toggle yellow boost
 - **Ratchet** — 1 / 2 / 3 / 4 hits per step slot
+
+Right-clicking any active bassline step opens a similar popover that also includes **Note** (MIDI pitch 24–60).
 
 
 ## Polymetry — Per-Track Step Count
@@ -174,6 +178,79 @@ Select a style from the dropdown next to the header, then click **Generate**. Th
 `House` · `Techno` · `HipHop` · `Trap` · `Funk` · `Jungle/DnB` · `Latin` · `Rock` · `EDM` · `Pop` · `Jazz`
 
 Each style has multiple variants; one is chosen randomly on each press so repeated generates produce unique results within the genre feel. After the base variant is applied, **style-aware variation** adds musical unpredictability — ghost notes on empty steps, accent promotion/demotion, ratchet subdivision, and velocity jitter — all tuned per style (e.g., Jazz gets high ghost-note density and wide velocity jitter; EDM stays tight with minimal variation).
+
+---
+
+## Bassline
+
+The bassline section lets you control 3 melodic voices assigned to the last three drum slots (Rim Shot, Cowbell, Tambourine by default). Each voice is a 16-step monophonic sequencer with per-step pitch (MIDI note).
+
+### Enabling Bassline
+
+Click the **Bass** button in the header to toggle the bassline panel. When active:
+- The bassline panel slides open below the track grid
+- Drum slots 8–10 (Rim Shot, Cowbell, Tambourine) are **automatically hidden** from the track grid
+- Bassline voices use those slots as their audio output
+
+### Voice Controls
+
+| Control | Description |
+|---------|-------------|
+| **Slot label** | Shows the assigned drum track name and loaded sample name. Click to open the **Sound Folder Browser** and assign a different sample. Click the ▶ button to preview |
+| **M** | Mute this bassline voice. Also mutes the corresponding drum track slot |
+| **S** | Solo this bassline voice. Also solos the corresponding drum track slot |
+| **Pitch** | Semitone offset (0–24) applied to all notes of this voice |
+| **Tone** | Low-pass filter cutoff (200 Hz – 20 kHz) per voice |
+| **Vol** | Per-voice volume (0–1) |
+| **Steps** | Active step length (1–16). Click to cycle |
+
+### Bassline Header
+
+| Control | Description |
+|---------|-------------|
+| **Hide slots / Show slots** | Manually toggle visibility of drum slots 8–10. Auto-hides when bassline opens |
+| **Active** | Toggle bassline playback on/off without closing the panel |
+| **CLR** | Clear all steps and notes from all bassline voices |
+| **Root** | MIDI root note (12=C1, 24=C2, 36=C3, 48=C4, 60=C5). Used by the Generate button |
+| **Generate** | Generates a 3-voice bassline pattern based on the root note — voice 1 plays root/fifth/octave, voice 2 plays offbeat syncopation, voice 3 adds ghost-note variation |
+
+### Step Grid
+
+Each voice has 16 step buttons. Click to toggle a step on/off. Right-click for velocity, accent, and ratchet settings. When a step is activated for the first time, it receives a default MIDI note (C3 = 36).
+
+**MIDI Note Capture:** Click a step button to arm it for MIDI note capture (it turns orange). Play a note on your connected MIDI controller — the captured note is assigned to that step and the step activates.
+
+**Scroll to adjust:** Hover over a step and scroll to cycle its pitch up/down.
+
+---
+
+## Euclidean Generator
+
+The Euclidean generator creates rhythms using the Bjorklund algorithm, which distributes `pulses` evenly across `steps` positions — similar to the Euclidean rhythm found in many hardware sequencers (e.g., Elektron, Korg volca).
+
+### Opening the Dialog
+
+Click the **Euclidean** button in the header. A dialog opens with the following controls:
+
+| Control | Range | Description |
+|---------|-------|-------------|
+| **Steps** | 1–64 | Total number of steps in the generated pattern |
+| **Pulses** | 0–steps | Number of active hits distributed evenly across steps |
+| **Rotation** | 0–(steps-1) | Shift the pattern forward by N positions |
+| **Velocity** | 1–127 | Velocity applied to active steps |
+| **Accent** | ON/OFF | Apply accent flag to active steps |
+| **Apply to tracks** | 11 checkboxes | Select which tracks receive the generated pattern |
+
+Click **Generate** to apply. Each selected track receives its own unique Euclidean pattern with randomized pulse density and rotation, creating varied interlocking rhythms rather than identical patterns across all instruments.
+
+### Regen
+
+After the first Euclidean generation, a **Regen** button appears next to the Euclidean button. Click it to re-run the Euclidean generator with the **same settings** (steps, pulses, rotation, velocity, accent, track selection) without reopening the dialog — each click produces a fresh randomized variation.
+
+### Icons
+
+- **Euclidean** — opens the generator dialog
+- **Regen** (green, visible after first use) — quick re-generate with same settings
 
 ---
 

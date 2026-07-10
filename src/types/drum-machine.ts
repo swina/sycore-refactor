@@ -11,6 +11,7 @@ export interface DrumStep {
   accent: boolean;
   ratchet: number;
   tie: number;
+  note?: number;
 }
 
 /** A single drum track (8 tracks per sequence) */
