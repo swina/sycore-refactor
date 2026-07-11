@@ -487,8 +487,22 @@ export class MidiService {
     const targetsFromMatrix = this.router.matrix.get(source) || new Set();
     const hasMappings = targetsFromMatrix.size > 0;
 
+    // Normalize matrix names for case-insensitive / whitespace-tolerant matching
+    const normalizedMatrix = new Set(Array.from(targetsFromMatrix).map(n => n.toLowerCase().trim()));
+
+    if (hasMappings) {
+      const syLog = (window as any).SY_LOG;
+      if (typeof syLog === 'function') {
+        const actualNames = Array.from(this.midiAccess.outputs.values()).map(o => o.name);
+        syLog(
+          `[MIDI] Matrix targets for ${source}: [${Array.from(targetsFromMatrix).join(', ')}] ` +
+          `— available outputs: [${actualNames.join(', ')}]`
+        );
+      }
+    }
+
     this.midiAccess.outputs.forEach((outPort: any) => {
-      const isMatrixMatch = targetsFromMatrix.has(outPort.name);
+      const isMatrixMatch = targetsFromMatrix.has(outPort.name) || normalizedMatrix.has(outPort.name.toLowerCase().trim());
       const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && !hasMappings;
       if (!isMatrixMatch && !isBroadcastTarget) return;
 

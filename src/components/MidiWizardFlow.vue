@@ -4,7 +4,7 @@ import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as Keyboa
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
-import { MidiSource } from '@/core/midi/midi-service'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
@@ -147,6 +147,8 @@ function finish() {
     bySource.get(cable.fromId).push(cable.toId)
   }
 
+  const outputPorts = midiService.getOutputs()
+
   for (const [srcId, dstIds] of bySource) {
     const src = canvasNodes.value.find(n => n.id === srcId)
     if (!src) continue
@@ -161,16 +163,20 @@ function finish() {
     for (const dstId of dstIds) {
       const dst = canvasNodes.value.find(n => n.id === dstId)
       if (!dst) continue
-      midiStore.addRegistration(dst.name)
-      midiStore.updateRegistration(dst.name, 'outEnabled',  true)
-      midiStore.updateRegistration(dst.name, 'outChannel',  dst.outChannel)
-      midiStore.updateRegistration(dst.name, 'clock',       dst.sync)
-      midiStore.updateRegistration(dst.name, 'transport',   dst.transport)
-      midiStore.updateRegistration(dst.name, 'notes',       dst.notes)
-      midiStore.updateRegistration(dst.name, 'cc',          dst.cc)
-      midiStore.updateRegistration(dst.name, 'pc',          dst.pc)
-      midiStore.updateRegistration(dst.name, 'pcEnabled',   dst.pc)
-      outputNames.push(dst.name)
+      // Resolve the canonical Web MIDI port name so the routing matrix
+      // entry matches the exact name that Web MIDI reports at send time.
+      const webMidiPort = outputPorts.find(p => p.name === dst.name)
+      const canonicalName = webMidiPort?.name ?? dst.name
+      midiStore.addRegistration(canonicalName)
+      midiStore.updateRegistration(canonicalName, 'outEnabled',  true)
+      midiStore.updateRegistration(canonicalName, 'outChannel',  dst.outChannel)
+      midiStore.updateRegistration(canonicalName, 'clock',       dst.sync)
+      midiStore.updateRegistration(canonicalName, 'transport',   dst.transport)
+      midiStore.updateRegistration(canonicalName, 'notes',       dst.notes)
+      midiStore.updateRegistration(canonicalName, 'cc',          dst.cc)
+      midiStore.updateRegistration(canonicalName, 'pc',          dst.pc)
+      midiStore.updateRegistration(canonicalName, 'pcEnabled',   dst.pc)
+      outputNames.push(canonicalName)
     }
 
     // Wire the routing matrix: apps use MidiSource enum, hardware uses device name
