@@ -863,6 +863,13 @@ const APP_SECTIONS = [
       ...Array.from({ length: 24 }, (_, i) => ({ paramName: `lm_vol_${i}`, label: `Vol ${i + 1}` })),
     ],
   },
+  {
+    key: 'transport', label: 'Transport',
+    items: [
+      { action: 'transport_play_all', label: 'Play All (Synced)' },
+      { action: 'transport_stop_all', label: 'Stop All' },
+    ],
+  },
 ]
 
 const collapsedActions = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))

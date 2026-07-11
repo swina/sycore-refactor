@@ -5,11 +5,13 @@ import { useTransportManager } from '@/composables/useTransportManager'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 
 const transportManager = useTransportManager()
 const syncStore = useSyncStore()
 const arpStore = useArpStore()
 const midiStore = useMidiStore()
+const { openMenu } = useMidiContextMenu()
 
 const showSyncPanel = ref(false)
 const position = ref('001:1:1')
@@ -28,10 +30,14 @@ function updatePosition() {
 
 onMounted(() => {
   rafId = requestAnimationFrame(updatePosition)
+  window.addEventListener('transport-play-all', _onTransportPlayAll)
+  window.addEventListener('transport-stop-all', _onTransportStopAll)
 })
 
 onUnmounted(() => {
   if (rafId) cancelAnimationFrame(rafId)
+  window.removeEventListener('transport-play-all', _onTransportPlayAll)
+  window.removeEventListener('transport-stop-all', _onTransportStopAll)
 })
 
 function handleBpmChange(e) {
@@ -40,6 +46,9 @@ function handleBpmChange(e) {
     arpStore.arpBpm = v
   }
 }
+
+const _onTransportPlayAll = () => { playAll() }
+const _onTransportStopAll = () => { stopAll() }
 
 function playAll() {
   transportManager.forceStopAll()
@@ -75,6 +84,7 @@ function stopAll() {
     <!-- Play All / Stop All -->
     <button
       @click="transportManager.isRunning.value ? stopAll() : playAll()"
+      @contextmenu.prevent="openMenu($event, { name: 'transport-play-all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
       class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95"
       :class="transportManager.isRunning.value
         ? 'text-red-400 border-red-500/40 bg-red-500/10 hover:bg-red-500/20'

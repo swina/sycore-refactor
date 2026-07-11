@@ -128,7 +128,9 @@ export type AppAction =
   | 'timeline_add_audio_trim_start'
   | 'timeline_add_audio_set_loop'
   | 'timeline_add_audio_crop'
-  | 'timeline_add_audio_save_wav';
+  | 'timeline_add_audio_save_wav'
+  | 'transport_play_all'
+  | 'transport_stop_all';
 
 export interface AppMidiMapping {
   id: string;
@@ -311,6 +313,8 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   timeline_add_audio_set_loop: 'TL Add Marker: Audio Set Loop',
   timeline_add_audio_crop: 'TL Add Marker: Audio Crop',
   timeline_add_audio_save_wav: 'TL Add Marker: Audio Save WAV',
+  transport_play_all: 'Transport: Play All (Synced)',
+  transport_stop_all: 'Transport: Stop All',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -348,7 +352,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog', 'open_sound_engine', 'open_live_timeline',
   ],
   'Transport & Performance': [
-    'global_start_stop', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
+    'global_start_stop', 'transport_play_all', 'transport_stop_all', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
     'playlist_volume_cc', 'transpose_cc', 'pass_thru', 'capture_rec_toggle'
   ],
   'MIDI Channel': [

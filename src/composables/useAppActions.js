@@ -306,6 +306,13 @@ export function useAppActions() {
         }
         break
 
+      case 'transport_play_all':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('transport-play-all'))
+        break
+      case 'transport_stop_all':
+        if (ccVal > 63) window.dispatchEvent(new CustomEvent('transport-stop-all'))
+        break
+
       case 'smart_latch_cc':
         // Turn latch on if CC >= 64, otherwise off
         midiStore.toggleSmartLatch(ccVal >= 64)
