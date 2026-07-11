@@ -1589,7 +1589,10 @@ function cycleChainSlot(i) {
 
       <!-- ── Step ruler ─────────────────────────────────────────────────────── -->
       <div class="shrink-0 flex items-center gap-2 px-3 pt-1.5 pb-0.5">
-        <div style="width: 92px" class="shrink-0" />
+        <div class="flex items-center gap-1.5" style="width: 92px;">
+          <!-- ── Kit name header ─────────────────────────────────────────────────── -->
+          <span v-if="drumStore.currentKitName" class="text-[8px] font-mono font-bold uppercase tracking-widest text-amber-500/80 truncate" :title="'DrumKit:' + drumStore.currentKitName">{{ drumStore.currentKitName }}</span>
+        </div>
         <div class="flex flex-col shrink-0"><div class="w-5 h-1" /><div class="w-5 h-1" /></div>
         <div class="relative shrink-0"><div class="w-12 h-1" /></div>
         <div class="flex flex-col shrink-0"><div class="w-6 h-1" /><div class="w-6 h-1" /><div class="w-6 h-1" /></div>
@@ -1609,11 +1612,11 @@ function cycleChainSlot(i) {
       </div>
 
       <!-- ── Kit name header ─────────────────────────────────────────────────── -->
-      <div v-if="drumStore.currentKitName" class="shrink-0 px-3 pt-1.5 pb-0.5">
+      <!-- <div v-if="drumStore.currentKitName" class="shrink-0 px-3 pt-1.5 pb-0.5">
         <div class="flex items-center gap-1.5" style="width: 92px;">
           <span class="text-[8px] font-mono font-bold uppercase tracking-widest text-amber-500/80 truncate" :title="'DrumKit:' + drumStore.currentKitName">{{ drumStore.currentKitName }}</span>
         </div>
-      </div>
+      </div> -->
 
       <!-- ── Track grid ──────────────────────────────────────────────────────── -->
       <div class="flex-1 overflow-y-auto custom-scrollbar px-3 py-2 space-y-1 min-h-0">
@@ -2020,13 +2023,16 @@ function cycleChainSlot(i) {
                 <div v-for="g in 4" :key="g" class="flex-1 grid grid-cols-4 gap-0.5">
                   <button
                     v-for="l in 4" :key="l"
-                    :class="[
-                      'relative h-12 rounded-sm border text-[11px] font-mono transition-colors focus:outline-none',
-                      (g-1)*4+(l-1) < voice.length ? '' : 'bg-neutral-900/60 border-neutral-800/40 opacity-30 cursor-not-allowed',
-                      (g-1)*4+(l-1) < voice.length && drumStore.currentBasslinePattern[vi]?.steps[(g-1)*4+(l-1)]?.active
-                        ? 'bg-amber-600/40 border-amber-400 shadow-[0_0_6px_rgba(139,92,246,0.4)]'
-                        : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700'
-                    ]"
+:class="[
+                        'relative h-12 rounded-sm border text-[11px] font-mono transition-colors focus:outline-none',
+                        (g-1)*4+(l-1) < voice.length ? '' : 'bg-neutral-900/60 border-neutral-800/40 opacity-30 cursor-not-allowed',
+                        (g-1)*4+(l-1) < voice.length && drumStore.currentBasslinePattern[vi]?.steps[(g-1)*4+(l-1)]?.active
+                          ? 'bg-amber-600/40 border-amber-400 shadow-[0_0_6px_rgba(139,92,246,0.4)]'
+                          : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700',
+                        drumStore.isPlaying && drumStore.currentStep === (g-1)*4+(l-1) && (g-1)*4+(l-1) < voice.length
+                          ? 'ring-2 ring-white/70'
+                          : ''
+                      ]"
                     @click.stop="(g-1)*4+(l-1) < voice.length && drumStore.toggleBasslineStep(vi, (g-1)*4+(l-1))"
                     @contextmenu="(g-1)*4+(l-1) < voice.length && openBasslineStepContext(vi, (g-1)*4+(l-1), $event)"
                     @wheel.prevent="(g-1)*4+(l-1) < voice.length && onBasslineStepWheel(vi, (g-1)*4+(l-1), $event)"
