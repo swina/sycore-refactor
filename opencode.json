@@ -1,5 +1,5 @@
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://opencode.ai",
   "mcp": {
     "web-dev-helper": {
       "type": "local",
@@ -9,7 +9,14 @@
         "/home/antonio/personal/mcp/web-dev-mcp/dist/index.js"
       ],
       "enabled": true
+    },
+     "claude-mem": {
+      "type": "local",
+      "command": [
+        "node",
+        "/home/antonio/.claude/plugins/marketplaces/thedotmack/plugin/scripts/mcp-server.cjs"
+      ],
+      "enabled": true
     }
-  },
-  "plugin": ["claude-mem"]
+  }
 }

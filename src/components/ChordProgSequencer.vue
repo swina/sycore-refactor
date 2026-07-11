@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
+import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -26,6 +27,7 @@ const midiStore = useMidiStore()
 const arpStore = useArpStore()
 const authStore = useAuthStore()
 const presetStore = usePresetStore()
+const transportManager = useTransportManager()
 const store = useChordProgStore()
 const syncStore = useSyncStore()
 const uiStore = useUiStore()
@@ -107,6 +109,7 @@ watch(() => store.isPlaying, (playing) => {
       getTransport().clear(repeatEventIdRef.value)
       repeatEventIdRef.value = null
     }
+    transportManager.releaseTransport()
     stopAllNotes()
     store.currentStep = 0
     playStateRef.current = {}
@@ -123,6 +126,7 @@ watch(() => store.isPlaying, (playing) => {
   toneStart().then(() => {
     getTransport().bpm.value = arpStore.arpBpm || 120
 
+const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgToTransport.value
     repeatEventIdRef.value = getTransport().scheduleRepeat((time) => {
       const state = playStateRef.current
       if (!state.isPlaying || _stopPending) return
@@ -175,7 +179,7 @@ watch(() => store.isPlaying, (playing) => {
             _pendingTimeouts.delete(tid)
             midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
             _activeNoteKeys.delete(noteKey)
-          }, noteDurationMs)
+          }, arpMs)
           _pendingTimeouts.add(tid)
         }
       }
@@ -193,9 +197,9 @@ watch(() => store.isPlaying, (playing) => {
           state.stepPointer = nextPointer
         }
       }
-    }, '384n')
+    }, '384n', alignToBar ? transportManager.getNextBarPosition() : undefined)
 
-    getTransport().start()
+    transportManager.acquireTransport()
   })
 })
 
@@ -256,10 +260,13 @@ watch(() => store.isPlaying, (playing) => {
 onUnmounted(() => {
   store.isPlaying = false
   if (repeatEventIdRef.value !== null) getTransport().clear(repeatEventIdRef.value)
+  transportManager.releaseTransport()
   stopAllNotes()
   if (_panicTimeout) { clearTimeout(_panicTimeout); midiStore.panic() }
   if (rafRef.value !== null) cancelAnimationFrame(rafRef.value)
   previewTimeouts.forEach(id => clearTimeout(id))
+  window.removeEventListener('cp-start', _onCpStart)
+  window.removeEventListener('cp-stop', _onCpStop)
 })
 
 // ── UI State ─────────────────────────────────────────────────────────────────
@@ -403,9 +410,14 @@ async function handleDeletePattern(id) {
   await store.deleteFromLibrary(id)
 }
 
+const _onCpStart = () => { store.isPlaying = true }
+const _onCpStop = () => { store.isPlaying = false }
+
 onMounted(() => {
   if (authStore.user) store.loadLibrary()
   loadPcSets()
+  window.addEventListener('cp-start', _onCpStart)
+  window.addEventListener('cp-stop', _onCpStop)
 })
 
 watch(() => authStore.user, (u) => {

@@ -36,6 +36,9 @@ const KEYS: Record<string, string> = {
   syncDrumMachineToBackingTrack: 'S1_SYNC_DRUM_TRACK',
   syncDrumMachineToLooper:       'S1_SYNC_DRUM_LOOPER',
   syncDrumMachineToAudioCapture: 'S1_SYNC_DRUM_CAPTURE',
+  syncSequencerToTransport:      'S1_SYNC_SEQ_TRANSPORT',
+  syncChordProgToTransport:      'S1_SYNC_CP_TRANSPORT',
+  syncDrumMachineToTransport:    'S1_SYNC_DM_TRANSPORT',
 }
 
 function readBool(k: string): boolean {
@@ -75,6 +78,9 @@ export interface SyncFlags {
   syncDrumMachineToBackingTrack: Ref<boolean>
   syncDrumMachineToLooper: Ref<boolean>
   syncDrumMachineToAudioCapture: Ref<boolean>
+  syncSequencerToTransport: Ref<boolean>
+  syncChordProgToTransport: Ref<boolean>
+  syncDrumMachineToTransport: Ref<boolean>
 }
 
 // ── Store ───────────────────────────────────────────────────────────────────
@@ -113,6 +119,9 @@ export const useSyncStore = defineStore('sync', () => {
   const syncDrumMachineToBackingTrack = ref(readBool(KEYS.syncDrumMachineToBackingTrack))
   const syncDrumMachineToLooper       = ref(readBool(KEYS.syncDrumMachineToLooper))
   const syncDrumMachineToAudioCapture = ref(readBool(KEYS.syncDrumMachineToAudioCapture))
+  const syncSequencerToTransport      = ref(readBool(KEYS.syncSequencerToTransport))
+  const syncChordProgToTransport      = ref(readBool(KEYS.syncChordProgToTransport))
+  const syncDrumMachineToTransport    = ref(readBool(KEYS.syncDrumMachineToTransport))
 
   const REFS: SyncFlags = {
     syncTrack, syncRecordAudioCapture, syncBackingTrackToLooper, syncSequencerToLooper,
@@ -122,6 +131,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
     syncLoopPadsToMidi, syncLoopPadsToSequencer, syncLoopPadsToBackingTrack, syncLoopPadsToLooper, syncLoopPadsToAudioCapture,
     syncDrumMachineToMidi, syncDrumMachineToSequencer, syncDrumMachineToBackingTrack, syncDrumMachineToLooper, syncDrumMachineToAudioCapture,
+    syncSequencerToTransport, syncChordProgToTransport, syncDrumMachineToTransport,
   }
 
   Object.entries(REFS).forEach(([name, r]) => {

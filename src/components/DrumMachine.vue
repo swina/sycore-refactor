@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
+import { useTransportManager } from '@/composables/useTransportManager'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDrumMachineStore, DRUM_STYLE_NAMES } from '@/stores/useDrumMachineStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useArpStore } from '@/stores/useArpStore'
+import { useSyncStore } from '@/stores/useSyncStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -18,8 +20,10 @@ const drumStore      = useDrumMachineStore()
 const mixer          = useAudioMixerStore()
 const mappingStore   = useMappingStore()
 const arpStore       = useArpStore()
+const syncStore      = useSyncStore()
 const { openMenu }   = useMidiContextMenu()
 const { cacheFileBlob, resolveUrl } = useFreesoundCache()
+const transportManager = useTransportManager()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
@@ -427,7 +431,7 @@ watch(() => drumStore.isPlaying, (playing) => {
       getTransport().clear(repeatEventIdRef)
       repeatEventIdRef = null
     }
-    getTransport().stop()
+    transportManager.releaseTransport()
     stepCounter = 0
     _tieCountdown = Array(11).fill(0)
     drumStore.currentStep = -1
@@ -456,8 +460,8 @@ watch(() => drumStore.isPlaying, (playing) => {
     getTransport().bpm.value = drumStore.bpm
     playStateRef.current = buildPlayState()
 
-    repeatEventIdRef = getTransport().scheduleRepeat(_scheduleCallback, '16n')
-    getTransport().start()
+    repeatEventIdRef = getTransport().scheduleRepeat(_scheduleCallback, '16n', transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value ? transportManager.getNextBarPosition() : undefined)
+    transportManager.acquireTransport()
   })
 })
 

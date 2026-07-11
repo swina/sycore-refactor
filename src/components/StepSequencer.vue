@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, toRef } from 'vue'
 import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
+import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -45,6 +46,7 @@ const presetStore = usePresetStore()
 const authStore = useAuthStore()
 const syncStore = useSyncStore()
 const uiStore = useUiStore()
+const transportManager = useTransportManager()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
@@ -1282,7 +1284,7 @@ watch(isPlaying, (playing) => {
 
   if (!playing) {
     dynamicMidiTranspose.value = 0
-    getTransport().stop()
+    transportManager.releaseTransport()
     if (repeatEventIdRef.value !== null) {
       getTransport().clear(repeatEventIdRef.value)
       repeatEventIdRef.value = null
@@ -1365,9 +1367,9 @@ watch(isPlaying, (playing) => {
           currentStep.value = stepIdx
           playStateRef.current.currentStep = stepIdx
         }, time)
-      }, '16n')
+      }, '16n', transportManager.isRunning.value && syncStore.syncSequencerToTransport.value ? transportManager.getNextBarPosition() : undefined)
 
-      getTransport().start()
+      transportManager.acquireTransport()
     })
   }
 
@@ -1407,7 +1409,7 @@ watch(() => midiStore.isTransportPlaying, (isPlayingMIDI) => {
 })
 
 onUnmounted(() => {
-  getTransport().stop()
+  transportManager.releaseTransport()
   if (repeatEventIdRef.value !== null) {
     getTransport().clear(repeatEventIdRef.value)
   }

@@ -11,6 +11,7 @@ import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Mu
 import { lucideIcons } from '@/lib/lucide-icons'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
+import TransportBar from '@/components/TransportBar.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/midi-service'
 
@@ -175,16 +176,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('player-state-sync', onPlayerSync)
   if (_unsubFooterMidi) _unsubFooterMidi()
-  // uiStore.isMidiControllerDesignerOpen = !uiStore.isMidiControllerDesignerOpen
 })
-
-function handleBpmChange(e) {
-  const v = parseInt(e.target.value)
-  if (!isNaN(v)) {
-    arpStore.arpBpm = v
-    emit('bpm-override')
-  }
-}
 </script>
 
 <template>
@@ -323,39 +315,11 @@ function handleBpmChange(e) {
         </div>
 
         <div v-if="authStore.user" class="flex items-center gap-2">
-          <div class="flex items-center px-2 py-0.5 bg-neutral-900/40 rounded-full group">
-            <!-- MIDI TRANSPORT START/STOP -->
-            <button
-              @click="midiStore.toggleGlobalTransport()"
-              @contextmenu.prevent="openMenu($event, { name: 'globalTransport', label: 'Global Transport' })"
-              :class="[
-                'flex items-center gap-2 text-synth-cyan px-2 py-1 rounded-full transition-all active:scale-95 font-black text-[8px] border',
-                midiStore.isTransportPlaying
-                  ? 'text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500 hover:text-white'
-                  : 'text-emerald-500 bg-red-500/10 border-emerald-500/30 hover:bg-red-500 hover:text-black'
-              ]"
-            >
-              <div class="flex items-center gap-1.5">
-                <span class="opacity-50 text-[7px] border border-current px-1 rounded-sm tracking-tighter">MIDI</span>
-                <component :is="midiStore.isTransportPlaying ? Square : Play" class="w-3 h-3 fill-current" />
-                <span>{{ midiStore.isTransportPlaying ? 'STOP' : 'START' }}</span>
-              </div>
-            </button>
-          </div>
+          <TransportBar />
           <QuickChannelSelector v-if="showPartSelector" />
           <ActiveMidiControllers />
         </div>
 
-        <div v-if="authStore.user" class="flex items-center gap-1 relative group">
-          <span class="text-neutral-500 text-[8px]">BPM:</span>
-          <input
-            type="number" min="20" max="300"
-            :value="arpStore.arpBpm"
-            title="Set global BPM"
-            @change="handleBpmChange"
-            class="bg-black border border-neutral-800 w-[60px] rounded px-1 py-0.5 text-center text-synth-neon text-[14px] focus:outline-none focus:border-synth-neon transition-colors"
-          />
-        </div>
         <div v-if="authStore.user" class="relative">
           <button
             @click="midiStore.panic()"
