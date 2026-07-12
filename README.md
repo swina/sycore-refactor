@@ -160,7 +160,7 @@ Deploys the app to Vercel.
                        │
 ┌──────────────────────▼──────────────────────────────┐
 │           Layer 4: Data & Persistence               │
-│  IndexedDB  │  LocalStorage  │  Upstash Redis       │
+│  IndexedDB  │  LocalStorage       │
 └─────────────────────────────────────────────────────┘
 ```
 
