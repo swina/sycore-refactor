@@ -8,7 +8,9 @@ import { useUiStore } from '@/stores/useUiStore'
 import { defineAsyncComponent } from 'vue'
 import {
   Radio, Cable, Cpu, Info, Zap, CircleQuestionMark, Drum, Layers, Music, ListMusic,
-  Mic, LogIn, Settings, Infinity, Clock, User, Globe
+  Mic, LogIn, Settings, Infinity, Clock, User, Globe,
+  Monitor, GitBranch, Piano, Package, Search, FolderOpen, Play,
+  Disc3, Headphones, PanelRightOpen
 } from 'lucide-vue-next'
 
 const SlideshowModal = defineAsyncComponent(() => import('@/components/SlideshowModal.vue'))
@@ -40,6 +42,59 @@ function lazyBg(url) {
 function goWorkspace() {
   router.push('/workspace')
 }
+
+// ─── Section definitions ───────────────────────────────────────────────────
+
+const sections = [
+  {
+    title: 'MIDI Configuration',
+    icon: Cpu,
+    items: [
+      { label: 'Devices', icon: Radio, bg: '/midi-core-engine.png', onClick: () => { uiStore.isMidiDevicesOpen = true; goWorkspace() } },
+      { label: 'Flow', icon: GitBranch, bg: '/routing-flow.png', onClick: () => { uiStore.isMidiFlowOpen = true; goWorkspace() } },
+      { label: 'Controller Designer', icon: Piano, bg: '/midi-knob.png', onClick: () => { uiStore.isMidiControllerDesignerOpen = true; goWorkspace() } },
+      { label: 'Monitor', icon: Monitor, bg: '/midi-capture.png', onClick: () => { uiStore.isMidiMonitorOpen = true; goWorkspace() } },
+    ],
+  },
+  {
+    title: 'Sound Design',
+    icon: Zap,
+    items: [
+      { label: 'Sound Engine', icon: Zap, bg: '/bg-sound-design-2.png', onClick: () => { uiStore.isSoundEngineOpen = true; goWorkspace() } },
+      { label: 'Sampler', badge: 'Beta', icon: Disc3, bg: '/sycore-lab.png', onClick: () => { uiStore.isSamplerOpen = true; goWorkspace() } },
+    ],
+  },
+  {
+    title: 'MIDI Tools',
+    icon: Music,
+    items: [
+      { label: 'Step Sequencer', icon: Music, bg: '/step-sequencer-square.png', onClick: () => { uiStore.isSequencerOpen = true; goWorkspace() } },
+      { label: 'Chord Progression', icon: Layers, bg: '/chord-progression-sequencer.png', onClick: () => { uiStore.isChordProgOpen = true; goWorkspace() } },
+      { label: 'Piano Roll', icon: Cable, bg: '/midi-capture.jpg', onClick: () => { uiStore.isCaptureOpen = true; goWorkspace() } },
+      { label: 'Multi Sounds', icon: Package, bg: '/device-program-change.png', onClick: () => { uiStore.isProgramChangeBrowserOpen = true; goWorkspace() } },
+    ],
+  },
+  {
+    title: 'Audio Tools',
+    icon: Headphones,
+    items: [
+      { label: 'Audio Capture', icon: Mic, bg: '/audio-capture-mixer.jpg', onClick: () => { uiStore.isAudioCaptureOpen = true; goWorkspace() } },
+      { label: 'Freesound Browser', icon: Search, bg: '/bg-sound-design.png', onClick: () => { uiStore.isFreesoundBrowserOpen = true; goWorkspace() } },
+      { label: 'Sound Folder Browser', icon: FolderOpen, bg: '/bg-settings.png', onClick: () => { uiStore.isSoundFolderBrowserOpen = true; goWorkspace() } },
+    ],
+  },
+  {
+    title: 'Performance Tools',
+    icon: Play,
+    items: [
+      { label: 'Live Timeline', icon: Clock, bg: '/home-performance-synths.png', onClick: () => { uiStore.isLiveTimelineOpen = true; goWorkspace() } },
+      { label: 'Drum Machine', icon: Drum, bg: '/drum-machine.png', onClick: () => { uiStore.isDrumMachineOpen = true; goWorkspace() } },
+      { label: 'Live Set', icon: ListMusic, bg: '/live-performance-2.png', onClick: () => { uiStore.isLivePerformancePadOpen = true; goWorkspace() } },
+      { label: 'Samples Machine', icon: Infinity, bg: '/loop-machine.png', onClick: () => { uiStore.isLoopMachineOpen = true; goWorkspace() } },
+      { label: 'Tracks Player', icon: Music, bg: '/backing-tracks.jpg', onClick: () => { uiStore.isTracksPlayerOpen = true; goWorkspace() } },
+    ],
+  },
+]
 </script>
 
 <template>
@@ -92,146 +147,123 @@ function goWorkspace() {
       </div>
     </div>
 
-    <!-- Main layout: 2 columns -->
+    <!-- Scrollable content area -->
     <div class="flex-1 flex overflow-hidden p-3 gap-3 min-h-0">
 
-      <!-- Column 1 — 70% -->
-      <div class="flex flex-col gap-3 cursor-pointer" style="flex: 0 0 70%">
+      <!-- Main sections -->
+      <div class="flex-1 flex flex-col gap-5 overflow-y-auto pr-1 scrollbar-thin">
 
-        <div class="flex h-1/2 gap-3">
-          <div @click="uiStore.isSoundEngineOpen = true; goWorkspace()" class="flex-1 rounded-xl border-neutral-800 bg-neutral-900/40 flex flex-col overflow-hidden items-center" :style="lazyBg('/bg-sound-design-2.png')">
-            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Zap class="w-7 h-7 text-synth-neon" />
-              <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Sound Engine</span>
-            </div>
+        <section v-for="(section, sIdx) in sections" :key="sIdx">
+          <!-- Section header -->
+          <div class="flex items-center gap-2 mb-3 px-1">
+            <component :is="section.icon" class="w-4 h-4 text-synth-neon" />
+            <h2 class="text-[11px] font-black uppercase tracking-[0.3em] text-neutral-500 font-mono">
+              {{ section.title }}
+            </h2>
+            <div class="flex-1 h-px bg-neutral-800/60" />
           </div>
-          <div @click="uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 flex flex-col items-center overflow-hidden" :style="lazyBg('/home-performance-synths.png')">
-            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Clock class="w-7 h-7 text-synth-neon" />
-              <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Timeline</span>
-            </div>
-          </div>
-        </div>
 
-        <div class="flex h-1/2 gap-3">
-          <div @click="uiStore.isLivePerformancePadOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden" :style="lazyBg('/live-performance-2.png')">
-            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <ListMusic class="w-7 h-7 text-synth-neon" />
-              <span class="text-[18px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Live Set</span>
-            </div>
-          </div>
-          <div class="flex flex-col gap-3">
-            <div class="flex h-1/2 gap-3">
-              <div @click="uiStore.isAudioCaptureOpen = true; goWorkspace()" class="flex w-1/2 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden" :style="lazyBg('/audio-capture-mixer.jpg')">
-                <div class="flex-none px-2 py-1 border-b border-neutral-800 flex items-end h-full gap-1.5">
-                  <Mic class="w-7 h-7 text-synth-neon" />
-                  <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Audio Capture</span>
-                </div>
-              </div>
-              <div @click="uiStore.isCaptureOpen = true; goWorkspace()" class="flex w-1/2 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden" :style="lazyBg('/midi-capture.png')">
-                <div class="flex-none px-2 py-1 border-b border-neutral-800 flex items-end h-full gap-1.5">
-                  <Cable class="w-5 h-5 text-synth-neon" />
-                  <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Piano Roll</span>
-                </div>
-              </div>
-            </div>
-            <div class="flex h-1/2 gap-3">
-              <div @click="uiStore.isChordProgOpen = true; goWorkspace()" class="flex w-1/2 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden" :style="lazyBg('/chord-progression-sequencer.png')">
-                <div class="flex-none px-2 py-1 border-b border-neutral-800 flex items-end h-full gap-1.5">
-                  <Layers class="w-7 h-7 text-synth-neon" />
-                  <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Chord Prog</span>
-                </div>
-              </div>
-              <div @click="uiStore.isSequencerOpen = true; goWorkspace()" class="flex w-1/2 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden" :style="lazyBg('/step-sequencer-square.png')">
-                <div class="flex-none px-2 py-1 border-b border-neutral-800 flex items-end h-full gap-1.5">
-                  <Music class="w-5 h-5 text-synth-cyan" />
-                  <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Step Sequencer</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          <!-- Section cards -->
+          <div class="flex flex-wrap gap-3">
+            <div
+              v-for="(item, iIdx) in section.items"
+              :key="iIdx"
+              @click="item.onClick"
+              class="group relative flex-none w-[155px] h-[100px] rounded-xl border border-neutral-800/80 bg-neutral-900/40 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-synth-neon/30 hover:bg-neutral-900/70 transition-all duration-200 active:scale-[0.97]"
+              :style="lazyBg(item.bg)"
+            >
+              <!-- Gradient overlay -->
+              <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
+              <!-- Content -->
+              <div class="absolute inset-0 flex flex-col justify-end p-3">
+                <div class="flex items-center gap-2">
+                  <component :is="item.icon" class="w-4 h-4 text-synth-neon shrink-0 group-hover:drop-shadow-[0_0_6px_rgba(0,163,112,0.6)] transition-all" />
+                  <span class="text-[10px] font-bold uppercase tracking-[0.15em] text-neutral-300 font-mono group-hover:text-white transition-colors">
+                    {{ item.label }}
+                  </span>
+                  <span
+                    v-if="item.badge"
+                    class="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  >
+                    {{ item.badge }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bottom spacer -->
+        <div class="h-2" />
       </div>
 
-      <!-- Column 2 — 30% -->
-      <div class="flex-1 flex flex-col gap-3 min-w-0">
+      <!-- Right column — utilities -->
+      <div class="flex flex-col gap-3 w-[180px] shrink-0">
 
-        <div @click="uiStore.showUnifiedMidiManager = true; goWorkspace()" class="flex-1 rounded-xl cursor-pointer border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden items-center" :style="lazyBg('/midi-core-engine.png')">
-          <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-            <Cpu class="w-5 h-5 text-synth-neon" />
-            <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">MIDI Manager</span>
+        <!-- MIDI Status -->
+        <div class="rounded-xl border border-neutral-800/80 bg-neutral-900/40 backdrop-blur-sm overflow-hidden" :style="lazyBg('/midi-core-engine.png')">
+          <div class="px-3 py-2 flex items-center gap-2 border-b border-neutral-800/50">
+            <Radio class="w-3 h-3 text-synth-neon" />
+            <span class="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 font-mono">MIDI Status</span>
           </div>
-        </div>
-
-        <div class="flex h-1/4 gap-3">
-          <div @click="uiStore.isDrumMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden" :style="lazyBg('/drum-machine.png')">
-            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Drum class="h-5 w-5 text-synth-neon"/>
-              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Drum Machine</span>
-            </div>
-          </div>
-          <div @click="uiStore.isLoopMachineOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden" :style="lazyBg('/loop-machine.png')">
-            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Infinity class="h-5 w-5 text-synth-neon"/>
-              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Samples Machine</span>
+          <div class="p-3">
+            <div class="flex items-center gap-2">
+              <span :class="['w-2 h-2 rounded-full', midiStore.midiReady ? 'bg-synth-neon shadow-[0_0_6px_rgba(0,163,112,0.6)]' : 'bg-red-500']" />
+              <span :class="['text-[10px] font-bold uppercase tracking-widest font-mono', midiStore.midiReady ? 'text-synth-neon' : 'text-red-400']">
+                {{ midiStore.midiReady ? 'Connected' : 'Waiting S-1' }}
+              </span>
             </div>
           </div>
         </div>
 
-        <div class="flex h-1/4 gap-3">
-          <div @click="uiStore.isTracksPlayerOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden" :style="lazyBg('/backing-tracks.jpg')">
-            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Music class="h-5 w-5 text-synth-neon"/>
-              <span class="text-[14px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Tracks</span>
-            </div>
+        <!-- Profile -->
+        <div @click="uiStore.isProfileOpen = true; goWorkspace()" class="rounded-xl border border-neutral-800/80 bg-neutral-900/40 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-synth-cyan/30 transition-colors" :style="lazyBg('/bg-performance.png')">
+          <div class="px-3 py-2 flex items-center gap-2 border-b border-neutral-800/50">
+            <User class="w-3 h-3 text-synth-cyan" />
+            <span class="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 font-mono">User</span>
           </div>
-          <div @click="uiStore.isMultiSoundsOpen = true; goWorkspace()" class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col items-center overflow-hidden" :style="lazyBg('/midi-knob.png')">
-            <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-end h-full gap-1.5">
-              <Cable class="w-5 h-5 text-synth-neon" />
-              <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Multi Sounds</span>
-            </div>
+          <div class="p-3">
+            <span class="text-[10px] font-bold text-synth-cyan uppercase tracking-widest font-mono">Profile</span>
           </div>
         </div>
 
-        <div class="flex-1 cursor-pointer rounded-xl border-neutral-800 bg-neutral-900/60 backdrop-blur-sm flex flex-col overflow-hidden" :style="lazyBg('/bg-settings.png')">
-          <div class="flex items-end w-full h-full p-2 gap-2">
-            <div class="flex flex-col w-1/2 gap-1.5 items-center h-full">
-              <div class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 flex items-center gap-1.5">
-                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
-                  <Radio class="w-3 h-3 text-synth-neon" />
-                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Status</span>
-                </div>
-                <span :class="['text-[10px] font-black uppercase tracking-widest font-mono', midiStore.midiReady ? 'text-synth-neon' : 'text-red-400']">
-                    {{ midiStore.midiReady ? 'Connected' : 'Waiting S-1' }}
-                </span>
-              </div>
-              <div @click="uiStore.isProfileOpen = true; goWorkspace()" class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 mb-3 flex items-center gap-1.5 cursor-pointer">
-                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
-                  <User class="w-3 h-3 text-synth-cyan" />
-                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">User</span>
-                </div>
-                <span class="text-[10px] font-black text-synth-cyan uppercase tracking-widest font-mono">Profile</span>
-              </div>
-            </div>
-            <div class="flex flex-col w-1/2 gap-1.5 items-center h-full">
-              <div @click="uiStore.isGuidesOpen = true" class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 flex items-center gap-1.5 cursor-pointer">
-                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
-                  <CircleQuestionMark class="w-3 h-3 text-synth-neon" />
-                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">HELP</span>
-                </div>
-                <span class="text-[10px] font-black text-synth-cyan uppercase tracking-widest font-mono">Manual</span>
-              </div>
-              <div @click="uiStore.isAboutOpen = true" class="flex flex-col w-full bg-neutral-800/70 rounded-md border border-neutral-700/50 px-1 py-1 mb-3 flex items-center gap-1.5 cursor-pointer">
-                <div class="flex-none px-3 py-2 border-b border-neutral-800 flex items-center gap-1.5">
-                  <Info class="w-3 h-3 text-synth-cyan" />
-                  <span class="text-[9px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">About</span>
-                </div>
-                <span class="text-[10px] font-black text-synth-cyan uppercase tracking-widest font-mono">About SY.CORE</span>
-              </div>
-            </div>
+        <!-- Help -->
+        <div @click="uiStore.isGuidesOpen = true" class="rounded-xl border border-neutral-800/80 bg-neutral-900/40 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-synth-neon/30 transition-colors" :style="lazyBg('/bg-settings.png')">
+          <div class="px-3 py-2 flex items-center gap-2 border-b border-neutral-800/50">
+            <CircleQuestionMark class="w-3 h-3 text-synth-neon" />
+            <span class="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 font-mono">Help</span>
+          </div>
+          <div class="p-3">
+            <span class="text-[10px] font-bold text-synth-cyan uppercase tracking-widest font-mono">Manual / Guides</span>
           </div>
         </div>
+
+        <!-- About -->
+        <div @click="uiStore.isAboutOpen = true" class="rounded-xl border border-neutral-800/80 bg-neutral-900/40 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-synth-cyan/30 transition-colors" :style="lazyBg('/bg-sound-design.png')">
+          <div class="px-3 py-2 flex items-center gap-2 border-b border-neutral-800/50">
+            <Info class="w-3 h-3 text-synth-cyan" />
+            <span class="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 font-mono">About</span>
+          </div>
+          <div class="p-3">
+            <span class="text-[10px] font-bold text-synth-cyan uppercase tracking-widest font-mono">About SY.CORE</span>
+          </div>
+        </div>
+
+        <!-- Admin (conditional) -->
+        <button
+          v-if="authStore.isAdmin"
+          @click="isAdminPanelOpen = true"
+          class="rounded-xl border border-neutral-800/80 bg-neutral-900/40 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-amber-500/30 transition-colors text-left"
+        >
+          <div class="px-3 py-2 flex items-center gap-2 border-b border-neutral-800/50">
+            <Settings class="w-3 h-3 text-amber-400" />
+            <span class="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 font-mono">Admin</span>
+          </div>
+          <div class="p-3">
+            <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest font-mono">Panel</span>
+          </div>
+        </button>
 
       </div>
     </div>
