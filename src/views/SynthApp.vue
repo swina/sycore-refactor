@@ -79,7 +79,6 @@ import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 import MinimizedModalsBar from '@/components/ui/MinimizedModalsBar.vue'
-import StartupLoader from '@/components/ui/StartupLoader.vue'
 
 // Stores
 const midiStore = useMidiStore()
@@ -632,8 +631,6 @@ onMounted(() => {
     <AppFooter @bpm-override="sessionBpmOverride = true" />
     <!-- <SideBar /> -->
     <MainMenuDial />
-
-    <StartupLoader />
   </div>
 </template>
 

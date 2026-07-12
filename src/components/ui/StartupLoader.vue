@@ -1,10 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useUiStore } from '@/stores/useUiStore'
 
+// ── Session-level guard: show only once per session ───────────────────────
+let sessionShown = false
+
+const uiStore = useUiStore()
 const lines = ref([])
-const visible = ref(true)
+const visible = ref(false)
 const logEl = ref(null)
-let autoCloseTimer = null
 let fallbackTimer = null
 
 function addLine(msg) {
@@ -14,28 +18,43 @@ function addLine(msg) {
   })
 }
 
-function scheduleClose() {
-  if (autoCloseTimer) return
-  autoCloseTimer = setTimeout(() => { visible.value = false }, 1400)
+function dismiss() {
+  visible.value = false
+  sessionShown = true
 }
 
 function onLog(e) {
-  const msg = e.detail
-  addLine(msg)
-  if (typeof msg === 'string' && msg.includes('MIDI Store Init Result')) {
-    scheduleClose()
-  }
+  addLine(e.detail)
 }
 
 onMounted(() => {
-  window.addEventListener('app-system-log', onLog)
+  if (sessionShown) return
+
+  // Show the loader immediately
+  visible.value = true
   addLine('sycore starting up...')
-  fallbackTimer = setTimeout(() => { visible.value = false }, 12000)
+
+  // Listen for system log events during init
+  window.addEventListener('app-system-log', onLog)
+
+  // Auto-dismiss when app initialization completes
+  watch(
+    () => uiStore.isAppInitializing,
+    (val) => {
+      if (!val && visible.value) {
+        addLine('system ready')
+        setTimeout(dismiss, 800)
+      }
+    },
+    { immediate: true }
+  )
+
+  // Fallback: dismiss after 15s regardless
+  fallbackTimer = setTimeout(dismiss, 15000)
 })
 
 onUnmounted(() => {
   window.removeEventListener('app-system-log', onLog)
-  clearTimeout(autoCloseTimer)
   clearTimeout(fallbackTimer)
 })
 </script>
@@ -45,7 +64,7 @@ onUnmounted(() => {
     <div
       v-if="visible"
       class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-sm"
-      @click="visible = false"
+      @click="dismiss()"
     >
       <div
         class="w-[500px] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9)]"
