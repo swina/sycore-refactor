@@ -41,3 +41,4 @@ graphify-out
 *.mp4
 *.webm
 *.wav
+.sessions
