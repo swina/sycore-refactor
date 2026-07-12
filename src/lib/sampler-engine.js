@@ -397,6 +397,10 @@ export function stopGranular(padIdx) {
 }
 
 // Call after replacing a sample so the stale buffer isn't replayed
+export function getCachedBuffer(blobUrl) {
+  return _bufferCache.get(blobUrl) || null
+}
+
 export function invalidateBuffer(url) {
   _bufferCache.delete(url)
   // Also drop any lo-fi cached variants

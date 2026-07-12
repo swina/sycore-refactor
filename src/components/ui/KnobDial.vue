@@ -73,7 +73,7 @@ function down(e) {
       <line :x1="cx" :y1="cy" :x2="needle.x2" :y2="needle.y2" :stroke="color" stroke-width="1.5" stroke-linecap="round"/>
       <circle :cx="cx" :cy="cy" r="2.5" fill="#52525b"/>
     </svg>
-    <span v-if="label" class="text-[8px] text-neutral-500 font-mono leading-none">{{ label }}</span>
-    <span class="text-[7px] text-neutral-400 font-mono leading-none">{{ displayVal }}</span>
+    <span v-if="label" class="text-[9px] text-violet-500 font-mono leading-none">{{ label }}</span>
+    <span class="text-[9px] text-neutral-400 font-mono leading-none">{{ displayVal }}</span>
   </div>
 </template>
