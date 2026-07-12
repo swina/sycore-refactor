@@ -51,9 +51,9 @@ const sections = [
     icon: Cpu,
     items: [
       { label: 'Devices', icon: Radio, bg: '/midi-core-engine.png', onClick: () => { uiStore.isMidiDevicesOpen = true; goWorkspace() } },
-      { label: 'Flow', icon: GitBranch, bg: '/routing-flow.png', onClick: () => { uiStore.isMidiFlowOpen = true; goWorkspace() } },
+      { label: 'MIDI Flow', icon: GitBranch, bg: '/midi-flow.png', onClick: () => { uiStore.isMidiFlowOpen = true; goWorkspace() } },
       { label: 'Controller Designer', icon: Piano, bg: '/midi-knob.png', onClick: () => { uiStore.isMidiControllerDesignerOpen = true; goWorkspace() } },
-      { label: 'Monitor', icon: Monitor, bg: '/midi-capture.png', onClick: () => { uiStore.isMidiMonitorOpen = true; goWorkspace() } },
+      { label: 'MIDI Monitor', icon: Monitor, bg: '/midi-monitor.png', onClick: () => { uiStore.isMidiMonitorOpen = true; goWorkspace() } },
     ],
   },
   {

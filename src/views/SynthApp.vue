@@ -71,6 +71,7 @@ import LoopMachine        from '@/components/LoopMachine.vue'
 import DrumMachine        from '@/components/DrumMachine.vue'
 import MidiWizard         from '@/components/MidiWizard.vue'
 import MidiWizardFlow     from '@/components/MidiWizardFlow.vue'
+import MidiMonitorPanel   from '@/components/MidiMonitorPanel.vue'
 import SamplerPanel            from '@/components/SamplerPanel.vue'
 import MidiControllerDesigner from '@/components/MidiControllerDesigner.vue'
 import MidiDevices from '@/components/MidiDevices.vue'
@@ -467,6 +468,7 @@ onMounted(() => {
 
       <MidiWizard     v-if="uiStore.isMidiWizardOpen" />
       <MidiWizardFlow />
+      <MidiMonitorPanel />
       <MidiDevices    v-if="uiStore.isMidiDevicesOpen" />
 
       <!-- Live Timeline -->

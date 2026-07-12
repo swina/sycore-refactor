@@ -1,8 +1,11 @@
 <script setup>
 import { ref, computed, shallowRef, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import {
-  Activity, Pause, Play, Square, Trash2, Download, X, ChevronDown, ChevronUp
+  Activity, Pause, Play, Square, Trash2, Download, ChevronDown, ChevronUp
 } from 'lucide-vue-next'
+
+import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -11,6 +14,20 @@ import { useUiStore } from '@/stores/useUiStore'
 
 const uiStore       = useUiStore()
 const mappingStore  = useMappingStore()
+
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
+  useDraggableResizable({
+    storageKey:    'S1_MIDI_MONITOR_DR',
+    minimizeLabel: 'MIDI Monitor',
+    openRef:       () => uiStore.isMidiMonitorOpen,
+    initialWidth:  700,
+    initialHeight: 400,
+    minWidth:      520,
+    minHeight:     200,
+    zIndex:        998,
+  })
+
+watch(() => uiStore.isMidiMonitorOpen, v => { if (v) bringToFront() })
 
 // ─── Filter state ─────────────────────────────────────────────────────────────
 const direction      = ref('both')   // 'in' | 'out' | 'both'
@@ -181,15 +198,23 @@ onUnmounted(() => {
   <Transition name="monitor">
     <div
       v-if="props.embedded || uiStore.isMidiMonitorOpen"
+      :style="props.embedded ? undefined : panelStyle"
       :class="props.embedded
         ? 'flex flex-col h-full overflow-hidden'
-        : 'fixed bottom-[52px] left-1/2 -translate-x-1/2 z-[998] w-[680px] max-w-[calc(100vw-1rem)] bg-neutral-900 border border-cyan-500/30 rounded-xl shadow-2xl shadow-cyan-900/10 flex flex-col overflow-hidden'"
+        : 'fixed flex flex-col bg-neutral-900 border border-cyan-500/30 rounded-xl shadow-2xl shadow-cyan-900/10 overflow-hidden'"
+      @mousedown="bringToFront"
     >
       <!-- ── Header ──────────────────────────────────────────────────────── -->
-      <div class="flex items-center justify-between border-b border-neutral-800 px-3 py-2 bg-cyan-900/10 gap-2 flex-wrap">
-        <div class="text-cyan-400 text-[10px] font-black tracking-widest uppercase flex items-center gap-1.5 shrink-0">
-          <Activity class="w-3 h-3" />
-          <span class="text-sm font-black text-white tracking-widest uppercase">MIDI MONITOR</span>
+      <div
+        class="flex items-center justify-between border-b border-neutral-800 px-3 py-2 bg-cyan-900/10 gap-2 flex-wrap cursor-move select-none shrink-0"
+        @mousedown.self="onDragStart"
+      >
+        <div class="flex items-center gap-2">
+          <MacOsButtons v-if="!props.embedded" @close="uiStore.isMidiMonitorOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
+          <div class="text-cyan-400 text-[10px] font-black tracking-widest uppercase flex items-center gap-1.5 shrink-0">
+            <Activity class="w-3 h-3 pointer-events-none" />
+            <span class="text-sm font-black text-white tracking-widest uppercase pointer-events-none">MIDI MONITOR</span>
+          </div>
         </div>
 
         <div class="flex items-center gap-1.5 flex-wrap flex-1 justify-end">
@@ -261,19 +286,18 @@ onUnmounted(() => {
           >
             <Download class="w-3 h-3" />
           </button>
-
-          <!-- Close -->
-          <button v-if="!props.embedded" @click="uiStore.isMidiMonitorOpen = false"
-            class="p-1 text-neutral-500 hover:text-white transition-colors"
-            title="Close"
-          >
-            <X class="w-3 h-3" />
-          </button>
         </div>
       </div>
 
-      <!-- ── Filter panel ────────────────────────────────────────────────── -->
-      <Transition name="filters">
+      <!-- Minimized bar -->
+      <div v-if="!props.embedded && isMinimized" class="px-3 py-1.5 text-[10px] text-neutral-500 font-mono">
+        MIDI Monitor — {{ filteredEntries.length }} events
+      </div>
+
+      <template v-if="props.embedded || !isMinimized">
+
+        <!-- ── Filters ────────────────────────────────────────────────────────── -->
+        <Transition name="filters">
         <div v-if="showFilters"
           class="border-b border-neutral-800 px-3 py-2 bg-black/40 flex flex-wrap gap-x-4 gap-y-2"
         >
@@ -360,6 +384,8 @@ onUnmounted(() => {
         <div ref="logEndRef" />
       </div>
 
+      </template>
+
       <!-- ── Footer ─────────────────────────────────────────────────────── -->
       <div class="px-3 py-1.5 border-t border-neutral-800 flex items-center justify-between bg-black/40">
         <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">
@@ -373,6 +399,17 @@ onUnmounted(() => {
           />
           {{ !monitoring ? 'STOPPED' : paused ? 'PAUSED' : 'LIVE' }}
         </span>
+      </div>
+
+      <!-- Resize handle -->
+      <div
+        v-if="!props.embedded"
+        class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-20 hover:opacity-60 transition-opacity"
+        @mousedown.stop="e => onResizeStart(e, 'se')"
+      >
+        <svg viewBox="0 0 10 10" class="w-4 h-4">
+          <path d="M8 2L2 8M5 2L2 5M8 5L5 8" stroke="currentColor" stroke-width="1.5" fill="none" class="text-neutral-400"/>
+        </svg>
       </div>
     </div>
   </Transition>
