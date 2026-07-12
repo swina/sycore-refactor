@@ -206,6 +206,8 @@ const MARKER_TYPES = [
   { value: 'audio-crop',       label: 'Audio Crop (macro)',       hasValue: false },
   { value: 'audio-save-wav',   label: 'Audio Save WAV (macro)',   hasValue: false },
   { value: 'tl-stop',          label: 'Stop Timeline',           hasValue: false },
+  { value: 'gt-start',         label: 'Global Transport Start',  hasValue: false },
+  { value: 'gt-stop',          label: 'Global Transport Stop',   hasValue: false },
 ]
 
 const newMkrType = computed(() => MARKER_TYPES.find(t => t.value === newMkr.value.type))
@@ -293,6 +295,8 @@ const MKR_COLORS = {
   'audio-crop':       '#f472b6',
   'audio-save-wav':   '#fbbf24',
   'tl-stop':          '#ef4444',
+  'gt-start':         '#00ff88',
+  'gt-stop':          '#ff0044',
 }
 
 const MKR_ICONS = {
@@ -318,6 +322,8 @@ const MKR_ICONS = {
   'audio-crop':       '⊞',
   'audio-save-wav':   '⬇',
   'tl-stop':          '◼',
+  'gt-start':         '⏯',
+  'gt-stop':          '⏹',
 }
 
 const MKR_ABBREV = {
@@ -343,6 +349,8 @@ const MKR_ABBREV = {
   'audio-crop':       'CRP⊞',
   'audio-save-wav':   'SAVE',
   'tl-stop':          'TL■',
+  'gt-start':         'GT▶',
+  'gt-stop':          'GT■',
 }
 
 function segColor(idx)    { return SEG_COLORS[segments.value[idx]?.trackIdx % SEG_COLORS.length ?? idx % SEG_COLORS.length] }
@@ -638,6 +646,13 @@ function _fireMarker(m) {
     case 'transport-stop':
       _lastTransportWasPlay = false
       midiStore.sendStop()
+      break
+    // Global Transport: Play All / Stop All (synced apps)
+    case 'gt-start':
+      window.dispatchEvent(new CustomEvent('transport-play-all'))
+      break
+    case 'gt-stop':
+      window.dispatchEvent(new CustomEvent('transport-stop-all'))
       break
     // Clock ticks only (no transport START/STOP byte)
     case 'clock-start':
@@ -1628,6 +1643,25 @@ onUnmounted(() => {
           >
             ⬇ Save
           </button>
+
+          <!-- Quick Global Transport buttons -->
+          <div class="w-px h-4 bg-neutral-800 mx-1" />
+          <button
+            @click="newMkr.position = timelinePos; newMkr.type = 'gt-start'; showAddMarker = true"
+            title="Insert Global Transport Start at playhead"
+            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
+            :style="{ borderColor: '#00ff8866', color: '#00ff88', background: '#00ff8811' }"
+          >
+            ⏯ GT▶
+          </button>
+          <button
+            @click="newMkr.position = timelinePos; newMkr.type = 'gt-stop'; showAddMarker = true"
+            title="Insert Global Transport Stop at playhead"
+            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
+            :style="{ borderColor: '#ff004466', color: '#ff0044', background: '#ff004411' }"
+          >
+            ⏹ GT■
+          </button>
         </div>
       </div>
 
@@ -2223,6 +2257,13 @@ onUnmounted(() => {
               <div v-if="m.type === 'tl-stop'" class="text-[9px] font-mono text-neutral-500">
                 Stop timeline playback
               </div>
+              <!-- Global Transport markers -->
+              <div v-if="m.type === 'gt-start'" class="text-[9px] font-mono text-emerald-400">
+                Global Transport Start — Play All
+              </div>
+              <div v-if="m.type === 'gt-stop'" class="text-[9px] font-mono text-rose-400">
+                Global Transport Stop — Stop All
+              </div>
             </div>
             <span class="text-[9px] font-mono text-neutral-600 shrink-0">{{ formatTime(m.position) }}</span>
             <button @click="removeMarker(m.id)" class="p-1 text-neutral-600 hover:text-rose-500 transition-colors shrink-0">
@@ -2462,6 +2503,20 @@ onUnmounted(() => {
             <template v-if="newMkr.type === 'tl-stop'">
               <div class="text-[10px] font-mono text-neutral-500 py-2">
                 Stops the timeline playback when this marker is reached. Place at the end of your arrangement.
+              </div>
+            </template>
+
+            <!-- Global Transport Start -->
+            <template v-if="newMkr.type === 'gt-start'">
+              <div class="text-[10px] font-mono text-neutral-500 py-2">
+                Fires Play All on the global transport — starts all synced sequencers (step sequencer, chord prog, drum machine) and aligns them to the next bar boundary.
+              </div>
+            </template>
+
+            <!-- Global Transport Stop -->
+            <template v-if="newMkr.type === 'gt-stop'">
+              <div class="text-[10px] font-mono text-neutral-500 py-2">
+                Fires Stop All on the global transport — stops all synced sequencers and halts Tone.Transport.
               </div>
             </template>
 
