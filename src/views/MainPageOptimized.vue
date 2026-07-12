@@ -71,7 +71,7 @@ const sections = [
       { label: 'Step Sequencer', icon: Music, bg: '/step-sequencer-square.png', onClick: () => { uiStore.isSequencerOpen = true; goWorkspace() } },
       { label: 'Chord Progression', icon: Layers, bg: '/chord-progression-sequencer.png', onClick: () => { uiStore.isChordProgOpen = true; goWorkspace() } },
       { label: 'Piano Roll', icon: Cable, bg: '/midi-capture.jpg', onClick: () => { uiStore.isCaptureOpen = true; goWorkspace() } },
-      { label: 'Multi Sounds', icon: Package, bg: '/device-program-change.png', onClick: () => { uiStore.isProgramChangeBrowserOpen = true; goWorkspace() } },
+      { label: 'Multi Sounds', icon: Package, bg: '/device-program-change.png', onClick: () => { uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace() } },
     ],
   },
   {
