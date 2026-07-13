@@ -281,21 +281,21 @@
                 <span class="text-[11px] font-mono text-violet-300 w-7">{{ midiNoteName(selectedPadData.rootKey ?? 72) }}</span>
                 <input type="number" min="0" max="127" :value="selectedPadData.rootKey ?? 72"
                   @change="e => updatePadStore(selectedPad, 'rootKey', Math.max(0, Math.min(127, +e.target.value || 72)))"
-                  class="w-10 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
+                  class="w-14 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
               </div>
               <div class="flex items-center gap-1">
                 <span class="text-[11px] font-mono text-neutral-500 w-8">Lo</span>
                 <span class="text-[11px] font-mono text-neutral-400 w-7">{{ midiNoteName(selectedPadData.minKey ?? 0) }}</span>
                 <input type="number" min="0" max="127" :value="selectedPadData.minKey ?? 0"
                   @change="e => updatePadStore(selectedPad, 'minKey', Math.max(0, Math.min(127, +e.target.value)))"
-                  class="w-10 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
+                  class="w-14 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
               </div>
               <div class="flex items-center gap-1">
                 <span class="text-[11px] font-mono text-neutral-500 w-8">Hi</span>
                 <span class="text-[11px] font-mono text-neutral-400 w-7">{{ midiNoteName(selectedPadData.maxKey ?? 127) }}</span>
                 <input type="number" min="0" max="127" :value="selectedPadData.maxKey ?? 127"
                   @change="e => updatePadStore(selectedPad, 'maxKey', Math.max(0, Math.min(127, +e.target.value)))"
-                  class="w-10 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
+                  class="w-14 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
               </div>
             </div>
           </div>

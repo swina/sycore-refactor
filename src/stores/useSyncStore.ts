@@ -39,6 +39,7 @@ const KEYS: Record<string, string> = {
   syncSequencerToTransport:      'S1_SYNC_SEQ_TRANSPORT',
   syncChordProgToTransport:      'S1_SYNC_CP_TRANSPORT',
   syncDrumMachineToTransport:    'S1_SYNC_DM_TRANSPORT',
+  syncBackingTrackToTransport:   'S1_SYNC_BT_TRANSPORT',
 }
 
 function readBool(k: string): boolean {
@@ -81,6 +82,7 @@ export interface SyncFlags {
   syncSequencerToTransport: Ref<boolean>
   syncChordProgToTransport: Ref<boolean>
   syncDrumMachineToTransport: Ref<boolean>
+  syncBackingTrackToTransport: Ref<boolean>
 }
 
 // ── Store ───────────────────────────────────────────────────────────────────
@@ -122,6 +124,7 @@ export const useSyncStore = defineStore('sync', () => {
   const syncSequencerToTransport      = ref(readBool(KEYS.syncSequencerToTransport))
   const syncChordProgToTransport      = ref(readBool(KEYS.syncChordProgToTransport))
   const syncDrumMachineToTransport    = ref(readBool(KEYS.syncDrumMachineToTransport))
+  const syncBackingTrackToTransport   = ref(readBool(KEYS.syncBackingTrackToTransport))
 
   const REFS: SyncFlags = {
     syncTrack, syncRecordAudioCapture, syncBackingTrackToLooper, syncSequencerToLooper,
@@ -131,7 +134,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
     syncLoopPadsToMidi, syncLoopPadsToSequencer, syncLoopPadsToBackingTrack, syncLoopPadsToLooper, syncLoopPadsToAudioCapture,
     syncDrumMachineToMidi, syncDrumMachineToSequencer, syncDrumMachineToBackingTrack, syncDrumMachineToLooper, syncDrumMachineToAudioCapture,
-    syncSequencerToTransport, syncChordProgToTransport, syncDrumMachineToTransport,
+    syncSequencerToTransport, syncChordProgToTransport, syncDrumMachineToTransport, syncBackingTrackToTransport,
   }
 
   Object.entries(REFS).forEach(([name, r]) => {

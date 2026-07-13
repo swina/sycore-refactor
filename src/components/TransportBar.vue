@@ -63,6 +63,9 @@ function playAll() {
   if (syncStore.syncDrumMachineToTransport) {
     window.dispatchEvent(new CustomEvent('timeline-dm-start', { detail: {} }))
   }
+  if (syncStore.syncBackingTrackToTransport) {
+    window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: true, restart: true } }))
+  }
 }
 
 function stopAll() {
@@ -74,6 +77,9 @@ function stopAll() {
   }
   if (syncStore.syncDrumMachineToTransport) {
     window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
+  }
+  if (syncStore.syncBackingTrackToTransport) {
+    window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
   }
   transportManager.forceStopAll()
 }
@@ -140,6 +146,10 @@ function stopAll() {
             <label class="flex items-center justify-between cursor-pointer group">
               <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Drum Machine</span>
               <input type="checkbox" v-model="syncStore.syncDrumMachineToTransport" class="accent-synth-neon" />
+            </label>
+            <label class="flex items-center justify-between cursor-pointer group">
+              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Backing Track (Playlist)</span>
+              <input type="checkbox" v-model="syncStore.syncBackingTrackToTransport" class="accent-synth-neon" />
             </label>
           </div>
 

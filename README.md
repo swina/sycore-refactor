@@ -92,13 +92,12 @@ npm install
 
 ### Run (Development)
 
+<h3 style="color:red;">The current last version to run is branch is release/0.1.1</h2>
+
 ```bash
-npm run dev
+git branch release/0.1.1
 ```
 
-Starts the Vite dev server (default: `http://localhost:5173`).
-
-### Run (Alternative Port)
 
 ```bash
 npm run dev:refactor

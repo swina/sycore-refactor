@@ -797,10 +797,19 @@ onMounted(() => {
 
   const handleToggle = (e) => {
     const audio = activeSlot === 'a' ? audioRefA.value : audioRefB.value
-    if (!audio || !src.value) return
-    const restart = e.detail?.restart
-    if (restart) { audio.currentTime = 0; currentTime.value = 0 }
     const play = e.detail?.play
+    const restart = e.detail?.restart
+
+    // If no track loaded but playlist exists, start/stop from playlist
+    if (!audio || !src.value) {
+      if (play === true && playlist.value.length > 0) {
+        playFromPlaylist(0)
+      } else if (play === false) {
+        // nothing to stop — noop
+      }
+      return
+    }
+    if (restart) { audio.currentTime = 0; currentTime.value = 0 }
     if (play === undefined) {
       if (isPlaying.value) {
         audio.pause()
