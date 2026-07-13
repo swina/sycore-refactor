@@ -61,7 +61,7 @@
             i === 6 ? 'border-dashed' : '',
             mappingStore.mappedParams?.has('sampler_pad_' + i) ? 'ring-1 ring-amber-500/60' : '',
           ]"
-          style="height: 72px"
+          style="height: 82px"
           @click="handlePadClick(i)"
           @contextmenu.prevent="handlePadRightClick($event, i)"
         >
@@ -110,7 +110,7 @@
 
         <!-- Header row: label · MIDI In · Chromatic · Poly · Loop · Clear -->
         <div class="flex items-center gap-2 flex-wra p-2 rounded bg-neutral-800">
-          <div class="flex flex-col min-w-1/3">
+          <div class="flex flex-col min-w-1/2">
             <span class="text-[10px] text-neutral-500 font-mono">Pad {{ selectedPad + 1 }}</span>
             <span class="text-[14px] font-mono text-orange-400 uppercase tracking-widest">{{ selectedPadData.label }}</span>
           </div>
@@ -214,7 +214,7 @@
         <div class="flex items-start gap-2 flex-nowrap">
 
           <!-- LEVEL -->
-          <div class="flex flex-col w-1/6 items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">Level</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.volume"     :min="0"   :max="1"     :step="0.01"  :defaultVal="0.85"  label="Vol"    :format="fmtPct"  @change="v => updatePadParam(selectedPad, 'volume', v)"/>
@@ -224,7 +224,7 @@
             
           </div>
           <!-- FILTER -->
-          <div class="flex flex-col w-1/6 items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">Filter</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.pitch"      :min="-24" :max="24"    :step="1"     :defaultVal="0"     label="Pitch"  :format="fmtSemi" @change="v => updatePadParam(selectedPad, 'pitch', v)" />
@@ -240,7 +240,7 @@
             </select>
           </div>
           <!-- FX -->
-          <div class="flex flex-col w-1/6 items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">FX</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.reverbSend" :min="0" :max="1" :step="0.01" :defaultVal="0" label="Rev" :format="fmtPct" @change="v => updatePadParam(selectedPad, 'reverbSend', v)" />
@@ -249,7 +249,7 @@
           </div>
 
           <!-- LOOP -->
-          <div class="flex flex-col w-1/6 items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">Loop</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.startPoint" :min="0" :max="1" :step="0.001" :defaultVal="0" label="Start" :format="fmtLoopTime" @change="v => updatePadStore(selectedPad, 'startPoint', v)" />
@@ -262,7 +262,7 @@
           </div>
 
           <!-- ENV (ADSR) -->
-          <div class="flex flex-col w-1/6 items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">ENV</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.attack  ?? 0.005" :min="0" :max="2"  :step="0.005" :defaultVal="0.005" label="Attack" :format="fmtMs"  @change="v => updatePadParam(selectedPad, 'attack', v)" />
@@ -273,7 +273,7 @@
           </div>
 
           <!-- MAP -->
-          <div class="flex flex-col w-1/6 items-center gap-1.5 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-1.5 p-2 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">MAP</span>
             <div class="flex flex-col gap-1">
               <div class="flex items-center gap-1">
@@ -281,21 +281,21 @@
                 <span class="text-[11px] font-mono text-violet-300 w-7">{{ midiNoteName(selectedPadData.rootKey ?? 72) }}</span>
                 <input type="number" min="0" max="127" :value="selectedPadData.rootKey ?? 72"
                   @change="e => updatePadStore(selectedPad, 'rootKey', Math.max(0, Math.min(127, +e.target.value || 72)))"
-                  class="w-14 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
+                  class="w-14 bg-red-700 border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
               </div>
               <div class="flex items-center gap-1">
                 <span class="text-[11px] font-mono text-neutral-500 w-8">Lo</span>
                 <span class="text-[11px] font-mono text-neutral-400 w-7">{{ midiNoteName(selectedPadData.minKey ?? 0) }}</span>
                 <input type="number" min="0" max="127" :value="selectedPadData.minKey ?? 0"
                   @change="e => updatePadStore(selectedPad, 'minKey', Math.max(0, Math.min(127, +e.target.value)))"
-                  class="w-14 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
+                  class="w-14 bg-yellow-300/50 border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
               </div>
               <div class="flex items-center gap-1">
                 <span class="text-[11px] font-mono text-neutral-500 w-8">Hi</span>
                 <span class="text-[11px] font-mono text-neutral-400 w-7">{{ midiNoteName(selectedPadData.maxKey ?? 127) }}</span>
                 <input type="number" min="0" max="127" :value="selectedPadData.maxKey ?? 127"
                   @change="e => updatePadStore(selectedPad, 'maxKey', Math.max(0, Math.min(127, +e.target.value)))"
-                  class="w-14 bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
+                  class="w-14 bg-yellow-300/50 border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 text-center" />
               </div>
             </div>
           </div>
@@ -314,6 +314,37 @@
         </div>
       </div>
 
+      <!-- Virtual Keyboard: note range -->
+      <div v-if="selectedPadData?.url" class="px-3 pb-2 select-none">
+        <div class="flex items-center gap-3">
+          <div class="flex-1 relative" style="height: 84px; min-height: 64px;">
+            <!-- White keys -->
+            <div class="absolute inset-0 flex">
+              <div v-for="note in keyboardWhiteKeys" :key="'w' + note"
+                class="flex-1 border-r border-neutral-800 rounded-bl rounded-br cursor-pointer transition-all flex flex-col items-center justify-end pb-1"
+                :class="keyWhiteClass(note)"
+                @click="keyboardSetRoot(note)"
+                :title="midiNoteName(note)"
+              >
+                <span v-if="(note % 12) === 0" class="text-[8px] font-mono text-black pointer-events-none leading-none mb-0.5">{{ midiNoteName(note) }}</span>
+              </div>
+            </div>
+            <!-- Black keys -->
+            <div v-for="note in keyboardBlackKeys" :key="'b' + note"
+              class="absolute cursor-pointer transition-all rounded-bl rounded-br z-10"
+              :class="keyBlackClass(note)"
+              :style="keyBlackStyle(note)"
+              @click="keyboardSetRoot(note)"
+              :title="midiNoteName(note)"
+            />
+          </div>
+          <div class="flex flex-col items-end gap-0.5 text-[8px] font-mono leading-none shrink-0">
+            <span class="text-neutral-500">Lo <span class="text-violet-300">{{ midiNoteName(kbMin) }}</span></span>
+            <span class="text-neutral-500">Hi <span class="text-amber-300">{{ midiNoteName(kbMax) }}</span></span>
+            <span class="text-neutral-500">Rt <span class="text-emerald-300">{{ midiNoteName(kbRoot) }}</span></span>
+          </div>
+        </div>
+      </div>
 
       <!-- Resize handle -->
       <div
@@ -1020,6 +1051,106 @@ const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
 function midiNoteName(n) {
   n = Math.max(0, Math.min(127, n))
   return `${NOTE_NAMES[n % 12]}${Math.floor(n / 12) - 2}`
+}
+
+const BLACK_SEMIS = new Set([1, 3, 6, 8, 10])
+
+// ── Virtual Keyboard ──────────────────────────────────────────────────────
+
+const kbMin = computed(() => selectedPadData.value?.minKey ?? 0)
+const kbMax = computed(() => selectedPadData.value?.maxKey ?? 127)
+const kbRoot = computed(() => selectedPadData.value?.rootKey ?? 72)
+
+const keyboardOctaveRange = computed(() => {
+  const min = kbMin.value
+  const max = kbMax.value
+  const root = kbRoot.value
+  const lowNote = Math.max(0, Math.min(min, root))
+  const highNote = Math.min(127, Math.max(max, root))
+
+  let start = Math.floor(lowNote / 12) * 12
+  let end = Math.ceil(highNote / 12) * 12 + 11
+
+  // Ensure at least 2 octaves
+  if (end - start < 23) {
+    const center = (start + end) / 2
+    start = Math.max(0, Math.floor(center / 12) * 12 - 12)
+    end = Math.min(127, Math.ceil(center / 12) * 12 + 23)
+  }
+
+  // Limit to 4 octaves max
+  if (end - start > 47) {
+    const center = (start + end) / 2
+    start = Math.max(0, Math.floor(center / 12) * 12)
+    end = Math.min(127, start + 47)
+  }
+
+  return { start, end }
+})
+
+const keyboardWhiteKeys = computed(() => {
+  const { start, end } = keyboardOctaveRange.value
+  const notes = []
+  for (let n = start; n <= end; n++) {
+    if (!BLACK_SEMIS.has(n % 12)) notes.push(n)
+  }
+  return notes
+})
+
+const keyboardBlackKeys = computed(() => {
+  const { start, end } = keyboardOctaveRange.value
+  const notes = []
+  for (let n = start; n <= end; n++) {
+    if (BLACK_SEMIS.has(n % 12)) notes.push(n)
+  }
+  return notes
+})
+
+function keyWhiteClass(note) {
+  const inRange = note >= kbMin.value && note <= kbMax.value
+  const isRoot = note === kbRoot.value
+  return {
+    'bg-white hover:bg-gray-100 border-gray-300 text-black': !inRange && !isRoot,
+    'bg-yellow-300/50 hover:bg-orange-600 border-black text-black': inRange && !isRoot,
+    'bg-red-500/60 hover:bg-red-400/60 ring-2 ring-red-600/60 border-red-600/60 text-white': isRoot,
+  }
+}
+
+function keyBlackClass(note) {
+  const inRange = note >= kbMin.value && note <= kbMax.value
+  const isRoot = note === kbRoot.value
+  return {
+    'bg-black hover:bg-neutral-800 border-neutral-800': !inRange && !isRoot,
+    'bg-orange-300 hover:bg-orange-600 border-orange-800/60': inRange && !isRoot,
+    'bg-red-700/60 hover:bg-red-600/60 ring-2 ring-red-500/60 border-red-800/60': isRoot,
+  }
+}
+
+function keyBlackStyle(note) {
+  const whites = keyboardWhiteKeys.value
+  const total = whites.length
+  if (total === 0) return {}
+
+  const prevWhite = note - 1
+  const whiteIdx = whites.indexOf(prevWhite)
+  if (whiteIdx === -1) return {}
+
+  const whiteWidth = 100 / total
+  const left = (whiteIdx + 0.6) * whiteWidth
+  const width = whiteWidth * 0.7
+
+  return {
+    left: left + '%',
+    width: width + '%',
+    height: '60%',
+    top: '0',
+  }
+}
+
+function keyboardSetRoot(note) {
+  if (selectedPad.value !== null) {
+    updatePadStore(selectedPad.value, 'rootKey', note)
+  }
 }
 
 let _unsubMidiNote = null
