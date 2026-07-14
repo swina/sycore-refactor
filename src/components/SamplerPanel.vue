@@ -112,7 +112,7 @@
         <div class="flex items-center gap-2 flex-wra p-2 rounded bg-neutral-800">
           <div class="flex flex-col min-w-1/2">
             <span class="text-[10px] text-neutral-500 font-mono">Pad {{ selectedPad + 1 }}</span>
-            <span class="text-[14px] font-mono text-orange-400 uppercase tracking-widest">{{ selectedPadData.label }}</span>
+            <span class="text-[14px] font-mono text-orange-400 uppercase tracking-widest cursor-pointer hover:text-orange-300 transition-colors" @click="openFolderBrowser(selectedPad)">{{ selectedPadData.label }}</span>
           </div>
 
           <!-- MIDI controller filter -->
@@ -1068,22 +1068,24 @@ const keyboardOctaveRange = computed(() => {
   const lowNote = Math.max(0, Math.min(min, root))
   const highNote = Math.min(127, Math.max(max, root))
 
-  let start = Math.floor(lowNote / 12) * 12
-  let end = Math.ceil(highNote / 12) * 12 + 11
+  // Minimum visible range: C2 (36) to B6 (95) = 5 octaves
+  const MIN_START = 36
+  const MIN_END = 95
 
-  // Ensure at least 2 octaves
-  if (end - start < 23) {
-    const center = (start + end) / 2
-    start = Math.max(0, Math.floor(center / 12) * 12 - 12)
-    end = Math.min(127, Math.ceil(center / 12) * 12 + 23)
+  // Start from the octave below the lowest relevant note, or C2 whichever is lower
+  let start = Math.min(MIN_START, Math.floor(lowNote / 12) * 12)
+  // End at the octave above the highest relevant note, or B6 whichever is higher
+  let end = Math.max(MIN_END, Math.ceil(highNote / 12) * 12 + 11)
+
+  // Ensure at least 5 octaves (C2-B6 span)
+  if (end - start < 59) {
+    start = Math.min(start, MIN_START)
+    end = Math.max(end, MIN_END)
   }
 
-  // Limit to 4 octaves max
-  if (end - start > 47) {
-    const center = (start + end) / 2
-    start = Math.max(0, Math.floor(center / 12) * 12)
-    end = Math.min(127, start + 47)
-  }
+  // Clamp to MIDI range
+  start = Math.max(0, start)
+  end = Math.min(127, end)
 
   return { start, end }
 })
