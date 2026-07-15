@@ -95,7 +95,7 @@ npm install
 <h3 style="color:red;">The current last version to run is branch is release/0.1.1</h2>
 
 ```bash
-git branch release/0.1.1
+git checkout release/0.1.1
 ```
 
 
