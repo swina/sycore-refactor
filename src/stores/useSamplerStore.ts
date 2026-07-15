@@ -8,7 +8,7 @@ import { userKey } from '@/lib/userKey'
 export const BANKS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const
 export type BankId = typeof BANKS[number]
 
-export const PAD_COUNT = 7
+export const PAD_COUNT = 8
 export const STEP_COUNT = 64
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ function defaultPad(bankId: string, padIdx: number): SamplerPad {
     chromatic: true,
     polyMode: false,
   }
-  if (padIdx === 6) {
+  if (padIdx === 7) {
     base.granular = true
     base.grainSize = 0.1
     base.grainOverlap = 0.5
@@ -149,9 +149,29 @@ function _load(): SamplerPattern[] {
   try {
     const raw = localStorage.getItem(userKey(LS_KEY))
     const arr = raw ? JSON.parse(raw) : null
-    if (Array.isArray(arr) && arr.length > 0) return arr
+    if (Array.isArray(arr) && arr.length > 0) {
+      _migratePatterns(arr)
+      return arr
+    }
   } catch {}
   return [defaultPattern()]
+}
+
+function _migratePatterns(patterns: SamplerPattern[]): void {
+  for (const p of patterns) {
+    for (const bankId of BANKS) {
+      const bank = p.banks[bankId]
+      if (!bank) continue
+      // Pad pads array to PAD_COUNT
+      while (bank.pads.length < PAD_COUNT) {
+        bank.pads.push(defaultPad(bankId, bank.pads.length))
+      }
+      // Pad steps array to PAD_COUNT
+      while (bank.steps.length < PAD_COUNT) {
+        bank.steps.push(Array.from({ length: STEP_COUNT }, defaultStep))
+      }
+    }
+  }
 }
 
 function _loadActiveId(): string | null {

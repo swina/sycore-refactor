@@ -44,7 +44,7 @@
       </div>
 
       <!-- Pad grid: 7 pads -->
-      <div class="grid grid-cols-7 gap-2 px-3 py-2 shrink-0">
+      <div class="grid grid-cols-8 gap-2 px-3 py-2 shrink-0">
         <div
           v-for="(pad, i) in activeBankData?.pads ?? []"
           :key="pad.id"
@@ -52,13 +52,13 @@
           :class="[
             padActive[i]
               ? 'border-violet-400 bg-violet-800/40 shadow-[0_0_12px_rgba(167,139,250,0.3)]'
-              : padArmed[i]
-                ? 'border-violet-700/80 bg-emerald-950/30 hover:bg-violet-700/40'
+              : padOn[i]
+                ? 'border-emerald-600/80 bg-emerald-950/30 hover:border-emerald-500'
                 : pad.url
                   ? 'border-neutral-600 bg-neutral-900/50 hover:border-violet-500/40'
                   : 'border-neutral-700 bg-neutral-900/50 hover:border-neutral-600',
             selectedPad === i ? 'ring-1 ring-violet-400/60 border-violet-500 bg-violet-700/50' : '',
-            i === 6 ? 'border-dashed' : '',
+            i === 6 || i === 7 ? 'border-dashed' : '',
             mappingStore.mappedParams?.has('sampler_pad_' + i) ? 'ring-1 ring-amber-500/60' : '',
           ]"
           style="height: 82px"
@@ -66,7 +66,7 @@
           @contextmenu.prevent="handlePadRightClick($event, i)"
         >
           <span class="text-[8px] font-mono text-neutral-600 absolute top-1 left-1.5">{{ i + 1 }}</span>
-          <span v-if="i === 6" class="text-[7px] font-mono text-violet-400/50 absolute top-1 right-1.5 uppercase tracking-widest">G</span>
+          <span v-if="i === 6 || i === 7" class="text-[7px] font-mono text-violet-400/50 absolute top-1 right-1.5 uppercase tracking-widest">G</span>
           <span v-if="mappingStore.learningParamName === 'sampler_pad_' + i" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
 
           <!-- Mute / Solo -->
@@ -111,8 +111,19 @@
         <!-- Header row: label · MIDI In · Chromatic · Poly · Loop · Clear -->
         <div class="flex items-center gap-2 flex-wra p-2 rounded bg-neutral-800">
           <div class="flex flex-col min-w-1/2">
-            <span class="text-[10px] text-neutral-500 font-mono">Pad {{ selectedPad + 1 }}</span>
-            <span class="text-[14px] font-mono text-orange-400 uppercase tracking-widest cursor-pointer hover:text-orange-300 transition-colors" @click="openFolderBrowser(selectedPad)">{{ selectedPadData.label }}</span>
+            <span class="text-[12px] text-neutral-500 font-mono"><span class="bg-violet-600/30 text-violet-300 px-2 py-1 rounded mr-1">Pad {{ selectedPad + 1 }}</span>
+               <!-- ON toggle (arm/disarm for MIDI) -->
+              <button
+            @click.stop="padOn[selectedPad] = !padOn[selectedPad]"
+            :class="['px-2 py-0.5 rounded border text-[11px] font-black uppercase tracking-widest transition-colors',
+              padOn[selectedPad]
+                ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300'
+                : 'border-neutral-700 bg-red-600/50 text-red-400 hover:border-emerald-500/40 hover:text-white']"
+            title="ON: pad responds to MIDI input"
+          >{{ padOn[selectedPad] ? 'ON' : 'OFF' }}</button>
+            </span>
+            
+            <span class="mt-1 text-[14px] font-mono text-orange-400 uppercase tracking-widest cursor-pointer hover:text-orange-300 transition-colors" @click="openFolderBrowser(selectedPad)">{{ selectedPadData.label }}</span>
           </div>
 
           <!-- MIDI controller filter -->
@@ -124,7 +135,7 @@
               class="bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 max-w-[130px] truncate"
             >
               <option value="all">All controllers</option>
-              <option v-for="inp in midiInputs" :key="inp.id" :value="inp.id">{{ inp.name }}</option>
+              <option v-for="inp in midiInputs" :key="inp.id" :value="inp.name">{{ inp.name }}</option>
             </select>
           </div>
 
@@ -160,6 +171,15 @@
             title="Loop: repeat sample between start/end points"
           >Loop</button>
 
+          <!-- ON toggle (arm/disarm for MIDI) -->
+          <!-- <button
+            @click.stop="padOn[selectedPad] = !padOn[selectedPad]"
+            :class="['px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+              padOn[selectedPad]
+                ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300'
+                : 'border-neutral-700 bg-red-600/50 text-red-400 hover:border-emerald-500/40 hover:text-white']"
+            title="ON: pad responds to MIDI input"
+          >{{ padOn[selectedPad] ? 'ON' : 'OFF' }}</button> -->
           <!-- Clear pad -->
           <button
             @click="clearPad(selectedPad)"
@@ -406,11 +426,11 @@ const selectedPadData = computed(() =>
 )
 const samplerMasterVol = ref(1.0)
 
-const padActive = ref(Array(7).fill(false))  // currently playing (audio)
-const padArmed  = ref(Array(7).fill(false))  // armed = responds to MIDI IN
-const padMuted  = ref(Array(7).fill(false))
-const padSoloed = ref(Array(7).fill(false))
-const _bankState = new Map()  // bank → { armed, muted, soloed }
+const padActive = ref(Array(8).fill(false))  // currently playing (audio)
+const padOn     = ref(Array(8).fill(false))  // ON = armed, responds to MIDI IN
+const padMuted  = ref(Array(8).fill(false))
+const padSoloed = ref(Array(8).fill(false))
+const _bankState = new Map()  // bank → { on, muted, soloed }
 const anySoloed = computed(() => padSoloed.value.some(Boolean))
 
 function padShouldPlay(padIdx) {
@@ -473,7 +493,6 @@ function formatDur(s) {
 
 function handlePadClick(padIdx) {
   selectedPad.value = padIdx
-  padArmed.value = padArmed.value.map((v, i) => i === padIdx ? true : v)
 }
 
 function handlePadRightClick(event, padIdx) {
@@ -485,7 +504,7 @@ function handlePadRightClick(event, padIdx) {
 function clearPad(padIdx) {
   engine.stopPad(padIdx)
   padActive.value = padActive.value.map((v, i) => i === padIdx ? false : v)
-  padArmed.value  = padArmed.value.map((v, i)  => i === padIdx ? false : v)
+  padOn.value  = padOn.value.map((v, i)  => i === padIdx ? false : v)
   _midiNotePlaying.delete(padIdx)
   samplerStore.clearPad(activeBank.value, padIdx)
 }
@@ -1015,17 +1034,17 @@ const _blobUrlCache = {}   // padIdx → blobUrl
 // Save/restore per-bank pad state on bank switch
 watch(() => samplerStore.activeBank, (newBank, oldBank) => {
   if (oldBank) _bankState.set(oldBank, {
-    armed:  [...padArmed.value],
+    on:     [...padOn.value],
     muted:  [...padMuted.value],
     soloed: [...padSoloed.value],
   })
-  padActive.value = Array(7).fill(false)
+  padActive.value = Array(8).fill(false)
   _midiNotePlaying.clear()
   Object.keys(_blobUrlCache).forEach(k => delete _blobUrlCache[k])
   const saved = _bankState.get(newBank)
-  padArmed.value  = saved ? [...saved.armed]  : Array(7).fill(false)
-  padMuted.value  = saved ? [...saved.muted]  : Array(7).fill(false)
-  padSoloed.value = saved ? [...saved.soloed] : Array(7).fill(false)
+  padOn.value     = saved ? [...saved.on]     : Array(8).fill(false)
+  padMuted.value  = saved ? [...saved.muted]  : Array(8).fill(false)
+  padSoloed.value = saved ? [...saved.soloed] : Array(8).fill(false)
 })
 
 // Receive sounds from FreesoundBrowser (dispatches 'sampler-pad-assign' event)
@@ -1194,8 +1213,8 @@ function _startMidiMappingListener() {
       if (samplerStore.BANKS.includes(bank)) samplerStore.activeBank = bank
     } else if (paramName.startsWith('sampler_pad_')) {
       const padIdx = parseInt(paramName.slice('sampler_pad_'.length))
-      if (!isNaN(padIdx) && padIdx >= 0 && padIdx < 7)
-        padArmed.value = padArmed.value.map((v, i) => i === padIdx ? !v : v)
+      if (!isNaN(padIdx) && padIdx >= 0 && padIdx < 8)
+        padOn.value = padOn.value.map((v, i) => i === padIdx ? !v : v)
     }
   })
 }
@@ -1203,11 +1222,15 @@ function _startMidiMappingListener() {
 async function _onMidiNote(type, note, velocity, _chan, inputId) {
   const bank = samplerStore.activeBankData
   if (!bank) return
-  for (let padIdx = 0; padIdx < 7; padIdx++) {
+  for (let padIdx = 0; padIdx < 8; padIdx++) {
     const pad = bank.pads[padIdx]
-    if (!pad?.url || !padArmed.value[padIdx] || !padShouldPlay(padIdx)) continue
-    // Per-pad MIDI input filter — pad.midiInput stores the device ID
-    if (pad.midiInput && pad.midiInput !== 'all' && inputId !== pad.midiInput) continue
+    if (!pad?.url || !padOn.value[padIdx] || !padShouldPlay(padIdx)) continue
+    // Per-pad MIDI input filter — pad.midiInput stores the device name (stable across restarts)
+    if (pad.midiInput && pad.midiInput !== 'all') {
+      const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+      const deviceName = inputDevice?.name
+      if (deviceName !== pad.midiInput) continue
+    }
     const minKey  = pad.minKey  ?? 0
     const maxKey  = pad.maxKey  ?? 127
     if (note < minKey || note > maxKey) continue
