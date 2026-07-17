@@ -40,12 +40,17 @@ export interface SamplerPad {
   release: number
   chromatic: boolean
   polyMode: boolean
-  // Granular (pad idx 6 only)
+  armed: boolean
+  // Granular (pads 7 & 8 — indices 6 & 7)
   granular?: boolean
   grainSize?: number
   grainOverlap?: number
   grainPosition?: number
   grainPitch?: number
+  grainSpray?: number
+  grainDirection?: number  // 0=forward, 1=backward, 2=alternating, 3=random
+  grainStereo?: number
+  grainCount?: number
 }
 
 export interface SamplerStep {
@@ -102,13 +107,18 @@ function defaultPad(bankId: string, padIdx: number): SamplerPad {
     release: 0.05,
     chromatic: true,
     polyMode: false,
+    armed: false,
   }
-  if (padIdx === 7) {
+  if (padIdx === 6 || padIdx === 7) {
     base.granular = true
     base.grainSize = 0.1
     base.grainOverlap = 0.5
     base.grainPosition = 0.5
     base.grainPitch = 0
+    base.grainSpray = 0.3
+    base.grainDirection = 0      // 0=forward, 1=backward, 2=alternating, 3=random
+    base.grainStereo = 0
+    base.grainCount = 4
   }
   return base
 }

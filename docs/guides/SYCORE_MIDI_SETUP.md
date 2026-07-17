@@ -6,7 +6,7 @@
 ---
 ## Quick Reference
 
-<img src="/help/guides/sycore-MIDI-Setup-Guide.png"/>
+<!-- <img src="/help/guides/sycore-MIDI-Setup-Guide.png"/> -->
 
 ## Before You Start
 
@@ -50,18 +50,24 @@ Click **Allow**. If you accidentally click Block, go to the browser's site setti
 
 ---
 
-## Step 3 — Open the MIDI Manager
 
-In the SY.CORE header, click the **MIDI** button (or use the keyboard shortcut assigned to it). The **Unified MIDI Manager** modal opens.
+[<button class="border px-8 py-2 border-neutral-700 rounded m-auto hover:bg-synth-neon bg-synth-neon/50">Next MIDI DEVICES</button>](./SYCORE_MIDI_DEVICES.md)
+
+## Step 3 — Open the MIDI Devices
+
+<!-- [<img src="/help/guides/sycore-midi-devices.png"/>](./SYCORE_MIDI_DEVICES.md) -->
+<!-- [MIDI Devices](./SYCORE_MIDI_DEVICES.md) -->
+
+<!-- In the SY.CORE header, click the **MIDI** button (or use the keyboard shortcut assigned to it). The **Unified MIDI Manager** modal opens.
 
 
 All eight tabs are described below in the order you will use them during initial setup.
 
----
+--- -->
 
-## Step 4 — Discover Your Devices (Devices Tab)
+## Step 4 — MIDI Flow (Devices Tab)
 
-<img src="/help/guides/sycore-midi-manager.png"/>
+<img src="/help/guides/sycore-midi-routing-flow.png"/>
 
 Open the **Devices** tab (the first tab, selected by default).
 

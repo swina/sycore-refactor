@@ -1,10 +1,12 @@
 # Sampler
 
-The **Sampler** is a 7-pad, multi-bank sample player with MIDI velocity, chromatic pitch-shifting, polyphonic voice management, per-pad ADSR envelopes, lo-fi downsampling, granular synthesis (pad 7), and full MIDI input filtering. Sounds are loaded from local files or injected directly from the Freesound Browser.
+The **Sampler** is an 8-pad, multi-bank sample player with MIDI velocity, chromatic pitch-shifting, polyphonic voice management, per-pad ADSR envelopes, lo-fi downsampling, dual granular synthesis (pads 7 & 8), and full MIDI input filtering. Sounds are loaded from local files or injected directly from the Freesound Browser.
 
 ---
 
 ## Opening the Panel
+
+<img src="/help/guides/sycore-sampler.png"/>
 
 | Method | Action |
 |--------|--------|
@@ -18,7 +20,7 @@ The panel opens as a floating, **draggable and resizable** window (initial 720 �
 
 ## Banks A–H
 
-Eight independent pattern banks (**A–H**) each hold 7 pads with completely separate sound assignments and settings. Click a bank letter to switch instantly.
+Eight independent pattern banks (**A–H**) each hold 8 pads with completely separate sound assignments and settings. Click a bank letter to switch instantly.
 
 > Switching banks resets all arm, mute, and solo states for the incoming bank.
 
@@ -26,7 +28,11 @@ Eight independent pattern banks (**A–H**) each hold 7 pads with completely sep
 
 ## The Pad Grid
 
-7 pads are arranged in a horizontal row. Pad 7 is the **Granular pad** (marked **G**) and has extra grain controls when selected.
+<img src="/help/guides/sycore-sampler-pads.png"/>
+
+8 pads are arranged in a horizontal row. Pads 7 and 8 (indices 6 & 7) are **Granular pads** (marked **G**) and have extra grain controls when selected.
+
+> **Note:** Banks created before the 8-pad update may have pad 7 as granular too. Both pads are styled identically (dashed border, **G** label).
 
 | Pad state | Visual |
 |-----------|--------|
@@ -36,10 +42,11 @@ Eight independent pattern banks (**A–H**) each hold 7 pads with completely sep
 | **Playing** | Violet glow |
 | **Selected** | Orange tint + violet ring — detail panel shown below |
 
-### Loading a Sample
+### Loading & Selecting a Sample
 
-- **Click an empty pad** → arms it. Hover and click **+ load** to open the Sound Folder Browser and pick an audio file.
-- **Right-click a loaded pad** → clears it immediately.
+- **Click an empty pad** → selects it. Hover and click **+ load** to open the Sound Folder Browser and pick an audio file.
+- **Click a loaded pad** → selects it and opens the detail panel — does **not** toggle arm status.
+- **Right-click any pad** → opens the MIDI context menu for mapping.
 - **Freesound Browser** → search and assign directly; the pad receives the sound via the `sampler-pad-assign` event.
 
 Root key is auto-detected from the filename (e.g. `Piano_C4.wav` → MIDI 72).
@@ -59,19 +66,30 @@ Multiple pads can be soloed simultaneously.
 
 ## Pad Detail Panel
 
-Click any loaded pad to select it and reveal the detail strip below the grid. Six (or seven for pad 7) control sections are shown side by side.
+Click any loaded pad to select it and reveal the detail strip below the grid. Six (or seven for granular pads) control sections are shown side by side.
 
 ### Header Row
+
+<img src="/help/guides/sycore-sampler-header.png"/>
 
 | Control | Description |
 |---------|-------------|
 | **Pad number / label** | Shows the pad index and sample name |
+| **ON/OFF** | Toggle — arms or disarms the pad for MIDI input. Green = armed, neutral = off |
 | **MIDI In** | Dropdown — filter incoming MIDI to a specific hardware controller (by device ID) or leave on **All controllers** |
 | **Chromatic** | Toggle — when on, pitch follows the incoming MIDI note relative to the pad's Root key; when off, only the exact Root key triggers the pad |
 | **Poly** | Toggle — when on, multiple simultaneous notes are tracked independently per pad; when off, a new note stops the previous one |
-| **clear** | Unloads the sample and resets the pad |
+| **Clear** | Unloads the sample and resets the pad |
+
+
+### Waveform
+
+<img src="/help/guides/sycore-sampler-waveform.png"/>
+
 
 ### Level
+
+<img src="/help/guides/sycore-sampler-level.png"/>
 
 | Knob | Range | Default | Notes |
 |------|-------|---------|-------|
@@ -79,6 +97,8 @@ Click any loaded pad to select it and reveal the detail strip below the grid. Si
 | **Pan** | L100–C–R100 | C | Stereo position |
 
 ### Filter
+
+<img src="/help/guides/sycore-sampler-filter.png"/>
 
 | Control | Range | Default | Notes |
 |---------|-------|---------|-------|
@@ -98,6 +118,8 @@ Lo-fi sample rate options and their character:
 
 ### FX
 
+<img src="/help/guides/sycore-sampler-fx.png"/>
+
 | Knob | Range | Default |
 |------|-------|---------|
 | **Rev** | 0–100% | 0% |
@@ -107,6 +129,8 @@ Send levels to the shared reverb and delay buses.
 
 ### Loop
 
+<img src="/help/guides/sycore-sampler-loop.png"/>
+
 | Control | Range | Default | Notes |
 |---------|-------|---------|-------|
 | **Start** | 0–100% | 0% | Playback start point within the buffer |
@@ -114,6 +138,8 @@ Send levels to the shared reverb and delay buses.
 | **Loop** button | on/off | off | Loops the region between Start and End |
 
 ### ENV (ADSR)
+
+<img src="/help/guides/sycore-sampler-env.png"/>
 
 | Knob | Range | Default |
 |------|-------|---------|
@@ -126,6 +152,8 @@ The envelope is applied to every triggered note. Decay ramps to the Sustain leve
 
 ### MAP (MIDI Key Range)
 
+<img src="/help/guides/sycore-sampler-map.png"/>
+
 | Field | MIDI range | Default | Notes |
 |-------|-----------|---------|-------|
 | **Root** | 0–127 | 72 (C4) | Reference pitch for chromatic shift; auto-detected from filename |
@@ -134,9 +162,10 @@ The envelope is applied to every triggered note. Decay ramps to the Sustain leve
 
 Notes outside Lo–Hi are ignored even when the pad is armed.
 
-### Grain (Pad 7 only)
+### Grain (Pads 7 & 8 — indices 6 & 7)
 
-Pad 7 uses a granular engine. When selected, four additional knobs appear:
+<img src="/help/guides/sycore-sampler-grain.png"/>
+Pads 7 and 8 use a granular engine. When selected, four additional knobs appear:
 
 | Knob | Range | Default | Notes |
 |------|-------|---------|-------|
@@ -151,11 +180,13 @@ Tweaking any grain parameter while the pad is playing restarts the granular clou
 
 ## MIDI Triggering
 
-1. **Arm a pad** — click it (green border appears).
+1. **Arm a pad** — select the pad, then toggle **ON** in the detail panel header (green = armed).
 2. Play a MIDI note within the pad's Lo–Hi key range on the selected controller.
 3. Velocity scales the pad volume proportionally.
 4. In **Chromatic** mode, pitch shifts by the interval between the incoming note and the Root key.
 5. **Note OFF** (or velocity-0 Note ON) triggers the release envelope and stops the sound.
+
+> **Arming:** Clicking a pad only selects it — arm status is controlled exclusively via the **ON/OFF** toggle in the detail panel header or via MIDI mapping.
 
 In **Poly** mode each note is tracked separately; overlapping notes fade out independently on Note OFF.
 
@@ -172,8 +203,9 @@ Open the Freesound Browser, find a sound, and use **Assign to Sampler Pad** to r
 - **Auto root key** — include the note name in your filename (`Kick_D2.wav`) and the sampler sets Root automatically.
 - **Stack banks for a set** — load different kits into A–H and switch banks between songs.
 - **Lo-fi layering** — run two pads with the same sample at different sample rates for a layered texture.
-- **Pad 7 as texture** — use the granular pad for sustained pads or ambient textures while the other six handle one-shots.
+- **Dual granular pads** — pads 7 and 8 are both granular. Use one for sustained textures and the other for glitchy rhythmic grains, or layer both for dense ambient clouds.
+- **Pad 7 as texture** — use the granular pads for sustained pads or ambient textures while the other six handle one-shots.
 
 ---
 
-*Last updated: 2026-06-22*
+*Last updated: 2026-07-15*

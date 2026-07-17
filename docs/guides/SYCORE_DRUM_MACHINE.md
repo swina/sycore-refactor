@@ -183,6 +183,8 @@ Each style has multiple variants; one is chosen randomly on each press so repeat
 
 ## Bassline
 
+<img src="/help/guides/sycore-drum-machine-bassline.png"/>
+
 The bassline section lets you control 3 melodic voices assigned to the last three drum slots (Rim Shot, Cowbell, Tambourine by default). Each voice is a 16-step monophonic sequencer with per-step pitch (MIDI note).
 
 ### Enabling Bassline
@@ -225,6 +227,8 @@ Each voice has 16 step buttons. Click to toggle a step on/off. Right-click for v
 ---
 
 ## Euclidean Generator
+
+<img src="/help/guides/sycore-drum-machine-euclidean.png"/>
 
 The Euclidean generator creates rhythms using the Bjorklund algorithm, which distributes `pulses` evenly across `steps` positions — similar to the Euclidean rhythm found in many hardware sequencers (e.g., Elektron, Korg volca).
 
