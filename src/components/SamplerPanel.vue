@@ -266,10 +266,15 @@
               <KnobDial :modelValue="selectedPadData.startPoint" :min="0" :max="1" :step="0.001" :defaultVal="0" label="Start" :format="fmtLoopTime" @change="v => updatePadStore(selectedPad, 'startPoint', v)" />
               <KnobDial :modelValue="selectedPadData.endPoint"   :min="0" :max="1" :step="0.001" :defaultVal="1" label="End"   :format="fmtLoopTime" @change="v => updatePadStore(selectedPad, 'endPoint', v)" />
             </div>
-            <button @click="updatePadStore(selectedPad, 'loopMode', !selectedPadData.loopMode)"
-              :class="['w-full px-2 py-0.5 rounded border text-[11px] font-mono transition-colors',
-                selectedPadData.loopMode ? 'bg-violet-600 border-violet-500 text-white' : 'bg-neutral-800 border-neutral-600 text-neutral-500 hover:text-white']"
-            >Loop</button>
+            <div class="flex items-center gap-1 w-full">
+              <button @click="snapToZeroCross(selectedPad)"
+                class="flex-1 px-1.5 py-1 rounded border text-[8px] font-mono transition-colors bg-neutral-800 border-cyan-700/50 text-cyan-400 hover:bg-cyan-900/30 hover:border-cyan-500"
+                title="Snap start/end to nearest zero-crossing">Z-Cross</button>
+              <button @click="updatePadStore(selectedPad, 'loopMode', !selectedPadData.loopMode)"
+                :class="['flex-1 px-1.5 py-1 rounded border text-[8px] font-mono transition-colors',
+                  selectedPadData.loopMode ? 'bg-violet-600 border-violet-500 text-white' : 'bg-neutral-800 border-neutral-600 text-neutral-500 hover:text-white']"
+              >Loop</button>
+            </div>
           </div>
 
           <!-- ENV (ADSR) -->
@@ -988,6 +993,15 @@ function snapToZeroCrossing(padIdx, pct, searchRadius) {
   return bestIdx / (len - 1)
 }
 
+function snapToZeroCross(padIdx) {
+  const pad = selectedPadData.value
+  if (!pad) return
+  const s = snapToZeroCrossing(padIdx, pad.startPoint ?? 0, 0.002)
+  const e = snapToZeroCrossing(padIdx, pad.endPoint ?? 1, 0.002)
+  updatePadStore(padIdx, 'startPoint', s)
+  updatePadStore(padIdx, 'endPoint', e)
+}
+
 // Recompute peaks and redraw when selected pad changes
 watch(() => selectedPad.value, (newPad, oldPad) => {
   // Save zoom state under the OLD pad's key (selectedPad has already changed)
@@ -998,6 +1012,11 @@ watch(() => selectedPad.value, (newPad, oldPad) => {
   // Load zoom state for the new pad
   loadZoomState()
   nextTick(loadWaveform)
+})
+
+// Reload waveform when the selected pad's URL changes (e.g. user assigns a new sample)
+watch(() => selectedPadData.value?.url, () => {
+  if (selectedPad.value !== null) nextTick(loadWaveform)
 })
 
 // Redraw when start/end points change
@@ -1044,8 +1063,11 @@ async function openFolderBrowser(padIdx) {
       const blobUrl   = await cacheFileBlob(id, file.name.replace(/\.[^.]+$/, ''), blob, { duration })
       const baseName  = file.name.replace(/\.[^.]+$/, '')
       const autoKey   = parseRootKeyFromName(file.name)
-      engine.invalidateBuffer(blobUrl)
+      // Invalidate any stale cached buffer for this pad before caching the new one
+      if (_blobUrlCache[padIdx]) engine.invalidateBuffer(_blobUrlCache[padIdx])
       _blobUrlCache[padIdx] = blobUrl
+      // Preload the new buffer so waveform draws and MIDI triggerPadSync works immediately
+      await engine.preloadBuffer(blobUrl)
       const padUpdate = { id, label: baseName, url: id, duration }
       if (autoKey !== null) padUpdate.rootKey = autoKey
       samplerStore.setPad(activeBank.value, padIdx, padUpdate)
