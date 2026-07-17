@@ -2061,6 +2061,7 @@ function cycleChainSlot(i) {
       <div class="flex items-center gap-2 px-3 py-2 border-t border-neutral-800 bg-neutral-900/40">
         <!-- Sequence tabs A-F -->
         <div class="flex items-center gap-1 ml-3 mb-2">
+          <span class="-ml-3 text-[8px] font-mono uppercase tracking-widest text-neutral-400 shrink-0">PATTERN</span>
           <div
             v-for="seq in SEQUENCES"
             :key="seq"
@@ -2209,15 +2210,15 @@ function cycleChainSlot(i) {
 
         <div v-if="drumStore.currentPresetName" class="ml-auto flex items-center gap-1 min-w-0">
           <span
-            class="text-[9px] font-mono text-neutral-500 truncate max-w-[120px]"
+            class="text-[11px] font-mono text-violet-300 bg-violet-600 rounded px-2 truncate max-w-[120px]"
             :title="drumStore.currentPresetName"
           >{{ drumStore.currentPresetName }}</span>
           <button
             @click.stop="overwritePresetWithToast(currentPresetId)"
-            class="p-1 rounded text-neutral-600 hover:text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
+            class="p-1 rounded text-violet-600 hover:text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
             title="Save (overwrite preset)"
           >
-            <Save class="w-3 h-3" />
+            <Save class="w-5 h-5" />
           </button>
         </div>
 
@@ -2225,7 +2226,8 @@ function cycleChainSlot(i) {
 
       <!-- ── Chain row ─────────────────────────────────────────────────────── -->
       <div v-if="chainEnabled" class="shrink-0 flex items-center gap-2 px-3 py-1.5 border-t border-neutral-800 bg-neutral-900/60">
-        <div class="flex gap-1">
+        <div class="flex gap-1 items-center">
+          <span class="text-[8px] font-mono uppercase tracking-widest text-neutral-400 shrink-0">Chain</span>
           <button
             v-for="(slot, i) in chain"
             :key="i"
