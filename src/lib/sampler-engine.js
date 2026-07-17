@@ -1,9 +1,9 @@
 // Web Audio engine for SamplerPanel.
-// 7 per-pad chains (6 standard + 1 granular slot) with shared reverb + delay bus.
+// 8 per-pad chains (6 standard + 2 granular slots) with shared reverb + delay bus.
 // Uses Tone.js AudioContext so scheduled times from getTransport() are compatible.
 import { getContext } from 'tone'
 
-const PAD_COUNT = 7
+const PAD_COUNT = 8
 
 let _ctx           = null
 let _masterGain    = null
@@ -331,29 +331,78 @@ export function stopPadNote(padIdx, note, release) {
 
 // ── Granular engine ──────────────────────────────────────────────────────────
 
+// Create a reversed grain-sized AudioBuffer from the source buffer
+function _reverseSegment(buffer, offset, grainSize) {
+  const ctx = _ctx
+  const sampleRate = buffer.sampleRate
+  const startSample = Math.floor(offset * sampleRate)
+  const numSamples = Math.min(Math.floor(grainSize * sampleRate), buffer.length - startSample)
+  if (numSamples < 1) return null
+  const reversed = ctx.createBuffer(buffer.numberOfChannels, numSamples, sampleRate)
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const src = buffer.getChannelData(ch)
+    const dst = reversed.getChannelData(ch)
+    for (let i = 0; i < numSamples; i++) {
+      dst[i] = src[startSample + numSamples - 1 - i]
+    }
+  }
+  return reversed
+}
+
 function _spawnGrain(padIdx, pad, buffer) {
   const ctx = _ctx; if (!ctx) return
   const grainSize = pad.grainSize ?? 0.1
   const pos       = pad.grainPosition ?? 0.5
-  // Random jitter: ±30% of grain size
-  const jitter    = grainSize * 0.3
-  const offset    = Math.max(0, Math.min(buffer.duration - grainSize,
-    pos * buffer.duration + (Math.random() - 0.5) * jitter * 2))
+  const spray     = pad.grainSpray ?? 0
+  const direction = pad.grainDirection ?? 0
+  const stereo    = pad.grainStereo ?? 0
+
+  // Position spray: randomize the start point
+  const sprayAmount = spray * grainSize * 2  // up to 2× grain size of jitter
+  const offset = Math.max(0, Math.min(buffer.duration - grainSize,
+    pos * buffer.duration + (Math.random() - 0.5) * sprayAmount))
+
+  // Direction: reverse the grain segment when going backward
+  let isReverse = false
+  if (direction === 1) isReverse = true
+  else if (direction === 2) isReverse = Math.random() < 0.5
+  else if (direction === 3) isReverse = Math.random() < 0.5
+
+  let grainBuffer = buffer
+  let grainOffset = offset
+  if (isReverse) {
+    const rev = _reverseSegment(buffer, offset, grainSize)
+    if (rev) {
+      grainBuffer = rev
+      grainOffset = 0
+    }
+  }
 
   const src = ctx.createBufferSource()
-  src.buffer = buffer
-  src.playbackRate.value = Math.pow(2, ((pad.pitch ?? 0) + (pad.grainPitch ?? 0)) / 12)
+  src.buffer = grainBuffer
+  const pitchShift = (pad.pitch ?? 0) + (pad.grainPitch ?? 0)
+  src.playbackRate.value = Math.pow(2, pitchShift / 12)
 
-  // Hann envelope via gain automation
+  // Hann envelope
   const env = ctx.createGain()
   const now = ctx.currentTime
   env.gain.setValueAtTime(0, now)
   env.gain.linearRampToValueAtTime(1, now + grainSize * 0.5)
   env.gain.linearRampToValueAtTime(0, now + grainSize)
 
-  src.connect(env)
-  env.connect(_padGains[padIdx])
-  src.start(now, offset, grainSize)
+  // Stereo width: randomize pan per grain
+  if (stereo > 0) {
+    const panner = ctx.createStereoPanner()
+    panner.pan.value = (Math.random() * 2 - 1) * stereo
+    src.connect(env)
+    env.connect(panner)
+    panner.connect(_padGains[padIdx])
+  } else {
+    src.connect(env)
+    env.connect(_padGains[padIdx])
+  }
+
+  src.start(now, grainOffset, grainSize)
   src.onended = () => { try { env.disconnect() } catch {} }
 }
 
@@ -371,19 +420,35 @@ export function triggerGranular(padIdx, pad, blobUrl) {
   _reverbSends[padIdx].gain.value  = pad.reverbSend ?? 0
   _delaySends[padIdx].gain.value   = pad.delaySend  ?? 0
 
+  // Reset ADSR envelope so grains aren't muted by the stopGranular fade-out
+  _applyEnvelope(padIdx, pad, _ctx.currentTime)
+
   const grainSize = pad.grainSize    ?? 0.1
   const overlap   = pad.grainOverlap ?? 0.5
+  const grainCount = pad.grainCount ?? 4
   const intervalMs = Math.max(10, grainSize * (1 - overlap) * 1000)
 
-  _spawnGrain(padIdx, pad, buffer)
-  const id = setInterval(() => _spawnGrain(padIdx, pad, buffer), intervalMs)
-  _granularIntervals.set(padIdx, id)
-  _activeSrcs[padIdx] = true   // marker so isPlaying() returns true
+  // Spawn initial grains for each voice
+  for (let v = 0; v < grainCount; v++) {
+    _spawnGrain(padIdx, pad, buffer)
+  }
+
+  // Schedule periodic grain spawning for each voice, staggered by interval
+  const intervals = []
+  for (let v = 0; v < grainCount; v++) {
+    const id = setInterval(() => _spawnGrain(padIdx, pad, buffer), intervalMs)
+    intervals.push(id)
+  }
+  _granularIntervals.set(padIdx, intervals)
+  _activeSrcs[padIdx] = true
 }
 
 export function stopGranular(padIdx) {
-  const id = _granularIntervals.get(padIdx)
-  if (id != null) { clearInterval(id); _granularIntervals.delete(padIdx) }
+  const ids = _granularIntervals.get(padIdx)
+  if (ids != null) {
+    for (const id of ids) clearInterval(id)
+    _granularIntervals.delete(padIdx)
+  }
   // Fade out any in-flight grains via the pad gain
   const release = _releaseTimes[padIdx] ?? 0
   if (release > 0.001 && _ctx && _envelopeGains[padIdx]) {
@@ -412,7 +477,9 @@ export function isPlaying(padIdx) {
 }
 
 export function dispose() {
-  for (const id of _granularIntervals.values()) clearInterval(id)
+  for (const ids of _granularIntervals.values()) {
+    for (const id of ids) clearInterval(id)
+  }
   _granularIntervals.clear()
   _polyNoteMap.clear()
   stopAll()

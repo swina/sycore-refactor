@@ -114,7 +114,7 @@
             <span class="text-[12px] text-neutral-500 font-mono"><span class="bg-violet-600/30 text-violet-300 px-2 py-1 rounded mr-1">Pad {{ selectedPad + 1 }}</span>
                <!-- ON toggle (arm/disarm for MIDI) -->
               <button
-            @click.stop="padOn[selectedPad] = !padOn[selectedPad]"
+            @click.stop="togglePadOn(selectedPad)"
             :class="['px-2 py-0.5 rounded border text-[11px] font-black uppercase tracking-widest transition-colors',
               padOn[selectedPad]
                 ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300'
@@ -171,15 +171,6 @@
             title="Loop: repeat sample between start/end points"
           >Loop</button>
 
-          <!-- ON toggle (arm/disarm for MIDI) -->
-          <!-- <button
-            @click.stop="padOn[selectedPad] = !padOn[selectedPad]"
-            :class="['px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
-              padOn[selectedPad]
-                ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300'
-                : 'border-neutral-700 bg-red-600/50 text-red-400 hover:border-emerald-500/40 hover:text-white']"
-            title="ON: pad responds to MIDI input"
-          >{{ padOn[selectedPad] ? 'ON' : 'OFF' }}</button> -->
           <!-- Clear pad -->
           <button
             @click="clearPad(selectedPad)"
@@ -320,14 +311,28 @@
             </div>
           </div>
 
-          <!-- GRAIN (pad 7 only) -->
-          <div v-if="selectedPadData?.granular" class="flex flex-col w-1/6 items-center gap-2 p-2 bg-neutral-900 rounded">
+          <!-- GRAIN (pads 7 & 8) -->
+          <div v-if="selectedPadData?.granular" class="flex flex-col w-1/3 items-center gap-2 p-2 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-400/70 font-mono uppercase tracking-widest">Grain</span>
-            <div class="grid grid-cols-2 gap-x-6 gap-y-2">
+            <div class="grid grid-cols-4 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.grainSize"     :min="0.02" :max="0.5"  :step="0.01"  :defaultVal="0.1"  label="Size"  :format="fmtMs"  color="#a78bfa" @change="v => updatePadStore(selectedPad, 'grainSize', v)" />
               <KnobDial :modelValue="selectedPadData.grainOverlap"  :min="0"    :max="0.95" :step="0.01"  :defaultVal="0.5"  label="Ovlp"  :format="fmtPct" color="#a78bfa" @change="v => updatePadStore(selectedPad, 'grainOverlap', v)" />
               <KnobDial :modelValue="selectedPadData.grainPosition" :min="0"    :max="1"    :step="0.001" :defaultVal="0.5"  label="Pos"   :format="fmtPct" color="#a78bfa" @change="v => updatePadStore(selectedPad, 'grainPosition', v)" />
               <KnobDial :modelValue="selectedPadData.grainPitch"    :min="-24"  :max="24"   :step="1"     :defaultVal="0"    label="Pitch" :format="fmtSemi" color="#a78bfa" @change="v => updatePadStore(selectedPad, 'grainPitch', v)" />
+              <KnobDial :modelValue="selectedPadData.grainSpray"    :min="0"    :max="1"    :step="0.01"  :defaultVal="0.3"  label="Spray" :format="fmtPct" color="#a78bfa" @change="v => updatePadStore(selectedPad, 'grainSpray', v)" />
+              <KnobDial :modelValue="selectedPadData.grainStereo"   :min="0"    :max="1"    :step="0.01"  :defaultVal="0"    label="Width" :format="fmtPct" color="#a78bfa" @change="v => updatePadStore(selectedPad, 'grainStereo', v)" />
+              <KnobDial :modelValue="selectedPadData.grainCount"    :min="1"    :max="20"   :step="1"     :defaultVal="4"    label="Voices"  :format="v => v.toFixed(0)" color="#a78bfa" @change="v => updatePadStore(selectedPad, 'grainCount', v)" />
+            </div>
+            <!-- Direction selector -->
+            <div class="flex items-center gap-1 w-full px-1">
+              <span class="text-[9px] font-mono text-neutral-500 mr-1">Dir</span>
+              <button v-for="opt in grainDirOptions" :key="opt.value"
+                @click="updatePadStore(selectedPad, 'grainDirection', opt.value)"
+                :class="['px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors border',
+                  (selectedPadData.grainDirection ?? 0) === opt.value
+                    ? 'bg-violet-600/40 border-violet-500/60 text-violet-200'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-violet-500/40']"
+              >{{ opt.label }}</button>
             </div>
           </div>
 
@@ -431,6 +436,22 @@ const padOn     = ref(Array(8).fill(false))  // ON = armed, responds to MIDI IN
 const padMuted  = ref(Array(8).fill(false))
 const padSoloed = ref(Array(8).fill(false))
 const _bankState = new Map()  // bank → { on, muted, soloed }
+
+// Sync padOn from persisted store data for the current bank
+function syncPadOnFromStore() {
+  const bank = activeBankData.value
+  if (bank) {
+    padOn.value = bank.pads.map(p => p.armed ?? false)
+  }
+}
+
+// Toggle arm status and persist to store
+function togglePadOn(padIdx) {
+  const newVal = !padOn.value[padIdx]
+  padOn.value[padIdx] = newVal
+  updatePadStore(padIdx, 'armed', newVal)
+}
+
 const anySoloed = computed(() => padSoloed.value.some(Boolean))
 
 function padShouldPlay(padIdx) {
@@ -470,6 +491,13 @@ const fmtHz   = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0)
 const fmtPan  = v => v === 0 ? 'C' : v < 0 ? `L${(-v * 100).toFixed(0)}` : `R${(v * 100).toFixed(0)}`
 const fmtTime = (pct, duration) => duration ? `${(pct * duration * 1000).toFixed(0)}ms` : `${(pct * 100).toFixed(0)}%`
 const fmtLoopTime = v => fmtTime(v, selectedPadData.value?.duration)
+
+const grainDirOptions = [
+  { value: 0, label: 'Fwd' },
+  { value: 1, label: 'Rev' },
+  { value: 2, label: 'Alt' },
+  { value: 3, label: 'Rnd' },
+]
 
 // Parse a MIDI root key from a sample filename (e.g. "Piano_C4.wav" → 72)
 function parseRootKeyFromName(name) {
@@ -1042,9 +1070,16 @@ watch(() => samplerStore.activeBank, (newBank, oldBank) => {
   _midiNotePlaying.clear()
   Object.keys(_blobUrlCache).forEach(k => delete _blobUrlCache[k])
   const saved = _bankState.get(newBank)
-  padOn.value     = saved ? [...saved.on]     : Array(8).fill(false)
-  padMuted.value  = saved ? [...saved.muted]  : Array(8).fill(false)
-  padSoloed.value = saved ? [...saved.soloed] : Array(8).fill(false)
+  if (saved) {
+    padOn.value     = [...saved.on]
+    padMuted.value  = [...saved.muted]
+    padSoloed.value = [...saved.soloed]
+  } else {
+    // Fall back to persisted store data
+    syncPadOnFromStore()
+    padMuted.value  = Array(8).fill(false)
+    padSoloed.value = Array(8).fill(false)
+  }
 })
 
 // Receive sounds from FreesoundBrowser (dispatches 'sampler-pad-assign' event)
@@ -1278,6 +1313,7 @@ async function _onMidiNote(type, note, velocity, _chan, inputId) {
 function _onSamplerMasterVol(e) { samplerMasterVol.value = e.detail }
 
 onMounted(() => {
+  syncPadOnFromStore()
   window.addEventListener('sampler-pad-assign', _onSamplerPadAssign)
   window.addEventListener('sampler-master-volume', _onSamplerMasterVol)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNote)
