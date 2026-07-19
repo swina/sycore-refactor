@@ -84,14 +84,25 @@ watch(captureBarCount, v => localStorage.setItem(userKey('S1_CP_CAPTURE_BARS'), 
 watch(captureAutoStop, v => localStorage.setItem(userKey('S1_CP_CAPTURE_AUTOSTOP'), v ? 'true' : 'false'))
 
 function buildPlayState() {
+  let steps = store.steps
+  let numSteps = store.numSteps
+  let playMode = store.playMode
+  let arpRate = store.arpRate
+
+  if (store.chainEnabled && store.chain.some(i => i >= 0)) {
+    const chainSteps = store.getChainSteps()
+    steps = chainSteps.steps
+    numSteps = chainSteps.numSteps
+  }
+
   return {
     isPlaying: store.isPlaying,
-    steps: store.steps,
-    numSteps: store.numSteps,
+    steps,
+    numSteps,
     bpm: arpStore.arpBpm || 120,
     channel: midiStore.midiChannel,
-    playMode: store.playMode,
-    arpRate: store.arpRate,
+    playMode,
+    arpRate,
     transpose: seqTranspose.value,
     loop: loopEnabled.value,
     stepPointer: 0,
@@ -377,6 +388,13 @@ function togglePlay() {
   store.isPlaying = !store.isPlaying
 }
 
+function handleSlotSelect(idx) {
+  if (store.activeSlotIndex !== idx) {
+    store.slotSave(store.activeSlotIndex)
+    store.slotLoad(idx)
+  }
+}
+
 function handleStepClick(idx) {
   store.selectedStepIdx = idx
   if (!store.isPlaying) previewStep(idx)
@@ -494,6 +512,11 @@ onMounted(() => {
   window.addEventListener('cp-start', _onCpStart)
   window.addEventListener('cp-stop', _onCpStop)
 })
+
+// Auto-save current slot whenever steps/numSteps/playMode/arpRate change
+watch([() => store.steps, () => store.numSteps, () => store.playMode, () => store.arpRate], () => {
+  store.slotSave(store.activeSlotIndex)
+}, { deep: true })
 
 watch(() => authStore.user, (u) => {
   if (u) store.loadLibrary()
@@ -782,6 +805,23 @@ function velBarColor(v) {
           <Play v-else class="w-3 h-3" />
           {{ store.isPlaying ? 'Stop' : 'Play' }}
         </button>
+
+        <!-- Slot selector (A-H) -->
+        <div class="flex items-center gap-0.5" title="Progression slot — each slot holds an independent chord progression">
+          <button
+            v-for="i in store.SLOT_COUNT"
+            :key="i"
+            @click.stop="handleSlotSelect(i - 1)"
+            :class="[
+              'w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
+              store.activeSlotIndex === i - 1
+                ? 'bg-purple-700 text-white ring-1 ring-purple-400'
+                : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700'
+            ]"
+          >{{ String.fromCharCode(64 + i) }}</button>
+          <div class="w-px h-4 bg-neutral-700 mx-1" />
+        </div>
+
         <!-- Step count -->
         <div class="flex items-center gap-1.5 text-[12px]">
           <span class="text-neutral-500 font-mono">Steps</span>
@@ -836,6 +876,19 @@ function velBarColor(v) {
           ]"
         >
           ⟳ {{ loopEnabled ? 'Loop' : 'Once' }}
+        </button>
+
+        <!-- Chain toggle -->
+        <button
+          @click.stop="store.chainEnabled = !store.chainEnabled"
+          :title="store.chainEnabled ? 'Chain mode ON — plays through chained slots' : 'Chain mode OFF — plays only the active slot'"
+          :class="[
+            'flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-bold uppercase border transition-colors',
+            store.chainEnabled ? 'border-cyan-600 text-cyan-400 bg-cyan-950/40' : 'border-neutral-700 text-neutral-500 hover:text-neutral-300'
+          ]"
+        >
+          <span class="tracking-wider">Chain</span>
+          <span :class="['text-[9px]', store.chainEnabled ? 'text-cyan-400' : 'text-neutral-600']">{{ store.chainEnabled ? 'ON' : 'OFF' }}</span>
         </button>
 
         <!-- Panic delay -->
@@ -1111,7 +1164,7 @@ function velBarColor(v) {
       <!-- ── BOTTOM TABS ─────────────────────────────────────────────────── -->
       <div class="shrink-0 flex border-b border-neutral-800 px-3">
         <button
-          v-for="tab in ['library', 'generate', 'save-load', 'performance']"
+          v-for="tab in ['chain', 'library', 'generate', 'save-load', 'performance']"
           :key="tab"
           @click="activeTab = tab"
           :class="[
@@ -1374,6 +1427,49 @@ function velBarColor(v) {
             </div>
           </div>
         </div>
+
+        <!-- Chain Tab -->
+        <div v-else-if="activeTab === 'chain'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div class="px-3 py-1.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
+            <span class="text-[9px] font-bold uppercase tracking-widest text-neutral-500 flex-1">Chain Editor</span>
+            <span class="text-[8px] text-neutral-600 font-mono">{{ store.chain.filter(i => i >= 0).length }} / {{ store.CHAIN_MAX }}</span>
+            <button
+              @click="store.chainClear()"
+              class="px-2 py-0.5 rounded bg-neutral-800 hover:bg-red-900 text-neutral-400 hover:text-red-400 text-[9px] font-bold uppercase tracking-wider transition-colors"
+              title="Clear chain"
+            >Clear</button>
+          </div>
+          <div class="flex-1 overflow-y-auto custom-scrollbar p-3">
+            <div class="grid grid-cols-8 gap-2">
+              <div
+                v-for="(slotIdx, pos) in store.chain"
+                :key="pos"
+                class="flex flex-col gap-1 p-2 rounded border transition-colors"
+                :class="slotIdx >= 0 ? 'border-purple-700/40 bg-purple-950/20' : 'border-neutral-800 bg-neutral-950/40'"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-mono text-neutral-500">#{{ pos + 1 }}</span>
+                  <button
+                    v-if="slotIdx >= 0"
+                    @click="store.chainRemove(pos)"
+                    class="text-[9px] text-neutral-600 hover:text-red-400 transition-colors"
+                    title="Remove from chain"
+                  >✕</button>
+                </div>
+                <select
+                  :value="slotIdx"
+                  @change="e => store.chainSet(pos, parseInt(e.target.value))"
+                  class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono outline-none"
+                  :class="slotIdx >= 0 ? 'text-purple-300' : 'text-neutral-600'"
+                >
+                  <option :value="-1">—</option>
+                  <option v-for="i in store.SLOT_COUNT" :key="i" :value="i - 1">{{ String.fromCharCode(64 + i) }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 

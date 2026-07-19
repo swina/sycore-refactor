@@ -78,10 +78,17 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const uid = computed(() => authStore.user?.uid)
   const saved = loadSaved()
 
+  function ensureSteps16(arr: ChordStep[]): ChordStep[] {
+    if (arr.length >= 16) return arr.slice(0, 16)
+    return [...arr, ...Array(16 - arr.length).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))]
+  }
+
   const steps = ref<ChordStep[]>(
-    saved?.steps
-      ? saved.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s }))
-      : Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
+    ensureSteps16(
+      saved?.steps
+        ? saved.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s }))
+        : Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
+    )
   )
   const numSteps = ref(saved?.numSteps ?? 8)
   const isPlaying = ref(false)
@@ -91,6 +98,136 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const playMode = ref<PlayMode>(saved?.playMode ?? 'chord')
   const arpRate = ref<DurationOption>(saved?.arpRate ?? '16n')
   const midiChannel = ref(saved?.midiChannel ?? 1)
+  // ── Progression Slots (A-H) & Chain ─────────────────────────────────────
+  const SLOT_COUNT = 8
+  const CHAIN_MAX = 16
+
+  function makeEmptySlot() {
+    return {
+      steps: Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP })),
+      numSteps: 8,
+      playMode: 'chord' as PlayMode,
+      arpRate: '16n' as DurationOption,
+    }
+  }
+
+  const slots = ref<Array<{ steps: ChordStep[]; numSteps: number; playMode: PlayMode; arpRate: DurationOption }>>(
+    Array.from({ length: SLOT_COUNT }, () => makeEmptySlot())
+  )
+  const activeSlotIndex = ref(0)
+  const chain = ref<number[]>(Array(CHAIN_MAX).fill(-1))
+  const chainEnabled = ref(false)
+
+  const SLOT_STORAGE_KEY = 'SYCORE_CHORD_PROG_SLOTS'
+  const CHAIN_STORAGE_KEY = 'SYCORE_CHORD_PROG_CHAIN'
+
+  function loadSlotData() {
+    try {
+      const raw = localStorage.getItem(userKey(SLOT_STORAGE_KEY))
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length === SLOT_COUNT) {
+          slots.value = parsed.map((s: any) => ({
+            steps: s.steps?.map((st: any) => ({ ...DEFAULT_CHORD_STEP, ...st })) ?? makeEmptySlot().steps,
+            numSteps: s.numSteps ?? 8,
+            playMode: s.playMode ?? 'chord',
+            arpRate: s.arpRate ?? '16n',
+          }))
+        }
+      }
+    } catch {}
+  }
+
+  function persistSlots() {
+    try {
+      localStorage.setItem(userKey(SLOT_STORAGE_KEY), JSON.stringify(slots.value))
+    } catch {}
+  }
+
+  function loadChainData() {
+    try {
+      const raw = localStorage.getItem(userKey(CHAIN_STORAGE_KEY))
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length === CHAIN_MAX) {
+          chain.value = parsed
+        }
+      }
+    } catch {}
+  }
+
+  function persistChain() {
+    try {
+      localStorage.setItem(userKey(CHAIN_STORAGE_KEY), JSON.stringify(chain.value))
+    } catch {}
+  }
+
+  loadSlotData()
+  loadChainData()
+
+  // Save current editing state to a slot
+  function slotSave(index: number) {
+    if (index < 0 || index >= SLOT_COUNT) return
+    slots.value[index] = {
+      steps: steps.value.map(s => ({ ...s })),
+      numSteps: numSteps.value,
+      playMode: playMode.value,
+      arpRate: arpRate.value,
+    }
+    persistSlots()
+  }
+
+  // Load a slot into current editing state
+  function slotLoad(index: number) {
+    if (index < 0 || index >= SLOT_COUNT) return
+    const slot = slots.value[index]
+    steps.value = ensureSteps16(slot.steps.map(s => ({ ...s })))
+    numSteps.value = slot.numSteps
+    playMode.value = slot.playMode
+    arpRate.value = slot.arpRate
+    activeSlotIndex.value = index
+  }
+
+  // Set a chain position to a slot index (0-7) or -1 to clear
+  function chainSet(pos: number, slotIdx: number) {
+    if (pos < 0 || pos >= CHAIN_MAX) return
+    chain.value[pos] = slotIdx
+    persistChain()
+  }
+
+  // Insert a slot at a chain position, shifting later entries right
+  function chainInsert(pos: number, slotIdx: number) {
+    if (pos < 0 || pos > CHAIN_MAX) return
+    chain.value.splice(pos, 0, slotIdx)
+    if (chain.value.length > CHAIN_MAX) chain.value.length = CHAIN_MAX
+    persistChain()
+  }
+
+  // Remove a chain entry at position
+  function chainRemove(pos: number) {
+    if (pos < 0 || pos >= CHAIN_MAX) return
+    chain.value.splice(pos, 1)
+    while (chain.value.length < CHAIN_MAX) chain.value.push(-1)
+    persistChain()
+  }
+
+  // Clear the entire chain
+  function chainClear() {
+    chain.value = Array(CHAIN_MAX).fill(-1)
+    persistChain()
+  }
+
+  // Get the combined steps+numSteps for chain playback
+  function getChainSteps(): { steps: ChordStep[]; numSteps: number } {
+    const all: ChordStep[] = []
+    for (const slotIdx of chain.value) {
+      if (slotIdx < 0 || slotIdx >= SLOT_COUNT) continue
+      const slot = slots.value[slotIdx]
+      all.push(...slot.steps.slice(0, slot.numSteps))
+    }
+    return { steps: all, numSteps: all.length }
+  }
+
   const libraryPatterns = ref<any[]>([])
   const loadingLibrary = ref(false)
 
@@ -203,7 +340,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   }
 
   function loadFromDocument(pattern: Partial<ChordProgSnapshot>) {
-    if (pattern.steps) steps.value = pattern.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s }))
+    if (pattern.steps) steps.value = ensureSteps16(pattern.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s })))
     if (pattern.numSteps) numSteps.value = pattern.numSteps
     if (pattern.selectedKey !== undefined) selectedKey.value = pattern.selectedKey
     if (pattern.playMode) playMode.value = pattern.playMode
@@ -213,7 +350,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
 
   watch(uid, (newUid) => {
     const s: ChordProgSnapshot | null = newUid ? loadSaved() : null
-    steps.value = s?.steps ?? Array(8).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
+    steps.value = ensureSteps16(s?.steps ?? Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP })))
     numSteps.value = s?.numSteps ?? 8
     selectedKey.value = s?.selectedKey ?? 0
     playMode.value = s?.playMode ?? 'chord'
@@ -228,5 +365,9 @@ export const useChordProgStore = defineStore('chordProg', () => {
     setStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, clearSteps,
     saveToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument,
+    // Slots & Chain
+    SLOT_COUNT, CHAIN_MAX,
+    slots, activeSlotIndex, chain, chainEnabled,
+    slotSave, slotLoad, chainSet, chainInsert, chainRemove, chainClear, getChainSteps,
   }
 })
