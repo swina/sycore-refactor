@@ -115,62 +115,6 @@ const sessionBpmOverride    = ref(false)
 
 const isAdmin = computed(() => authStore.isAdmin)
 
-// Map button IDs to their state properties, icons, and actions
-const toolbarButtonMap = {
-  types:       { state: 'isTypesOpen',      icon: LayoutGrid,    label: 'Sound Types' },
-  history:     { state: 'isHistoryOpen',    icon: Layers,        label: 'Sounds'},
-  keyboard:    { state: 'isKeyboardOpen',   icon: Keyboard,      label: 'Virtual Keyboard' },
-  sequencer:   { state: 'isSequencerOpen',  icon: ListMusic,     label: 'Step Sequencer' },
-  profile:     { state: 'isProfileOpen',    icon: User,          label: 'User Profile' },
-  portal:      { state: 'isPortalOpen',     icon: BookOpen,      label: 'Back to S1CORE Portal' },
-  midilearn:   { state: 'isMidiMappingOpen',icon: Workflow,      label: 'MIDI Mapping (Learn CC)' },
-  manual:      { state: 'isGuidesOpen',     icon: BookOpen,      label: 'User Manual' },
-  help:        { state: 'isHelpOpen',       icon: HelpCircle,    label: 'Help & Info' },
-  guides:      { state: 'isGuidesOpen',    icon: BookOpen,      label: 'Guides' },
-  liveset:     { state: 'isLiveSetOpen',    icon: Zap,           label: 'Live Set' },
-  midiactions: { state: 'isMidiActionsOpen',icon: Gamepad2,      label: 'MIDI Actions' },
-  panic:       { state: null,               icon: AlertTriangle,  label: 'PANIC: All Notes Off', action: 'panic' },
-  support:     { state: 'isSupportOpen',    icon: Mail,          label: 'Support Request' },
-  capture:       { state: 'isCaptureOpen',      icon: BarChart3, label: 'MIDI Capture', badge: 'capture' },
-  'audio-capture': { state: 'isAudioCaptureOpen',  icon: Mic,      label: 'Audio Capture'    },
-  visualizer:      { state: 'isVisualizerOpen',    icon: Activity,  label: 'Audio Visualizer' },
-  midilogger:      { state: 'isAdminLoggerOpen',  icon: Settings2, label: 'MIDI Logger'      },
-  arp:           { state: 'isArpOpen',          icon: BarChart3, label: 'Arpeggiator' },
-  session:       { state: 'isSessionOpen',      icon: Save,       label: 'Session' },
-  looper:        { state: 'isLooperOpen',       icon: RotateCw,   label: 'Looper' },
-  midi_matrix:   { state: 'isMidiMatrixOpen',   icon: Cpu,        label: 'MIDI Matrix' },
-  'midi-performance':   { state: 'isMidiPerformanceOpen',       icon: Network, label: 'MIDI Performance Grid'    },
-  'program-change':         { state: 'isProgramChangeBrowserOpen',       icon: Music2, label: 'Program Change Browser' },
-  'device-program-change':  { state: 'isDeviceProgramChangePanelOpen',   icon: Disc3,   label: 'Device Program Change' },
-  'live-performance-pad':   { state: 'isLivePerformancePadOpen',         icon: Layers,  label: 'Live Performance' },
-  'loop-machine':           { state: 'isLoopMachineOpen',                icon: Layers,  label: 'Samples Machine' },
-  'drum-machine':           { state: 'isDrumMachineOpen',                icon: Layers,  label: 'Drum Machine' },
-  'sampler':                { state: 'isSamplerOpen',                    icon: Music2,  label: 'Sampler' },
-  'ctrl-designer':          { state: 'isMidiControllerDesignerOpen',     icon: Cpu,     label: 'Controller Designer' },
-  'midi-devices':           { state: 'isMidiDevicesOpen',                 icon: Cpu,     label: 'MIDI Devices' },
-  'live-timeline':          { state: 'isLiveTimelineOpen',               icon: ListMusic,        label: 'Live Timeline' },
-  'sound-engine':           { state: 'isSoundEngineOpen',                icon: SlidersHorizontal, label: 'Sound Engine' },
-  'chord-prog':             { state: 'isChordProgOpen',                  icon: Music2,             label: 'Chord Progression Sequencer' },
-  'audio-looper':           { state: 'isLooperOpen',                     icon: RotateCw,           label: 'Audio Looper' },
-  'freesound-browser':      { state: 'isFreesoundBrowserOpen',           icon: Radio,               label: 'Freesound Browser' },
-  'audio-mixer':            { state: 'isAudioMixerOpen',                 icon: Volume2,             label: 'Audio Mixer' },
-  'sound-folder-browser':   { state: 'isSoundFolderBrowserOpen',         icon: FolderOpen,          label: 'Sound Folder Browser' },
-}
-
-function handleToolbarButtonClick(button) {
-  const config = toolbarButtonMap[button.id]
-  presetStore.isHistoryOpen = false
-  if (!config) return
-
-  if (button.id === 'panic') {
-    midiStore.panic()
-    return
-  }
-
-  // Toggle the panel state
-  uiStore[config.state] = !uiStore[config.state]
-}
-
 function closeAllPanels() {
   uiStore.closeAll()
 }
@@ -179,6 +123,38 @@ function focusStyle(key) {
   if (uiStore.focusedModalKey !== key) return {}
   return { position: 'relative', zIndex: 9999, isolation: 'isolate' }
 }
+
+// ── Consolidated panel groups (see docs/plans/modular-panel-system.md) ────
+// Only panels with zero cross-store props are collapsed into a loop here;
+// panels needing extra props (channel, bpm, capture state, etc.) stay as
+// explicit blocks below. `focusKey` is the pre-existing camelCase key used
+// by focusStyle()/cycleFocusedModal — a separate namespace from the
+// kebab-case ids used by uiStore.isPanelOpen/closePanel (PANEL_ID_REF_LOOKUP)
+// until MODAL_CYCLE_REGISTRY is migrated to the same ids (not done yet).
+
+// Always mounted, no props/events — each self-guards its own visibility.
+const alwaysMountedPanels = [
+  { focusKey: 'unifiedMidi', component: UnifiedMidiManager },
+  { focusKey: 'loopMachine', component: LoopMachine },
+  { focusKey: 'drumMachine', component: DrumMachine },
+  { focusKey: 'sampler', component: SamplerPanel },
+  { focusKey: 'midiControllerDesigner', component: MidiControllerDesigner },
+  { focusKey: 'visualizer', component: AudioVisualizer },
+  { focusKey: 'session', component: SessionManager },
+  { focusKey: 'adminLogger', component: MidiLoggerPanel },
+]
+
+// v-if gated on a single flag, single @close, no other props.
+const simpleTogglePanels = [
+  { openId: 'history', focusKey: 'history', component: PresetHistoryPanel, transition: 'sy-modal' },
+  { openId: 'midi_matrix', focusKey: 'midiMatrix', component: MidiMatrix, transition: 'sy-modal' },
+  { openId: 'midilearn', focusKey: 'midiMapping', component: MidiMappingPanel, transition: 'sy-modal' },
+  { openId: 'looper', focusKey: 'looper', component: AudioLooper, transition: 'sy-modal' },
+  { openId: 'midi-performance', focusKey: 'midiPerformance', component: MidiPerformancePanel, transition: null },
+  { openId: 'midiactions', focusKey: 'midiActions', component: AppMidiMapper, transition: null },
+  { openId: 'profile', focusKey: 'profile', component: UserProfileModal, transition: null },
+  { openId: 'about', focusKey: 'about', component: AboutModal, transition: null },
+]
 
 async function handleStepSequencerSave(config) {
   if (uiStore.seqActiveSlot === 2) {
@@ -325,25 +301,22 @@ onMounted(() => {
         </Transition>
       </div>
 
-      <!-- Preset History -->
-      <div :style="focusStyle('history')">
-        <Transition name="sy-modal">
-          <PresetHistoryPanel
-            v-if="uiStore.isHistoryOpen"
-            @close="uiStore.isHistoryOpen = false"
-          />
-        </Transition>
+      <!-- Always-mounted panels (no props) + simple single-flag toggle panels -->
+      <div v-for="m in alwaysMountedPanels" :key="m.focusKey" :style="focusStyle(m.focusKey)">
+        <component :is="m.component" />
       </div>
-
-      <!-- MIDI MATRIX -->
-      <div :style="focusStyle('midiMatrix')">
-        <Transition name="sy-modal">
-          <MidiMatrix
-            v-if="uiStore.isMidiMatrixOpen"
-            @close="uiStore.isMidiMatrixOpen = false"
+      <template v-for="m in simpleTogglePanels" :key="m.openId">
+        <div :style="focusStyle(m.focusKey)">
+          <Transition v-if="m.transition" :name="m.transition">
+            <component :is="m.component" v-if="uiStore.isPanelOpen(m.openId)" @close="uiStore.closePanel(m.openId)" />
+          </Transition>
+          <component
+            v-else-if="uiStore.isPanelOpen(m.openId)"
+            :is="m.component"
+            @close="uiStore.closePanel(m.openId)"
           />
-        </Transition>
-      </div>
+        </div>
+      </template>
 
       <!-- DEVICE PROGRAM CHANGE PANEL -->
       <div :style="focusStyle('deviceProgramChange')">
@@ -353,34 +326,6 @@ onMounted(() => {
             @close="uiStore.isDeviceProgramChangePanelOpen = false"
           />
         </Transition>
-      </div>
-
-      <!-- MIDI PERFORMANCE GRID -->
-      <div :style="focusStyle('midiPerformance')">
-        <MidiPerformancePanel
-          v-if="uiStore.isMidiPerformanceOpen"
-          @close="uiStore.isMidiPerformanceOpen = false"
-        />
-      </div>
-
-      <!-- MIDI Mapping -->
-      <div :style="focusStyle('midiMapping')">
-        <Transition name="sy-modal">
-          <MidiMappingPanel
-            v-if="uiStore.isMidiMappingOpen"
-            @close="uiStore.isMidiMappingOpen = false"
-          />
-        </Transition>
-      </div>
-
-      <!-- MIDI APP ACTION MAPPING -->
-      <div :style="focusStyle('midiActions')">
-        <AppMidiMapper v-if="uiStore.isMidiActionsOpen" @close="uiStore.isMidiActionsOpen = false" />
-      </div>
-
-      <!-- UNIFIED MIDI MANAGER -->
-      <div :style="focusStyle('unifiedMidi')">
-        <UnifiedMidiManager />
       </div>
 
       <!-- PROGRAM CHANGE BROWSER -->
@@ -450,22 +395,6 @@ onMounted(() => {
         </Transition>
       </div>
 
-      <div :style="focusStyle('loopMachine')">
-        <LoopMachine />
-      </div>
-
-      <div :style="focusStyle('drumMachine')">
-        <DrumMachine />
-      </div>
-
-      <div :style="focusStyle('sampler')">
-        <SamplerPanel />
-      </div>
-
-      <div :style="focusStyle('midiControllerDesigner')">
-        <MidiControllerDesigner />
-      </div>
-
       <MidiWizard     v-if="uiStore.isMidiWizardOpen" />
       <MidiWizardFlow />
       <MidiMonitorPanel />
@@ -509,11 +438,6 @@ onMounted(() => {
       <!-- Audio Capture -->
       <div :style="focusStyle('audioCapture')">
         <AudioCapture @close="uiStore.isAudioCaptureOpen = false" />
-      </div>
-
-      <!-- Audio Visualizer -->
-      <div :style="focusStyle('visualizer')">
-        <AudioVisualizer />
       </div>
 
       <!-- Step Sequencer -->
@@ -565,21 +489,11 @@ onMounted(() => {
         />
       </div>
 
-      <!-- User Profile Modal -->
-      <div :style="focusStyle('profile')">
-        <UserProfileModal v-if="uiStore.isProfileOpen" @close="uiStore.isProfileOpen = false" />
-      </div>
-
       <!-- Admin Panel -->
       <div :style="focusStyle('adminPanel')">
         <Transition name="sy-drawer">
           <AdminPanel v-if="uiStore.isAdminPanelOpen" :isOpen="uiStore.isAdminPanelOpen" @close="uiStore.isAdminPanelOpen = false" />
         </Transition>
-      </div>
-
-      <!-- About Modal -->
-      <div :style="focusStyle('about')">
-        <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
       </div>
 
       <!-- Help Slideshow -->

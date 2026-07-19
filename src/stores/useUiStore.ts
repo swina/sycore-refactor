@@ -356,6 +356,80 @@ export const useUiStore = defineStore('ui', () => {
     focusedModalKey.value = null
   }
 
+  // ── Generic per-id panel API (canonical toolbar/module ids — kebab-case) ──
+  // Single source of truth for "which flag does this id toggle", mirroring the
+  // mapping previously copy-pasted across AppFooter.vue, SideBar.vue,
+  // MainMenuDial.vue (each had their own ACTION_MAP) and SynthApp.vue's
+  // toolbarButtonMap. New code should prefer isPanelOpen/togglePanel over the
+  // named isXOpen refs above. See docs/plans/modular-panel-system.md.
+  const PANEL_ID_REF_LOOKUP: Record<string, Ref<boolean>> = {
+    types: isTypesOpen,
+    history: isHistoryOpen,
+    liveset: isLiveSetOpen,
+    tracks: isBackingTrackOpen,
+    sequencer: isSequencerOpen,
+    'sequencer-modal': isSequencerModalOpen,
+    'audio-capture': isAudioCaptureOpen,
+    visualizer: isVisualizerOpen,
+    keyboard: isKeyboardOpen,
+    arp: isArpOpen,
+    favorites: isFavoritesOpen,
+    profile: isProfileOpen,
+    help: isHelpOpen,
+    guides: isGuidesOpen,
+    support: isSupportOpen,
+    manual: isGuidesOpen,
+    portal: isPortalOpen,
+    panic: isPanicOpen,
+    midilogger: isAdminLoggerOpen,
+    routing: isMidiPortOpen,
+    midiactions: isMidiActionsOpen,
+    midilearn: isMidiMappingOpen,
+    session: isSessionOpen,
+    looper: isLooperOpen,
+    'audio-looper': isLooperOpen,
+    admin: isAdminPanelOpen,
+    midi_matrix: isMidiMatrixOpen,
+    'midi-performance': isMidiPerformanceOpen,
+    'midi-manager': showUnifiedMidiManager,
+    capture: isCaptureOpen,
+    'live-timeline': isLiveTimelineOpen,
+    'sound-engine': isSoundEngineOpen,
+    'tracks-player': isTracksPlayerOpen,
+    'chord-prog': isChordProgOpen,
+    'live-performance-pad': isLivePerformancePadOpen,
+    'loop-machine': isLoopMachineOpen,
+    'drum-machine': isDrumMachineOpen,
+    sampler: isSamplerOpen,
+    'device-program-change': isDeviceProgramChangePanelOpen,
+    'freesound-browser': isFreesoundBrowserOpen,
+    'audio-mixer': isAudioMixerOpen,
+    'sound-folder-browser': isSoundFolderBrowserOpen,
+    'midi-flow': isMidiFlowOpen,
+    'controller-designer': isMidiControllerDesignerOpen,
+    'midi-devices': isMidiDevicesOpen,
+    'program-change': isProgramChangeBrowserOpen,
+    'midi-monitor': isMidiMonitorOpen,
+    about: isAboutOpen,
+  }
+
+  function isPanelOpen(id: string): boolean {
+    return PANEL_ID_REF_LOOKUP[id]?.value ?? false
+  }
+  function togglePanel(id: string): void {
+    const ref = PANEL_ID_REF_LOOKUP[id]
+    if (ref) ref.value = !ref.value
+    else console.warn(`[useUiStore] togglePanel: unknown panel id "${id}"`)
+  }
+  function openPanel(id: string): void {
+    const ref = PANEL_ID_REF_LOOKUP[id]
+    if (ref) ref.value = true
+  }
+  function closePanel(id: string): void {
+    const ref = PANEL_ID_REF_LOOKUP[id]
+    if (ref) ref.value = false
+  }
+
   function toggleMainMenu() {
     isMainMenuOpen.value = !isMainMenuOpen.value
     if (isMainMenuOpen.value) {
@@ -421,5 +495,6 @@ export const useUiStore = defineStore('ui', () => {
     globalModCC, globalTranspose,
     focusedModalKey, openModalKeys, cycleFocusedModal,
     closeAll, toggleMainMenu, toggleSideMenu,
+    isPanelOpen, togglePanel, openPanel, closePanel,
   }
 })

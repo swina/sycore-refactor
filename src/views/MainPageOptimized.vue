@@ -7,11 +7,11 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { defineAsyncComponent } from 'vue'
 import {
-  Radio, Cable, Cpu, Info, Zap, CircleQuestionMark, Drum, Layers, Music, ListMusic,
-  Mic, LogIn, Settings, Infinity, Clock, User, Globe,
-  Monitor, GitBranch, Piano, Package, Search, FolderOpen, Play,
-  Disc3, Headphones, PanelRightOpen
+  Radio, Info, CircleQuestionMark,
+  LogIn, Settings, User, Globe,
+  Cpu, Zap, Music, Headphones, Play,
 } from 'lucide-vue-next'
+import { modulesByCategory } from '@/core/modules/registry'
 
 const SlideshowModal = defineAsyncComponent(() => import('@/components/SlideshowModal.vue'))
 const AboutModal = defineAsyncComponent(() => import('@/components/AboutModal.vue'))
@@ -44,57 +44,29 @@ function goWorkspace() {
 }
 
 // ─── Section definitions ───────────────────────────────────────────────────
+// Derived from src/core/modules/registry.ts — the single source of truth for
+// launcher module metadata (label/icon/background/category). See
+// docs/plans/modular-panel-system.md.
 
-const sections = [
-  {
-    title: 'MIDI Configuration',
-    icon: Cpu,
-    items: [
-      { label: 'Devices', icon: Radio, bg: '/midi-core-engine.png', onClick: () => { uiStore.isMidiDevicesOpen = true; goWorkspace() } },
-      { label: 'MIDI Flow', icon: GitBranch, bg: '/midi-flow.png', onClick: () => { uiStore.isMidiFlowOpen = true; goWorkspace() } },
-      { label: 'Controller Designer', icon: Piano, bg: '/midi-knob.png', onClick: () => { uiStore.isMidiControllerDesignerOpen = true; goWorkspace() } },
-      { label: 'MIDI Monitor', icon: Monitor, bg: '/midi-monitor.png', onClick: () => { uiStore.isMidiMonitorOpen = true; goWorkspace() } },
-    ],
-  },
-  {
-    title: 'Sound Design',
-    icon: Zap,
-    items: [
-      { label: 'Sound Engine', icon: Zap, bg: '/bg-sound-design-2.png', onClick: () => { uiStore.isSoundEngineOpen = true; goWorkspace() } },
-      { label: 'Sampler', badge: 'Beta', icon: Disc3, bg: '/sycore-lab.png', onClick: () => { uiStore.isSamplerOpen = true; goWorkspace() } },
-    ],
-  },
-  {
-    title: 'MIDI Tools',
-    icon: Music,
-    items: [
-      { label: 'Step Sequencer', icon: Music, bg: '/step-sequencer-square.png', onClick: () => { uiStore.isSequencerOpen = true; goWorkspace() } },
-      { label: 'Chord Progression', icon: Layers, bg: '/chord-progression-sequencer.png', onClick: () => { uiStore.isChordProgOpen = true; goWorkspace() } },
-      { label: 'Piano Roll', icon: Cable, bg: '/midi-capture.jpg', onClick: () => { uiStore.isCaptureOpen = true; goWorkspace() } },
-      { label: 'Multi Sounds', icon: Package, bg: '/device-program-change.png', onClick: () => { uiStore.isDeviceProgramChangePanelOpen = true; goWorkspace() } },
-    ],
-  },
-  {
-    title: 'Audio Tools',
-    icon: Headphones,
-    items: [
-      { label: 'Audio Capture', icon: Mic, bg: '/audio-capture-mixer.jpg', onClick: () => { uiStore.isAudioCaptureOpen = true; goWorkspace() } },
-      { label: 'Freesound Browser', icon: Search, bg: '/bg-sound-design.png', onClick: () => { uiStore.isFreesoundBrowserOpen = true; goWorkspace() } },
-      { label: 'Sound Folder Browser', icon: FolderOpen, bg: '/bg-settings.png', onClick: () => { uiStore.isSoundFolderBrowserOpen = true; goWorkspace() } },
-    ],
-  },
-  {
-    title: 'Performance Tools',
-    icon: Play,
-    items: [
-      { label: 'Live Timeline', icon: Clock, bg: '/home-performance-synths.png', onClick: () => { uiStore.isLiveTimelineOpen = true; goWorkspace() } },
-      { label: 'Drum Machine', icon: Drum, bg: '/drum-machine.png', onClick: () => { uiStore.isDrumMachineOpen = true; goWorkspace() } },
-      { label: 'Live Set', icon: ListMusic, bg: '/live-performance-2.png', onClick: () => { uiStore.isLivePerformancePadOpen = true; goWorkspace() } },
-      { label: 'Samples Machine', icon: Infinity, bg: '/loop-machine.png', onClick: () => { uiStore.isLoopMachineOpen = true; goWorkspace() } },
-      { label: 'Tracks Player', icon: Music, bg: '/backing-tracks.jpg', onClick: () => { uiStore.isTracksPlayerOpen = true; goWorkspace() } },
-    ],
-  },
-]
+const CATEGORY_LABELS = {
+  'midi-config': { title: 'MIDI Configuration', icon: Cpu },
+  'sound-design': { title: 'Sound Design', icon: Zap },
+  'midi-tools': { title: 'MIDI Tools', icon: Music },
+  'audio-tools': { title: 'Audio Tools', icon: Headphones },
+  performance: { title: 'Performance Tools', icon: Play },
+}
+
+const sections = modulesByCategory().map(({ category, items }) => ({
+  title: CATEGORY_LABELS[category]?.title || category,
+  icon: CATEGORY_LABELS[category]?.icon,
+  items: items.map(m => ({
+    label: m.label,
+    icon: m.icon,
+    badge: m.badge,
+    bg: m.bg,
+    onClick: () => { uiStore.openPanel(m.id); goWorkspace() },
+  })),
+}))
 </script>
 
 <template>

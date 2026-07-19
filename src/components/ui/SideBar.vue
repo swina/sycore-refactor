@@ -10,45 +10,6 @@ const uiStore = useUiStore()
 const authStore = useAuthStore()
 const configStore = useConfigStore()
 
-const ACTION_MAP = {
-  types:          () => uiStore.isTypesOpen = !uiStore.isTypesOpen,
-  history:        () => uiStore.isHistoryOpen = !uiStore.isHistoryOpen,
-  liveset:        () => uiStore.isLiveSetOpen = !uiStore.isLiveSetOpen,
-  tracks:         () => uiStore.isBackingTrackOpen = !uiStore.isBackingTrackOpen,
-  sequencer:      () => uiStore.isSequencerOpen = !uiStore.isSequencerOpen,
-  'sequencer-modal':() => uiStore.isSequencerModalOpen = !uiStore.isSequencerModalOpen,
-  capture:        () => uiStore.isCaptureOpen = !uiStore.isCaptureOpen,
-  'audio-capture':() => uiStore.isAudioCaptureOpen = !uiStore.isAudioCaptureOpen,
-  visualizer:     () => uiStore.isVisualizerOpen = !uiStore.isVisualizerOpen,
-  keyboard:       () => uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen,
-  arp:            () => uiStore.isArpOpen = !uiStore.isArpOpen,
-  favorites:      () => uiStore.isFavoritesOpen = !uiStore.isFavoritesOpen,
-  profile:        () => uiStore.isProfileOpen = !uiStore.isProfileOpen,
-  help:           () => uiStore.isHelpOpen = !uiStore.isHelpOpen,
-  support:        () => uiStore.isSupportOpen = !uiStore.isSupportOpen,
-  manual:         () => uiStore.isGuidesOpen = !uiStore.isGuidesOpen,
-  portal:         () => uiStore.isPortalOpen = !uiStore.isPortalOpen,
-  panic:          () => uiStore.isPanicOpen = !uiStore.isPanicOpen,
-  midilogger:     () => uiStore.isAdminLoggerOpen = !uiStore.isAdminLoggerOpen,
-  midiactions:    () => uiStore.isMidiActionsOpen = !uiStore.isMidiActionsOpen,
-  midilearn:      () => uiStore.isMidiMappingOpen = !uiStore.isMidiMappingOpen,
-  session:        () => uiStore.isSessionOpen = !uiStore.isSessionOpen,
-  admin:          () => uiStore.isAdminPanelOpen = !uiStore.isAdminPanelOpen,
-  midi_matrix:    () => uiStore.isMidiMatrixOpen = !uiStore.isMidiMatrixOpen,
-  'midi-performance': () => uiStore.isMidiPerformanceOpen = !uiStore.isMidiPerformanceOpen,
-  'program-change':         () => uiStore.isProgramChangeBrowserOpen = !uiStore.isProgramChangeBrowserOpen,
-  'device-program-change':  () => uiStore.isDeviceProgramChangePanelOpen = !uiStore.isDeviceProgramChangePanelOpen,
-  'live-performance-pad':   () => uiStore.isLivePerformancePadOpen = !uiStore.isLivePerformancePadOpen,
-  'live-timeline':          () => uiStore.isLiveTimelineOpen = !uiStore.isLiveTimelineOpen,
-  'sound-engine':           () => uiStore.isSoundEngineOpen = !uiStore.isSoundEngineOpen,
-  'midi-manager':           () => uiStore.showUnifiedMidiManager = !uiStore.showUnifiedMidiManager,
-  'drum-machine':           () => uiStore.isDrumMachineOpen = !uiStore.isDrumMachineOpen,
-  'sampler':                () => uiStore.isSamplerOpen = !uiStore.isSamplerOpen,
-  'audio-mixer':            () => uiStore.isAudioMixerOpen = !uiStore.isAudioMixerOpen,
-  'sound-folder-browser':   () => uiStore.isSoundFolderBrowserOpen = !uiStore.isSoundFolderBrowserOpen,
-  'midi-devices':           () => uiStore.isMidiDevicesOpen = !uiStore.isMidiDevicesOpen,
-}
-
 const COLORS = [
   'text-cyan-400', 'text-purple-400', 'text-yellow-400', 'text-orange-400',
   'text-green-400', 'text-blue-400', 'text-emerald-400', 'text-amber-400', 'text-red-500'
@@ -79,7 +40,7 @@ const filteredActions = computed(() => {
     ...b,
     iconComponent: lucideIcons[b.icon] || lucideIcons.HelpCircle,
     color: COLORS[idx % COLORS.length],
-    onClick: ACTION_MAP[b.id] || (() => console.warn(`No action for ${b.id}`))
+    onClick: () => uiStore.togglePanel(b.id)
   })).reverse()
 })
 
