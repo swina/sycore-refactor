@@ -67,9 +67,21 @@ let _pendingTimeouts = new Set()  // all scheduled timeout IDs
 let _activeNoteKeys = new Set()   // "note-channel" keys currently sounding
 let _stopPending = false          // set synchronously on stop; blocks any queued tid callbacks
 let _transportTicks = 0          // our own tick counter (384n resolution, resets on each play)
+let _captureArmed = false         // set true on play, consumed by next schedule tick
+let _captureBarsRemaining = 0     // tick counter until auto-stop
+let _captureRecording = false     // set true after pre-roll fires, cleared on stop
 
 const seqTranspose = ref(0)
 const loopEnabled = ref(true)
+
+// ── Audio Capture Sync ────────────────────────────────────────────────────────
+const captureBarCount = ref(parseInt(localStorage.getItem(userKey('S1_CP_CAPTURE_BARS')) ?? '4', 10))
+const captureAutoStop = ref(localStorage.getItem(userKey('S1_CP_CAPTURE_AUTOSTOP')) !== 'false')
+const captureArmed = ref(false)
+const captureRecording = ref(false)
+
+watch(captureBarCount, v => localStorage.setItem(userKey('S1_CP_CAPTURE_BARS'), v.toString()))
+watch(captureAutoStop, v => localStorage.setItem(userKey('S1_CP_CAPTURE_AUTOSTOP'), v ? 'true' : 'false'))
 
 function buildPlayState() {
   return {
@@ -113,6 +125,13 @@ watch(() => store.isPlaying, (playing) => {
     stopAllNotes()
     store.currentStep = 0
     playStateRef.current = {}
+    _captureArmed = false
+    if (_captureRecording) {
+      _captureRecording = false
+      captureRecording.value = false
+      window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+    }
+    captureArmed.value = false
     return
   }
 
@@ -132,6 +151,46 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       if (!state.isPlaying || _stopPending) return
 
       _transportTicks++
+
+      // ── Audio capture sync with pre-roll & auto-stop ─────────────────
+      if (syncStore.syncChordProgToAudioCapture) {
+        if (_captureArmed) {
+          _captureArmed = false
+          _captureRecording = true
+          captureArmed.value = false
+          captureRecording.value = true
+
+          // Total ticks = sum of all chord durations (one full pass through the progression)
+          const totalTicks = state.steps.reduce((acc, s) => {
+            return acc + (DURATION_TICKS[s?.duration] ?? 32)
+          }, 0)
+          _captureBarsRemaining = captureAutoStop.value ? totalTicks : Infinity
+
+          const PRE_ROLL = 0.2
+          const timeUntilBeat = time - getTransport().now()
+          const actualPreRoll = Math.min(PRE_ROLL, Math.max(0, timeUntilBeat))
+          const delayMs = Math.max(0, (timeUntilBeat - PRE_ROLL) * 1000)
+
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('capture-start-rec', {
+              detail: { background: true, preRoll: actualPreRoll },
+            }))
+          }, delayMs)
+
+          // Count this tick (armed tick is still a real tick)
+          _captureBarsRemaining -= 1
+        } else if (_captureRecording) {
+          // Each schedule fire is 1 tick (384n resolution), so decrement by 1.
+          _captureBarsRemaining -= 1
+          if (_captureBarsRemaining <= 0) {
+            _captureRecording = false
+            captureRecording.value = false
+            getDraw().schedule(() => {
+              window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+            }, time)
+          }
+        }
+      }
 
       const activeCount = Math.max(1, Math.min(state.numSteps, 16))
       const step = state.steps[state.stepPointer]
@@ -223,8 +282,19 @@ watch(() => store.isPlaying, (playing) => {
     else midiStore.sendStop()
   }
   if (syncStore.syncChordProgToAudioCapture) {
-    if (playing) window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
-    else window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+    if (playing) {
+      // Arm capture — the next transport tick will fire start-rec with pre-roll
+      _captureArmed = true
+      captureArmed.value = true
+    } else {
+      _captureArmed = false
+      captureArmed.value = false
+      if (_captureRecording) {
+        _captureRecording = false
+        captureRecording.value = false
+        window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+      }
+    }
   }
 })
 
@@ -262,6 +332,11 @@ onUnmounted(() => {
   if (repeatEventIdRef.value !== null) getTransport().clear(repeatEventIdRef.value)
   transportManager.releaseTransport()
   stopAllNotes()
+  if (_captureRecording) {
+    _captureRecording = false
+    captureRecording.value = false
+    window.dispatchEvent(new CustomEvent('capture-stop-rec'))
+  }
   if (_panicTimeout) { clearTimeout(_panicTimeout); midiStore.panic() }
   if (rafRef.value !== null) cancelAnimationFrame(rafRef.value)
   previewTimeouts.forEach(id => clearTimeout(id))
@@ -609,7 +684,7 @@ function velBarColor(v) {
               <span
                 :class="[
                   'w-1.5 h-1.5 rounded-full transition-all duration-300',
-                  syncStore.syncChordProgToAudioCapture && store.isPlaying
+                  captureRecording
                     ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse'
                     : syncStore.syncChordProgToAudioCapture
                       ? 'bg-red-500/60'
@@ -618,13 +693,58 @@ function velBarColor(v) {
               />
               <span :class="[
                 'text-[11px] font-mono uppercase tracking-widest transition-colors duration-300',
-                syncStore.syncChordProgToAudioCapture && store.isPlaying
+                captureRecording
                   ? 'text-red-400'
                   : syncStore.syncChordProgToAudioCapture
                     ? 'text-red-500/60 hover:text-red-400'
                     : 'text-neutral-600 hover:text-neutral-500'
               ]">REC SYNC</span>
             </div>
+
+            <!-- Capture arming indicator -->
+            <span
+              v-if="captureArmed"
+              class="text-[9px] font-mono text-yellow-400 animate-pulse"
+            >ARMED</span>
+
+            <!-- Capture recording indicator -->
+            <span
+              v-if="captureRecording"
+              class="flex items-center gap-1 text-[9px] font-mono text-red-400"
+            >
+              <span class="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+              REC
+            </span>
+
+            <!-- Bar count & auto-stop controls (only when sync is enabled) -->
+            <div v-if="syncStore.syncChordProgToAudioCapture" class="flex items-center gap-1.5 ml-1">
+              <div class="flex items-center gap-0.5">
+                <span class="text-[8px] font-mono text-neutral-600">Bars</span>
+                <button
+                  @click.stop="captureBarCount = Math.max(1, captureBarCount - 1)"
+                  class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[9px]"
+                >−</button>
+                <span class="text-[10px] font-mono text-cyan-400 w-4 text-center">{{ captureBarCount }}</span>
+                <button
+                  @click.stop="captureBarCount = Math.min(32, captureBarCount + 1)"
+                  class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[9px]"
+                >+</button>
+              </div>
+              <button
+                @click.stop="captureAutoStop = !captureAutoStop"
+                :title="captureAutoStop ? 'Auto-stop ON — recording stops after progression ends' : 'Auto-stop OFF — record until manually stopped'"
+                :class="[
+                  'flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border transition-colors',
+                  captureAutoStop
+                    ? 'border-cyan-600/50 text-cyan-400 bg-cyan-950/30'
+                    : 'border-neutral-700 text-neutral-600 hover:text-neutral-400'
+                ]"
+              >
+                <span v-if="captureAutoStop">Auto</span>
+                <span v-else>∞</span>
+              </button>
+            </div>
+
             <div
               v-if="syncStore.syncChordProgToAudioCapture && !store.isPlaying"
               @click.stop="uiStore.isAudioCaptureOpen = true"
