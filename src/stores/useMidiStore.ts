@@ -14,7 +14,7 @@ import {
   type MidiConfigSnapshot,
   type SmartLatchConfig,
 } from '@/lib/midi-config-presets'
-import type { DeviceRegistration, RoutingConfig, SplitConfig, MidiSource as MidiSourceType } from '@/types/midi'
+import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, MidiSource as MidiSourceType } from '@/types/midi'
 
 // ---------------------------------------------------------------------------
 // LocalStorage keys
@@ -149,6 +149,75 @@ export const useMidiStore = defineStore('midi', () => {
   } catch {}
   const routingMatrix = ref<Record<string, string[]>>(initialMatrix)
 
+  // ── Virtual Instruments ──────────────────────────────────────────────────
+  const VIRTUAL_INSTRUMENTS_KEY = 'S1_VIRTUAL_INSTRUMENTS'
+
+  function loadVirtualInstruments(): VirtualRegistration[] {
+    try {
+      const raw = localStorage.getItem(userKey(VIRTUAL_INSTRUMENTS_KEY))
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  }
+
+  function persistVirtualInstruments() {
+    try {
+      localStorage.setItem(userKey(VIRTUAL_INSTRUMENTS_KEY), JSON.stringify(virtualInstruments.value))
+    } catch {}
+  }
+
+  const virtualInstruments = ref<VirtualRegistration[]>(loadVirtualInstruments())
+
+  function addVirtualInstrument(name: string, midiOutputPort?: string) {
+    if (!name || virtualInstruments.value.some(v => v.name === name)) return
+    virtualInstruments.value.push({
+      name,
+      channel: 0,
+      bankMsb: 0,
+      bankLsb: 0,
+      program: 0,
+      midiOutputPort: midiOutputPort ?? '',
+    })
+    persistVirtualInstruments()
+    // Register with the MIDI service — forward data to the real MIDI output port
+    midiService.registerVirtualOutput(name, (data) => {
+      const v = virtualInstruments.value.find(x => x.name === name)
+      if (v && v.midiOutputPort) {
+        midiService.sendRawToDeviceByName(v.midiOutputPort, data)
+      }
+    })
+    // Add a registration in the routing config so it behaves like a real device
+    if (!routingConfig.value.registrations[name]) {
+      addRegistration(name)
+    }
+    refreshDevices()
+  }
+
+  function removeVirtualInstrument(name: string) {
+    virtualInstruments.value = virtualInstruments.value.filter(v => v.name !== name)
+    persistVirtualInstruments()
+    midiService.unregisterVirtualOutput(name)
+    removeRegistration(name)
+    refreshDevices()
+  }
+
+  function updateVirtualInstrument(name: string, data: Partial<VirtualRegistration>) {
+    const idx = virtualInstruments.value.findIndex(v => v.name === name)
+    if (idx < 0) return
+    virtualInstruments.value[idx] = { ...virtualInstruments.value[idx], ...data }
+    persistVirtualInstruments()
+  }
+
+  // Register all virtual instruments with the MIDI service on init
+  function registerAllVirtualInstruments() {
+    virtualInstruments.value.forEach(v => {
+      midiService.registerVirtualOutput(v.name, (data) => {
+        if (v.midiOutputPort) {
+          midiService.sendRawToDeviceByName(v.midiOutputPort, data)
+        }
+      })
+    })
+  }
+
   // ── Watchers ─────────────────────────────────────────────────────────────
   watch(routingConfig, (newVal) => {
     if (!newVal || !newVal.registrations) return
@@ -245,6 +314,7 @@ export const useMidiStore = defineStore('midi', () => {
     if (!ok) return midiReady.value
 
     refreshDevices()
+    registerAllVirtualInstruments()
 
     midiService.addStateChangeListener(() => refreshDevices())
 
@@ -614,5 +684,10 @@ export const useMidiStore = defineStore('midi', () => {
     loadConfigPreset,
     deleteConfigPreset,
     MidiSource,
+    // Virtual Instruments
+    virtualInstruments,
+    addVirtualInstrument,
+    removeVirtualInstrument,
+    updateVirtualInstrument,
   }
 })

@@ -41,7 +41,7 @@ const registrations = computed(() => {
 })
 
 function isOnline(name) {
-  return midiStore.inputs.some(i => i.name === name) || midiStore.outputs.some(o => o.name === name)
+  return midiStore.inputs.some(i => i.name === name) || midiStore.outputs.some(o => o.name === name) || midiStore.virtualInstruments.some(v => v.name === name)
 }
 
 function handleAdd(name) {
@@ -258,7 +258,8 @@ function openProgramChangePanel() {
                         <div class="flex flex-col min-w-0">
                           <div class="flex items-center gap-2">
                             <span class="text-[11px] font-bold text-white truncate max-w-[180px]">{{ reg.name }}</span>
-                            <span v-if="!isOnline(reg.name)" class="text-[7px] font-black bg-neutral-800 text-neutral-500 px-1 rounded uppercase tracking-tighter">Offline</span>
+                            <span v-if="midiStore.virtualInstruments.some(v => v.name === reg.name)" class="text-[7px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1 rounded uppercase tracking-tighter">Virtual</span>
+                            <span v-else-if="!isOnline(reg.name)" class="text-[7px] font-black bg-neutral-800 text-neutral-500 px-1 rounded uppercase tracking-tighter">Offline</span>
                           </div>
                           <div v-if="configStore.enablePartSelector" class="flex items-center gap-2 mt-1">
                             <span class="text-[7px] font-mono text-neutral-500 uppercase tracking-widest">REGISTERED</span>

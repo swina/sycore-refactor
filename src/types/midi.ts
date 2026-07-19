@@ -102,3 +102,13 @@ export interface LatchedNote {
   note: number;
   velocity: number;
 }
+
+/** A virtual instrument — a standalone app that receives MIDI but can't be discovered via WebMIDI */
+export interface VirtualRegistration {
+  name: string;
+  channel: number;   // MIDI channel (0-15)
+  bankMsb: number;
+  bankLsb: number;
+  program: number;
+  midiOutputPort: string; // real MIDI output port to route data through (e.g. "LoopBe Internal MIDI")
+}

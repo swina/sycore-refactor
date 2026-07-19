@@ -73,6 +73,8 @@ function refreshKnownDevices() {
 
 function _appendEntry(entry) {
   if (!monitoring.value || paused.value) return
+  // Skip clock messages if the clock filter is off — prevents flooding the buffer
+  if (entry.type === 'clock' && !typeFilter.value.clock) return
   if (!knownDevices.value.includes(entry.device)) {
     knownDevices.value = [...knownDevices.value, entry.device]
   }

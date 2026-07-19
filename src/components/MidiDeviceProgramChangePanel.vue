@@ -42,9 +42,15 @@ const devices = computed(() => {
       .filter(d => d.type === 'instrument-single' || d.type === 'instrument-multi')
       .map(d => d.name)
   )
+  // Add virtual instrument names to the set so they pass the filter
+  midiStore.virtualInstruments.forEach(v => instrumentNames.add(v.name))
+
   return Object.values(midiStore.routingConfig.registrations)
     .filter(r => r.outEnabled && (r.pcEnabled || r.pc) && instrumentNames.has(r.name))
-    .map(r => ({ ...r, isOnline: midiStore.outputs.some(o => o.name === r.name) }))
+    .map(r => ({
+      ...r,
+      isOnline: midiStore.outputs.some(o => o.name === r.name) || midiStore.virtualInstruments.some(v => v.name === r.name),
+    }))
     .sort((a, b) => b.isOnline - a.isOnline || a.name.localeCompare(b.name))
 })
 
@@ -61,9 +67,11 @@ const selectedReg = computed(() =>
   selectedDeviceName.value ? midiStore.routingConfig.registrations[selectedDeviceName.value] : null
 )
 
-const isDeviceOffline = computed(() =>
-  selectedDeviceName.value && !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
-)
+const isDeviceOffline = computed(() => {
+  if (!selectedDeviceName.value) return false
+  if (midiStore.virtualInstruments.some(v => v.name === selectedDeviceName.value)) return false
+  return !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
+})
 
 // ── UI/Preview instrument detection ────────────────────────────
 // A device routed from MidiSource.UI is the app's primary instrument.
@@ -311,6 +319,20 @@ const currentPcState = computed(() => {
     .sort((a, b) => a.ch - b.ch)
 })
 
+// ── Send to a device (real MIDI output or virtual) ───────────────
+function sendToDeviceMessage(data, deviceName) {
+  const dn = deviceName ?? selectedDeviceName.value
+  if (!dn) return
+  if (midiStore.virtualInstruments.some(v => v.name === dn)) {
+    midiService.sendRawToDeviceByName(dn, data)
+  } else {
+    const port = midiStore.outputs.find(o => o.name === dn)
+    if (port) {
+      try { port.send(data) } catch {}
+    }
+  }
+}
+
 // ── Send from catalog ───────────────────────────────────────────
 function selectSound(sound) {
   activeSound.value = sound
@@ -320,9 +342,6 @@ function selectSound(sound) {
 function sendCatalogSound(sound) {
   const reg = selectedReg.value
   if (!reg) return
-  const port = midiStore.outputs.find(o => o.name === selectedDeviceName.value)
-  if (!port) return
-
   const cfg    = bankConfig.value
   const ch     = reg.pcChannel ?? 0
   const pField = cfg?.program_field ?? 'program'
@@ -337,9 +356,9 @@ function sendCatalogSound(sound) {
   const lsb    = cfg.lsb ? (sound.lsb ?? 0) : 0
   const progNum = Math.max(0, Math.min(127, progIdx % 128))
 
-  port.send([0xB0 | ch, 0,  msb])
-  port.send([0xB0 | ch, 32, lsb])
-  port.send([0xC0 | ch, progNum])
+  sendToDeviceMessage([0xB0 | ch, 0,  msb])
+  sendToDeviceMessage([0xB0 | ch, 32, lsb])
+  sendToDeviceMessage([0xC0 | ch, progNum])
 
   lastSent.value = sound
   recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb)
@@ -363,13 +382,11 @@ const sendLsb    = ref(false)
 function sendManual() {
   const reg = selectedReg.value
   if (!reg) return
-  const port = midiStore.outputs.find(o => o.name === selectedDeviceName.value)
-  if (!port) return
   const ch = reg.pcChannel ?? 0
-  if (sendMsb.value) port.send([0xB0 | ch, 0,  manualMsb.value])
-  if (sendLsb.value) port.send([0xB0 | ch, 32, manualLsb.value])
+  if (sendMsb.value) sendToDeviceMessage([0xB0 | ch, 0,  manualMsb.value])
+  if (sendLsb.value) sendToDeviceMessage([0xB0 | ch, 32, manualLsb.value])
   const prog = Math.max(0, Math.min(127, manualProg.value - 1))
-  port.send([0xC0 | ch, prog])
+  sendToDeviceMessage([0xC0 | ch, prog])
   recordChannelState(ch, prog, '', `PC ${manualProg.value}`)
   lastSent.value = { name: `PC ${manualProg.value}` }
   showPcNotification(selectedDeviceName.value, `PC ${manualProg.value}`)
@@ -554,6 +571,13 @@ function selectDevice(name) {
   }
 }
 
+function promptAddVirtualInstrument() {
+  const name = window.prompt('Virtual instrument name:')
+  if (name && name.trim()) {
+    midiStore.addVirtualInstrument(name.trim())
+  }
+}
+
 const pcNotification = ref({ visible: false, device: '', name: '', category: '' })
 let _pcNotifTimer = null
 
@@ -640,21 +664,19 @@ function recallSet(set) {
         if (preset) presetStore.recallPreset(preset, false)
       }
     } else {
-      const port = midiStore.outputs.find(o => o.name === entry.deviceName)
-      if (!port) return
       const multiEntries = Object.entries(entry.pcChannels)
       if (multiEntries.length > 0) {
         multiEntries.forEach(([chStr, info]) => {
           const ch = parseInt(chStr)
-          port.send([0xB0 | ch, 0,  info.msb ?? 0])
-          port.send([0xB0 | ch, 32, info.lsb ?? 0])
-          port.send([0xC0 | ch, info.program ?? 0])
+          sendToDeviceMessage([0xB0 | ch, 0,  info.msb ?? 0], entry.deviceName)
+          sendToDeviceMessage([0xB0 | ch, 32, info.lsb ?? 0], entry.deviceName)
+          sendToDeviceMessage([0xC0 | ch, info.program ?? 0], entry.deviceName)
         })
       } else {
         const ch = entry.pcChannel ?? 0
-        port.send([0xB0 | ch, 0,  entry.pcMsb ?? 0])
-        port.send([0xB0 | ch, 32, entry.pcLsb ?? 0])
-        port.send([0xC0 | ch, entry.pcProgram ?? 0])
+        sendToDeviceMessage([0xB0 | ch, 0,  entry.pcMsb ?? 0], entry.deviceName)
+        sendToDeviceMessage([0xB0 | ch, 32, entry.pcLsb ?? 0], entry.deviceName)
+        sendToDeviceMessage([0xC0 | ch, entry.pcProgram ?? 0], entry.deviceName)
       }
     }
   })
@@ -793,6 +815,11 @@ function assignToPad(setId, padIdx) {
                         </span>
                         <span class="text-[7px] font-mono text-neutral-500">{{ presetStore.lastPreset?.name ?? '—' }}</span>
                       </template>
+                      <template v-else-if="midiStore.virtualInstruments.some(v => v.name === dev.name)">
+                        <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-0.5">
+                          <Radio class="w-2 h-2" />Virtual
+                        </span>
+                      </template>
                       <template v-else-if="dev.isMulti">
                         <span class="text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">Multi</span>
                         <span v-if="Object.keys(dev.pcChannels ?? {}).length > 0" class="text-[7px] font-mono text-neutral-500">
@@ -810,6 +837,17 @@ function assignToPad(setId, padIdx) {
                   </div>
                 </div>
               </button>
+
+              <!-- Add Virtual Instrument -->
+              <div class="px-4 py-2 border-b border-neutral-800/60">
+                <button
+                  @click="promptAddVirtualInstrument"
+                  class="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-neutral-700 text-neutral-500 hover:text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all text-[9px] font-bold uppercase tracking-wider"
+                >
+                  <Plus class="w-3 h-3" />
+                  Add Virtual Instrument
+                </button>
+              </div>
             </div>
 
             <!-- ── Performance Sets section ── -->

@@ -63,6 +63,43 @@ export class MidiService {
   // ── SysEx ────────────────────────────────────────────────────────────────
   private sysexEnabled = false;
 
+  // ── Virtual output registry ──────────────────────────────────────────────
+  private virtualOutputs = new Map<string, (data: number[]) => void>();
+
+  registerVirtualOutput(name: string, sendFn: (data: number[]) => void): void {
+    this.virtualOutputs.set(name, sendFn);
+  }
+
+  unregisterVirtualOutput(name: string): void {
+    this.virtualOutputs.delete(name);
+  }
+
+  getVirtualOutputNames(): string[] {
+    return Array.from(this.virtualOutputs.keys());
+  }
+
+  /** Send raw bytes to a virtual output by name */
+  private sendToVirtualOutput(name: string, data: number[]): void {
+    const fn = this.virtualOutputs.get(name);
+    if (!fn) return;
+
+    // Log to monitor with proper type decoding
+    const { type: mType, channel: mCh, decoded: mDecoded } = decodeRaw(data);
+    this.monitor.append({
+      id: ++this._monitorSeq,
+      timestamp: Date.now(),
+      direction: 'out',
+      device: name,
+      channel: mCh,
+      type: mType,
+      data: Array.from(data),
+      decoded: `[${name}] ${mDecoded}`,
+    });
+
+    fn(data);
+    this.globalSentHashes.set(data.join(','), Date.now());
+  }
+
   // ── Public state flags ───────────────────────────────────────────────────
   isSmartLatchActive = false;
   isSequencerPlaying = false;
@@ -338,13 +375,18 @@ export class MidiService {
   }
 
   sendRawCC(portName: string, cc: number, value: number, channel = 0): void {
-    if (!this.midiAccess) return;
     const status = 0xB0 | (channel & 0xF);
-    this.midiAccess.outputs.forEach((out: any) => {
-      if (out.name === portName) {
-        try { out.send([status, cc & 0x7F, value & 0x7F]); } catch {}
-      }
-    });
+    const msg = [status, cc & 0x7F, value & 0x7F];
+    // Try real MIDI output
+    if (this.midiAccess) {
+      this.midiAccess.outputs.forEach((out: any) => {
+        if (out.name === portName) {
+          try { out.send(msg); } catch {}
+        }
+      });
+    }
+    // Try virtual output
+    this.sendToVirtualOutput(portName, msg);
   }
 
   allNotesOff(channel = 0): void {
@@ -354,18 +396,31 @@ export class MidiService {
   }
 
   panic(): void {
+    console.log('[MIDI] PANIC! Sending All Notes Off to all devices and channels.');
+    const panicMsg = (ch: number) => [0xb0 + ch, 123, 0];
+    const resetMsg = (ch: number) => [0xb0 + ch, 120, 0];
+    const sustainMsg = (ch: number) => [0xb0 + ch, 64, 0];
+
     if (this.midiAccess) {
-      console.log('[MIDI] PANIC! Sending All Notes Off to all devices and channels.');
       Array.from(this.midiAccess.outputs.values()).forEach((out: any) => {
         for (let ch = 0; ch < 16; ch++) {
           try {
-            out.send([0xb0 + ch, 123, 0]);
-            out.send([0xb0 + ch, 120, 0]);
-            out.send([0xb0 + ch, 64, 0]);
+            out.send(panicMsg(ch));
+            out.send(resetMsg(ch));
+            out.send(sustainMsg(ch));
           } catch {}
         }
       });
     }
+
+    // Also panic virtual outputs
+    this.virtualOutputs.forEach((_, virtName) => {
+      for (let ch = 0; ch < 16; ch++) {
+        this.sendToVirtualOutput(virtName, panicMsg(ch));
+        this.sendToVirtualOutput(virtName, resetMsg(ch));
+        this.sendToVirtualOutput(virtName, sustainMsg(ch));
+      }
+    });
   }
 
   sendRawToDevice(deviceId: string, data: number[]): void {
@@ -373,6 +428,18 @@ export class MidiService {
     if (out) {
       try { out.send(data); } catch {}
     }
+  }
+
+  sendRawToDeviceByName(deviceName: string, data: number[]): void {
+    // Try real MIDI output
+    if (this.midiAccess) {
+      const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === deviceName);
+      if (out) {
+        try { out.send(data); return; } catch {}
+      }
+    }
+    // Try virtual output
+    this.sendToVirtualOutput(deviceName, data);
   }
 
   cleanupDevice(deviceId: string): void {
@@ -407,6 +474,17 @@ export class MidiService {
             out.send([0xb0 + ch, 98, nrpnLsb]);
             out.send([0xb0 + ch, 6, value]);
           });
+
+          // Also send to virtual output with same name
+          const isVirtual = this.virtualOutputs.has(name);
+          const isMatrixMatch = targetsFromMatrix.has(name);
+          if (isVirtual && (this.router.getBroadcastMode() || isMatrixMatch)) {
+            let ch = statusCh;
+            if (config.outChannel !== -1) ch = config.outChannel % 16;
+            this.sendToVirtualOutput(name, [0xb0 + ch, 99, 0]);
+            this.sendToVirtualOutput(name, [0xb0 + ch, 98, nrpnLsb]);
+            this.sendToVirtualOutput(name, [0xb0 + ch, 6, value]);
+          }
         }
       });
     }
@@ -483,6 +561,7 @@ export class MidiService {
 
     // Collect target device IDs
     const targetDeviceIds = new Set<string>();
+    const virtualTargets = new Set<string>();
     const skipDeviceName = skipDeviceId ? this.midiAccess.inputs.get(skipDeviceId)?.name : null;
     const targetsFromMatrix = this.router.matrix.get(source) || new Set();
     const hasMappings = targetsFromMatrix.size > 0;
@@ -522,7 +601,15 @@ export class MidiService {
       if (shouldAdd) targetDeviceIds.add(outPort.id);
     });
 
-    // Send to all targets
+    // Also check virtual outputs against the routing matrix
+    this.virtualOutputs.forEach((_, virtName) => {
+      const isMatrixMatch = targetsFromMatrix.has(virtName) || normalizedMatrix.has(virtName.toLowerCase().trim());
+      const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && !hasMappings;
+      if (!isMatrixMatch && !isBroadcastTarget) return;
+      virtualTargets.add(virtName);
+    });
+
+    // Send to real MIDI outputs
     targetDeviceIds.forEach(id => {
       const out = this.midiAccess?.outputs.get(id);
       if (!out) return;
@@ -557,6 +644,47 @@ export class MidiService {
         const fullMsg = [status, ...bytes];
         this.globalSentHashes.set(fullMsg.join(','), Date.now());
         out.send(fullMsg);
+      }
+    });
+
+    // Send to virtual outputs
+    // Determine which virtual outputs match the same routing criteria
+    virtualTargets.forEach(virtName => {
+      const config = this.routingConfig?.registrations[virtName];
+      if (!config || !config.outEnabled) return;
+
+      let shouldAdd = true;
+      switch (type) {
+        case 'noteon': case 'noteoff': case 'allnotesoff': shouldAdd = config.notes; break;
+        case 'cc': shouldAdd = config.cc; break;
+        case 'pc': shouldAdd = config.pc; break;
+        case 'pitchbend': shouldAdd = true; break;
+        case 'clock': shouldAdd = config.clock; break;
+        case 'start': case 'stop': shouldAdd = config.transport; break;
+      }
+      if (!shouldAdd) return;
+
+      let targetChannel = channel;
+      if (config.outChannel !== -1) targetChannel = config.outChannel;
+
+      const statusCh = targetChannel % 16;
+      let status = 0;
+      let bytes: number[] = [];
+
+      switch (type) {
+        case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+        case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
+        case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
+        case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
+        case 'pitchbend': status = 0xe0 + statusCh; bytes = [data.lsb, data.msb]; break;
+        case 'allnotesoff': status = 0xb0 + statusCh; bytes = [123, 0]; break;
+        case 'clock': status = 0xF8; break;
+        case 'start': status = 0xFA; break;
+        case 'stop': status = 0xFC; break;
+      }
+
+      if (status > 0) {
+        this.sendToVirtualOutput(virtName, [status, ...bytes]);
       }
     });
   }
@@ -709,19 +837,33 @@ export class MidiService {
     velocity: number,
     channel: number,
   ): void {
-    if (!this.midiAccess) return;
     const now = Date.now();
-    this.midiAccess.outputs.forEach((out: any) => {
-      if (out.name !== deviceName) return;
-      const config = this.routingConfig?.registrations[out.name];
+
+    // Try real MIDI output
+    if (this.midiAccess) {
+      this.midiAccess.outputs.forEach((out: any) => {
+        if (out.name !== deviceName) return;
+        const config = this.routingConfig?.registrations[out.name];
+        let targetCh = channel;
+        if (config && !config.isMulti && config.outChannel !== -1) targetCh = config.outChannel;
+        const statusCh = targetCh % 16;
+        const status = (type === 'noteon' ? 0x90 : 0x80) + statusCh;
+        const msg = [status, note & 0x7f, velocity & 0x7f];
+        this.globalSentHashes.set(msg.join(','), now);
+        try { out.send(msg); } catch {}
+      });
+    }
+
+    // Try virtual output
+    if (this.virtualOutputs.has(deviceName)) {
+      const config = this.routingConfig?.registrations[deviceName];
       let targetCh = channel;
       if (config && !config.isMulti && config.outChannel !== -1) targetCh = config.outChannel;
       const statusCh = targetCh % 16;
       const status = (type === 'noteon' ? 0x90 : 0x80) + statusCh;
       const msg = [status, note & 0x7f, velocity & 0x7f];
-      this.globalSentHashes.set(msg.join(','), now);
-      try { out.send(msg); } catch {}
-    });
+      this.sendToVirtualOutput(deviceName, msg);
+    }
   }
 
   private sendNoteSplit(type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number): void {
