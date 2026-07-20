@@ -82,7 +82,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'midilogger', label: 'MIDI Logger', icon: GitCompareArrows, category: 'system', showOnLauncher: false },
   { id: 'admin', label: 'Admin Panel', icon: Settings, category: 'system', showOnLauncher: false },
   { id: 'about', label: 'About', icon: Info, category: 'system', showOnLauncher: false },
-  { id: 'module-manager', label: 'Module Manager', icon: LayoutGrid, category: 'system', showOnLauncher: false },
+  { id: 'module-manager', label: 'Module Manager', icon: LayoutGrid, category: 'system', showOnLauncher: false, locked: true },
 ]
 
 /** Groups the registry by category, preserving first-seen category order. */

@@ -3,6 +3,7 @@ import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { db, getDoc, setDoc, doc } from '@/lib/idb'
 import { DEFAULT_ROLES_CONFIG, type RolesConfig, type RoleConfig } from '@/lib/roles'
 import systemSeed from '@/data/system_config.json'
+import { moduleRegistry } from '@/core/modules/registry'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -274,6 +275,7 @@ export const useConfigStore = defineStore('config', () => {
    * rather than deleting the entry). See docs/plans/modular-panel-system.md.
    */
   function isModuleEnabled(id: string): boolean {
+    if (moduleRegistry.find(m => m.id === id)?.locked) return true
     const entry = toolbarConfig.value.find(b => b.id === id)
     return entry?.enabled ?? true
   }

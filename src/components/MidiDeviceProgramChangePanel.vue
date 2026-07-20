@@ -9,6 +9,7 @@ import { useUserBanksStore } from '@/stores/useUserBanksStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
+import { pickFxpBanksFolder, restoreFxpBanksFolder } from '@/composables/useFxpBankScanner'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -183,6 +184,43 @@ function deleteUserBank(bankName) {
   userBanksStore.removeBank(selectedDeviceName.value, bankName)
 }
 
+// ── FXP preset banks folder (virtual devices) ───────────────────
+const isFxpApiSupported = typeof window !== 'undefined' && !!window.showDirectoryPicker
+const isFxpScanning = ref(false)
+const fxpError       = ref('')
+
+async function openFxpBanksFolder() {
+  fxpError.value = ''
+  if (!isFxpApiSupported) {
+    fxpError.value = 'Folder browsing requires the File System Access API — available in Chrome, Edge, or Opera.'
+    return
+  }
+  isFxpScanning.value = true
+  try {
+    const dn = selectedDeviceName.value
+    const banks = await pickFxpBanksFolder(dn)
+    if (!banks) return   // user cancelled
+    userBanksStore.removeBanksBySource(dn, 'fxp')
+    for (const b of banks) {
+      userBanksStore.addBank(dn, b.bankName, b.presets, 'fxp')
+    }
+  } finally {
+    isFxpScanning.value = false
+  }
+}
+
+watch(selectedDeviceName, async (dn) => {
+  if (!dn || !isFxpApiSupported) return
+  if (!midiStore.virtualInstruments.some(v => v.name === dn)) return
+  const result = await restoreFxpBanksFolder(dn)
+  if (Array.isArray(result)) {
+    userBanksStore.removeBanksBySource(dn, 'fxp')
+    for (const b of result) {
+      userBanksStore.addBank(dn, b.bankName, b.presets, 'fxp')
+    }
+  }
+}, { immediate: true })
+
 const selectedBank = ref('')
 watch([catalogDevice, selectedDeviceName], () => {
   // restore last-used bank if available, else reset
@@ -196,11 +234,18 @@ watch([catalogDevice, selectedDeviceName], () => {
 })
 
 const bankConfig = computed(() => {
-  if (!catalogDevice.value || !selectedBank.value) return null
+  if (!selectedBank.value) return null
+  const userEntry = userBanksStore.getBanksForDevice(selectedDeviceName.value)
+    .find(b => b.name === selectedBank.value)
+  if (userEntry?.source === 'fxp') return {
+    msb: true, lsb: false, category_field: 'category',
+    program_field: 'program', program_base: 0,
+  }
   if (isUserBank(selectedBank.value)) return {
     msb: false, lsb: false, category_field: 'category',
     program_field: 'program', program_base: -1,
   }
+  if (!catalogDevice.value) return null
   return catalogIndex[catalogDevice.value][selectedBank.value]
 })
 
@@ -761,7 +806,7 @@ function assignToPad(setId, padIdx) {
               <Music2 class="w-5 h-5 text-violet-400" />
             </div>
             <div>
-              <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">MULTI SOUND</h2>
+              <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">MULTI SOUND A</h2>
               <p class="text-[9px] font-mono text-violet-500/60 uppercase tracking-widest">Per-Device Bank & Preset Browser</p>
             </div>
           </div>
@@ -1171,7 +1216,7 @@ function assignToPad(setId, padIdx) {
                 </div>
 
                 <!-- ── 4. Bank selector ── -->
-                <template v-if="catalogDevice || userBanks.length > 0">
+                <template v-if="catalogDevice || userBanks.length > 0 || midiStore.virtualInstruments.some(v => v.name === selectedDeviceName)">
                   <!-- Hidden file input for .mfprojz import -->
                   <input
                     ref="importInput"
@@ -1184,17 +1229,37 @@ function assignToPad(setId, padIdx) {
                   <div class="shrink-0 px-6 mt-4">
                     <div class="flex items-center justify-between mb-2">
                       <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Bank</label>
-                      <!-- Import button -->
-                      <button
-                        @click="triggerImport"
-                        :disabled="isImporting"
-                        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
-                        title="Import a .mfprojz bank from Arturia MIDI Control Center"
-                      >
-                        <Loader2 v-if="isImporting" class="w-2.5 h-2.5 animate-spin" />
-                        <Upload v-else class="w-2.5 h-2.5" />
-                        Import .mfprojz
-                      </button>
+                      <div class="flex items-center gap-1.5">
+                        <!-- FXP presets folder button (virtual devices only) -->
+                        <button
+                          v-if="midiStore.virtualInstruments.some(v => v.name === selectedDeviceName)"
+                          @click="openFxpBanksFolder"
+                          :disabled="isFxpScanning"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Open a folder of .fxp preset banks"
+                        >
+                          <Loader2 v-if="isFxpScanning" class="w-2.5 h-2.5 animate-spin" />
+                          <FolderOpen v-else class="w-2.5 h-2.5" />
+                          Open Presets Banks Folder
+                        </button>
+                        <!-- Import button -->
+                        <button
+                          @click="triggerImport"
+                          :disabled="isImporting"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Import a .mfprojz bank from Arturia MIDI Control Center"
+                        >
+                          <Loader2 v-if="isImporting" class="w-2.5 h-2.5 animate-spin" />
+                          <Upload v-else class="w-2.5 h-2.5" />
+                          Import .mfprojz
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- FXP scan error -->
+                    <div v-if="fxpError" class="mb-2 flex items-center gap-2 bg-red-950/40 border border-red-500/30 rounded-lg px-3 py-1.5">
+                      <AlertTriangle class="w-3 h-3 text-red-400 shrink-0" />
+                      <span class="text-[9px] font-mono text-red-400">{{ fxpError }}</span>
                     </div>
 
                     <!-- Import error -->
@@ -1285,13 +1350,13 @@ function assignToPad(setId, padIdx) {
                 <div ref="presetListEl" class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4" @wheel="onPresetListWheel">
 
                   <!-- Catalog: loading -->
-                  <div v-if="catalogDevice && selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
+                  <div v-if="selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
                     <Loader2 class="w-5 h-5 text-violet-400 animate-spin" />
                     <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Loading catalog…</span>
                   </div>
 
                   <!-- Catalog: preset list -->
-                  <template v-else-if="catalogDevice && selectedBank && filteredSounds.length > 0">
+                  <template v-else-if="selectedBank && filteredSounds.length > 0">
                     <div class="flex items-center justify-between mb-2 px-1">
                       <div class="flex items-center gap-2">
                         <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
@@ -1374,13 +1439,13 @@ function assignToPad(setId, padIdx) {
                   </template>
 
                   <!-- Catalog: empty results -->
-                  <div v-else-if="catalogDevice && selectedBank && !isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
+                  <div v-else-if="selectedBank && !isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
                     <Music2 class="w-6 h-6 text-neutral-700" />
                     <span class="text-[10px] font-mono text-neutral-600">No presets found</span>
                   </div>
 
-                  <!-- Manual fallback (no catalog match) -->
-                  <div v-else-if="!catalogDevice" class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
+                  <!-- Manual fallback (no catalog match, nothing selected) -->
+                  <div v-else-if="!catalogDevice && !selectedBank" class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
                     <p class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Manual Bank / Program Change</p>
                     <div class="grid grid-cols-2 gap-3">
                       <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">

@@ -36,4 +36,11 @@ export interface ModuleManifest {
   panelMode?: 'modal' | 'drawer' | 'singleton'
   /** Optional key into authStore.profile.features gating this module */
   featureFlag?: string
+  /**
+   * Always enabled and hidden from ModuleManagerPanel.vue's toggle grid.
+   * Reserved for meta-panels (e.g. Module Manager itself) whose only path
+   * back to being re-enabled IS opening them — disabling one would brick
+   * that recovery path with no way to undo it from the UI.
+   */
+  locked?: boolean
 }

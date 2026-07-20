@@ -15,12 +15,14 @@ const savingIds = ref(new Set())
 const errorId = ref(null)
 
 const groups = computed(() =>
-  modulesByCategory().map(({ category, items }) => ({
-    category,
-    title: CATEGORY_META[category]?.title || category,
-    icon: CATEGORY_META[category]?.icon,
-    items,
-  }))
+  modulesByCategory()
+    .map(({ category, items }) => ({
+      category,
+      title: CATEGORY_META[category]?.title || category,
+      icon: CATEGORY_META[category]?.icon,
+      items: items.filter(m => !m.locked),
+    }))
+    .filter(g => g.items.length > 0)
 )
 
 const enabledCount = computed(() =>
