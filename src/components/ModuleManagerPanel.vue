@@ -14,13 +14,18 @@ const configStore = useConfigStore()
 const savingIds = ref(new Set())
 const errorId = ref(null)
 
+// Module Manager can't list (and disable) itself — it's the only UI for
+// re-enabling a disabled module, so toggling it off here would permanently
+// lock it out (see useConfigStore.isModuleEnabled).
 const groups = computed(() =>
-  modulesByCategory().map(({ category, items }) => ({
-    category,
-    title: CATEGORY_META[category]?.title || category,
-    icon: CATEGORY_META[category]?.icon,
-    items,
-  }))
+  modulesByCategory()
+    .map(({ category, items }) => ({
+      category,
+      title: CATEGORY_META[category]?.title || category,
+      icon: CATEGORY_META[category]?.icon,
+      items: items.filter(m => m.id !== 'module-manager'),
+    }))
+    .filter(g => g.items.length > 0)
 )
 
 const enabledCount = computed(() =>
