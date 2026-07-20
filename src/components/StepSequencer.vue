@@ -979,7 +979,7 @@ onMounted(() => {
   }
   window.addEventListener('toggle-sequencer', handleToggle)
 
-  const isMidiDeviceAllowed = (chan, inputId) => {
+  const isMidiDeviceAllowed = (chan, inputId, note) => {
     if (!inputId) return true
 
     const inputDevice = midiService.getInputs().find(i => i.id === inputId)
@@ -1017,39 +1017,16 @@ onMounted(() => {
       }
     }
 
-    // 2. Performance Matrix matching (if not in broadcast mode)
+    // 2. MIDI FLOW device→app input routing (replaces the old output-matrix-
+    // overlap heuristic — see docs/plans/modular/MIDI-Flow-Control.md).
+    // Skipped in broadcast mode, matching the previous heuristic's bypass.
     if (!midiStore.broadcastMode) {
-      const seqTargets = midiStore.routingMatrix?.['SEQUENCER'] || []
-      
-      // Match by normalized name
-      const deviceTargets = Object.entries(midiStore.routingMatrix || {}).find(([key]) => {
-        const normKey = normalizeName(key)
-        return normKey === normDevice || normKey.includes(normDevice) || normDevice.includes(normKey)
-      })?.[1] || []
-
-      // Check if the input device itself is one of the sequencer targets
-      const isTargetSynth = seqTargets.some(sTarget => {
-        const normTarget = normalizeName(sTarget)
-        return normTarget === normDevice || normTarget.includes(normDevice) || normDevice.includes(normTarget)
-      })
-
-      if (isTargetSynth) {
+      if (!midiStore.isDeviceRoutedToApp(deviceName, MidiSource.SEQUENCER, note)) {
         if (window.SY_LOG) {
-          window.SY_LOG(`[Seq Ingress] Allowed ${deviceName} as it is the target synthesizer itself`)
+          window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (not routed to Sequencer in MIDI Flow)`)
         }
-        return true
+        return false
       }
-
-      // Case-insensitive trimmed target comparison
-      const hasCommonTarget = seqTargets.some(sTarget => 
-        deviceTargets.some(dTarget => sTarget.toLowerCase().trim() === dTarget.toLowerCase().trim())
-      )
-      
-      if (window.SY_LOG) {
-        window.SY_LOG(`[Seq Ingress] ${deviceName} (${normDevice}) -> seqTargets: [${seqTargets.join(', ')}], deviceTargets: [${deviceTargets.join(', ')}], hasCommonTarget: ${hasCommonTarget}`)
-      }
-
-      if (!hasCommonTarget) return false
     }
 
     return true
@@ -1061,7 +1038,7 @@ onMounted(() => {
     }
     // When the panel is closed: only handle auto-start and transposition for linked sequences
     if (!props.isOpen) {
-      if (hasSavedSeqConfig.value && !isRecording.value && isMidiDeviceAllowed(chan, inputId)) {
+      if (hasSavedSeqConfig.value && !isRecording.value && isMidiDeviceAllowed(chan, inputId, note)) {
         if (type === 'on' && velocity > 0) {
           if (!isPlaying.value && uiStore.seqAutoStart) {
             dynamicMidiTranspose.value = note - sequenceRootMidi.value
@@ -1075,7 +1052,7 @@ onMounted(() => {
     }
 
     // MIDI Performance routing matrix checks
-    if (!isMidiDeviceAllowed(chan, inputId)) {
+    if (!isMidiDeviceAllowed(chan, inputId, note)) {
       if (window.SY_LOG) {
         window.SY_LOG(`[Seq Ingress] Note blocked: isMidiDeviceAllowed returned false`)
       }

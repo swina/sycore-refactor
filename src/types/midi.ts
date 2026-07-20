@@ -69,6 +69,19 @@ export enum MidiSource {
   UI = 'UI',
   TRANSPORT = 'TRANSPORT',
   DRUM_MACHINE = 'DRUM_MACHINE',
+  SAMPLER = 'SAMPLER',
+}
+
+/** Optional note-range gate on a device→app input route (the "keyboard split" filter) */
+export interface InputRouteFilter {
+  lowNote?: number;   // 0-127; omitted/undefined = 0 (no lower bound)
+  highNote?: number;  // 0-127; omitted/undefined = 127 (no upper bound)
+}
+
+/** One app fed by a given input device, in MIDI FLOW's device→app routing */
+export interface InputRouteEntry {
+  app: string;   // a MidiSource value, e.g. MidiSource.SEQUENCER
+  filter?: InputRouteFilter;
 }
 
 /** Shape passed to CC listeners */

@@ -401,12 +401,14 @@ import { useFreesoundCache }     from '@/composables/useFreesoundCache'
 import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
 import * as engine               from '@/lib/sampler-engine'
 import { getCachedBuffer }        from '@/lib/sampler-engine'
-import { midiService }           from '@/core/midi/midi-service'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { useMidiStore }          from '@/stores/useMidiStore'
 import KnobDial                  from '@/components/ui/KnobDial.vue'
 
 const uiStore      = useUiStore()
 const samplerStore = useSamplerStore()
 const mappingStore = useMappingStore()
+const midiStore    = useMidiStore()
 const { openMenu } = useMidiContextMenu()
 const { cacheFileBlob, resolveUrl } = useFreesoundCache()
 
@@ -1277,6 +1279,11 @@ function _startMidiMappingListener() {
 }
 
 async function _onMidiNote(type, note, velocity, _chan, inputId) {
+  // MIDI FLOW device→app input routing — additive, above the per-pad
+  // filtering below (see docs/plans/modular/MIDI-Flow-Control.md).
+  const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+  if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.SAMPLER, note)) return
+
   const bank = samplerStore.activeBankData
   if (!bank) return
   for (let padIdx = 0; padIdx < 8; padIdx++) {

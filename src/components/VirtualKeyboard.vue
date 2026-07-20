@@ -193,8 +193,10 @@ let _unsubCC    = null
 let _unsubPitch = null
 
 onMounted(() => {
-  _unsubNote = midiService.addNoteListener((type, note, velocity, chan) => {
+  _unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
     if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
+    const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+    if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.KEYBOARD, note)) return
     if (type === 'on' && velocity > 0) {
       extActiveNotes.value = new Set(extActiveNotes.value).add(note)
     } else {

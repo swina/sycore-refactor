@@ -14,6 +14,8 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
 import * as drumEngine from '@/lib/drum-engine'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { useMidiStore } from '@/stores/useMidiStore'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
@@ -21,6 +23,7 @@ const mixer          = useAudioMixerStore()
 const mappingStore   = useMappingStore()
 const arpStore       = useArpStore()
 const syncStore      = useSyncStore()
+const midiStore      = useMidiStore()
 const { openMenu }   = useMidiContextMenu()
 const { cacheFileBlob, resolveUrl } = useFreesoundCache()
 const transportManager = useTransportManager()
@@ -564,6 +567,16 @@ async function _tlDmStartHandler(e) {
 }
 function _tlDmStopHandler() { drumStore.isPlaying = false }
 
+// MIDI FLOW device→app input routing: a device wired to Drum Machine in the
+// canvas starts playback on note-on (see docs/plans/modular/MIDI-Flow-Control.md).
+let _unsubMidiNote = null
+function _onMidiNoteIn(type, note, velocity, chan, inputId) {
+  if (type !== 'on' || velocity <= 0) return
+  const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+  if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.DRUM_MACHINE, note)) return
+  if (!drumStore.isPlaying) drumStore.isPlaying = true
+}
+
 // ── Timeline DM Rec Sync ─────────────────────────────────────────────────────
 function _tlDmRecSyncHandler(e) {
   const measures = e.detail?.measures ?? 4
@@ -606,6 +619,7 @@ onMounted(async () => {
   window.addEventListener('dm-pad-trigger',    _onPadTrigger)
 
   window.addEventListener('dm-bass-midi-note', _onBassMidiNote)
+  _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
 })
 
 const _onBassMidiNote = (e) => {
@@ -638,6 +652,7 @@ onUnmounted(() => {
   window.removeEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
   window.removeEventListener('dm-pad-trigger',    _onPadTrigger)
   window.removeEventListener('dm-bass-midi-note', _onBassMidiNote)
+  _unsubMidiNote?.()
 })
 
 // ── File / URL loading ─────────────────────────────────────────────────────────

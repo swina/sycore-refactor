@@ -353,6 +353,7 @@ onUnmounted(() => {
   previewTimeouts.forEach(id => clearTimeout(id))
   window.removeEventListener('cp-start', _onCpStart)
   window.removeEventListener('cp-stop', _onCpStop)
+  _unsubMidiNote?.()
 })
 
 // ── UI State ─────────────────────────────────────────────────────────────────
@@ -506,11 +507,22 @@ async function handleDeletePattern(id) {
 const _onCpStart = () => { store.isPlaying = true }
 const _onCpStop = () => { store.isPlaying = false }
 
+// MIDI FLOW device→app input routing: a device wired to Chord Sequencer in
+// the canvas starts playback on note-on (see docs/plans/modular/MIDI-Flow-Control.md).
+let _unsubMidiNote = null
+function _onMidiNoteIn(type, note, velocity, chan, inputId) {
+  if (type !== 'on' || velocity <= 0) return
+  const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+  if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.CHORD_PROG, note)) return
+  _onCpStart()
+}
+
 onMounted(() => {
   if (authStore.user) store.loadLibrary()
   loadPcSets()
   window.addEventListener('cp-start', _onCpStart)
   window.addEventListener('cp-stop', _onCpStop)
+  _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
 })
 
 // Auto-save current slot whenever steps/numSteps/playMode/arpRate change

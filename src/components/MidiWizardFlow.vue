@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Radio } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Radio, Disc3 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -98,13 +98,14 @@ const FLAGS = [
 ]
 
 const MIDI_APPS = [
-  { name: 'Step Sequencer',    sourceId: MidiSource.SEQUENCER,  icon: ListMusic },
-  { name: 'Chord Sequencer',   sourceId: MidiSource.CHORD_PROG, icon: Music2    },
-  { name: 'Virtual Keyboard',  sourceId: MidiSource.KEYBOARD,   icon: KeyboardIcon },
+  { name: 'Step Sequencer',    sourceId: MidiSource.SEQUENCER,  icon: ListMusic,    hasIn: true },
+  { name: 'Chord Sequencer',   sourceId: MidiSource.CHORD_PROG, icon: Music2,       hasIn: true },
+  { name: 'Virtual Keyboard',  sourceId: MidiSource.KEYBOARD,   icon: KeyboardIcon, hasIn: true },
   { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music     },
   { name: 'Transport / Clock', sourceId: MidiSource.TRANSPORT,  icon: Zap       },
   { name: 'UI / Preview',      sourceId: MidiSource.UI,         icon: Layers    },
-  { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum    },
+  { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum,   hasIn: true },
+  { name: 'Sampler',           sourceId: MidiSource.SAMPLER,    icon: Disc3,        hasIn: true },
 ]
 
 const appIconMap = Object.fromEntries(MIDI_APPS.map(a => [a.sourceId, a.icon]))
@@ -126,7 +127,7 @@ function onCanvasDrop(e) {
     name: device.name,
     sourceId: device.sourceId ?? null,   // null = hardware device
     type: device.sourceId ? null : (device.type ?? deviceType(device.name)),
-    hasIn:  device.sourceId ? false : device.hasIn,
+    hasIn:  device.hasIn,
     hasOut: true,
     x: Math.max(0, e.clientX - rect.left - NODE_W / 2),
     y: Math.max(0, e.clientY - rect.top - PORT_Y),
@@ -192,11 +193,12 @@ function onInPortMouseup(e, node) {
 function removeCable(id) { cables.value = cables.value.filter(c => c.id !== id) }
 
 function finish() {
-  // Group destinations by source so we can call setRouting once per source
+  // Group destinations by source, keeping the whole cable object (not just
+  // the target id) so the app-routing branch below can read cable.filter.
   const bySource = new Map()
   for (const cable of cables.value) {
     if (!bySource.has(cable.fromId)) bySource.set(cable.fromId, [])
-    bySource.get(cable.fromId).push(cable.toId)
+    bySource.get(cable.fromId).push(cable)
   }
 
   const outputPorts = midiService.getOutputs()
@@ -205,17 +207,19 @@ function finish() {
   // so a source that just lost its last cable gets its routing explicitly
   // cleared instead of left stale from a previous apply.
   for (const src of canvasNodes.value) {
-    const dstIds = bySource.get(src.id) ?? []
+    const dstCables = bySource.get(src.id) ?? []
+    const hwCables  = dstCables.filter(c => !canvasNodes.value.find(n => n.id === c.toId)?.sourceId)
+    const appCables = dstCables.filter(c =>  canvasNodes.value.find(n => n.id === c.toId)?.sourceId)
 
-    if (!src.sourceId && dstIds.length > 0) {
+    if (!src.sourceId && hwCables.length > 0) {
       midiStore.addRegistration(src.name)
       midiStore.updateRegistration(src.name, 'inEnabled', true)
       midiStore.updateRegistration(src.name, 'inChannel', src.inChannel)
     }
 
     const outputNames = []
-    for (const dstId of dstIds) {
-      const dst = canvasNodes.value.find(n => n.id === dstId)
+    for (const cable of hwCables) {
+      const dst = canvasNodes.value.find(n => n.id === cable.toId)
       if (!dst) continue
       // Resolve the canonical Web MIDI port name so the routing matrix
       // entry matches the exact name that Web MIDI reports at send time.
@@ -235,6 +239,18 @@ function finish() {
 
     // Wire the routing matrix: apps use MidiSource enum, hardware uses device name
     midiStore.setRouting(src.sourceId ?? src.name, outputNames)
+
+    // Device → app input routing (MIDI FLOW's MIDI IN to apps). Only a
+    // hardware device can be a real input-routing source — apps aren't
+    // registered input ports, so an app→app cable has no store
+    // representation and is silently ignored here.
+    if (!src.sourceId) {
+      const inputEntries = appCables.map(cable => {
+        const dst = canvasNodes.value.find(n => n.id === cable.toId)
+        return { app: dst.sourceId, filter: cable.filter }
+      })
+      midiStore.setInputRouting(src.name, inputEntries)
+    }
   }
 }
 
@@ -254,14 +270,23 @@ function onCanvasMousemove(e) {
 function onCanvasMouseup() { draggingNode.value = null; pendingCable.value = null }
 
 function initFromStore() {
-  const regs   = midiStore.routingConfig?.registrations ?? {}
-  const matrix = midiStore.routingMatrix ?? {}
-  if (!Object.keys(regs).length && !Object.values(matrix).some(v => v?.length)) return
+  const regs         = midiStore.routingConfig?.registrations ?? {}
+  const matrix       = midiStore.routingMatrix ?? {}
+  const inputRouting = midiStore.inputRouting ?? {}
+  const hasInputRouting = Object.values(inputRouting).some(v => v?.length)
+  if (!Object.keys(regs).length && !Object.values(matrix).some(v => v?.length) && !hasInputRouting) return
 
   const appNames   = new Set(MIDI_APPS.map(a => a.name))
   const nodeMap    = new Map()
   const sourceKeys = new Set(Object.keys(matrix).filter(k => matrix[k]?.length))
   const destNames  = new Set(Object.values(matrix).flat().filter(Boolean))
+
+  // Device→app input routing (MIDI FLOW's MIDI IN to apps): a device with
+  // input-routing entries is also a canvas "source" (it now originates a
+  // cable, even if it has no hardware-output cables); an app fed by any
+  // device becomes a valid node too, even with zero outgoing routing.
+  const inputSourceDeviceNames = new Set(Object.keys(inputRouting).filter(k => inputRouting[k]?.length))
+  const inputDestApps = new Set(Object.values(inputRouting).flat().map(e => e.app))
 
   const sourceNodes = []  // left column — things that send MIDI out
   const destNodes   = []  // right column — things that receive MIDI in
@@ -269,7 +294,7 @@ function initFromStore() {
   // Hardware device nodes — skip unconnected ones and any app names leaked in
   for (const reg of Object.values(regs)) {
     if (appNames.has(reg.name)) { midiStore.removeRegistration(reg.name); continue }
-    const isSource = sourceKeys.has(reg.name)
+    const isSource = sourceKeys.has(reg.name) || inputSourceDeviceNames.has(reg.name)
     const isDest   = destNames.has(reg.name)
     if (!isSource && !isDest) continue
 
@@ -288,18 +313,25 @@ function initFromStore() {
     else sourceNodes.push(node)
   }
 
-  // MIDI App nodes — only if they have active routing (always sources)
+  // MIDI App nodes — placed if they have active output routing (source) or
+  // are fed by a device's input routing (destination); an app with both
+  // stays a source, matching hardware's isDest-takes-priority convention above.
   for (const app of MIDI_APPS) {
-    if (!sourceKeys.has(app.sourceId)) continue
+    const isOutputSource = sourceKeys.has(app.sourceId)
+    const isInputDest    = inputDestApps.has(app.sourceId)
+    if (!isOutputSource && !isInputDest) continue
+
     const id = nextId++
     nodeMap.set(app.sourceId, id)
-    sourceNodes.push({
+    const node = {
       id, name: app.name, sourceId: app.sourceId,
-      hasIn: false, hasOut: true,
+      hasIn: app.hasIn ?? false, hasOut: true,
       x: 0, y: 0,
       inChannel: -1, outChannel: -1,
       sync: true, transport: true, notes: true, cc: true, pc: true,
-    })
+    }
+    if (isOutputSource) sourceNodes.push(node)
+    else destNodes.push(node)
   }
 
   // Layout: sources on left, destinations on right
@@ -314,7 +346,12 @@ function initFromStore() {
     leftY += node.sourceId ? APP_ROW_H : HW_ROW_H
     canvasNodes.value.push(node)
   })
-  destNodes.forEach((node, i) => { node.x = RIGHT_X; node.y = 20 + i * HW_ROW_H; canvasNodes.value.push(node) })
+  let rightY = 20
+  destNodes.forEach(node => {
+    node.x = RIGHT_X; node.y = rightY
+    rightY += node.sourceId ? APP_ROW_H : HW_ROW_H
+    canvasNodes.value.push(node)
+  })
 
   // Cables from routing matrix
   for (const [sourceKey, outputNames] of Object.entries(matrix)) {
@@ -323,6 +360,16 @@ function initFromStore() {
     for (const outName of (outputNames ?? [])) {
       const toId = nodeMap.get(outName)
       if (toId) cables.value.push({ id: nextId++, fromId, toId })
+    }
+  }
+
+  // Cables from device→app input routing
+  for (const [deviceName, entries] of Object.entries(inputRouting)) {
+    const fromId = nodeMap.get(deviceName)
+    if (!fromId) continue
+    for (const entry of (entries ?? [])) {
+      const toId = nodeMap.get(entry.app)
+      if (toId) cables.value.push({ id: nextId++, fromId, toId, filter: entry.filter })
     }
   }
 }
@@ -355,7 +402,7 @@ const routingSignature = computed(() => JSON.stringify([
     inChannel: n.inChannel, outChannel: n.outChannel,
     sync: n.sync, transport: n.transport, notes: n.notes, cc: n.cc, pc: n.pc,
   })),
-  cables.value.map(c => ({ fromId: c.fromId, toId: c.toId })),
+  cables.value.map(c => ({ fromId: c.fromId, toId: c.toId, filter: c.filter })),
 ]))
 
 watch(routingSignature, () => {
@@ -432,6 +479,40 @@ function cablePath(cable) {
 
 function isAppCable(cable) {
   return !!canvasNodes.value.find(n => n.id === cable.fromId)?.sourceId
+}
+
+// ── Note-range filter popover (device→app cables only — "keyboard split") ──
+function isDeviceToAppCable(cable) {
+  const from = canvasNodes.value.find(n => n.id === cable.fromId)
+  const to   = canvasNodes.value.find(n => n.id === cable.toId)
+  return !!(from && to && !from.sourceId && to.sourceId)
+}
+
+const editingCableId = ref(null)
+
+function onCableClick(cable) {
+  if (isDeviceToAppCable(cable)) {
+    if (!cable.filter) cable.filter = { lowNote: 0, highNote: 127 }
+    editingCableId.value = editingCableId.value === cable.id ? null : cable.id
+  } else {
+    removeCable(cable.id)
+  }
+}
+
+function cableMidpoint(cable) {
+  const from = canvasNodes.value.find(n => n.id === cable.fromId)
+  const to   = canvasNodes.value.find(n => n.id === cable.toId)
+  if (!from || !to) return { x: 0, y: 0 }
+  const p1 = outPos(from), p2 = inPos(to)
+  return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+}
+
+const editingCable = computed(() => cables.value.find(c => c.id === editingCableId.value) ?? null)
+const editingCablePos = computed(() => editingCable.value ? cableMidpoint(editingCable.value) : { x: 0, y: 0 })
+
+function removeEditingCable() {
+  if (editingCable.value) removeCable(editingCable.value.id)
+  editingCableId.value = null
 }
 
 function pendingPath() {
@@ -580,7 +661,7 @@ function pendingPath() {
             v-for="app in MIDI_APPS"
             :key="app.sourceId"
             draggable="true"
-            @dragstart="onSidebarDragStart($event, { name: app.name, sourceId: app.sourceId, hasIn: false, hasOut: true })"
+            @dragstart="onSidebarDragStart($event, { name: app.name, sourceId: app.sourceId, hasIn: app.hasIn ?? false, hasOut: true })"
             class="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:border-purple-500/50 hover:bg-purple-900/20 cursor-grab active:cursor-grabbing transition-colors"
           >
             <component :is="app.icon" class="w-3 h-3 text-purple-400 shrink-0" />
@@ -643,12 +724,15 @@ function pendingPath() {
                 :d="cablePath(cable)"
                 fill="none" stroke="transparent" stroke-width="14"
                 style="pointer-events:stroke; cursor:pointer;"
-                @click="removeCable(cable.id)"
+                @click="onCableClick(cable)"
               />
               <!-- visible cable -->
               <path
                 :d="cablePath(cable)"
-                fill="none" :stroke="isAppCable(cable) ? '#8b5cf6' : '#a3e635'" stroke-width="2" stroke-opacity="0.65"
+                fill="none"
+                :stroke="isDeviceToAppCable(cable) ? '#3b82f6' : (isAppCable(cable) ? '#8b5cf6' : '#a3e635')"
+                stroke-width="2" stroke-opacity="0.65"
+                :stroke-dasharray="isDeviceToAppCable(cable) && cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127) ? '5 3' : null"
                 style="pointer-events:none;"
               />
             </g>
@@ -660,6 +744,46 @@ function pendingPath() {
             />
           </svg>
 
+          <!-- Note-range filter popover (device→app cables — "keyboard split") -->
+          <template v-if="editingCable">
+            <div class="fixed inset-0 z-30" @click="editingCableId = null" />
+            <div
+              class="absolute z-40 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl p-2.5 flex flex-col gap-2"
+              :style="{ left: editingCablePos.x + 'px', top: editingCablePos.y + 'px', transform: 'translate(-50%, -50%)' }"
+              @mousedown.stop
+            >
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-[8px] font-mono text-neutral-500 uppercase tracking-widest">Note Range</span>
+                <button @click="editingCableId = null" class="text-neutral-600 hover:text-white transition-colors">
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+              <div class="flex items-end gap-2">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-[7px] font-bold uppercase tracking-widest text-neutral-500">Low</span>
+                  <input
+                    type="number" min="0" max="127" v-model.number="editingCable.filter.lowNote"
+                    class="w-14 bg-black border border-neutral-700 rounded px-1.5 py-1 text-[10px] text-white font-mono outline-none focus:border-synth-neon/60"
+                  />
+                </div>
+                <span class="text-neutral-700 pb-1.5">–</span>
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-[7px] font-bold uppercase tracking-widest text-neutral-500">High</span>
+                  <input
+                    type="number" min="0" max="127" v-model.number="editingCable.filter.highNote"
+                    class="w-14 bg-black border border-neutral-700 rounded px-1.5 py-1 text-[10px] text-white font-mono outline-none focus:border-synth-neon/60"
+                  />
+                </div>
+              </div>
+              <button
+                @click="removeEditingCable"
+                class="flex items-center justify-center gap-1 text-[8px] font-black uppercase tracking-wider text-red-400/80 hover:text-red-400 transition-colors pt-1.5 border-t border-neutral-800"
+              >
+                <X class="w-2.5 h-2.5" /> Remove Connection
+              </button>
+            </div>
+          </template>
+
           <!-- Nodes -->
           <div
             v-for="node in canvasNodes"
@@ -668,9 +792,9 @@ function pendingPath() {
             :style="{ left: node.x + 'px', top: node.y + 'px', width: NODE_W + 'px', zIndex: 2 }"
             @mousedown="onNodeMousedown($event, node)"
           >
-            <!-- IN port (hardware only) -->
+            <!-- IN port (hardware, or an app that supports MIDI IN) -->
             <svg
-              v-if="!node.sourceId"
+              v-if="!node.sourceId || node.hasIn"
               class="absolute"
               :style="{ left: '-9px', top: (PORT_Y - 8) + 'px', width: '18px', height: '18px', zIndex: 3, pointerEvents: 'all', cursor: 'crosshair' }"
               @mouseup.stop="onInPortMouseup($event, node)"

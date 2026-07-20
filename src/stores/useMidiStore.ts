@@ -14,7 +14,7 @@ import {
   type MidiConfigSnapshot,
   type SmartLatchConfig,
 } from '@/lib/midi-config-presets'
-import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, MidiSource as MidiSourceType } from '@/types/midi'
+import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, MidiSource as MidiSourceType, InputRouteEntry } from '@/types/midi'
 
 // ---------------------------------------------------------------------------
 // LocalStorage keys
@@ -149,6 +149,15 @@ export const useMidiStore = defineStore('midi', () => {
   } catch {}
   const routingMatrix = ref<Record<string, string[]>>(initialMatrix)
 
+  // Device → App input routing (MIDI FLOW's "MIDI IN to apps" feature).
+  // Keyed by input device name — the inverse direction of routingMatrix.
+  let initialInputRouting: Record<string, InputRouteEntry[]> = {}
+  try {
+    const rawInputRouting = localStorage.getItem(userKey('SYCORE_INPUT_ROUTING'))
+    if (rawInputRouting) initialInputRouting = JSON.parse(rawInputRouting)
+  } catch {}
+  const inputRouting = ref<Record<string, InputRouteEntry[]>>(initialInputRouting)
+
   // ── Virtual Instruments ──────────────────────────────────────────────────
   const VIRTUAL_INSTRUMENTS_KEY = 'S1_VIRTUAL_INSTRUMENTS'
 
@@ -223,6 +232,10 @@ export const useMidiStore = defineStore('midi', () => {
     if (!newVal || !newVal.registrations) return
     localStorage.setItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING'), JSON.stringify(newVal))
     midiService.setRoutingConfig(JSON.parse(JSON.stringify(newVal)))
+  }, { deep: true, immediate: true })
+
+  watch(inputRouting, (newVal) => {
+    localStorage.setItem(userKey('SYCORE_INPUT_ROUTING'), JSON.stringify(newVal))
   }, { deep: true, immediate: true })
 
   watch(midiChannel, (newVal) => {
@@ -396,6 +409,36 @@ export const useMidiStore = defineStore('midi', () => {
   function toggleRouting(source: string, outputName: string) {
     midiService.toggleRouting(source, outputName)
     routingMatrix.value[source] = midiService.getRouting(source)
+  }
+
+  function setInputRouting(deviceName: string, entries: InputRouteEntry[]) {
+    if (entries.length === 0) {
+      // Nothing to clear — skip the reactive write. finish() calls this
+      // unconditionally for every canvas node on every edit, so avoiding a
+      // no-op churn here matters.
+      if (!(deviceName in inputRouting.value)) return
+      const next = { ...inputRouting.value }
+      delete next[deviceName]
+      inputRouting.value = next
+    } else {
+      inputRouting.value[deviceName] = entries
+    }
+  }
+
+  // No explicit routing configured for a device yet = legacy "open to
+  // everything" default — preserves zero-config behavior for every app that
+  // already worked without MIDI FLOW, until the user wires at least one
+  // explicit cable for that specific device, at which point it becomes
+  // exclusive to what's wired.
+  function isDeviceRoutedToApp(deviceName: string, appSourceId: string, note?: number): boolean {
+    const entries = inputRouting.value[deviceName]
+    if (!entries || entries.length === 0) return true
+    const entry = entries.find(e => e.app === appSourceId)
+    if (!entry) return false
+    if (note == null || !entry.filter) return true
+    const lo = entry.filter.lowNote  ?? 0
+    const hi = entry.filter.highNote ?? 127
+    return note >= lo && note <= hi
   }
 
   function toggleBroadcastMode() {
@@ -651,6 +694,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiReady, outputs, inputs,
     midiChannel, midiInputChannel,
     isDeviceConnected, broadcastMode, routingMatrix,
+    inputRouting, setInputRouting, isDeviceRoutedToApp,
     init, refreshDevices,
     setMidiChannel, setMidiInputChannel,
     setRouting, toggleRouting, toggleBroadcastMode,
