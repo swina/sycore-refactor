@@ -209,7 +209,7 @@ onUnmounted(() => {
       <!-- ── Header ──────────────────────────────────────────────────────── -->
       <div
         class="flex items-center justify-between border-b border-neutral-800 px-3 py-2 bg-cyan-900/10 gap-2 flex-wrap cursor-move select-none shrink-0"
-        @mousedown.self="onDragStart"
+        @mousedown="onDragStart"
       >
         <div class="flex items-center gap-2">
           <MacOsButtons v-if="!props.embedded" @close="uiStore.isMidiMonitorOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
