@@ -53,6 +53,7 @@ import Tooltip from '@/components/Tooltip.vue'
 import AppMidiMapper from '@/components/AppMidiMapper.vue'
 import UserProfileModal from '@/components/UserProfileModal.vue'
 import AdminPanel from '@/components/AdminPanel.vue'
+import ModuleManagerPanel from '@/components/ModuleManagerPanel.vue'
 import SessionManager from '@/components/ui/SessionManager.vue'
 import AudioLooper from '@/components/AudioLooper.vue'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
@@ -494,6 +495,15 @@ onMounted(() => {
         <Transition name="sy-drawer">
           <AdminPanel v-if="uiStore.isAdminPanelOpen" :isOpen="uiStore.isAdminPanelOpen" @close="uiStore.isAdminPanelOpen = false" />
         </Transition>
+      </div>
+
+      <!-- Module Manager -->
+      <div :style="focusStyle('moduleManager')">
+        <ModuleManagerPanel
+          v-if="uiStore.isModuleManagerOpen"
+          :isOpen="uiStore.isModuleManagerOpen"
+          @close="uiStore.closePanel('module-manager')"
+        />
       </div>
 
       <!-- Help Slideshow -->

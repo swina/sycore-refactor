@@ -63,7 +63,8 @@ import {
   X,
   Captions,
   Drum,
-  FolderOpen
+  FolderOpen,
+  Monitor
 } from 'lucide-vue-next'
 
 export const lucideIcons = {
@@ -131,5 +132,6 @@ export const lucideIcons = {
   X,
   Captions,
   Drum,
-  FolderOpen
+  FolderOpen,
+  Monitor
 }

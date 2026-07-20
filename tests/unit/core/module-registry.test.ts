@@ -10,12 +10,18 @@ describe('moduleRegistry', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('every entry has a label, icon, category, and launcher background', () => {
+  it('every entry has a label, icon, and category', () => {
     for (const m of moduleRegistry) {
       expect(m.label, `${m.id} is missing a label`).toBeTruthy()
       expect(m.icon, `${m.id} is missing an icon`).toBeTruthy()
       expect(m.category, `${m.id} is missing a category`).toBeTruthy()
-      expect(m.bg, `${m.id} is missing a launcher background`).toBeTruthy()
+    }
+  })
+
+  it('every launcher-shown entry has a background image', () => {
+    for (const m of moduleRegistry) {
+      if (m.showOnLauncher === false) continue
+      expect(m.bg, `${m.id} shows on the launcher but is missing a background`).toBeTruthy()
     }
   })
 

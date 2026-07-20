@@ -1,15 +1,30 @@
 import {
-  Radio, GitBranch, Piano, Monitor, Zap, Disc3, Music, Layers, Cable, Package,
+  Radio, GitBranch, Piano, Monitor, Zap, Disc3, Music, Music2, Layers, Cable, Package,
   Mic, Search, FolderOpen, Clock, Drum, ListMusic, Infinity as InfinityIcon,
+  Cpu, Headphones, Play, LayoutGrid, KeyboardMusic, Activity, Network, Workflow,
+  Gamepad2, Heart, User, HelpCircle, Mail, BookOpen, GitCompareArrows, RotateCw,
+  Volume2, Save, Settings, Info,
 } from 'lucide-vue-next'
-import type { ModuleManifest } from './types'
+import type { ModuleManifest, ModuleCategory } from './types'
+
+/** Section title + icon per category — shared by MainPageOptimized.vue's launcher and ModuleManagerPanel.vue. */
+export const CATEGORY_META: Record<ModuleCategory, { title: string; icon: unknown }> = {
+  'midi-config': { title: 'MIDI Configuration', icon: Cpu },
+  'sound-design': { title: 'Sound Design', icon: Zap },
+  'midi-tools': { title: 'MIDI Tools', icon: Music },
+  'audio-tools': { title: 'Audio Tools', icon: Headphones },
+  performance: { title: 'Performance Tools', icon: Play },
+  system: { title: 'System', icon: Settings },
+}
 
 /**
- * The set of modules currently exposed on the MainPageOptimized.vue launcher.
- * This is the first slice of a wider module registry — most panels reachable
- * only from the in-workspace toolbar/footer/sidebar (see useUiStore.ts's
- * PANEL_ID_REF_LOOKUP) aren't listed here yet. See
- * docs/plans/modular-panel-system.md for the migration plan.
+ * The full set of toolbar-addressable modules — launcher tiles (18, most
+ * with showOnLauncher unset/true) plus toolbar/footer-only utilities (the
+ * rest, showOnLauncher: false). This is the single source of truth for
+ * AppFooter.vue/MainMenuDial.vue's main menu and ModuleManagerPanel.vue —
+ * see docs/plans/modular-panel-system.md. SideBar.vue's separate
+ * "settings" gear-menu still reads configStore.toolbarConfig's fab field
+ * directly and isn't driven by this registry (out of scope for now).
  */
 export const moduleRegistry: ModuleManifest[] = [
   // ── MIDI Configuration ──────────────────────────────────────────────────
@@ -39,6 +54,35 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'live-performance-pad', label: 'Live Set', icon: ListMusic, category: 'performance', bg: '/live-performance-2.png' },
   { id: 'loop-machine', label: 'Samples Machine', icon: InfinityIcon, category: 'performance', bg: '/loop-machine.png' },
   { id: 'tracks-player', label: 'Tracks Player', icon: Music, category: 'performance', bg: '/backing-tracks.jpg' },
+
+  // ── Toolbar/footer-only utilities (no launcher tile) ────────────────────
+  { id: 'types', label: 'Sound Types', icon: LayoutGrid, category: 'sound-design', showOnLauncher: false },
+  { id: 'history', label: 'Sounds History', icon: Layers, category: 'sound-design', showOnLauncher: false },
+  { id: 'keyboard', label: 'Virtual Keyboard', icon: KeyboardMusic, category: 'midi-tools', showOnLauncher: false },
+  { id: 'sequencer-modal', label: 'Step Sequencer Modal', icon: ListMusic, category: 'midi-tools', showOnLauncher: false },
+  { id: 'arp', label: 'Arpeggiator', icon: Activity, category: 'midi-tools', showOnLauncher: false },
+  { id: 'program-change', label: 'Program Change Browser', icon: Music2, category: 'midi-tools', showOnLauncher: false },
+  { id: 'visualizer', label: 'Audio Visualizer', icon: Activity, category: 'audio-tools', showOnLauncher: false },
+  { id: 'audio-mixer', label: 'Audio Mixer', icon: Volume2, category: 'audio-tools', showOnLauncher: false },
+  { id: 'midi-performance', label: 'MIDI Performance', icon: Network, category: 'midi-config', showOnLauncher: false },
+  { id: 'routing', label: 'MIDI Routing', icon: Cable, category: 'midi-config', showOnLauncher: false },
+  { id: 'midilearn', label: 'MIDI Mapping', icon: Workflow, category: 'midi-config', showOnLauncher: false },
+  { id: 'midiactions', label: 'MIDI Actions', icon: Gamepad2, category: 'midi-config', showOnLauncher: false },
+  { id: 'midi_matrix', label: 'MIDI Matrix', icon: Network, category: 'midi-config', showOnLauncher: false },
+  { id: 'midi-manager', label: 'MIDI Manager', icon: Cpu, category: 'midi-config', showOnLauncher: false },
+  { id: 'liveset', label: 'Live Set (Legacy)', icon: Zap, category: 'performance', showOnLauncher: false },
+  { id: 'looper', label: 'Audio Looper', icon: RotateCw, category: 'performance', showOnLauncher: false },
+  { id: 'session', label: 'Session', icon: Save, category: 'system', showOnLauncher: false },
+  { id: 'favorites', label: 'Favorites', icon: Heart, category: 'system', showOnLauncher: false },
+  { id: 'profile', label: 'User Profile', icon: User, category: 'system', showOnLauncher: false },
+  { id: 'help', label: 'Help', icon: HelpCircle, category: 'system', showOnLauncher: false },
+  { id: 'support', label: 'Support', icon: Mail, category: 'system', showOnLauncher: false },
+  { id: 'guides', label: 'Guides', icon: BookOpen, category: 'system', showOnLauncher: false },
+  { id: 'portal', label: 'Portal', icon: BookOpen, category: 'system', showOnLauncher: false },
+  { id: 'midilogger', label: 'MIDI Logger', icon: GitCompareArrows, category: 'system', showOnLauncher: false },
+  { id: 'admin', label: 'Admin Panel', icon: Settings, category: 'system', showOnLauncher: false },
+  { id: 'about', label: 'About', icon: Info, category: 'system', showOnLauncher: false },
+  { id: 'module-manager', label: 'Module Manager', icon: LayoutGrid, category: 'system', showOnLauncher: false },
 ]
 
 /** Groups the registry by category, preserving first-seen category order. */

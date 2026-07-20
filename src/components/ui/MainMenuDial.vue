@@ -5,6 +5,7 @@ const { Menu, X } = lucideIcons
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { moduleRegistry } from '@/core/modules/registry'
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()
@@ -16,17 +17,20 @@ const COLORS = [
   'text-rose-400', 'text-cyan-400', 'text-purple-400', 'text-amber-400'
 ]
 
+// Driven entirely by moduleRegistry + ModuleManagerPanel's enabled state,
+// same source as AppFooter.vue's menuActions — keeps the dial and footer
+// menus identical. See docs/plans/modular-panel-system.md.
 const filteredActions = computed(() => {
   if (!uiStore.isMainMenuOpen) return []
 
-  const configButtons = (configStore.toolbarConfig || [])
-    .filter(b => b.enabled !== false && (b.fab === 'main' || !b.fab))
+  const enabledModules = moduleRegistry.filter(m => configStore.isModuleEnabled(m.id))
 
-  return configButtons.map((b, idx) => ({
-    ...b,
-    iconComponent: lucideIcons[b.icon] || lucideIcons.HelpCircle,
+  return enabledModules.map((m, idx) => ({
+    id: m.id,
+    label: m.label,
+    iconComponent: m.icon,
     color: COLORS[idx % COLORS.length],
-    onClick: () => uiStore.togglePanel(b.id)
+    onClick: () => uiStore.togglePanel(m.id)
   })).reverse()
 })
 

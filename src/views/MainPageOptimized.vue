@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -8,14 +8,14 @@ import { useUiStore } from '@/stores/useUiStore'
 import { defineAsyncComponent } from 'vue'
 import {
   Radio, Info, CircleQuestionMark,
-  LogIn, Settings, User, Globe,
-  Cpu, Zap, Music, Headphones, Play,
+  LogIn, Settings, User, Globe, LayoutGrid,
 } from 'lucide-vue-next'
-import { modulesByCategory } from '@/core/modules/registry'
+import { modulesByCategory, CATEGORY_META } from '@/core/modules/registry'
 
 const SlideshowModal = defineAsyncComponent(() => import('@/components/SlideshowModal.vue'))
 const AboutModal = defineAsyncComponent(() => import('@/components/AboutModal.vue'))
 const AdminPanel = defineAsyncComponent(() => import('@/components/AdminPanel.vue'))
+const ModuleManagerPanel = defineAsyncComponent(() => import('@/components/ModuleManagerPanel.vue'))
 
 const router = useRouter()
 const configStore = useConfigStore()
@@ -48,25 +48,27 @@ function goWorkspace() {
 // launcher module metadata (label/icon/background/category). See
 // docs/plans/modular-panel-system.md.
 
-const CATEGORY_LABELS = {
-  'midi-config': { title: 'MIDI Configuration', icon: Cpu },
-  'sound-design': { title: 'Sound Design', icon: Zap },
-  'midi-tools': { title: 'MIDI Tools', icon: Music },
-  'audio-tools': { title: 'Audio Tools', icon: Headphones },
-  performance: { title: 'Performance Tools', icon: Play },
-}
-
-const sections = modulesByCategory().map(({ category, items }) => ({
-  title: CATEGORY_LABELS[category]?.title || category,
-  icon: CATEGORY_LABELS[category]?.icon,
-  items: items.map(m => ({
-    label: m.label,
-    icon: m.icon,
-    badge: m.badge,
-    bg: m.bg,
-    onClick: () => { uiStore.openPanel(m.id); goWorkspace() },
-  })),
-}))
+// computed (not a plain const) so it re-filters once configStore.init()
+// resolves (async, may finish after this page has already rendered) and any
+// time an admin changes a module's enabled state via AdminPanel's Toolbar
+// Settings section.
+const sections = computed(() =>
+  modulesByCategory()
+    .map(({ category, items }) => ({
+      title: CATEGORY_META[category]?.title || category,
+      icon: CATEGORY_META[category]?.icon,
+      items: items
+        .filter(m => m.showOnLauncher !== false && configStore.isModuleEnabled(m.id))
+        .map(m => ({
+          label: m.label,
+          icon: m.icon,
+          badge: m.badge,
+          bg: m.bg,
+          onClick: () => { uiStore.openPanel(m.id); goWorkspace() },
+        })),
+    }))
+    .filter(section => section.items.length > 0)
+)
 </script>
 
 <template>
@@ -237,6 +239,21 @@ const sections = modulesByCategory().map(({ category, items }) => ({
           </div>
         </button>
 
+        <!-- Module Manager (conditional) -->
+        <button
+          v-if="authStore.isAdmin"
+          @click="uiStore.openPanel('module-manager')"
+          class="rounded-xl border border-neutral-800/80 bg-neutral-900/40 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-synth-neon/30 transition-colors text-left"
+        >
+          <div class="px-3 py-2 flex items-center gap-2 border-b border-neutral-800/50">
+            <LayoutGrid class="w-3 h-3 text-synth-neon" />
+            <span class="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 font-mono">Modules</span>
+          </div>
+          <div class="p-3">
+            <span class="text-[10px] font-bold text-synth-neon uppercase tracking-widest font-mono">Manager</span>
+          </div>
+        </button>
+
       </div>
     </div>
 
@@ -244,5 +261,6 @@ const sections = modulesByCategory().map(({ category, items }) => ({
     <SlideshowModal :isOpen="isHelpSlideshowOpen" source="help" @close="isHelpSlideshowOpen = false" />
     <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
     <AdminPanel :isOpen="isAdminPanelOpen" @close="isAdminPanelOpen = false" />
+    <ModuleManagerPanel :isOpen="uiStore.isModuleManagerOpen" @close="uiStore.closePanel('module-manager')" />
   </div>
 </template>

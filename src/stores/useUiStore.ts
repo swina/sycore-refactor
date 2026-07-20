@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { useAuthStore } from './useAuthStore'
+import { useConfigStore } from './useConfigStore'
 import { userKey } from '@/lib/userKey'
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ export interface PanelVisibility {
   isProfileOpen: boolean
   isAuthModalOpen: boolean
   isAdminPanelOpen: boolean
+  isModuleManagerOpen: boolean
   isHelpOpen: boolean
   isManualOpen: boolean
   isSupportOpen: boolean
@@ -103,6 +105,7 @@ export const useUiStore = defineStore('ui', () => {
   const isProfileOpen      = ref(false)
   const isAuthModalOpen    = ref(false)
   const isAdminPanelOpen   = ref(false)
+  const isModuleManagerOpen = ref(false)
   const isHelpOpen         = ref(false)
   const isManualOpen       = ref(false)
   const isSupportOpen      = ref(false)
@@ -167,6 +170,7 @@ export const useUiStore = defineStore('ui', () => {
   const isPlayingBacking   = ref(false)
   const isSequencerPlaying = ref(false)
   const authStore = useAuthStore()
+  const configStore = useConfigStore()
   const uid: ComputedRef<string | undefined> = computed(() => authStore.user?.uid)
 
   const seqAutoStart: Ref<boolean> = ref(localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false')
@@ -207,6 +211,7 @@ export const useUiStore = defineStore('ui', () => {
     visualizer:          () => isVisualizerOpen.value,
     profile:             () => isProfileOpen.value,
     adminPanel:          () => isAdminPanelOpen.value,
+    moduleManager:       () => isModuleManagerOpen.value,
     about:               () => isAboutOpen.value,
     helpSlideshow:       () => isHelpSlideshowOpen.value,
     velocityMap:         () => isVelocityMapOpen.value,
@@ -258,6 +263,7 @@ export const useUiStore = defineStore('ui', () => {
     visualizer:          isVisualizerOpen,
     profile:             isProfileOpen,
     adminPanel:          isAdminPanelOpen,
+    moduleManager:       isModuleManagerOpen,
     about:               isAboutOpen,
     helpSlideshow:       isHelpSlideshowOpen,
     velocityMap:         isVelocityMapOpen,
@@ -309,6 +315,7 @@ export const useUiStore = defineStore('ui', () => {
     isProfileOpen.value      = false
     isAuthModalOpen.value    = false
     isAdminPanelOpen.value   = false
+    isModuleManagerOpen.value = false
     isHelpOpen.value         = false
     isManualOpen.value       = false
     isSupportOpen.value      = false
@@ -389,6 +396,7 @@ export const useUiStore = defineStore('ui', () => {
     looper: isLooperOpen,
     'audio-looper': isLooperOpen,
     admin: isAdminPanelOpen,
+    'module-manager': isModuleManagerOpen,
     midi_matrix: isMidiMatrixOpen,
     'midi-performance': isMidiPerformanceOpen,
     'midi-manager': showUnifiedMidiManager,
@@ -416,14 +424,29 @@ export const useUiStore = defineStore('ui', () => {
   function isPanelOpen(id: string): boolean {
     return PANEL_ID_REF_LOOKUP[id]?.value ?? false
   }
+  // Closing is always allowed (even a since-disabled module can be closed);
+  // opening is gated on configStore.isModuleEnabled — this is the defense-in-
+  // depth backstop so a disabled module can't be opened via a MIDI action
+  // mapping, keyboard shortcut, or stale deep link that bypasses the UI
+  // (launcher/toolbar) which already filters disabled modules out visually.
   function togglePanel(id: string): void {
     const ref = PANEL_ID_REF_LOOKUP[id]
-    if (ref) ref.value = !ref.value
-    else console.warn(`[useUiStore] togglePanel: unknown panel id "${id}"`)
+    if (!ref) { console.warn(`[useUiStore] togglePanel: unknown panel id "${id}"`); return }
+    const next = !ref.value
+    if (next && !configStore.isModuleEnabled(id)) {
+      console.warn(`[useUiStore] togglePanel: "${id}" is disabled`)
+      return
+    }
+    ref.value = next
   }
   function openPanel(id: string): void {
     const ref = PANEL_ID_REF_LOOKUP[id]
-    if (ref) ref.value = true
+    if (!ref) return
+    if (!configStore.isModuleEnabled(id)) {
+      console.warn(`[useUiStore] openPanel: "${id}" is disabled`)
+      return
+    }
+    ref.value = true
   }
   function closePanel(id: string): void {
     const ref = PANEL_ID_REF_LOOKUP[id]
@@ -477,7 +500,7 @@ export const useUiStore = defineStore('ui', () => {
     isAppInitializing,
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen, isSequencerModalOpen,
     isArpOpen, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
-    isAuthModalOpen, isAdminPanelOpen, isHelpOpen, isManualOpen,
+    isAuthModalOpen, isAdminPanelOpen, isModuleManagerOpen, isHelpOpen, isManualOpen,
     isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,
     isBackingTrackOpen, isTracksPlayerOpen, isLiveSetOpen, isAppMidiMapperOpen,
     isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,

@@ -266,6 +266,50 @@ export const useConfigStore = defineStore('config', () => {
     await setDoc(doc(db, 'system', 'sound_type_bg'), { ...bg, updatedAt: new Date().toISOString() })
   }
 
+  /**
+   * Whether a module/toolbar-button id is enabled per the admin-configured
+   * toolbarConfig (see AdminPanel.vue's "Toolbar Settings" section). Missing
+   * ids default to enabled — an id only becomes disabled once an admin
+   * explicitly removes it via the toolbar picker (which sets enabled:false
+   * rather than deleting the entry). See docs/plans/modular-panel-system.md.
+   */
+  function isModuleEnabled(id: string): boolean {
+    const entry = toolbarConfig.value.find(b => b.id === id)
+    return entry?.enabled ?? true
+  }
+
+  /**
+   * Sets a module's enabled state and persists it immediately (unlike
+   * AdminPanel.vue's "Toolbar Settings" section, which stages edits to a
+   * local copy until "Sync Configuration" is clicked). Used by
+   * ModuleManagerPanel.vue, where each toggle is a standalone action.
+   * Writes to the same app_settings.toolbar doc, so both admin surfaces
+   * share one persisted source of truth.
+   *
+   * Enabling always sets fab:'main' too, so the module is guaranteed to
+   * show up in AppFooter/MainMenuDial's main menu without a separate trip
+   * to AdminPanel's Toolbar Settings to fix its FAB placement — this
+   * matters for modules that were previously seeded with fab:'settings'
+   * (e.g. device-program-change, sampler, live-performance-pad in
+   * useConfigStore.init()'s migrations), which would otherwise only ever
+   * appear in SideBar's gear menu even once "enabled".
+   */
+  async function setModuleEnabled(id: string, enabled: boolean, meta?: { label?: string; icon?: string }): Promise<void> {
+    const entry = toolbarConfig.value.find(b => b.id === id)
+    if (entry) {
+      entry.enabled = enabled
+      if (enabled) entry.fab = 'main'
+    } else {
+      toolbarConfig.value.push({
+        id, enabled,
+        label: meta?.label || id,
+        icon: meta?.icon || 'HelpCircle',
+        fab: enabled ? 'main' : undefined,
+      })
+    }
+    await saveAppSettings()
+  }
+
   async function saveAppSettings(): Promise<void> {
     await setDoc(doc(db, 'system', 'app_settings'), {
       appVersion: appVersion.value,
@@ -289,5 +333,6 @@ export const useConfigStore = defineStore('config', () => {
     init,
     saveRolesConfig, saveMidiConfig,
     saveSoundTypes, saveSoundTypeBg, saveAppSettings,
+    isModuleEnabled, setModuleEnabled,
   }
 })

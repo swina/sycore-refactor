@@ -7,6 +7,7 @@ import {
 import { lucideIcons } from '@/lib/lucide-icons'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { usePushNotifications } from '@/composables/usePushNotifications'
 import { db, doc, setDoc, getDoc, serverTimestamp } from '@/lib/idb'
 
@@ -14,6 +15,7 @@ const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
 
 const configStore = useConfigStore()
+const uiStore     = useUiStore()
 const authStore   = useAuthStore()
 
 const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail.com')
@@ -82,7 +84,7 @@ const ALL_AVAILABLE_ICONS = [
   'Activity','Sliders','Menu','MoreVertical','Plus','Minus','ChevronDown','ChevronUp',
   'Clock','Music','Volume2','Pause','Play','Square','Circle','Triangle',
   'Eye','EyeOff','Lock','Unlock','Trash2','Save','Download','Upload','Search','Filter',
-  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','GitCompareArrows','Grid3x3','RotateCw','RotateCcw','Network','ListTree','Music2','Drum',
+  'Database','Palette','Disc3','Radio','BarChart3','ListFilter','Mic','GitCompareArrows','Grid3x3','RotateCw','RotateCcw','Network','ListTree','Music2','Drum','Monitor',
 ]
 const AVAILABLE_ICONS = ALL_AVAILABLE_ICONS.sort()
 
@@ -131,6 +133,7 @@ const KNOWN_TOOLBAR_FUNCTIONS = [
   { id: 'midi-flow',            label: 'MIDI Flow',             icon: 'Network'    },
   { id: 'controller-designer',  label: 'Controller Designer',   icon: 'Cpu'        },
   { id: 'midi-devices',         label: 'MIDI Devices',          icon: 'Cpu'        },
+  { id: 'midi-monitor',         label: 'MIDI Monitor',          icon: 'Monitor'    },
 ]
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -463,6 +466,9 @@ watch(openSections, (sections) => {
           </div>
         </div>
         <div class="flex items-center gap-2">
+          <button @click="uiStore.openPanel('module-manager')" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-synth-neon/10 border border-synth-neon/20 text-synth-neon hover:bg-synth-neon/20 transition-colors text-xs font-bold tracking-widest uppercase">
+            <LayoutGrid class="w-4 h-4" /> Modules
+          </button>
           <button @click="handleExportConfig" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-colors text-xs font-bold tracking-widest uppercase">
             <Download class="w-4 h-4" /> Export
           </button>

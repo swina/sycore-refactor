@@ -8,7 +8,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X } from 'lucide-vue-next'
-import { lucideIcons } from '@/lib/lucide-icons'
+import { moduleRegistry } from '@/core/modules/registry'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
 import TransportBar from '@/components/TransportBar.vue'
@@ -34,14 +34,20 @@ const MENU_COLORS = [
   'text-rose-400', 'text-cyan-400', 'text-purple-400', 'text-amber-400'
 ]
 
+// Driven entirely by moduleRegistry + ModuleManagerPanel's enabled state —
+// no longer requires an admin to separately "add" each button via
+// AdminPanel's Toolbar Settings picker, and uses each module's own icon
+// component directly (no lucideIcons[string] lookup), so the icon here
+// always matches what Module Manager shows. See
+// docs/plans/modular-panel-system.md.
 const menuActions = computed(() => {
-  const configButtons = (configStore.toolbarConfig || [])
-    .filter(b => b.enabled !== false && (b.fab === 'main' || !b.fab))
-  return configButtons.map((b, idx) => ({
-    ...b,
-    iconComponent: lucideIcons[b.icon] || lucideIcons.HelpCircle,
+  const enabledModules = moduleRegistry.filter(m => configStore.isModuleEnabled(m.id))
+  return enabledModules.map((m, idx) => ({
+    id: m.id,
+    label: m.label,
+    iconComponent: m.icon,
     color: MENU_COLORS[idx % MENU_COLORS.length],
-    onClick: () => uiStore.togglePanel(b.id)
+    onClick: () => uiStore.togglePanel(m.id)
   }))
 })
 
