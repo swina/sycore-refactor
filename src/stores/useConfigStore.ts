@@ -274,6 +274,11 @@ export const useConfigStore = defineStore('config', () => {
    * rather than deleting the entry). See docs/plans/modular-panel-system.md.
    */
   function isModuleEnabled(id: string): boolean {
+    // Module Manager is the only UI for re-enabling a disabled module, so it
+    // must never be disableable itself — otherwise toggling it off from
+    // within its own panel permanently locks it (and every other module)
+    // out, since openPanel()/togglePanel() gate on this function.
+    if (id === 'module-manager') return true
     const entry = toolbarConfig.value.find(b => b.id === id)
     return entry?.enabled ?? true
   }

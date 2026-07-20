@@ -1,15 +1,17 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2 } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const midiStore  = useMidiStore()
 const uiStore    = useUiStore()
+const midiFlowConfigsStore = useMidiFlowConfigsStore()
 const activeTab  = ref('routing')  // 'routing' | 'sync'
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
@@ -279,6 +281,36 @@ function reloadConfig() {
   initFromStore()
 }
 
+// ── Named saved canvas configurations ──
+const showConfigsMenu = ref(false)
+const newConfigName   = ref('')
+
+function saveCurrentConfig() {
+  const name = newConfigName.value.trim()
+  if (!name) return
+  midiFlowConfigsStore.saveConfig(
+    name,
+    JSON.parse(JSON.stringify(canvasNodes.value)),
+    JSON.parse(JSON.stringify(cables.value)),
+  )
+  newConfigName.value = ''
+}
+
+function loadConfig(name) {
+  const entry = midiFlowConfigsStore.getConfig(name)
+  if (!entry) return
+  canvasNodes.value = JSON.parse(JSON.stringify(entry.nodes))
+  cables.value      = JSON.parse(JSON.stringify(entry.cables))
+  const maxId = Math.max(0, ...canvasNodes.value.map(n => n.id), ...cables.value.map(c => c.id))
+  nextId = maxId + 1
+  showConfigsMenu.value = false
+}
+
+function deleteConfigEntry(e, name) {
+  e.stopPropagation()
+  midiFlowConfigsStore.deleteConfig(name)
+}
+
 onMounted(() => {
   window.addEventListener('mouseup', onCanvasMouseup)
   if (!canvasNodes.value.length) initFromStore()
@@ -346,6 +378,66 @@ function pendingPath() {
           Drag devices → canvas &nbsp;·&nbsp; OUT● → ●IN to connect &nbsp;·&nbsp; click cable to remove
         </span>
         <span class="flex-1" v-else />
+
+        <!-- Saved canvas configurations -->
+        <div v-if="activeTab === 'routing'" class="relative shrink-0" @mousedown.stop>
+          <button
+            @click="showConfigsMenu = !showConfigsMenu"
+            :class="showConfigsMenu ? 'text-synth-neon' : 'text-neutral-400 hover:text-synth-neon'"
+            class="flex items-center gap-1 p-1 transition-colors"
+            title="Saved configurations"
+          >
+            <FolderOpen class="w-4 h-4" />
+            <ChevronDown class="w-3 h-3" />
+          </button>
+
+          <div v-if="showConfigsMenu">
+            <div class="fixed inset-0 z-40" @click="showConfigsMenu = false" />
+            <div class="absolute top-full right-0 mt-2 w-64 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl z-50 overflow-hidden">
+              <div class="p-2.5 border-b border-neutral-800 flex items-center gap-1.5">
+                <input
+                  v-model="newConfigName"
+                  type="text"
+                  placeholder="Config name…"
+                  @keydown.enter="saveCurrentConfig"
+                  class="flex-1 min-w-0 bg-black border border-neutral-700 rounded px-2 py-1 text-[10px] text-white font-mono outline-none focus:border-synth-neon/60 placeholder:text-neutral-700"
+                />
+                <button
+                  @click="saveCurrentConfig"
+                  :disabled="!newConfigName.trim()"
+                  title="Save current canvas as a new configuration"
+                  class="shrink-0 flex items-center gap-1 px-2 py-1 rounded bg-synth-neon/10 border border-synth-neon/30 text-synth-neon text-[9px] font-black uppercase tracking-wider hover:bg-synth-neon/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Save class="w-2.5 h-2.5" /> Save
+                </button>
+              </div>
+              <div class="max-h-64 overflow-y-auto custom-scrollbar">
+                <div v-if="!midiFlowConfigsStore.configs.length" class="px-3 py-4 text-center text-[9px] font-mono text-neutral-700 uppercase tracking-widest">
+                  No saved configurations
+                </div>
+                <button
+                  v-for="cfg in midiFlowConfigsStore.configs"
+                  :key="cfg.name"
+                  @click="loadConfig(cfg.name)"
+                  class="group w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-neutral-800/60 transition-colors"
+                >
+                  <span class="min-w-0">
+                    <span class="block text-[10px] font-bold text-white truncate">{{ cfg.name }}</span>
+                    <span class="block text-[8px] font-mono text-neutral-600">{{ cfg.nodes.length }} nodes · {{ cfg.cables.length }} cables</span>
+                  </span>
+                  <span
+                    @click="deleteConfigEntry($event, cfg.name)"
+                    class="shrink-0 opacity-0 group-hover:opacity-100 text-neutral-600 hover:text-red-400 transition-all"
+                    title="Delete this configuration"
+                  >
+                    <Trash2 class="w-3 h-3" />
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <button v-if="activeTab === 'routing'" @click="reloadConfig" title="Reload config" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors shrink-0">
           <RefreshCw class="w-4 h-4" />
         </button>
