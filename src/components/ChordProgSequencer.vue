@@ -70,6 +70,7 @@ let _transportTicks = 0          // our own tick counter (384n resolution, reset
 let _captureArmed = false         // set true on play, consumed by next schedule tick
 let _captureBarsRemaining = 0     // tick counter until auto-stop
 let _captureRecording = false     // set true after pre-roll fires, cleared on stop
+let _lastFollowedSlot = null      // last slot auto-loaded to follow chain playback; null forces a follow on the next tick
 
 const seqTranspose = ref(0)
 const loopEnabled = ref(true)
@@ -88,11 +89,15 @@ function buildPlayState() {
   let numSteps = store.numSteps
   let playMode = store.playMode
   let arpRate = store.arpRate
+  let chainSlotIndices = null
+  let chainLocalIndices = null
 
   if (store.chainEnabled && store.chain.some(i => i >= 0)) {
     const chainSteps = store.getChainSteps()
     steps = chainSteps.steps
     numSteps = chainSteps.numSteps
+    chainSlotIndices = chainSteps.slotIndices
+    chainLocalIndices = chainSteps.localIndices
   }
 
   return {
@@ -107,6 +112,8 @@ function buildPlayState() {
     loop: loopEnabled.value,
     stepPointer: 0,
     tickCounter: 0,
+    chainSlotIndices,
+    chainLocalIndices,
   }
 }
 
@@ -135,6 +142,7 @@ watch(() => store.isPlaying, (playing) => {
     transportManager.releaseTransport()
     stopAllNotes()
     store.currentStep = 0
+    store.playingSlotIndex = null
     playStateRef.current = {}
     _captureArmed = false
     if (_captureRecording) {
@@ -149,6 +157,7 @@ watch(() => store.isPlaying, (playing) => {
   // Reset stop flag and clear stale state before starting
   _stopPending = false
   _transportTicks = 0
+  _lastFollowedSlot = null
   _pendingTimeouts.clear()
   _activeNoteKeys.clear()
   playStateRef.current = buildPlayState()
@@ -203,13 +212,34 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
         }
       }
 
-      const activeCount = Math.max(1, Math.min(state.numSteps, 16))
+      // Un-capped: a chain's flattened step count can exceed 16 (multiple
+      // slots concatenated), unlike a single slot which the UI already
+      // bounds to 16 — capping here silently truncated longer chains.
+      const activeCount = Math.max(1, state.numSteps)
       const step = state.steps[state.stepPointer]
       const ticksNeeded = DURATION_TICKS[step?.duration] ?? 32
 
       if (state.tickCounter === 0) {
         getDraw().schedule(() => {
-          store.currentStep = state.stepPointer
+          if (state.chainSlotIndices) {
+            const slotIdx = state.chainSlotIndices[state.stepPointer]
+            store.currentStep = state.chainLocalIndices[state.stepPointer]
+            store.playingSlotIndex = slotIdx
+            // Follow the chain: switch the displayed/editable slot to show
+            // the chords actually playing right now. Only on a slot
+            // boundary crossing (not every tick) — slotLoad() swaps
+            // store.steps/numSteps/playMode/arpRate, which the "sync live
+            // edits" watcher above is guarded to ignore during chain
+            // playback specifically so this can't corrupt the running
+            // flattened sequence in state.steps.
+            if (slotIdx !== _lastFollowedSlot) {
+              _lastFollowedSlot = slotIdx
+              store.slotLoad(slotIdx)
+            }
+          } else {
+            store.currentStep = state.stepPointer
+            store.playingSlotIndex = store.activeSlotIndex
+          }
         }, time)
 
         if (step?.active && step.velocity > 0 && step.notes?.length > 0 && state.playMode !== 'arp') {
@@ -273,9 +303,14 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
   })
 })
 
-// Sync live state changes into playStateRef without restarting
+// Sync live state changes into playStateRef without restarting.
+// Skipped during chain playback: state.steps there is the flattened,
+// multi-slot chain array built once at play-start (buildPlayState), not
+// store.steps — syncing store.steps into it would replace the actively
+// playing chain sequence with whichever single slot auto-follow just
+// switched into view (see the chain-follow block below).
 watch([() => store.steps, () => store.numSteps, () => store.playMode, () => store.arpRate, () => midiStore.midiChannel], () => {
-  if (playStateRef.current && store.isPlaying) {
+  if (playStateRef.current && store.isPlaying && !playStateRef.current.chainSlotIndices) {
     playStateRef.current.steps = store.steps
     playStateRef.current.numSteps = store.numSteps
     playStateRef.current.playMode = store.playMode
@@ -399,6 +434,14 @@ function handleSlotSelect(idx) {
 function handleStepClick(idx) {
   store.selectedStepIdx = idx
   if (!store.isPlaying) previewStep(idx)
+}
+
+// The "now playing" highlight only makes sense when the slot being shown
+// (activeSlotIndex) is the one actually sounding (playingSlotIndex) — during
+// chain playback these diverge as playback advances through slots the user
+// isn't looking at.
+function isCurrentPlayingStep(idx) {
+  return idx === store.currentStep && store.isPlaying && store.activeSlotIndex === store.playingSlotIndex
 }
 
 function handleStepDoubleClick(idx) {
@@ -678,6 +721,7 @@ function velBarColor(v) {
 <template>
   <div
     v-if="isOpen"
+    v-show="!isMinimized"
     :style="panelStyle"
     class="fixed flex flex-col bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl overflow-hidden text-white font-sans text-sm select-none"
     style="border-top: 2px solid #7c3aed;"
@@ -824,13 +868,22 @@ function velBarColor(v) {
             v-for="i in store.SLOT_COUNT"
             :key="i"
             @click.stop="handleSlotSelect(i - 1)"
+            :title="store.isPlaying && store.playingSlotIndex === i - 1 ? 'Now playing (chain)' : undefined"
             :class="[
-              'w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
+              'relative w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
               store.activeSlotIndex === i - 1
                 ? 'bg-purple-700 text-white ring-1 ring-purple-400'
                 : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700'
             ]"
-          >{{ String.fromCharCode(64 + i) }}</button>
+          >
+            {{ String.fromCharCode(64 + i) }}
+            <!-- Now-playing indicator — distinct from the purple "editing" ring since
+                 during chain playback the sounding slot and the displayed slot differ -->
+            <span
+              v-if="store.isPlaying && store.playingSlotIndex === i - 1"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 ring-1 ring-neutral-900 animate-pulse"
+            />
+          </button>
           <div class="w-px h-4 bg-neutral-700 mx-1" />
         </div>
 
@@ -840,20 +893,6 @@ function velBarColor(v) {
           <button @click.stop="store.numSteps = Math.max(1, store.numSteps - 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"><ChevronLeft class="w-3 h-3" /></button>
           <span class="text-purple-300 font-bold font-mono w-4 text-center">{{ store.numSteps }}</span>
           <button @click.stop="store.numSteps = Math.min(16, store.numSteps + 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"><ChevronRight class="w-3 h-3" /></button>
-        </div>
-
-        <!-- Play mode -->
-        <div class="flex items-center rounded overflow-hidden border border-neutral-700 text-[12px] font-mono uppercase tracking-wider">
-          <button
-            @click.stop="store.playMode = 'chord'"
-            title="Play chords"
-            :class="['px-2 py-0.5 transition-colors', store.playMode === 'chord' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
-          >Chord</button>
-          <button
-            @click.stop="store.playMode = 'arp'"
-            title="Play arpeggio"
-            :class="['px-2 py-0.5 transition-colors', store.playMode === 'arp' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
-          >Arp</button>
         </div>
 
         <!-- Arp rate (only in arp mode) -->
@@ -916,10 +955,22 @@ function velBarColor(v) {
           />
           <span class="text-[10px] text-neutral-600 font-mono">ms</span>
         </div>
+      </div>
 
-        
-
-        
+      <div class="flex items-center gap-2 justify-start w-full">
+        <!-- Play mode -->
+        <div class="flex items-center rounded overflow-hidden border border-neutral-700 text-[12px] font-mono uppercase tracking-wider">
+          <button
+            @click.stop="store.playMode = 'chord'"
+            title="Play chords"
+            :class="['px-2 py-0.5 transition-colors', store.playMode === 'chord' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+          >Chord</button>
+          <button
+            @click.stop="store.playMode = 'arp'"
+            title="Play arpeggio"
+            :class="['px-2 py-0.5 transition-colors', store.playMode === 'arp' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+          >Arp</button>
+        </div>
       </div>
     </div>
 
@@ -933,10 +984,10 @@ function velBarColor(v) {
           :class="[
             'relative flex flex-col items-center justify-between rounded border transition-all overflow-hidden',
             idx >= store.numSteps ? 'opacity-25 pointer-events-none' : '',
-            idx === store.currentStep && store.isPlaying ? 'border-yellow-400 bg-yellow-400/10' : '',
-            idx === store.selectedStepIdx && !(idx === store.currentStep && store.isPlaying) ? 'border-purple-500 bg-purple-900/20' : '',
-            step.active && !(idx === store.currentStep && store.isPlaying) && !(idx === store.selectedStepIdx) ? 'border-purple-700/60 bg-purple-950/40' : '',
-            !step.active && !(idx === store.currentStep && store.isPlaying) && !(idx === store.selectedStepIdx) ? 'border-neutral-800 bg-neutral-950/60' : '',
+            isCurrentPlayingStep(idx) ? 'border-yellow-400 bg-yellow-400/10' : '',
+            idx === store.selectedStepIdx && !isCurrentPlayingStep(idx) ? 'border-purple-500 bg-purple-900/20' : '',
+            step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-purple-700/60 bg-purple-950/40' : '',
+            !step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-neutral-800 bg-neutral-950/60' : '',
           ]"
           style="height: 72px; min-width: 0;"
           @click="handleStepClick(idx)"
@@ -951,7 +1002,7 @@ function velBarColor(v) {
             <span
               v-if="step.active"
               class="w-1.5 h-1.5 rounded-full"
-              :class="idx === store.currentStep && store.isPlaying ? 'bg-yellow-400' : 'bg-purple-500'"
+              :class="isCurrentPlayingStep(idx) ? 'bg-yellow-400' : 'bg-purple-500'"
             />
           </div>
 
@@ -959,7 +1010,7 @@ function velBarColor(v) {
           <div class="px-1 w-full text-center">
             <span :class="[
               'text-[14px] font-mono truncate block leading-tight',
-              step.active ? (idx === store.currentStep && store.isPlaying ? 'text-yellow-300' : 'text-white') : 'text-neutral-600'
+              step.active ? (isCurrentPlayingStep(idx) ? 'text-yellow-300' : 'text-white') : 'text-neutral-600'
             ]">
               {{ step.chordName }}
             </span>

@@ -1565,7 +1565,7 @@ let generateHidden = ref(false)
 </script>
 
 <template>
-  <div v-if="isOpen"
+  <div v-if="isOpen" v-show="!isMinimized"
     class="fixed bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden select-none"
     :style="panelStyle"
     @mousedown="bringToFront"

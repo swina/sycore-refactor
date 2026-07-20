@@ -115,6 +115,11 @@ export const useChordProgStore = defineStore('chordProg', () => {
     Array.from({ length: SLOT_COUNT }, () => makeEmptySlot())
   )
   const activeSlotIndex = ref(0)
+  // Which slot is actually sounding right now — distinct from activeSlotIndex
+  // (which slot's steps are loaded into the editable buffer/shown in the
+  // grid). During chain playback these diverge as playback advances through
+  // slots the user isn't looking at; null when not playing.
+  const playingSlotIndex = ref<number | null>(null)
   const chain = ref<number[]>(Array(CHAIN_MAX).fill(-1))
   const chainEnabled = ref(false)
 
@@ -217,15 +222,27 @@ export const useChordProgStore = defineStore('chordProg', () => {
     persistChain()
   }
 
-  // Get the combined steps+numSteps for chain playback
-  function getChainSteps(): { steps: ChordStep[]; numSteps: number } {
+  // Get the combined steps+numSteps for chain playback. slotIndices/localIndices
+  // are parallel arrays (same length as steps) mapping each flattened step
+  // back to which slot it came from and its index within that slot's own
+  // grid — needed so the UI can show which slot is currently playing and
+  // highlight the right step within it, instead of a flattened global index
+  // that only makes sense against the concatenated array itself.
+  function getChainSteps(): { steps: ChordStep[]; numSteps: number; slotIndices: number[]; localIndices: number[] } {
     const all: ChordStep[] = []
+    const slotIndices: number[] = []
+    const localIndices: number[] = []
     for (const slotIdx of chain.value) {
       if (slotIdx < 0 || slotIdx >= SLOT_COUNT) continue
       const slot = slots.value[slotIdx]
-      all.push(...slot.steps.slice(0, slot.numSteps))
+      const count = Math.min(slot.numSteps, slot.steps.length)
+      for (let i = 0; i < count; i++) {
+        all.push(slot.steps[i])
+        slotIndices.push(slotIdx)
+        localIndices.push(i)
+      }
     }
-    return { steps: all, numSteps: all.length }
+    return { steps: all, numSteps: all.length, slotIndices, localIndices }
   }
 
   const libraryPatterns = ref<any[]>([])
@@ -367,7 +384,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     saveToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,
-    slots, activeSlotIndex, chain, chainEnabled,
+    slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled,
     slotSave, slotLoad, chainSet, chainInsert, chainRemove, chainClear, getChainSteps,
   }
 })
