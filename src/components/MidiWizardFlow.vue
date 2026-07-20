@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2 } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Radio } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
+import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
@@ -12,7 +13,49 @@ import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 const midiStore  = useMidiStore()
 const uiStore    = useUiStore()
 const midiFlowConfigsStore = useMidiFlowConfigsStore()
+const { devices: registryDevices } = useDeviceRegistry()
 const activeTab  = ref('routing')  // 'routing' | 'sync'
+
+// ── Device-type coloring — reuses DeviceRegistry's classification
+// (controller/instrument-single/instrument-multi, per MidiDevices.vue's
+// typeIcon/typeColor) plus the existing "Virtual" amber/Radio convention
+// from MidiDeviceProgramChangePanel.vue's badge, so canvas nodes read the
+// same way the rest of the app already colors these categories.
+const DEVICE_TYPE_META = {
+  controller: {
+    label: 'Controller', icon: Gamepad2,
+    dot: 'bg-sky-400', text: 'text-sky-400', accent: 'border-l-sky-500',
+    card: 'bg-sky-950/20 border-sky-800/50 hover:border-sky-500/50',
+    header: 'bg-sky-900/20 border-sky-900/40',
+  },
+  'instrument-single': {
+    label: 'Instrument (Single)', icon: Music,
+    dot: 'bg-rose-300', text: 'text-rose-300', accent: 'border-l-rose-400',
+    card: 'bg-rose-900/15 border-rose-700/40 hover:border-rose-400/50',
+    header: 'bg-rose-900/15 border-rose-800/30',
+  },
+  'instrument-multi': {
+    label: 'Instrument (Multi)', icon: Layers,
+    dot: 'bg-violet-400', text: 'text-violet-400', accent: 'border-l-violet-500',
+    card: 'bg-violet-950/20 border-violet-800/50 hover:border-violet-500/50',
+    header: 'bg-violet-900/20 border-violet-900/40',
+  },
+  virtual: {
+    label: 'Virtual Instrument', icon: Radio,
+    dot: 'bg-amber-400', text: 'text-amber-400', accent: 'border-l-amber-500',
+    card: 'bg-amber-950/20 border-amber-800/50 hover:border-amber-500/50',
+    header: 'bg-amber-900/20 border-amber-900/40',
+  },
+}
+
+function deviceType(name) {
+  if (midiStore.virtualInstruments.some(v => v.name === name)) return 'virtual'
+  return registryDevices.value.find(d => d.name === name)?.type ?? 'instrument-single'
+}
+
+function typeMeta(type) {
+  return DEVICE_TYPE_META[type] ?? DEVICE_TYPE_META['instrument-single']
+}
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey:    'SYCORE_POS_MIDI_FLOW',
@@ -31,6 +74,7 @@ const allDevices = computed(() =>
     name:   reg.name,
     hasIn:  reg.inEnabled,
     hasOut: reg.outEnabled,
+    type:   deviceType(reg.name),
   }))
 )
 
@@ -81,6 +125,7 @@ function onCanvasDrop(e) {
     id: nextId++,
     name: device.name,
     sourceId: device.sourceId ?? null,   // null = hardware device
+    type: device.sourceId ? null : (device.type ?? deviceType(device.name)),
     hasIn:  device.sourceId ? false : device.hasIn,
     hasOut: true,
     x: Math.max(0, e.clientX - rect.left - NODE_W / 2),
@@ -92,8 +137,13 @@ function onCanvasDrop(e) {
 }
 
 function removeNode(id) {
+  const node = canvasNodes.value.find(n => n.id === id)
   canvasNodes.value = canvasNodes.value.filter(n => n.id !== id)
   cables.value      = cables.value.filter(c => c.fromId !== id && c.toId !== id)
+  // The removed node no longer appears in canvasNodes for finish() to walk,
+  // so its routing key needs clearing explicitly (otherwise a stale route
+  // to/from a deleted node would keep sending after auto-apply).
+  if (node) midiStore.setRouting(node.sourceId ?? node.name, [])
 }
 
 // ── Node dragging ──
@@ -151,11 +201,13 @@ function finish() {
 
   const outputPorts = midiService.getOutputs()
 
-  for (const [srcId, dstIds] of bySource) {
-    const src = canvasNodes.value.find(n => n.id === srcId)
-    if (!src) continue
+  // Walk every node still on the canvas (not just ones with active cables)
+  // so a source that just lost its last cable gets its routing explicitly
+  // cleared instead of left stale from a previous apply.
+  for (const src of canvasNodes.value) {
+    const dstIds = bySource.get(src.id) ?? []
 
-    if (!src.sourceId) {
+    if (!src.sourceId && dstIds.length > 0) {
       midiStore.addRegistration(src.name)
       midiStore.updateRegistration(src.name, 'inEnabled', true)
       midiStore.updateRegistration(src.name, 'inChannel', src.inChannel)
@@ -225,6 +277,7 @@ function initFromStore() {
     nodeMap.set(reg.name, id)
     const node = {
       id, name: reg.name, sourceId: null,
+      type: deviceType(reg.name),
       hasIn: reg.inEnabled, hasOut: reg.outEnabled,
       x: 0, y: 0,
       inChannel: reg.inChannel ?? -1, outChannel: reg.outChannel ?? -1,
@@ -274,26 +327,70 @@ function initFromStore() {
   }
 }
 
-function reloadConfig() {
-  canvasNodes.value = []
-  cables.value = []
-  nextId = 1
-  initFromStore()
+// Bulk canvas repopulation (initial load, reload) shouldn't trigger the
+// auto-apply watcher below — it would just write the same state straight
+// back to the store it was just read from. Only genuine edits (cable
+// connect/disconnect, channel/flag changes, node add/remove) should apply.
+let suppressAutoApply = false
+function withSuppressedAutoApply(fn) {
+  suppressAutoApply = true
+  fn()
+  nextTick(() => { suppressAutoApply = false })
 }
 
+function reloadConfig() {
+  withSuppressedAutoApply(() => {
+    canvasNodes.value = []
+    cables.value = []
+    nextId = 1
+    initFromStore()
+  })
+  currentConfigName.value = ''
+}
+
+// ── Auto-apply routing on any Input/Output change in the canvas ──
+const routingSignature = computed(() => JSON.stringify([
+  canvasNodes.value.map(n => ({
+    id: n.id, name: n.name, sourceId: n.sourceId,
+    inChannel: n.inChannel, outChannel: n.outChannel,
+    sync: n.sync, transport: n.transport, notes: n.notes, cc: n.cc, pc: n.pc,
+  })),
+  cables.value.map(c => ({ fromId: c.fromId, toId: c.toId })),
+]))
+
+watch(routingSignature, () => {
+  if (suppressAutoApply) return
+  finish()
+})
+
 // ── Named saved canvas configurations ──
-const showConfigsMenu = ref(false)
-const newConfigName   = ref('')
+const showConfigsMenu  = ref(false)
+const newConfigName    = ref('')
+const currentConfigName = ref('')   // name of the loaded/last-saved config, shown in the footer
+
+function cloneCanvas() {
+  return {
+    nodes:  JSON.parse(JSON.stringify(canvasNodes.value)),
+    cables: JSON.parse(JSON.stringify(cables.value)),
+  }
+}
 
 function saveCurrentConfig() {
   const name = newConfigName.value.trim()
   if (!name) return
-  midiFlowConfigsStore.saveConfig(
-    name,
-    JSON.parse(JSON.stringify(canvasNodes.value)),
-    JSON.parse(JSON.stringify(cables.value)),
-  )
+  const { nodes, cables: c } = cloneCanvas()
+  midiFlowConfigsStore.saveConfig(name, nodes, c)
+  currentConfigName.value = name
   newConfigName.value = ''
+}
+
+// Overwrite an existing saved config with the current canvas state — the
+// floppy-icon "quick save" action, as opposed to saveCurrentConfig()'s
+// "save as" (which names a new or different entry).
+function overwriteConfig(name) {
+  const { nodes, cables: c } = cloneCanvas()
+  midiFlowConfigsStore.saveConfig(name, nodes, c)
+  currentConfigName.value = name
 }
 
 function loadConfig(name) {
@@ -303,17 +400,19 @@ function loadConfig(name) {
   cables.value      = JSON.parse(JSON.stringify(entry.cables))
   const maxId = Math.max(0, ...canvasNodes.value.map(n => n.id), ...cables.value.map(c => c.id))
   nextId = maxId + 1
+  currentConfigName.value = name
   showConfigsMenu.value = false
 }
 
 function deleteConfigEntry(e, name) {
   e.stopPropagation()
   midiFlowConfigsStore.deleteConfig(name)
+  if (currentConfigName.value === name) currentConfigName.value = ''
 }
 
 onMounted(() => {
   window.addEventListener('mouseup', onCanvasMouseup)
-  if (!canvasNodes.value.length) initFromStore()
+  if (!canvasNodes.value.length) withSuppressedAutoApply(() => initFromStore())
 })
 onUnmounted(() => window.removeEventListener('mouseup', onCanvasMouseup))
 
@@ -422,15 +521,27 @@ function pendingPath() {
                   class="group w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-neutral-800/60 transition-colors"
                 >
                   <span class="min-w-0">
-                    <span class="block text-[10px] font-bold text-white truncate">{{ cfg.name }}</span>
+                    <span class="flex items-center gap-1 min-w-0">
+                      <span class="block text-[10px] font-bold text-white truncate">{{ cfg.name }}</span>
+                      <span v-if="cfg.name === currentConfigName" class="shrink-0 text-[7px] font-black uppercase tracking-wider px-1 py-0.5 rounded bg-synth-neon/15 text-synth-neon">Current</span>
+                    </span>
                     <span class="block text-[8px] font-mono text-neutral-600">{{ cfg.nodes.length }} nodes · {{ cfg.cables.length }} cables</span>
                   </span>
-                  <span
-                    @click="deleteConfigEntry($event, cfg.name)"
-                    class="shrink-0 opacity-0 group-hover:opacity-100 text-neutral-600 hover:text-red-400 transition-all"
-                    title="Delete this configuration"
-                  >
-                    <Trash2 class="w-3 h-3" />
+                  <span class="shrink-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                    <span
+                      @click.stop="overwriteConfig(cfg.name)"
+                      class="text-neutral-600 hover:text-synth-neon transition-colors"
+                      title="Overwrite with current canvas"
+                    >
+                      <Save class="w-3 h-3" />
+                    </span>
+                    <span
+                      @click.stop="deleteConfigEntry($event, cfg.name)"
+                      class="text-neutral-600 hover:text-red-400 transition-colors"
+                      title="Delete this configuration"
+                    >
+                      <Trash2 class="w-3 h-3" />
+                    </span>
                   </span>
                 </button>
               </div>
@@ -478,6 +589,12 @@ function pendingPath() {
 
           <!-- MIDI Devices -->
           <p class="text-[8px] font-bold uppercase tracking-widest text-neutral-600 mt-2 mb-1 px-1">MIDI Devices</p>
+          <!-- Type legend -->
+          <div class="flex flex-col gap-0.5 px-1 mb-1.5">
+            <span v-for="(meta, key) in DEVICE_TYPE_META" :key="key" class="flex items-center gap-1.5 text-[7px] font-mono text-neutral-500">
+              <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="meta.dot" />{{ meta.label }}
+            </span>
+          </div>
           <div v-if="!allDevices.length" class="text-[9px] text-neutral-700 font-mono text-center pt-2">
             No devices detected
           </div>
@@ -486,9 +603,13 @@ function pendingPath() {
             :key="dev.name"
             draggable="true"
             @dragstart="onSidebarDragStart($event, dev)"
-            class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-neutral-800 bg-neutral-900 hover:border-synth-neon/40 hover:bg-neutral-800/60 cursor-grab active:cursor-grabbing transition-colors"
+            class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-l-2 border-neutral-800 bg-neutral-900 hover:bg-neutral-800/60 cursor-grab active:cursor-grabbing transition-colors"
+            :class="typeMeta(dev.type).accent"
           >
-            <span class="text-[9px] font-mono font-bold text-white truncate leading-tight">{{ dev.name }}</span>
+            <span class="flex items-center gap-1.5 min-w-0">
+              <component :is="typeMeta(dev.type).icon" class="w-2.5 h-2.5 shrink-0" :class="typeMeta(dev.type).text" />
+              <span class="text-[9px] font-mono font-bold text-white truncate leading-tight">{{ dev.name }}</span>
+            </span>
             <div class="flex gap-1">
               <span v-if="dev.hasIn"  class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wide">IN</span>
               <span v-if="dev.hasOut" class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-synth-neon/20 text-synth-neon uppercase tracking-wide">OUT</span>
@@ -563,15 +684,16 @@ function pendingPath() {
               class="rounded-xl overflow-hidden shadow-xl transition-colors cursor-grab active:cursor-grabbing border"
               :class="node.sourceId
                 ? 'bg-purple-950/30 border-purple-800/50 hover:border-purple-500/50'
-                : 'bg-neutral-900 border-neutral-700 hover:border-synth-neon/30'"
+                : typeMeta(node.type).card"
             >
               <!-- Card header -->
               <div
                 class="flex items-center justify-between px-3 py-2 border-b"
-                :class="node.sourceId ? 'bg-purple-900/30 border-purple-900/50' : 'bg-neutral-800/50 border-neutral-800'"
+                :class="node.sourceId ? 'bg-purple-900/30 border-purple-900/50' : typeMeta(node.type).header"
               >
                 <span class="flex items-center gap-1.5 flex-1 pr-2 min-w-0">
                   <component v-if="node.sourceId" :is="appIconMap[node.sourceId]" class="w-3 h-3 text-purple-400 shrink-0" />
+                  <component v-else :is="typeMeta(node.type).icon" class="w-3 h-3 shrink-0" :class="typeMeta(node.type).text" />
                   <span class="text-[9px] font-mono font-bold truncate leading-tight"
                     :class="node.sourceId ? 'text-purple-200' : 'text-white'"
                   >{{ node.name }}</span>
@@ -627,18 +749,34 @@ function pendingPath() {
 
       <!-- Footer (routing tab only) -->
       <div v-show="activeTab === 'routing'" class="flex items-center justify-between px-4 py-2.5 border-t border-neutral-800 bg-neutral-900/40 shrink-0">
-        <span class="text-[9px] font-mono text-neutral-600">
-          {{ cables.length }} connection{{ cables.length !== 1 ? 's' : '' }}
+        <span class="flex items-center gap-2 text-[9px] font-mono text-neutral-600 min-w-0">
+          <span class="flex items-center gap-1 text-emerald-400 font-black uppercase tracking-wider shrink-0" title="Routing changes apply automatically">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
+          </span>
+          <span class="shrink-0">{{ cables.length }} connection{{ cables.length !== 1 ? 's' : '' }}</span>
+          <template v-if="currentConfigName">
+            <span class="text-neutral-700 shrink-0">·</span>
+            <FolderOpen class="w-3 h-3 text-neutral-600 shrink-0" />
+            <span class="truncate text-neutral-400">{{ currentConfigName }}</span>
+            <button
+              @click="overwriteConfig(currentConfigName)"
+              title="Save changes to this configuration"
+              class="shrink-0 text-neutral-600 hover:text-synth-neon transition-colors"
+            >
+              <Save class="w-3 h-3" />
+            </button>
+          </template>
         </span>
         <button
           :disabled="!cables.length"
           @click="finish"
-          class="flex items-center gap-2 px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-lg transition-colors"
+          title="Routing already applies automatically — use this to force a re-sync"
+          class="flex items-center gap-2 px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-lg transition-colors shrink-0"
           :class="cables.length
             ? 'bg-synth-neon text-black hover:bg-synth-neon/80'
             : 'bg-neutral-800 text-neutral-600 cursor-not-allowed'"
         >
-          <Check class="w-3.5 h-3.5" /> Apply Routing
+          <Check class="w-3.5 h-3.5" /> Re-apply
         </button>
       </div>
     </div>
