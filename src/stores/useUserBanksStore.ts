@@ -9,6 +9,7 @@ export interface PresetBankEntry {
   name: string
   createdAt: string
   presets: any[]
+  source?: 'emulatorx3'
 }
 
 export interface PresetBanks {
@@ -41,10 +42,10 @@ export const useUserBanksStore = defineStore('userBanks', () => {
     return banks.value[deviceName] ?? []
   }
 
-  function addBank(deviceName: string, bankName: string, presets: any[]) {
+  function addBank(deviceName: string, bankName: string, presets: any[], source?: 'emulatorx3') {
     if (!banks.value[deviceName]) banks.value[deviceName] = []
     const idx = banks.value[deviceName].findIndex(b => b.name === bankName)
-    const entry: PresetBankEntry = { name: bankName, createdAt: new Date().toISOString(), presets }
+    const entry: PresetBankEntry = { name: bankName, createdAt: new Date().toISOString(), presets, source }
     if (idx >= 0) banks.value[deviceName].splice(idx, 1, entry)
     else banks.value[deviceName].push(entry)
   }

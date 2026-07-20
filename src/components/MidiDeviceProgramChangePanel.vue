@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { userKey } from '@/lib/userKey'
@@ -9,6 +9,7 @@ import { useUserBanksStore } from '@/stores/useUserBanksStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
+import { parseEmulatorX3 } from '@/composables/useEmulatorX3Parser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -133,17 +134,25 @@ function isUserBank(bankName) {
   return userBanksStore.hasBank(selectedDeviceName.value, bankName)
 }
 
-// ── .mfprojz import ────────────────────────────────────────────
-const importInput      = ref(null)   // hidden <input type="file">
-const isImporting      = ref(false)
-const importError      = ref('')
-const showImportRename = ref(false)
-const pendingPresets   = ref([])
-const pendingBankName  = ref('')
+// ── .mfprojz / Emulator X3 import ────────────────────────────────
+const importInput        = ref(null)   // hidden <input type="file"> (.mfprojz)
+const importInputX3      = ref(null)   // hidden <input type="file"> (Emulator X3 .txt)
+const isImporting        = ref(false)
+const isImportingX3      = ref(false)
+const importError        = ref('')
+const showImportRename   = ref(false)
+const pendingPresets     = ref([])
+const pendingBankName    = ref('')
+const pendingImportSource = ref(undefined)   // undefined = .mfprojz, 'emulatorx3' = Emulator X3
 
 function triggerImport() {
   importError.value = ''
   importInput.value?.click()
+}
+
+function triggerImportX3() {
+  importError.value = ''
+  importInputX3.value?.click()
 }
 
 async function onImportFile(event) {
@@ -156,6 +165,7 @@ async function onImportFile(event) {
     // Default bank name = filename without extension
     pendingBankName.value = file.name.replace(/\.mfprojz$/i, '')
     pendingPresets.value  = presets
+    pendingImportSource.value = undefined
     showImportRename.value = true
   } catch (e) {
     importError.value = e.message ?? 'Failed to parse file.'
@@ -165,17 +175,38 @@ async function onImportFile(event) {
   }
 }
 
+async function onImportEmulatorX3File(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  isImportingX3.value = true
+  importError.value = ''
+  try {
+    const { bankName, presets } = await parseEmulatorX3(file)
+    pendingBankName.value = bankName
+    pendingPresets.value  = presets
+    pendingImportSource.value = 'emulatorx3'
+    showImportRename.value = true
+  } catch (e) {
+    importError.value = e.message ?? 'Failed to parse file.'
+  } finally {
+    isImportingX3.value = false
+    event.target.value = ''
+  }
+}
+
 function confirmImport() {
   const name = pendingBankName.value.trim() || 'Imported Bank'
-  userBanksStore.addBank(selectedDeviceName.value, name, pendingPresets.value)
+  userBanksStore.addBank(selectedDeviceName.value, name, pendingPresets.value, pendingImportSource.value)
   selectedBank.value = name
   showImportRename.value = false
   pendingPresets.value   = []
+  pendingImportSource.value = undefined
 }
 
 function cancelImport() {
   showImportRename.value = false
   pendingPresets.value   = []
+  pendingImportSource.value = undefined
 }
 
 function deleteUserBank(bankName) {
@@ -196,11 +227,19 @@ watch([catalogDevice, selectedDeviceName], () => {
 })
 
 const bankConfig = computed(() => {
-  if (!catalogDevice.value || !selectedBank.value) return null
+  if (!selectedBank.value) return null
+  const userEntry = userBanksStore.getBanksForDevice(selectedDeviceName.value)
+    .find(b => b.name === selectedBank.value)
+  if (userEntry?.source === 'emulatorx3') return {
+    msb: false, lsb: false, category_field: 'category',
+    program_field: 'program', program_base: 0,
+    bankSelect: 'emulatorx3', bank_field: 'bank',
+  }
   if (isUserBank(selectedBank.value)) return {
     msb: false, lsb: false, category_field: 'category',
     program_field: 'program', program_base: -1,
   }
+  if (!catalogDevice.value) return null
   return catalogIndex[catalogDevice.value][selectedBank.value]
 })
 
@@ -272,16 +311,19 @@ function scrollToCurrentProgram() {
   const reg = selectedReg.value
   if (!reg) return
 
-  const targetProg = reg.pcProgram ?? 0
-  const targetMsb  = reg.pcMsb  ?? 0
-  const pField = bankConfig.value.program_field ?? 'program'
-  const base   = bankConfig.value.program_base  ?? 0
+  const cfg    = bankConfig.value
+  const pField = cfg.program_field ?? 'program'
 
   const idx = list.findIndex(s => {
-    const progIdx = (s[pField] ?? 0) + base
+    if (cfg.bankSelect === 'emulatorx3') {
+      const bank    = s[cfg.bank_field ?? 'bank'] ?? 0
+      const progNum = Math.max(0, Math.min(127, s[pField] ?? 0))
+      return progNum === (reg.pcProgram ?? 0) && bank === (reg.pcLsb ?? 0)
+    }
+    const progIdx = (s[pField] ?? 0) + (cfg.program_base ?? 0)
     const progNum = Math.max(0, Math.min(127, progIdx % 128))
-    const msb     = bankConfig.value.msb ? (s.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
-    return progNum === targetProg && msb === targetMsb
+    const msb     = cfg.msb ? (s.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
+    return progNum === (reg.pcProgram ?? 0) && msb === (reg.pcMsb ?? 0)
   })
   if (idx < 0) return
 
@@ -351,14 +393,35 @@ function sendCatalogSound(sound) {
   // then derive bank MSB and within-bank PC consistently from the same index.
   // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
   // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
-  const progIdx = prog + (cfg.program_base ?? 0)           // 0-indexed absolute program
-  const msb    = cfg.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
-  const lsb    = cfg.lsb ? (sound.lsb ?? 0) : 0
-  const progNum = Math.max(0, Math.min(127, progIdx % 128))
+  let msb, lsb, progNum
 
-  sendToDeviceMessage([0xB0 | ch, 0,  msb])
-  sendToDeviceMessage([0xB0 | ch, 32, lsb])
-  sendToDeviceMessage([0xC0 | ch, progNum])
+  if (cfg?.bankSelect === 'emulatorx3') {
+    // Emulator X3 wire format: CC64 = 0 (fixed), CC32 = bank, PC = program.
+    // "msb"/"lsb" below are recorded purely as the raw bytes sent (for
+    // currentPcState display / scrollToCurrentProgram matching); CC0 (bank
+    // MSB) is intentionally never sent for this device.
+    const bank = sound[cfg.bank_field ?? 'bank'] ?? 0
+    msb = 0
+    lsb = bank
+    progNum = Math.max(0, Math.min(127, prog))
+
+    sendToDeviceMessage([0xB0 | ch, 64, 0])
+    sendToDeviceMessage([0xB0 | ch, 32, bank])
+    sendToDeviceMessage([0xC0 | ch, progNum])
+  } else {
+    // Normalize to 0-indexed absolute MIDI program number using program_base,
+    // then derive bank MSB and within-bank PC consistently from the same index.
+    // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
+    // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
+    const progIdx = prog + (cfg.program_base ?? 0)           // 0-indexed absolute program
+    msb = cfg.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
+    lsb = cfg.lsb ? (sound.lsb ?? 0) : 0
+    progNum = Math.max(0, Math.min(127, progIdx % 128))
+
+    sendToDeviceMessage([0xB0 | ch, 0,  msb])
+    sendToDeviceMessage([0xB0 | ch, 32, lsb])
+    sendToDeviceMessage([0xC0 | ch, progNum])
+  }
 
   lastSent.value = sound
   recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb)
@@ -1171,7 +1234,7 @@ function assignToPad(setId, padIdx) {
                 </div>
 
                 <!-- ── 4. Bank selector ── -->
-                <template v-if="catalogDevice || userBanks.length > 0">
+                <template v-if="catalogDevice || userBanks.length > 0 || midiStore.virtualInstruments.some(v => v.name === selectedDeviceName)">
                   <!-- Hidden file input for .mfprojz import -->
                   <input
                     ref="importInput"
@@ -1180,21 +1243,43 @@ function assignToPad(setId, padIdx) {
                     class="hidden"
                     @change="onImportFile"
                   />
+                  <!-- Hidden file input for Emulator X3 import -->
+                  <input
+                    ref="importInputX3"
+                    type="file"
+                    accept=".txt"
+                    class="hidden"
+                    @change="onImportEmulatorX3File"
+                  />
 
                   <div class="shrink-0 px-6 mt-4">
                     <div class="flex items-center justify-between mb-2">
                       <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Bank</label>
-                      <!-- Import button -->
-                      <button
-                        @click="triggerImport"
-                        :disabled="isImporting"
-                        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
-                        title="Import a .mfprojz bank from Arturia MIDI Control Center"
-                      >
-                        <Loader2 v-if="isImporting" class="w-2.5 h-2.5 animate-spin" />
-                        <Upload v-else class="w-2.5 h-2.5" />
-                        Import .mfprojz
-                      </button>
+                      <div class="flex items-center gap-1.5">
+                        <!-- Emulator X3 import button (virtual devices only) -->
+                        <button
+                          v-if="midiStore.virtualInstruments.some(v => v.name === selectedDeviceName)"
+                          @click="triggerImportX3"
+                          :disabled="isImportingX3"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Import an Emulator X3 preset/sample listing (.txt)"
+                        >
+                          <Loader2 v-if="isImportingX3" class="w-2.5 h-2.5 animate-spin" />
+                          <FileText v-else class="w-2.5 h-2.5" />
+                          Import Emulator X3
+                        </button>
+                        <!-- Import button -->
+                        <button
+                          @click="triggerImport"
+                          :disabled="isImporting"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Import a .mfprojz bank from Arturia MIDI Control Center"
+                        >
+                          <Loader2 v-if="isImporting" class="w-2.5 h-2.5 animate-spin" />
+                          <Upload v-else class="w-2.5 h-2.5" />
+                          Import .mfprojz
+                        </button>
+                      </div>
                     </div>
 
                     <!-- Import error -->
@@ -1285,13 +1370,13 @@ function assignToPad(setId, padIdx) {
                 <div ref="presetListEl" class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4" @wheel="onPresetListWheel">
 
                   <!-- Catalog: loading -->
-                  <div v-if="catalogDevice && selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
+                  <div v-if="selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
                     <Loader2 class="w-5 h-5 text-violet-400 animate-spin" />
                     <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Loading catalog…</span>
                   </div>
 
                   <!-- Catalog: preset list -->
-                  <template v-else-if="catalogDevice && selectedBank && filteredSounds.length > 0">
+                  <template v-else-if="selectedBank && filteredSounds.length > 0">
                     <div class="flex items-center justify-between mb-2 px-1">
                       <div class="flex items-center gap-2">
                         <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
@@ -1374,13 +1459,13 @@ function assignToPad(setId, padIdx) {
                   </template>
 
                   <!-- Catalog: empty results -->
-                  <div v-else-if="catalogDevice && selectedBank && !isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
+                  <div v-else-if="selectedBank && !isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
                     <Music2 class="w-6 h-6 text-neutral-700" />
                     <span class="text-[10px] font-mono text-neutral-600">No presets found</span>
                   </div>
 
-                  <!-- Manual fallback (no catalog match) -->
-                  <div v-else-if="!catalogDevice" class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
+                  <!-- Manual fallback (no catalog match, nothing selected) -->
+                  <div v-else-if="!catalogDevice && !selectedBank" class="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-5 space-y-4">
                     <p class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Manual Bank / Program Change</p>
                     <div class="grid grid-cols-2 gap-3">
                       <div class="bg-black/40 border border-neutral-800 rounded-xl p-3 space-y-2">
