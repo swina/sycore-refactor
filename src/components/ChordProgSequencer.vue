@@ -437,6 +437,7 @@ onUnmounted(() => {
   window.removeEventListener('cp-start', _onCpStart)
   window.removeEventListener('cp-stop', _onCpStop)
   _unsubMidiNote?.()
+  _unsubAppNote?.()
 })
 
 // ── UI State ─────────────────────────────────────────────────────────────────
@@ -608,12 +609,23 @@ function _onMidiNoteIn(type, note, velocity, chan, inputId) {
   _onCpStart()
 }
 
+// MIDI FLOW app-to-app routing (e.g. Step Sequencer OUT → Chord Sequencer
+// IN) — a separate pipeline from device input above, since an app's
+// generated notes never pass through a real MIDI input port.
+let _unsubAppNote = null
+function _onAppNoteIn(type, note, velocity, chan, sourceApp) {
+  if (type !== 'on' || velocity <= 0) return
+  if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.CHORD_PROG, note)) return
+  _onCpStart()
+}
+
 onMounted(() => {
   if (authStore.user) store.loadLibrary()
   loadPcSets()
   window.addEventListener('cp-start', _onCpStart)
   window.addEventListener('cp-stop', _onCpStop)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
+  _unsubAppNote = midiStore.addAppNoteListener(_onAppNoteIn)
 })
 
 // Auto-save current slot whenever steps/numSteps/playMode/arpRate change

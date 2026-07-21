@@ -577,6 +577,16 @@ function _onMidiNoteIn(type, note, velocity, chan, inputId) {
   if (!drumStore.isPlaying) drumStore.isPlaying = true
 }
 
+// MIDI FLOW app-to-app routing (e.g. Chord Sequencer OUT → Drum Machine IN)
+// — a separate pipeline from device input above, since an app's generated
+// notes never pass through a real MIDI input port.
+let _unsubAppNote = null
+function _onAppNoteIn(type, note, velocity, chan, sourceApp) {
+  if (type !== 'on' || velocity <= 0) return
+  if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.DRUM_MACHINE, note)) return
+  if (!drumStore.isPlaying) drumStore.isPlaying = true
+}
+
 // ── Timeline DM Rec Sync ─────────────────────────────────────────────────────
 function _tlDmRecSyncHandler(e) {
   const measures = e.detail?.measures ?? 4
@@ -620,6 +630,7 @@ onMounted(async () => {
 
   window.addEventListener('dm-bass-midi-note', _onBassMidiNote)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
+  _unsubAppNote  = midiStore.addAppNoteListener(_onAppNoteIn)
 })
 
 const _onBassMidiNote = (e) => {
@@ -653,6 +664,7 @@ onUnmounted(() => {
   window.removeEventListener('dm-pad-trigger',    _onPadTrigger)
   window.removeEventListener('dm-bass-midi-note', _onBassMidiNote)
   _unsubMidiNote?.()
+  _unsubAppNote?.()
 })
 
 // ── File / URL loading ─────────────────────────────────────────────────────────

@@ -1032,13 +1032,24 @@ onMounted(() => {
     return true
   }
 
-  const handleIncomingNote = (type, note, velocity, chan, inputId) => {
+  // Gate for MIDI FLOW app-to-app routing (e.g. Chord Sequencer OUT → Step
+  // Sequencer IN) — the app-source counterpart to isMidiDeviceAllowed,
+  // which is device-specific (registrations/inChannel don't apply to an
+  // app source). Same broadcast-mode bypass convention.
+  function isAppSourceAllowed(sourceApp, note) {
+    if (midiStore.broadcastMode) return true
+    return midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.SEQUENCER, note)
+  }
+
+  const handleIncomingNote = (type, note, velocity, chan, inputId, sourceApp) => {
     if (window.SY_LOG) {
-      window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, isOpen=${props.isOpen}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
+      window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, sourceApp=${sourceApp || 'null'}, isOpen=${props.isOpen}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
     }
+    const allowed = sourceApp ? isAppSourceAllowed(sourceApp, note) : isMidiDeviceAllowed(chan, inputId, note)
+
     // When the panel is closed: only handle auto-start and transposition for linked sequences
     if (!props.isOpen) {
-      if (hasSavedSeqConfig.value && !isRecording.value && isMidiDeviceAllowed(chan, inputId, note)) {
+      if (hasSavedSeqConfig.value && !isRecording.value && allowed) {
         if (type === 'on' && velocity > 0) {
           if (!isPlaying.value && uiStore.seqAutoStart) {
             dynamicMidiTranspose.value = note - sequenceRootMidi.value
@@ -1052,9 +1063,9 @@ onMounted(() => {
     }
 
     // MIDI Performance routing matrix checks
-    if (!isMidiDeviceAllowed(chan, inputId, note)) {
+    if (!allowed) {
       if (window.SY_LOG) {
-        window.SY_LOG(`[Seq Ingress] Note blocked: isMidiDeviceAllowed returned false`)
+        window.SY_LOG(`[Seq Ingress] Note blocked: ${sourceApp ? 'isAppSourceAllowed' : 'isMidiDeviceAllowed'} returned false`)
       }
       return
     }
@@ -1221,6 +1232,14 @@ onMounted(() => {
     handleIncomingNote(type, note, velocity, chan, inputId)
   })
 
+  // MIDI FLOW app-to-app routing — a separate pipeline from device input
+  // above, since an app's generated notes never pass through a real MIDI
+  // input port. sourceApp (6th arg) tells handleIncomingNote to gate via
+  // isAppSourceAllowed instead of the device-based isMidiDeviceAllowed.
+  const unsubAppNote = midiStore.addAppNoteListener((type, note, velocity, chan, sourceApp) => {
+    handleIncomingNote(type, note, velocity, chan, null, sourceApp)
+  })
+
   const unsubCC = midiService.addCCListener((cc, val, chan, inputId) => {
     handleIncomingCC(cc, val, chan, inputId)
   })
@@ -1236,6 +1255,7 @@ onMounted(() => {
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('sequencer-action', handleSequencerAction)
     unsubNote?.()
+    unsubAppNote?.()
     unsubCC?.()
   }
 })

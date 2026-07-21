@@ -1234,6 +1234,7 @@ function keyboardSetRoot(note) {
 }
 
 let _unsubMidiNote = null
+let _unsubAppNote  = null
 let _unsubMidiRaw  = null
 // Tracks which MIDI note triggered each pad so Note OFF can match
 const _midiNotePlaying = new Map()
@@ -1278,19 +1279,18 @@ function _startMidiMappingListener() {
   })
 }
 
-async function _onMidiNote(type, note, velocity, _chan, inputId) {
-  // MIDI FLOW device→app input routing — additive, above the per-pad
-  // filtering below (see docs/plans/modular/MIDI-Flow-Control.md).
-  const inputDevice = midiService.getInputs().find(i => i.id === inputId)
-  if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.SAMPLER, note)) return
-
+// Shared by both listeners below (device input and MIDI FLOW app-to-app
+// routing) once the app-level gate has passed. `inputId` is null for an
+// app-sourced note — the per-pad pad.midiInput device-name filter only
+// makes sense for a real device, so it's skipped in that case.
+async function _playPadsForNote(type, note, velocity, inputId) {
   const bank = samplerStore.activeBankData
   if (!bank) return
   for (let padIdx = 0; padIdx < 8; padIdx++) {
     const pad = bank.pads[padIdx]
     if (!pad?.url || !padOn.value[padIdx] || !padShouldPlay(padIdx)) continue
     // Per-pad MIDI input filter — pad.midiInput stores the device name (stable across restarts)
-    if (pad.midiInput && pad.midiInput !== 'all') {
+    if (inputId != null && pad.midiInput && pad.midiInput !== 'all') {
       const inputDevice = midiService.getInputs().find(i => i.id === inputId)
       const deviceName = inputDevice?.name
       if (deviceName !== pad.midiInput) continue
@@ -1339,6 +1339,22 @@ async function _onMidiNote(type, note, velocity, _chan, inputId) {
   }
 }
 
+async function _onMidiNote(type, note, velocity, _chan, inputId) {
+  // MIDI FLOW device→app input routing — additive, above the per-pad
+  // filtering below (see docs/plans/modular/MIDI-Flow-Control.md).
+  const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+  if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.SAMPLER, note)) return
+  await _playPadsForNote(type, note, velocity, inputId)
+}
+
+// MIDI FLOW app-to-app routing (e.g. Chord Sequencer OUT → Sampler IN) — a
+// separate pipeline from device input above, since an app's generated
+// notes never pass through a real MIDI input port.
+async function _onAppNote(type, note, velocity, _chan, sourceApp) {
+  if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.SAMPLER, note)) return
+  await _playPadsForNote(type, note, velocity, null)
+}
+
 function _onSamplerMasterVol(e) { samplerMasterVol.value = e.detail }
 
 onMounted(() => {
@@ -1346,6 +1362,7 @@ onMounted(() => {
   window.addEventListener('sampler-pad-assign', _onSamplerPadAssign)
   window.addEventListener('sampler-master-volume', _onSamplerMasterVol)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNote)
+  _unsubAppNote  = midiStore.addAppNoteListener(_onAppNote)
   _startMidiMappingListener()
 })
 
@@ -1353,6 +1370,7 @@ onUnmounted(() => {
   window.removeEventListener('sampler-pad-assign', _onSamplerPadAssign)
   window.removeEventListener('sampler-master-volume', _onSamplerMasterVol)
   _unsubMidiNote?.()
+  _unsubAppNote?.()
   _unsubMidiRaw?.()
   engine.stopAll()
 })

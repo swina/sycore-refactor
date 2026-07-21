@@ -425,13 +425,16 @@ export const useMidiStore = defineStore('midi', () => {
     }
   }
 
-  // No explicit routing configured for a device yet = legacy "open to
+  // No explicit routing configured for a source yet = legacy "open to
   // everything" default — preserves zero-config behavior for every app that
   // already worked without MIDI FLOW, until the user wires at least one
-  // explicit cable for that specific device, at which point it becomes
-  // exclusive to what's wired.
-  function isDeviceRoutedToApp(deviceName: string, appSourceId: string, note?: number): boolean {
-    const entries = inputRouting.value[deviceName]
+  // explicit cable for that specific source, at which point it becomes
+  // exclusive to what's wired. `sourceKey` is a hardware/virtual device
+  // name for device→app routing, or another app's MidiSource id for
+  // app-to-app routing — inputRouting is just string-keyed, so both share
+  // this one function and one data model.
+  function isDeviceRoutedToApp(sourceKey: string, appSourceId: string, note?: number): boolean {
+    const entries = inputRouting.value[sourceKey]
     if (!entries || entries.length === 0) return true
     const entry = entries.find(e => e.app === appSourceId)
     if (!entry) return false
@@ -439,6 +442,29 @@ export const useMidiStore = defineStore('midi', () => {
     const lo = entry.filter.lowNote  ?? 0
     const hi = entry.filter.highNote ?? 127
     return note >= lo && note <= hi
+  }
+
+  // ── App-to-app note routing (MIDI FLOW app→app cables) ────────────────────
+  // Apps generate notes via sendNoteOn/sendNoteOff below, which is a separate
+  // pipeline from midiService.addNoteListener (that one only ever sees real/
+  // virtual MIDI *input ports* — hardware controllers, not another app's
+  // internally-generated notes). This is the missing link: any app's send
+  // also notifies these listeners, tagged with its MidiSource id as the
+  // "source", so a downstream app can gate on it via isDeviceRoutedToApp
+  // exactly like it already does for a physical device's inputId.
+  type AppNoteListener = (type: 'on' | 'off', note: number, velocity: number, channel: number, sourceApp: string) => void
+  const _appNoteListeners: AppNoteListener[] = []
+
+  function addAppNoteListener(cb: AppNoteListener): () => void {
+    _appNoteListeners.push(cb)
+    return () => {
+      const idx = _appNoteListeners.indexOf(cb)
+      if (idx !== -1) _appNoteListeners.splice(idx, 1)
+    }
+  }
+
+  function notifyAppNoteListeners(type: 'on' | 'off', note: number, velocity: number, channel: number, sourceApp: string) {
+    _appNoteListeners.forEach(l => l(type, note, velocity, channel, sourceApp))
   }
 
   function toggleBroadcastMode() {
@@ -465,11 +491,13 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.sendNoteOn(note, velocity, targetChannel, source, skipDeviceId)
     const mappingStore = useMappingStore()
     mappingStore.handleVelocity(velocity, targetChannel)
+    notifyAppNoteListeners('on', note, velocity, targetChannel, source)
   }
 
   function sendNoteOff(note: number, velocity = 0, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null) {
     const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
     midiService.sendNoteOff(note, velocity, targetChannel, source, skipDeviceId)
+    notifyAppNoteListeners('off', note, velocity, targetChannel, source)
   }
 
   function sendPitchBend(value: number, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null) {
@@ -694,7 +722,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiReady, outputs, inputs,
     midiChannel, midiInputChannel,
     isDeviceConnected, broadcastMode, routingMatrix,
-    inputRouting, setInputRouting, isDeviceRoutedToApp,
+    inputRouting, setInputRouting, isDeviceRoutedToApp, addAppNoteListener,
     init, refreshDevices,
     setMidiChannel, setMidiInputChannel,
     setRouting, toggleRouting, toggleBroadcastMode,

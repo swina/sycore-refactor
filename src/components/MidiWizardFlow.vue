@@ -142,9 +142,15 @@ function removeNode(id) {
   canvasNodes.value = canvasNodes.value.filter(n => n.id !== id)
   cables.value      = cables.value.filter(c => c.fromId !== id && c.toId !== id)
   // The removed node no longer appears in canvasNodes for finish() to walk,
-  // so its routing key needs clearing explicitly (otherwise a stale route
-  // to/from a deleted node would keep sending after auto-apply).
-  if (node) midiStore.setRouting(node.sourceId ?? node.name, [])
+  // so its routing keys need clearing explicitly (otherwise a stale route
+  // to/from a deleted node would keep sending after auto-apply). Both
+  // directions: output routing (it was a source of hardware/app output)
+  // and input routing (it was a source of device/app→app input routing —
+  // e.g. removing an app after wiring it into another app's IN).
+  if (node) {
+    midiStore.setRouting(node.sourceId ?? node.name, [])
+    midiStore.setInputRouting(node.sourceId ?? node.name, [])
+  }
 }
 
 // ── Node dragging ──
@@ -240,17 +246,18 @@ function finish() {
     // Wire the routing matrix: apps use MidiSource enum, hardware uses device name
     midiStore.setRouting(src.sourceId ?? src.name, outputNames)
 
-    // Device → app input routing (MIDI FLOW's MIDI IN to apps). Only a
-    // hardware device can be a real input-routing source — apps aren't
-    // registered input ports, so an app→app cable has no store
-    // representation and is silently ignored here.
-    if (!src.sourceId) {
-      const inputEntries = appCables.map(cable => {
-        const dst = canvasNodes.value.find(n => n.id === cable.toId)
-        return { app: dst.sourceId, filter: cable.filter }
-      })
-      midiStore.setInputRouting(src.name, inputEntries)
-    }
+    // Device/app → app input routing (MIDI FLOW's MIDI IN to apps). Keyed by
+    // the source's routing key — a hardware/virtual device name, or another
+    // app's MidiSource id when the source is itself an app (app-to-app
+    // routing, e.g. Chord Sequencer → Virtual Keyboard). inputRouting is
+    // just string-keyed so both share one data model and one gate
+    // (isDeviceRoutedToApp) — see useMidiStore.ts's app-note broadcast for
+    // how an app's generated notes reach a downstream app's listener.
+    const inputEntries = appCables.map(cable => {
+      const dst = canvasNodes.value.find(n => n.id === cable.toId)
+      return { app: dst.sourceId, filter: cable.filter }
+    })
+    midiStore.setInputRouting(src.sourceId ?? src.name, inputEntries)
   }
 }
 
@@ -281,11 +288,12 @@ function initFromStore() {
   const sourceKeys = new Set(Object.keys(matrix).filter(k => matrix[k]?.length))
   const destNames  = new Set(Object.values(matrix).flat().filter(Boolean))
 
-  // Device→app input routing (MIDI FLOW's MIDI IN to apps): a device with
-  // input-routing entries is also a canvas "source" (it now originates a
+  // Device/app → app input routing (MIDI FLOW's MIDI IN to apps): any
+  // source with input-routing entries — a hardware device, or another app
+  // (app-to-app routing) — is also a canvas "source" (it now originates a
   // cable, even if it has no hardware-output cables); an app fed by any
-  // device becomes a valid node too, even with zero outgoing routing.
-  const inputSourceDeviceNames = new Set(Object.keys(inputRouting).filter(k => inputRouting[k]?.length))
+  // source becomes a valid node too, even with zero outgoing routing.
+  const inputSourceKeys = new Set(Object.keys(inputRouting).filter(k => inputRouting[k]?.length))
   const inputDestApps = new Set(Object.values(inputRouting).flat().map(e => e.app))
 
   const sourceNodes = []  // left column — things that send MIDI out
@@ -294,7 +302,7 @@ function initFromStore() {
   // Hardware device nodes — skip unconnected ones and any app names leaked in
   for (const reg of Object.values(regs)) {
     if (appNames.has(reg.name)) { midiStore.removeRegistration(reg.name); continue }
-    const isSource = sourceKeys.has(reg.name) || inputSourceDeviceNames.has(reg.name)
+    const isSource = sourceKeys.has(reg.name) || inputSourceKeys.has(reg.name)
     const isDest   = destNames.has(reg.name)
     if (!isSource && !isDest) continue
 
@@ -313,13 +321,16 @@ function initFromStore() {
     else sourceNodes.push(node)
   }
 
-  // MIDI App nodes — placed if they have active output routing (source) or
-  // are fed by a device's input routing (destination); an app with both
-  // stays a source, matching hardware's isDest-takes-priority convention above.
+  // MIDI App nodes — placed if they have active output routing (source),
+  // route their own notes into another app (also a source — app-to-app
+  // routing), or are fed by a device/app's input routing (destination); an
+  // app that's any kind of source stays on the source side, matching
+  // hardware's isDest-takes-priority convention above.
   for (const app of MIDI_APPS) {
     const isOutputSource = sourceKeys.has(app.sourceId)
+    const isInputSource  = inputSourceKeys.has(app.sourceId)
     const isInputDest    = inputDestApps.has(app.sourceId)
-    if (!isOutputSource && !isInputDest) continue
+    if (!isOutputSource && !isInputSource && !isInputDest) continue
 
     const id = nextId++
     nodeMap.set(app.sourceId, id)
@@ -330,7 +341,7 @@ function initFromStore() {
       inChannel: -1, outChannel: -1,
       sync: true, transport: true, notes: true, cc: true, pc: true,
     }
-    if (isOutputSource) sourceNodes.push(node)
+    if (isOutputSource || isInputSource) sourceNodes.push(node)
     else destNodes.push(node)
   }
 
@@ -363,9 +374,11 @@ function initFromStore() {
     }
   }
 
-  // Cables from device→app input routing
-  for (const [deviceName, entries] of Object.entries(inputRouting)) {
-    const fromId = nodeMap.get(deviceName)
+  // Cables from device/app → app input routing (sourceKey is a device name
+  // or, for app-to-app routing, another app's MidiSource id — nodeMap holds
+  // both kinds of node under the same key space, so this needs no branching)
+  for (const [sourceKey, entries] of Object.entries(inputRouting)) {
+    const fromId = nodeMap.get(sourceKey)
     if (!fromId) continue
     for (const entry of (entries ?? [])) {
       const toId = nodeMap.get(entry.app)
@@ -415,6 +428,17 @@ const showConfigsMenu  = ref(false)
 const newConfigName    = ref('')
 const currentConfigName = ref('')   // name of the loaded/last-saved config, shown in the footer
 
+// Persist whichever config is active so a page reload can restore the label
+// (not the canvas — initFromStore() already correctly rebuilds the canvas
+// from the live routing state, which reflects any edits made after loading
+// this config; re-loading the named config's own saved snapshot here could
+// silently discard those). Whatever sets currentConfigName — load, save,
+// overwrite, or clearing it — flows through this one watcher instead of
+// each call site remembering to persist it individually.
+watch(currentConfigName, (name) => {
+  midiFlowConfigsStore.setLastConfigName(name)
+})
+
 function cloneCanvas() {
   return {
     nodes:  JSON.parse(JSON.stringify(canvasNodes.value)),
@@ -459,7 +483,16 @@ function deleteConfigEntry(e, name) {
 
 onMounted(() => {
   window.addEventListener('mouseup', onCanvasMouseup)
-  if (!canvasNodes.value.length) withSuppressedAutoApply(() => initFromStore())
+  // Reload the last-used saved configuration's own snapshot on startup —
+  // takes priority over deriving the canvas from the live routing state,
+  // so a reload always lands back on exactly what was last explicitly
+  // saved/loaded, discarding any unsaved live edits from before the reload.
+  const lastName = midiFlowConfigsStore.lastConfigName
+  if (lastName && midiFlowConfigsStore.hasConfig(lastName)) {
+    loadConfig(lastName)
+  } else if (!canvasNodes.value.length) {
+    withSuppressedAutoApply(() => initFromStore())
+  }
 })
 onUnmounted(() => window.removeEventListener('mouseup', onCanvasMouseup))
 
@@ -481,11 +514,12 @@ function isAppCable(cable) {
   return !!canvasNodes.value.find(n => n.id === cable.fromId)?.sourceId
 }
 
-// ── Note-range filter popover (device→app cables only — "keyboard split") ──
+// ── Note-range filter popover (any cable landing on an app's IN port —
+// device→app or app→app — gets the editable filter instead of click-to-
+// delete; "keyboard split" for device sources, same idea for app sources) ──
 function isDeviceToAppCable(cable) {
-  const from = canvasNodes.value.find(n => n.id === cable.fromId)
-  const to   = canvasNodes.value.find(n => n.id === cable.toId)
-  return !!(from && to && !from.sourceId && to.sourceId)
+  const to = canvasNodes.value.find(n => n.id === cable.toId)
+  return !!(to && to.sourceId)
 }
 
 const editingCableId = ref(null)

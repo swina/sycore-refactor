@@ -188,22 +188,39 @@ watch(() => configStore.midiConfig, (cfg) => {
 
 // ─── MIDI listeners ───────────────────────────────────────────────────────────
 
-let _unsubNote  = null
-let _unsubCC    = null
-let _unsubPitch = null
+let _unsubNote     = null
+let _unsubAppNote  = null
+let _unsubCC       = null
+let _unsubPitch    = null
+
+// Shared by both listeners below — a physical/virtual device's input and
+// another app's routed notes react identically here (just a visual "these
+// notes are externally held" indicator).
+function _reactToExternalNote(type, note, velocity) {
+  if (type === 'on' && velocity > 0) {
+    extActiveNotes.value = new Set(extActiveNotes.value).add(note)
+  } else {
+    const next = new Set(extActiveNotes.value)
+    next.delete(note)
+    extActiveNotes.value = next
+  }
+}
 
 onMounted(() => {
   _unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
     if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
     const inputDevice = midiService.getInputs().find(i => i.id === inputId)
     if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.KEYBOARD, note)) return
-    if (type === 'on' && velocity > 0) {
-      extActiveNotes.value = new Set(extActiveNotes.value).add(note)
-    } else {
-      const next = new Set(extActiveNotes.value)
-      next.delete(note)
-      extActiveNotes.value = next
-    }
+    _reactToExternalNote(type, note, velocity)
+  })
+
+  // MIDI FLOW app-to-app routing (e.g. Chord Sequencer OUT → Virtual
+  // Keyboard IN) — a separate pipeline from device input above, since an
+  // app's generated notes never pass through a real MIDI input port.
+  _unsubAppNote = midiStore.addAppNoteListener((type, note, velocity, chan, sourceApp) => {
+    if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
+    if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.KEYBOARD, note)) return
+    _reactToExternalNote(type, note, velocity)
   })
 
   _unsubCC = midiService.addCCListener((cc, val, chan) => {
@@ -223,6 +240,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   _unsubNote?.()
+  _unsubAppNote?.()
   _unsubCC?.()
   _unsubPitch?.()
 })

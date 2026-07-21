@@ -4,6 +4,7 @@ import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 
 const STORAGE_KEY = 'SYCORE_MIDI_FLOW_CONFIGS'
+const LAST_CONFIG_STORAGE_KEY = 'SYCORE_MIDI_FLOW_LAST_CONFIG'
 
 export interface MidiFlowConfigEntry {
   name: string
@@ -17,6 +18,9 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
   const uid = computed(() => authStore.user?.uid)
 
   const configs = ref<MidiFlowConfigEntry[]>(load())
+  // Name of the config last loaded/saved in the canvas — restored on reload
+  // so MIDI FLOW reopens showing which configuration is active, not blank.
+  const lastConfigName = ref<string>(localStorage.getItem(userKey(LAST_CONFIG_STORAGE_KEY)) ?? '')
 
   function load(): MidiFlowConfigEntry[] {
     try {
@@ -30,9 +34,18 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
     localStorage.setItem(userKey(STORAGE_KEY), JSON.stringify(val))
   }, { deep: true })
 
+  watch(lastConfigName, val => {
+    localStorage.setItem(userKey(LAST_CONFIG_STORAGE_KEY), val)
+  })
+
   watch(uid, (newUid) => {
     configs.value = newUid ? load() : []
+    lastConfigName.value = newUid ? (localStorage.getItem(userKey(LAST_CONFIG_STORAGE_KEY)) ?? '') : ''
   })
+
+  function setLastConfigName(name: string) {
+    lastConfigName.value = name
+  }
 
   function saveConfig(name: string, nodes: any[], cables: any[]) {
     const idx = configs.value.findIndex(c => c.name === name)
@@ -47,11 +60,12 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
 
   function deleteConfig(name: string) {
     configs.value = configs.value.filter(c => c.name !== name)
+    if (lastConfigName.value === name) lastConfigName.value = ''
   }
 
   function hasConfig(name: string): boolean {
     return configs.value.some(c => c.name === name)
   }
 
-  return { configs, saveConfig, getConfig, deleteConfig, hasConfig }
+  return { configs, saveConfig, getConfig, deleteConfig, hasConfig, lastConfigName, setLastConfigName }
 })
