@@ -45,6 +45,29 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     }
   }
 
+  // ── Solo ─────────────────────────────────────────────────────────────────
+  // A generic, string-keyed solo set shared by every kind of mixer strip
+  // (CATALOG channel ids, `inst:<name>` for MIDI instruments, and
+  // `virt:<name>:<channel>` for virtual-instrument per-channel strips) so one
+  // mechanism covers all of them. Not persisted — solo is a live-mixing
+  // gesture, not a setting you'd want silently restored on reload.
+  const soloedChannels = ref<Set<string>>(new Set())
+
+  function isSoloed(id: string) { return soloedChannels.value.has(id) }
+
+  function isEffectivelyMuted(id: string, ownMuted: boolean): boolean {
+    if (soloedChannels.value.size === 0) return ownMuted
+    return !soloedChannels.value.has(id)
+  }
+
+  function toggleSolo(id: string) {
+    const next = new Set(soloedChannels.value)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    soloedChannels.value = next
+    _redispatchAll()
+  }
+
   const backingVol    = ref(loadFloat('S1_MIX_BACKING',     0.8))
   const tracksVol     = ref(loadFloat('S1_MIX_TRACKS',      0.8))
   const looperVol     = ref(loadFloat('S1_MIX_LOOPER',      0.9))
@@ -73,39 +96,40 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   watch(drumsVol,      v => localStorage.setItem(userKey('S1_MIX_DRUMS'),       String(v)))
   watch(drumsLevelVol, v => localStorage.setItem(userKey('S1_MIX_DRUMS_LEVEL'), String(v)))
   watch(samplerVol,    v => localStorage.setItem(userKey('S1_MIX_SAMPLER'),     String(v)))
-watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   String(v)))
+  watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   String(v)))
   watch(basslineVol,   v => localStorage.setItem(userKey('S1_MIX_BASSLINE'),   String(v)))
   watch(masterVol,     v => localStorage.setItem(userKey('S1_MIX_MASTER'),      String(v)))
 
-  function effective(ch: number, muted: boolean): number {
+  function effective(ch: number, id: MixerChannelId, ownMuted: boolean): number {
+    const muted = isEffectivelyMuted(id, ownMuted)
     return muted ? 0 : Math.min(1, ch * masterVol.value)
   }
 
-  const effectiveDrumsLevel = computed(() => effective(drumsLevelVol.value, drumsLevelMuted.value))
+  const effectiveDrumsLevel = computed(() => effective(drumsLevelVol.value, 'drumsLevel', drumsLevelMuted.value))
 
   function _dispatchBacking() {
-    window.dispatchEvent(new CustomEvent('playlist-volume', { detail: effective(backingVol.value, backingMuted.value) }))
+    window.dispatchEvent(new CustomEvent('playlist-volume', { detail: effective(backingVol.value, 'backing', backingMuted.value) }))
   }
   function _dispatchTracks() {
-    window.dispatchEvent(new CustomEvent('tracks-player-volume', { detail: effective(tracksVol.value, tracksMuted.value) }))
+    window.dispatchEvent(new CustomEvent('tracks-player-volume', { detail: effective(tracksVol.value, 'tracks', tracksMuted.value) }))
   }
   function _dispatchLooper() {
-    looperEngine.masterVolume = effective(looperVol.value, looperMuted.value)
+    looperEngine.masterVolume = effective(looperVol.value, 'looper', looperMuted.value)
   }
   function _dispatchLM() {
-    window.dispatchEvent(new CustomEvent('lm-master-volume', { detail: effective(lmVol.value, lmMuted.value) }))
+    window.dispatchEvent(new CustomEvent('lm-master-volume', { detail: effective(lmVol.value, 'lm', lmMuted.value) }))
   }
   function _dispatchDrums() {
-    window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: effective(drumsVol.value, drumsMuted.value) }))
+    window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: effective(drumsVol.value, 'drums', drumsMuted.value) }))
   }
   function _dispatchSampler() {
-    window.dispatchEvent(new CustomEvent('sampler-master-volume', { detail: effective(samplerVol.value, samplerMuted.value) }))
+    window.dispatchEvent(new CustomEvent('sampler-master-volume', { detail: effective(samplerVol.value, 'sampler', samplerMuted.value) }))
   }
   function _dispatchBassline() {
-    window.dispatchEvent(new CustomEvent('bassline-master-volume', { detail: effective(basslineVol.value, basslineMuted.value) }))
+    window.dispatchEvent(new CustomEvent('bassline-master-volume', { detail: effective(basslineVol.value, 'bassline', basslineMuted.value) }))
   }
   function _dispatchLiveperf() {
-    window.dispatchEvent(new CustomEvent('liveperf-master-volume', { detail: effective(liveperfVol.value, liveperfMuted.value) }))
+    window.dispatchEvent(new CustomEvent('liveperf-master-volume', { detail: effective(liveperfVol.value, 'liveperf', liveperfMuted.value) }))
   }
 
   function setBackingVol(v: number)    { backingVol.value = v; _dispatchBacking() }
@@ -140,9 +164,7 @@ watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   Str
   const instrumentVols  = ref<Record<string, number>>(_loadInstVols())
   const instrumentMuted = ref<Record<string, boolean>>({})
 
-  function _sendInstCC(name: string) {
-    const vol   = instrumentMuted.value[name] ? 0 : (instrumentVols.value[name] ?? 0.8)
-    const cc7   = Math.round(vol * 127)
+  function _regOutChannel(name: string): number {
     let outCh = 0
     try {
       const raw = localStorage.getItem(userKey('SYCORE_ADVANCED_MIDI_ROUTING'))
@@ -152,7 +174,15 @@ watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   Str
         if (typeof ch === 'number' && ch >= 0) outCh = ch
       }
     } catch {}
-    midiService.sendRawCC(name, 7, cc7, outCh)
+    return outCh
+  }
+
+  function _sendInstCC(name: string) {
+    const ownMuted = !!instrumentMuted.value[name]
+    const muted = isEffectivelyMuted('inst:' + name, ownMuted)
+    const vol   = muted ? 0 : (instrumentVols.value[name] ?? 0.8)
+    const cc7   = Math.round(vol * 127)
+    midiService.sendRawCC(name, 7, cc7, _regOutChannel(name))
   }
 
   function getInstrumentVol(name: string): number  { return instrumentVols.value[name] ?? 0.8 }
@@ -169,13 +199,90 @@ watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   Str
     _sendInstCC(name)
   }
 
+  function toggleInstrumentSolo(name: string) { toggleSolo('inst:' + name) }
+
+  // ── Virtual instruments — per-MIDI-channel volume/mute (CC#7) ──────────────
+  // A virtual instrument configured as multi-timbral in MIDI Flow
+  // (registration.outChannels, see MidiWizardFlow.vue's "Multi-CH out" grid)
+  // gets one independent fader per channel instead of a single fader — each
+  // sends Volume (CC#7) on just that channel. A virtual instrument with no
+  // outChannels set keeps the single-fader behavior, sending on its
+  // registration's plain outChannel, exactly like a MIDI instrument channel.
+  function _virtKey(name: string, ch: number) { return `${name}:${ch}` }
+
+  function _loadVirtChanVols(): Record<string, number> {
+    try { return JSON.parse(localStorage.getItem(userKey('S1_MIX_VIRT_CHAN_VOLS')) || '{}') } catch { return {} }
+  }
+
+  const virtualChannelVols  = ref<Record<string, number>>(_loadVirtChanVols())
+  const virtualChannelMuted = ref<Record<string, boolean>>({})
+
+  function getVirtualChannelVol(name: string, ch: number): number {
+    return virtualChannelVols.value[_virtKey(name, ch)] ?? 0.8
+  }
+  function isVirtualChannelMuted(name: string, ch: number): boolean {
+    return !!virtualChannelMuted.value[_virtKey(name, ch)]
+  }
+  function isVirtualChannelSoloed(name: string, ch: number): boolean {
+    return isSoloed('virt:' + _virtKey(name, ch))
+  }
+
+  function _sendVirtChanCC(name: string, ch: number) {
+    const key = _virtKey(name, ch)
+    const ownMuted = !!virtualChannelMuted.value[key]
+    const muted = isEffectivelyMuted('virt:' + key, ownMuted)
+    const vol   = muted ? 0 : (virtualChannelVols.value[key] ?? 0.8)
+    const cc7   = Math.round(vol * 127)
+    midiService.sendRawCC(name, 7, cc7, ch)
+  }
+
+  function setVirtualChannelVol(name: string, ch: number, v: number) {
+    const key = _virtKey(name, ch)
+    virtualChannelVols.value = { ...virtualChannelVols.value, [key]: v }
+    localStorage.setItem(userKey('S1_MIX_VIRT_CHAN_VOLS'), JSON.stringify(virtualChannelVols.value))
+    _sendVirtChanCC(name, ch)
+  }
+
+  function toggleVirtualChannelMute(name: string, ch: number) {
+    const key = _virtKey(name, ch)
+    virtualChannelMuted.value = { ...virtualChannelMuted.value, [key]: !virtualChannelMuted.value[key] }
+    _sendVirtChanCC(name, ch)
+  }
+
+  function toggleVirtualChannelSolo(name: string, ch: number) { toggleSolo('virt:' + _virtKey(name, ch)) }
+
+  // Single-fader virtual instruments (no outChannels configured) reuse the
+  // plain instrument vol/mute maps above, keyed by name — same as a MIDI
+  // instrument channel, just targeting a virtual output instead of a real one.
+
+  // Re-push every channel's current volume/mute state — needed whenever solo
+  // membership changes, since soloing one channel silences every other one
+  // and each channel's "effective" level is only recomputed when its own
+  // dispatch function runs.
+  function _redispatchAll() {
+    _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM(); _dispatchDrums()
+    _dispatchSampler(); _dispatchLiveperf(); _dispatchBassline()
+    Object.keys(instrumentVols.value).forEach(_sendInstCC)
+    Object.keys(instrumentMuted.value).forEach(_sendInstCC)
+    Object.keys(virtualChannelVols.value).forEach(key => {
+      const i = key.lastIndexOf(':')
+      _sendVirtChanCC(key.slice(0, i), Number(key.slice(i + 1)))
+    })
+    Object.keys(virtualChannelMuted.value).forEach(key => {
+      const i = key.lastIndexOf(':')
+      _sendVirtChanCC(key.slice(0, i), Number(key.slice(i + 1)))
+    })
+  }
+
   watch(uid, (newUid) => {
+    soloedChannels.value = new Set()
     if (!newUid) {
       enabledChannels.value = [...ALL_CHANNEL_IDS]
       backingVol.value = 0.8; tracksVol.value = 0.8; looperVol.value = 0.9
       lmVol.value = 0.85; drumsVol.value = 0.85; drumsLevelVol.value = 0.85; masterVol.value = 1.0
       samplerVol.value = 0.85; liveperfVol.value = 0.85; basslineVol.value = 0.85
       instrumentVols.value = {}
+      virtualChannelVols.value = {}
     } else {
       enabledChannels.value = loadEnabledChannels()
       backingVol.value    = loadFloat('S1_MIX_BACKING',     0.8)
@@ -189,6 +296,7 @@ watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   Str
       basslineVol.value   = loadFloat('S1_MIX_BASSLINE',    0.85)
       masterVol.value     = loadFloat('S1_MIX_MASTER',      1.0)
       instrumentVols.value = _loadInstVols()
+      virtualChannelVols.value = _loadVirtChanVols()
     }
   })
 
@@ -204,5 +312,10 @@ watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   Str
     toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute, toggleDrumsLevelMute, toggleSamplerMute, toggleLiveperfMute, toggleBasslineMute,
     instrumentVols, instrumentMuted,
     getInstrumentVol, isInstrumentMuted, setInstrumentVol, toggleInstrumentMute,
+    // Solo
+    soloedChannels, isSoloed, toggleSolo, toggleInstrumentSolo,
+    // Virtual instrument per-channel (multi-timbral) faders
+    getVirtualChannelVol, isVirtualChannelMuted, isVirtualChannelSoloed,
+    setVirtualChannelVol, toggleVirtualChannelMute, toggleVirtualChannelSolo,
   }
 })
