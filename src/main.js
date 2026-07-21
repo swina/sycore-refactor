@@ -6,7 +6,12 @@ import { useAuthStore } from './stores/useAuthStore'
 import { useUiStore } from './stores/useUiStore'
 import { runStartupMigrations } from './lib/idb'
 import { dispatch } from '@/types/events'
+import { readStoredTheme, applyTheme } from '@/lib/theme'
 import './assets/main.css'
+
+// Applied synchronously, before any Vue/Pinia work, so the correct theme is
+// set before first paint — avoids a flash of the wrong theme on load.
+applyTheme(readStoredTheme())
 import App from './App.vue'
 import SynthApp from './views/SynthApp.vue'
 import HomeView from './views/HomeView.vue'

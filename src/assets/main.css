@@ -4,15 +4,41 @@
 @theme {
     --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-    /* --color-synth-neon: rgba(0, 255, 204, 1); */
-    --color-synth-neon: rgba(0, 163, 112, 1);
-    --color-synth-neon-dark: rgba(0, 200, 160, 1);
-    --color-synth-cyan: #00f3ff;
+
+    /* ---- Primary brand — canonicalized, refined into a ramp ---- */
+    --color-brand: #00A370;
+    /* = today's live rgba(0,163,112,1), unchanged value */
+    --color-brand-strong: #00815A;
+    /* AA-safe on white — use for text/icons in light mode */
+    --color-brand-soft: #33D6A8;
+    /* glow/hover accent on dark surfaces */
+
+    /* ---- Accent (single CTA color) — refined synth-cyan ---- */
+    --color-accent: #00C2FF;
+    --color-accent-strong: #0092C2;
+    /* AA-safe on white */
+
+    /* ---- Back-compat aliases — zero-diff for every file already using these ---- */
+    --color-synth-neon: var(--color-brand);
+    --color-synth-neon-dark: var(--color-brand-strong);
+    --color-synth-cyan: var(--color-accent);
     --color-synth-lime: #00ff9d;
     --color-synth-amber: #F59E0B;
-    --color-aira: rgba(0, 163, 112, 1);
-    --color-aira-dark: rgba(0, 120, 80, 1);
+    --color-aira: var(--color-brand);
+    --color-aira-dark: var(--color-brand-strong);
+
+    /* ---- New surfaces — namespaced so global neutral-* (all panels) stays untouched ---- */
+    --color-surface-canvas-dark: #0a0a0a;
+    --color-surface-panel-dark: #131313;
+    --color-surface-canvas: #f7f8f9;
+    --color-surface-panel: #ffffff;
+    --color-ink-dark: #f5f5f5;
+    --color-ink: #1a1d1e;
+    --color-ink-muted-dark: #8a8f92;
+    --color-ink-muted: #5b6265;
 }
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
     body {
@@ -26,17 +52,17 @@
     /* Grid backgrounds */
     .bg-grid-neon {
         background-size: 30px 30px;
-        background-image: linear-gradient(to right, rgba(0, 255, 204, 0.05) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0, 255, 204, 0.05) 1px, transparent 1px);
+        background-image: linear-gradient(to right, color-mix(in srgb, var(--color-brand) 5%, transparent) 1px, transparent 1px),
+            linear-gradient(to bottom, color-mix(in srgb, var(--color-brand) 5%, transparent) 1px, transparent 1px);
     }
 
     /* Glow effects */
     .glow-neon {
-        box-shadow: 0 0 20px #00ffcc66;
+        box-shadow: 0 0 20px color-mix(in srgb, var(--color-brand) 40%, transparent);
     }
 
     .glow-cyan {
-        box-shadow: 0 0 20px #00f3ff66;
+        box-shadow: 0 0 20px color-mix(in srgb, var(--color-accent) 40%, transparent);
     }
 
     .glow-lime {
@@ -44,7 +70,7 @@
     }
 
     .text-glow-neon {
-        text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+        text-shadow: 0 0 10px color-mix(in srgb, var(--color-brand) 50%, transparent);
     }
 
     .text-light-blue {
@@ -90,10 +116,10 @@ button {
     transition: all 0.2s ease;
 }
 
-/* ── PWA minimum viewport ──────────────────────────────────────────── */
+/* ── PWA minimum viewport — tablet-compatible (see App.vue's checkSize) ── */
 #app {
-    min-width: 1024px;
-    min-height: 768px;
+    min-width: 768px;
+    min-height: 500px;
 }
 
 /* Overlay shown when viewport is below minimum */
@@ -117,7 +143,7 @@ button {
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #00a370;
+    color: var(--color-brand);
     margin-bottom: 0.75rem;
 }
 
@@ -141,7 +167,7 @@ input[type='range'] {
 input[type='range']::-webkit-slider-thumb {
     width: 0.8rem;
     height: 0.8rem;
-    background-color: #00ffcc;
+    background-color: var(--color-brand);
     border-radius: 9999px;
     border: 0px solid white;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);

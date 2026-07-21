@@ -3,6 +3,7 @@ import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { useConfigStore } from './useConfigStore'
 import { userKey } from '@/lib/userKey'
+import { readStoredTheme, storeTheme, applyTheme, type ThemeMode } from '@/lib/theme'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -174,6 +175,16 @@ export const useUiStore = defineStore('ui', () => {
   const uid: ComputedRef<string | undefined> = computed(() => authStore.user?.uid)
 
   const seqAutoStart: Ref<boolean> = ref(localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false')
+
+  // ── Theme (light/dark) — applied to <html> synchronously at main.js's
+  // first line, before this store even exists; this ref just mirrors that
+  // state for reactive UI (ThemeToggle) and re-applies on change ──
+  const theme: Ref<ThemeMode> = ref(readStoredTheme())
+  function toggleTheme(): void {
+    theme.value = theme.value === 'dark' ? 'light' : 'dark'
+    storeTheme(theme.value)
+    applyTheme(theme.value)
+  }
 
   const isAudioPlaying: ComputedRef<boolean> = computed(() => isPlayingPreview.value || isPlayingBacking.value)
   const lastPlaylistName: Ref<string> = ref(localStorage.getItem(userKey('S1_LAST_PLAYLIST')) || '')
@@ -516,6 +527,7 @@ export const useUiStore = defineStore('ui', () => {
     isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqActiveSlot,
     globalModCC, globalTranspose,
+    theme, toggleTheme,
     focusedModalKey, openModalKeys, cycleFocusedModal,
     closeAll, toggleMainMenu, toggleSideMenu,
     isPanelOpen, togglePanel, openPanel, closePanel,

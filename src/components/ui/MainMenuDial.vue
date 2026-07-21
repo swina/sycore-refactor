@@ -90,4 +90,14 @@ const activeLabel = computed(() => {
 })
 </script>
 
-<template></template>
+<template>
+  <div
+    v-if="activeLabel"
+    class="fixed bottom-14 left-1/2 -translate-x-1/2 z-[1050] px-3 py-1 rounded-full
+           bg-surface-panel/95 dark:bg-black/90 border border-brand/40 backdrop-blur-md
+           text-[10px] font-black uppercase tracking-widest text-brand-strong dark:text-synth-neon
+           pointer-events-none shadow-sm dark:shadow-none"
+  >
+    {{ activeLabel }}
+  </div>
+</template>

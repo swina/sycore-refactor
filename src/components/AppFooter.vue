@@ -12,6 +12,7 @@ import { moduleRegistry } from '@/core/modules/registry'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
 import TransportBar from '@/components/TransportBar.vue'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/midi-service'
 
@@ -138,7 +139,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <footer class="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-md border-t border-neutral-900/80 z-[960] text-[10px] font-mono tracking-widest text-neutral-500 uppercase h-10">
+  <footer class="fixed bottom-0 left-0 w-full bg-surface-panel/95 dark:bg-black/95 backdrop-blur-md border-t border-black/5 dark:border-neutral-900/80 z-[960] text-[10px] font-mono tracking-widest text-neutral-500 uppercase h-10">
     <div class="h-full px-4 md:px-2 flex flex-row justify-between items-center gap-2">
 
       <button
@@ -293,6 +294,7 @@ onUnmounted(() => {
           />
         </div>
 
+        <ThemeToggle size="sm" />
         <button
           v-if="authStore.user"
           @click="uiStore.isSessionOpen = true"
@@ -326,7 +328,7 @@ onUnmounted(() => {
   <Transition name="menu-slide">
     <div
       v-if="uiStore.isMainMenuOpen"
-      class="fixed bottom-10 left-0 w-full flex flex-row items-center gap-1.5 px-2 py-2 bg-black/90 backdrop-blur-md border-t border-neutral-800/60 overflow-x-auto z-[1050] justify-between"
+      class="fixed bottom-10 left-0 w-full flex flex-row items-center gap-1.5 px-2 py-2 bg-surface-panel/95 dark:bg-black/90 backdrop-blur-md border-t border-black/5 dark:border-neutral-800/60 overflow-x-auto z-[1050] justify-between"
     >
       <button
         v-for="(action, index) in menuActions"
@@ -335,7 +337,10 @@ onUnmounted(() => {
         @click="action.onClick(); uiStore.isMainMenuOpen = false"
         :class="[
           'flex-shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-xl border transition-all active:scale-95',
-          'border-white/10 bg-black/60 hover:border-white/30 hover:scale-105',
+          'border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/60 hover:border-brand/40 dark:hover:border-white/30 hover:scale-105',
+          /* MainMenuDial.vue's filteredActions (what mainMenuSelectedIndex indexes
+             into) is menuActions.reverse() — map back to this list's natural order */
+          uiStore.mainMenuSelectedIndex === (menuActions.length - 1 - index) ? 'ring-2 ring-accent' : '',
           action.color
         ]"
       >
