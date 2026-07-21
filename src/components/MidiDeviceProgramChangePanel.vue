@@ -15,6 +15,7 @@ import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { MidiSource, midiService } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
+import { on } from '@/types/events'
 
 const emit = defineEmits(['close'])
 
@@ -549,6 +550,7 @@ function clearScrollCC() {
 
 let _pcNavHandler   = null
 let _unsubDevMidi   = null
+let _unsubDevicePcOpen = null
 
 function _startDevMidiListener() {
   _unsubDevMidi?.()
@@ -612,11 +614,18 @@ onMounted(() => {
   _startDevMidiListener()
   _pcNavHandler = e => navigatePresetList(e.detail?.delta ?? 1)
   window.addEventListener('device-pc-preset-navigate', _pcNavHandler)
+  // Opened from elsewhere (e.g. the MIDI Flow canvas's per-device shortcut icon)
+  // with a specific device already in mind — jump straight to it.
+  _unsubDevicePcOpen = on('device-pc-open', ({ deviceName }) => {
+    uiStore.openPanel('device-program-change')
+    selectDevice(deviceName)
+  })
 })
 onUnmounted(() => {
   _unsubScrollCC?.()
   _unsubDevMidi?.()
   if (_pcNavHandler) window.removeEventListener('device-pc-preset-navigate', _pcNavHandler)
+  _unsubDevicePcOpen?.()
   clearTimeout(_pcNotifTimer)
 })
 

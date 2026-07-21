@@ -7,6 +7,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { dispatch } from '@/types/events'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
@@ -123,6 +124,11 @@ const APP_PANEL_ID = {
 function openApp(sourceId) {
   const panelId = APP_PANEL_ID[sourceId]
   if (panelId) uiStore.openPanel(panelId)
+}
+
+// ── Instrument device node "open Program Change panel" shortcut ──
+function openDevicePc(deviceName) {
+  dispatch('device-pc-open', { deviceName })
 }
 
 // ── Sidebar drag-to-canvas ──
@@ -903,6 +909,15 @@ function pendingPath() {
                     @click.stop="openApp(node.sourceId)"
                     class="text-purple-400/70 hover:text-purple-300 transition-colors"
                     title="Open app"
+                  >
+                    <ExternalLink class="w-3 h-3" />
+                  </button>
+                  <button
+                    v-if="!node.sourceId && node.type !== 'controller'"
+                    @click.stop="openDevicePc(node.name)"
+                    class="transition-colors"
+                    :class="typeMeta(node.type).text + ' opacity-70 hover:opacity-100'"
+                    title="Open Program Change panel"
                   >
                     <ExternalLink class="w-3 h-3" />
                   </button>

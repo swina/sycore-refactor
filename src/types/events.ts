@@ -55,6 +55,7 @@ export interface SyCoreEventMap {
   // MIDI / Controller
   'midi-main-menu': { action: 'toggle' | 'scroll' | 'select'; val: number };
   'device-pc-preset-navigate': { delta: number };
+  'device-pc-open': { deviceName: string };
 
   // Timeline
   'timeline-lm-start': { padIdx: number; bpm: number };
