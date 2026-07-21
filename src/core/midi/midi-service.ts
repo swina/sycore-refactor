@@ -19,6 +19,7 @@ import type {
   SplitConfig,
   MidiMessageType,
   MidiMonitorEntry,
+  InputRouteFilter,
 } from '@/types/midi';
 import { MidiSource } from '@/types/midi';
 import { MidiMonitor } from './midi-monitor';
@@ -36,6 +37,12 @@ export class MidiService {
   private routingConfig: RoutingConfig | null = null;
   private globalChannel = 0;
   private splitConfig: SplitConfig | null = null;
+  // Note-range filters for hardware/virtual device→device Thru connections
+  // (MIDI Flow's "MIDI Controller → Instrument" cables) — keyed by
+  // `${sourceDeviceName}→${destDeviceName}`. Kept separate from useMidiStore's
+  // inputRouting, which apps use for their own fail-open input gating, so a
+  // device→device filter can never accidentally affect app routing.
+  private outputRouteFilters: Record<string, InputRouteFilter> = {};
 
   // Sub-module instances (created in constructor)
   readonly monitor: MidiMonitor;
@@ -65,13 +72,23 @@ export class MidiService {
 
   // ── Virtual output registry ──────────────────────────────────────────────
   private virtualOutputs = new Map<string, (data: number[]) => void>();
+  // Real hardware port each virtual instrument is bound to (its Output port
+  // setting) — tracked separately since the registered sendFn closure is
+  // opaque. Used to detect the physical-loop case: an instrument's own bound
+  // output port also being the input device that's being Thru-routed to it
+  // (common when a keyboard's own Local Control/MIDI Thru echoes its output
+  // back into its input) — see routeMessageToVirtualOutputs.
+  private virtualOutputPorts = new Map<string, string>();
 
-  registerVirtualOutput(name: string, sendFn: (data: number[]) => void): void {
+  registerVirtualOutput(name: string, sendFn: (data: number[]) => void, portName?: string): void {
     this.virtualOutputs.set(name, sendFn);
+    if (portName) this.virtualOutputPorts.set(name, portName);
+    else this.virtualOutputPorts.delete(name);
   }
 
   unregisterVirtualOutput(name: string): void {
     this.virtualOutputs.delete(name);
+    this.virtualOutputPorts.delete(name);
   }
 
   getVirtualOutputNames(): string[] {
@@ -127,10 +144,35 @@ export class MidiService {
       const isRouted = hasMappings ? isRoutedByMatrix : (isRoutedByMatrix || this.router.getBroadcastMode());
       if (!isRouted) return;
 
+      // Physical-loop guard: if this instrument's own bound Output port is
+      // the same device we're currently routing FROM, forwarding here would
+      // send straight back out to that same device — many keyboards/synths
+      // echo their own output back into their input (Local Control/MIDI
+      // Thru), so this closes the loop into a runaway repeat. Matches
+      // MidiRouter.routeMessageToOutputs' equivalent same-device guard.
+      const boundPort = this.virtualOutputPorts.get(virtName);
+      if (boundPort) {
+        const normIn  = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+        const normOut = boundPort.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+        if (normIn && normOut && normIn === normOut) return;
+      }
+
       if (isNote && !outConfig.notes) return;
       if (isCC && !outConfig.cc) return;
       if (status === 0xF8 && !outConfig.clock) return;
       if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
+
+      // Note-range filter — MIDI Flow's per-cable "keyboard split" for
+      // device→device connections (Controller → virtual Instrument).
+      if (isNote) {
+        const filter = this.getOutputRouteFilter(inputName, virtName);
+        if (filter) {
+          const note = data[1];
+          const lo = filter.lowNote ?? 0;
+          const hi = filter.highNote ?? 127;
+          if (note < lo || note > hi) return;
+        }
+      }
 
       if (status >= 0xF0) {
         // System/realtime messages carry no channel nibble — send as-is.
@@ -165,6 +207,7 @@ export class MidiService {
     const getRoutingConfig = () => this.routingConfig;
     const getGlobalChannel = () => this.globalChannel;
     const getSequencerPlaying = () => this.isSequencerPlaying;
+    const getOutputRouteFilter = (sourceKey: string, destKey: string) => this.getOutputRouteFilter(sourceKey, destKey);
     const onSent = (bytes: string, now: number) => {
       this.globalSentHashes.set(bytes, now);
     };
@@ -178,6 +221,7 @@ export class MidiService {
       getGlobalChannel,
       getSmartLatch: () => this.latch,
       getSequencerPlaying,
+      getOutputRouteFilter,
       onSent,
     });
   }
@@ -265,6 +309,14 @@ export class MidiService {
 
   setRoutingConfig(config: RoutingConfig): void {
     this.routingConfig = config;
+  }
+
+  setOutputRouteFilters(filters: Record<string, InputRouteFilter>): void {
+    this.outputRouteFilters = filters;
+  }
+
+  private getOutputRouteFilter(sourceKey: string, destKey: string): InputRouteFilter | undefined {
+    return this.outputRouteFilters[`${sourceKey}→${destKey}`];
   }
 
   setGlobalChannel(channel: number): void {
@@ -480,6 +532,20 @@ export class MidiService {
     if (out) {
       try { out.send(data); } catch {}
     }
+  }
+
+  /**
+   * Silences one channel on a named output (real or virtual) — All Notes
+   * Off + Reset All Controllers + Sustain Off. Used when a channel is
+   * dropped from a multi-timbral instrument's outChannels list, so any
+   * notes/effect sends still active on that channel at the receiving synth
+   * don't get orphaned (we'd otherwise never talk to that channel again).
+   */
+  resetChannel(outputName: string, channel: number): void {
+    const ch = channel % 16;
+    [[0xb0 + ch, 123, 0], [0xb0 + ch, 120, 0], [0xb0 + ch, 64, 0]].forEach(msg => {
+      this.sendRawToDeviceByName(outputName, msg);
+    });
   }
 
   sendRawToDeviceByName(deviceName: string, data: number[]): void {

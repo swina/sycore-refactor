@@ -15,7 +15,7 @@ import {
   type MidiConfigSnapshot,
   type SmartLatchConfig,
 } from '@/lib/midi-config-presets'
-import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, MidiSource as MidiSourceType, InputRouteEntry } from '@/types/midi'
+import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, MidiSource as MidiSourceType, InputRouteEntry, InputRouteFilter } from '@/types/midi'
 
 // ---------------------------------------------------------------------------
 // LocalStorage keys
@@ -160,6 +160,17 @@ export const useMidiStore = defineStore('midi', () => {
   } catch {}
   const inputRouting = ref<Record<string, InputRouteEntry[]>>(initialInputRouting)
 
+  // Note-range filters for device→device Thru cables (MIDI FLOW's "MIDI
+  // Controller → Instrument" connections, real or virtual) — kept separate
+  // from inputRouting so it can never affect apps' own fail-open input
+  // gating. Keyed by `${sourceDeviceName}→${destDeviceName}`.
+  let initialOutputRouteFilters: Record<string, InputRouteFilter> = {}
+  try {
+    const rawOutputFilters = localStorage.getItem(userKey('SYCORE_OUTPUT_ROUTE_FILTERS'))
+    if (rawOutputFilters) initialOutputRouteFilters = JSON.parse(rawOutputFilters)
+  } catch {}
+  const outputRouteFilters = ref<Record<string, InputRouteFilter>>(initialOutputRouteFilters)
+
   // ── Virtual Instruments ──────────────────────────────────────────────────
   const VIRTUAL_INSTRUMENTS_KEY = 'S1_VIRTUAL_INSTRUMENTS'
 
@@ -195,7 +206,7 @@ export const useMidiStore = defineStore('midi', () => {
       if (v && v.midiOutputPort) {
         midiService.sendRawToDeviceByName(v.midiOutputPort, data)
       }
-    })
+    }, midiOutputPort)
     // Add a registration in the routing config so it behaves like a real device
     if (!routingConfig.value.registrations[name]) {
       addRegistration(name)
@@ -228,7 +239,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.unregisterVirtualOutput(name)
     midiService.registerVirtualOutput(name, (data: number[]) => {
       if (port) midiService.sendRawToDeviceByName(port, data)
-    })
+    }, port)
   }
 
   // Register all virtual instruments with the MIDI service on init
@@ -238,7 +249,7 @@ export const useMidiStore = defineStore('midi', () => {
         if (v.midiOutputPort) {
           midiService.sendRawToDeviceByName(v.midiOutputPort, data)
         }
-      })
+      }, v.midiOutputPort)
     })
   }
 
@@ -251,6 +262,11 @@ export const useMidiStore = defineStore('midi', () => {
 
   watch(inputRouting, (newVal) => {
     localStorage.setItem(userKey('SYCORE_INPUT_ROUTING'), JSON.stringify(newVal))
+  }, { deep: true, immediate: true })
+
+  watch(outputRouteFilters, (newVal) => {
+    localStorage.setItem(userKey('SYCORE_OUTPUT_ROUTE_FILTERS'), JSON.stringify(newVal))
+    midiService.setOutputRouteFilters(newVal)
   }, { deep: true, immediate: true })
 
   watch(midiChannel, (newVal) => {
@@ -310,8 +326,18 @@ export const useMidiStore = defineStore('midi', () => {
   }
 
   function updateRegistration(name: string, field: string, value: any) {
-    if (routingConfig.value.registrations[name]) {
-      (routingConfig.value.registrations[name] as any)[field] = value
+    const reg = routingConfig.value.registrations[name]
+    if (reg) {
+      // Dropping a channel from a multi-timbral instrument's outChannels
+      // stops us ever talking to it again — silence it first so any notes
+      // or FX sends (delay/reverb tails) still active there at the synth
+      // don't get stuck ringing forever.
+      if (field === 'outChannels') {
+        const oldChannels: number[] = (reg as any).outChannels ?? []
+        const newChannels: number[] = value ?? []
+        oldChannels.filter(ch => !newChannels.includes(ch)).forEach(ch => midiService.resetChannel(name, ch))
+      }
+      (reg as any)[field] = value
       saveRoutingConfig()
     }
   }
@@ -438,6 +464,13 @@ export const useMidiStore = defineStore('midi', () => {
     } else {
       inputRouting.value[deviceName] = entries
     }
+  }
+
+  // Wholesale-replaces the device→device Thru filter map — called once per
+  // MidiWizardFlow.vue finish() with a freshly-rebuilt map, same pattern as
+  // routingMatrix/inputRouting being fully rebuilt from the canvas each time.
+  function setOutputRouteFilters(filters: Record<string, InputRouteFilter>) {
+    outputRouteFilters.value = filters
   }
 
   // No explicit routing configured for a source yet = legacy "open to
@@ -763,6 +796,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiChannel, midiInputChannel,
     isDeviceConnected, broadcastMode, routingMatrix,
     inputRouting, setInputRouting, isDeviceRoutedToApp, hasExplicitInputRouting, addAppNoteListener,
+    outputRouteFilters, setOutputRouteFilters,
     init, refreshDevices,
     setMidiChannel, setMidiInputChannel,
     setRouting, toggleRouting, toggleBroadcastMode,

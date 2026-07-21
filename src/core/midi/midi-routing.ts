@@ -4,7 +4,7 @@
  */
 
 import { userKey } from '@/lib/userKey';
-import type { RoutingConfig, MidiSource } from '@/types/midi';
+import type { RoutingConfig, MidiSource, InputRouteFilter } from '@/types/midi';
 import type { SmartLatch } from './midi-smart-latch';
 
 const MIDI_ROUTING_KEY = 'S1_MIDI_ROUTING';
@@ -16,6 +16,9 @@ export interface RoutingContext {
   getGlobalChannel: () => number;
   getSmartLatch: () => SmartLatch;
   getSequencerPlaying: () => boolean;
+  /** Note-range filter for a device→device Thru cable, if one is set
+   * (MIDI Flow's "MIDI Controller → Instrument" connections). */
+  getOutputRouteFilter: (sourceKey: string, destKey: string) => InputRouteFilter | undefined;
   /** Called when a message byte array is sent (for echo suppression) */
   onSent: (bytes: string, now: number) => void;
 }
@@ -157,6 +160,18 @@ export class MidiRouter {
       if (isCC && !outConfig.cc) return;
       if (status === 0xF8 && !outConfig.clock) return;
       if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
+
+      // Note-range filter — MIDI Flow's per-cable "keyboard split" for
+      // device→device connections (Controller → Instrument).
+      if (isNote) {
+        const filter = this.ctx.getOutputRouteFilter(inputName, outDevice.name);
+        if (filter) {
+          const note = data[1];
+          const lo = filter.lowNote ?? 0;
+          const hi = filter.highNote ?? 127;
+          if (note < lo || note > hi) return;
+        }
+      }
 
       let bytes = data;
       let shouldForward = true;

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Disc3, ExternalLink, Activity } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Disc3, ExternalLink, Activity, Filter } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -207,6 +207,11 @@ function finish() {
 
   const outputPorts = midiService.getOutputs()
 
+  // Device→device Thru filters (MIDI Flow's "MIDI Controller → Instrument"
+  // note-range splits) — rebuilt fresh from the whole canvas each apply,
+  // same as routingMatrix/inputRouting, then committed once at the end.
+  const newOutputFilters = {}
+
   // Walk every node still on the canvas (not just ones with active cables)
   // so a source that just lost its last cable gets its routing explicitly
   // cleared instead of left stale from a previous apply.
@@ -240,6 +245,16 @@ function finish() {
       midiStore.updateRegistration(canonicalName, 'pc',          dst.pc)
       midiStore.updateRegistration(canonicalName, 'pcEnabled',   dst.pc)
       outputNames.push(canonicalName)
+
+      // Note-range filter for device→device cables (Controller → Instrument,
+      // real or virtual) — app-sourced cables use inputRouting instead (see
+      // appCables below), so this only applies when the source is hardware.
+      if (!src.sourceId && cable.filter) {
+        const { lowNote = 0, highNote = 127 } = cable.filter
+        if (lowNote > 0 || highNote < 127) {
+          newOutputFilters[`${src.name}→${canonicalName}`] = cable.filter
+        }
+      }
     }
 
     // Wire the routing matrix: apps use MidiSource enum, hardware uses device name
@@ -258,6 +273,8 @@ function finish() {
     })
     midiStore.setInputRouting(src.sourceId ?? src.name, inputEntries)
   }
+
+  midiStore.setOutputRouteFilters(newOutputFilters)
 }
 
 // ── Canvas mouse events ──
@@ -526,10 +543,22 @@ function isDeviceToAppCable(cable) {
   return !!(to && to.sourceId)
 }
 
+// Device→device cables (Controller → Instrument, real or virtual) — also
+// filterable, enforced in the hardware Thru path (see
+// MidiRouter.routeMessageToOutputs / MidiService.routeMessageToVirtualOutputs)
+// rather than an app's own input gate, since neither end is an app.
+function isHwToHwCable(cable) {
+  return !isAppCable(cable) && !isDeviceToAppCable(cable)
+}
+
+function isCableFilterable(cable) {
+  return isDeviceToAppCable(cable) || isHwToHwCable(cable)
+}
+
 const editingCableId = ref(null)
 
 function onCableClick(cable) {
-  if (isDeviceToAppCable(cable)) {
+  if (isCableFilterable(cable)) {
     if (!cable.filter) cable.filter = { lowNote: 0, highNote: 127 }
     editingCableId.value = editingCableId.value === cable.id ? null : cable.id
   } else {
@@ -792,7 +821,7 @@ function pendingPath() {
                 fill="none"
                 :stroke="isDeviceToAppCable(cable) ? '#3b82f6' : (isAppCable(cable) ? '#8b5cf6' : '#a3e635')"
                 stroke-width="2" stroke-opacity="0.65"
-                :stroke-dasharray="isDeviceToAppCable(cable) && cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127) ? '5 3' : null"
+                :stroke-dasharray="isCableFilterable(cable) && cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127) ? '5 3' : null"
                 style="pointer-events:none;"
               />
             </g>
@@ -803,6 +832,26 @@ function pendingPath() {
               fill="none" stroke="#a3e635" stroke-width="2" stroke-opacity="0.4" stroke-dasharray="6 4"
             />
           </svg>
+
+          <!-- Filter icon — a dedicated, always-visible click target for each
+               device→app cable's note-range popover. Clicking the thin cable
+               line itself can be finicky near the ports (a mousedown that
+               starts on/near a port is a drag gesture, not a click), so this
+               gives a reliable button instead. -->
+          <button
+            v-for="cable in cables.filter(isCableFilterable)"
+            :key="'filter:' + cable.id"
+            @click.stop="onCableClick(cable)"
+            @mousedown.stop
+            class="absolute z-20 w-5 h-5 rounded-full border flex items-center justify-center transition-colors"
+            :class="cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127)
+              ? 'bg-blue-500/30 border-blue-400/60 text-blue-200 hover:bg-blue-500/50'
+              : 'bg-neutral-900 border-neutral-700 text-neutral-500 hover:text-blue-300 hover:border-blue-400/50'"
+            :style="{ left: cableMidpoint(cable).x + 'px', top: cableMidpoint(cable).y + 'px', transform: 'translate(-50%, -50%)' }"
+            title="Set note-range filter (keyboard split)"
+          >
+            <Filter class="w-2.5 h-2.5" />
+          </button>
 
           <!-- Note-range filter popover (device→app cables — "keyboard split") -->
           <template v-if="editingCable">
