@@ -423,6 +423,10 @@ watch(routingSignature, () => {
   finish()
 })
 
+// ── Sidebar section collapse state ──
+const showDevicesSection = ref(true)
+const showAppsSection    = ref(true)
+
 // ── Named saved canvas configurations ──
 const showConfigsMenu  = ref(false)
 const newConfigName    = ref('')
@@ -689,47 +693,69 @@ function pendingPath() {
         <!-- Sidebar -->
         <div class="w-44 shrink-0 bg-neutral-900/40 border-r border-neutral-800 flex flex-col overflow-y-auto custom-scrollbar p-3 gap-1.5">
 
-          <!-- MIDI Apps -->
-          <p class="text-[8px] font-bold uppercase tracking-widest text-neutral-600 mb-1 px-1">MIDI Apps</p>
-          <div
-            v-for="app in MIDI_APPS"
-            :key="app.sourceId"
-            draggable="true"
-            @dragstart="onSidebarDragStart($event, { name: app.name, sourceId: app.sourceId, hasIn: app.hasIn ?? false, hasOut: true })"
-            class="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:border-purple-500/50 hover:bg-purple-900/20 cursor-grab active:cursor-grabbing transition-colors"
-          >
-            <component :is="app.icon" class="w-3 h-3 text-purple-400 shrink-0" />
-            <span class="text-[9px] font-mono font-bold text-purple-200 truncate leading-tight">{{ app.name }}</span>
-          </div>
-
           <!-- MIDI Devices -->
-          <p class="text-[8px] font-bold uppercase tracking-widest text-neutral-600 mt-2 mb-1 px-1">MIDI Devices</p>
-          <!-- Type legend -->
-          <div class="flex flex-col gap-0.5 px-1 mb-1.5">
-            <span v-for="(meta, key) in DEVICE_TYPE_META" :key="key" class="flex items-center gap-1.5 text-[7px] font-mono text-neutral-500">
-              <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="meta.dot" />{{ meta.label }}
-            </span>
-          </div>
-          <div v-if="!allDevices.length" class="text-[9px] text-neutral-700 font-mono text-center pt-2">
-            No devices detected
-          </div>
-          <div
-            v-for="dev in allDevices"
-            :key="dev.name"
-            draggable="true"
-            @dragstart="onSidebarDragStart($event, dev)"
-            class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-l-2 border-neutral-800 bg-neutral-900 hover:bg-neutral-800/60 cursor-grab active:cursor-grabbing transition-colors"
-            :class="typeMeta(dev.type).accent"
+          <button
+            @click="showDevicesSection = !showDevicesSection"
+            class="flex items-center justify-between px-1 group bg-red-900/60 p-1 rounded"
           >
-            <span class="flex items-center gap-1.5 min-w-0">
-              <component :is="typeMeta(dev.type).icon" class="w-2.5 h-2.5 shrink-0" :class="typeMeta(dev.type).text" />
-              <span class="text-[9px] font-mono font-bold text-white truncate leading-tight">{{ dev.name }}</span>
-            </span>
-            <div class="flex gap-1">
-              <span v-if="dev.hasIn"  class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wide">IN</span>
-              <span v-if="dev.hasOut" class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-synth-neon/20 text-synth-neon uppercase tracking-wide">OUT</span>
+            <span class="text-[8px] font-bold uppercase tracking-widest text-neutral-300 group-hover:text-neutral-400 transition-colors">MIDI Devices</span>
+            <ChevronDown
+              class="w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform"
+              :class="showDevicesSection ? '' : '-rotate-90'"
+            />
+          </button>
+          <template v-if="showDevicesSection">
+            <!-- Type legend -->
+            <div class="flex flex-col gap-0.5 px-1 mb-1.5">
+              <span v-for="(meta, key) in DEVICE_TYPE_META" :key="key" class="flex items-center gap-1.5 text-[7px] font-mono text-neutral-500">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="meta.dot" />{{ meta.label }}
+              </span>
             </div>
-          </div>
+            <div v-if="!allDevices.length" class="text-[9px] text-neutral-700 font-mono text-center pt-2">
+              No devices detected
+            </div>
+            <div
+              v-for="dev in allDevices"
+              :key="dev.name"
+              draggable="true"
+              @dragstart="onSidebarDragStart($event, dev)"
+              class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-l-2 border-neutral-800 bg-neutral-900 hover:bg-neutral-800/60 cursor-grab active:cursor-grabbing transition-colors"
+              :class="typeMeta(dev.type).accent"
+            >
+              <span class="flex items-center gap-1.5 min-w-0">
+                <component :is="typeMeta(dev.type).icon" class="w-2.5 h-2.5 shrink-0" :class="typeMeta(dev.type).text" />
+                <span class="text-[9px] font-mono font-bold text-white truncate leading-tight">{{ dev.name }}</span>
+              </span>
+              <div class="flex gap-1">
+                <span v-if="dev.hasIn"  class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wide">IN</span>
+                <span v-if="dev.hasOut" class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-synth-neon/20 text-synth-neon uppercase tracking-wide">OUT</span>
+              </div>
+            </div>
+          </template>
+
+          <!-- MIDI Apps -->
+          <button
+            @click="showAppsSection = !showAppsSection"
+            class="flex items-center justify-between px-1 mt-2 group bg-emerald-900/60 p-1 rounded"
+          >
+            <span class="text-[8px] font-bold uppercase tracking-widest text-white-600 group-hover:text-neutral-400 transition-colors">MIDI Apps</span>
+            <ChevronDown
+              class="w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform"
+              :class="showAppsSection ? '' : '-rotate-90'"
+            />
+          </button>
+          <template v-if="showAppsSection">
+            <div
+              v-for="app in MIDI_APPS"
+              :key="app.sourceId"
+              draggable="true"
+              @dragstart="onSidebarDragStart($event, { name: app.name, sourceId: app.sourceId, hasIn: app.hasIn ?? false, hasOut: true })"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:border-purple-500/50 hover:bg-purple-900/20 cursor-grab active:cursor-grabbing transition-colors"
+            >
+              <component :is="app.icon" class="w-3 h-3 text-purple-400 shrink-0" />
+              <span class="text-[9px] font-mono font-bold text-purple-200 truncate leading-tight">{{ app.name }}</span>
+            </div>
+          </template>
         </div>
 
         <!-- Canvas -->
