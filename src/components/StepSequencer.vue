@@ -1041,6 +1041,16 @@ onMounted(() => {
     return midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.SEQUENCER, note)
   }
 
+  // Auto-starting the sequencer's own transport is a higher-stakes action than
+  // just sounding a note, so — unlike isMidiDeviceAllowed/isAppSourceAllowed
+  // above — this does NOT fail open in broadcast mode. It requires an explicit
+  // MIDI Flow routing entry for the source, mirroring the same guard applied to
+  // ChordProgSequencer.vue and DrumMachine.vue.
+  function canAutoStart(sourceApp, inputId) {
+    const sourceKey = sourceApp || midiService.getInputs().find(i => i.id === inputId)?.name
+    return !!sourceKey && midiStore.hasExplicitInputRouting(sourceKey)
+  }
+
   const handleIncomingNote = (type, note, velocity, chan, inputId, sourceApp) => {
     if (window.SY_LOG) {
       window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, sourceApp=${sourceApp || 'null'}, isOpen=${props.isOpen}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
@@ -1052,8 +1062,10 @@ onMounted(() => {
       if (hasSavedSeqConfig.value && !isRecording.value && allowed) {
         if (type === 'on' && velocity > 0) {
           if (!isPlaying.value && uiStore.seqAutoStart) {
-            dynamicMidiTranspose.value = note - sequenceRootMidi.value
-            isPlaying.value = true
+            if (canAutoStart(sourceApp, inputId)) {
+              dynamicMidiTranspose.value = note - sequenceRootMidi.value
+              isPlaying.value = true
+            }
           } else if (isPlaying.value) {
             dynamicMidiTranspose.value = note - sequenceRootMidi.value
           }
@@ -1127,7 +1139,7 @@ onMounted(() => {
 
     // Auto-start for linked sequences when panel is open but sequencer not yet running
     if (!isPlaying.value && hasSavedSeqConfig.value && !isRecording.value && uiStore.seqAutoStart) {
-      if (type === 'on' && velocity > 0) {
+      if (type === 'on' && velocity > 0 && canAutoStart(sourceApp, inputId)) {
         dynamicMidiTranspose.value = note - sequenceRootMidi.value
         isPlaying.value = true
       }
