@@ -195,7 +195,14 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   }
 
   function toggleInstrumentMute(name: string) {
+    const wasAudible = !isEffectivelyMuted('inst:' + name, !!instrumentMuted.value[name])
     instrumentMuted.value = { ...instrumentMuted.value, [name]: !instrumentMuted.value[name] }
+    // Muting is just a volume fader (CC#7) — it doesn't release a note that's
+    // still sustaining, or an aux-bus delay/reverb send still ringing on that
+    // channel. Silence the channel outright the moment it goes audible→muted.
+    if (wasAudible && isEffectivelyMuted('inst:' + name, !!instrumentMuted.value[name])) {
+      midiService.resetChannel(name, _regOutChannel(name))
+    }
     _sendInstCC(name)
   }
 
@@ -245,7 +252,13 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
 
   function toggleVirtualChannelMute(name: string, ch: number) {
     const key = _virtKey(name, ch)
+    const wasAudible = !isEffectivelyMuted('virt:' + key, !!virtualChannelMuted.value[key])
     virtualChannelMuted.value = { ...virtualChannelMuted.value, [key]: !virtualChannelMuted.value[key] }
+    // Same reasoning as toggleInstrumentMute: CC#7 volume alone won't release
+    // a held note or stop a delay/reverb tail already ringing on that channel.
+    if (wasAudible && isEffectivelyMuted('virt:' + key, !!virtualChannelMuted.value[key])) {
+      midiService.resetChannel(name, ch)
+    }
     _sendVirtChanCC(name, ch)
   }
 
