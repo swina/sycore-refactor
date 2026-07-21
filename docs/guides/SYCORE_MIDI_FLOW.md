@@ -53,7 +53,7 @@ Drop sidebar items onto the dot-grid canvas. Each dropped item becomes a movable
 - **App nodes** — purple-toned cards with the app icon, an OUT port, and an IN port if the app accepts input
 - **Device nodes** — color-coded cards (by device type) with device name, IN port (left), OUT port (right), flag toggles, and channel selectors
 
-Each app node's header also has an **open-app** shortcut (external-link icon) that jumps straight to that app's panel, plus the **X** button to remove the node.
+Each app node's header also has an **open-app** shortcut (external-link icon) that jumps straight to that app's panel. Instrument device nodes (Instrument Single/Multi and Virtual Instrument — not Controllers) get the same icon, but it opens the **Device Program Change** panel pre-selected to that device instead. Every node's header also has the **X** button to remove it.
 
 ### Building Connections
 
@@ -92,6 +92,17 @@ Hardware device nodes expose inline controls:
 | **PC** | Toggle program change messages |
 | **IN ch** | Input channel: OMNI or 1–16 |
 | **OUT ch** | Output channel: OMNI or 1–16 |
+
+---
+
+## Virtual Instrument Configuration
+
+Virtual Instrument nodes get two extra controls beyond the standard device controls above, since a virtual instrument isn't a real WebMIDI port:
+
+| Control | Description |
+|---|---|
+| **Output port** | The real MIDI output that physically carries this virtual instrument's data. Also editable from [MIDI Devices](./SYCORE_MIDI_DEVICES.md)'s Virtual Instruments list — both controls update the same setting. |
+| **Multi-CH out** | A 16-button channel grid for multi-timbral fanout — select any combination of channels (e.g. 1, 2, 4) to duplicate every outgoing note/CC/PC onto all of them at once, instead of a single channel. Useful for a virtual multi-instrument rack where several parts should sound together from one source (e.g. Chord Sequencer OUT feeding three layered parts). When at least one channel is selected here, it overrides the regular **OUT ch** selector above (shown disabled while overridden). Leave empty to fall back to OUT ch's single-channel behavior. |
 
 ---
 
