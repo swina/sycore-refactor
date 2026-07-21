@@ -274,6 +274,28 @@ function finish() {
     midiStore.setInputRouting(src.sourceId ?? src.name, inputEntries)
   }
 
+  // Sync each device/virtual-instrument node's own settings (channel
+  // config, flags) even when nothing is cabled to it on the canvas — the
+  // loop above only ever touches a dst node's settings as a side effect of
+  // walking hwCables, so a device relying on Broadcast Mode (the default —
+  // actively receiving notes with zero explicit cables) never got its
+  // Multi-CH out / OUT ch / flag changes committed at all.
+  for (const node of canvasNodes.value) {
+    if (node.sourceId) continue
+    const webMidiPort = outputPorts.find(p => p.name === node.name)
+    const canonicalName = webMidiPort?.name ?? node.name
+    const isRegistered = !!midiStore.routingConfig?.registrations?.[canonicalName]
+    if (!isRegistered) continue
+    midiStore.updateRegistration(canonicalName, 'outChannel',  node.outChannel)
+    midiStore.updateRegistration(canonicalName, 'outChannels', node.outChannels ?? [])
+    midiStore.updateRegistration(canonicalName, 'clock',       node.sync)
+    midiStore.updateRegistration(canonicalName, 'transport',   node.transport)
+    midiStore.updateRegistration(canonicalName, 'notes',       node.notes)
+    midiStore.updateRegistration(canonicalName, 'cc',          node.cc)
+    midiStore.updateRegistration(canonicalName, 'pc',          node.pc)
+    midiStore.updateRegistration(canonicalName, 'pcEnabled',   node.pc)
+  }
+
   midiStore.setOutputRouteFilters(newOutputFilters)
 }
 
@@ -330,7 +352,11 @@ function initFromStore() {
       hasIn: reg.inEnabled, hasOut: reg.outEnabled,
       x: 0, y: 0,
       inChannel: reg.inChannel ?? -1, outChannel: reg.outChannel ?? -1,
-      outChannels: reg.outChannels ?? [],
+      // Copy, not reference — node.outChannels is mutated in place by
+      // toggleNodeOutChannel (splice/push). Sharing the store's own array
+      // here would let that mutation silently corrupt the live registration
+      // before finish()/updateRegistration ever runs its before/after diff.
+      outChannels: [...(reg.outChannels ?? [])],
       sync: reg.clock ?? true, transport: reg.transport ?? true,
       notes: reg.notes ?? true, cc: reg.cc ?? true, pc: reg.pc ?? true,
     }

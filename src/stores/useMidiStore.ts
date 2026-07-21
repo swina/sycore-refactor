@@ -335,9 +335,17 @@ export const useMidiStore = defineStore('midi', () => {
       if (field === 'outChannels') {
         const oldChannels: number[] = (reg as any).outChannels ?? []
         const newChannels: number[] = value ?? []
-        oldChannels.filter(ch => !newChannels.includes(ch)).forEach(ch => midiService.resetChannel(name, ch))
+        const removed = oldChannels.filter(ch => !newChannels.includes(ch))
+        removed.forEach(ch => midiService.resetChannel(name, ch))
       }
-      (reg as any)[field] = value
+      // Copy arrays rather than store the caller's reference — MidiWizardFlow
+      // passes its own canvas node's outChannels array here on every apply.
+      // Storing it by reference means a later in-place mutation of that same
+      // node (toggleNodeOutChannel's splice/push) silently rewrites this
+      // registration too, so the very next updateRegistration call reads an
+      // already-corrupted "old" value and the before/after diff above can
+      // never detect a real change.
+      (reg as any)[field] = Array.isArray(value) ? [...value] : value
       saveRoutingConfig()
     }
   }

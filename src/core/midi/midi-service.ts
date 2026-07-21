@@ -535,14 +535,24 @@ export class MidiService {
   }
 
   /**
-   * Silences one channel on a named output (real or virtual) — All Notes
-   * Off + Reset All Controllers + Sustain Off. Used when a channel is
-   * dropped from a multi-timbral instrument's outChannels list, so any
-   * notes/effect sends still active on that channel at the receiving synth
-   * don't get orphaned (we'd otherwise never talk to that channel again).
+   * Silences one channel on a named output (real or virtual) — used when a
+   * channel is dropped from a multi-timbral instrument's outChannels list,
+   * so any note still sounding there doesn't get orphaned (we'd otherwise
+   * never talk to that channel again — the routing fanout recomputes
+   * target channels from the *current* outChannels on every send, so a
+   * later Note Off for a note that started before the channel was removed
+   * never reaches it either).
+   *
+   * Sends literal Note Off for every note 0-127 in addition to the CC-based
+   * All Notes Off/Reset/Sustain Off, since many MIDI-to-CV/Gate interfaces
+   * (Eurorack-style hardware in particular) only respond to explicit
+   * Note On/Off pairs and silently ignore channel-mode CCs like CC123.
    */
   resetChannel(outputName: string, channel: number): void {
     const ch = channel % 16;
+    for (let note = 0; note < 128; note++) {
+      this.sendRawToDeviceByName(outputName, [0x80 + ch, note, 0]);
+    }
     [[0xb0 + ch, 123, 0], [0xb0 + ch, 120, 0], [0xb0 + ch, 64, 0]].forEach(msg => {
       this.sendRawToDeviceByName(outputName, msg);
     });
