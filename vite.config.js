@@ -10,7 +10,7 @@ const resolveAlias = {
 };
 
 const devServer = {
-  port: Number(process.env.VITE_DEV_PORT) || 3094,
+  port: Number(process.env.VITE_DEV_PORT) || 4100,
   host: '0.0.0.0',
   proxy: {
     '/freesound-api': {

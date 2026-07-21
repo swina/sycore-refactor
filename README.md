@@ -22,23 +22,26 @@ SY.CORE is a professional-grade, local-first web application that serves as a ce
 - **Freesound Browser** — search, preview, and inject sounds from [freesound.org](https://freesound.org) into playlists, loop pads, or Audio Capture.
 
 ### MIDI Tools
-- **Devices** — auto-discover and register your MIDI hardware.
-- **Flow** — visual drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices.
+- **Devices** — auto-discover and register your MIDI hardware, plus Virtual Instruments (software synths reachable through a virtual MIDI cable) with a bindable real output port.
+- **Flow** — visual drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices. Supports device→app and app→app routing with per-connection note-range filters (keyboard splits), multi-channel fanout for multi-timbral virtual instruments (e.g. duplicate one part onto CH 1, 2 and 4), one-click shortcuts to open a routed app or a device's Program Change panel straight from its canvas node, and named saved canvas configurations that auto-restore on reopen.
 - **Controller Designer** — visual canvas for designing custom MIDI controller layouts with draggable controls and preset management.
-- **Monitor** — real-time MIDI event monitoring and logging.
+- **Monitor** — real-time MIDI event monitoring and logging, one click away from the MIDI Flow canvas footer for checking messages while you wire up routing.
 - **MIDI Manager** — unified MIDI control center for routing, mapping, and device management.
 - **Mapping** — MIDI CC to application parameter binding.
 - **Actions** — per-device app action binding (MIDI CC/Note → high-level actions: start sequencer, toggle looper, change preset).
-- **Sync** — cross-subsystem transport synchronization matrix.
+- **Sync** — cross-subsystem transport synchronization matrix, backed by a single global BPM control that keeps Tone.js playback and outgoing MIDI clock to hardware in lockstep across every synced app.
 - **MIDI Capture** — record, view, and export MIDI events in real time.
-- **Multi Sound / Program Change Browser** — browse and send Program Change messages to connected devices.
+- **Multi Sound / Program Change Browser** — browse and send Program Change messages to connected devices, organize sounds into custom named banks per device, and import external preset listings (e.g. E-MU Emulator X3 exports).
 
 ### Live Performance
 - **Live Performance Pad** — pad-based performance panel for triggering sounds and sequences on stage.
 - **Live Timeline** — visual arrangement timeline with segments, MIDI markers, and transport control.
 - **Step Sequencer** — algorithmic composition and MIDI sequencing engine with style-based generation.
-- **Chord Progression Sequencer** — step-based harmonic sequencer with built-in chord library, arpeggio mode, and algorithmic generation.
+- **Chord Progression Sequencer** — step-based harmonic sequencer with built-in chord library, algorithmic generation, and 8 independent progression slots (A–H) chainable into a longer arrangement. Chord/Arp play mode, chord-strum direction, and arpeggio pattern can all be overridden per step, so a single progression can mix strummed chords and arpeggios freely.
 - **Drum Machine** — 8-track 16-step pattern sequencer with A–F sequence banks, Fill, Repeater, style generation, and REC SYNC.
+
+### Platform
+- **Module Manager** — enable or disable individual app modules to keep the workspace focused on what you actually use; disabled modules are hidden from every toolbar, dock, and quick-launcher.
 
 ---
 
@@ -74,6 +77,19 @@ SY.CORE connects over Web MIDI — plug in your hardware and it's recognized imm
 
 ---
 
+## Why SY.CORE — Benefits & Workflow Scenarios
+
+SY.CORE isn't a single instrument or a single tool — it's the layer that sits between your gear, your DAW-less ideas, and the performance itself. A few concrete scenarios where that pays off:
+
+- **One visual hub for a multi-device rig.** Instead of hunting through each synth's own MIDI settings, drag devices and apps onto the MIDI Flow canvas and draw cables between them. Split one keyboard across a Roland S-1, a soft-synth, and a drum machine using note-range filters — or fan one part out to CH 1, 2, and 4 on a multi-timbral virtual rack — all visually, all applied live as you connect.
+- **Compose harmony first, arrangement second.** The Chord Progression Sequencer's 8 independent slots (A–H) let you sketch a verse, chorus, and bridge as separate progressions, then chain them into a full arrangement without losing the ability to edit each section independently. Per-step Chord/Arp overrides mean a single progression can strum some chords and arpeggiate others — no need to bounce between a chord tool and an arpeggiator.
+- **A rig that stays in tempo without babysitting.** One global BPM control keeps every synced app — sequencers, the drum machine, outgoing MIDI clock to hardware — locked together. Change tempo from a MIDI CC knob mid-performance and everything follows, instead of hunting down three separate tempo fields.
+- **Beyond the hardware's onboard memory.** The Roland S-1 (and other supported gear) ships with a fixed pattern/patch limit — SY.CORE's unlimited preset library and per-device Program Change banks (including imports from external listing formats) mean your sound library isn't capped by what fits on the device itself.
+- **A workspace that only shows what you need.** Module Manager lets you disable the tools you're not using for a given session, so a sound-design pass and a live-performance set-up don't have to share the same cluttered toolbar.
+- **No install, no drivers, no lock-in.** Everything above runs directly in the browser over the Web MIDI and Web Audio APIs — no ASIO drivers, no installer, always the latest version, and your session state persists locally so closing the tab mid-set is safe. See [SY.CORE Advantages](./docs/guides/SYCORE_ADVANTEGES.md) for the deeper technical case.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -92,18 +108,13 @@ npm install
 
 ### Run (Development)
 
-<h3 style="color:red;">The current last version to run is branch is release/0.1.1</h2>
-
 ```bash
-git checkout release/0.1.1
+npm run dev
 ```
 
+Starts on port `4100` (or `VITE_DEV_PORT` if set) using the default IndexedDB database. This is the standard way to run the app.
 
-```bash
-npm run dev:refactor
-```
-
-Starts on port `3999` with an alternate database name (`sycore_2`).
+`npm run dev:refactor` is also available if you need to run this checkout side-by-side with another SY.CORE instance — it uses a different port (`3999`) and a separate IndexedDB database (`sycore_2`) so neither instance clobbers the other's local data.
 
 ### Build for Production
 
