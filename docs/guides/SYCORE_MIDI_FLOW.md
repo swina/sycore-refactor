@@ -1,6 +1,6 @@
 # MIDI Flow
 
-**Purpose:** Visual, drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices.
+**Purpose:** Visual, drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices — including device→app and app→app input routing.
 
 <img src="/help/guides/sycore-midi-wizard-flow.png"/>
 
@@ -8,31 +8,41 @@
 
 ## Overview
 
-The MIDI Flow panel provides a graphical canvas to build your MIDI routing topology. Drag sources from the sidebar, drop them onto the canvas, and connect them by drawing cables between ports. Once configured, commit the wiring to the active routing matrix.
+The MIDI Flow panel provides a graphical canvas to build your MIDI routing topology. Drag sources from the sidebar, drop them onto the canvas, and connect them by drawing cables between ports. Routing applies **live** — every change is committed to the store automatically, no separate "apply" step required.
 
 ---
 
 ## Sidebar
 
-Two sidebar sections list draggable items:
+The sidebar has two collapsible sections. Click a section header to expand/collapse it (chevron indicates state).
+
+### MIDI Devices
+
+All registered hardware/virtual devices from `midiStore.routingConfig.registrations`, color-coded by type:
+
+| Type | Color |
+|---|---|
+| Controller | Sky blue |
+| Instrument (Single) | Rose |
+| Instrument (Multi) | Violet |
+| Virtual Instrument | Amber |
+
+Each device shows **IN**/**OUT** capability badges and has both an OUT port and an IN port on the canvas.
 
 ### MIDI Apps (Virtual Sources)
 
-| App | Source ID |
-|---|---|
-| Step Sequencer | `SEQUENCER` |
-| Arpeggiator | `ARP` |
-| Virtual Keyboard | `KEYBOARD` |
-| Chord Progression | `CHORD_PROG` |
-| Drum Machine | `DRUM_MACHINE` |
-| Loop Machine | `LOOP_MACHINE` |
-| MIDI Learn / CC | `MIDI_CC` |
+| App | Source ID | Has IN |
+|---|---|---|
+| Step Sequencer | `SEQUENCER` | ✓ |
+| Chord Sequencer | `CHORD_PROG` | ✓ |
+| Virtual Keyboard | `KEYBOARD` | ✓ |
+| Arpeggiator | `ARP` | |
+| Transport / Clock | `TRANSPORT` | |
+| Sound Engine | `UI` | |
+| Drum Machine | `DRUM_MACHINE` | ✓ |
+| Sampler | `SAMPLER` | ✓ |
 
-Each app has only an **OUT** port — it sends MIDI but cannot receive.
-
-### MIDI Devices (Hardware)
-
-All registered hardware devices from `midiStore.routingConfig.registrations`. Each device shows IN/OUT capability badges and has both an **OUT** port and an **IN** port.
+Every app has an **OUT** port. Apps marked "Has IN" also expose an **IN** port, so they can receive routed MIDI from a device or from another app (e.g. Chord Sequencer OUT → Virtual Keyboard IN).
 
 ---
 
@@ -40,24 +50,32 @@ All registered hardware devices from `midiStore.routingConfig.registrations`. Ea
 
 Drop sidebar items onto the dot-grid canvas. Each dropped item becomes a movable node card:
 
-- **App nodes** — purple-toned cards with app icon, OUT port only
-- **Device nodes** — dark cards with device name, IN port (left) and OUT port (right), flag toggles, and channel selectors
+- **App nodes** — purple-toned cards with the app icon, an OUT port, and an IN port if the app accepts input
+- **Device nodes** — color-coded cards (by device type) with device name, IN port (left), OUT port (right), flag toggles, and channel selectors
+
+Each app node's header also has an **open-app** shortcut (external-link icon) that jumps straight to that app's panel, plus the **X** button to remove the node.
 
 ### Building Connections
 
-1. **OUT port** → **IN port**: Click and drag from a node's green OUT dot (right side) to another node's blue IN dot (left side)
+1. **OUT port** → **IN port**: click and drag from a node's green OUT dot (right side) to another node's blue IN dot (left side)
 2. A dashed bezier preview follows the cursor while dragging
-3. Cables appear as colored SVG bezier curves:
-   - **Purple** (`#8b5cf6`) — app to device connections
-   - **Lime** (`#a3e635`) — device to device connections
+3. Cables are colored by connection type:
+   - **Lime** (`#a3e635`) — device to device
+   - **Blue** (`#3b82f6`) — device to app (device→app input routing)
+   - **Purple** (`#8b5cf6`) — app to app (app→app input routing)
+4. A dashed cable indicates a device→app connection with an active note-range filter
+
+### Note-Range Filters (Keyboard Split)
+
+Click any device→app cable to open its note-range popover. Set **Low**/**High** (0–127) to restrict which notes flow through that connection — e.g. split one keyboard so the low half feeds the Drum Machine and the high half feeds the Step Sequencer. Leaving the full 0–127 range means no filtering.
 
 ### Removing Connections
 
-Click on any cable to delete it. An invisible wide hit-area path makes clicking easy.
+Click on any cable to delete it (or open its note-range popover and use the remove action). An invisible wide hit-area path makes clicking easy.
 
 ### Removing Nodes
 
-Click the **X** button on a node card to remove both the node and all its connected cables.
+Click the **X** button on a node card to remove the node along with all its connected cables and any input-routing entries tied to it.
 
 ---
 
@@ -77,11 +95,21 @@ Hardware device nodes expose inline controls:
 
 ---
 
-## Apply Routing
+## Saved Configurations
 
-Once connections are built, click **Apply Routing** in the footer to commit the visual wiring to the store. This calls `midiStore.addRegistration`, `midiStore.updateRegistration`, and `midiStore.setRouting` for each source/destination pair. The connection count is displayed in the footer.
+Use the **folder** button in the header to save, load, overwrite, or delete named canvas snapshots (nodes + cables):
 
-Use the header **Reload** button (`:RefreshCw:`) to re-read the current store state and rebuild the canvas from existing routing data.
+- **Save** the current canvas under a new name
+- Click a saved entry to **load** it — replaces the current canvas
+- Hover an entry for **overwrite** (save icon) and **delete** (trash icon) actions
+- The footer shows the currently loaded configuration name with a quick overwrite button
+- The last loaded/saved configuration is remembered and automatically reloaded the next time MIDI Flow opens
+
+---
+
+## Live Routing
+
+Routing changes apply automatically as you build the canvas — the footer's **Live** indicator confirms this. The **Re-apply** button forces a manual re-sync if needed, and the header **Reload** button (`RefreshCw`) re-reads the current store state and rebuilds the canvas from scratch, discarding unsaved canvas edits.
 
 ---
 
