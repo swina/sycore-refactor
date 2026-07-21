@@ -68,6 +68,48 @@ describe('useMidiStore device→app input routing (isDeviceRoutedToApp)', () => 
     expect(midiStore.isDeviceRoutedToApp('Keyboard B', MidiSource.SEQUENCER)).toBe(true)
     expect(midiStore.isDeviceRoutedToApp('Keyboard B', MidiSource.DRUM_MACHINE)).toBe(true)
   })
+})
+
+// hasExplicitInputRouting is the guard auto-start-on-note call sites (Chord
+// Progression Sequencer, Drum Machine) must AND with isDeviceRoutedToApp —
+// unlike isDeviceRoutedToApp alone, it does NOT fail open, so an unwired
+// device/app can never auto-start an app's own ongoing playback just
+// because MIDI Flow hasn't been configured yet.
+describe('useMidiStore hasExplicitInputRouting (auto-start guard)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('is false by default when a source has no explicit routing entries', () => {
+    const midiStore = useMidiStore()
+    expect(midiStore.hasExplicitInputRouting('My Keyboard')).toBe(false)
+  })
+
+  it('becomes true once at least one explicit cable exists for that source', () => {
+    const midiStore = useMidiStore()
+    midiStore.setInputRouting('My Keyboard', [{ app: MidiSource.CHORD_PROG }])
+    expect(midiStore.hasExplicitInputRouting('My Keyboard')).toBe(true)
+  })
+
+  it('goes back to false once routing is cleared', () => {
+    const midiStore = useMidiStore()
+    midiStore.setInputRouting('My Keyboard', [{ app: MidiSource.CHORD_PROG }])
+    midiStore.setInputRouting('My Keyboard', [])
+    expect(midiStore.hasExplicitInputRouting('My Keyboard')).toBe(false)
+  })
+
+  it('reproduces the Chord Sequencer -> Drum Machine auto-start bug fix: unwired app source must not pass the guard even though isDeviceRoutedToApp fails open', () => {
+    const midiStore = useMidiStore()
+    // No routing configured anywhere — matches the reported bug's starting state.
+    expect(midiStore.isDeviceRoutedToApp(MidiSource.CHORD_PROG, MidiSource.DRUM_MACHINE)).toBe(true)
+    expect(midiStore.hasExplicitInputRouting(MidiSource.CHORD_PROG)).toBe(false)
+
+    // Only once the user explicitly wires Chord Sequencer OUT -> Drum Machine IN
+    // in MIDI Flow should the auto-start guard (hasExplicitInputRouting && isDeviceRoutedToApp) pass.
+    midiStore.setInputRouting(MidiSource.CHORD_PROG, [{ app: MidiSource.DRUM_MACHINE }])
+    expect(midiStore.hasExplicitInputRouting(MidiSource.CHORD_PROG)).toBe(true)
+    expect(midiStore.isDeviceRoutedToApp(MidiSource.CHORD_PROG, MidiSource.DRUM_MACHINE)).toBe(true)
+  })
 
   // inputRouting is just string-keyed, so an app's own MidiSource id works
   // as a routing key exactly like a device name does — this is what makes

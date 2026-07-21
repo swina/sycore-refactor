@@ -232,11 +232,21 @@ export function useControllerManager() {
     }
 
     const matchedMapping = mappings.find(m => {
-      // Robust device matching: partial and case-insensitive
+      // A mapping with neither note nor cc set is malformed — without this
+      // guard it would fall through both checks below and match every
+      // incoming message, on every channel. Reject rather than treat as a
+      // wildcard; there's no UI concept of an intentional "any message" mapping.
+      if (m.note === undefined && m.cc === undefined) return false
+
+      // Robust device matching: partial and case-insensitive. A blank/missing
+      // device is also malformed, not a wildcard — dName.includes('') is
+      // always true, so without this guard an empty m.device would silently
+      // match every connected device.
       const mName = (m.device || '').toLowerCase()
+      if (!mName) return false
       const dName = deviceName.toLowerCase()
       if (mName !== dName && !dName.includes(mName)) return false
-      
+
       if (m.channel !== -1 && m.channel !== chan) return false
       if (m.note !== undefined && m.note !== note) return false
       if (m.cc !== undefined && m.cc !== cc) return false
@@ -282,7 +292,7 @@ export function useControllerManager() {
 
       lastTriggerTimes.set(action, now)
 
-      log(`User Override: Executing Custom Action ${action}`)
+      log(`User Override: Executing Custom Action ${action} (mapping id=${matchedMapping.id ?? '?'}, device="${matchedMapping.device}", ${matchedMapping.note !== undefined ? `note=${matchedMapping.note}` : `cc=${matchedMapping.cc}`}, incoming device="${deviceName}")`)
       if (action !== 'pass_thru') {
         // Note mappings: normalize velocity so any press passes the >63 threshold
         const effectiveVal = matchedMapping.note !== undefined ? Math.max(data[2], 64) : data[2]

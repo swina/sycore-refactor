@@ -100,6 +100,58 @@ export class MidiService {
     this.globalSentHashes.set(data.join(','), Date.now());
   }
 
+  /**
+   * Thru-routes a raw incoming hardware message to registered virtual
+   * outputs — the counterpart to MidiRouter.routeMessageToOutputs, which
+   * only ever loops MIDIAccess's real outputs and can't reach a virtual
+   * instrument at all. Lives here (not in MidiRouter) since virtualOutputs
+   * is private to this class. Mirrors broadcast()'s outChannels fanout so a
+   * multi-timbral virtual instrument gets duplicated onto every selected
+   * channel from hardware input the same way it already does from an app's
+   * generated notes.
+   */
+  private routeMessageToVirtualOutputs(data: Uint8Array, inputName: string, now: number): void {
+    if (this.virtualOutputs.size === 0) return;
+    const status = data[0];
+    const isNote = (status & 0xf0) === 0x90 || (status & 0xf0) === 0x80;
+    const isCC = (status & 0xf0) === 0xb0;
+    const targetsFromMatrix = inputName ? this.router.matrix.get(inputName) : null;
+
+    this.virtualOutputs.forEach((_, virtName) => {
+      const outConfig = this.routingConfig?.registrations[virtName];
+      if (!outConfig || !outConfig.outEnabled) return;
+      if (outConfig.midiThru === false) return;
+
+      const isRoutedByMatrix = targetsFromMatrix ? targetsFromMatrix.has(virtName) : false;
+      const hasMappings = !!targetsFromMatrix && targetsFromMatrix.size > 0;
+      const isRouted = hasMappings ? isRoutedByMatrix : (isRoutedByMatrix || this.router.getBroadcastMode());
+      if (!isRouted) return;
+
+      if (isNote && !outConfig.notes) return;
+      if (isCC && !outConfig.cc) return;
+      if (status === 0xF8 && !outConfig.clock) return;
+      if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
+
+      if (status >= 0xF0) {
+        // System/realtime messages carry no channel nibble — send as-is.
+        this.sendToVirtualOutput(virtName, Array.from(data));
+        return;
+      }
+
+      // outChannels (multi-timbral fanout) takes precedence over the single
+      // outChannel remap, exactly like broadcast()'s app-generated-note path.
+      const channels = (outConfig.outChannels && outConfig.outChannels.length > 0)
+        ? outConfig.outChannels
+        : [outConfig.outChannel !== -1 ? outConfig.outChannel : (status & 0x0f)];
+
+      channels.forEach(ch => {
+        const newStatus = (status & 0xf0) | (ch % 16);
+        const bytes = data.length >= 2 ? [newStatus, ...Array.from(data.slice(1))] : [newStatus];
+        this.sendToVirtualOutput(virtName, bytes);
+      });
+    });
+  }
+
   // ── Public state flags ───────────────────────────────────────────────────
   isSmartLatchActive = false;
   isSequencerPlaying = false;
@@ -813,6 +865,7 @@ export class MidiService {
         (!isNote && !isCC && !isSystem);
       if (passGlobal) {
         this.router.routeMessageToOutputs(processedData as Uint8Array, inputId, now);
+        this.routeMessageToVirtualOutputs(processedData as Uint8Array, inputDevice?.name || '', now);
       }
     }
 

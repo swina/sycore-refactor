@@ -1,6 +1,6 @@
 # SY.CORE — Connecting Your MIDI Devices
 
-> **Audience:** First-time setup · Live performers · Studio producers  
+> **Audience:** First-time setup · Live performers · Studio producers
 > **Prerequisite:** A browser that supports the Web MIDI API (Chrome, Edge, or Opera recommended)
 
 ---
@@ -21,7 +21,20 @@ SY.CORE uses the **Web MIDI API** — a browser-native interface that talks dire
 - DIN-5 MIDI (unless you use a USB-MIDI interface)
 - Virtual MIDI ports created by a DAW (the DAW must expose them as system MIDI ports)
 
-> **Roland S-1 users:** The Roland S-1 is directly supported. SY.CORE auto-detects it on startup and pre-configures CC mappings automatically — skip straight to [Step 3](#step-3--open-the-midi-manager).
+> **Roland S-1 users:** The Roland S-1 is directly supported. SY.CORE auto-detects it on startup and pre-configures CC mappings automatically — skip straight to [Step 3](#step-3--register-your-devices).
+
+### The 4 tools you actually need
+
+SY.CORE's MIDI configuration lives in four tools, each with a distinct job:
+
+| Tool | Job |
+|---|---|
+| **MIDI Devices** | Discover and register hardware/virtual MIDI ports |
+| **MIDI Flow** | The visual canvas — routing, per-device channels, note-range filters, saved configurations |
+| **MIDI Controller Designer** | Bind a controller's knobs/pads/keys to synth parameters or app actions |
+| **MIDI Learn** | Not a panel — right-click any fader/button anywhere in the app to bind it to a physical CC/note on the spot |
+
+You'll also see a **MIDI Manager** entry (and its Routing/Performance/Matrix sub-views) in Module Manager — these are legacy, disabled by default, and duplicate state the 4 tools above already own (same underlying device registrations, same routing data, different UI). They're not deleted, just off by default; re-enable them from Module Manager only if you specifically need their config-preset export/import or a grid-style view instead of the canvas. This guide only covers the 4 canonical tools.
 
 ---
 
@@ -30,7 +43,7 @@ SY.CORE uses the **Web MIDI API** — a browser-native interface that talks dire
 1. Plug your device into a USB port on your computer (or hub).
 2. If the device requires external power, switch it on.
 3. Wait for the OS to enumerate it (usually 2–5 seconds). On Windows you may see a brief "Setting up device" notification.
-4. **Open SY.CORE in Chrome, Edge, or Opera.**  
+4. **Open SY.CORE in Chrome, Edge, or Opera.**
    Firefox does not implement the Web MIDI API and will not detect any device.
 
 ---
@@ -50,164 +63,87 @@ Click **Allow**. If you accidentally click Block, go to the browser's site setti
 
 ---
 
-
 [<button class="border px-8 py-2 border-neutral-700 rounded m-auto hover:bg-synth-neon bg-synth-neon/50">Next MIDI DEVICES</button>](./SYCORE_MIDI_DEVICES.md)
 
-## Step 3 — Open the MIDI Devices
+## Step 3 — Register Your Devices
 
-<!-- [<img src="/help/guides/sycore-midi-devices.png"/>](./SYCORE_MIDI_DEVICES.md) -->
-<!-- [MIDI Devices](./SYCORE_MIDI_DEVICES.md) -->
+Open **MIDI Devices**. Full reference: [MIDI Devices guide](./SYCORE_MIDI_DEVICES.md).
 
-<!-- In the SY.CORE header, click the **MIDI** button (or use the keyboard shortcut assigned to it). The **Unified MIDI Manager** modal opens.
-
-
-All eight tabs are described below in the order you will use them during initial setup.
-
---- -->
-
-## Step 4 — MIDI Flow (Devices Tab)
-
-<img src="/help/guides/sycore-midi-routing-flow.png"/>
-
-Open the **Devices** tab (the first tab, selected by default).
-
-The panel lists every MIDI port detected by the Web MIDI API — inputs and outputs — grouped by physical device. Each entry shows:
-
-| Column | Meaning |
-|--------|---------|
-| **Name** | Port name as reported by the OS / driver |
-| **Type** | Auto-classified: Controller · Instrument · Audio Interface |
-| **Status** | Online (green) or Offline (gray) |
+The panel lists every MIDI port detected by the Web MIDI API — inputs and outputs — grouped by physical device.
 
 ### If your device is not listed
 
-- Click the **Refresh** button (circular arrow) in the top-right of the Devices tab. This re-scans the Web MIDI API without reloading the page.
+- Click **Refresh** — re-scans the Web MIDI API without reloading the page.
 - Unplug and re-plug the USB cable, wait 3 seconds, then refresh again.
 - Make sure no other application (DAW, standalone synth editor) has taken exclusive ownership of the port.
 
 ### Register the device
 
-Click **Add to Routing** next to the device you want to use. This moves it into the routing system so it appears in all other tabs. Registered devices persist across sessions — you only need to do this once per device.
+Click **Add to routing** on the device you want to use. Registered devices persist across sessions — you only need to do this once per device. If the auto-detected type is wrong, click the type dropdown to override it.
 
-If the auto-detected type is wrong (e.g. a controller is classified as an instrument), click the type badge to cycle through the options. Your choice is saved immediately.
-
----
-
-## Step 5 — Configure Routing (Routing Tab)
-
-<img src="/help/guides/sycore-midi-routing.png"/>
-
-Switch to the **Routing** tab. You will see one row per registered device in **Grid view**.
-
-### Enable inputs and outputs
-
-| Column | What to do |
-|--------|-----------|
-| **MIDI IN** | Toggle ON for every device you want SY.CORE to *receive* from (controllers, sequencers, clock sources) |
-| **MIDI OUT** | Toggle ON for every device SY.CORE should *send* to (synths, drum machines, audio interfaces with MIDI) |
-| **SYNC** | Toggle ON to forward MIDI Clock (0xF8) to this device |
-| **TRSP** | Toggle ON to forward Start / Stop / Continue messages |
-| **NOTE** | Toggle ON to forward note data (Note On / Note Off) |
-| **CC** | Toggle ON to forward Control Change messages |
-| **PC** | Toggle ON to enable Program Change dispatch (only when OUT is enabled) |
-
-A typical controller + one synth setup looks like this:
-
-```
-Device              IN   OUT  SYNC  TRSP  NOTE  CC   PC
-─────────────────── ──── ──── ───── ───── ───── ──── ────
-Keystep (ctrl)       ✔    —    —     —     —     —    —
-Roland S-1           —    ✔    ✔     ✔     ✔     ✔    ✔
-```
-
-### Set MIDI channels
-
-Each device row has channel selectors next to the IN and OUT toggles:
-
-- **IN channel** — `OMNI` (receive all channels) or `1–16` (receive one specific channel only). Use OMNI unless you need to filter a specific channel.
-- **OUT channel** — `Pass-through` (send on the channel the message arrived on) or `1–16` (force all outgoing messages to a fixed channel). Set this to match the receive channel on your hardware.
-
-### Global Thru Bridge
-
-At the bottom of the Routing tab, enabling **Global Thru Bridge** forwards all incoming messages directly to all active outputs without any processing. Useful for connecting a controller to a hardware synth in pass-through mode. You can limit the bridge to Notes only or CC only using the Thru Filters toggles.
+**Setting up a software synth?** Use the **Virtual Instruments** section at the bottom of the same panel instead — name it, then bind its real output port (either there or from its node in MIDI Flow).
 
 ---
 
-## Step 6 — Set Up Performance Routing (Performance Tab)
+## Step 4 — Wire It Up in MIDI Flow
 
-<img src="/help/guides/sycore-midi-performance-grid.png"/>
+<img src="/help/guides/sycore-midi-routing-flow.png"/>
 
-The **Performance** tab controls which *internal SY.CORE sources* route to which hardware outputs.
+Open **MIDI Flow**. Full reference: [MIDI Flow guide](./SYCORE_MIDI_FLOW.md).
 
-| Source | Sends from |
-|--------|-----------|
-| **Keyboard** | On-screen keyboard / touch input |
-| **Sequencer** | Step sequencer MIDI output |
-| **Arpeggiator** | Arpeggiated note stream |
-| **UI / Preview** | Sound library preview triggers |
-| **Transport / Clock** | Internal MIDI clock generator |
-| *(your physical inputs)* | Hardware controllers (MIDI Thru) |
+Drag your registered devices and any app you want to route (Step Sequencer, Chord Sequencer, etc.) onto the canvas, then draw a cable from one node's **OUT** port to another's **IN** port. Routing applies live — no separate "apply" step.
 
-Enable the checkbox at each source → output intersection to create a route. For example, to route the on-screen keyboard to your Roland S-1:
+A typical controller + one synth setup: drag the Keystep and the Roland S-1 onto the canvas, cable Keystep's OUT to Roland S-1's IN.
 
-```
-                   Roland S-1
-                   ──────────
-Keyboard           ✔
-Sequencer          ✔
-Arpeggiator        ✔
-UI / Preview       ✔  (this enables the Sound Engine to generate sounds for the device)
-Transport          ✔
-```
+### Per-device channel & message-type controls
 
-### Broadcast Mode
+Click a device node to reveal its inline controls, right on the canvas:
 
-Toggle **Broadcast Mode** (top of the Performance tab) to send all sources to all active outputs simultaneously. Useful during sound checks when you want everything to reach all devices without configuring individual routes.
+| Control | What to do |
+|---|---|
+| **SYNC** | Forward MIDI Clock (0xF8) to this device |
+| **TRSP** | Forward Start / Stop / Continue messages |
+| **NOTE** | Forward note data |
+| **CC** | Forward Control Change messages |
+| **PC** | Enable Program Change dispatch |
+| **IN ch** | `OMNI` or a fixed 1–16 |
+| **OUT ch** | `OMNI`/pass-through or a fixed 1–16 |
 
----
+These are the same underlying settings MIDI Devices' registration list shows — MIDI Flow is just the live, visual place to edit them while you're already wiring things up.
 
-## Step 7 — Mapping (Map CC Controls)
+### Keyboard splits and multi-channel virtual instruments
 
-<img src="/help/guides/sycore-midi-mapping.png"/>
+Click any device→app cable to set a note-range filter (e.g. low keys to a bass synth, high keys to a lead synth — see the guide for the full keyboard-split walkthrough). A virtual instrument configured as multi-timbral gets a **Multi-CH out** grid on its node instead of a single OUT channel, so one source can drive several of its parts at once.
 
-If you want a physical knob or fader on your controller to control a parameter in SY.CORE or on your synth hardware, use the **Mapping** tab.
+### Save your wiring
 
-### MIDI Learn workflow
-
-1. Click **MIDI LEARN** — the button glows and the app enters learn mode.
-2. Move the knob or fader on your controller. SY.CORE detects the CC number, device name, and channel automatically.
-3. Open the **Target parameter** dropdown and select what that knob should control (S-1 hardware parameters, app parameters, etc.).
-4. Click **Confirm Mapping**. The binding is saved immediately.
-
-Repeat for each control. Mappings can be saved as named presets (see [Step 9](#step-9--save-your-configuration)).
+Use the header's folder icon to save the current canvas as a named configuration, and reload it later in one click — see [MIDI Flow → Saved Configurations](./SYCORE_MIDI_FLOW.md#saved-configurations).
 
 ---
 
-## Step 8 — Map App Actions (Actions Tab)
+## Step 5 — Map Controls & Actions
 
-The **Actions** tab lets you bind MIDI notes or CC values to high-level SY.CORE functions — things like:
+If you want a physical knob, pad, or key on your controller to control something in SY.CORE, you have two options:
 
-- Next / Previous preset
-- Start / Stop the sequencer
-- Toggle the Looper
-- Switch UI panels
+### Quick: MIDI Learn (right-click anywhere)
 
-The workflow is the same as MIDI Learn in the Mapping tab:
+Right-click almost any fader, button, or knob in SY.CORE — mixer channels, sequencer controls, the transport bar, and more — and choose **MIDI Learn**. Move the physical control on your hardware; SY.CORE detects the device/CC/note automatically and binds it on the spot. No dedicated panel needed — this works the same way everywhere in the app.
 
-1. Choose a target **App Action** from the category list.
-2. Click **MIDI LEARN**.
-3. Press the button, pad, or key on your controller.
-4. The binding is confirmed automatically.
+### Full control: MIDI Controller Designer
 
-### Launchpad Mini MK1
+Open **MIDI Controller Designer** for a dedicated visual layout — drag-place pads, sliders, and encoders to mirror your physical controller, then assign each one to either:
+- an **app parameter** (S-1 hardware parameters, app parameters) — the same kind of binding as MIDI Learn, with a persistent visual layout, or
+- an **app action** (start/stop the sequencer, toggle the looper, next/previous preset, switch panels, etc.)
 
-SY.CORE includes a built-in profile for the **Novation Launchpad Mini MK1**. When detected, the top row of 8 buttons (CC 104–111) is pre-mapped to app actions and LED feedback is active — no manual binding required. The grid (8×8 note pads) is available for custom bindings via the Actions tab.
+Controller Designer also has a sweep-to-discover mode that auto-detects a control's CC/note by moving it, so you don't have to know your hardware's CC map in advance.
+
+> **Novation Launchpad Mini MK1:** SY.CORE includes a built-in profile — the top row (CC 104–111) is pre-mapped to app actions with LED feedback automatically, no manual binding required. The 8×8 grid is free for custom bindings via Controller Designer.
 
 ---
 
-## Step 9 — Verify with the Monitor (Monitor Tab)
+## Step 6 — Verify with MIDI Monitor
 
-Before leaving setup, open the **Monitor** tab and click **Start**. Play a note or move a knob on your controller. You should see entries appear in real time:
+Before leaving setup, open **MIDI Monitor** and click **Start**. Play a note or move a knob on your controller — entries appear in real time:
 
 ```
 →  IN   Keystep       Ch 1   Note On   C4   vel 87
@@ -217,22 +153,15 @@ Before leaving setup, open the **Monitor** tab and click **Start**. Play a note 
 - **IN** entries (blue arrow) = messages received from your controller
 - **OUT** entries (green arrow) = messages sent to your synth
 
-If IN entries appear but OUT entries do not, check the Routing tab and confirm the output device has **NOTE** and/or **CC** enabled.
+If IN entries appear but OUT entries do not, check MIDI Flow and confirm the cable to that device has **NOTE** and/or **CC** enabled. MIDI Monitor is also reachable directly from MIDI Flow's footer while you're wiring things up.
 
 Use the **Direction**, **Type**, and **Device** filters to narrow the view when debugging a specific issue.
 
 ---
 
-## Step 10 — Save Your Configuration (Settings Tab)
+## Resetting MIDI Configuration
 
-Once everything works, switch to the **Settings** tab and save a named preset:
-
-1. Type a name (e.g. `Studio Rig`, `Live Set A`).
-2. Click **Save Preset**.
-
-This snapshot captures: device registrations, routing matrix, channel assignments, performance routes, keyboard split, smart latch settings, and CC mappings. Load it in one click at the start of your next session.
-
-You can also click **Export** to download a `.json` file as a backup or to transfer the configuration to another machine.
+If something's behaving strangely and you want to rule out a stale mapping, a full reset (device registrations, routing, keyboard split, smart latch, **and both mapping systems** — MIDI Learn and MIDI Actions) is available from the legacy MIDI Manager's Settings tab. Since MIDI Manager is off by default (see above), enable it first from **Module Manager**, open it, go to **Settings**, and use **Reset all MIDI settings to defaults**. This is also where config-preset export/import lives if you want a full backup before making changes.
 
 ---
 
@@ -243,21 +172,18 @@ You can also click **Export** to download a `.json` file as a backup or to trans
 ```
 Goal: Keystep plays notes on Roland S-1 via SY.CORE
 
-Devices tab:  Register both devices
-Routing tab:  Keystep IN ✔  |  Roland S-1 OUT ✔ (Notes ✔, CC ✔)
-Performance:  Keyboard → Roland S-1 ✔
+MIDI Devices:  Register both devices
+MIDI Flow:     Drag both onto the canvas, cable Keystep OUT -> Roland S-1 IN
 ```
 
 ### Two synths, one controller, keyboard split
 
 ```
-Goal: Low keys → Bass synth  |  High keys → Lead synth
+Goal: Low keys -> Bass synth  |  High keys -> Lead synth
 
-Routing tab:  Register all three devices
-              Bass Synth OUT ✔  |  Lead Synth OUT ✔
-Performance:  Enable Keyboard Split (bottom of Performance tab)
-              Split Note: C3
-              Low Device: Bass Synth  |  High Device: Lead Synth
+MIDI Devices:  Register all three devices
+MIDI Flow:     Cable the controller to both synths, click each cable to set
+               its note-range filter (e.g. 0-59 -> Bass, 60-127 -> Lead)
 ```
 
 ### External clock master (DAW or hardware)
@@ -265,8 +191,8 @@ Performance:  Enable Keyboard Split (bottom of Performance tab)
 ```
 Goal: Receive clock from external master, drive internal sequencer
 
-Routing tab:  Clock Source IN ✔  |  Enable "Receive Sync In" on that device
-Sync tab:     Enable "MIDI START → Step Sequencer"
+MIDI Devices:  Enable "Receive Sync In" on the clock source device
+MIDI Flow:     Cable the clock source's IN as needed for your setup
 ```
 
 ### Record MIDI output
@@ -274,8 +200,8 @@ Sync tab:     Enable "MIDI START → Step Sequencer"
 ```
 Goal: Capture the sequencer's MIDI output to a file
 
-Use the MIDI Capture tool (header toolbar → Capture button)
-The Monitor tab's Export button downloads a JSON log of all messages
+Use the MIDI Capture tool (header toolbar -> Capture button)
+MIDI Monitor's Export button downloads a JSON log of all messages
 ```
 
 ---
@@ -284,13 +210,15 @@ The Monitor tab's Export button downloads a JSON log of all messages
 
 | Symptom | Check |
 |---------|-------|
-| No devices appear in Devices tab | Browser permission denied — reset MIDI permission in browser site settings and reload |
-| Device appears offline | Unplug, replug, click Refresh in Devices tab |
-| Notes heard on wrong channel | Set OUT channel on the synth's row in Routing tab to match hardware receive channel |
-| Controller knobs have no effect | Routing tab → CC toggle must be ON for the synth output; also check Mapping tab for CC conflicts |
+| No devices appear in MIDI Devices | Browser permission denied — reset MIDI permission in browser site settings and reload |
+| Device appears offline | Unplug, replug, click Refresh in MIDI Devices |
+| Notes heard on wrong channel | Set OUT channel on the device's node in MIDI Flow to match hardware receive channel |
+| Controller knobs have no effect | MIDI Flow → CC toggle must be ON for the target device; also check for a conflicting MIDI Learn *and* Controller Designer Actions binding on the same control |
+| A control seems to trigger two things at once | It's likely bound in both MIDI Learn and Controller Designer's Actions system for the same device/CC/note — both can fire for one message; remove one of the two bindings |
 | Clock drifts | Disable "Receive Sync In" on non-clock devices; only one source should drive the clock |
-| Echo / double notes | Echo suppression is automatic (300ms window); if still occurring, disable Global Thru Bridge |
+| Echo / double notes | Echo suppression is automatic (300ms window); if still occurring, check for a stray MIDI Thru route in MIDI Flow |
 | Roland S-1 not auto-configured | It may not have been connected when the app loaded — reload with the S-1 powered on and connected |
+| Something's still off after checking the above | Try a full reset — see [Resetting MIDI Configuration](#resetting-midi-configuration) |
 
 ---
 
@@ -306,4 +234,4 @@ The Monitor tab's Export button downloads a JSON log of all messages
 
 ---
 
-*Last updated: 2026-05-31*
+*Last updated: 2026-07-21*

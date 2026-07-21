@@ -574,7 +574,13 @@ let _unsubMidiNote = null
 function _onMidiNoteIn(type, note, velocity, chan, inputId) {
   if (type !== 'on' || velocity <= 0) return
   const inputDevice = midiService.getInputs().find(i => i.id === inputId)
-  if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.DRUM_MACHINE, note)) return
+  const sourceKey = inputDevice?.name
+  // Starting playback is a much bigger deal than just sounding a note, so
+  // this requires an explicit MIDI Flow cable to this source — unlike most
+  // isDeviceRoutedToApp checks elsewhere, an unwired device must NOT
+  // auto-start the drum machine just because nothing's been configured yet.
+  if (!midiStore.hasExplicitInputRouting(sourceKey)) return
+  if (!midiStore.isDeviceRoutedToApp(sourceKey, MidiSource.DRUM_MACHINE, note)) return
   if (!drumStore.isPlaying) drumStore.isPlaying = true
 }
 
@@ -584,6 +590,9 @@ function _onMidiNoteIn(type, note, velocity, chan, inputId) {
 let _unsubAppNote = null
 function _onAppNoteIn(type, note, velocity, chan, sourceApp) {
   if (type !== 'on' || velocity <= 0) return
+  // Same reasoning as _onMidiNoteIn — an unwired app source (e.g. Chord
+  // Sequencer playing) must not auto-start the drum machine by default.
+  if (!midiStore.hasExplicitInputRouting(sourceApp)) return
   if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.DRUM_MACHINE, note)) return
   if (!drumStore.isPlaying) drumStore.isPlaying = true
 }

@@ -175,10 +175,13 @@ export const useConfigStore = defineStore('config', () => {
               ...appData, toolbar: toolbarConfig.value, updatedAt: new Date().toISOString(),
             }).catch(err => console.error('[ConfigStore] Migration rename failed', err))
           } else if (!toolbarConfig.value.find((b: ToolbarButton) => b.id === 'midi_matrix')) {
-            console.log('[ConfigStore] Migration: Adding midi_matrix button to toolbar')
+            // Off by default — duplicates routing state already owned by MIDI
+            // Flow (see docs/plans/modular/Routing-Mapping-Sync.md). Still
+            // reachable via Module Manager.
+            console.log('[ConfigStore] Migration: Adding midi_matrix button to toolbar (disabled by default)')
             toolbarConfig.value.push({
               id: 'midi_matrix', label: 'MIDI Matrix', icon: 'Network',
-              enabled: true, fab: 'settings', toolbar: 'main',
+              enabled: false, fab: 'settings', toolbar: 'main',
             })
             setDoc(doc(db, 'system', 'app_settings'), {
               ...appData, toolbar: toolbarConfig.value, updatedAt: new Date().toISOString(),
@@ -231,6 +234,34 @@ export const useConfigStore = defineStore('config', () => {
             setDoc(doc(db, 'system', 'app_settings'), {
               ...appData, toolbar: toolbarConfig.value, updatedAt: new Date().toISOString(),
             }).catch(err => console.error('[ConfigStore] Migration live-performance-pad failed', err))
+          }
+
+          // Migration: Add midi-manager button, off by default — superseded by
+          // MIDI Devices / MIDI Flow / Controller Designer as the canonical
+          // configuration surface (see docs/plans/modular/Routing-Mapping-Sync.md).
+          // Still reachable via Module Manager for anyone who wants it.
+          if (!toolbarConfig.value.find((b: ToolbarButton) => b.id === 'midi-manager')) {
+            console.log('[ConfigStore] Migration: Adding midi-manager button to toolbar (disabled by default)')
+            toolbarConfig.value.push({
+              id: 'midi-manager', label: 'MIDI Manager', icon: 'Cpu',
+              enabled: false, fab: 'settings', toolbar: 'main',
+            })
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData, toolbar: toolbarConfig.value, updatedAt: new Date().toISOString(),
+            }).catch(err => console.error('[ConfigStore] Migration midi-manager failed', err))
+          }
+
+          // Migration: Add midi-performance button, off by default — duplicates
+          // routing state already owned by MIDI Flow.
+          if (!toolbarConfig.value.find((b: ToolbarButton) => b.id === 'midi-performance')) {
+            console.log('[ConfigStore] Migration: Adding midi-performance button to toolbar (disabled by default)')
+            toolbarConfig.value.push({
+              id: 'midi-performance', label: 'MIDI Performance', icon: 'Network',
+              enabled: false, fab: 'settings', toolbar: 'main',
+            })
+            setDoc(doc(db, 'system', 'app_settings'), {
+              ...appData, toolbar: toolbarConfig.value, updatedAt: new Date().toISOString(),
+            }).catch(err => console.error('[ConfigStore] Migration midi-performance failed', err))
           }
         }
         if (appData.toolbarIconSize) {

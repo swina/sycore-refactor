@@ -459,6 +459,18 @@ export const useMidiStore = defineStore('midi', () => {
     return note >= lo && note <= hi
   }
 
+  // isDeviceRoutedToApp's fail-open default (unwired source = open to
+  // everyone) is right for one-shot actions like sounding a note (Virtual
+  // Keyboard, Sampler) but wrong for auto-starting an app's own ongoing
+  // playback/transport (Chord Sequencer, Drum Machine) — that should never
+  // happen just because MIDI Flow hasn't been configured yet. Call sites
+  // that auto-start playback on an incoming note should require this to be
+  // true (i.e. at least one explicit cable exists for this source) *in
+  // addition to* isDeviceRoutedToApp, instead of relying on it alone.
+  function hasExplicitInputRouting(sourceKey: string): boolean {
+    return (inputRouting.value[sourceKey]?.length ?? 0) > 0
+  }
+
   // ── App-to-app note routing (MIDI FLOW app→app cables) ────────────────────
   // Apps generate notes via sendNoteOn/sendNoteOff below, which is a separate
   // pipeline from midiService.addNoteListener (that one only ever sees real/
@@ -750,7 +762,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiReady, outputs, inputs,
     midiChannel, midiInputChannel,
     isDeviceConnected, broadcastMode, routingMatrix,
-    inputRouting, setInputRouting, isDeviceRoutedToApp, addAppNoteListener,
+    inputRouting, setInputRouting, isDeviceRoutedToApp, hasExplicitInputRouting, addAppNoteListener,
     init, refreshDevices,
     setMidiChannel, setMidiInputChannel,
     setRouting, toggleRouting, toggleBroadcastMode,

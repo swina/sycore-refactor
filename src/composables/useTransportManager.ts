@@ -9,7 +9,13 @@ export function useTransportManager() {
 
   function acquireTransport(): void {
     participantCount++
-    if (!_isRunning) {
+    // Check Tone's actual transport state, not just the internal _isRunning
+    // flag — HMR, an error mid-playback, or any path that skips
+    // releaseTransport can desync the two, leaving _isRunning=true while the
+    // real transport is stopped. That desync looks like "plays once and
+    // never advances": a scheduleRepeat callback only fires while the
+    // underlying transport is actually running.
+    if (!_isRunning || getTransport().state !== 'started') {
       _isRunning = true
       getTransport().start()
       isRunning.value = true

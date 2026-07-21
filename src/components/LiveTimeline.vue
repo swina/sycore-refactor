@@ -1386,6 +1386,7 @@ function _onTransportCC(cc, val, chan, inputId) {
   const deviceName = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
   const paramName  = _resolveParamFromCC(cc, chan, deviceName)
   if (!paramName) return
+  console.log(`[LiveTimeline] CC ${cc}=${val} from "${deviceName || 'Unknown'}" (CH ${chan + 1}) -> ${paramName}`)
   if (paramName === 'live_timeline_play_stop' && val > 63) { isPlaying.value ? pause() : play() }
   else if (paramName === 'live_timeline_stop' && val > 63) { stop() }
 }
@@ -1393,14 +1394,20 @@ function _onTransportCC(cc, val, chan, inputId) {
 function _onTransportNote(type, note, velocity, chan, inputId) {
   if (type !== 'on' || velocity === 0) return
   const deviceName  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
-  const preciseKey  = deviceName ? `${deviceName}:CH${chan + 1}:Note${note}` : `CH${chan + 1}:Note${note}`
-  const deviceKey   = deviceName ? `${deviceName}:Note${note}` : null
-  const plainKey    = `Note${note}`
+  // Must match confirmLearn's key format exactly (useMappingStore.ts) — it
+  // always saves the fragment as uppercase `NOTE${n}`. This previously read
+  // `Note${note}` (mixed case), which is a different string key and could
+  // never match a mapping actually saved by the standard MIDI Learn flow.
+  const preciseKey  = deviceName ? `${deviceName}:CH${chan + 1}:NOTE${note}` : `CH${chan + 1}:NOTE${note}`
+  const deviceKey   = deviceName ? `${deviceName}:NOTE${note}` : null
+  const plainKey    = `NOTE${note}`
   const mapping     = mappingStore.midiMappings[preciseKey] ||
                       (deviceKey ? mappingStore.midiMappings[deviceKey] : null) ||
                       mappingStore.midiMappings[plainKey]
   const paramName   = mapping ? (typeof mapping === 'object' ? mapping.paramName : mapping) : null
   if (!paramName) return
+  const isGlobalFallback = !mappingStore.midiMappings[preciseKey] && !(deviceKey && mappingStore.midiMappings[deviceKey])
+  console.log(`[LiveTimeline] Note ${note} from "${deviceName || 'Unknown'}" (CH ${chan + 1}) -> ${paramName}${isGlobalFallback ? ' [device-agnostic mapping — matches this note on ANY device]' : ''}`)
   if (paramName === 'live_timeline_play_stop') { isPlaying.value ? pause() : play() }
   else if (paramName === 'live_timeline_stop') { stop() }
 }

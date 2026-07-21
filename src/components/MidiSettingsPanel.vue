@@ -89,16 +89,21 @@ function importConfig(e) {
   reader.readAsText(file)
 }
 
-function resetDefaults() {
-  if (!confirm('Reset all MIDI settings to defaults? This will reload the page.')) return
+async function resetDefaults() {
+  if (!confirm('Reset all MIDI settings to defaults? This clears MIDI Learn and MIDI Actions mappings too, and will reload the page.')) return
   const keys = [
     'SYCORE_ADVANCED_MIDI_ROUTING', 'S1_MIDI_ROUTING', 'SYCORE_KEYBOARD_SPLIT',
     'SYCORE_SMARTLATCH_ACTIVE', 'SYCORE_SMARTLATCH_MAX', 'SYCORE_SMARTLATCH_REPLACE',
-    'SYCORE_SMARTLATCH_FADE', 'midiMappings', 'midiChannel', 'midiInputChannel',
+    'SYCORE_SMARTLATCH_FADE', 'midiChannel', 'midiInputChannel',
     'midiSendClock', 'midiSyncTransport', 'midiSyncSequencerTransport',
     'SYCORE_DEVICE_REGISTRY',
   ]
   keys.forEach(k => localStorage.removeItem(userKey(k)))
+  // Go through the store (not a raw localStorage key) so both mapping
+  // systems are actually cleared — appMidiMappings is Firestore/idb-backed,
+  // not localStorage, so it was previously left untouched by this reset.
+  mappingStore.clearMidiMappings()
+  await mappingStore.clearAppMidiMappings()
   window.location.reload()
 }
 </script>
