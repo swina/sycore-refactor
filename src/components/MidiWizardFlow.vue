@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Radio, Disc3 } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Radio, Disc3, ExternalLink } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -103,12 +103,27 @@ const MIDI_APPS = [
   { name: 'Virtual Keyboard',  sourceId: MidiSource.KEYBOARD,   icon: KeyboardIcon, hasIn: true },
   { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music     },
   { name: 'Transport / Clock', sourceId: MidiSource.TRANSPORT,  icon: Zap       },
-  { name: 'UI / Preview',      sourceId: MidiSource.UI,         icon: Layers    },
+  { name: 'Sound Engine',      sourceId: MidiSource.UI,         icon: Layers    },
   { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum,   hasIn: true },
   { name: 'Sampler',           sourceId: MidiSource.SAMPLER,    icon: Disc3,        hasIn: true },
 ]
 
 const appIconMap = Object.fromEntries(MIDI_APPS.map(a => [a.sourceId, a.icon]))
+
+// ── App node "open app" shortcut — maps a MIDI_APPS sourceId to the uiStore panel id ──
+const APP_PANEL_ID = {
+  [MidiSource.SEQUENCER]:    'sequencer',
+  [MidiSource.CHORD_PROG]:   'chord-prog',
+  [MidiSource.KEYBOARD]:     'keyboard',
+  [MidiSource.ARP]:          'arp',
+  [MidiSource.UI]:           'sound-engine',
+  [MidiSource.DRUM_MACHINE]: 'drum-machine',
+  [MidiSource.SAMPLER]:      'sampler',
+}
+function openApp(sourceId) {
+  const panelId = APP_PANEL_ID[sourceId]
+  if (panelId) uiStore.openPanel(panelId)
+}
 
 // ── Sidebar drag-to-canvas ──
 function onSidebarDragStart(e, device) {
@@ -882,12 +897,22 @@ function pendingPath() {
                     :class="node.sourceId ? 'text-purple-200' : 'text-white'"
                   >{{ node.name }}</span>
                 </span>
-                <button
-                  @click.stop="removeNode(node.id)"
-                  class="text-neutral-600 hover:text-red-400 transition-colors shrink-0"
-                >
-                  <X class="w-3 h-3" />
-                </button>
+                <span class="flex items-center gap-1.5 shrink-0">
+                  <button
+                    v-if="node.sourceId && APP_PANEL_ID[node.sourceId]"
+                    @click.stop="openApp(node.sourceId)"
+                    class="text-purple-400/70 hover:text-purple-300 transition-colors"
+                    title="Open app"
+                  >
+                    <ExternalLink class="w-3 h-3" />
+                  </button>
+                  <button
+                    @click.stop="removeNode(node.id)"
+                    class="text-neutral-600 hover:text-red-400 transition-colors"
+                  >
+                    <X class="w-3 h-3" />
+                  </button>
+                </span>
               </div>
               <!-- Hardware-only: flags + channels -->
               <template v-if="!node.sourceId">
