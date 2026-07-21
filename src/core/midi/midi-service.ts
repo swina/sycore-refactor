@@ -614,37 +614,44 @@ export class MidiService {
       const out = this.midiAccess?.outputs.get(id);
       if (!out) return;
 
-      let targetChannel = channel;
       const config = this.routingConfig?.registrations[out.name];
-      if (config) {
-        if (config.isMulti) {
-          targetChannel = channel;
-        } else if (config.outChannel !== -1) {
-          targetChannel = config.outChannel;
+      // outChannels (multi-timbral fanout) takes precedence over the single
+      // outChannel remap when set — duplicates the message onto every
+      // listed channel instead of picking just one.
+      let channels: number[];
+      if (config?.outChannels && config.outChannels.length > 0) {
+        channels = config.outChannels;
+      } else if (config?.isMulti) {
+        channels = [channel];
+      } else if (config && config.outChannel !== -1) {
+        channels = [config.outChannel];
+      } else {
+        channels = [channel];
+      }
+
+      channels.forEach(targetChannel => {
+        const statusCh = targetChannel % 16;
+        let status = 0;
+        let bytes: number[] = [];
+
+        switch (type) {
+          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
+          case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
+          case 'pitchbend': status = 0xe0 + statusCh; bytes = [data.lsb, data.msb]; break;
+          case 'allnotesoff': status = 0xb0 + statusCh; bytes = [123, 0]; break;
+          case 'clock': status = 0xF8; break;
+          case 'start': status = 0xFA; break;
+          case 'stop': status = 0xFC; break;
         }
-      }
 
-      const statusCh = targetChannel % 16;
-      let status = 0;
-      let bytes: number[] = [];
-
-      switch (type) {
-        case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
-        case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
-        case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
-        case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
-        case 'pitchbend': status = 0xe0 + statusCh; bytes = [data.lsb, data.msb]; break;
-        case 'allnotesoff': status = 0xb0 + statusCh; bytes = [123, 0]; break;
-        case 'clock': status = 0xF8; break;
-        case 'start': status = 0xFA; break;
-        case 'stop': status = 0xFC; break;
-      }
-
-      if (status > 0) {
-        const fullMsg = [status, ...bytes];
-        this.globalSentHashes.set(fullMsg.join(','), Date.now());
-        out.send(fullMsg);
-      }
+        if (status > 0) {
+          const fullMsg = [status, ...bytes];
+          this.globalSentHashes.set(fullMsg.join(','), Date.now());
+          out.send(fullMsg);
+        }
+      });
     });
 
     // Send to virtual outputs
@@ -664,28 +671,31 @@ export class MidiService {
       }
       if (!shouldAdd) return;
 
-      let targetChannel = channel;
-      if (config.outChannel !== -1) targetChannel = config.outChannel;
+      const channels = (config.outChannels && config.outChannels.length > 0)
+        ? config.outChannels
+        : [config.outChannel !== -1 ? config.outChannel : channel];
 
-      const statusCh = targetChannel % 16;
-      let status = 0;
-      let bytes: number[] = [];
+      channels.forEach(targetChannel => {
+        const statusCh = targetChannel % 16;
+        let status = 0;
+        let bytes: number[] = [];
 
-      switch (type) {
-        case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
-        case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
-        case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
-        case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
-        case 'pitchbend': status = 0xe0 + statusCh; bytes = [data.lsb, data.msb]; break;
-        case 'allnotesoff': status = 0xb0 + statusCh; bytes = [123, 0]; break;
-        case 'clock': status = 0xF8; break;
-        case 'start': status = 0xFA; break;
-        case 'stop': status = 0xFC; break;
-      }
+        switch (type) {
+          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
+          case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
+          case 'pitchbend': status = 0xe0 + statusCh; bytes = [data.lsb, data.msb]; break;
+          case 'allnotesoff': status = 0xb0 + statusCh; bytes = [123, 0]; break;
+          case 'clock': status = 0xF8; break;
+          case 'start': status = 0xFA; break;
+          case 'stop': status = 0xFC; break;
+        }
 
-      if (status > 0) {
-        this.sendToVirtualOutput(virtName, [status, ...bytes]);
-      }
+        if (status > 0) {
+          this.sendToVirtualOutput(virtName, [status, ...bytes]);
+        }
+      });
     });
   }
 

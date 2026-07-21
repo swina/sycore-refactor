@@ -12,6 +12,11 @@ export interface DeviceRegistration {
   inChannel: number; // -1 for OMNI
   outEnabled: boolean;
   outChannel: number; // -1 for pass-through
+  // Multi-timbral fanout — when non-empty, outgoing notes/CC/PC are
+  // duplicated onto every channel listed here instead of the single
+  // outChannel remap (e.g. a virtual multi-instrument split across parts
+  // on CH 1, 2, and 4). Values are 0-based (channel 1 === 0).
+  outChannels?: number[];
   clock: boolean;
   transport: boolean;
   notes: boolean;

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Radio, Disc3, ExternalLink } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Radio, Disc3, ExternalLink, Activity } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -131,6 +131,17 @@ function openDevicePc(deviceName) {
   dispatch('device-pc-open', { deviceName })
 }
 
+function virtualInstrumentPort(name) {
+  return midiStore.virtualInstruments.find(v => v.name === name)?.midiOutputPort ?? ''
+}
+
+function toggleNodeOutChannel(node, ch) {
+  if (!node.outChannels) node.outChannels = []
+  const i = node.outChannels.indexOf(ch)
+  if (i === -1) node.outChannels.push(ch)
+  else node.outChannels.splice(i, 1)
+}
+
 // ── Sidebar drag-to-canvas ──
 function onSidebarDragStart(e, device) {
   e.dataTransfer.setData('midi-device', JSON.stringify(device))
@@ -154,6 +165,7 @@ function onCanvasDrop(e) {
     y: Math.max(0, e.clientY - rect.top - PORT_Y),
     inChannel:  -1,
     outChannel: -1,
+    outChannels: [],
     sync: true, transport: true, notes: true, cc: true, pc: true,
   })
 }
@@ -255,6 +267,7 @@ function finish() {
       midiStore.addRegistration(canonicalName)
       midiStore.updateRegistration(canonicalName, 'outEnabled',  true)
       midiStore.updateRegistration(canonicalName, 'outChannel',  dst.outChannel)
+      midiStore.updateRegistration(canonicalName, 'outChannels', dst.outChannels ?? [])
       midiStore.updateRegistration(canonicalName, 'clock',       dst.sync)
       midiStore.updateRegistration(canonicalName, 'transport',   dst.transport)
       midiStore.updateRegistration(canonicalName, 'notes',       dst.notes)
@@ -335,6 +348,7 @@ function initFromStore() {
       hasIn: reg.inEnabled, hasOut: reg.outEnabled,
       x: 0, y: 0,
       inChannel: reg.inChannel ?? -1, outChannel: reg.outChannel ?? -1,
+      outChannels: reg.outChannels ?? [],
       sync: reg.clock ?? true, transport: reg.transport ?? true,
       notes: reg.notes ?? true, cc: reg.cc ?? true, pc: reg.pc ?? true,
     }
@@ -433,7 +447,7 @@ function reloadConfig() {
 const routingSignature = computed(() => JSON.stringify([
   canvasNodes.value.map(n => ({
     id: n.id, name: n.name, sourceId: n.sourceId,
-    inChannel: n.inChannel, outChannel: n.outChannel,
+    inChannel: n.inChannel, outChannel: n.outChannel, outChannels: n.outChannels,
     sync: n.sync, transport: n.transport, notes: n.notes, cc: n.cc, pc: n.pc,
   })),
   cables.value.map(c => ({ fromId: c.fromId, toId: c.toId, filter: c.filter })),
@@ -939,6 +953,19 @@ function pendingPath() {
                     :class="node[flag.key] ? 'bg-synth-neon/10 border-synth-neon/50 text-synth-neon' : 'bg-neutral-900 border-neutral-700 text-neutral-600'"
                   >{{ flag.label }}</button>
                 </div>
+                <!-- Virtual instruments aren't real WebMIDI ports — bind which
+                     real output physically carries their MIDI data. -->
+                <div v-if="node.type === 'virtual'" class="flex flex-col gap-0.5 px-3 pt-2" @mousedown.stop>
+                  <span class="text-[7px] font-bold uppercase tracking-widest text-amber-400/70">Output port</span>
+                  <select
+                    :value="virtualInstrumentPort(node.name)"
+                    @change="e => midiStore.setVirtualInstrumentPort(node.name, e.target.value)"
+                    class="bg-neutral-950 border border-neutral-700 rounded text-[9px] font-mono focus:outline-none cursor-pointer px-1 py-0.5 w-full"
+                  >
+                    <option value="" class="bg-neutral-950">— none —</option>
+                    <option v-for="p in midiStore.outputs" :key="p.name" :value="p.name" class="bg-neutral-950">{{ p.name }}</option>
+                  </select>
+                </div>
                 <div class="flex items-start gap-2 px-3 py-2">
                   <div class="flex flex-col gap-0.5 flex-1">
                     <span class="text-[7px] font-bold uppercase tracking-widest text-blue-400/70">IN ch</span>
@@ -949,10 +976,36 @@ function pendingPath() {
                   </div>
                   <div class="flex flex-col gap-0.5 flex-1">
                     <span class="text-[7px] font-bold uppercase tracking-widest text-synth-neon/70 text-right">OUT ch</span>
-                    <select v-model.number="node.outChannel" class="bg-neutral-950 border border-neutral-700 rounded text-[9px] font-mono focus:outline-none cursor-pointer px-1 py-0.5 w-full" @mousedown.stop>
+                    <select
+                      v-model.number="node.outChannel"
+                      :disabled="node.outChannels?.length > 0"
+                      :title="node.outChannels?.length > 0 ? 'Overridden by the multi-channel selection below' : ''"
+                      class="bg-neutral-950 border border-neutral-700 rounded text-[9px] font-mono focus:outline-none cursor-pointer px-1 py-0.5 w-full disabled:opacity-30 disabled:cursor-not-allowed"
+                      @mousedown.stop
+                    >
                       <option :value="-1" class="bg-neutral-950">OMNI</option>
                       <option v-for="ch in CHANNELS" :key="ch" :value="ch - 1" class="bg-neutral-950">{{ ch }}</option>
                     </select>
+                  </div>
+                </div>
+                <!-- Multi-timbral fanout — duplicate outgoing notes/CC/PC onto
+                     every selected channel instead of just one (e.g. a 16-part
+                     virtual rack split across CH 1, 2, 4). Overrides OUT ch
+                     above when at least one channel is selected. -->
+                <div v-if="node.type === 'virtual'" class="flex flex-col gap-1 px-3 pb-2" @mousedown.stop>
+                  <span class="text-[7px] font-bold uppercase tracking-widest text-amber-400/70">
+                    Multi-CH out{{ node.outChannels?.length ? ` (${node.outChannels.length})` : '' }}
+                  </span>
+                  <div class="grid grid-cols-8 gap-0.5">
+                    <button
+                      v-for="ch in CHANNELS" :key="ch"
+                      @click.stop="toggleNodeOutChannel(node, ch - 1)"
+                      :title="`Duplicate onto channel ${ch}`"
+                      class="text-[8px] font-mono py-0.5 rounded border transition-colors"
+                      :class="node.outChannels?.includes(ch - 1)
+                        ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                        : 'bg-neutral-900 border-neutral-700 text-neutral-600 hover:border-neutral-600'"
+                    >{{ ch }}</button>
                   </div>
                 </div>
               </template>
@@ -991,17 +1044,26 @@ function pendingPath() {
             </button>
           </template>
         </span>
-        <button
-          :disabled="!cables.length"
-          @click="finish"
-          title="Routing already applies automatically — use this to force a re-sync"
-          class="flex items-center gap-2 px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-lg transition-colors shrink-0"
-          :class="cables.length
-            ? 'bg-synth-neon text-black hover:bg-synth-neon/80'
-            : 'bg-neutral-800 text-neutral-600 cursor-not-allowed'"
-        >
-          <Check class="w-3.5 h-3.5" /> Re-apply
-        </button>
+        <span class="flex items-center gap-2 shrink-0">
+          <button
+            @click="uiStore.openPanel('midi-monitor')"
+            title="Open MIDI Monitor — watch live MIDI messages while you configure routing"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-neutral-700 text-neutral-400 hover:text-synth-neon hover:border-synth-neon/50 transition-colors"
+          >
+            <Activity class="w-3.5 h-3.5" /> Monitor
+          </button>
+          <button
+            :disabled="!cables.length"
+            @click="finish"
+            title="Routing already applies automatically — use this to force a re-sync"
+            class="flex items-center gap-2 px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-lg transition-colors"
+            :class="cables.length
+              ? 'bg-synth-neon text-black hover:bg-synth-neon/80'
+              : 'bg-neutral-800 text-neutral-600 cursor-not-allowed'"
+          >
+            <Check class="w-3.5 h-3.5" /> Re-apply
+          </button>
+        </span>
       </div>
     </div>
   </div>

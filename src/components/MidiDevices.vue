@@ -4,7 +4,6 @@ import { Gamepad2, Music, Layers, Cable, Cpu, Circle, Plus, Trash2, RefreshCw, U
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
-import { midiService } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -69,31 +68,13 @@ function toggleReg(name, field) {
 function promptAddVirtualInstrument() {
   const name = window.prompt('Virtual instrument name:')
   if (!name || !name.trim()) return
-  // Show port selector
-  const ports = midiStore.outputs.map(o => o.name)
-  let port = ''
-  if (ports.length > 0) {
-    const portMsg = 'Available MIDI outputs:\n' + ports.map((p, i) => `  ${i + 1}. ${p}`).join('\n') + '\n\nEnter the number of the port this virtual instrument listens on (or leave blank for none):'
-    const answer = window.prompt(portMsg)
-    if (answer) {
-      const idx = parseInt(answer) - 1
-      if (idx >= 0 && idx < ports.length) port = ports[idx]
-    }
-  }
-  midiStore.addVirtualInstrument(name.trim(), port)
+  // Output port is bound afterwards — from the dropdown below, or from the
+  // instrument's node card on the MIDI Flow canvas.
+  midiStore.addVirtualInstrument(name.trim())
 }
 
 function onVirtualPortChange(name, port) {
-  const v = midiStore.virtualInstruments.find(x => x.name === name)
-  if (!v) return
-  midiStore.updateVirtualInstrument(name, { midiOutputPort: port })
-  // Re-register the handler with the new port
-  midiService.unregisterVirtualOutput(name)
-  midiService.registerVirtualOutput(name, (data) => {
-    if (port) {
-      midiService.sendRawToDeviceByName(port, data)
-    }
-  })
+  midiStore.setVirtualInstrumentPort(name, port)
 }
 
 const sortedDevices = computed(() =>

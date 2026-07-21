@@ -51,6 +51,7 @@ function defaultRegistration(name = ''): DeviceRegistration {
     inChannel: -1,
     outEnabled: true,
     outChannel: -1,
+    outChannels: [],
     clock: true,
     transport: true,
     notes: true,
@@ -215,6 +216,19 @@ export const useMidiStore = defineStore('midi', () => {
     if (idx < 0) return
     virtualInstruments.value[idx] = { ...virtualInstruments.value[idx], ...data }
     persistVirtualInstruments()
+  }
+
+  // Rebind a virtual instrument's underlying real MIDI output port — the
+  // physical hop a virtual instrument name can't have on its own, since it
+  // isn't a real WebMIDI port. Re-registers the virtual output handler so
+  // the new port takes effect immediately. Shared by MidiDevices.vue's
+  // dropdown and the equivalent control on the node's MIDI Flow canvas card.
+  function setVirtualInstrumentPort(name: string, port: string) {
+    updateVirtualInstrument(name, { midiOutputPort: port })
+    midiService.unregisterVirtualOutput(name)
+    midiService.registerVirtualOutput(name, (data: number[]) => {
+      if (port) midiService.sendRawToDeviceByName(port, data)
+    })
   }
 
   // Register all virtual instruments with the MIDI service on init
@@ -775,5 +789,6 @@ export const useMidiStore = defineStore('midi', () => {
     addVirtualInstrument,
     removeVirtualInstrument,
     updateVirtualInstrument,
+    setVirtualInstrumentPort,
   }
 })
