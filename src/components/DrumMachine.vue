@@ -560,7 +560,8 @@ async function _tlDmStartHandler(e) {
     if (preset) await handleLoadPreset(preset)
   }
   // Restore timeline BPM — preset load may have overwritten arpStore.arpBpm
-  if (bpm) { arpStore.arpBpm = bpm; drumStore.bpm = bpm }
+  // (drumStore.bpm follows arpStore.arpBpm via its own watcher, see below)
+  if (bpm) midiStore.setGlobalBpm(bpm)
   if (seqKey) drumStore.swapSequence(seqKey)
   if (ce != null) chainEnabled.value = ce
   if (!drumStore.isPlaying) drumStore.isPlaying = true
@@ -767,7 +768,7 @@ async function handleLoadPreset(preset) {
   autofillEnabled.value = preset.autofillEnabled ?? false
   autofillEvery.value   = preset.autofillEvery   ?? 4
   if (preset.generatedStyle) selectedStyle.value = preset.generatedStyle
-  if (preset.bpm)           arpStore.arpBpm = preset.bpm
+  if (preset.bpm)           midiStore.setGlobalBpm(preset.bpm)
   showPresets.value = false
   await nextTick()
   await loadAllSamples(drumStore.currentPattern)

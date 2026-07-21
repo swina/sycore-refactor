@@ -12,7 +12,6 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { useMidiStore } from '@/stores/useMidiStore'
-import { useArpStore } from '@/stores/useArpStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useFreesoundBrowserState } from '@/composables/useFreesoundBrowserState'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
@@ -23,7 +22,6 @@ import { detectBpmFromUrl } from '@/composables/useBpmDetector'
 const uiStore      = useUiStore()
 const authStore    = useAuthStore()
 const midiStore    = useMidiStore()
-const arpStore     = useArpStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
 
@@ -426,9 +424,7 @@ async function confirmCaptureAndSend() {
   if (!capturePickerFor.value || isSendingToCapture.value) return
   const bpm = captureBpm.value !== '' ? Number(captureBpm.value) : null
   if (bpm !== null && bpm > 0) {
-    arpStore.arpBpm      = bpm
-    midiStore.currentBpm = bpm
-    midiStore.setBpm(bpm)
+    midiStore.setGlobalBpm(bpm)
   }
   const sound = capturePickerFor.value
   capturePickerFor.value = null

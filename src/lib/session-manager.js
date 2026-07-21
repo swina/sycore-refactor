@@ -139,7 +139,7 @@ export async function importSession(jsonContent) {
     if (data.arpSettings) {
       arpStore.arpEnabled = data.arpSettings.arpEnabled
       arpStore.arpMode = data.arpSettings.arpMode
-      arpStore.arpBpm = data.arpSettings.arpBpm
+      if (data.arpSettings.arpBpm) midiStore.setGlobalBpm(data.arpSettings.arpBpm)
       arpStore.arpSubdivision = data.arpSettings.arpSubdivision
       arpStore.arpHold = data.arpSettings.arpHold
     }

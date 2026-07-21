@@ -210,15 +210,16 @@ onMounted(() => {
   
   const handleBpmUpdate = (e) => {
     if (!sessionBpmOverride.value && e.detail?.bpm) {
-      arpStore.arpBpm = e.detail.bpm
+      midiStore.setGlobalBpm(e.detail.bpm)
     }
   }
   window.addEventListener('bpm-update', handleBpmUpdate)
 
-  watch(() => arpStore.arpBpm, (bpm) => {
-    midiStore.currentBpm = bpm
-    midiStore.setBpm(bpm)
-  }, { immediate: true })
+  // setGlobalBpm() (called by every BPM-changing action app-wide) already
+  // keeps arpStore.arpBpm and midiStore.currentBpm in sync and re-times
+  // outgoing MIDI clock — apply the current value once on mount so a
+  // restored/default BPM is reflected in the clock immediately.
+  midiStore.setGlobalBpm(arpStore.arpBpm)
 
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') {
@@ -462,7 +463,7 @@ onMounted(() => {
           :currentPresetCCValues="presetStore.lastPreset?.data || {}"
           :activeSlot="uiStore.seqActiveSlot"
           @close="uiStore.isSequencerOpen = false; uiStore.isSequencerModalOpen = false"
-          @bpmChange="bpm => { arpStore.arpBpm = bpm; sessionBpmOverride = true }"
+          @bpmChange="bpm => { midiStore.setGlobalBpm(bpm); sessionBpmOverride = true }"
           @transposeChange="handleStepSequencerTranspose"
           @configChange="config => {
             if (uiStore.seqActiveSlot === 2) {

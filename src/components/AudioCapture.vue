@@ -1256,8 +1256,7 @@ async function calculateBpm() {
   try {
     const estimated = await detectBpmFromBlob(recordedBlob.value, loopStart.value, loopEnd.value)
     if (estimated != null) {
-      midiStore.currentBpm = estimated
-      midiStore.setBpm(estimated)
+      midiStore.setGlobalBpm(estimated)
     }
   } catch (e) {
     console.error('[AudioCapture] BPM calculation failed', e)
@@ -1269,9 +1268,7 @@ async function calculateBpm() {
 function applyBpmConfirm() {
   const bpm = Number(bpmConfirm.value?.editable)
   if (bpm >= 40 && bpm <= 240) {
-    arpStore.arpBpm = bpm
-    midiStore.currentBpm = bpm
-    midiStore.setBpm(bpm)
+    midiStore.setGlobalBpm(bpm)
   }
   bpmConfirm.value = null
 }
@@ -2572,8 +2569,7 @@ onMounted(async () => {
     if (!blob) return
     // Apply BPM before opening so discoverSeamlessLoop can use it immediately
     if (bpm != null && bpm > 0) {
-      midiStore.currentBpm = bpm
-      midiStore.setBpm(bpm)
+      midiStore.setGlobalBpm(bpm)
     }
     uiStore.isAudioCaptureOpen = true
     isImporting.value = true

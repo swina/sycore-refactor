@@ -15,7 +15,6 @@ import { useMappingStore }  from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import MidiMapContextMenu     from '@/components/ui/MidiMapContextMenu.vue'
 import { useLivePadStore } from '@/stores/useLivePadStore'
-import { useArpStore }     from '@/stores/useArpStore'
 import { useSyncStore }    from '@/stores/useSyncStore'
 import { useUiStore }      from '@/stores/useUiStore'
 import { useAuthStore }    from '@/stores/useAuthStore'
@@ -67,7 +66,6 @@ const allDevicesPcState = computed(() => {
       return { key: regKey, name: r.name ?? regKey, isUi: false, isMulti, entries }
     })
 })
-const arpStore     = useArpStore()
 const syncStore    = useSyncStore()
 const uiStore      = useUiStore()
 const drumStore    = useDrumMachineStore()
@@ -543,9 +541,7 @@ function _checkSegments() {
       const track = playlist.value[seg.trackIdx]
       const bpm = getTrackBpm(seg.trackIdx)
       if (bpm) {
-        arpStore.arpBpm      = bpm
-        midiStore.currentBpm = bpm
-        midiStore.setBpm(bpm)
+        midiStore.setGlobalBpm(bpm)
         window.dispatchEvent(new CustomEvent('bpm-update', { detail: { bpm } }))
       }
       window.dispatchEvent(new CustomEvent('playlist-play', { detail: { idx: seg.trackIdx, playlist: playlist.value, crossfade: crossfadeOnChange.value, source: 'timeline' } }))
@@ -582,7 +578,7 @@ function _fireMarker(m) {
   switch (m.type) {
     case 'tempo': {
       const bpm = Number(m.value)
-      if (bpm > 0) { arpStore.arpBpm = bpm; midiStore.setBpm(bpm); midiStore.currentBpm = bpm }
+      if (bpm > 0) midiStore.setGlobalBpm(bpm)
       break
     }
     case 'perf-set': {

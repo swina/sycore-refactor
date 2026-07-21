@@ -6,6 +6,7 @@ import { FIELD_TO_CC } from '@/constants/s1-config'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { useMappingStore } from './useMappingStore'
+import { useArpStore } from './useArpStore'
 import {
   loadConfigPresets as fetchConfigPresets,
   persistConfigPresets,
@@ -521,6 +522,19 @@ export const useMidiStore = defineStore('midi', () => {
   function stopClock() { midiService.stopClock() }
   function setBpm(bpm: number) { midiService.setBpm(bpm) }
 
+  // Single choke point for a global tempo change — fans out to every BPM
+  // copy in the app (arpStore.arpBpm, currentBpm, outgoing MIDI clock timing)
+  // so callers don't have to remember to touch each one by hand. Sequencer
+  // components (StepSequencer/ChordProgSequencer/DrumMachine) each already
+  // watch arpStore.arpBpm or currentBpm and retune their own Tone.js
+  // transport from that, so this alone is enough to keep everything in sync.
+  function setGlobalBpm(bpm: number) {
+    const clamped = Math.round(Math.max(20, Math.min(300, bpm)))
+    useArpStore().arpBpm = clamped
+    currentBpm.value = clamped
+    midiService.setBpm(clamped)
+  }
+
   function sendStart() {
     isTransportPlaying.value = true
     midiService.sendStart()
@@ -728,7 +742,7 @@ export const useMidiStore = defineStore('midi', () => {
     setRouting, toggleRouting, toggleBroadcastMode,
     sendProgramChange, sendCC, sendNRPN, sendAllCCs, sendControlValue,
     sendNoteOn, sendNoteOff, sendPitchBend,
-    allNotesOff, panic, startClock, stopClock, setBpm, sendStart, sendStop, sendContinue,
+    allNotesOff, panic, startClock, stopClock, setBpm, setGlobalBpm, sendStart, sendStop, sendContinue,
     incomingBpm, sysexEnabled, toggleSysEx,
     sendClock, setSendClock, currentBpm,
     syncMidiTransport, setSyncMidiTransport,

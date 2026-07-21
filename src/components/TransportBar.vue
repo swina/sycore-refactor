@@ -43,7 +43,7 @@ onUnmounted(() => {
 function handleBpmChange(e) {
   const v = parseInt(e.target.value)
   if (!isNaN(v) && v >= 20 && v <= 300) {
-    arpStore.arpBpm = v
+    midiStore.setGlobalBpm(v)
   }
 }
 

@@ -4,7 +4,6 @@ import { Layers, Clock, Plus, Square, Circle, SlidersHorizontal, BookOpen, Mic, 
 import { useUiStore }              from '@/stores/useUiStore'
 import { useMidiStore }            from '@/stores/useMidiStore'
 import { useDrumMachineStore }     from '@/stores/useDrumMachineStore'
-import { useArpStore }          from '@/stores/useArpStore'
 import { useMappingStore }      from '@/stores/useMappingStore'
 import { usePresetStore }       from '@/stores/usePresetStore'
 import { useLivePadStore }      from '@/stores/useLivePadStore'
@@ -18,7 +17,6 @@ import { userKey }              from '@/lib/userKey'
 
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
-const arpStore     = useArpStore()
 const mappingStore = useMappingStore()
 const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
@@ -90,8 +88,7 @@ const lmBpm = computed({
   get: () => midiStore.currentBpm,
   set: (v) => {
     const bpm = Math.max(20, Math.min(300, Math.round(+v || 120)))
-    midiStore.currentBpm = bpm
-    midiStore.setBpm(bpm)
+    midiStore.setGlobalBpm(bpm)
     localStorage.setItem(userKey('S1_LM_SESSION_BPM'), String(bpm))
   },
 })
@@ -390,9 +387,7 @@ async function _startPad(idx) {
   wa.rafId = requestAnimationFrame(() => _loopTick(idx))
 
   if (pad.bpm && !lmUseSessionBpm.value) {
-    arpStore.arpBpm      = pad.bpm
-    midiStore.currentBpm = pad.bpm
-    midiStore.setBpm(pad.bpm)
+    midiStore.setGlobalBpm(pad.bpm)
   }
 
   const isFirstPad = !_master
@@ -648,8 +643,7 @@ let _tlLmStopHandler       = null
 onMounted(() => {
   if (lmUseSessionBpm.value) {
     const saved = parseInt(localStorage.getItem(userKey('S1_LM_SESSION_BPM')) || '120')
-    midiStore.currentBpm = saved
-    midiStore.setBpm(saved)
+    midiStore.setGlobalBpm(saved)
   }
 
   _loadPresets()
@@ -683,11 +677,7 @@ onMounted(() => {
     if (typeof padIdx === 'number' && padIdx >= 0 && padIdx < PAD_COUNT && !active.value[padIdx])
       togglePad(padIdx)
     // _startPad overrides BPM asynchronously after sample load — reassert timeline BPM
-    if (bpm) setTimeout(() => {
-      arpStore.arpBpm      = bpm
-      midiStore.currentBpm = bpm
-      midiStore.setBpm(bpm)
-    }, 300)
+    if (bpm) setTimeout(() => midiStore.setGlobalBpm(bpm), 300)
   }
   _tlLmStopHandler = () => stopAll()
   window.addEventListener('timeline-lm-start', _tlLmStartHandler)

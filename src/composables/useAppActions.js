@@ -182,12 +182,12 @@ export function useAppActions() {
         break
 
       case 'seq_bpm_up':
-        if (ccVal > 63) arpStore.arpBpm = Math.min(300, arpStore.arpBpm + 1); break
+        if (ccVal > 63) midiStore.setGlobalBpm(arpStore.arpBpm + 1); break
       case 'seq_bpm_down':
-        if (ccVal > 63) arpStore.arpBpm = Math.max(20, arpStore.arpBpm - 1); break
+        if (ccVal > 63) midiStore.setGlobalBpm(arpStore.arpBpm - 1); break
       case 'seq_bpm_cc':
         // Map CC value 0-127 → BPM 20-300
-        arpStore.arpBpm = 20 + Math.round((ccVal / 127) * 280); break
+        midiStore.setGlobalBpm(20 + Math.round((ccVal / 127) * 280)); break
 
       case 'toggle_visualizer': if (ccVal > 63) uiStore.isVisualizerOpen = !uiStore.isVisualizerOpen; break
       case 'toggle_midi_capture': if (ccVal > 63) uiStore.isCaptureOpen = !uiStore.isCaptureOpen; break
