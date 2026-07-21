@@ -1132,7 +1132,7 @@ function velBarColor(v) {
 
       <!-- ── STEP DETAIL ────────────────────────────────────────────────── -->
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
-        <span class="text-neutral-500 font-mono shrink-0">Step {{ store.selectedStepIdx + 1 }}</span>
+        <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 items-center">Step {{ store.selectedStepIdx + 1 }}</div>
 
         <div class="flex flex-col">
           <!-- Active toggle -->
