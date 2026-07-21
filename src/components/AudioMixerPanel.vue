@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { SlidersHorizontal, Volume2, VolumeX, Music, Layers, Radio, Mic2, Settings2, CheckSquare, Square, Piano, Disc, Zap } from 'lucide-vue-next'
+import { SlidersHorizontal, Volume2, VolumeX, Music, Layers, Radio, Mic2, Settings2, CheckSquare, Square, Piano, Disc, Zap, Activity } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -295,6 +295,13 @@ const TYPE_FILL = {
             title="Configure channels"
           >
             <Settings2 class="w-3.5 h-3.5" />
+          </button>
+          <button
+            @click.stop="uiStore.openPanel('visualizer')"
+            class="p-1.5 transition-colors rounded-full hover:bg-white/5 text-neutral-500 hover:text-white"
+            title="Audio Visualizer"
+          >
+            <Activity class="w-3.5 h-3.5" />
           </button>
         <div class="flex items-center gap-1 pointer-events-auto"  @mousedown.stop>
             <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
