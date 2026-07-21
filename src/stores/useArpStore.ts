@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { ArpMode } from '@/lib/arp-patterns'
 
 export const ARP_SUBDIVISIONS = [
   '1/1d', '1/1', '1/2d', '1/1t', '1/2', '1/4d', '1/2t', '1/4', '1/8d', '1/4t',
@@ -8,7 +9,10 @@ export const ARP_SUBDIVISIONS = [
 ] as const
 
 export type ArpSubdivision = typeof ARP_SUBDIVISIONS[number]
-export type ArpMode = 'up' | 'down' | 'up-down' | 'random'
+// Was hardcoded to 'up' | 'down' | 'up-down' | 'random' — stale relative to
+// the 10 modes actually offered/used (ArpeggiatorPanel.vue's arpModes ref);
+// now sourced from the shared pattern module so it can't drift again.
+export type { ArpMode }
 
 export const useArpStore = defineStore('arp', () => {
   const arpEnabled     = ref(false)

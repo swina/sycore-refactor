@@ -15,6 +15,8 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
+import { orderChordStrumNotes } from '@/lib/chord-strum'
+import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -114,6 +116,13 @@ function buildPlayState() {
     tickCounter: 0,
     chainSlotIndices,
     chainLocalIndices,
+    // Per-step-position arp pattern traversal state, keyed by stepPointer
+    // (the position within `steps`, whether a single slot's 16 steps or a
+    // longer flattened chain) — each position cycles its own arpMode
+    // independently. Lazily populated as positions are first visited;
+    // rebuilt fresh on every play start since buildPlayState() is only
+    // called then.
+    arpPatternStates: new Map(),
   }
 }
 
@@ -218,6 +227,8 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       const activeCount = Math.max(1, state.numSteps)
       const step = state.steps[state.stepPointer]
       const ticksNeeded = DURATION_TICKS[step?.duration] ?? 32
+      // Per-step Chord/Arp override — unset means "inherit the slot's global playMode".
+      const effectiveMode = step?.stepMode ?? state.playMode
 
       if (state.tickCounter === 0) {
         getDraw().schedule(() => {
@@ -242,27 +253,56 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
           }
         }, time)
 
-        if (step?.active && step.velocity > 0 && step.notes?.length > 0 && state.playMode !== 'arp') {
+        if (step?.active && step.velocity > 0 && step.notes?.length > 0 && effectiveMode !== 'arp') {
           const tickMs = 60000 / (state.bpm * 96)
           const stepMs = tickMs * ticksNeeded
           const noteDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
           const channel = state.channel
-          step.notes.forEach(note => {
-            const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
-            const noteKey = `${clampedNote}-${channel}`
-            midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
-            _activeNoteKeys.add(noteKey)
-            const tid = window.setTimeout(() => {
-              _pendingTimeouts.delete(tid)
-              midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
-              _activeNoteKeys.delete(noteKey)
-            }, noteDurationMs)
-            _pendingTimeouts.add(tid)
-          })
+
+          if (!step.chordMode) {
+            // Simultaneous — today's only behavior, unchanged.
+            step.notes.forEach(note => {
+              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
+              const noteKey = `${clampedNote}-${channel}`
+              midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
+              _activeNoteKeys.add(noteKey)
+              const tid = window.setTimeout(() => {
+                _pendingTimeouts.delete(tid)
+                midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
+                _activeNoteKeys.delete(noteKey)
+              }, noteDurationMs)
+              _pendingTimeouts.add(tid)
+            })
+          } else {
+            // Staggered strum in step.chordMode's direction. Spread across a
+            // small slice of the step, capped so it always reads as a fast
+            // strum rather than stretching into the step's own duration on
+            // slow steps or big chords.
+            const orderedNotes = orderChordStrumNotes(step.notes, step.chordMode)
+            const strumStepMs = Math.min(25, stepMs / (orderedNotes.length + 1))
+
+            orderedNotes.forEach((note, i) => {
+              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
+              const noteKey = `${clampedNote}-${channel}`
+              const onTid = window.setTimeout(() => {
+                _pendingTimeouts.delete(onTid)
+                if (_stopPending) return
+                midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
+                _activeNoteKeys.add(noteKey)
+                const offTid = window.setTimeout(() => {
+                  _pendingTimeouts.delete(offTid)
+                  midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
+                  _activeNoteKeys.delete(noteKey)
+                }, noteDurationMs)
+                _pendingTimeouts.add(offTid)
+              }, strumStepMs * i)
+              _pendingTimeouts.add(onTid)
+            })
+          }
         }
       }
 
-      if (state.playMode === 'arp' && step?.active && step.velocity > 0 && step.notes?.length > 0) {
+      if (effectiveMode === 'arp' && step?.active && step.velocity > 0 && step.notes?.length > 0) {
         const arpTicks = DURATION_TICKS[state.arpRate] ?? 8
         if (state.tickCounter % arpTicks === 0) {
           if (_stopPending) return
@@ -270,8 +310,16 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
           const arpMs = tickMs * arpTicks
           const noteDurationMs = Math.max(10, arpMs * ((step.gate ?? 80) / 100))
           const channel = state.channel
-          const noteIdx = Math.floor(state.tickCounter / arpTicks) % step.notes.length
-          const clampedNote = Math.max(0, Math.min(127, step.notes[noteIdx] + (state.transpose || 0) + (step.transpose || 0)))
+
+          if (!state.arpPatternStates.has(state.stepPointer)) {
+            state.arpPatternStates.set(state.stepPointer, defaultArpPatternState())
+          }
+          const patternState = state.arpPatternStates.get(state.stepPointer)
+          const sortedNotes = [...step.notes].sort((a, b) => a - b)
+          const noteIdx = nextArpIndex(step.arpMode ?? 'up', patternState, sortedNotes.length)
+          if (noteIdx < 0) return
+
+          const clampedNote = Math.max(0, Math.min(127, sortedNotes[noteIdx] + (state.transpose || 0) + (step.transpose || 0)))
           const noteKey = `${clampedNote}-${channel}`
           midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
           _activeNoteKeys.add(noteKey)
@@ -612,6 +660,19 @@ function handleGateKeydown(e) {
 }
 
 const selectedStep = computed(() => store.steps[store.selectedStepIdx])
+// The selected step's own Chord/Arp mode if it overrides the slot's global
+// playMode, else the global playMode — matches the scheduler's effectiveMode.
+const effectiveStepMode = computed(() => selectedStep.value?.stepMode ?? store.playMode)
+
+// While playing, follow the currently-sounding step so the STEP DETAIL
+// panel shows its settings instead of staying frozen on whatever was last
+// clicked. store.currentStep is already the correct local index into
+// store.steps (chain playback auto-follows the sounding slot, see the
+// scheduler's chain-follow block), so this is a direct, safe sync — the
+// same "auto-follow while playing" pattern already used for slot follow.
+watch(() => store.currentStep, (idx) => {
+  if (store.isPlaying) store.selectedStepIdx = idx
+})
 
 // ── Fill All ──────────────────────────────────────────────────────────────────
 
@@ -658,6 +719,23 @@ function applyFillTranspose() {
       : Math.max(-24, Math.min(24, fillTranspose.value))
     store.setStep(i, { transpose })
   }
+}
+
+// Bulk-apply the per-step Chord/Arp override, chord-strum direction, or
+// arp pattern to every step — same "pick a value, click All" shape as the
+// fills above, for the fields added alongside per-step Chord/Arp mixing.
+const fillStepMode  = ref(undefined) // undefined | 'chord' | 'arp'
+const fillChordMode = ref(undefined) // undefined | 'up' | 'down' | 'up-down' | 'down-up'
+const fillArpMode   = ref('up')
+
+function applyFillStepMode() {
+  for (let i = 0; i < store.numSteps; i++) store.setStep(i, { stepMode: fillStepMode.value })
+}
+function applyFillChordMode() {
+  for (let i = 0; i < store.numSteps; i++) store.setStep(i, { chordMode: fillChordMode.value })
+}
+function applyFillArpMode() {
+  for (let i = 0; i < store.numSteps; i++) store.setStep(i, { arpMode: fillArpMode.value })
 }
 
 // ── Performance Sets (from MidiDeviceProgramChangePanel / localStorage) ───────
@@ -863,14 +941,14 @@ function velBarColor(v) {
         </button>
 
         <!-- Slot selector (A-H) -->
-        <div class="flex items-center gap-0.5" title="Progression slot — each slot holds an independent chord progression">
+        <div class="flex items-center gap-1" title="Progression slot — each slot holds an independent chord progression">
           <button
             v-for="i in store.SLOT_COUNT"
             :key="i"
             @click.stop="handleSlotSelect(i - 1)"
             :title="store.isPlaying && store.playingSlotIndex === i - 1 ? 'Now playing (chain)' : undefined"
             :class="[
-              'relative w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
+              'relative w-8 h-8 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
               store.activeSlotIndex === i - 1
                 ? 'bg-purple-700 text-white ring-1 ring-purple-400'
                 : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700'
@@ -909,13 +987,13 @@ function velBarColor(v) {
         </div>
 
         <!-- Sequence transpose -->
-        <div class="flex items-center gap-1 text-[12px]">
+        <!-- <div class="flex items-center gap-1 text-[12px]">
           <span class="text-neutral-500 font-mono shrink-0 text-[12px]">Transpose</span>
           <button @click.stop="seqTranspose = Math.max(-24, seqTranspose - 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[12px]">−</button>
           <span :class="['font-bold font-mono w-6 text-center', seqTranspose !== 0 ? 'text-yellow-300' : 'text-neutral-400']">{{ seqTranspose > 0 ? '+' : '' }}{{ seqTranspose }}</span>
           <button @click.stop="seqTranspose = Math.min(24, seqTranspose + 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[12px]">+</button>
           <button v-if="seqTranspose !== 0" @click.stop="seqTranspose = 0" class="text-[8px] text-neutral-600 hover:text-neutral-300 ml-0.5">↺</button>
-        </div>
+        </div> -->
 
         <!-- Loop toggle -->
         <button
@@ -970,6 +1048,15 @@ function velBarColor(v) {
             title="Play arpeggio"
             :class="['px-2 py-0.5 transition-colors', store.playMode === 'arp' ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
           >Arp</button>
+        </div>
+
+        <!-- Sequence transpose -->
+        <div class="flex items-center gap-1 text-[12px]">
+          <span class="text-neutral-500 font-mono shrink-0 text-[12px]">Transpose</span>
+          <button @click.stop="seqTranspose = Math.max(-24, seqTranspose - 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[12px]">−</button>
+          <span :class="['font-bold font-mono w-6 text-center', seqTranspose !== 0 ? 'text-yellow-300' : 'text-neutral-400']">{{ seqTranspose > 0 ? '+' : '' }}{{ seqTranspose }}</span>
+          <button @click.stop="seqTranspose = Math.min(24, seqTranspose + 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[12px]">+</button>
+          <button v-if="seqTranspose !== 0" @click.stop="seqTranspose = 0" class="text-[8px] text-neutral-600 hover:text-neutral-300 ml-0.5">↺</button>
         </div>
       </div>
     </div>
@@ -1047,61 +1134,104 @@ function velBarColor(v) {
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
         <span class="text-neutral-500 font-mono shrink-0">Step {{ store.selectedStepIdx + 1 }}</span>
 
-        <!-- Active toggle -->
-        <button
-          @click="store.toggleStepActive(store.selectedStepIdx)"
-          :class="['px-2 py-0.5 rounded font-bold uppercase tracking-wider transition-colors', selectedStep.active ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400']"
-        >
-          {{ selectedStep.active ? 'Active' : 'Off' }}
-        </button>
+        <div class="flex flex-col">
+          <!-- Active toggle -->
+          <button
+            @click="store.toggleStepActive(store.selectedStepIdx)"
+            :class="['px-2 py-0.5 rounded font-bold uppercase tracking-wider transition-colors', selectedStep.active ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400']"
+          >
+            {{ selectedStep.active ? 'Active' : 'Off' }}
+          </button>
 
-        <!-- Chord name -->
-        <span class="text-purple-300 font-bold">{{ selectedStep.chordName }}</span>
-        <span class="text-neutral-600 font-mono">{{ selectedStep.notes?.join(', ') || 'no notes' }}</span>
+          <!-- Chord name -->
+          <span class="text-purple-300 text-[14px] font-bold">{{ selectedStep.chordName }}</span>
+          <span class="text-neutral-600 text-[10px] font-mono">{{ selectedStep.notes?.join(', ') || 'no notes' }}</span>
+        </div>
 
+        
         <!-- Duration selector -->
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 px-2 border-l h-full border-neutral-700">
           <span class="text-neutral-500">Dur</span>
           <select
             :value="selectedStep.duration"
             @change="e => store.setStep(store.selectedStepIdx, { duration: e.target.value })"
-            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
+            class="bg-neutral-800 border border-neutral-700 w-18 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
           >
             <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
           </select>
         </div>
-
-        <!-- Velocity -->
-        <div class="flex items-center gap-1">
-          <span class="text-neutral-500">Vel</span>
-          <input
-            type="number"
-            :value="selectedStep.velocity"
-            min="0" max="127"
-            @change="e => updateSelectedStepField('velocity', e.target.value)"
-            @keydown="handleVelocityKeydown"
-            class="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
-            title="Velocity 0–127 (0 = off). Arrow keys to nudge, Shift+Arrow ×10"
-          />
+        <div class="flex flex-col gap-1 items-end px-4 border-r h-full border-neutral-700">
+          <!-- Velocity -->
+          <div class="flex items-center gap-1">
+            <span class="text-neutral-500">Vel</span>
+            <input
+              type="number"
+              :value="selectedStep.velocity"
+              min="0" max="127"
+              @change="e => updateSelectedStepField('velocity', e.target.value)"
+              @keydown="handleVelocityKeydown"
+              class="w-18 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
+              title="Velocity 0–127 (0 = off). Arrow keys to nudge, Shift+Arrow ×10"
+            />
+          </div>
+          <!-- Gate -->
+          <div class="flex items-center gap-1">
+            <span class="text-neutral-500">Gate</span>
+            <input
+              type="number"
+              :value="selectedStep.gate"
+              min="0" max="100"
+              @change="e => updateSelectedStepField('gate', e.target.value)"
+              @keydown="handleGateKeydown"
+              class="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
+              title="Gate 0–100%. Arrow keys to nudge."
+            />
+            <span class="text-neutral-600">%</span>
+          </div>
         </div>
 
-        <!-- Gate -->
-        <div class="flex items-center gap-1">
-          <span class="text-neutral-500">Gate</span>
-          <input
-            type="number"
-            :value="selectedStep.gate"
-            min="0" max="100"
-            @change="e => updateSelectedStepField('gate', e.target.value)"
-            @keydown="handleGateKeydown"
-            class="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-center"
-            title="Gate 0–100%. Arrow keys to nudge."
-          />
-          <span class="text-neutral-600">%</span>
+        <!-- Per-step Chord/Arp override — lets individual steps play as Chord/Strum
+             while others in the same progression play as Arp, independent of the
+             slot's global Play Mode toggle. Auto = inherit the global mode. -->
+        <div class="flex items-center gap-1" title="Override Chord/Arp for just this step — Auto follows the global Play Mode">
+          <span class="text-neutral-500">Mode</span>
+          <div class="flex items-center rounded overflow-hidden border border-neutral-700">
+            <button
+              v-for="opt in [{ v: undefined, label: 'Auto' }, { v: 'chord', label: 'Chord' }, { v: 'arp', label: 'Arp' }]"
+              :key="opt.label"
+              @click="store.setStep(store.selectedStepIdx, { stepMode: opt.v })"
+              :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', (selectedStep.stepMode ?? undefined) === opt.v ? 'bg-cyan-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+            >{{ opt.label }}</button>
+          </div>
+        </div>
+
+        <!-- Per-step Chord strum direction (only meaningful when this step's effective mode is Chord) -->
+        <div v-if="effectiveStepMode === 'chord'" class="flex items-center gap-1" title="Strum direction for this step's chord — Sim = simultaneous (default)">
+          <span class="text-neutral-500">Strum</span>
+          <div class="flex items-center rounded overflow-hidden border border-neutral-700">
+            <button
+              v-for="opt in [{ v: undefined, label: 'Sim' }, { v: 'up', label: 'Up' }, { v: 'down', label: 'Dn' }, { v: 'up-down', label: 'U-D' }, { v: 'down-up', label: 'D-U' }]"
+              :key="opt.label"
+              @click="store.setStep(store.selectedStepIdx, { chordMode: opt.v })"
+              :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', (selectedStep.chordMode ?? undefined) === opt.v ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+            >{{ opt.label }}</button>
+          </div>
+        </div>
+
+        <!-- Per-step Arp pattern (only meaningful when this step's effective mode is Arp) -->
+        <div v-if="effectiveStepMode === 'arp'" class="flex items-center gap-1" title="Arpeggio pattern for this step">
+          <span class="text-neutral-500">Pattern</span>
+          <select
+            :value="selectedStep.arpMode ?? 'up'"
+            @change="e => store.setStep(store.selectedStepIdx, { arpMode: e.target.value })"
+            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
+          >
+            <option v-for="mode in ARP_MODES" :key="mode" :value="mode">{{ mode }}</option>
+          </select>
         </div>
 
         <!-- Per-step Transpose -->
-        <div class="flex items-center gap-1 ml-auto">
+        <div class="flex items-center gap-1 ml-auto border-l border-neutral-700 pl-4" title="Transpose this step's chord up/down in semitones">
           <span class="text-neutral-500">Tr</span>
           <button
             @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) - 1)"
@@ -1212,6 +1342,66 @@ function velBarColor(v) {
             class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
           >All</button>
         </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Chord/Arp mode fill -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-neutral-500">Mode</span>
+          <div class="flex items-center rounded overflow-hidden border border-neutral-700">
+            <button
+              v-for="opt in [{ v: undefined, label: 'Auto' }, { v: 'chord', label: 'Chord' }, { v: 'arp', label: 'Arp' }]"
+              :key="opt.label"
+              @click="fillStepMode = opt.v"
+              :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', fillStepMode === opt.v ? 'bg-cyan-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+            >{{ opt.label }}</button>
+          </div>
+          <button
+            @click="applyFillStepMode"
+            title="Set every step to this Chord/Arp override (Auto = clear override, follow global Play Mode)"
+            class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-cyan-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
+          >All</button>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Chord strum direction fill -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-neutral-500">Strum</span>
+          <div class="flex items-center rounded overflow-hidden border border-neutral-700">
+            <button
+              v-for="opt in [{ v: undefined, label: 'Sim' }, { v: 'up', label: 'Up' }, { v: 'down', label: 'Dn' }, { v: 'up-down', label: 'U-D' }, { v: 'down-up', label: 'D-U' }]"
+              :key="opt.label"
+              @click="fillChordMode = opt.v"
+              :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', fillChordMode === opt.v ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+            >{{ opt.label }}</button>
+          </div>
+          <button
+            @click="applyFillChordMode"
+            title="Set every step's chord-strum direction"
+            class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
+          >All</button>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Arp pattern fill -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-neutral-500">Pattern</span>
+          <select
+            v-model="fillArpMode"
+            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
+          >
+            <option v-for="mode in ARP_MODES" :key="mode" :value="mode">{{ mode }}</option>
+          </select>
+          <button
+            @click="applyFillArpMode"
+            title="Set every step's arp pattern"
+            class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
+          >All</button>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
 
         <!-- Clear -->
         <button

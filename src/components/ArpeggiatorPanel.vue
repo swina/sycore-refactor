@@ -6,6 +6,7 @@ import { useArpStore, ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 
 const props = defineProps({
   isOpen:       { type: Boolean, default: false },
@@ -21,21 +22,9 @@ const { openMenu } = useMidiContextMenu()
 
 let arpTimer = null
 let lastArpNote = null
-let currentArpIndex = -1
-let arpDirection = 1
+let patternState = defaultArpPatternState()
 const physicalKeysHeld = ref(0)
-const arpModes = ref([
-  'up',
-  'down',
-  'up-down',
-  'down-up',
-  'converge',
-  'diverge',
-  'pinky-up',
-  'thumb-up',
-  'random',
-  'random-other',
-])
+const arpModes = ref(ARP_MODES)
 
 /**
  * Check if the given input device ID is routed to the arpeggiator
@@ -147,9 +136,10 @@ function startArpEngine() {
   if (arpTimer) clearInterval(arpTimer)
 
   const stepMs = calculateStepMs(arpStore.arpBpm, arpStore.arpSubdivision)
-  
-  // Teniamo traccia della direzione per stili complessi (up-down, down-up, converge, diverge)
-  let subIndex = 0 
+
+  // currentIndex/direction persist across stop/start (matching the original
+  // behavior); only subIndex resets on each new start.
+  patternState.subIndex = 0
 
   arpTimer = setInterval(() => {
     // Build expanded note array based on octave setting
@@ -179,107 +169,12 @@ function startArpEngine() {
         midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
         lastArpNote = null
       }
-      currentArpIndex = 0
-      subIndex = 0
+      patternState.currentIndex = 0
+      patternState.subIndex = 0
       return
     }
 
-    // Se l'indice memorizzato è fuori dai limiti (es. sono state rilasciate delle note), resetta
-    if (currentArpIndex >= notesArray.length) {
-      currentArpIndex = 0
-      subIndex = 0
-    }
-
-    let nextIndex = 0
-    const len = notesArray.length
-
-    // --- LOGICA DEGLI STILI DI ABLETON LIVE ---
-    if (arpStore.arpMode === 'up') {
-      nextIndex = (currentArpIndex + 1) % len
-
-    } else if (arpStore.arpMode === 'down') {
-      nextIndex = currentArpIndex - 1
-      if (nextIndex < 0) nextIndex = len - 1
-
-    } else if (arpStore.arpMode === 'up-down') {
-      // Ableton ripete la prima e l'ultima nota nel ciclo completo
-      nextIndex = currentArpIndex + arpDirection
-      if (nextIndex >= len) {
-        nextIndex = len - 1
-        arpDirection = -1
-      } else if (nextIndex < 0) {
-        nextIndex = 0
-        arpDirection = 1
-      }
-
-    } else if (arpStore.arpMode === 'down-up') {
-      nextIndex = currentArpIndex + arpDirection
-      if (nextIndex >= len) {
-        nextIndex = len - 1
-        arpDirection = 1
-      } else if (nextIndex < 0) {
-        nextIndex = 0
-        arpDirection = -1
-      }
-
-    } else if (arpStore.arpMode === 'converge') {
-      // Alterna estremo basso ed estremo alto stringendo verso il centro
-      // subIndex tiene traccia del progresso [0, 1, 2, 3...]
-      subIndex = (subIndex + 1) % len
-      const step = Math.floor(subIndex / 2)
-      if (subIndex % 2 === 0) {
-        nextIndex = step // Basso sale
-      } else {
-        nextIndex = (len - 1) - step // Alto scende
-      }
-
-    } else if (arpStore.arpMode === 'diverge') {
-      // Parte dal centro e si allarga verso gli estremi
-      subIndex = (subIndex + 1) % len
-      const mid = Math.floor((len - 1) / 2)
-      const step = Math.floor((subIndex + 1) / 2)
-      if (subIndex === 0) {
-        nextIndex = mid
-      } else if (subIndex % 2 === 1) {
-        nextIndex = mid + step
-        if (nextIndex >= len) nextIndex = len - 1
-      } else {
-        nextIndex = mid - step
-        if (nextIndex < 0) nextIndex = 0
-      }
-
-    } else if (arpStore.arpMode === 'pinky-up') {
-      // Alterna la nota più alta (len-1) con le altre note che salgono
-      if (currentArpIndex === len - 1) {
-        nextIndex = subIndex
-        subIndex = (subIndex + 1) % (len - 1)
-      } else {
-        nextIndex = len - 1
-      }
-
-    } else if (arpStore.arpMode === 'thumb-up') {
-      // Alterna la nota più bassa (0) con le altre note che salgono
-      if (currentArpIndex === 0) {
-        nextIndex = subIndex
-        if (subIndex === 0) subIndex = 1
-        subIndex = (subIndex + 1) % len
-        if (subIndex === 0) subIndex = 1
-      } else {
-        nextIndex = 0
-      }
-
-    } else if (arpStore.arpMode === 'random') {
-      nextIndex = Math.floor(Math.random() * len)
-
-    } else if (arpStore.arpMode === 'random-other') {
-      // Evita di ripetere la stessa nota consecutivamente
-      do {
-        nextIndex = Math.floor(Math.random() * len)
-      } while (nextIndex === currentArpIndex)
-    }
-
-    // Aggiorna lo stato degli indici
-    currentArpIndex = nextIndex
+    const nextIndex = nextArpIndex(arpStore.arpMode, patternState, notesArray.length)
     const note = notesArray[nextIndex]
 
     // Riproduzione della nota MIDI

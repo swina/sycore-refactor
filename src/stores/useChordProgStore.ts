@@ -3,10 +3,17 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
+import type { ArpMode } from '@/lib/arp-patterns'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type DurationOption = typeof DURATION_OPTIONS[number]
+
+// A step's chord-strum direction, used when the slot's global playMode is
+// 'chord'. Undefined/unset means "play simultaneously" — today's only
+// behavior — so old saved progressions are unaffected until the user
+// explicitly picks one of these 4 in the step-detail editor.
+export type ChordStrumMode = 'up' | 'down' | 'up-down' | 'down-up'
 
 export interface ChordStep {
   active: boolean
@@ -16,6 +23,9 @@ export interface ChordStep {
   duration: DurationOption
   gate: number
   transpose: number
+  stepMode?: 'chord' | 'arp'   // per-step override of the slot's global playMode; unset = inherit playMode
+  chordMode?: ChordStrumMode   // used when this step's effective mode is 'chord'; unset = simultaneous (today's behavior)
+  arpMode?: ArpMode            // used when this step's effective mode is 'arp'; defaults to 'up' (today's hardcoded behavior)
 }
 
 export type PlayMode = 'chord' | 'arp' | 'bass'
@@ -57,6 +67,9 @@ export const DEFAULT_CHORD_STEP: ChordStep = {
   duration: '4n',
   gate: 80,
   transpose: 0,
+  stepMode: undefined,
+  chordMode: undefined,
+  arpMode: 'up',
 }
 
 // ── Storage ─────────────────────────────────────────────────────────────────
