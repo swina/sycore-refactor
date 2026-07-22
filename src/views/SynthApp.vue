@@ -122,7 +122,15 @@ function closeAllPanels() {
 
 function focusStyle(key) {
   if (uiStore.focusedModalKey !== key) return {}
-  return { position: 'relative', zIndex: 9999, isolation: 'isolate' }
+  // Capped at 399 (useDraggableResizable's own DRAGGABLE_Z_MAX) — never
+  // exceed it. Sub-dialogs owned by a panel (e.g. LiveTimeline's Add Marker
+  // dialog, SoundFolderBrowser) Teleport to body at z-[600]+ on the
+  // assumption that nothing panel-related ever goes above ~399; letting
+  // this go to 9999 let the currently-focused panel bury its own dialogs
+  // whenever focusedModalKey stayed pinned to it (which is now much more
+  // often, since useUiStore.focusPanel() sets it on every launcher/dial
+  // open, not just Ctrl+Tab cycling).
+  return { position: 'relative', zIndex: 399, isolation: 'isolate' }
 }
 
 // ── Consolidated panel groups (see docs/plans/modular-panel-system.md) ────

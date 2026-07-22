@@ -1501,12 +1501,51 @@ onUnmounted(() => {
         </nav>
       </div>
 
-      
+
       <div class="flex-1" />
+
+      <!-- Save / Load controls (moved from the footer to free up its space
+           for the Macro/Global Transport buttons relocated off the toolbar row) -->
       <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+        <!-- Current set name chip -->
+        <div
+          class="flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900/60 border text-[9px] font-mono max-w-[120px] overflow-hidden"
+          :class="currentSetId ? 'border-synth-neon/20 text-synth-neon' : 'border-neutral-800 text-neutral-600'"
+          :title="currentSetName || 'No timeline saved'"
+        >
+          <span class="truncate">{{ currentSetName || 'Unsaved' }}</span>
+        </div>
+        <!-- Save (update) -->
+        <button
+          @click="saveUpdate"
+          :disabled="!currentSetId"
+          title="Save (update current)"
+          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90 disabled:opacity-25 disabled:cursor-not-allowed"
+        >
+          <Save class="w-3.5 h-3.5" />
+        </button>
+        <!-- Save As -->
+        <button
+          @click="openSaveAs"
+          title="Save as new timeline"
+          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
+        >
+          <FilePlus class="w-3.5 h-3.5" />
+        </button>
+        <!-- Load -->
+        <button
+          @click="showLoadSets = true; loadSets()"
+          title="Load saved timeline"
+          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
+        >
+          <FolderOpen class="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div class="flex items-center gap-1 pointer-events-auto ml-2" @mousedown.stop>
         <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
-      
+
     </div>
 
     <!-- ── Timeline Tab ────────────────────────────────────────────────────── -->
@@ -1603,70 +1642,6 @@ onUnmounted(() => {
         >
           <Trash2 class="w-3 h-3" /> Mks
         </button>
-
-        <!-- Quick Macro buttons -->
-        <div class="flex items-center gap-1 ml-2 pl-2 border-l border-neutral-800">
-          <span class="text-[8px] font-mono text-neutral-700 uppercase tracking-widest mr-1">Macro</span>
-          <button
-            @click="newMkr.position = timelinePos; newMkr.type = 'dm-rec-sync'; showAddMarker = true"
-            title="Insert DM Rec Sync → records 4 bars at playhead"
-            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
-            :style="{ borderColor: '#ff6b3566', color: '#ff6b35', background: '#ff6b3511' }"
-          >
-            ⏺ Rec
-          </button>
-          <button
-            @click="newMkr.position = timelinePos; newMkr.type = 'audio-trim-start'; showAddMarker = true"
-            title="Insert Audio Trim Start at playhead"
-            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
-            :style="{ borderColor: '#38bdf866', color: '#38bdf8', background: '#38bdf811' }"
-          >
-            ✂ Trim
-          </button>
-          <button
-            @click="newMkr.position = timelinePos; newMkr.type = 'audio-set-loop'; showAddMarker = true"
-            title="Insert Audio Set Loop (2 bars) at playhead"
-            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
-            :style="{ borderColor: '#34d39966', color: '#34d399', background: '#34d39911' }"
-          >
-            ↺ Loop
-          </button>
-          <button
-            @click="newMkr.position = timelinePos; newMkr.type = 'audio-crop'; showAddMarker = true"
-            title="Insert Audio Crop at playhead"
-            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
-            :style="{ borderColor: '#f472b666', color: '#f472b6', background: '#f472b611' }"
-          >
-            ⊞ Crop
-          </button>
-          <button
-            @click="newMkr.position = timelinePos; newMkr.type = 'audio-save-wav'; showAddMarker = true"
-            title="Insert Audio Save WAV at playhead"
-            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
-            :style="{ borderColor: '#fbbf2466', color: '#fbbf24', background: '#fbbf2411' }"
-          >
-            ⬇ Save
-          </button>
-
-          <!-- Quick Global Transport buttons -->
-          <div class="w-px h-4 bg-neutral-800 mx-1" />
-          <button
-            @click="newMkr.position = timelinePos; newMkr.type = 'gt-start'; showAddMarker = true"
-            title="Insert Global Transport Start at playhead"
-            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
-            :style="{ borderColor: '#00ff8866', color: '#00ff88', background: '#00ff8811' }"
-          >
-            ⏯ GT▶
-          </button>
-          <button
-            @click="newMkr.position = timelinePos; newMkr.type = 'gt-stop'; showAddMarker = true"
-            title="Insert Global Transport Stop at playhead"
-            class="px-1.5 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all active:scale-90"
-            :style="{ borderColor: '#ff004466', color: '#ff0044', background: '#ff004411' }"
-          >
-            ⏹ GT■
-          </button>
-        </div>
       </div>
 
       <!-- Timeline canvas -->
@@ -2068,41 +2043,53 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Save / Load controls -->
-      <div class="flex items-center gap-1 pointer-events-auto justify-end w-1/4" @mousedown.stop>
-        <!-- Current set name chip -->
-        <div
-          class="flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900/60 border text-[9px] font-mono max-w-[120px] overflow-hidden"
-          :class="currentSetId ? 'border-synth-neon/20 text-synth-neon' : 'border-neutral-800 text-neutral-600'"
-          :title="currentSetName || 'No timeline saved'"
-        >
-          <span class="truncate">{{ currentSetName || 'Unsaved' }}</span>
-        </div>
-        <!-- Save (update) -->
+      <!-- Quick Macro + Global Transport buttons (moved from the toolbar row,
+           which overflowed with these included — compact icon-only here to
+           fit the footer's quarter-width slot) -->
+      <div class="flex items-center gap-0.5 pointer-events-auto justify-end w-1/4" @mousedown.stop>
         <button
-          @click="saveUpdate"
-          :disabled="!currentSetId"
-          title="Save (update current)"
-          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90 disabled:opacity-25 disabled:cursor-not-allowed"
-        >
-          <Save class="w-3.5 h-3.5" />
-        </button>
-        <!-- Save As -->
+          @click="newMkr.position = timelinePos; newMkr.type = 'dm-rec-sync'; showAddMarker = true"
+          title="Insert DM Rec Sync → records 4 bars at playhead"
+          class="p-1.5 rounded-md hover:bg-white/10 transition-colors active:scale-90"
+          :style="{ color: '#ff6b35' }"
+        >⏺</button>
         <button
-          @click="openSaveAs"
-          title="Save as new timeline"
-          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
-        >
-          <FilePlus class="w-3.5 h-3.5" />
-        </button>
-        <!-- Load -->
+          @click="newMkr.position = timelinePos; newMkr.type = 'audio-trim-start'; showAddMarker = true"
+          title="Insert Audio Trim Start at playhead"
+          class="p-1.5 rounded-md hover:bg-white/10 transition-colors active:scale-90"
+          :style="{ color: '#38bdf8' }"
+        >✂</button>
         <button
-          @click="showLoadSets = true; loadSets()"
-          title="Load saved timeline"
-          class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
-        >
-          <FolderOpen class="w-3.5 h-3.5" />
-        </button>
+          @click="newMkr.position = timelinePos; newMkr.type = 'audio-set-loop'; showAddMarker = true"
+          title="Insert Audio Set Loop (2 bars) at playhead"
+          class="p-1.5 rounded-md hover:bg-white/10 transition-colors active:scale-90"
+          :style="{ color: '#34d399' }"
+        >↺</button>
+        <button
+          @click="newMkr.position = timelinePos; newMkr.type = 'audio-crop'; showAddMarker = true"
+          title="Insert Audio Crop at playhead"
+          class="p-1.5 rounded-md hover:bg-white/10 transition-colors active:scale-90"
+          :style="{ color: '#f472b6' }"
+        >⊞</button>
+        <button
+          @click="newMkr.position = timelinePos; newMkr.type = 'audio-save-wav'; showAddMarker = true"
+          title="Insert Audio Save WAV at playhead"
+          class="p-1.5 rounded-md hover:bg-white/10 transition-colors active:scale-90"
+          :style="{ color: '#fbbf24' }"
+        >⬇</button>
+        <div class="w-px h-4 bg-neutral-800 mx-0.5" />
+        <button
+          @click="newMkr.position = timelinePos; newMkr.type = 'gt-start'; showAddMarker = true"
+          title="Insert Global Transport Start at playhead"
+          class="p-1.5 rounded-md hover:bg-white/10 transition-colors active:scale-90"
+          :style="{ color: '#00ff88' }"
+        >⏯</button>
+        <button
+          @click="newMkr.position = timelinePos; newMkr.type = 'gt-stop'; showAddMarker = true"
+          title="Insert Global Transport Stop at playhead"
+          class="p-1.5 rounded-md hover:bg-white/10 transition-colors active:scale-90"
+          :style="{ color: '#ff0044' }"
+        >⏹</button>
       </div>
     </div> 
 

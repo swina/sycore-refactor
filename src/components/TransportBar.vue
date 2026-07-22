@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Play, Square, Settings, AlertTriangle } from 'lucide-vue-next'
+import { Play, Square, Settings, AlertTriangle, RefreshCcwDot } from 'lucide-vue-next'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -100,30 +100,15 @@ function stopAll() {
       <span>{{ transportManager.isRunning.value ? 'Stop All' : 'Play All' }}</span>
     </button>
 
-    <!-- Position -->
-    <span class="text-[10px] font-mono text-neutral-400 tabular-nums w-16 text-center">
-      {{ position }}
-    </span>
-
-    <!-- BPM -->
-    <div class="flex items-center gap-1">
-      <span class="text-[8px] text-neutral-600">BPM</span>
-      <input
-        type="number" min="20" max="300"
-        :value="arpStore.arpBpm"
-        @change="handleBpmChange"
-        class="w-14 bg-black border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[12px] focus:outline-none focus:border-synth-neon transition-colors"
-      />
-    </div>
-
     <!-- Sync config gear -->
     <div class="relative">
       <button
         @click="showSyncPanel = !showSyncPanel"
-        :class="['p-1 rounded transition-colors', showSyncPanel ? 'text-synth-neon bg-synth-neon/10' : 'text-neutral-500 hover:text-white']"
+        :class="['p-1.5 rounded transition-colors', showSyncPanel ? 'text-synth-neon bg-synth-neon/10' : 'text-synth-neon']"
+        class="hover:bg-synth-neon/30 rounded-full"
         title="Sync apps to transport"
       >
-        <Settings class="w-3.5 h-3.5" />
+        <RefreshCcwDot class="w-5 h-5" />
       </button>
 
       <!-- Dropdown panel -->
@@ -159,5 +144,23 @@ function stopAll() {
         </div>
       </Transition>
     </div>
+
+    <!-- Position -->
+    <span class="text-[10px] font-mono text-neutral-400 tabular-nums w-16 text-center">
+      {{ position }}
+    </span>
+
+    <!-- BPM -->
+    <div class="flex items-center gap-1">
+      <span class="text-[8px] text-neutral-600">BPM</span>
+      <input
+        type="number" min="20" max="300"
+        :value="arpStore.arpBpm"
+        @change="handleBpmChange"
+        class="w-14 bg-black border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[12px] focus:outline-none focus:border-synth-neon transition-colors"
+      />
+    </div>
+
+    
   </div>
 </template>

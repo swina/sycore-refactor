@@ -138,7 +138,7 @@ onUnmounted(() => {
       </button>
 
       <!-- Burger menu toggle -->
-      <button
+      <!-- <button
         @click="uiStore.toggleMainMenu()"
         :class="[
           'w-10 h-10 flex items-center justify-center transition-all active:scale-95',
@@ -148,7 +148,7 @@ onUnmounted(() => {
       >
         <X v-if="uiStore.isMainMenuOpen" class="w-5 h-5" />
         <Menu v-else class="w-5 h-5" />
-      </button>
+      </button> -->
 
       <!-- Open-apps dial toggle -->
       <button
