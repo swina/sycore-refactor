@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue'
-import { Maximize2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMinimizedModals } from '@/composables/useMinimizedModals'
 import { moduleRegistry } from '@/core/modules/registry'
@@ -80,7 +79,7 @@ function activate(entry) {
             :title="entry.minimized ? `Restore: ${entry.label}` : `Focus: ${entry.label}`"
           >
             <component
-              :is="entry.minimized ? Maximize2 : entry.icon"
+              :is="entry.icon"
               :class="['w-4 h-4', entry.minimized ? 'text-neutral-500 group-hover:text-synth-neon' : 'text-synth-neon']"
             />
           </button>
