@@ -30,6 +30,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minWidth:      280,
     minHeight:     340,
     zIndex:        180,
+    panelId:       'audio-mixer',
   })
 
 const showConfig = ref(false)

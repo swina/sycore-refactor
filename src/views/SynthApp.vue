@@ -80,7 +80,7 @@ import LiveTimeline       from '@/components/LiveTimeline.vue'
 import SoundEngine        from '@/components/SoundEngine.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
-import MinimizedModalsBar from '@/components/ui/MinimizedModalsBar.vue'
+import OpenAppsDock from '@/components/ui/OpenAppsDock.vue'
 
 // Stores
 const midiStore = useMidiStore()
@@ -548,8 +548,8 @@ onMounted(() => {
       <!-- Global MIDI Map context menu (always mounted, Teleports to body) -->
       <MidiMapContextMenu />
 
-      <!-- Minimized modals restore bar -->
-      <MinimizedModalsBar />
+      <!-- Open-apps dock (all open panels, not just minimized ones) -->
+      <OpenAppsDock />
     </Teleport>
 
     <!-- Tooltip Wrapper -->

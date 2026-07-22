@@ -36,6 +36,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minHeight: 440,
   zIndex: 100,
   minimizeLabel: 'Live Timeline',
+  panelId: 'live-timeline',
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 

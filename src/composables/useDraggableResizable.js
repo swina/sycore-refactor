@@ -3,6 +3,8 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 const FOOTER_H = 40 // AppFooter h-10
 import { registerMinimized, unregisterMinimized } from './useMinimizedModals'
 import { userKey } from '@/lib/userKey'
+import { useUiStore } from '@/stores/useUiStore'
+import { useViewportClass } from './useViewportClass'
 
 // Shared counter for draggable panels. Capped at 399 so non-draggable
 // modals (z-[400]+) always layer above floating panels.
@@ -19,6 +21,10 @@ export function useDraggableResizable({
   minimizedHeight = 44,
   minimizeLabel = 'Modal',
   openRef = null,
+  // Canonical moduleRegistry/PANEL_ID_REF_LOOKUP id — lets the open-apps
+  // dock and useUiStore.focusPanel() address this panel by a stable id
+  // instead of the internal storageKey.
+  panelId = null,
 } = {}) {
 
   const _id = storageKey || `modal_${Math.random().toString(36).slice(2)}`
@@ -88,13 +94,16 @@ export function useDraggableResizable({
     persist()
   }
 
-  // Keep global minimized-modals registry in sync
+  // Keep global minimized-modals registry in sync — keyed by panelId when
+  // available so the open-apps dock (which iterates moduleRegistry ids) can
+  // cross-reference minimized state by the same id.
+  const _minimizedKey = panelId ?? _id
   watch(isMinimized, (v) => {
-    if (v) registerMinimized(_id, minimizeLabel, toggleMinimize)
-    else   unregisterMinimized(_id)
+    if (v) registerMinimized(_minimizedKey, minimizeLabel, toggleMinimize)
+    else   unregisterMinimized(_minimizedKey)
   }, { immediate: true })
 
-  onUnmounted(() => unregisterMinimized(_id))
+  onUnmounted(() => unregisterMinimized(_minimizedKey))
 
   function persist() {
     if (storageKey) {
@@ -187,6 +196,24 @@ export function useDraggableResizable({
   // { immediate: true } handles v-if panels that mount while already open.
   if (openRef) {
     watch(openRef, (v) => { if (v) { isMinimized.value = false; bringToFront() } }, { immediate: true })
+  }
+
+  // focusRequest always changes (nonce bump), unlike a boolean open ref, so
+  // this also handles re-focusing a panel that's already open (dock clicks,
+  // launcher tiles for an already-open app) — not just the initial open.
+  // On a tablet-width viewport, a freshly-focused panel auto-fills the
+  // workspace instead of requiring a manual maximize. { immediate: true }
+  // catches panels that only mount once already open (v-if-gated) — by the
+  // time they mount, focusRequest was already bumped by whatever opened them.
+  if (panelId) {
+    const uiStore = useUiStore()
+    const { isTabletSize } = useViewportClass()
+    watch(() => uiStore.focusRequest, (req) => {
+      if (req.id !== panelId) return
+      isMinimized.value = false
+      bringToFront()
+      if (isTabletSize.value && !isMaximized.value) maximize()
+    }, { immediate: true })
   }
 
   return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize, isMaximized }

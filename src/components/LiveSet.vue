@@ -33,6 +33,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minWidth: 640,
   minHeight: 480,
   zIndex: 500,
+  panelId: 'liveset',
 })
 
 const { state: paramsStorage } = useLocalStorage('S1_LIVESET_PARAMS', Array(8).fill(null).map(() => ({ label: '', cc: -1 })))

@@ -348,6 +348,7 @@ export const useUiStore = defineStore('ui', () => {
     isPanicOpen.value        = false
     isMainMenuOpen.value     = false
     mainMenuSelectedIndex.value = -1
+    isOpenAppsDockOpen.value = false
     isSideMenuOpen.value     = false
     isSessionOpen.value      = false
     isMidiMatrixOpen.value   = false
@@ -435,6 +436,27 @@ export const useUiStore = defineStore('ui', () => {
   function isPanelOpen(id: string): boolean {
     return PANEL_ID_REF_LOOKUP[id]?.value ?? false
   }
+
+  // ── Focus-on-demand (launcher tiles / open-apps dock / MIDI dial) ────────
+  // A plain boolean transition (false→true) only fires once per open; this
+  // nonce always changes so "bring an already-open panel to front" works too.
+  const focusRequest = ref<{ id: string; nonce: number }>({ id: '', nonce: 0 })
+
+  function _bumpFocus(id: string, ref: Ref<boolean>): void {
+    // Bridge into the separate MODAL_CYCLE_REGISTRY/focusedModalKey namespace
+    // (Ctrl+Tab's z-9999 override) by ref identity, since the two id spaces
+    // aren't otherwise reconciled. Not every panel has a MODAL_REFS entry or
+    // even a focusStyle() wrapper in SynthApp.vue (e.g. AudioMixerPanel is
+    // mounted in App.vue, MidiWizardFlow/MidiMonitorPanel/MidiDevices are
+    // mounted bare) — when focusing one of those, focusedModalKey MUST be
+    // cleared rather than left pointing at whatever was focused previously,
+    // or that stale panel's z-9999 override lingers forever and permanently
+    // shadows every panel outside the legacy cycle system.
+    const cycleEntry = Object.entries(MODAL_REFS).find(([, r]) => r === ref)
+    focusedModalKey.value = cycleEntry ? cycleEntry[0] : null
+    focusRequest.value = { id, nonce: focusRequest.value.nonce + 1 }
+  }
+
   // Closing is always allowed (even a since-disabled module can be closed);
   // opening is gated on configStore.isModuleEnabled — this is the defense-in-
   // depth backstop so a disabled module can't be opened via a MIDI action
@@ -449,25 +471,48 @@ export const useUiStore = defineStore('ui', () => {
       return
     }
     ref.value = next
+    if (next) _bumpFocus(id, ref)
   }
-  function openPanel(id: string): void {
+  // Sets the panel open (if not already) and always bumps focusRequest, so
+  // it also re-focuses a panel that's already open (dock/launcher clicks).
+  function focusPanel(id: string): void {
     const ref = PANEL_ID_REF_LOOKUP[id]
     if (!ref) return
-    if (!configStore.isModuleEnabled(id)) {
-      console.warn(`[useUiStore] openPanel: "${id}" is disabled`)
-      return
+    if (!ref.value) {
+      if (!configStore.isModuleEnabled(id)) {
+        console.warn(`[useUiStore] focusPanel: "${id}" is disabled`)
+        return
+      }
+      ref.value = true
     }
-    ref.value = true
+    _bumpFocus(id, ref)
+  }
+  function openPanel(id: string): void {
+    focusPanel(id)
   }
   function closePanel(id: string): void {
     const ref = PANEL_ID_REF_LOOKUP[id]
     if (ref) ref.value = false
   }
 
+  // Dedup by ref identity — several ids alias the same underlying ref
+  // (looper/audio-looper, guides/manual).
+  const openPanelIds = computed<string[]>(() => {
+    const seenRefs = new Set<Ref<boolean>>()
+    const ids: string[] = []
+    for (const [id, ref] of Object.entries(PANEL_ID_REF_LOOKUP)) {
+      if (!ref.value || seenRefs.has(ref)) continue
+      seenRefs.add(ref)
+      ids.push(id)
+    }
+    return ids
+  })
+
   function toggleMainMenu() {
     isMainMenuOpen.value = !isMainMenuOpen.value
     if (isMainMenuOpen.value) {
       isSideMenuOpen.value = false
+      isOpenAppsDockOpen.value = false
       mainMenuSelectedIndex.value = -1
     } else {
       mainMenuSelectedIndex.value = -1
@@ -483,6 +528,18 @@ export const useUiStore = defineStore('ui', () => {
   function toggleSideMenu() {
     isSideMenuOpen.value = !isSideMenuOpen.value
     if (isSideMenuOpen.value) isMainMenuOpen.value = false
+  }
+
+  // ── Open-apps dial (footer icon -> radial fan-out of open panels) ───────
+  const isOpenAppsDockOpen = ref(false)
+  const openAppsDockAnchor = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  function toggleOpenAppsDock(anchor?: { x: number; y: number }): void {
+    isOpenAppsDockOpen.value = !isOpenAppsDockOpen.value
+    if (isOpenAppsDockOpen.value) {
+      if (anchor) openAppsDockAnchor.value = anchor
+      isMainMenuOpen.value = false
+    }
   }
 
   watch(lastPlaylistName, (v) => {
@@ -531,5 +588,7 @@ export const useUiStore = defineStore('ui', () => {
     focusedModalKey, openModalKeys, cycleFocusedModal,
     closeAll, toggleMainMenu, toggleSideMenu,
     isPanelOpen, togglePanel, openPanel, closePanel,
+    focusRequest, focusPanel, openPanelIds,
+    isOpenAppsDockOpen, openAppsDockAnchor, toggleOpenAppsDock,
   }
 })

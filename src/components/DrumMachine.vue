@@ -38,6 +38,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minWidth:      720,
     minHeight:     380,
     zIndex:        210,
+    panelId:       'drum-machine',
   })
 
 // ── Local UI state ─────────────────────────────────────────────────────────────

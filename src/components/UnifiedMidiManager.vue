@@ -31,6 +31,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   initialWidth: 920,
   initialHeight: 720,
   zIndex: 100,
+  panelId: 'midi-manager',
 })
 
 const TABS = [

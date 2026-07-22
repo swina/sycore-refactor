@@ -1,5 +1,4 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import TracksPlayer from '@/components/TracksPlayer.vue'
 import GuidesPanel from '@/components/GuidesPanel.vue'
@@ -8,25 +7,13 @@ import AudioMixerPanel from '@/components/AudioMixerPanel.vue'
 import SoundFolderBrowser from '@/components/SoundFolderBrowser.vue'
 import StartupLoader from '@/components/ui/StartupLoader.vue'
 import { useUiStore } from '@/stores/useUiStore'
+import { useViewportClass } from '@/composables/useViewportClass'
 
 const uiStore = useUiStore()
 
-const tooSmall = ref(false)
-
-function checkSize() {
-  // Tablet-compatible: blocks phones, not iPad-class devices (768x1024 portrait
-  // and up must render — see docs/plans/modular/UI-Redesign.md).
-  tooSmall.value = window.innerWidth < 768 || window.innerHeight < 500
-}
-
-onMounted(() => {
-  checkSize()
-  window.addEventListener('resize', checkSize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', checkSize)
-})
+// Tablet-compatible: blocks phones, not iPad-class devices (768x1024 portrait
+// and up must render — see docs/plans/modular/UI-Redesign.md).
+const { isTooSmall: tooSmall } = useViewportClass()
 </script>
 
 <template>

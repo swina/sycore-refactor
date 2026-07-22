@@ -19,6 +19,7 @@ const { panelStyle, onDragStart, bringToFront, toggleMinimize, maximize, onResiz
   minHeight:     380,
   zIndex:        120,
   minimizeLabel: 'MIDI Devices',
+  panelId:       'midi-devices',
 })
 
 const DEVICE_TYPES = [

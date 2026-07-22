@@ -43,6 +43,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minWidth: 640,
   minHeight: 440,
   zIndex: 100,
+  panelId: 'chord-prog',
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 

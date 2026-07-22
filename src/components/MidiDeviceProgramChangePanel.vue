@@ -25,6 +25,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   initialWidth: 900,
   initialHeight: 700,
   zIndex: 100,
+  panelId: 'device-program-change',
 })
 
 const midiStore      = useMidiStore()

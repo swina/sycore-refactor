@@ -760,6 +760,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minHeight:     320,
     minimizeLabel: 'Controller Designer',
     openRef:       () => uiStore.isMidiControllerDesignerOpen,
+    panelId:       'controller-designer',
   })
 
 // ─── State ────────────────────────────────────────────────────────────────────

@@ -45,6 +45,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minWidth: 600,
   minHeight: 500,
   zIndex: 160,
+  panelId: 'looper',
 })
 watch(() => uiStore.isLooperOpen, (v) => { if (v) bringToFront() })
 

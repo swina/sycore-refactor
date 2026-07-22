@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -10,8 +10,8 @@ import {
   Radio, Info, CircleQuestionMark,
   LogIn, Settings, User, Globe, LayoutGrid,
 } from 'lucide-vue-next'
-import { modulesByCategory, CATEGORY_META } from '@/core/modules/registry'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import AppLauncher from '@/components/ui/AppLauncher.vue'
 
 const SlideshowModal = defineAsyncComponent(() => import('@/components/SlideshowModal.vue'))
 const AboutModal = defineAsyncComponent(() => import('@/components/AboutModal.vue'))
@@ -44,32 +44,6 @@ function goWorkspace() {
   router.push('/workspace')
 }
 
-// ─── Section definitions ───────────────────────────────────────────────────
-// Derived from src/core/modules/registry.ts — the single source of truth for
-// launcher module metadata (label/icon/background/category). See
-// docs/plans/modular-panel-system.md.
-
-// computed (not a plain const) so it re-filters once configStore.init()
-// resolves (async, may finish after this page has already rendered) and any
-// time an admin changes a module's enabled state via AdminPanel's Toolbar
-// Settings section.
-const sections = computed(() =>
-  modulesByCategory()
-    .map(({ category, items }) => ({
-      title: CATEGORY_META[category]?.title || category,
-      icon: CATEGORY_META[category]?.icon,
-      items: items
-        .filter(m => m.showOnLauncher !== false && configStore.isModuleEnabled(m.id))
-        .map(m => ({
-          label: m.label,
-          icon: m.icon,
-          badge: m.badge,
-          bg: m.bg,
-          onClick: () => { uiStore.openPanel(m.id); goWorkspace() },
-        })),
-    }))
-    .filter(section => section.items.length > 0)
-)
 </script>
 
 <template>
@@ -132,51 +106,9 @@ const sections = computed(() =>
     <div class="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 scrollbar-thin">
       <div class="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-5 max-w-[1400px] mx-auto">
 
-        <!-- Main sections -->
-        <div class="flex flex-col gap-6">
-          <section v-for="(section, sIdx) in sections" :key="sIdx">
-            <!-- Section header -->
-            <div class="flex items-center gap-2 mb-3 px-1">
-              <component :is="section.icon" class="w-4 h-4 text-brand-strong dark:text-synth-neon" />
-              <h2 class="text-[11px] font-black uppercase tracking-[0.3em] text-ink-muted dark:text-neutral-500 font-mono">
-                {{ section.title }}
-              </h2>
-              <div class="flex-1 h-px bg-black/10 dark:bg-neutral-800/60" />
-            </div>
-
-            <!-- Section cards -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              <div
-                v-for="(item, iIdx) in section.items"
-                :key="iIdx"
-                @click="item.onClick"
-                class="group relative aspect-[3/2] rounded-xl border overflow-hidden cursor-pointer transition-all duration-200 active:scale-[0.97]
-                       border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 backdrop-blur-sm
-                       hover:border-brand/40 dark:hover:border-synth-neon/30 hover:bg-surface-panel dark:hover:bg-neutral-900/70
-                       shadow-sm dark:shadow-none"
-                :style="lazyBg(item.bg)"
-              >
-                <!-- Gradient overlay — softer wash in light mode -->
-                <div class="absolute inset-0 bg-gradient-to-t from-white/80 via-white/40 to-transparent dark:from-black/70 dark:via-black/20 dark:to-transparent" />
-
-                <!-- Content -->
-                <div class="absolute inset-0 flex flex-col justify-end p-3">
-                  <div class="flex items-center gap-2 min-w-0">
-                    <component :is="item.icon" class="w-4 h-4 text-brand-strong dark:text-synth-neon shrink-0 group-hover:drop-shadow-[0_0_6px_color-mix(in_srgb,var(--color-brand)_60%,transparent)] transition-all" />
-                    <span class="text-[10px] font-bold uppercase tracking-[0.15em] text-ink dark:text-neutral-300 font-mono group-hover:text-brand-strong dark:group-hover:text-white transition-colors truncate">
-                      {{ item.label }}
-                    </span>
-                    <span
-                      v-if="item.badge"
-                      class="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0"
-                    >
-                      {{ item.badge }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+        <!-- App launcher -->
+        <div class="min-w-0">
+          <AppLauncher variant="page" @select="goWorkspace" />
         </div>
 
         <!-- Utility rail -->

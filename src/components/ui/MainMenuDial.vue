@@ -3,13 +3,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { lucideIcons } from '@/lib/lucide-icons'
 const { Menu, X } = lucideIcons
 import { useUiStore } from '@/stores/useUiStore'
-import { useConfigStore } from '@/stores/useConfigStore'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { moduleRegistry } from '@/core/modules/registry'
+import { useAppLauncher } from '@/composables/useAppLauncher'
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()
-const configStore = useConfigStore()
+const { flatCyclableItems } = useAppLauncher()
 
 const COLORS = [
   'text-synth-neon', 'text-blue-400', 'text-yellow-400', 'text-emerald-400',
@@ -17,15 +16,15 @@ const COLORS = [
   'text-rose-400', 'text-cyan-400', 'text-purple-400', 'text-amber-400'
 ]
 
-// Driven entirely by moduleRegistry + ModuleManagerPanel's enabled state,
-// same source as AppFooter.vue's menuActions — keeps the dial and footer
-// menus identical. See docs/plans/modular-panel-system.md.
+// Same source as AppFooter.vue's AppLauncherModal (variant="modal", so it
+// includes toolbar-only utilities too) — pinned items first, then registry
+// order — keeps the hardware dial and the burger-menu modal identical.
 const filteredActions = computed(() => {
   if (!uiStore.isMainMenuOpen) return []
 
-  const enabledModules = moduleRegistry.filter(m => configStore.isModuleEnabled(m.id))
+  const eligibleModules = flatCyclableItems({ includeUtilities: true })
 
-  return enabledModules.map((m, idx) => ({
+  return eligibleModules.map((m, idx) => ({
     id: m.id,
     label: m.label,
     iconComponent: m.icon,

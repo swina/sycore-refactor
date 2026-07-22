@@ -96,6 +96,7 @@ const { panelStyle: panelDRStyle, onDragStart: startPanelDrag, onResizeStart: st
   minWidth: 904,
   minHeight: 280,
   zIndex: 220,
+  panelId: 'tracks-player',
 })
 watch(isOpen, (v) => { if (v) bringToFront() })
 

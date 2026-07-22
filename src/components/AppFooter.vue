@@ -7,9 +7,9 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SlidersHorizontal } from 'lucide-vue-next'
-import { moduleRegistry } from '@/core/modules/registry'
+import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SlidersHorizontal, SquareStack } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
+import AppLauncherModal from '@/components/ui/AppLauncherModal.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
 import TransportBar from '@/components/TransportBar.vue'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
@@ -29,28 +29,13 @@ const router = useRouter()
 
 const showPartSelector = computed(() => configStore.enablePartSelector)
 
-const MENU_COLORS = [
-  'text-synth-neon', 'text-blue-400', 'text-yellow-400', 'text-emerald-400',
-  'text-pink-400', 'text-red-400', 'text-indigo-400', 'text-orange-400',
-  'text-rose-400', 'text-cyan-400', 'text-purple-400', 'text-amber-400'
-]
-
-// Driven entirely by moduleRegistry + ModuleManagerPanel's enabled state —
-// no longer requires an admin to separately "add" each button via
-// AdminPanel's Toolbar Settings picker, and uses each module's own icon
-// component directly (no lucideIcons[string] lookup), so the icon here
-// always matches what Module Manager shows. See
-// docs/plans/modular-panel-system.md.
-const menuActions = computed(() => {
-  const enabledModules = moduleRegistry.filter(m => configStore.isModuleEnabled(m.id))
-  return enabledModules.map((m, idx) => ({
-    id: m.id,
-    label: m.label,
-    iconComponent: m.icon,
-    color: MENU_COLORS[idx % MENU_COLORS.length],
-    onClick: () => uiStore.togglePanel(m.id)
-  }))
-})
+// Plain {x,y} only — never store the DOMRect itself in reactive state, its
+// native getters can throw "Illegal invocation" when accessed through a
+// Vue reactivity Proxy.
+function onToggleOpenAppsDock(event) {
+  const rect = event.currentTarget.getBoundingClientRect()
+  uiStore.toggleOpenAppsDock({ x: rect.left + rect.width / 2, y: rect.top })
+}
 
 // ── Backing Track transport state (synced via window events) ──────────────────
 const btIsPlaying        = ref(false)
@@ -163,6 +148,19 @@ onUnmounted(() => {
       >
         <X v-if="uiStore.isMainMenuOpen" class="w-5 h-5" />
         <Menu v-else class="w-5 h-5" />
+      </button>
+
+      <!-- Open-apps dial toggle -->
+      <button
+        v-if="uiStore.openPanelIds.length > 0"
+        @click="onToggleOpenAppsDock"
+        :class="[
+          'w-10 h-10 flex items-center justify-center transition-all active:scale-95',
+          uiStore.isOpenAppsDockOpen ? 'text-white bg-white/10' : 'text-synth-neon hover:bg-synth-neon/10'
+        ]"
+        title="Open Apps"
+      >
+        <SquareStack class="w-5 h-5" />
       </button>
 
       <!-- Left: Backing Track transport -->
@@ -327,50 +325,5 @@ onUnmounted(() => {
 
   </footer>
 
-  <!-- Backdrop — outside footer to escape its stacking context -->
-  <div
-    v-if="uiStore.isMainMenuOpen"
-    @click="uiStore.isMainMenuOpen = false"
-    class="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[1040]"
-  />
-
-  <!-- Horizontal menu panel — outside footer so z-index is not capped at z-960 -->
-  <Transition name="menu-slide">
-    <div
-      v-if="uiStore.isMainMenuOpen"
-      class="fixed bottom-10 left-0 w-full flex flex-row items-center gap-1.5 px-2 py-2 bg-surface-panel/95 dark:bg-black/90 backdrop-blur-md border-t border-black/5 dark:border-neutral-800/60 overflow-x-auto z-[1050] justify-between"
-    >
-      <button
-        v-for="(action, index) in menuActions"
-        :key="action.id"
-        :title="action.label"
-        @click="action.onClick(); uiStore.isMainMenuOpen = false"
-        :class="[
-          'flex-shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-xl border transition-all active:scale-95',
-          'border-black/10 dark:border-white/10 bg-black/5 dark:bg-black/60 hover:border-brand/40 dark:hover:border-white/30 hover:scale-105',
-          /* MainMenuDial.vue's filteredActions (what mainMenuSelectedIndex indexes
-             into) is menuActions.reverse() — map back to this list's natural order */
-          uiStore.mainMenuSelectedIndex === (menuActions.length - 1 - index) ? 'ring-2 ring-accent' : '',
-          action.color
-        ]"
-      >
-        <component :is="action.iconComponent" class="w-4 h-4" />
-        <span class="text-[7px] font-black uppercase tracking-tighter text-center leading-none opacity-80">
-          {{ action.label }}
-        </span>
-      </button>
-    </div>
-  </Transition>
+  <AppLauncherModal v-if="uiStore.isMainMenuOpen" @close="uiStore.isMainMenuOpen = false" />
 </template>
-
-<style scoped>
-.menu-slide-enter-active,
-.menu-slide-leave-active {
-  transition: all 0.2s ease;
-}
-.menu-slide-enter-from,
-.menu-slide-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
-}
-</style>

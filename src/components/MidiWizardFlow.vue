@@ -32,6 +32,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   zIndex:        130,
   minimizeLabel: 'MIDI Flow',
   openRef:       () => uiStore.isMidiFlowOpen,
+  panelId:       'midi-flow',
 })
 
 // ── Registered devices (matches DeviceListPanel source of truth) ──

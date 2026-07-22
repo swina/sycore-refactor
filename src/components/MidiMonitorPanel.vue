@@ -25,6 +25,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minWidth:      520,
     minHeight:     200,
     zIndex:        998,
+    panelId:       'midi-monitor',
   })
 
 watch(() => uiStore.isMidiMonitorOpen, v => { if (v) bringToFront() })

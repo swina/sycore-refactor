@@ -422,6 +422,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minWidth:      520,
     minHeight:     300,
     zIndex:        200,
+    panelId:       'sampler',
   })
 
 watch(() => uiStore.isSamplerOpen, v => { if (v) bringToFront() })

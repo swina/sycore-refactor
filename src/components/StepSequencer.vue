@@ -58,6 +58,11 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minHeight:     500,
     zIndex:        120,
     openRef:       toRef(props, 'isOpen'),
+    // props.isOpen is `uiStore.isSequencerOpen || uiStore.isSequencerModalOpen`
+    // (two registry ids share this one panel) — 'sequencer' is the primary
+    // launcher-tile id; focusing via 'sequencer-modal' won't trigger this
+    // panel's auto-maximize/bring-to-front, only the 'sequencer' route will.
+    panelId:       'sequencer',
   })
 
 const showSaveLibraryModal = ref(false)

@@ -41,6 +41,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minWidth: 700,
   minHeight: 500,
   zIndex: 100,
+  panelId: 'audio-capture',
 })
 watch(() => uiStore.isAudioCaptureOpen, (v) => { if (v) bringToFront() })
 

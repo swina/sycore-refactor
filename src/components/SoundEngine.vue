@@ -18,6 +18,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minHeight:     480,
   zIndex:        100,
   minimizeLabel: 'Sound Engine',
+  panelId:       'sound-engine',
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 </script>

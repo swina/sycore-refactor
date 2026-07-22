@@ -31,6 +31,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   initialWidth: 900,
   initialHeight: 700,
   zIndex: 100,
+  panelId: 'live-performance-pad',
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 

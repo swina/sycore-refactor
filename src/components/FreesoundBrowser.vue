@@ -457,6 +457,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     minWidth:      420,
     minHeight:     320,
     zIndex:        300,
+    panelId:       'freesound-browser',
   })
 
 watch(() => uiStore.isFreesoundBrowserOpen, (open) => { if (open) bringToFront() })
