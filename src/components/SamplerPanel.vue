@@ -1,11 +1,11 @@
 <template>
-  <div v-show="uiStore.isSamplerOpen" :style="panelStyle"
+  <div v-show="uiStore.isSamplerOpen && !isMinimized" :style="panelStyle"
     class="fixed flex flex-col bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl"
     @mousedown="bringToFront"
   >
     <!-- Title bar -->
     <div
-      class="flex items-center justify-between px-3 py-2 bg-neutral-900 border-b border-neutral-800 cursor-move select-none shrink-0"
+      class="flex items-center justify-between px-3 py-1 bg-neutral-900 border-b border-neutral-800 cursor-move select-none shrink-0"
       @mousedown.self="onDragStart"
     >
       <div class="flex items-center gap-2">
@@ -13,20 +13,10 @@
         <span class="text-[11px] font-black uppercase tracking-[0.2em] text-white pointer-events-none">Sampler</span>
         <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest pointer-events-none">{{ activePattern?.name }}</span>
       </div>
-      <div class="flex items-center gap-1">
-        <MacOsButtons @close="uiStore.isSamplerOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
-      </div>
-    </div>
 
-    <!-- Minimized bar -->
-    <div v-if="isMinimized" class="px-3 py-1.5 text-[10px] text-neutral-500 font-mono">
-      Sampler — {{ activeBank }} · {{ loadedCount }} pads loaded
-    </div>
-
-    <template v-if="!isMinimized">
-
-      <!-- Bank selector A–H -->
+      <!-- BANK SELECTOR A-H -->
       <div class="flex items-center gap-1 px-3 pt-2 pb-1 shrink-0">
+        <span class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 mr-4">Bank</span>
         <div v-for="b in BANKS" :key="b" class="relative">
           <button
             @click="samplerStore.activeBank = b"
@@ -42,6 +32,30 @@
           <span v-if="mappingStore.learningParamName === 'sampler_bank_' + b" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
         </div>
       </div>
+      <div class="flex items-center gap-1">
+        <MacOsButtons @close="uiStore.isSamplerOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
+      </div>
+    </div>
+
+    <template v-if="!isMinimized">
+
+      <!-- Bank selector A–H -->
+      <!-- <div class="flex items-center gap-1 px-3 pt-2 pb-1 shrink-0">
+        <div v-for="b in BANKS" :key="b" class="relative">
+          <button
+            @click="samplerStore.activeBank = b"
+            @contextmenu.prevent="openMenu($event, { name: 'sampler_bank_' + b, label: 'Sampler: Bank ' + b })"
+            :class="[
+              'w-7 h-7 rounded text-[10px] font-black uppercase tracking-widest transition-colors border',
+              activeBank === b
+                ? 'bg-violet-600 border-violet-500 text-white'
+                : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-violet-500/50 hover:text-white',
+              mappingStore.mappedParams?.has('sampler_bank_' + b) ? 'ring-1 ring-amber-500/60' : ''
+            ]"
+          >{{ b }}</button>
+          <span v-if="mappingStore.learningParamName === 'sampler_bank_' + b" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+        </div>
+      </div> -->
 
       <!-- Pad grid: 7 pads -->
       <div class="grid grid-cols-8 gap-2 px-3 py-2 shrink-0">
@@ -61,7 +75,7 @@
             i === 6 || i === 7 ? 'border-dashed' : '',
             mappingStore.mappedParams?.has('sampler_pad_' + i) ? 'ring-1 ring-amber-500/60' : '',
           ]"
-          style="height: 82px"
+          style="height: 62px"
           @click="handlePadClick(i)"
           @contextmenu.prevent="handlePadRightClick($event, i)"
         >
@@ -110,8 +124,8 @@
 
         <!-- Header row: label · MIDI In · Chromatic · Poly · Loop · Clear -->
         <div class="flex items-center gap-2 flex-wra p-2 rounded bg-neutral-800">
-          <div class="flex flex-col min-w-1/2">
-            <span class="text-[12px] text-neutral-500 font-mono"><span class="bg-violet-600/30 text-violet-300 px-2 py-1 rounded mr-1">Pad {{ selectedPad + 1 }}</span>
+          <div class="flex items-center min-w-1/2">
+            <span class="text-[12px] text-neutral-500 font-mono"><span class="bg-violet-600/30 text-violet-300 px-2 py-1 rounded mr-1 cursor-pointer" title="Change Pad Sound" @click="openFolderBrowser(selectedPad)">Pad {{ selectedPad + 1 }}</span>
                <!-- ON toggle (arm/disarm for MIDI) -->
               <button
             @click.stop="togglePadOn(selectedPad)"
@@ -123,20 +137,7 @@
           >{{ padOn[selectedPad] ? 'ON' : 'OFF' }}</button>
             </span>
             
-            <span class="mt-1 text-[14px] font-mono text-orange-400 uppercase tracking-widest cursor-pointer hover:text-orange-300 transition-colors" @click="openFolderBrowser(selectedPad)">{{ selectedPadData.label }}</span>
-          </div>
-
-          <!-- MIDI controller filter -->
-          <div class="flex flex items-center gap-0.5">
-            <span class="text-[9px] text-neutral-500 font-mono mr-2">MIDI In</span>
-            <select
-              :value="selectedPadData.midiInput ?? 'all'"
-              @change="e => updatePadStore(selectedPad, 'midiInput', e.target.value)"
-              class="bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 max-w-[130px] truncate"
-            >
-              <option value="all">All controllers</option>
-              <option v-for="inp in midiInputs" :key="inp.id" :value="inp.name">{{ inp.name }}</option>
-            </select>
+            <span class="ml-4 mt-1 text-[14px] font-mono text-orange-400 uppercase tracking-widest cursor-pointer hover:text-orange-300 transition-colors" title="Change Pad Sound" @click="openFolderBrowser(selectedPad)">{{ selectedPadData.label }}</span>
           </div>
 
           <!-- Chromatic toggle -->
@@ -225,7 +226,7 @@
         <div class="flex items-start gap-2 flex-nowrap">
 
           <!-- LEVEL -->
-          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-1 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">Level</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.volume"     :min="0"   :max="1"     :step="0.01"  :defaultVal="0.85"  label="Vol"    :format="fmtPct"  @change="v => updatePadParam(selectedPad, 'volume', v)"/>
@@ -235,7 +236,7 @@
             
           </div>
           <!-- FILTER -->
-          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-1 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">Filter</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.pitch"      :min="-24" :max="24"    :step="1"     :defaultVal="0"     label="Pitch"  :format="fmtSemi" @change="v => updatePadParam(selectedPad, 'pitch', v)" />
@@ -251,7 +252,7 @@
             </select>
           </div>
           <!-- FX -->
-          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-1 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">FX</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.reverbSend" :min="0" :max="1" :step="0.01" :defaultVal="0" label="Rev" :format="fmtPct" @change="v => updatePadParam(selectedPad, 'reverbSend', v)" />
@@ -260,7 +261,7 @@
           </div>
 
           <!-- LOOP -->
-          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-1 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">Loop</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.startPoint" :min="0" :max="1" :step="0.001" :defaultVal="0" label="Start" :format="fmtLoopTime" @change="v => updatePadStore(selectedPad, 'startPoint', v)" />
@@ -278,7 +279,7 @@
           </div>
 
           <!-- ENV (ADSR) -->
-          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-2 p-1 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">ENV</span>
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.attack  ?? 0.005" :min="0" :max="2"  :step="0.005" :defaultVal="0.005" label="Attack" :format="fmtMs"  @change="v => updatePadParam(selectedPad, 'attack', v)" />
@@ -289,7 +290,7 @@
           </div>
 
           <!-- MAP -->
-          <div class="flex flex-col w-1/6 h-full items-center gap-1.5 p-2 bg-neutral-900 rounded">
+          <div class="flex flex-col w-1/6 h-full items-center gap-1.5 p-1 bg-neutral-900 rounded">
             <span class="text-[11px] text-violet-500 font-mono uppercase tracking-widest">MAP</span>
             <div class="flex flex-col gap-1">
               <div class="flex items-center gap-1">
@@ -347,7 +348,7 @@
       <!-- Virtual Keyboard: note range -->
       <div v-if="selectedPadData?.url" class="px-3 pb-2 select-none">
         <div class="flex items-center gap-3">
-          <div class="flex-1 relative" style="height: 84px; min-height: 64px;">
+          <div class="flex-1 relative" style="height: 64px; min-height: 64px;">
             <!-- White keys -->
             <div class="absolute inset-0 flex">
               <div v-for="note in keyboardWhiteKeys" :key="'w' + note"
@@ -432,7 +433,6 @@ const { BANKS } = samplerStore
 const activePattern  = computed(() => samplerStore.activePattern)
 const activeBank     = computed(() => samplerStore.activeBank)
 const activeBankData = computed(() => samplerStore.activeBankData)
-const loadedCount    = computed(() => activeBankData.value?.pads.filter(p => p.url).length ?? 0)
 const selectedPad    = ref(null)
 const selectedPadData = computed(() =>
   selectedPad.value !== null ? activeBankData.value?.pads[selectedPad.value] : null
@@ -566,8 +566,6 @@ function updatePadStore(padIdx, param, value) {
 }
 
 // Live MIDI input list for per-pad controller filter
-const midiInputs = ref([])
-
 // ── Waveform ────────────────────────────────────────────────────────────────
 const waveformCanvas = ref(null)
 const waveformContainer = ref(null)
@@ -1040,14 +1038,7 @@ onUnmounted(() => {
   _resizeObs?.disconnect()
 })
 
-function refreshMidiInputs() {
-  midiInputs.value = midiService.getInputs().map(i => ({ id: i.id, name: i.name }))
-}
-watch(() => uiStore.isSamplerOpen, v => { if (v) refreshMidiInputs() })
-watch(selectedPad, () => refreshMidiInputs())
-
 async function openFolderBrowser(padIdx) {
-  refreshMidiInputs()
   uiStore.soundFolderAssignTarget = {
     label: `Sampler Pad ${padIdx + 1}`,
     onAssign: async (file) => {
@@ -1281,21 +1272,13 @@ function _startMidiMappingListener() {
 }
 
 // Shared by both listeners below (device input and MIDI FLOW app-to-app
-// routing) once the app-level gate has passed. `inputId` is null for an
-// app-sourced note — the per-pad pad.midiInput device-name filter only
-// makes sense for a real device, so it's skipped in that case.
-async function _playPadsForNote(type, note, velocity, inputId) {
+// routing) once the app-level gate has passed.
+async function _playPadsForNote(type, note, velocity) {
   const bank = samplerStore.activeBankData
   if (!bank) return
   for (let padIdx = 0; padIdx < 8; padIdx++) {
     const pad = bank.pads[padIdx]
     if (!pad?.url || !padOn.value[padIdx] || !padShouldPlay(padIdx)) continue
-    // Per-pad MIDI input filter — pad.midiInput stores the device name (stable across restarts)
-    if (inputId != null && pad.midiInput && pad.midiInput !== 'all') {
-      const inputDevice = midiService.getInputs().find(i => i.id === inputId)
-      const deviceName = inputDevice?.name
-      if (deviceName !== pad.midiInput) continue
-    }
     const minKey  = pad.minKey  ?? 0
     const maxKey  = pad.maxKey  ?? 127
     if (note < minKey || note > maxKey) continue
@@ -1341,19 +1324,25 @@ async function _playPadsForNote(type, note, velocity, inputId) {
 }
 
 async function _onMidiNote(type, note, velocity, _chan, inputId) {
-  // MIDI FLOW device→app input routing — additive, above the per-pad
-  // filtering below (see docs/plans/modular/MIDI-Flow-Control.md).
+  // Playing a pad from a device is more than a one-shot sound — it's the
+  // Sampler acting as an instrument for that device, so (like Drum Machine
+  // and Chord Sequencer) an unwired device must NOT trigger pads just
+  // because nothing's been configured in MIDI Flow yet. MIDI In routing is
+  // owned entirely by MIDI Flow now — no per-pad device filter here.
   const inputDevice = midiService.getInputs().find(i => i.id === inputId)
-  if (!midiStore.isDeviceRoutedToApp(inputDevice?.name, MidiSource.SAMPLER, note)) return
-  await _playPadsForNote(type, note, velocity, inputId)
+  const sourceKey = inputDevice?.name
+  if (!midiStore.hasExplicitInputRouting(sourceKey)) return
+  if (!midiStore.isDeviceRoutedToApp(sourceKey, MidiSource.SAMPLER, note)) return
+  await _playPadsForNote(type, note, velocity)
 }
 
 // MIDI FLOW app-to-app routing (e.g. Chord Sequencer OUT → Sampler IN) — a
 // separate pipeline from device input above, since an app's generated
 // notes never pass through a real MIDI input port.
 async function _onAppNote(type, note, velocity, _chan, sourceApp) {
+  if (!midiStore.hasExplicitInputRouting(sourceApp)) return
   if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.SAMPLER, note)) return
-  await _playPadsForNote(type, note, velocity, null)
+  await _playPadsForNote(type, note, velocity)
 }
 
 function _onSamplerMasterVol(e) { samplerMasterVol.value = e.detail }
