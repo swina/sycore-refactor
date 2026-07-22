@@ -119,13 +119,13 @@ const soundEngineFeatures = [
 
 const midiCapabilities = [
   { title: 'Auto-Discovery', text: 'Devices appear automatically on connection. True plug and play — no drivers, ever.' },
-  { title: 'MIDI Routing', text: 'Visual routing matrix (Grid & Flow views) for any signal path: splits, layers, multi-device rigs.' },
-  { title: 'MIDI Performance', text: 'Real-time note and CC management across your entire setup.' },
-  { title: 'MIDI Mapping', text: 'Assign any CC to any function with Pass Thru / Consume logic.' },
-  { title: 'MIDI Actions', text: 'Trigger platform events from incoming MIDI — start the sequencer, toggle the looper, change presets from your pedalboard.' },
-  { title: 'MIDI Sync', text: 'Cross-subsystem transport synchronization locked to a master clock.' },
+  { title: 'MIDI Flow', text: 'Flow canvas: drag-and-drop device↔app / app↔app routing, note-range splits, multi-channel fanout, saved configs' },
+  { title: 'MIDI Controller Design', text: 'Visual canvas for designing custom MIDI controller layouts with draggable controls, real-time feedback, and preset management.' },
+  // { title: 'MIDI Mapping', text: 'Assign any CC to any function with Pass Thru / Consume logic.' },
+  // { title: 'MIDI Actions', text: 'Trigger platform events from incoming MIDI — start the sequencer, toggle the looper, change presets from your pedalboard.' },
+  // { title: 'MIDI Sync', text: 'Cross-subsystem transport synchronization locked to a master clock.' },
   { title: 'MIDI Monitor', text: 'Live MIDI traffic inspector for fast on-stage debugging.' },
-  { title: 'Config Export / Import', text: 'Save and restore your entire MIDI setup — your rig travels with you.' },
+  // { title: 'Config Export / Import', text: 'Save and restore your entire MIDI setup — your rig travels with you.' },
 ]
 
 const liveTools = [
@@ -358,14 +358,14 @@ const audiences = [
             {{ badge }}
           </span>
         </div>
-        <div class="hero-fade hero-fade-6 mt-14">
+        <!-- <div class="hero-fade hero-fade-6 mt-14">
           <img
             src="/help/guides/landing.png"
             alt="SY.CORE workspace"
             class="img-float mx-auto w-full max-w-4xl rounded-xl border border-neutral-800 shadow-[0_0_60px_rgba(0,163,112,0.15)]"
             loading="eager"
           />
-        </div>
+        </div> -->
       </div>
     </section>
 
@@ -479,8 +479,8 @@ const audiences = [
         Granular. Stable. <span class="text-synth-cyan">Intuitive.</span>
       </h2>
       <p class="mt-4 max-w-2xl text-neutral-400">
-        From a single synth to a complex multi-device rig — the MIDI Manager consolidates routing,
-        mapping, actions, sync and monitoring into one tab-navigated workspace.
+        From a single synth to a complex multi-device rig — the <span class="text-synth-cyan font-mono">MIDI FLOW</span> with a true visual patch-cable UX consolidates routing,
+        mapping, filtering, the <span class="text-synth-cyan font-mono">MIDI Controller Designer</span> delivers actions and sync thru MIDI and the <span class="text-synth-cyan font-mono">MIDI Monitor</span> to monitoring anything about your MIDI setup.
       </p>
 
       <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -494,21 +494,42 @@ const audiences = [
         </div>
       </div>
 
-      <div class="mt-10 grid gap-6 md:grid-cols-2">
+      <div class="relative">
         <img
           v-reveal
-          src="/help/guides/sycore-midi-routing.png"
-          alt="MIDI routing matrix"
-          class="img-zoom w-full rounded-xl border border-neutral-800"
+          src="/help/guides/sycore-midi-flow.png"
+          alt="MIDI flow canvas"
+          class="img-zoom my-10 w-full rounded-xl border border-neutral-800"
           loading="lazy"
         />
+        <div class="absolute inset-0 top-1/2 -m-10 left-2/3 h-24 mx-3 rounded-lg items-center flex justify-center bg-synth-neon/20 font-mono uppercase z-10000">
+          <span>true visual patch-cable UX</span>
+        </div>
+      </div>
+      <div class="mt-10 grid gap-6 md:grid-cols-2">
         <img
           v-reveal="150"
-          src="/help/guides/sycore-midi-manager.png"
+          src="/help/guides/sycore-midi-devices.png"
           alt="MIDI Manager"
           class="img-zoom w-full rounded-xl border border-neutral-800"
           loading="lazy"
         />
+        <div class="flex flex-col">
+          <img
+            v-reveal="150"
+            src="/help/guides/sycore-midi-controller-designer.png"
+            alt="MIDI Controller Designer"
+            class="img-zoom w-full rounded-xl border border-neutral-800"
+            loading="lazy"
+          />
+          <img
+          v-reveal="150"
+          src="/help/guides/sycore-midi-monitor.png"
+          alt="MIDI Monitor"
+          class="img-zoom w-full rounded-xl border border-neutral-800"
+          loading="lazy"
+        />
+        </div>
       </div>
 
       <div class="mt-12 grid gap-6 md:grid-cols-2">
