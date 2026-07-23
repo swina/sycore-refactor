@@ -42,5 +42,5 @@ graphify-out
 *.webm
 *.wav
 .sessions
-docs/plans/*
-docs/notes/*
+docs/plans/
+docs/notes/
