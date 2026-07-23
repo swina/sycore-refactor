@@ -38,12 +38,10 @@ const handleImport = async (event) => {
   reader.onload = async (e) => {
     try {
       const result = await importSession(e.target.result)
-      status.value = { 
-        type: 'success', 
-        message: `Session imported : ${result.count} patches loaded` 
+      status.value = {
+        type: 'success',
+        message: `Session imported : ${result.count} patches loaded — reloading to apply MIDI Flow, Chord Prog & Mixer settings…`
       }
-      // Optional: close after a delay
-      setTimeout(() => uiStore.isSessionOpen = false, 2000)
     } catch (err) {
       status.value = { type: 'error', message: 'Error importing session !' }
     } finally {
@@ -86,7 +84,7 @@ const handleImport = async (event) => {
         <div class="p-4 bg-white/5 border border-white/10 rounded-2xl flex gap-4">
           <AlertTriangle class="w-5 h-5 text-yellow-500 shrink-0" />
           <p class="text-xs text-white/70 leading-relaxed">
-            Exporting the session will save all your <strong>presets</strong>, <strong>MIDI mappings</strong> and <strong>settings</strong> in a single file. Loading a session will overwrite the current data.
+            Exporting the session will save all your <strong>presets</strong>, <strong>MIDI mappings</strong>, <strong>MIDI Flow routing</strong>, <strong>Chord Progressions</strong>, <strong>Controller Designer & Audio Mixer configs</strong> and <strong>settings</strong> in a single file. Loading a session will overwrite the current data and reload the page.
           </p>
         </div>
 

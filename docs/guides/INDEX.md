@@ -66,4 +66,12 @@
 
 ---
 
-*Last updated: 2026-06-15*
+## Platform
+
+| Guide | Description |
+|-------|-------------|
+| [User Session — Backup & Restore](./SYCORE_SESSION_MANAGER.md) | Export your full user data set (presets, Chord Progressions, MIDI Flow routing, Controller Designer & Mixer configs, mappings, settings) to a single JSON file and restore it later |
+
+---
+
+*Last updated: 2026-07-23*
