@@ -186,6 +186,27 @@
           <Radio class="w-3 h-3" />
           Sweep
         </button>
+
+        <div class="w-px h-4 bg-neutral-700 mx-1" />
+
+        <!-- Background reference image -->
+        <input ref="bgImageInputRef" type="file" accept="image/*" class="hidden" @change="onBgImageFileChange" />
+        <button
+          @click="bgImageInputRef?.click()"
+          class="flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-violet-500/40 hover:text-violet-400"
+          title="Upload a reference image behind the controls"
+        >
+          <ImagePlus class="w-3 h-3" />
+          Image
+        </button>
+        <button
+          v-if="activePreset?.backgroundImage"
+          @click="removeBgImage"
+          class="p-1 text-neutral-500 hover:text-red-400 transition-colors"
+          title="Remove background image"
+        >
+          <ImageOff class="w-3.5 h-3.5" />
+        </button>
         </div>
       </div>
 
@@ -284,6 +305,34 @@
           </defs>
           <rect width="100%" height="100%" fill="url(#ctrl-grid)" />
         </svg>
+
+        <!-- Background reference image — sits below the controls layer -->
+        <div
+          v-if="activePreset?.backgroundImage"
+          :style="{
+            position: 'absolute',
+            left: activePreset.backgroundImage.x + 'px',
+            top: activePreset.backgroundImage.y + 'px',
+            width: activePreset.backgroundImage.w + 'px',
+            height: activePreset.backgroundImage.h + 'px',
+            zIndex: 0,
+          }"
+          class="group/bgimg"
+          @mousedown.stop="onBgImageMouseDown"
+        >
+          <img
+            :src="activePreset.backgroundImage.url"
+            draggable="false"
+            class="w-full h-full object-contain select-none pointer-events-none"
+            :class="isBgImageSelected ? 'outline outline-2 outline-violet-400/60' : ''"
+          />
+          <!-- Resize handle (bottom-right) -->
+          <div
+            v-if="isBgImageSelected && !isDesignMode"
+            class="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize bg-violet-500/60 rounded-tl"
+            @mousedown.stop="onBgImageResizeMouseDown"
+          />
+        </div>
 
         <!-- Controls -->
         <div
@@ -719,7 +768,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Cpu, Minus, X, Plus, Gamepad2, Save, Copy, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio, Download, List } from 'lucide-vue-next'
+import { Cpu, Minus, X, Plus, Gamepad2, Save, Copy, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio, Download, List, ImagePlus, ImageOff } from 'lucide-vue-next'
 import { useUiStore }            from '@/stores/useUiStore'
 import { useMidiStore }          from '@/stores/useMidiStore'
 import { useMappingStore }       from '@/stores/useMappingStore'
@@ -892,6 +941,8 @@ const isContinuousSelected = computed(() =>
 
 const selectedControlId = ref(null)
 const canvasRef         = ref(null)
+const bgImageInputRef   = ref(null)
+const isBgImageSelected = ref(false)
 const isDesignMode      = ref(false)
 const isSimulateMode    = ref(false)
 const showMidiMonitor   = ref(false)
@@ -1071,6 +1122,7 @@ function deletePreset() {
 function onCanvasMouseDown(e) {
   if (e.button !== 0) return
   if (isSimulateMode.value) return
+  isBgImageSelected.value = false
   if (isDesignMode.value) {
     if (!e.shiftKey) selectedIds.value = new Set()
     const rect = canvasRef.value.getBoundingClientRect()
@@ -1096,6 +1148,7 @@ let _multiDrag  = null
 function onControlMouseDown(e, ctrl) {
   if (e.button !== 0) return
   selectedControlId.value = ctrl.id
+  isBgImageSelected.value = false
   _dragging = {
     ctrl,
     startX: e.clientX - ctrl.x,
@@ -1119,6 +1172,41 @@ function onResizeHandleMouseDown(e, ctrl) {
   e.stopPropagation()
 }
 
+// Background reference image — move/resize, separate from _dragging/_multiDrag
+// above since it isn't a control and never belongs to selectedIds.
+let _imgDragging = null
+
+function onBgImageMouseDown(e) {
+  if (e.button !== 0) return
+  if (isSimulateMode.value) return
+  const img = activePreset.value?.backgroundImage
+  if (!img) return
+  selectedControlId.value = null
+  isBgImageSelected.value = true
+  _imgDragging = {
+    img,
+    startX: e.clientX - img.x,
+    startY: e.clientY - img.y,
+    mode: 'move',
+  }
+  e.preventDefault()
+}
+
+function onBgImageResizeMouseDown(e) {
+  const img = activePreset.value?.backgroundImage
+  if (!img) return
+  _imgDragging = {
+    img,
+    startX: e.clientX,
+    startY: e.clientY,
+    startW: img.w,
+    startH: img.h,
+    mode: 'resize',
+  }
+  e.preventDefault()
+  e.stopPropagation()
+}
+
 function onWindowMouseMove(e) {
   if (lassoStart.value && canvasRef.value) {
     const rect = canvasRef.value.getBoundingClientRect()
@@ -1131,6 +1219,17 @@ function onWindowMouseMove(e) {
     for (const { ctrl, ox, oy } of _multiDrag.starts) {
       ctrl.x = Math.max(0, ox + dx)
       ctrl.y = Math.max(0, oy + dy)
+    }
+    return
+  }
+  if (_imgDragging) {
+    const { img, mode } = _imgDragging
+    if (mode === 'move') {
+      img.x = Math.max(0, Math.round((e.clientX - _imgDragging.startX) / 10) * 10)
+      img.y = Math.max(0, Math.round((e.clientY - _imgDragging.startY) / 10) * 10)
+    } else if (mode === 'resize') {
+      img.w = Math.max(40, Math.round((_imgDragging.startW + e.clientX - _imgDragging.startX) / 10) * 10)
+      img.h = Math.max(40, Math.round((_imgDragging.startH + e.clientY - _imgDragging.startY) / 10) * 10)
     }
     return
   }
@@ -1161,8 +1260,34 @@ function onWindowMouseUp() {
     lassoEnd.value   = null
     return
   }
-  if (_multiDrag) { _multiDrag = null; debouncedSave(); return }
-  if (_dragging)  { _dragging  = null; debouncedSave() }
+  if (_multiDrag)   { _multiDrag   = null; debouncedSave(); return }
+  if (_imgDragging) { _imgDragging = null; debouncedSave(); return }
+  if (_dragging)    { _dragging    = null; debouncedSave() }
+}
+
+function onBgImageFileChange(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file || !activePreset.value) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    activePreset.value.backgroundImage = {
+      url: reader.result,
+      x: 0,
+      y: 0,
+      w: 300,
+      h: 200,
+    }
+    debouncedSave()
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeBgImage() {
+  if (!activePreset.value) return
+  activePreset.value.backgroundImage = undefined
+  isBgImageSelected.value = false
+  debouncedSave()
 }
 
 let _removeCCListener      = null
@@ -1431,6 +1556,7 @@ function toggleDesignMode() {
 
 function onDesignMouseDown(e, ctrl) {
   if (e.button !== 0) return
+  isBgImageSelected.value = false
   if (!selectedIds.value.has(ctrl.id)) {
     if (!e.shiftKey) selectedIds.value = new Set()
     selectedIds.value.add(ctrl.id)

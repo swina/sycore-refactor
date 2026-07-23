@@ -130,7 +130,20 @@ export type AppAction =
   | 'timeline_add_audio_crop'
   | 'timeline_add_audio_save_wav'
   | 'transport_play_all'
-  | 'transport_stop_all';
+  | 'transport_stop_all'
+  | 'toggle_audio_mixer'
+  | 'mixer_ch1_volume_cc'  | 'mixer_ch2_volume_cc'  | 'mixer_ch3_volume_cc'  | 'mixer_ch4_volume_cc'
+  | 'mixer_ch5_volume_cc'  | 'mixer_ch6_volume_cc'  | 'mixer_ch7_volume_cc'  | 'mixer_ch8_volume_cc'
+  | 'mixer_ch9_volume_cc'  | 'mixer_ch10_volume_cc' | 'mixer_ch11_volume_cc' | 'mixer_ch12_volume_cc'
+  | 'mixer_ch13_volume_cc' | 'mixer_ch14_volume_cc' | 'mixer_ch15_volume_cc' | 'mixer_ch16_volume_cc'
+  | 'mixer_ch1_mute'  | 'mixer_ch2_mute'  | 'mixer_ch3_mute'  | 'mixer_ch4_mute'
+  | 'mixer_ch5_mute'  | 'mixer_ch6_mute'  | 'mixer_ch7_mute'  | 'mixer_ch8_mute'
+  | 'mixer_ch9_mute'  | 'mixer_ch10_mute' | 'mixer_ch11_mute' | 'mixer_ch12_mute'
+  | 'mixer_ch13_mute' | 'mixer_ch14_mute' | 'mixer_ch15_mute' | 'mixer_ch16_mute'
+  | 'mixer_ch1_solo'  | 'mixer_ch2_solo'  | 'mixer_ch3_solo'  | 'mixer_ch4_solo'
+  | 'mixer_ch5_solo'  | 'mixer_ch6_solo'  | 'mixer_ch7_solo'  | 'mixer_ch8_solo'
+  | 'mixer_ch9_solo'  | 'mixer_ch10_solo' | 'mixer_ch11_solo' | 'mixer_ch12_solo'
+  | 'mixer_ch13_solo' | 'mixer_ch14_solo' | 'mixer_ch15_solo' | 'mixer_ch16_solo';
 
 export interface AppMidiMapping {
   id: string;
@@ -315,6 +328,55 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   timeline_add_audio_save_wav: 'TL Add Marker: Audio Save WAV',
   transport_play_all: 'Transport: Play All (Synced)',
   transport_stop_all: 'Transport: Stop All',
+  toggle_audio_mixer: 'Toggle Audio Mixer',
+  mixer_ch1_volume_cc:  'Mixer Ch 1: Volume via CC',
+  mixer_ch2_volume_cc:  'Mixer Ch 2: Volume via CC',
+  mixer_ch3_volume_cc:  'Mixer Ch 3: Volume via CC',
+  mixer_ch4_volume_cc:  'Mixer Ch 4: Volume via CC',
+  mixer_ch5_volume_cc:  'Mixer Ch 5: Volume via CC',
+  mixer_ch6_volume_cc:  'Mixer Ch 6: Volume via CC',
+  mixer_ch7_volume_cc:  'Mixer Ch 7: Volume via CC',
+  mixer_ch8_volume_cc:  'Mixer Ch 8: Volume via CC',
+  mixer_ch9_volume_cc:  'Mixer Ch 9: Volume via CC',
+  mixer_ch10_volume_cc: 'Mixer Ch 10: Volume via CC',
+  mixer_ch11_volume_cc: 'Mixer Ch 11: Volume via CC',
+  mixer_ch12_volume_cc: 'Mixer Ch 12: Volume via CC',
+  mixer_ch13_volume_cc: 'Mixer Ch 13: Volume via CC',
+  mixer_ch14_volume_cc: 'Mixer Ch 14: Volume via CC',
+  mixer_ch15_volume_cc: 'Mixer Ch 15: Volume via CC',
+  mixer_ch16_volume_cc: 'Mixer Ch 16: Volume via CC',
+  mixer_ch1_mute:  'Mixer Ch 1: Mute',
+  mixer_ch2_mute:  'Mixer Ch 2: Mute',
+  mixer_ch3_mute:  'Mixer Ch 3: Mute',
+  mixer_ch4_mute:  'Mixer Ch 4: Mute',
+  mixer_ch5_mute:  'Mixer Ch 5: Mute',
+  mixer_ch6_mute:  'Mixer Ch 6: Mute',
+  mixer_ch7_mute:  'Mixer Ch 7: Mute',
+  mixer_ch8_mute:  'Mixer Ch 8: Mute',
+  mixer_ch9_mute:  'Mixer Ch 9: Mute',
+  mixer_ch10_mute: 'Mixer Ch 10: Mute',
+  mixer_ch11_mute: 'Mixer Ch 11: Mute',
+  mixer_ch12_mute: 'Mixer Ch 12: Mute',
+  mixer_ch13_mute: 'Mixer Ch 13: Mute',
+  mixer_ch14_mute: 'Mixer Ch 14: Mute',
+  mixer_ch15_mute: 'Mixer Ch 15: Mute',
+  mixer_ch16_mute: 'Mixer Ch 16: Mute',
+  mixer_ch1_solo:  'Mixer Ch 1: Solo',
+  mixer_ch2_solo:  'Mixer Ch 2: Solo',
+  mixer_ch3_solo:  'Mixer Ch 3: Solo',
+  mixer_ch4_solo:  'Mixer Ch 4: Solo',
+  mixer_ch5_solo:  'Mixer Ch 5: Solo',
+  mixer_ch6_solo:  'Mixer Ch 6: Solo',
+  mixer_ch7_solo:  'Mixer Ch 7: Solo',
+  mixer_ch8_solo:  'Mixer Ch 8: Solo',
+  mixer_ch9_solo:  'Mixer Ch 9: Solo',
+  mixer_ch10_solo: 'Mixer Ch 10: Solo',
+  mixer_ch11_solo: 'Mixer Ch 11: Solo',
+  mixer_ch12_solo: 'Mixer Ch 12: Solo',
+  mixer_ch13_solo: 'Mixer Ch 13: Solo',
+  mixer_ch14_solo: 'Mixer Ch 14: Solo',
+  mixer_ch15_solo: 'Mixer Ch 15: Solo',
+  mixer_ch16_solo: 'Mixer Ch 16: Solo',
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
@@ -390,6 +452,25 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'timeline_add_audio_crop',
     'timeline_add_audio_save_wav',
   ],
+  'Audio Mixer': [
+    'toggle_audio_mixer',
+    'mixer_ch1_volume_cc',  'mixer_ch1_mute',  'mixer_ch1_solo',
+    'mixer_ch2_volume_cc',  'mixer_ch2_mute',  'mixer_ch2_solo',
+    'mixer_ch3_volume_cc',  'mixer_ch3_mute',  'mixer_ch3_solo',
+    'mixer_ch4_volume_cc',  'mixer_ch4_mute',  'mixer_ch4_solo',
+    'mixer_ch5_volume_cc',  'mixer_ch5_mute',  'mixer_ch5_solo',
+    'mixer_ch6_volume_cc',  'mixer_ch6_mute',  'mixer_ch6_solo',
+    'mixer_ch7_volume_cc',  'mixer_ch7_mute',  'mixer_ch7_solo',
+    'mixer_ch8_volume_cc',  'mixer_ch8_mute',  'mixer_ch8_solo',
+    'mixer_ch9_volume_cc',  'mixer_ch9_mute',  'mixer_ch9_solo',
+    'mixer_ch10_volume_cc', 'mixer_ch10_mute', 'mixer_ch10_solo',
+    'mixer_ch11_volume_cc', 'mixer_ch11_mute', 'mixer_ch11_solo',
+    'mixer_ch12_volume_cc', 'mixer_ch12_mute', 'mixer_ch12_solo',
+    'mixer_ch13_volume_cc', 'mixer_ch13_mute', 'mixer_ch13_solo',
+    'mixer_ch14_volume_cc', 'mixer_ch14_mute', 'mixer_ch14_solo',
+    'mixer_ch15_volume_cc', 'mixer_ch15_mute', 'mixer_ch15_solo',
+    'mixer_ch16_volume_cc', 'mixer_ch16_mute', 'mixer_ch16_solo',
+  ],
 };
 
 // Actions where the CC value (0–127) is mapped to a range (not just trigger on >63)
@@ -434,4 +515,8 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'pc_category_cc',
   'pc_preset_cc',
   'channel_cc',
+  'mixer_ch1_volume_cc',  'mixer_ch2_volume_cc',  'mixer_ch3_volume_cc',  'mixer_ch4_volume_cc',
+  'mixer_ch5_volume_cc',  'mixer_ch6_volume_cc',  'mixer_ch7_volume_cc',  'mixer_ch8_volume_cc',
+  'mixer_ch9_volume_cc',  'mixer_ch10_volume_cc', 'mixer_ch11_volume_cc', 'mixer_ch12_volume_cc',
+  'mixer_ch13_volume_cc', 'mixer_ch14_volume_cc', 'mixer_ch15_volume_cc', 'mixer_ch16_volume_cc',
 ]);

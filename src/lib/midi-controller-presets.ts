@@ -27,6 +27,14 @@ export interface ControlItem {
   assignment?: ControlAssignment
 }
 
+export interface BackgroundImage {
+  url: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface ControllerPreset {
   id: string
   name: string
@@ -34,6 +42,7 @@ export interface ControllerPreset {
   updatedAt?: number
   assignedDevice: string
   controls: ControlItem[]
+  backgroundImage?: BackgroundImage
 }
 
 const IDB_DOC = 'midiControllerPresets'

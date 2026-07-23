@@ -5,6 +5,7 @@ import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useMappingStore } from '@/stores/useMappingStore'
+import { useAudioMixerChannels } from '@/composables/useAudioMixerChannels'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -25,6 +26,7 @@ export function useAppActions() {
   const midiStore = useMidiStore()
   const lfoStore = useLfoStore()
   const mappingStore = useMappingStore()
+  const { flatChannels: mixerChannels } = useAudioMixerChannels()
 
   function dispatchAction(action, ccVal = 0) {
     switch (action) {
@@ -269,6 +271,7 @@ export function useAppActions() {
       case 'open_sound_engine':  uiStore.isSoundEngineOpen            = ccVal > 63; break
       case 'open_live_timeline': uiStore.isLiveTimelineOpen           = ccVal > 63; break
       case 'open_tracks_player': uiStore.isTracksPlayerOpen           = ccVal > 63; break
+      case 'toggle_audio_mixer': uiStore.isAudioMixerOpen             = ccVal > 63; break
       case 'timeline_add_dm_rec_sync':
         if (ccVal > 63) window.dispatchEvent(new CustomEvent('timeline-add-mkr-dm-rec-sync')); break
       case 'timeline_add_audio_trim_start':
@@ -462,6 +465,19 @@ export function useAppActions() {
             const namedPresets = midiStore.configPresets.filter(p => p.id !== '__autosave__')
             const preset = namedPresets[slotIdx]
             if (preset) midiStore.loadConfigPreset(preset.id)
+          }
+        } else if (action.startsWith('mixer_ch')) {
+          // mixer_ch3_volume_cc / mixer_ch3_mute / mixer_ch3_solo — N is
+          // positional into useAudioMixerChannels()'s flatChannels, the same
+          // ordered list AudioMixerPanel.vue renders (app channels, then
+          // instruments, then virtual instruments).
+          const m = action.match(/^mixer_ch(\d+)_(volume_cc|mute|solo)$/)
+          if (m) {
+            const ch = mixerChannels.value[parseInt(m[1], 10) - 1]
+            if (ch) {
+              if (m[2] === 'volume_cc') ch.setVol(ccVal / 127)
+              else if (ccVal > 63) { if (m[2] === 'mute') ch.toggleMute(); else ch.toggleSolo() }
+            }
           }
         } else {
           console.warn('Unknown AppAction:', action)
