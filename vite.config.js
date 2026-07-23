@@ -50,6 +50,11 @@ export default defineConfig(({ mode }) => {
           },
         },
       ],
+      // Vercel serves this at the domain root ('/'), so only override when
+      // an env var is set — e.g. the GitHub Pages workflow builds with
+      // VITE_PAGES_BASE=/sycore-refactor/ since a project page is served
+      // under /<repo-name>/, not the root.
+      base: process.env.VITE_PAGES_BASE || '/',
       build: {
         outDir: 'dist-site',
         rollupOptions: {
