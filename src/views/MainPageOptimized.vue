@@ -8,7 +8,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { defineAsyncComponent } from 'vue'
 import {
   Radio, Info, CircleQuestionMark,
-  LogIn, Settings, User, Globe, LayoutGrid,
+  LogIn, Settings, User, Globe, LayoutGrid, Heart,
 } from 'lucide-vue-next'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import AppLauncher from '@/components/ui/AppLauncher.vue'
@@ -29,6 +29,7 @@ const isSlideshowOpen = ref(false)
 const isHelpSlideshowOpen = ref(false)
 const isAdminPanelOpen = ref(false)
 const websiteUrl = import.meta.env.VITE_WEBSITE_URL || ''
+const patreonUrl = 'https://www.patreon.com/cw/moodgiver/membership'
 
 const bgLoaded = ref(false)
 
@@ -91,6 +92,18 @@ function goWorkspace() {
         >
           <Globe class="w-3 h-3" />
           Website
+        </a>
+        <a
+          :href="patreonUrl"
+          target="_blank"
+          rel="noopener"
+          title="Support SY.CORE on Patreon"
+          class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase font-mono border transition-colors
+                 bg-black/5 dark:bg-neutral-900/60 text-ink-muted dark:text-neutral-400 border-black/10 dark:border-neutral-700
+                 hover:border-pink-500/40 hover:text-pink-500 dark:hover:text-pink-400"
+        >
+          <Heart class="w-3 h-3" />
+          Support
         </a>
         <button
           v-if="!authStore.user"

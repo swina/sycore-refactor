@@ -12,6 +12,7 @@ const isMobileNavOpen = ref(false)
 
 // URL of the PWA app deployment — set VITE_APP_URL at build time.
 const appUrl = import.meta.env.VITE_APP_URL || '/'
+const patreonUrl = 'https://www.patreon.com/cw/moodgiver/membership'
 
 // Every screenshot below lives in public/help/guides and is referenced by a
 // root-relative path — that only resolves correctly when the site is served
@@ -898,6 +899,15 @@ const audiences = [
             <p class="mt-3 font-mono text-[10px] uppercase tracking-widest text-synth-neon">
               Completely free · Open source · Donationware
             </p>
+            <a
+              :href="patreonUrl"
+              target="_blank"
+              rel="noopener"
+              class="mt-3 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-neutral-500 hover:text-pink-400 transition-colors"
+            >
+              <Heart class="h-3 w-3" />
+              Support on Patreon
+            </a>
           </div>
           <div class="grid grid-cols-2 gap-x-12 gap-y-2">
             <a
