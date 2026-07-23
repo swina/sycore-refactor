@@ -137,11 +137,11 @@ const liveTools = [
     text: 'A visual arrangement timeline for live performance. Sequence backing-track segments, fire MIDI and UI events at exact time positions with markers, and drive MIDI transport sync independently of the player.',
   },
   {
-    icon: Repeat,
-    title: 'Samples Machine',
-    tag: 'Loops',
-    img: '/help/guides/sycore-loop-machine.png',
-    text: '24 pads of simultaneous, gapless loops — fed from local files or Freesound. Sync-quantized starts locked to a master loop, automatic global BPM retune, an always-on 24-channel mixer, one-touch Performance Sets, and auto-recording of your jam via Audio Capture. Every pad, fader and toggle is MIDI-learnable.',
+    icon: Drum,
+    title: 'Drum Machine',
+    tag: 'Rhythm',
+    img: '/help/guides/sycore-drum-machine.png',
+    text: 'An 8-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, 8-slot pattern chain with BPM-synced sequential playback, and full preset save/load with per-preset tempo.',
   },
   {
     icon: ListMusic,
@@ -151,13 +151,6 @@ const liveTools = [
     text: 'The dedicated show-mode control center: 16 Soundset pads for one-touch multi-device preset recall, 16 backing-track pads, 16 loop pads, and a per-device MIDI CC volume mixer. Every pad and fader is mappable to your hardware controller. Save layouts as Snapshots.',
   },
   {
-    icon: Music,
-    title: 'Step Sequencer',
-    tag: 'Algorithmic',
-    img: '/help/guides/sycore-step-sequencer.png',
-    text: 'Style-based generation — House, Techno, Acid, Minimal, Drum&Bass, Funk, Ambient and more — locked to key and scale. Up to 64 steps, native polyphony, per-step parameter locks (2 CCs), gate and tie control.',
-  },
-  {
     icon: Layers,
     title: 'Chord Progression Sequencer',
     tag: 'Harmony',
@@ -165,19 +158,33 @@ const liveTools = [
     text: 'Up to 16 steps, each carrying a full chord — or an arpeggio. Per-step duration, velocity, gate and transpose, plus a built-in progression library organised by key and genre, and algorithmic generation.',
   },
   {
+    icon: Music,
+    title: 'Step Sequencer',
+    tag: 'Algorithmic',
+    img: '/help/guides/sycore-step-sequencer.png',
+    text: 'Style-based generation — House, Techno, Acid, Minimal, Drum&Bass, Funk, Ambient and more — locked to key and scale. Up to 64 steps, native polyphony, per-step parameter locks (2 CCs), gate and tie control.',
+  },
+  {
+    icon: Cpu,
+    title: 'Sampler',
+    tag: 'Beta',
+    img: '/help/guides/sycore-sampler.png',
+    text: '8-pad, multi-bank sample player with MIDI velocity, chromatic pitch-shifting, polyphonic voice management, per-pad ADSR envelopes, lo-fi downsampling, dual granular synthesis (pads 7 & 8), and full MIDI input filtering and mapping.',
+  },
+  {
+    icon: Repeat,
+    title: 'Samples Machine',
+    tag: 'Loops',
+    img: '/help/guides/sycore-loop-machine.png',
+    text: '24 pads of simultaneous, gapless loops — fed from local files or Freesound. Sync-quantized starts locked to a master loop, automatic global BPM retune, an always-on 24-channel mixer, one-touch Performance Sets, and auto-recording of your jam via Audio Capture. Every pad, fader and toggle is MIDI-learnable.',
+  },
+  {
     icon: InfinityIcon,
     title: 'Audio Looper',
     tag: 'Beta',
     img: '/help/guides/sycore-looper.png',
     text: 'A sample-accurate 8-track looper with BPM-aligned recording, MIDI-triggered hands-free capture, autosync, autolimiting, a touch-optimized mixer, and one-tap rendering into your playlist.',
-  },
-  {
-    icon: Drum,
-    title: 'Drum Machine',
-    tag: 'Rhythm',
-    img: '/help/guides/sycore-drum-machine.png',
-    text: 'An 8-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, 8-slot pattern chain with BPM-synced sequential playback, and full preset save/load with per-preset tempo.',
-  },
+  }
 ]
 
 const audioCaptureFeatures = [
@@ -358,14 +365,14 @@ const audiences = [
             {{ badge }}
           </span>
         </div>
-        <!-- <div class="hero-fade hero-fade-6 mt-14">
+        <div class="hero-fade hero-fade-6 mt-14">
           <img
-            src="/help/guides/landing.png"
+            src="/help/guides/sycore-refactor-mainpage.png"
             alt="SY.CORE workspace"
             class="img-float mx-auto w-full max-w-4xl rounded-xl border border-neutral-800 shadow-[0_0_60px_rgba(0,163,112,0.15)]"
             loading="eager"
           />
-        </div> -->
+        </div>
       </div>
     </section>
 
@@ -507,21 +514,26 @@ const audiences = [
         </div>
       </div>
       <div class="mt-10 grid gap-6 md:grid-cols-2">
-        <img
-          v-reveal="150"
-          src="/help/guides/sycore-midi-devices.png"
-          alt="MIDI Manager"
-          class="img-zoom w-full rounded-xl border border-neutral-800"
-          loading="lazy"
-        />
         <div class="flex flex-col">
+          <span class="py-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">AUTO-DISCOVERY</span>
+          <img
+            v-reveal="150"
+            src="/help/guides/sycore-midi-devices.png"
+            alt="MIDI Manager"
+            class="img-zoom w-full rounded-xl border border-neutral-800"
+            loading="lazy"
+          />
+        </div>
+        <div class="flex flex-col">
+          <!-- <span class="py-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">CONTROLLER DESIGNER</span>
           <img
             v-reveal="150"
             src="/help/guides/sycore-midi-controller-designer.png"
             alt="MIDI Controller Designer"
             class="img-zoom w-full rounded-xl border border-neutral-800"
             loading="lazy"
-          />
+          /> -->
+          <span class="py-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">MIDI MONITOR</span>
           <img
           v-reveal="150"
           src="/help/guides/sycore-midi-monitor.png"
@@ -543,6 +555,13 @@ const audiences = [
             Bundle device presets into <strong class="text-neutral-200">Performance Sets</strong> and load your
             entire multi-device configuration in a single click.
           </p>
+          <img
+          v-reveal="150"
+          src="/help/guides/sycore-multi-sound-program-change.png"
+          alt="MIDI Monitor"
+          class="mt-2 img-zoom w-full rounded-xl border border-neutral-800"
+          loading="lazy"
+        />
         </div>
         <div v-reveal="150" class="card-lift rounded-xl border border-neutral-800 bg-neutral-900/40 p-6">
           <Cpu class="h-6 w-6 text-synth-neon" />
@@ -552,6 +571,13 @@ const audiences = [
             toggle the looper, change a preset. Supports continuous (0–127) and trigger (push) control —
             your pedalboard becomes the front panel of the whole platform.
           </p>
+           <img
+            v-reveal="150"
+            src="/help/guides/sycore-midi-controller-designer.png"
+            alt="MIDI Controller Designer"
+            class="mt-2 img-zoom w-full rounded-xl border border-neutral-800"
+            loading="lazy"
+          />
         </div>
       </div>
     </section>
