@@ -101,6 +101,10 @@ function virtualInstrumentPort(name) {
   return midiStore.virtualInstruments.find(v => v.name === name)?.midiOutputPort ?? ''
 }
 
+function toggleNodeCollapsed(node) {
+  node.collapsed = !node.collapsed
+}
+
 function toggleNodeOutChannel(node, ch) {
   if (!node.outChannels) node.outChannels = []
   const i = node.outChannels.indexOf(ch)
@@ -133,6 +137,7 @@ function onCanvasDrop(e) {
     outChannel: -1,
     outChannels: [],
     sync: true, transport: true, notes: true, cc: true, pc: true,
+    collapsed: false,
   })
 }
 
@@ -360,6 +365,7 @@ function initFromStore() {
       outChannels: [...(reg.outChannels ?? [])],
       sync: reg.clock ?? true, transport: reg.transport ?? true,
       notes: reg.notes ?? true, cc: reg.cc ?? true, pc: reg.pc ?? true,
+      collapsed: false,
     }
     if (isDest) destNodes.push(node)
     else sourceNodes.push(node)
@@ -750,16 +756,25 @@ function pendingPath() {
         <div class="w-44 shrink-0 bg-neutral-900/40 border-r border-neutral-800 flex flex-col overflow-y-auto custom-scrollbar p-3 gap-1.5">
 
           <!-- MIDI Devices -->
-          <button
-            @click="showDevicesSection = !showDevicesSection"
-            class="flex items-center justify-between px-1 group bg-red-900/60 p-1 rounded"
-          >
-            <span class="text-[8px] font-bold uppercase tracking-widest text-neutral-300 group-hover:text-neutral-400 transition-colors">MIDI Devices</span>
-            <ChevronDown
-              class="w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform"
-              :class="showDevicesSection ? '' : '-rotate-90'"
-            />
-          </button>
+          <div class="flex items-center justify-between px-1 group bg-red-900/60 p-1 rounded">
+            <button
+              @click="showDevicesSection = !showDevicesSection"
+              class="flex items-center gap-1 flex-1 min-w-0"
+            >
+              <span class="text-[8px] font-bold uppercase tracking-widest text-neutral-300 group-hover:text-neutral-400 transition-colors">MIDI Devices</span>
+              <ChevronDown
+                class="w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform shrink-0"
+                :class="showDevicesSection ? '' : '-rotate-90'"
+              />
+            </button>
+            <button
+              @click.stop="uiStore.openPanel('midi-devices')"
+              class="shrink-0 text-neutral-400 hover:text-synth-neon transition-colors"
+              title="Open MIDI Devices panel"
+            >
+              <Network class="w-3 h-3" />
+            </button>
+          </div>
           <template v-if="showDevicesSection">
             <!-- Type legend -->
             <div class="flex flex-col gap-0.5 px-1 mb-1.5">
@@ -977,6 +992,15 @@ function pendingPath() {
                     <ExternalLink class="w-3 h-3" />
                   </button>
                   <button
+                    v-if="!node.sourceId"
+                    @click.stop="toggleNodeCollapsed(node)"
+                    class="transition-colors"
+                    :class="typeMeta(node.type).text + ' opacity-70 hover:opacity-100'"
+                    :title="node.collapsed ? 'Show full device card' : 'Show header only'"
+                  >
+                    <ChevronDown class="w-3 h-3 transition-transform" :class="node.collapsed ? '-rotate-90' : ''" />
+                  </button>
+                  <button
                     @click.stop="removeNode(node.id)"
                     class="text-neutral-600 hover:text-red-400 transition-colors"
                   >
@@ -985,7 +1009,7 @@ function pendingPath() {
                 </span>
               </div>
               <!-- Hardware-only: flags + channels -->
-              <template v-if="!node.sourceId">
+              <template v-if="!node.sourceId && !node.collapsed">
                 <div class="flex gap-1 px-3 pt-2 flex-wrap" @mousedown.stop>
                   <button
                     v-for="flag in FLAGS" :key="flag.key"
