@@ -75,6 +75,9 @@ export default defineConfig(({ mode }) => {
         srcDir: 'public',
         filename: 'sw.js',
         registerType: 'autoUpdate',
+        injectManifest: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        },
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
           runtimeCaching: [
