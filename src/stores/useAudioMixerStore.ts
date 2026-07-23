@@ -9,41 +9,46 @@ export type MixerChannelId =
   | 'backing' | 'tracks' | 'looper' | 'lm'
   | 'drums' | 'drumsLevel' | 'sampler' | 'liveperf' | 'bassline'
 
-const ALL_CHANNEL_IDS: MixerChannelId[] = ['backing', 'tracks', 'looper', 'lm', 'drums', 'drumsLevel', 'sampler', 'liveperf', 'bassline']
+// A numbered channel slot (1-16, consolidated view) is user-assigned to one
+// of: a catalog app-source (id = MixerChannelId), a registered MIDI
+// instrument (id = device name), or a virtual-instrument channel (id =
+// "name:ch", matching _virtKey below). null = unassigned slot.
+export type ChannelSlotAssignment = { type: 'catalog' | 'instrument' | 'virtual'; id: string } | null
+
+const NUM_CHANNEL_SLOTS = 16
 
 function loadFloat(key: string, def: number): number {
   const v = localStorage.getItem(userKey(key))
   return v !== null ? parseFloat(v) : def
 }
 
-function loadEnabledChannels(): MixerChannelId[] {
+function loadChannelSlots(): ChannelSlotAssignment[] {
+  const slots: ChannelSlotAssignment[] = Array(NUM_CHANNEL_SLOTS).fill(null)
   try {
-    const raw = localStorage.getItem(userKey('S1_MIX_CHANNELS'))
-    if (!raw) return [...ALL_CHANNEL_IDS]
-    const parsed: string[] = JSON.parse(raw)
-    return ALL_CHANNEL_IDS.filter(id => parsed.includes(id))
-  } catch {
-    return [...ALL_CHANNEL_IDS]
-  }
+    const raw = localStorage.getItem(userKey('S1_MIX_CHANNEL_SLOTS'))
+    if (raw) {
+      const parsed: ChannelSlotAssignment[] = JSON.parse(raw)
+      for (let i = 0; i < NUM_CHANNEL_SLOTS && i < parsed.length; i++) slots[i] = parsed[i] ?? null
+    }
+  } catch {}
+  return slots
 }
 
 export const useAudioMixerStore = defineStore('audioMixer', () => {
   const authStore = useAuthStore()
   const uid = computed(() => authStore.user?.uid)
 
-  const enabledChannels = ref<MixerChannelId[]>(loadEnabledChannels())
+  const channelSlots = ref<ChannelSlotAssignment[]>(loadChannelSlots())
 
-  watch(enabledChannels, v => localStorage.setItem(userKey('S1_MIX_CHANNELS'), JSON.stringify(v)), { deep: true })
+  watch(channelSlots, v => localStorage.setItem(userKey('S1_MIX_CHANNEL_SLOTS'), JSON.stringify(v)), { deep: true })
 
-  function isChannelEnabled(id: MixerChannelId) { return enabledChannels.value.includes(id) }
-
-  function toggleChannel(id: MixerChannelId) {
-    if (enabledChannels.value.includes(id)) {
-      enabledChannels.value = enabledChannels.value.filter(x => x !== id)
-    } else {
-      enabledChannels.value = ALL_CHANNEL_IDS.filter(x => enabledChannels.value.includes(x) || x === id)
-    }
+  function assignChannelSlot(slotIdx: number, assignment: ChannelSlotAssignment) {
+    const next = [...channelSlots.value]
+    next[slotIdx] = assignment
+    channelSlots.value = next
   }
+
+  function clearChannelSlot(slotIdx: number) { assignChannelSlot(slotIdx, null) }
 
   // ── Solo ─────────────────────────────────────────────────────────────────
   // A generic, string-keyed solo set shared by every kind of mixer strip
@@ -290,14 +295,14 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   watch(uid, (newUid) => {
     soloedChannels.value = new Set()
     if (!newUid) {
-      enabledChannels.value = [...ALL_CHANNEL_IDS]
+      channelSlots.value = Array(NUM_CHANNEL_SLOTS).fill(null)
       backingVol.value = 0.8; tracksVol.value = 0.8; looperVol.value = 0.9
       lmVol.value = 0.85; drumsVol.value = 0.85; drumsLevelVol.value = 0.85; masterVol.value = 1.0
       samplerVol.value = 0.85; liveperfVol.value = 0.85; basslineVol.value = 0.85
       instrumentVols.value = {}
       virtualChannelVols.value = {}
     } else {
-      enabledChannels.value = loadEnabledChannels()
+      channelSlots.value = loadChannelSlots()
       backingVol.value    = loadFloat('S1_MIX_BACKING',     0.8)
       tracksVol.value     = loadFloat('S1_MIX_TRACKS',      0.8)
       looperVol.value     = loadFloat('S1_MIX_LOOPER',      0.9)
@@ -314,10 +319,9 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   })
 
   return {
-    ALL_CHANNEL_IDS,
-    enabledChannels,
-    isChannelEnabled,
-    toggleChannel,
+    channelSlots,
+    assignChannelSlot,
+    clearChannelSlot,
     backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, samplerVol, liveperfVol, basslineVol, masterVol,
     backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted, drumsLevelMuted, samplerMuted, liveperfMuted, basslineMuted,
     effectiveDrumsLevel,

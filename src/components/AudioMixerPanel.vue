@@ -1,13 +1,13 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { SlidersHorizontal, Volume2, VolumeX, Music, Layers, Radio, Mic2, Settings2, CheckSquare, Square, Piano, Disc, Zap, Activity } from 'lucide-vue-next'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { SlidersHorizontal, Volume2, VolumeX, Settings2, Activity, Save, FilePlus, FolderOpen, X, Trash2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
-import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
+import { useAudioMixerChannels } from '@/composables/useAudioMixerChannels'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { loadMixerConfigs, persistMixerConfigs, createMixerConfig } from '@/lib/audio-mixer-configs'
 import { typeMeta } from '@/lib/device-type-meta'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
@@ -15,10 +15,9 @@ const emit = defineEmits(['close'])
 
 const uiStore    = useUiStore()
 const mixer      = useAudioMixerStore()
-const midiStore  = useMidiStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
-const { instruments } = useDeviceRegistry()
+const { availableSources, flatChannels } = useAudioMixerChannels()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
@@ -33,175 +32,114 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
     panelId:       'audio-mixer',
   })
 
-const showConfig = ref(false)
+const showAssign = ref(false)
 
-// ── Catalog of all controllable audio sources ─────────────────────────────────
-const CATALOG = [
-  {
-    id:       'backing',
-    label:    'Backing',
-    sub:      'Track Player',
-    desc:     'Backing Track Player playlist volume',
-    icon:     Music,
-    color:    'cyan',
-    volParam: 'mix_backing_vol',
-    muteParam:'mix_backing_mute',
-    vol:    () => mixer.backingVol,
-    muted:  () => mixer.backingMuted,
-    setVol: v => mixer.setBackingVol(v),
-    mute:   () => mixer.toggleBackingMute(),
-  },
-  {
-    id:       'tracks',
-    label:    'Tracks',
-    sub:      'Tracks Player',
-    desc:     'Tracks Player playlist volume',
-    icon:     Radio,
-    color:    'violet',
-    volParam: 'mix_tracks_vol',
-    muteParam:'mix_tracks_mute',
-    vol:    () => mixer.tracksVol,
-    muted:  () => mixer.tracksMuted,
-    setVol: v => mixer.setTracksVol(v),
-    mute:   () => mixer.toggleTracksMute(),
-  },
-  {
-    id:       'looper',
-    label:    'Looper',
-    sub:      '8-Track Looper',
-    desc:     'Master gain for all looper tracks combined',
-    icon:     Mic2,
-    color:    'synth-neon',
-    volParam: 'mix_looper_vol',
-    muteParam:'mix_looper_mute',
-    vol:    () => mixer.looperVol,
-    muted:  () => mixer.looperMuted,
-    setVol: v => mixer.setLooperVol(v),
-    mute:   () => mixer.toggleLooperMute(),
-  },
-  {
-    id:       'lm',
-    label:    'Loop Mch',
-    sub:      'Samples Machine',
-    desc:     'Master gain for all 24 Samples Machine pads',
-    icon:     Layers,
-    color:    'fuchsia',
-    volParam: 'mix_lm_vol',
-    muteParam:'mix_lm_mute',
-    vol:    () => mixer.lmVol,
-    muted:  () => mixer.lmMuted,
-    setVol: v => mixer.setLMVol(v),
-    mute:   () => mixer.toggleLMMute(),
-  },
-  {
-    id:       'drums',
-    label:    'Drums',
-    sub:      'Drum Machine',
-    desc:     'Master gain for Drum Machine audio engine',
-    icon:     Layers,
-    color:    'orange',
-    volParam: 'mix_drums_vol',
-    muteParam:'mix_drums_mute',
-    vol:    () => mixer.drumsVol,
-    muted:  () => mixer.drumsMuted,
-    setVol: v => mixer.setDrumsVol(v),
-    mute:   () => mixer.toggleDrumsMute(),
-  },
-  {
-    id:       'drumsLevel',
-    label:    'DM Level',
-    sub:      'All 8 Slots',
-    desc:     'Master level multiplier for all 8 Drum Machine slot volumes (same control as the Drum Machine footer Vol)',
-    icon:     Layers,
-    color:    'rose',
-    volParam: 'mix_drums_level_vol',
-    muteParam:'mix_drums_level_mute',
-    vol:    () => mixer.drumsLevelVol,
-    muted:  () => mixer.drumsLevelMuted,
-    setVol: v => mixer.setDrumsLevelVol(v),
-    mute:   () => mixer.toggleDrumsLevelMute(),
-  },
-  {
-    id:       'sampler',
-    label:    'Sampler',
-    sub:      'Sampler Engine',
-    desc:     'Master gain for all Sampler pads (multiplied with per-pad volume)',
-    icon:     Disc,
-    color:    'emerald',
-    volParam: 'mix_sampler_vol',
-    muteParam:'mix_sampler_mute',
-    vol:    () => mixer.samplerVol,
-    muted:  () => mixer.samplerMuted,
-    setVol: v => mixer.setSamplerVol(v),
-    mute:   () => mixer.toggleSamplerMute(),
-  },
-  {
-    id:       'liveperf',
-    label:    'Live Perf',
-    sub:      'Performance Pad',
-    desc:     'Master volume multiplier for Live Performance Pad',
-    icon:     Zap,
-    color:    'sky',
-    volParam: 'mix_liveperf_vol',
-    muteParam:'mix_liveperf_mute',
-    vol:    () => mixer.liveperfVol,
-    muted:  () => mixer.liveperfMuted,
-    setVol: v => mixer.setLiveperfVol(v),
-    mute:   () => mixer.toggleLiveperfMute(),
-  },
-]
-
-const activeChannels = computed(() =>
-  CATALOG.filter(c => mixer.enabledChannels.includes(c.id))
+// Only the 16 slots that resolve to a live source, each carrying its
+// 1-based slot number for the "CH n" label — the mixer's unified fader view.
+const assignedChannels = computed(() =>
+  flatChannels.value
+    .map((ch, i) => ch ? { ...ch, slotNum: i + 1 } : null)
+    .filter(Boolean)
 )
 
-// MIDI instruments with output registration → get their own fader
-const instrumentChannels = computed(() =>
-  instruments.value.filter(d => {
-    const reg = midiStore.routingConfig?.registrations?.[d.name]
-    return reg && reg.outEnabled
-  })
-)
-
-// Virtual instruments → one fader each, UNLESS configured as multi-timbral
-// in MIDI Flow (registration.outChannels — see MidiWizardFlow.vue's
-// "Multi-CH out" grid), in which case each channel gets its own independent
-// fader (all sending Volume CC#7, each on just that channel).
-const virtualInstrumentStrips = computed(() => {
-  const strips = []
-  for (const v of midiStore.virtualInstruments) {
-    const reg = midiStore.routingConfig?.registrations?.[v.name]
-    const outChannels = reg?.outChannels
-    if (outChannels && outChannels.length > 0) {
-      for (const ch of outChannels) {
-        strips.push({
-          key:    `${v.name}:${ch}`,
-          name:   v.name,
-          label:  `CH ${ch + 1}`,
-          vol:    () => mixer.getVirtualChannelVol(v.name, ch),
-          muted:  () => mixer.isVirtualChannelMuted(v.name, ch),
-          soloed: () => mixer.isVirtualChannelSoloed(v.name, ch),
-          setVol: val => mixer.setVirtualChannelVol(v.name, ch, val),
-          mute:   () => mixer.toggleVirtualChannelMute(v.name, ch),
-          solo:   () => mixer.toggleVirtualChannelSolo(v.name, ch),
-        })
-      }
-    } else {
-      strips.push({
-        key:    v.name,
-        name:   v.name,
-        label:  'CH ' + ((reg?.outChannel ?? 0) + 1),
-        vol:    () => mixer.getInstrumentVol(v.name),
-        muted:  () => mixer.isInstrumentMuted(v.name),
-        soloed: () => mixer.isSoloed('inst:' + v.name),
-        setVol: val => mixer.setInstrumentVol(v.name, val),
-        mute:   () => mixer.toggleInstrumentMute(v.name),
-        solo:   () => mixer.toggleInstrumentSolo(v.name),
-      })
-    }
+const sourcesByGroup = computed(() => {
+  const groups = {}
+  for (const s of availableSources.value) {
+    if (!groups[s.group]) groups[s.group] = []
+    groups[s.group].push(s)
   }
-  return strips
+  return groups
 })
+
+function slotValue(assignment) {
+  return assignment ? `${assignment.type}::${assignment.id}` : ''
+}
+
+function onAssignChange(slotIdx, e) {
+  const val = e.target.value
+  if (!val) { mixer.clearChannelSlot(slotIdx); return }
+  const i = val.indexOf('::')
+  mixer.assignChannelSlot(slotIdx, { type: val.slice(0, i), id: val.slice(i + 2) })
+}
+
+// ── Save / Update / Load configurations ───────────────────────────────────────
+const configs = ref([])
+const activeConfigId = ref('')
+const activeConfig = computed(() => configs.value.find(c => c.id === activeConfigId.value) ?? null)
+const showLoadConfigs = ref(false)
+
+onMounted(async () => {
+  configs.value = await loadMixerConfigs()
+})
+
+function snapshotChannels() {
+  return mixer.channelSlots.map((slot, i) => {
+    const ch = flatChannels.value[i]
+    return { slot, vol: ch ? ch.vol() : 0.8, muted: ch ? ch.muted() : false }
+  })
+}
+
+function applyConfig(cfg) {
+  mixer.channelSlots = cfg.channels.map(c => c.slot)
+  // channelSlots changing is what makes flatChannels re-resolve — wait one
+  // tick so the per-slot setVol/toggleMute calls below hit the newly
+  // resolved channels, not the previous assignment's.
+  nextTick(() => {
+    cfg.channels.forEach((c, i) => {
+      const ch = flatChannels.value[i]
+      if (!ch) return
+      ch.setVol(c.vol)
+      if (ch.muted() !== c.muted) ch.toggleMute()
+    })
+  })
+  mixer.setMasterVol(cfg.masterVol)
+}
+
+async function saveConfigUpdate() {
+  if (!activeConfig.value) { await saveConfigAs(); return }
+  activeConfig.value.channels  = snapshotChannels()
+  activeConfig.value.masterVol = mixer.masterVol
+  activeConfig.value.updatedAt = Date.now()
+  await persistMixerConfigs(configs.value)
+}
+
+async function saveConfigAs() {
+  const name = prompt('Configuration name:')
+  if (!name) return
+  const cfg = createMixerConfig(name, { channels: snapshotChannels(), masterVol: mixer.masterVol })
+  configs.value.push(cfg)
+  activeConfigId.value = cfg.id
+  await persistMixerConfigs(configs.value)
+}
+
+function loadConfig(id) {
+  const cfg = configs.value.find(c => c.id === id)
+  if (!cfg) return
+  applyConfig(cfg)
+  activeConfigId.value = id
+  showLoadConfigs.value = false
+}
+
+async function deleteConfig(id) {
+  if (!confirm('Delete this configuration?')) return
+  configs.value = configs.value.filter(c => c.id !== id)
+  if (activeConfigId.value === id) activeConfigId.value = ''
+  await persistMixerConfigs(configs.value)
+}
+
+// ── Per-channel styling — catalog channels use the color-keyed C map,
+// instrument/virtual channels use device-type-meta's classes (matching MIDI
+// FLOW's coloring), unified here so the single fader-strip template below
+// doesn't need to branch on `kind` more than once per helper. ─────────────
+function chDeviceKind(ch) { return ch.kind === 'instrument' ? ch.deviceType : 'virtual' }
+function chText(ch)  { return ch.kind === 'catalog' ? (C[ch.color]?.text ?? 'text-neutral-400') : typeMeta(chDeviceKind(ch)).text }
+function chTrack(ch) { return ch.kind === 'catalog' ? (C[ch.color]?.track ?? 'bg-neutral-400') : (TYPE_FILL[chDeviceKind(ch)] ?? TYPE_FILL['instrument-single']) }
+function chFill(ch)  { return ch.muted() ? 'bg-neutral-700' : chTrack(ch) }
+function chThumb(ch) { return ch.muted() ? 'bg-neutral-700 opacity-40' : (ch.kind === 'catalog' ? 'bg-neutral-200' : ch.kind === 'virtual' ? 'bg-amber-200' : 'bg-rose-500') }
+function chMuteBtnClass(ch) {
+  if (!ch.muted()) return 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
+  return ch.kind === 'catalog' ? (C[ch.color]?.muted ?? 'bg-red-500/20 text-red-300 border-red-500/30') : (TYPE_MUTED[chDeviceKind(ch)] ?? TYPE_MUTED['instrument-single'])
+}
 
 // ── Pointer-capture vertical fader drag ───────────────────────────────────────
 const FADER_H = 140  // px — must match the style="height: 140px" on the track div
@@ -287,13 +225,52 @@ const TYPE_FILL = {
           class="shrink-0 flex items-center gap-2 px-4 py-4 border-b border-neutral-800 bg-neutral-900/60 cursor-grab active:cursor-grabbing"
           @mousedown.stop="onDragStart"
         >
-          
           <SlidersHorizontal class="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span class="flex-1 text-[14px] font-mono font-bold uppercase tracking-widest text-synth-neon select-none">Audio Mixer</span>
+          <span class="text-[14px] font-mono font-bold uppercase tracking-widest text-synth-neon select-none">Audio Mixer</span>
+
+          <!-- Current configuration chip -->
+          <div
+            class="flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900/60 border text-[9px] font-mono max-w-[110px] overflow-hidden"
+            :class="activeConfig ? 'border-synth-neon/20 text-synth-neon' : 'border-neutral-800 text-neutral-600'"
+            :title="activeConfig?.name || 'No configuration loaded'"
+          >
+            <span class="truncate">{{ activeConfig?.name || 'Unsaved' }}</span>
+          </div>
+
+          <div class="flex-1" />
+
+          <!-- Save (update) -->
           <button
-            @click.stop="showConfig = !showConfig"
-            :class="['p-1.5 transition-colors rounded-full hover:bg-white/5', showConfig ? 'text-amber-400' : 'text-neutral-500 hover:text-white']"
-            title="Configure channels"
+            @click.stop="saveConfigUpdate"
+            :disabled="!activeConfig"
+            title="Save (update current configuration)"
+            class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90 disabled:opacity-25 disabled:cursor-not-allowed"
+          >
+            <Save class="w-3.5 h-3.5" />
+          </button>
+          <!-- Save As -->
+          <button
+            @click.stop="saveConfigAs"
+            title="Save as new configuration"
+            class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
+          >
+            <FilePlus class="w-3.5 h-3.5" />
+          </button>
+          <!-- Load -->
+          <button
+            @click.stop="showLoadConfigs = true"
+            title="Load saved configuration"
+            class="p-1.5 rounded-md text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors active:scale-90"
+          >
+            <FolderOpen class="w-3.5 h-3.5" />
+          </button>
+
+          <div class="w-px h-4 bg-neutral-800 mx-0.5" />
+
+          <button
+            @click.stop="showAssign = !showAssign"
+            :class="['p-1.5 transition-colors rounded-full hover:bg-white/5', showAssign ? 'text-amber-400' : 'text-neutral-500 hover:text-white']"
+            title="Channel assignments"
           >
             <Settings2 class="w-3.5 h-3.5" />
           </button>
@@ -304,101 +281,105 @@ const TYPE_FILL = {
           >
             <Activity class="w-3.5 h-3.5" />
           </button>
-        <div class="flex items-center gap-1 pointer-events-auto"  @mousedown.stop>
+          <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
             <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>
 
-        <!-- Channel selector overlay ──────────────────────────────────── -->
+        <!-- Channel assignments overlay ───────────────────────────────── -->
         <Transition
           enter-active-class="transition-all duration-200 ease-out"
           enter-from-class="opacity-0 -translate-y-1"
           leave-active-class="transition-all duration-150 ease-in"
           leave-to-class="opacity-0 -translate-y-1"
         >
-          <div v-if="showConfig" class="shrink-0 border-b border-neutral-800 bg-neutral-900/90 px-4 py-3 space-y-1.5">
+          <div v-if="showAssign" class="shrink-0 border-b border-neutral-800 bg-neutral-900/90 px-4 py-3 space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
             <p class="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2 select-none">
-              Select channels to control in this mixer
+              Assign a source to each numbered channel
             </p>
-            <button
-              v-for="c in CATALOG"
-              :key="c.id"
-              @click="mixer.toggleChannel(c.id)"
-              :class="['w-full flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors text-left',
-                mixer.isChannelEnabled(c.id)
-                  ? (C[c.color]?.check ?? 'border-neutral-600 bg-neutral-800 text-white')
-                  : 'border-neutral-800 text-neutral-500 hover:border-neutral-700 hover:text-neutral-300']"
+            <div
+              v-for="(slot, i) in mixer.channelSlots"
+              :key="i"
+              class="flex items-center gap-2"
             >
-              <component :is="c.icon" class="w-3.5 h-3.5 shrink-0" />
-              <div class="flex-1 min-w-0">
-                <div class="text-[10px] font-bold leading-none select-none">{{ c.label }}</div>
-                <div class="text-[9px] text-neutral-500 font-mono leading-none mt-0.5 truncate select-none">{{ c.desc }}</div>
-              </div>
-              <CheckSquare v-if="mixer.isChannelEnabled(c.id)" class="w-3.5 h-3.5 shrink-0 opacity-70" />
-              <Square      v-else                               class="w-3.5 h-3.5 shrink-0 opacity-30" />
-            </button>
+              <span class="w-12 shrink-0 text-[9px] font-mono font-bold text-neutral-400">CH {{ i + 1 }}</span>
+              <select
+                :value="slotValue(slot)"
+                @change="onAssignChange(i, $event)"
+                class="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded px-1.5 py-1 text-[10px] font-mono text-white outline-none focus:border-violet-500"
+              >
+                <option value="">— None —</option>
+                <optgroup v-for="(sources, group) in sourcesByGroup" :key="group" :label="group">
+                  <option v-for="s in sources" :key="s.type + '::' + s.id" :value="s.type + '::' + s.id">{{ s.label }}</option>
+                </optgroup>
+              </select>
+            </div>
           </div>
         </Transition>
 
         <!-- Fader strips ──────────────────────────────────────────────── -->
-        <div class="flex-1 flex items-stretch min-h-0">
+        <div class="flex-1 flex items-stretch min-h-0 overflow-x-auto custom-scrollbar">
 
           <!-- Empty state -->
           <div
-            v-if="activeChannels.length === 0"
+            v-if="assignedChannels.length === 0"
             class="flex-1 flex flex-col items-center justify-center gap-2 text-neutral-600 p-6"
           >
             <Settings2 class="w-6 h-6 opacity-40" />
-            <p class="text-[10px] font-bold uppercase tracking-widest text-center select-none">No channels selected</p>
+            <p class="text-[10px] font-bold uppercase tracking-widest text-center select-none">No channels assigned</p>
             <p class="text-[9px] text-neutral-700 text-center select-none">
-              Click <span class="text-amber-500">⚙</span> above to add audio sources.
+              Click <span class="text-amber-500">⚙</span> above to assign channels 1–16.
             </p>
           </div>
 
           <template v-else>
 
-            <!-- Per-channel strip -->
+            <!-- Per-channel strip (unified: app sources, MIDI instruments, virtual instruments) -->
             <div
-              v-for="ch in activeChannels"
+              v-for="ch in assignedChannels"
               :key="ch.id"
               class="flex-1 flex flex-col items-center gap-2 py-4 px-2 border-r border-neutral-800/60"
+              style="min-width: 56px;"
             >
-              <component :is="ch.icon" :class="['w-4 h-4 shrink-0', C[ch.color]?.text ?? 'text-neutral-400']" />
+              <component :is="ch.icon" :class="['w-4 h-4 shrink-0', chText(ch)]" />
 
-              <div class="text-center select-none">
-                <div class="text-[10px] font-black uppercase tracking-wider text-white leading-none">{{ ch.label }}</div>
-                <div class="text-[8px] text-neutral-600 font-mono leading-none mt-0.5">{{ ch.sub }}</div>
+              <div class="text-center select-none w-full px-1">
+                <div class="text-[9px] font-black text-neutral-500 tracking-wider leading-none">CH {{ ch.slotNum }}</div>
+                <div class="text-[10px] font-black uppercase tracking-wider text-white leading-none truncate mt-0.5" :title="ch.label">
+                  {{ ch.label.length > 8 ? ch.label.slice(0, 7) + '…' : ch.label }}
+                </div>
+                <div class="text-[8px] text-neutral-600 font-mono leading-none mt-0.5 truncate">{{ ch.sub }}</div>
               </div>
 
               <!-- dB readout -->
-              <div :class="['text-[9px] font-mono font-bold select-none', ch.muted() ? 'text-neutral-600' : C[ch.color]?.text ?? 'text-neutral-300']">
+              <div :class="['text-[9px] font-mono font-bold select-none', ch.muted() ? 'text-neutral-600' : chText(ch)]">
                 {{ ch.muted() ? 'MUTE' : toDb(ch.vol()) }}
               </div>
 
               <!-- ── Fader track (pointer-capture drag) ── -->
               <div class="flex-1 flex items-center justify-center w-full">
                 <div
-                  :class="['relative cursor-ns-resize rounded', mappingStore.mappedParams?.has(ch.volParam) ? 'ring-1 ring-amber-500/50' : '']"
+                  :class="['relative cursor-ns-resize rounded', ch.volParam && mappingStore.mappedParams?.has(ch.volParam) ? 'ring-1 ring-amber-500/50' : '']"
                   style="height: 140px; width: 28px; touch-action: none;"
                   @pointerdown="startFaderDrag($event, ch.setVol, ch.muted)"
-                  @contextmenu.prevent="openMenu($event, { name: ch.volParam, label: ch.label + ': Volume' })"
+                  @contextmenu.prevent="ch.volParam && openMenu($event, { name: ch.volParam, label: ch.label + ': Volume' })"
                 >
                   <!-- Groove -->
                   <div class="absolute rounded-full bg-neutral-800"
                     style="width:6px; top:4px; bottom:4px; left:50%; transform:translateX(-50%)" />
                   <!-- Fill -->
                   <div
-                    :class="['absolute rounded-full transition-none', ch.muted() ? 'bg-neutral-700' : C[ch.color]?.track ?? 'bg-neutral-400']"
+                    :class="['absolute rounded-full transition-none', chFill(ch)]"
                     :style="{ width: '6px', bottom: '4px', left: '50%', transform: 'translateX(-50%)', height: (ch.vol() * 132) + 'px' }"
                   />
                   <!-- Thumb -->
                   <div
-                    :class="['absolute rounded-sm border border-neutral-500 shadow-md pointer-events-none', ch.muted() ? 'bg-neutral-700 opacity-40' : 'bg-neutral-200']"
+                    :class="['absolute rounded-sm border border-neutral-500 shadow-md pointer-events-none', chThumb(ch)]"
                     :style="{ width: '20px', height: '10px', bottom: thumbBottom(ch.vol()) + 'px', left: '50%', transform: 'translateX(-50%)' }"
                   />
                   <!-- MIDI learn pulse -->
                   <span
-                    v-if="mappingStore.learningParamName === ch.volParam"
+                    v-if="ch.volParam && mappingStore.learningParamName === ch.volParam"
                     class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
                   />
                 </div>
@@ -411,173 +392,33 @@ const TYPE_FILL = {
               <div class="flex items-center gap-1">
                 <div class="relative">
                   <button
-                    @click="ch.mute()"
-                    @contextmenu.prevent="openMenu($event, { name: ch.muteParam, label: ch.label + ': Mute' })"
+                    @click="ch.toggleMute()"
+                    @contextmenu.prevent="ch.muteParam && openMenu($event, { name: ch.muteParam, label: ch.label + ': Mute' })"
                     :class="['flex items-center justify-center w-7 h-7 rounded-lg border transition-colors',
-                      mappingStore.mappedParams?.has(ch.muteParam) ? 'ring-1 ring-amber-500/50' : '',
-                      ch.muted()
-                        ? (C[ch.color]?.muted ?? 'bg-red-500/20 text-red-300 border-red-500/30')
-                        : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
-                    :title="ch.muted() ? 'Unmute (right-click: MIDI learn)' : 'Mute (right-click: MIDI learn)'"
+                      ch.muteParam && mappingStore.mappedParams?.has(ch.muteParam) ? 'ring-1 ring-amber-500/50' : '',
+                      chMuteBtnClass(ch)]"
+                    :title="ch.muted() ? 'Unmute' : 'Mute'"
                   >
                     <VolumeX v-if="ch.muted()" class="w-3.5 h-3.5" />
                     <Volume2 v-else            class="w-3.5 h-3.5" />
                   </button>
                   <span
-                    v-if="mappingStore.learningParamName === ch.muteParam"
+                    v-if="ch.muteParam && mappingStore.learningParamName === ch.muteParam"
                     class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
                   />
                 </div>
                 <button
-                  @click="mixer.toggleSolo(ch.id)"
+                  @click="ch.toggleSolo()"
                   :class="['flex items-center justify-center w-7 h-7 rounded-lg border text-[9px] font-black transition-colors',
-                    mixer.isSoloed(ch.id)
+                    ch.soloed()
                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
                       : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
-                  :title="mixer.isSoloed(ch.id) ? 'Unsolo' : 'Solo — silences every other channel'"
+                  :title="ch.soloed() ? 'Unsolo' : 'Solo — silences every other channel'"
                 >S</button>
               </div>
             </div>
 
-            <!-- MIDI Instrument channels ─────────────────────────────── -->
-            <template v-if="instrumentChannels.length > 0">
-              <!-- Divider -->
-              <div class="w-px self-stretch bg-neutral-700/40 my-2" />
-
-              <div
-                v-for="inst in instrumentChannels"
-                :key="'inst:' + inst.name"
-                class="flex-1 flex flex-col items-center gap-2 py-4 px-2 border-r border-neutral-800/60"
-                style="min-width: 56px;"
-              >
-                <Piano class="w-4 h-4 shrink-0" :class="typeMeta(inst.type).text" />
-
-                <div class="text-center select-none w-full px-1">
-                  <div class="text-[10px] font-black uppercase tracking-wider text-white leading-none truncate" :title="inst.name">
-                    {{ inst.name.length > 8 ? inst.name.slice(0, 7) + '…' : inst.name }}
-                  </div>
-                  <div class="text-[8px] text-neutral-600 font-mono leading-none mt-0.5">{{ typeMeta(inst.type).label }}</div>
-                </div>
-
-                <div :class="['text-[9px] font-mono font-bold select-none', mixer.isInstrumentMuted(inst.name) ? 'text-neutral-600' : typeMeta(inst.type).text]">
-                  {{ mixer.isInstrumentMuted(inst.name) ? 'MUTE' : toDb(mixer.getInstrumentVol(inst.name)) }}
-                </div>
-
-                <div class="flex-1 flex items-center justify-center w-full">
-                  <div
-                    class="relative cursor-ns-resize"
-                    style="height: 140px; width: 28px; touch-action: none;"
-                    @pointerdown="startFaderDrag($event, v => mixer.setInstrumentVol(inst.name, v), () => mixer.isInstrumentMuted(inst.name))"
-                  >
-                    <div class="absolute rounded-full bg-neutral-800"
-                      style="width:6px; top:4px; bottom:4px; left:50%; transform:translateX(-50%)" />
-                    <div
-                      :class="['absolute rounded-full transition-none', mixer.isInstrumentMuted(inst.name) ? 'bg-neutral-700' : (TYPE_FILL[inst.type] ?? TYPE_FILL['instrument-single'])]"
-                      :style="{ width: '6px', bottom: '4px', left: '50%', transform: 'translateX(-50%)', height: (mixer.getInstrumentVol(inst.name) * 132) + 'px' }"
-                    />
-                    <div
-                      :class="['absolute rounded-sm border border-neutral-500 shadow-md pointer-events-none', mixer.isInstrumentMuted(inst.name) ? 'bg-neutral-700 opacity-40' : 'bg-rose-500']"
-                      :style="{ width: '20px', height: '10px', bottom: thumbBottom(mixer.getInstrumentVol(inst.name)) + 'px', left: '50%', transform: 'translateX(-50%)' }"
-                    />
-                  </div>
-                </div>
-
-                <div class="text-[9px] font-mono text-neutral-500 select-none">{{ toPct(mixer.getInstrumentVol(inst.name)) }}</div>
-
-                <div class="flex items-center gap-1">
-                  <button
-                    @click="mixer.toggleInstrumentMute(inst.name)"
-                    :class="['flex items-center justify-center w-7 h-7 rounded-lg border transition-colors',
-                      mixer.isInstrumentMuted(inst.name)
-                        ? (TYPE_MUTED[inst.type] ?? TYPE_MUTED['instrument-single'])
-                        : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
-                    :title="mixer.isInstrumentMuted(inst.name) ? 'Unmute' : 'Mute'"
-                  >
-                    <VolumeX v-if="mixer.isInstrumentMuted(inst.name)" class="w-3.5 h-3.5" />
-                    <Volume2 v-else                                     class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    @click="mixer.toggleInstrumentSolo(inst.name)"
-                    :class="['flex items-center justify-center w-7 h-7 rounded-lg border text-[9px] font-black transition-colors',
-                      mixer.isSoloed('inst:' + inst.name)
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-                        : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
-                    :title="mixer.isSoloed('inst:' + inst.name) ? 'Unsolo' : 'Solo — silences every other channel'"
-                  >S</button>
-                </div>
-              </div>
-            </template>
-
-            <!-- Virtual Instrument channels ───────────────────────────── -->
-            <template v-if="virtualInstrumentStrips.length > 0">
-              <!-- Divider -->
-              <div class="w-px self-stretch bg-neutral-700/40 my-2" />
-
-              <div
-                v-for="strip in virtualInstrumentStrips"
-                :key="'virt:' + strip.key"
-                class="flex-1 flex flex-col items-center gap-2 py-4 px-2 border-r border-neutral-800/60"
-                style="min-width: 56px;"
-              >
-                <component :is="typeMeta('virtual').icon" class="w-4 h-4 shrink-0" :class="typeMeta('virtual').text" />
-
-                <div class="text-center select-none w-full px-1">
-                  <div class="text-[10px] font-black uppercase tracking-wider text-white leading-none truncate" :title="strip.name">
-                    {{ strip.name.length > 8 ? strip.name.slice(0, 7) + '…' : strip.name }}
-                  </div>
-                  <div class="text-[8px] text-neutral-600 font-mono leading-none mt-0.5">{{ strip.label }}</div>
-                </div>
-
-                <div :class="['text-[9px] font-mono font-bold select-none', strip.muted() ? 'text-neutral-600' : typeMeta('virtual').text]">
-                  {{ strip.muted() ? 'MUTE' : toDb(strip.vol()) }}
-                </div>
-
-                <div class="flex-1 flex items-center justify-center w-full">
-                  <div
-                    class="relative cursor-ns-resize"
-                    style="height: 140px; width: 28px; touch-action: none;"
-                    @pointerdown="startFaderDrag($event, strip.setVol, strip.muted)"
-                  >
-                    <div class="absolute rounded-full bg-neutral-800"
-                      style="width:6px; top:4px; bottom:4px; left:50%; transform:translateX(-50%)" />
-                    <div
-                      :class="['absolute rounded-full transition-none', strip.muted() ? 'bg-neutral-700' : TYPE_FILL.virtual]"
-                      :style="{ width: '6px', bottom: '4px', left: '50%', transform: 'translateX(-50%)', height: (strip.vol() * 132) + 'px' }"
-                    />
-                    <div
-                      :class="['absolute rounded-sm border border-neutral-500 shadow-md pointer-events-none', strip.muted() ? 'bg-neutral-700 opacity-40' : 'bg-amber-200']"
-                      :style="{ width: '20px', height: '10px', bottom: thumbBottom(strip.vol()) + 'px', left: '50%', transform: 'translateX(-50%)' }"
-                    />
-                  </div>
-                </div>
-
-                <div class="text-[9px] font-mono text-neutral-500 select-none">{{ toPct(strip.vol()) }}</div>
-
-                <div class="flex items-center gap-1">
-                  <button
-                    @click="strip.mute()"
-                    :class="['flex items-center justify-center w-7 h-7 rounded-lg border transition-colors',
-                      strip.muted()
-                        ? TYPE_MUTED.virtual
-                        : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
-                    :title="strip.muted() ? 'Unmute' : 'Mute'"
-                  >
-                    <VolumeX v-if="strip.muted()" class="w-3.5 h-3.5" />
-                    <Volume2 v-else                class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    @click="strip.solo()"
-                    :class="['flex items-center justify-center w-7 h-7 rounded-lg border text-[9px] font-black transition-colors',
-                      strip.soloed()
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-                        : 'border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500']"
-                    :title="strip.soloed() ? 'Unsolo' : 'Solo — silences every other channel'"
-                  >S</button>
-                </div>
-              </div>
-            </template>
-
-            <!-- Master channel ────────────────────────────────────────── -->
+            <!-- Master channel (fixed, not part of the numbered slots) ── -->
             <div class="flex flex-col items-center gap-2 py-4 px-3 bg-neutral-900/40 border-l border-neutral-700/60" style="min-width: 64px;">
               <SlidersHorizontal class="w-4 h-4 text-red-700 shrink-0" />
               <div class="text-center select-none">
@@ -635,5 +476,40 @@ const TYPE_FILL = {
         <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-0 right-0  w-3 h-3 cursor-se-resize z-50" />
       </div>
     </Transition>
+  </Teleport>
+
+  <!-- Load Configuration dialog ─────────────────────────────────────────── -->
+  <Teleport to="body">
+    <div
+      v-if="showLoadConfigs"
+      class="fixed inset-0 z-[9999] bg-black/75 flex items-center justify-center"
+      @click.self="showLoadConfigs = false"
+    >
+      <div class="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-sm font-black uppercase tracking-widest text-white">Load Configuration</span>
+          <button @click="showLoadConfigs = false" class="text-neutral-500 hover:text-white transition-colors">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+        <div v-if="!configs.length" class="py-10 text-center text-neutral-600 font-mono text-[10px] uppercase tracking-widest">
+          No saved configurations yet — use Save As to create one.
+        </div>
+        <div v-else class="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar">
+          <div
+            v-for="cfg in configs"
+            :key="cfg.id"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors"
+          >
+            <button @click="loadConfig(cfg.id)" class="flex-1 min-w-0 text-left text-[11px] font-bold text-white truncate">
+              {{ cfg.name }}
+            </button>
+            <button @click="deleteConfig(cfg.id)" class="p-1 text-neutral-600 hover:text-red-400 transition-colors" title="Delete">
+              <Trash2 class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </Teleport>
 </template>
