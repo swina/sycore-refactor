@@ -17,6 +17,7 @@ const SlideshowModal = defineAsyncComponent(() => import('@/components/Slideshow
 const AboutModal = defineAsyncComponent(() => import('@/components/AboutModal.vue'))
 const AdminPanel = defineAsyncComponent(() => import('@/components/AdminPanel.vue'))
 const ModuleManagerPanel = defineAsyncComponent(() => import('@/components/ModuleManagerPanel.vue'))
+const AuthModal = defineAsyncComponent(() => import('@/components/AuthModal.vue'))
 
 const router = useRouter()
 const configStore = useConfigStore()
@@ -202,5 +203,6 @@ function goWorkspace() {
     <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
     <AdminPanel :isOpen="isAdminPanelOpen" @close="isAdminPanelOpen = false" />
     <ModuleManagerPanel :isOpen="uiStore.isModuleManagerOpen" @close="uiStore.closePanel('module-manager')" />
+    <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />
   </div>
 </template>
