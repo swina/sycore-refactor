@@ -1,5 +1,7 @@
 # SY.CORE
 
+![SY.CORE main page](./public/help/guides/sycore-refactor-mainpage.png)
+
 > A browser-based performance tools & sound design ecosystem for electronic musicians.
 
 🌐 **[Website](https://swina.github.io/sycore-refactor/)** — marketing site, deployed via GitHub Pages.
