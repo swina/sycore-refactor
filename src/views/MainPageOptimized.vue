@@ -8,7 +8,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { defineAsyncComponent } from 'vue'
 import {
   Radio, Info, CircleQuestionMark,
-  LogIn, Settings, User, Globe, LayoutGrid, Heart,
+  LogIn, Settings, User, Globe, LayoutGrid, Heart, GithubIcon,
 } from 'lucide-vue-next'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import AppLauncher from '@/components/ui/AppLauncher.vue'
@@ -30,6 +30,7 @@ const isHelpSlideshowOpen = ref(false)
 const isAdminPanelOpen = ref(false)
 const websiteUrl = import.meta.env.VITE_WEBSITE_URL || ''
 const patreonUrl = 'https://www.patreon.com/cw/moodgiver/membership'
+const githubUrl = 'https://github.com/swina/sycore-refactor'
 
 const bgLoaded = ref(false)
 
@@ -104,6 +105,18 @@ function goWorkspace() {
         >
           <Heart class="w-3 h-3" />
           Support
+        </a>
+        <a
+          :href="githubUrl"
+          target="_blank"
+          rel="noopener"
+          title="SY.CORE on GitHub — open source"
+          class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase font-mono border transition-colors
+                 bg-black/5 dark:bg-neutral-900/60 text-ink-muted dark:text-neutral-400 border-black/10 dark:border-neutral-700
+                 hover:border-brand/40 hover:text-brand-strong dark:hover:text-synth-neon"
+        >
+          <GithubIcon class="w-3 h-3" />
+          GitHub
         </a>
         <button
           v-if="!authStore.user"

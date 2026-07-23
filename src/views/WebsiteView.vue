@@ -5,7 +5,7 @@ import {
   Database, Wifi, ArrowRight, Check, Sparkles, Network, Disc3, Play,
   SlidersHorizontal, Repeat, Gauge, Workflow, Infinity as InfinityIcon,
   Search, Download, MonitorSmartphone, GitBranch, Menu, X,
-  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum
+  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum, GithubIcon
 } from 'lucide-vue-next'
 
 const isMobileNavOpen = ref(false)
@@ -13,6 +13,7 @@ const isMobileNavOpen = ref(false)
 // URL of the PWA app deployment — set VITE_APP_URL at build time.
 const appUrl = import.meta.env.VITE_APP_URL || '/'
 const patreonUrl = 'https://www.patreon.com/cw/moodgiver/membership'
+const githubUrl = 'https://github.com/swina/sycore-refactor'
 
 // Every screenshot below lives in public/help/guides and is referenced by a
 // root-relative path — that only resolves correctly when the site is served
@@ -899,15 +900,26 @@ const audiences = [
             <p class="mt-3 font-mono text-[10px] uppercase tracking-widest text-synth-neon">
               Completely free · Open source · Donationware
             </p>
-            <a
-              :href="patreonUrl"
-              target="_blank"
-              rel="noopener"
-              class="mt-3 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-neutral-500 hover:text-pink-400 transition-colors"
-            >
-              <Heart class="h-3 w-3" />
-              Support on Patreon
-            </a>
+            <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+              <a
+                :href="patreonUrl"
+                target="_blank"
+                rel="noopener"
+                class="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-neutral-500 hover:text-pink-400 transition-colors"
+              >
+                <Heart class="h-3 w-3" />
+                Support on Patreon
+              </a>
+              <a
+                :href="githubUrl"
+                target="_blank"
+                rel="noopener"
+                class="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-neutral-500 hover:text-synth-neon transition-colors"
+              >
+                <GithubIcon class="h-3 w-3" />
+                View Source on GitHub
+              </a>
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-x-12 gap-y-2">
             <a

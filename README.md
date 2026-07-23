@@ -106,7 +106,7 @@ SY.CORE isn't a single instrument or a single tool — it's the layer that sits 
 
 ```bash
 git clone <repository-url>
-cd sycore
+cd sycore-refactor
 npm install
 ```
 
