@@ -10,6 +10,7 @@ on:
       - 'vite.config.js'
       - 'package.json'
       - 'package-lock.json'
+      - '.env.website'
       - '.github/workflows/main.yml'
   workflow_dispatch:
 
