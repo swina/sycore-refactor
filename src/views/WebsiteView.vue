@@ -13,6 +13,13 @@ const isMobileNavOpen = ref(false)
 // URL of the PWA app deployment — set VITE_APP_URL at build time.
 const appUrl = import.meta.env.VITE_APP_URL || '/'
 
+// Every screenshot below lives in public/help/guides and is referenced by a
+// root-relative path — that only resolves correctly when the site is served
+// from the domain root. Vite doesn't rewrite hardcoded "/foo.png" strings in
+// template bindings with the configured `base`, so under GitHub Pages
+// (base: /sycore-refactor/) they'd 404 unless explicitly prefixed here.
+const withBase = (path) => import.meta.env.BASE_URL + path.replace(/^\//, '')
+
 // Scroll-reveal directive: fades/slides elements in when they enter the viewport.
 // Binding value = transition delay in ms (for staggered grids).
 const vReveal = {
@@ -133,56 +140,56 @@ const liveTools = [
     icon: Clock,
     title: 'Live Timeline',
     tag: 'Arrangement',
-    img: '/help/guides/sycore-timeline.png',
+    img: withBase('/help/guides/sycore-timeline.png'),
     text: 'A visual arrangement timeline for live performance. Sequence backing-track segments, fire MIDI and UI events at exact time positions with markers, and drive MIDI transport sync independently of the player.',
   },
   {
     icon: Drum,
     title: 'Drum Machine',
     tag: 'Rhythm',
-    img: '/help/guides/sycore-drum-machine.png',
+    img: withBase('/help/guides/sycore-drum-machine.png'),
     text: 'An 8-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, 8-slot pattern chain with BPM-synced sequential playback, and full preset save/load with per-preset tempo.',
   },
   {
     icon: ListMusic,
     title: 'Live Set',
     tag: 'Show Mode',
-    img: '/help/guides/sycore-live-set.png',
+    img: withBase('/help/guides/sycore-live-set.png'),
     text: 'The dedicated show-mode control center: 16 Soundset pads for one-touch multi-device preset recall, 16 backing-track pads, 16 loop pads, and a per-device MIDI CC volume mixer. Every pad and fader is mappable to your hardware controller. Save layouts as Snapshots.',
   },
   {
     icon: Layers,
     title: 'Chord Progression Sequencer',
     tag: 'Harmony',
-    img: '/help/guides/sycore-chord-progression.png',
+    img: withBase('/help/guides/sycore-chord-progression.png'),
     text: 'Up to 16 steps, each carrying a full chord — or an arpeggio. Per-step duration, velocity, gate and transpose, plus a built-in progression library organised by key and genre, and algorithmic generation.',
   },
   {
     icon: Music,
     title: 'Step Sequencer',
     tag: 'Algorithmic',
-    img: '/help/guides/sycore-step-sequencer.png',
+    img: withBase('/help/guides/sycore-step-sequencer.png'),
     text: 'Style-based generation — House, Techno, Acid, Minimal, Drum&Bass, Funk, Ambient and more — locked to key and scale. Up to 64 steps, native polyphony, per-step parameter locks (2 CCs), gate and tie control.',
   },
   {
     icon: Cpu,
     title: 'Sampler',
     tag: 'Beta',
-    img: '/help/guides/sycore-sampler.png',
+    img: withBase('/help/guides/sycore-sampler.png'),
     text: '8-pad, multi-bank sample player with MIDI velocity, chromatic pitch-shifting, polyphonic voice management, per-pad ADSR envelopes, lo-fi downsampling, dual granular synthesis (pads 7 & 8), and full MIDI input filtering and mapping.',
   },
   {
     icon: Repeat,
     title: 'Samples Machine',
     tag: 'Loops',
-    img: '/help/guides/sycore-loop-machine.png',
+    img: withBase('/help/guides/sycore-loop-machine.png'),
     text: '24 pads of simultaneous, gapless loops — fed from local files or Freesound. Sync-quantized starts locked to a master loop, automatic global BPM retune, an always-on 24-channel mixer, one-touch Performance Sets, and auto-recording of your jam via Audio Capture. Every pad, fader and toggle is MIDI-learnable.',
   },
   {
     icon: InfinityIcon,
     title: 'Audio Looper',
     tag: 'Beta',
-    img: '/help/guides/sycore-looper.png',
+    img: withBase('/help/guides/sycore-looper.png'),
     text: 'A sample-accurate 8-track looper with BPM-aligned recording, MIDI-triggered hands-free capture, autosync, autolimiting, a touch-optimized mixer, and one-tap rendering into your playlist.',
   }
 ]
@@ -367,7 +374,7 @@ const audiences = [
         </div>
         <div class="hero-fade hero-fade-6 mt-14">
           <img
-            src="/help/guides/sycore-refactor-mainpage.png"
+            :src="withBase('/help/guides/sycore-refactor-mainpage.png')"
             alt="SY.CORE workspace"
             class="img-float mx-auto w-full max-w-4xl rounded-xl border border-neutral-800 shadow-[0_0_60px_rgba(0,163,112,0.15)]"
             loading="eager"
@@ -440,7 +447,7 @@ const audiences = [
 
         <img
           v-reveal
-          src="/help/guides/sycore-sound-engine-01.png"
+          :src="withBase('/help/guides/sycore-sound-engine-01.png')"
           alt="SY.CORE Sound Engine"
           class="img-zoom mt-10 w-full rounded-xl border border-neutral-800"
           loading="lazy"
@@ -461,7 +468,7 @@ const audiences = [
         <div class="mt-10 grid gap-6 md:grid-cols-2">
           <img
             v-reveal
-            src="/help/guides/sycore-sound-engine-visualizer.png"
+            :src="withBase('/help/guides/sycore-sound-engine-visualizer.png')"
             alt="Sound parameter visualizers"
             class="img-zoom w-full rounded-xl border border-neutral-800"
             loading="lazy"
@@ -504,7 +511,7 @@ const audiences = [
       <div class="relative">
         <img
           v-reveal
-          src="/help/guides/sycore-midi-flow.png"
+          :src="withBase('/help/guides/sycore-midi-flow.png')"
           alt="MIDI flow canvas"
           class="img-zoom my-10 w-full rounded-xl border border-neutral-800"
           loading="lazy"
@@ -518,7 +525,7 @@ const audiences = [
           <span class="py-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">AUTO-DISCOVERY</span>
           <img
             v-reveal="150"
-            src="/help/guides/sycore-midi-devices.png"
+            :src="withBase('/help/guides/sycore-midi-devices.png')"
             alt="MIDI Manager"
             class="img-zoom w-full rounded-xl border border-neutral-800"
             loading="lazy"
@@ -528,7 +535,7 @@ const audiences = [
           <!-- <span class="py-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">CONTROLLER DESIGNER</span>
           <img
             v-reveal="150"
-            src="/help/guides/sycore-midi-controller-designer.png"
+            :src="withBase('/help/guides/sycore-midi-controller-designer.png')"
             alt="MIDI Controller Designer"
             class="img-zoom w-full rounded-xl border border-neutral-800"
             loading="lazy"
@@ -536,7 +543,7 @@ const audiences = [
           <span class="py-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">MIDI MONITOR</span>
           <img
           v-reveal="150"
-          src="/help/guides/sycore-midi-monitor.png"
+          :src="withBase('/help/guides/sycore-midi-monitor.png')"
           alt="MIDI Monitor"
           class="img-zoom w-full rounded-xl border border-neutral-800"
           loading="lazy"
@@ -557,7 +564,7 @@ const audiences = [
           </p>
           <img
           v-reveal="150"
-          src="/help/guides/sycore-multi-sound-program-change.png"
+          :src="withBase('/help/guides/sycore-multi-sound-program-change.png')"
           alt="MIDI Monitor"
           class="mt-2 img-zoom w-full rounded-xl border border-neutral-800"
           loading="lazy"
@@ -573,7 +580,7 @@ const audiences = [
           </p>
            <img
             v-reveal="150"
-            src="/help/guides/sycore-midi-controller-designer.png"
+            :src="withBase('/help/guides/sycore-midi-controller-designer.png')"
             alt="MIDI Controller Designer"
             class="mt-2 img-zoom w-full rounded-xl border border-neutral-800"
             loading="lazy"
@@ -644,7 +651,7 @@ const audiences = [
         </p>
         <img
           v-reveal
-          src="/help/guides/sycore-audio-capture.png"
+          :src="withBase('/help/guides/sycore-audio-capture.png')"
           alt="Audio Capture recorder and waveform editor"
           class="img-zoom mt-8 m-auto rounded-xl border border-neutral-800"
           loading="lazy"
@@ -704,7 +711,7 @@ const audiences = [
 
         <img
           v-reveal
-          src="/help/guides/sycore-freesound.org-browser.png"
+          :src="withBase('/help/guides/sycore-freesound.org-browser.png')"
           alt="Freesound Browser"
           class="img-zoom mt-10 m-auto rounded-xl border border-neutral-800"
           loading="lazy"
@@ -746,7 +753,7 @@ const audiences = [
           </div>
           <img
             v-reveal="150"
-            src="/help/guides/sycore-freesound.org-browser-actions.png"
+            :src="withBase('/help/guides/sycore-freesound.org-browser-actions.png')"
             alt="Freesound per-sound actions"
             class="img-zoom w-full rounded-xl border border-neutral-800"
             loading="lazy"

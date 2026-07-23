@@ -4,7 +4,7 @@
 
 > A browser-based performance tools & sound design ecosystem for electronic musicians.
 
-🌐 **[Website](https://swina.github.io/sycore-refactor/)** — marketing site, deployed via GitHub Pages.
+🌐 **[Website](https://swina.github.io/sycore-refactor/)**
 
 SY.CORE is a professional-grade, local-first web application that serves as a centralized hub for MIDI orchestration, sound design, audio processing, and live performance — all running in your browser with no installation required.
 
