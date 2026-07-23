@@ -10,7 +10,7 @@ on:
       - 'vite.config.js'
       - 'package.json'
       - 'package-lock.json'
-      - '.github/workflows/deploy-pages.yml'
+      - '.github/workflows/main.yml'
   workflow_dispatch:
 
 permissions:
