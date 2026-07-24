@@ -1,9 +1,13 @@
 import { Redis } from '@upstash/redis'
 import webpush from 'web-push'
 
+// Vercel's native "Vercel KV" product (which injected KV_REST_API_URL/
+// KV_REST_API_TOKEN) is retired — a Marketplace Upstash integration injects
+// UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN instead. Support both so
+// this keeps working whichever one is actually connected to the project.
 const redis = new Redis({
-  url: process.env.KV_REST_API_URL || '',
-  token: process.env.KV_REST_API_TOKEN || '',
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '',
 })
 
 const SUBSCRIBERS_KEY = 'push:subscribers'
