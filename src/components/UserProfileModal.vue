@@ -1,8 +1,9 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Copy, Eye, EyeOff, Check } from 'lucide-vue-next'
+import { Copy, Eye, EyeOff, Check, Bell } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { usePushNotifications } from '@/composables/usePushNotifications'
 import ModalShell from '@/components/ui/ModalShell.vue'
 import SyButton from '@/components/ui/SyButton.vue'
 
@@ -11,6 +12,8 @@ const emit = defineEmits(['close'])
 const authStore = useAuthStore()
 const router    = useRouter()
 const copied = ref(false)
+
+const { isSupported, isSubscribed, permissionState, subscribe, unsubscribe } = usePushNotifications()
 
 const freesoundKey      = ref(authStore.profile?.freesoundApiKey || '')
 const freesoundKeyVisible = ref(false)
@@ -104,6 +107,35 @@ function logout() {
         <p v-if="authStore.profile?.freesoundApiKey" class="text-[10px] font-mono text-emerald-500">
           API key configured
         </p>
+      </div>
+
+      <!-- Push Notifications -->
+      <div v-if="authStore.user" class="border-t border-neutral-800 pt-4 space-y-2">
+        <div class="text-xs font-mono text-neutral-500 uppercase tracking-widest flex items-center gap-1.5">
+          <Bell class="w-3.5 h-3.5" /> Push Notifications
+        </div>
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[10px] font-mono">
+            <span v-if="!isSupported" class="text-red-400">Not supported in this browser</span>
+            <span v-else-if="isSubscribed" class="text-synth-neon">Subscribed</span>
+            <span v-else-if="permissionState === 'denied'" class="text-red-400">Permission denied — allow it in your browser's site settings</span>
+            <span v-else class="text-neutral-500">Not subscribed</span>
+          </span>
+          <button
+            v-if="isSupported && !isSubscribed && permissionState !== 'denied'"
+            @click="subscribe"
+            class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded bg-synth-neon/10 border border-synth-neon/30 text-synth-neon text-[10px] font-black uppercase tracking-widest hover:bg-synth-neon/20 transition-colors"
+          >
+            Subscribe
+          </button>
+          <button
+            v-if="isSubscribed"
+            @click="unsubscribe"
+            class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-colors"
+          >
+            Unsubscribe
+          </button>
+        </div>
       </div>
 
     </div>
