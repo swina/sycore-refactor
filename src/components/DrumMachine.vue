@@ -1428,62 +1428,7 @@ function cycleChainSlot(i) {
           Bass
         </button>
 
-        <!-- Copy pattern -->
-        <div class="relative" title="Copy pattern">
-          <button
-            v-if="!copySourceSeq"
-            @click.stop="copySourceSeq = drumStore.activeSequence"
-            class="p-1.5 text-neutral-500 hover:text-white transition-colors rounded-full hover:bg-white/5"
-            title="Copy current sequence"
-          >
-            <Copy class="w-3.5 h-3.5" />
-          </button>
-          <div v-else class="flex items-center gap-1" @click.stop>
-            <span class="text-[9px] text-amber-400 font-mono">Paste to:</span>
-            <button
-              v-for="seq in SEQUENCES.filter(s => s !== copySourceSeq)"
-              :key="seq"
-              @click="drumStore.copyPattern(copySourceSeq, seq); copySourceSeq = null"
-              class="w-5 h-5 text-[9px] font-black rounded border border-amber-500 bg-amber-600/20 text-amber-300 hover:bg-amber-600/40"
-            >{{ seq }}</button>
-            <button @click="copySourceSeq = null" class="p-0.5 text-neutral-500 hover:text-white">
-              <X class="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-
-        <!-- Copy sounds -->
-        <div class="relative" title="Copy sounds to another slot">
-          <button
-            v-if="!copySoundsSourceSeq"
-            @click.stop="copySoundsSourceSeq = drumStore.activeSequence"
-            class="p-1.5 text-neutral-500 hover:text-sky-300 transition-colors rounded-full hover:bg-sky-500/10"
-            title="Copy sounds to another slot"
-          >
-            <Music2 class="w-3.5 h-3.5" />
-          </button>
-          <div v-else class="flex items-center gap-1" @click.stop>
-            <span class="text-[9px] text-sky-400 font-mono">Sounds to:</span>
-            <button
-              v-for="seq in SEQUENCES.filter(s => s !== copySoundsSourceSeq)"
-              :key="seq"
-              @click="copySoundsTo(seq)"
-              class="w-5 h-5 text-[9px] font-black rounded border border-sky-500 bg-sky-600/20 text-sky-300 hover:bg-sky-600/40"
-            >{{ seq }}</button>
-            <button @click="copySoundsSourceSeq = null" class="p-0.5 text-neutral-500 hover:text-white">
-              <X class="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-
-        <!-- Clear pattern -->
-        <button
-          @click.stop="drumStore.clearPattern()"
-          class="p-1.5 text-neutral-500 hover:text-red-400 transition-colors rounded-full hover:bg-red-500/10"
-          title="Clear current pattern"
-        >
-          <Trash2 class="w-3.5 h-3.5" />
-        </button>
+        
 
         <!-- Init (clear everything) -->
         <div class="flex items-center gap-1" @click.stop>
@@ -2307,6 +2252,65 @@ function cycleChainSlot(i) {
 
       <!-- ── Footer ─────────────────────────────────────────────────────────── -->
       <div class="shrink-0 flex items-center gap-4 px-4 py-2 border-t border-neutral-800 bg-neutral-900/40">
+        <!-- Copy pattern -->
+        <div class="relative" title="Copy pattern">
+          <button
+            v-if="!copySourceSeq"
+            @click.stop="copySourceSeq = drumStore.activeSequence"
+            class="p-1.5 text-neutral-500 hover:text-white hover:bg-amber-600/60 transition-colors rounded-lg"
+            title="Copy current sequence"
+          >
+            <Copy class="w-4 h-4" />
+          </button>
+          <div v-else class="flex items-center gap-1" @click.stop>
+            <span class="text-[9px] text-amber-400 font-mono">Paste to:</span>
+            <button
+              v-for="seq in SEQUENCES.filter(s => s !== copySourceSeq)"
+              :key="seq"
+              @click="drumStore.copyPattern(copySourceSeq, seq); copySourceSeq = null"
+              class="w-5 h-5 text-[9px] font-black rounded border border-amber-500 bg-amber-600/20 text-amber-300 hover:bg-amber-600/60"
+            >{{ seq }}</button>
+            <button @click="copySourceSeq = null" class="p-0.5 text-neutral-500 hover:text-white">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Copy sounds -->
+        <div class="relative" title="Copy sounds to another slot">
+          <button
+            v-if="!copySoundsSourceSeq"
+            @click.stop="copySoundsSourceSeq = drumStore.activeSequence"
+            class="p-1.5 text-neutral-500 hover:text-sky-300 hover:bg-violet-600/60 transition-colors rounded-lg hover:bg-sky-500/10"
+            title="Copy sounds to another slot"
+          >
+            <Music2 class="w-4 h-4" />
+          </button>
+          <div v-else class="flex items-center gap-1" @click.stop>
+            <span class="text-[9px] text-sky-400 font-mono">Sounds to:</span>
+            <button
+              v-for="seq in SEQUENCES.filter(s => s !== copySoundsSourceSeq)"
+              :key="seq"
+              @click="copySoundsTo(seq)"
+              class="w-5 h-5 text-[9px] font-black rounded border border-sky-500 bg-sky-600/20 text-sky-300 hover:bg-violet-600/60"
+            >{{ seq }}</button>
+            <button @click="copySoundsSourceSeq = null" class="p-0.5 text-neutral-500 hover:text-white">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Clear pattern -->
+        <button
+          @click.stop="drumStore.clearPattern()"
+          class="p-1.5 text-neutral-500 hover:text-red-300 transition-colors rounded-lg hover:bg-red-500/50"
+          title="Clear current pattern"
+        >
+          <Trash2 class="w-4 h-4" />
+        </button>
+        
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
         <!-- Swing -->
         <div class="flex items-center gap-2">
           <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Swing</span>
