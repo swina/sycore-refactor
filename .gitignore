@@ -41,6 +41,10 @@ graphify-out
 *.mp4
 *.webm
 *.wav
+# Default Kit's bundled sample pool is intentionally committed (see
+# src/lib/default-kit-assets.ts) — exempt it from the blanket audio ignores.
+!src/assets/default-kit/*.wav
+!src/assets/default-kit/*.mp3
 .sessions
 docs/plans/
 docs/notes/
