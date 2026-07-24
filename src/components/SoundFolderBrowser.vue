@@ -196,6 +196,31 @@ function confirmSlotPicker() {
   randomAssign(selectedSlots.value)
 }
 
+// Filename substrings commonly used for standard drum machine track labels
+// (drumStore.TRACK_LABELS) — used to bias random assignment toward a
+// same-named sound for each slot (e.g. the Kick slot picks a file with
+// "kick" in its name) instead of pure luck. Only Drum Machine sets
+// `trackLabels` today, so this only ever kicks in for that caller.
+const DRUM_LABEL_ALIASES = {
+  'Kick':       ['kick', 'bass drum', 'bassdrum', 'bd_', '_bd'],
+  'Snare':      ['snare', 'sd_', '_sd'],
+  'Closed HH':  ['closed hat', 'closed hh', 'chh', 'hat closed', 'hihat closed', 'closedhat', 'hh closed'],
+  'Open HH':    ['open hat', 'open hh', 'ohh', 'hat open', 'hihat open', 'openhat', 'hh open'],
+  'Clap':       ['clap'],
+  'Tom 1':      ['tom 1', 'tom1', 'hi tom', 'high tom', 'tom hi'],
+  'Tom 2':      ['tom 2', 'tom2', 'lo tom', 'low tom', 'tom lo'],
+  'Cymbal':     ['cymbal', 'crash', 'ride'],
+  'Rim Shot':   ['rim shot', 'rimshot', 'rim'],
+  'Cowbell':    ['cowbell', 'cow bell'],
+  'Tambourine': ['tambourine', 'tamb'],
+}
+
+function fileMatchesLabel(file, label) {
+  const name = file.name.toLowerCase()
+  const aliases = DRUM_LABEL_ALIASES[label] || [label.toLowerCase()]
+  return aliases.some(alias => name.includes(alias))
+}
+
 async function randomAssign(slotIndices) {
   const target = uiStore.soundFolderAssignTarget
   if (!target?.onAssignRandom || filteredFiles.value.length === 0) return
@@ -205,8 +230,18 @@ async function randomAssign(slotIndices) {
   const selected = indices.slice(0, count)
   randomAssigning.value = true
   try {
-    const shuffled = [...filteredFiles.value].sort(() => Math.random() - 0.5)
-    const picked = shuffled.slice(0, count)
+    // Start from a shuffled pool so slots without a name match (or a
+    // caller with no trackLabels at all) still get a random pick, same as
+    // before — but each slot first tries to claim a filename-matched file.
+    const remaining = [...filteredFiles.value].sort(() => Math.random() - 0.5)
+    const picked = selected.map(slotIdx => {
+      const label = target.trackLabels?.[slotIdx]
+      if (label) {
+        const matchIdx = remaining.findIndex(f => fileMatchesLabel(f, label))
+        if (matchIdx !== -1) return remaining.splice(matchIdx, 1)[0]
+      }
+      return remaining.shift()
+    })
     await target.onAssignRandom(picked, selected)
   } catch (e) {
     console.error('[SoundFolderBrowser] randomAssign failed', e)
@@ -335,7 +370,7 @@ onUnmounted(() => {
           </div>
           <div>
             <span class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none">Sound Folder</span>
-            <p class="text-[9px] font-mono text-rose-500/60 uppercase tracking-widest leading-none mt-0.5">
+            <p class="text-[11px] font-mono p-1 rounded bg-rose-500/60 uppercase tracking-widest leading-none mt-0.5">
               {{ uiStore.soundFolderAssignTarget ? `Assigning to: ${uiStore.soundFolderAssignTarget.label}` : 'Browse · Preview Local Audio Files' }}
             </p>
           </div>
