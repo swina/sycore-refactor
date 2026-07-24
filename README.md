@@ -195,6 +195,8 @@ Detailed guides are available in [`docs/guides/`](./docs/guides/):
 - Sound Engine, Audio, MIDI, and Live Performance guides
 - Product overview and advantages
 
+See [`CHANGES.md`](./CHANGES.md) for a running log of new features.
+
 ---
 
 ## Environment Variables
