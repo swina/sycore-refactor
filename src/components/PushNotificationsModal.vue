@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { Bell, Users, Clock, Send, Image, X, RefreshCw, Download, Upload, CheckCircle2, XCircle, AlertCircle } from 'lucide-vue-next'
+import { Bell, Users, Clock, Send, Image, X, RefreshCw, Download, Upload, CheckCircle2, XCircle, AlertCircle, RotateCcw } from 'lucide-vue-next'
 import { usePushNotifications } from '@/composables/usePushNotifications'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useUiStore } from '@/stores/useUiStore'
@@ -112,6 +112,26 @@ async function handleSendToMe() {
     sendResult.value = { sent: 1, failed: 0, total: 1 }
   } finally {
     isSending.value = false
+  }
+}
+
+// ── Resend ────────────────────────────────────────────────────────────────────
+
+const resendingIndex = ref(null)
+
+async function handleResend(notif, index) {
+  if (resendingIndex.value !== null) return
+  resendingIndex.value = index
+  try {
+    await sendToAll({
+      title: notif.title,
+      body:  notif.body,
+      image: notif.image || undefined,
+      data:  notif.url ? { url: notif.url } : undefined,
+    })
+    await fetchSentNotifications()
+  } finally {
+    resendingIndex.value = null
   }
 }
 
@@ -493,6 +513,21 @@ onMounted(() => {
                 <span class="text-[9px] font-mono text-neutral-700">{{ notif.sentBy }}</span>
               </div>
             </div>
+
+            <!-- Re-send button -->
+            <button
+              v-if="isSuperAdmin"
+              @click="handleResend(notif, i)"
+              :disabled="resendingIndex !== null"
+              class="shrink-0 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest border rounded-lg px-2 py-1.5 transition-all"
+              :class="resendingIndex === i
+                ? 'border-synth-neon/40 text-synth-neon bg-synth-neon/10 cursor-wait'
+                : 'border-neutral-700 text-neutral-500 hover:border-synth-neon/40 hover:text-synth-neon hover:bg-synth-neon/5 disabled:opacity-40'"
+              title="Re-send to all subscribers"
+            >
+              <RotateCcw :class="['w-3 h-3', resendingIndex === i ? 'animate-spin' : '']" />
+              {{ resendingIndex === i ? '…' : 'Re-send' }}
+            </button>
           </div>
         </div>
       </div>

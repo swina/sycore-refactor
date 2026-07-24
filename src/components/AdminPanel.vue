@@ -2,13 +2,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import {
   X, Settings, Settings2, Save, Download, Database, Trash2,
-  ChevronUp, ChevronDown, Plus, Search, Palette, Captions, LayoutGrid, Loader2, AlertCircle, Bell
+  ChevronUp, ChevronDown, Plus, Search, Palette, Captions, LayoutGrid, Loader2, AlertCircle
 } from 'lucide-vue-next'
 import { lucideIcons } from '@/lib/lucide-icons'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
-import { usePushNotifications } from '@/composables/usePushNotifications'
 import { db, doc, setDoc, getDoc, serverTimestamp } from '@/lib/idb'
 
 const props = defineProps({ isOpen: Boolean })
@@ -19,11 +18,6 @@ const uiStore     = useUiStore()
 const authStore   = useAuthStore()
 
 const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail.com')
-
-// Full subscribe/unsubscribe/send/subscriber-list management now lives in
-// its own PushNotificationsModal.vue (opened via uiStore.isPushNotificationsOpen)
-// — only the quick status glance stays inline here.
-const { isSubscribed, permissionState, isSupported } = usePushNotifications()
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -428,6 +422,8 @@ function addButton(fn) {
     toolbarButtons.value = [...toolbarButtons.value, { id: fn.id, label: fn.label, icon: fn.icon, enabled: true, fab: 'main' }]
   }
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -888,29 +884,6 @@ watch(() => props.isOpen, (open) => {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <!-- ── PUSH NOTIFICATIONS ── -->
-          <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
-            <div class="flex items-center justify-between px-6 py-4">
-              <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
-                <Bell class="w-4 h-4" /> Push Notifications
-              </span>
-              <span class="text-[10px] font-mono">
-                <span v-if="!isSupported" class="text-red-400">Not supported</span>
-                <span v-else-if="isSubscribed" class="text-synth-neon">Subscribed</span>
-                <span v-else-if="permissionState === 'denied'" class="text-red-400">Permission denied</span>
-                <span v-else class="text-yellow-400">Not subscribed</span>
-              </span>
-            </div>
-            <div class="px-6 pb-6">
-              <button
-                @click="uiStore.isPushNotificationsOpen = true; uiStore.isAdminPanelOpen = false"
-                class="w-full bg-synth-neon/10 border border-synth-neon/20 hover:bg-synth-neon/20 text-synth-neon text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
-              >
-                Manage Push Notifications
-              </button>
             </div>
           </div>
 

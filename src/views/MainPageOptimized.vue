@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -8,7 +8,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { defineAsyncComponent } from 'vue'
 import {
   Radio, Info, CircleQuestionMark,
-  LogIn, Settings, User, Globe, LayoutGrid, Heart, GithubIcon,
+  LogIn, Settings, User, Globe, LayoutGrid, Heart, GithubIcon, Bell,
 } from 'lucide-vue-next'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import AppLauncher from '@/components/ui/AppLauncher.vue'
@@ -29,6 +29,7 @@ const uiStore = useUiStore()
 const isSlideshowOpen = ref(false)
 const isHelpSlideshowOpen = ref(false)
 const isAdminPanelOpen = ref(false)
+const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail.com')
 const websiteUrl = import.meta.env.VITE_WEBSITE_URL || ''
 const patreonUrl = 'https://www.patreon.com/cw/moodgiver/membership'
 const githubUrl = 'https://github.com/swina/sycore-refactor'
@@ -82,6 +83,16 @@ function goWorkspace() {
         >
           <Settings class="w-3 h-3" />
           Admin
+        </button>
+        <button
+          v-if="isSuperAdmin"
+          @click="uiStore.isPushNotificationsOpen = true"
+          class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase font-mono border transition-colors
+                 bg-black/5 dark:bg-neutral-900/60 text-ink-muted dark:text-neutral-400 border-black/10 dark:border-neutral-700
+                 hover:border-synth-neon/40 hover:text-synth-neon"
+        >
+          <Bell class="w-3 h-3" />
+          Push
         </button>
         <a
           v-if="websiteUrl"
@@ -203,6 +214,21 @@ function goWorkspace() {
             </div>
             <div class="p-3">
               <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest font-mono">Panel</span>
+            </div>
+          </button>
+
+          <!-- Push Notifications (superadmin only) -->
+          <button
+            v-if="isSuperAdmin"
+            @click="uiStore.isPushNotificationsOpen = true"
+            class="rounded-xl border border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-synth-neon/30 transition-colors text-left shadow-sm dark:shadow-none"
+          >
+            <div class="px-3 py-2 flex items-center gap-2 border-b border-black/5 dark:border-neutral-800/50">
+              <Bell class="w-3 h-3 text-synth-neon" />
+              <span class="text-[9px] font-black uppercase tracking-[0.2em] text-ink-muted dark:text-neutral-500 font-mono">Push</span>
+            </div>
+            <div class="p-3">
+              <span class="text-[10px] font-bold text-synth-neon uppercase tracking-widest font-mono">Notifications</span>
             </div>
           </button>
 
