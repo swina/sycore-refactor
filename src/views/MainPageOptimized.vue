@@ -50,7 +50,7 @@ function goWorkspace() {
 </script>
 
 <template>
-  <div class="w-full h-screen flex flex-col overflow-hidden bg-surface-canvas dark:bg-surface-canvas-dark text-ink dark:text-ink-dark">
+  <div class="w-full h-screen flex flex-col overflow-hidden bg-surface-canvas dark:bg-surface-canvas-dark text-ink dark:text-ink-dark bg-container">
 
     <!-- Top bar -->
     <header class="flex-none flex items-center justify-between gap-3 px-4 py-3 sm:px-5
