@@ -42,6 +42,17 @@ export interface AppSettings {
   enablePartSelector: boolean
 }
 
+export interface DefaultDrumKitSlot {
+  trackIndex: number
+  fileName: string
+  soundLabel: string
+}
+
+export interface DefaultDrumKitConfig {
+  slots: DefaultDrumKitSlot[]
+  updatedAt?: string
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -61,6 +72,7 @@ export const useConfigStore = defineStore('config', () => {
   const toolbarIconSize: Ref<number> = ref(6)
   const syncMidiTransportFromLivePad: Ref<boolean> = ref(true)
   const enablePartSelector: Ref<boolean> = ref(true)
+  const defaultDrumKit: Ref<DefaultDrumKitConfig | null> = ref(null)
 
   const appSettings: ComputedRef<AppSettings> = computed(() => ({
     appVersion: appVersion.value,
@@ -115,6 +127,15 @@ export const useConfigStore = defineStore('config', () => {
       const midiSnap = await getDoc(doc(db, 'system', 'midi_config'))
       if (midiSnap.exists() && Array.isArray((midiSnap.data() as any).controllers)) {
         midiConfig.value = (midiSnap.data() as any).controllers
+      }
+
+      // Drum Machine Default Kit
+      const drumKitSnap = await getDoc(doc(db, 'system', 'drum_default_kit'))
+      if (drumKitSnap.exists()) {
+        const data = drumKitSnap.data() as Record<string, any>
+        if (Array.isArray(data.slots)) {
+          defaultDrumKit.value = { slots: data.slots, updatedAt: data.updatedAt }
+        }
       }
 
       // Categories
@@ -298,6 +319,17 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   /**
+   * Publishes the Drum Machine's Default Kit — a global, admin-only-editable
+   * slot→filename assignment (files live in src/assets/default-kit/, see
+   * default-kit-assets.ts) that every user can recall via "Load Default Kit".
+   */
+  async function saveDefaultDrumKit(slots: DefaultDrumKitSlot[]): Promise<void> {
+    const config: DefaultDrumKitConfig = { slots, updatedAt: new Date().toISOString() }
+    defaultDrumKit.value = config
+    await setDoc(doc(db, 'system', 'drum_default_kit'), config)
+  }
+
+  /**
    * Whether a module/toolbar-button id is enabled per the admin-configured
    * toolbarConfig (see AdminPanel.vue's "Toolbar Settings" section). Missing
    * ids default to enabled — an id only becomes disabled once an admin
@@ -366,9 +398,11 @@ export const useConfigStore = defineStore('config', () => {
     soundTypeBg, midiConfig, categories, appVersion, appEngine,
     appName, appSubtitle, osTarget, toolbarConfig, toolbarIconSize,
     syncMidiTransportFromLivePad, enablePartSelector, appSettings,
+    defaultDrumKit,
     init,
     saveRolesConfig, saveMidiConfig,
     saveSoundTypes, saveSoundTypeBg, saveAppSettings,
+    saveDefaultDrumKit,
     isModuleEnabled, setModuleEnabled,
   }
 })

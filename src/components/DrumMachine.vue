@@ -2,13 +2,15 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
-import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2 } from 'lucide-vue-next'
+import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDrumMachineStore, DRUM_STYLE_NAMES } from '@/stores/useDrumMachineStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { useConfigStore } from '@/stores/useConfigStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -16,6 +18,8 @@ import { useFreesoundCache } from '@/composables/useFreesoundCache'
 import * as drumEngine from '@/lib/drum-engine'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { userKey } from '@/lib/userKey'
+import { defaultKitAssets, resolveDefaultKitAssetUrl } from '@/lib/default-kit-assets'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
@@ -23,6 +27,8 @@ const mixer          = useAudioMixerStore()
 const mappingStore   = useMappingStore()
 const arpStore       = useArpStore()
 const syncStore      = useSyncStore()
+const authStore      = useAuthStore()
+const configStore    = useConfigStore()
 const midiStore      = useMidiStore()
 const { openMenu }   = useMidiContextMenu()
 const { cacheFileBlob, resolveUrl } = useFreesoundCache()
@@ -64,6 +70,12 @@ const currentPresetId = ref(null)
 // Drum Kit panel
 const showKits    = ref(false)
 const newKitName  = ref('')
+
+// Default Kit — global, admin-published kit any user can recall (see
+// useConfigStore.defaultDrumKit + src/lib/default-kit-assets.ts)
+const showDefaultKitEditor = ref(false)
+const defaultKitDraft      = ref([]) // [{ trackIndex, label, fileName }]
+const loadingDefaultKit    = ref(false)
 
 // Euclidean dialog
 const showEuclidean = ref(false)
@@ -630,6 +642,21 @@ onMounted(async () => {
     await loadAllSamples(drumStore.currentPattern)
     pushAllFxToEngine(drumStore.currentPattern)
   }
+
+  // Default Kit: seed a genuinely first-time-empty active sequence once, if
+  // an admin has published one. The seeded flag is only set once we've
+  // actually loaded a kit, so it keeps retrying on later visits until a
+  // Default Kit exists — but never re-applies after the user's own sounds
+  // (or an intentional clear) touch the sequence.
+  if (
+    !localStorage.getItem(userKey(DEFAULT_KIT_SEEDED_KEY)) &&
+    !drumStore.currentPattern.some(t => t.soundId) &&
+    configStore.defaultDrumKit?.slots?.length
+  ) {
+    await loadDefaultKit()
+    localStorage.setItem(userKey(DEFAULT_KIT_SEEDED_KEY), '1')
+  }
+
   window.addEventListener('dm-master-volume',  _onMasterVolume)
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
@@ -805,6 +832,54 @@ async function handleApplyKit(id) {
   await nextTick()
   await loadAllSamples(drumStore.currentPattern)
   pushAllFxToEngine(drumStore.currentPattern)
+}
+
+// ── Default Kit — global, admin-published sound assignment ─────────────────
+const DEFAULT_KIT_SEEDED_KEY = 'SYCORE_DM_DEFAULT_KIT_SEEDED'
+
+async function loadDefaultKit() {
+  const slots = configStore.defaultDrumKit?.slots ?? []
+  if (!slots.length) return
+  loadingDefaultKit.value = true
+  try {
+    for (const slot of slots) {
+      const assetUrl = resolveDefaultKitAssetUrl(slot.fileName)
+      if (!assetUrl) continue
+      const soundId = `default_kit_${slot.trackIndex}`
+      // Reuse the local cache if this user already loaded the Default Kit
+      // before — same fetch-once-then-cache pattern as Freesound downloads.
+      let url = await resolveUrl(soundId, null)
+      if (!url) {
+        const res = await fetch(assetUrl)
+        const blob = await res.blob()
+        url = await cacheFileBlob(soundId, slot.soundLabel, blob)
+      }
+      drumStore.setTrackSound(slot.trackIndex, { soundId, soundLabel: slot.soundLabel, soundUrl: url })
+      await drumEngine.loadSample(slot.trackIndex, url)
+    }
+  } catch (e) {
+    console.error('[DrumMachine] loadDefaultKit failed', e)
+  } finally {
+    loadingDefaultKit.value = false
+  }
+}
+
+function openDefaultKitEditor() {
+  const existing = configStore.defaultDrumKit?.slots ?? []
+  defaultKitDraft.value = drumStore.TRACK_LABELS.map((label, i) => ({
+    trackIndex: i,
+    label,
+    fileName: existing.find(s => s.trackIndex === i)?.fileName ?? '',
+  }))
+  showDefaultKitEditor.value = true
+}
+
+async function saveDefaultKitDraft() {
+  const slots = defaultKitDraft.value
+    .filter(s => s.fileName)
+    .map(s => ({ trackIndex: s.trackIndex, fileName: s.fileName, soundLabel: s.label }))
+  await configStore.saveDefaultDrumKit(slots)
+  showDefaultKitEditor.value = false
 }
 
 // ── Quantized sequence switching ───────────────────────────────────────────────
@@ -1571,8 +1646,93 @@ function cycleChainSlot(i) {
             </div>
           </div>
           <p v-else class="text-[9px] text-neutral-600 font-mono text-center py-1">No kits saved yet</p>
+
+          <!-- Default Kit — global, admin-published, recallable by anyone -->
+          <div class="flex items-center gap-2 pt-2 border-t border-neutral-800">
+            <span class="flex-1 text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Default Kit</span>
+            <button
+              v-if="configStore.defaultDrumKit?.slots?.length"
+              @click="loadDefaultKit"
+              :disabled="loadingDefaultKit"
+              title="Load the admin-published Default Kit into the current sequence"
+              class="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-700 bg-emerald-700/20 text-emerald-300 text-[9px] font-bold hover:bg-emerald-700/40 transition-colors disabled:opacity-40"
+            >
+              <Download class="w-3 h-3" />
+              Load Default Kit
+            </button>
+            <span v-else class="shrink-0 text-[9px] font-mono text-neutral-700">Not published yet</span>
+            <button
+              v-if="authStore.isAdmin"
+              @click="openDefaultKitEditor"
+              title="Admin: assign sounds to the Default Kit"
+              class="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-400 text-[9px] font-bold hover:border-neutral-500 hover:text-white transition-colors"
+            >
+              <Settings2 class="w-3 h-3" />
+              Edit
+            </button>
+          </div>
         </div>
       </Transition>
+
+      <!-- ── Default Kit editor (admin only) ─────────────────────────────── -->
+      <Teleport to="body">
+        <div
+          v-if="showDefaultKitEditor"
+          class="fixed inset-0 z-[700] flex items-center justify-center"
+          @click.stop="showDefaultKitEditor = false"
+        >
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            class="relative bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden w-[360px] max-h-[480px] flex flex-col"
+            @click.stop
+          >
+            <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+              <span class="text-[11px] font-black uppercase tracking-widest text-white">Default Kit — Admin</span>
+              <button
+                @click="showDefaultKitEditor = false"
+                class="p-1 rounded-lg hover:bg-neutral-800 text-neutral-500 hover:text-white transition-colors"
+              >
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+            <p class="px-4 pt-3 text-[9px] font-mono text-neutral-500 leading-relaxed">
+              Assign a bundled sound to each track. Files come from <code class="text-neutral-400">src/assets/default-kit/</code> — drop new ones in and redeploy to make them selectable here.
+            </p>
+            <div class="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-1.5">
+              <div
+                v-for="slot in defaultKitDraft"
+                :key="slot.trackIndex"
+                class="flex items-center gap-2"
+              >
+                <span class="w-20 shrink-0 text-[10px] font-bold text-white truncate">{{ slot.label }}</span>
+                <select
+                  v-model="slot.fileName"
+                  class="flex-1 min-w-0 bg-black border border-neutral-700 rounded text-[9px] font-mono text-neutral-300 px-2 py-1 focus:outline-none focus:border-emerald-500/50"
+                >
+                  <option value="">— none —</option>
+                  <option v-for="asset in defaultKitAssets" :key="asset.fileName" :value="asset.fileName">{{ asset.fileName }}</option>
+                </select>
+              </div>
+              <p v-if="!defaultKitAssets.length" class="text-[9px] font-mono text-amber-500/80 text-center py-3">
+                No files in src/assets/default-kit/ yet.
+              </p>
+            </div>
+            <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-neutral-800 bg-neutral-950/40">
+              <button
+                @click="showDefaultKitEditor = false"
+                class="px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-400 text-[9px] font-bold hover:bg-neutral-800 hover:text-white transition-colors"
+              >Cancel</button>
+              <button
+                @click="saveDefaultKitDraft"
+                class="px-3 py-1 rounded-lg border border-emerald-600 bg-emerald-600/20 text-emerald-300 text-[9px] font-bold hover:bg-emerald-600/40 transition-colors"
+              >
+                <Save class="w-3 h-3 inline mr-1" />
+                Save Default Kit
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- ── Step ruler ─────────────────────────────────────────────────────── -->
       <div class="shrink-0 flex items-center gap-2 px-3 pt-1.5 pb-0.5">
