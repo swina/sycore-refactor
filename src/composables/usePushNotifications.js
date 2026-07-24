@@ -2,7 +2,11 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { db, doc, setDoc, getDoc, deleteDoc } from '@/lib/idb'
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BLrViOUVhA5fTRfb4j0p06WeYdfYIbfuRV7_M5QQwgc652QNBHCDPcZD4xFuAiFL2EJHFe9A6D5dEjfIcRtlsao'
+// Must match the server's VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY env vars — a
+// mismatch causes push sends to fail even though subscribing succeeds (the
+// browser accepts any well-formed key; only the server-side send validates
+// the pair). Override via VITE_VAPID_PUBLIC_KEY if the server keys rotate.
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BMadJTmTzjsf0G47Bwdhv1KDsgPg8IDi4MhHjOS_dh6-9nMI8Fhz6NWlpE8FaUnmADgmpQpF6YTSfQ2_Y25cDyg'
 
 const isSubscribed = ref(false)
 const subscription = ref(null)
