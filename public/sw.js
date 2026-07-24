@@ -20,6 +20,7 @@ self.addEventListener('push', (event) => {
       icon: data.icon,
       badge: data.badge,
       tag: data.tag || 'sy-core-push',
+      ...(data.image ? { image: data.image } : {}),
       renotify: true,
       vibrate: [200, 100, 200],
       ...(data.actions ? { actions: data.actions } : {}),

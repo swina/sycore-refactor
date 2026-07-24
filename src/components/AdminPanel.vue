@@ -20,11 +20,10 @@ const authStore   = useAuthStore()
 
 const isSuperAdmin = computed(() => authStore.user?.email === 'swina.allen@gmail.com')
 
-const {
-  isSubscribed, permissionState, isSupported,
-  subscribers, subscribe, unsubscribe, sendPush,
-  fetchSubscribers, removeSubscriber, exportSubscribers,
-} = usePushNotifications()
+// Full subscribe/unsubscribe/send/subscriber-list management now lives in
+// its own PushNotificationsModal.vue (opened via uiStore.isPushNotificationsOpen)
+// — only the quick status glance stays inline here.
+const { isSubscribed, permissionState, isSupported } = usePushNotifications()
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -52,8 +51,6 @@ const rolesConfig  = ref({
 })
 
 const searchQuery      = ref('')
-const pushTitle        = ref('')
-const pushBody         = ref('')
 const editingId        = ref(null)
 const editingOptionsId = ref(null)
 const optionEdit       = ref({ label: '', value: 0 })
@@ -443,9 +440,6 @@ watch(() => props.isOpen, (open) => {
   if (open && authStore.isAdmin && controllers.value.length === 0) loadConfigData()
 })
 
-watch(openSections, (sections) => {
-  if (sections.has('push')) fetchSubscribers()
-}, { deep: true })
 </script>
 
 <template>
@@ -899,106 +893,24 @@ watch(openSections, (sections) => {
 
           <!-- ── PUSH NOTIFICATIONS ── -->
           <div v-if="isSuperAdmin" class="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden">
-            <button @click="toggleSection('push')" class="w-full flex items-center justify-between px-6 py-4 hover:bg-neutral-800/30 transition-colors">
+            <div class="flex items-center justify-between px-6 py-4">
               <span class="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 text-neutral-400">
                 <Bell class="w-4 h-4" /> Push Notifications
               </span>
-              <ChevronDown :class="['w-4 h-4 text-neutral-600 transition-transform duration-200', openSections.has('push') ? 'rotate-180' : '']" />
-            </button>
-            <div v-if="openSections.has('push')" class="px-6 pb-6 border-t border-neutral-800/50 pt-5 space-y-4">
-              <div class="flex items-center justify-between bg-black/40 border border-neutral-800 rounded-xl p-4">
-                <div class="flex flex-col gap-1">
-                  <span class="text-xs font-bold text-neutral-300">Browser Push</span>
-                  <span class="text-[10px] font-mono text-neutral-500">
-                    Status:
-                    <span v-if="!isSupported" class="text-red-400">Not supported</span>
-                    <span v-else-if="isSubscribed" class="text-synth-neon">Subscribed</span>
-                    <span v-else-if="permissionState === 'denied'" class="text-red-400">Permission denied</span>
-                    <span v-else class="text-yellow-400">Not subscribed</span>
-                  </span>
-                </div>
-                <button
-                  v-if="isSupported && !isSubscribed"
-                  @click="subscribe"
-                  class="bg-synth-neon/10 border border-synth-neon/20 hover:bg-synth-neon/20 text-synth-neon text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
-                >
-                  Subscribe
-                </button>
-                <button
-                  v-if="isSubscribed"
-                  @click="unsubscribe"
-                  class="bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
-                >
-                  Unsubscribe
-                </button>
-              </div>
-
-              <div v-if="isSubscribed" class="bg-black/40 border border-neutral-800 rounded-xl p-4 space-y-3">
-                <span class="text-xs font-bold text-neutral-300 block">Send Test Push</span>
-                <div class="flex gap-3">
-                  <input
-                    v-model="pushTitle"
-                    type="text"
-                    placeholder="Notification title…"
-                    class="flex-1 bg-black border border-neutral-800 rounded-lg px-3 py-2 text-xs focus:border-synth-neon outline-none"
-                  />
-                  <input
-                    v-model="pushBody"
-                    type="text"
-                    placeholder="Notification body…"
-                    class="flex-1 bg-black border border-neutral-800 rounded-lg px-3 py-2 text-xs focus:border-synth-neon outline-none"
-                  />
-                </div>
-                <button
-                  @click="sendPush({ title: pushTitle || 'SY.CORE', body: pushBody || 'Test notification from Admin Panel' })"
-                  class="w-full bg-synth-neon/10 border border-synth-neon/20 hover:bg-synth-neon/20 text-synth-neon text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
-                >
-                  Send
-                </button>
-              </div>
-
-              <!-- Subscribers list -->
-              <div class="bg-black/40 border border-neutral-800 rounded-xl p-4 space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-neutral-300">Subscribers ({{ subscribers.length }})</span>
-                  <div class="flex items-center gap-2">
-                    <button
-                      v-if="subscribers.length > 0"
-                      @click="exportSubscribers"
-                      class="text-[9px] font-mono text-neutral-500 hover:text-synth-neon uppercase tracking-wider transition-colors"
-                    >
-                      Export CSV
-                    </button>
-                    <button
-                      @click="fetchSubscribers"
-                      class="text-[9px] font-mono text-neutral-500 hover:text-synth-neon uppercase tracking-wider transition-colors"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                </div>
-                <div v-if="subscribers.length === 0" class="text-[10px] font-mono text-neutral-600 text-center py-4">
-                  No subscribers yet
-                </div>
-                <div v-else class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                  <div
-                    v-for="sub in subscribers" :key="sub.hash"
-                    class="flex items-center justify-between bg-neutral-900/50 border border-neutral-800/50 rounded-lg px-3 py-2"
-                  >
-                    <div class="flex flex-col min-w-0">
-                      <span class="text-[11px] font-bold text-neutral-300 truncate">{{ sub.email }}</span>
-                      <span class="text-[8px] font-mono text-neutral-600 truncate">{{ sub.subscribedAt ? new Date(sub.subscribedAt).toLocaleString() : '' }}</span>
-                    </div>
-                    <button
-                      @click="removeSubscriber(sub.hash)"
-                      class="text-neutral-700 hover:text-red-500 transition-colors shrink-0 ml-2"
-                      title="Remove subscriber"
-                    >
-                      <X class="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <span class="text-[10px] font-mono">
+                <span v-if="!isSupported" class="text-red-400">Not supported</span>
+                <span v-else-if="isSubscribed" class="text-synth-neon">Subscribed</span>
+                <span v-else-if="permissionState === 'denied'" class="text-red-400">Permission denied</span>
+                <span v-else class="text-yellow-400">Not subscribed</span>
+              </span>
+            </div>
+            <div class="px-6 pb-6">
+              <button
+                @click="uiStore.isPushNotificationsOpen = true; uiStore.isAdminPanelOpen = false"
+                class="w-full bg-synth-neon/10 border border-synth-neon/20 hover:bg-synth-neon/20 text-synth-neon text-[10px] font-black uppercase py-2 px-4 rounded-lg transition-all"
+              >
+                Manage Push Notifications
+              </button>
             </div>
           </div>
 

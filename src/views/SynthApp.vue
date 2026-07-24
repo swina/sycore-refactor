@@ -53,6 +53,7 @@ import Tooltip from '@/components/Tooltip.vue'
 import AppMidiMapper from '@/components/AppMidiMapper.vue'
 import UserProfileModal from '@/components/UserProfileModal.vue'
 import AdminPanel from '@/components/AdminPanel.vue'
+import PushNotificationsModal from '@/components/PushNotificationsModal.vue'
 import ModuleManagerPanel from '@/components/ModuleManagerPanel.vue'
 import SessionManager from '@/components/ui/SessionManager.vue'
 import AudioLooper from '@/components/AudioLooper.vue'
@@ -506,6 +507,11 @@ onMounted(() => {
         <Transition name="sy-drawer">
           <AdminPanel v-if="uiStore.isAdminPanelOpen" :isOpen="uiStore.isAdminPanelOpen" @close="uiStore.isAdminPanelOpen = false" />
         </Transition>
+      </div>
+
+      <!-- Push Notifications -->
+      <div :style="focusStyle('pushNotifications')">
+        <PushNotificationsModal v-if="uiStore.isPushNotificationsOpen" @close="uiStore.isPushNotificationsOpen = false" />
       </div>
 
       <!-- Module Manager -->

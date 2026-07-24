@@ -16,6 +16,7 @@ import AppLauncher from '@/components/ui/AppLauncher.vue'
 const SlideshowModal = defineAsyncComponent(() => import('@/components/SlideshowModal.vue'))
 const AboutModal = defineAsyncComponent(() => import('@/components/AboutModal.vue'))
 const AdminPanel = defineAsyncComponent(() => import('@/components/AdminPanel.vue'))
+const PushNotificationsModal = defineAsyncComponent(() => import('@/components/PushNotificationsModal.vue'))
 const ModuleManagerPanel = defineAsyncComponent(() => import('@/components/ModuleManagerPanel.vue'))
 const AuthModal = defineAsyncComponent(() => import('@/components/AuthModal.vue'))
 
@@ -228,6 +229,7 @@ function goWorkspace() {
     <SlideshowModal :isOpen="isHelpSlideshowOpen" source="help" @close="isHelpSlideshowOpen = false" />
     <AboutModal v-if="uiStore.isAboutOpen" @close="uiStore.isAboutOpen = false" />
     <AdminPanel :isOpen="isAdminPanelOpen" @close="isAdminPanelOpen = false" />
+    <PushNotificationsModal v-if="uiStore.isPushNotificationsOpen" @close="uiStore.isPushNotificationsOpen = false" />
     <ModuleManagerPanel :isOpen="uiStore.isModuleManagerOpen" @close="uiStore.closePanel('module-manager')" />
     <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />
   </div>

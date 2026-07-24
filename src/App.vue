@@ -1,5 +1,6 @@
 <script setup>
 import { RouterView } from 'vue-router'
+import { Analytics } from '@vercel/analytics/vue'
 import TracksPlayer from '@/components/TracksPlayer.vue'
 import GuidesPanel from '@/components/GuidesPanel.vue'
 import FreesoundBrowser from '@/components/FreesoundBrowser.vue'
@@ -31,4 +32,5 @@ const { isTooSmall: tooSmall } = useViewportClass()
   <FreesoundBrowser />
   <AudioMixerPanel v-if="uiStore.isAudioMixerOpen" @close="uiStore.isAudioMixerOpen = false" />
   <SoundFolderBrowser />
+  <Analytics />
 </template>

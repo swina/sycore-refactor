@@ -6,7 +6,7 @@ import { db, doc, setDoc, getDoc, deleteDoc } from '@/lib/idb'
 // mismatch causes push sends to fail even though subscribing succeeds (the
 // browser accepts any well-formed key; only the server-side send validates
 // the pair). Override via VITE_VAPID_PUBLIC_KEY if the server keys rotate.
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BMadJTmTzjsf0G47Bwdhv1KDsgPg8IDi4MhHjOS_dh6-9nMI8Fhz6NWlpE8FaUnmADgmpQpF6YTSfQ2_Y25cDyg'
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BG1w81Uh552Zz7CepudljH2H_09b8LVzCZpEBRoJ0ukijtiG-auNZgucXEkjUF_w51vsGLmI3XRtDdGRuo36nd0'
 
 const isSubscribed = ref(false)
 const subscription = ref(null)
@@ -23,7 +23,6 @@ async function registerSW() {
   if (swRegistration) return swRegistration
   try {
     swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
-    // Wait for the SW to be active
     if (swRegistration.active) return swRegistration
     return new Promise((resolve) => {
       swRegistration.addEventListener('updatefound', () => {
@@ -62,7 +61,6 @@ async function subscribe() {
     subscription.value = sub
     isSubscribed.value = true
 
-    // Persist subscription locally
     await setDoc(doc(db, 'system', 'push_subscription'), {
       endpoint: sub.endpoint,
       keys: sub.toJSON().keys,
@@ -103,17 +101,23 @@ async function restoreSubscription() {
 }
 
 const subscribers = ref([])
+const apiAvailable = ref(true)
+
+function _checkAvailable(res) {
+  const ok = res.ok && res.headers.get('content-type')?.includes('application/json')
+  if (!ok && apiAvailable.value) {
+    apiAvailable.value = false
+    console.info('[PushNotifications] /api/send-push unavailable — only works when deployed to Vercel or run via `vercel dev`')
+  } else if (ok && !apiAvailable.value) {
+    apiAvailable.value = true
+  }
+  return ok
+}
 
 async function fetchSubscribers() {
   try {
     const res = await fetch('/api/send-push')
-    // The /api/* serverless functions only run when deployed to Vercel (or
-    // via `vercel dev`) — under plain `vite`/`npm run dev` this 404s or
-    // returns the route's raw, un-executed source instead of JSON.
-    if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) {
-      console.warn('[PushNotifications] /api/send-push unavailable — only works when deployed to Vercel or run via `vercel dev`, not plain `vite`')
-      return
-    }
+    if (!_checkAvailable(res)) return
     subscribers.value = await res.json()
   } catch (e) {
     console.error('[PushNotifications] Fetch subscribers failed', e)
@@ -133,7 +137,23 @@ async function removeSubscriber(hash) {
   }
 }
 
-async function sendPush({ title, body, tag, data, actions } = {}) {
+// ── Sent history ─────────────────────────────────────────────────────────────
+
+const sentNotifications = ref([])
+
+async function fetchSentNotifications() {
+  try {
+    const res = await fetch('/api/send-push?history=1')
+    if (!_checkAvailable(res)) return
+    sentNotifications.value = await res.json()
+  } catch (e) {
+    console.error('[PushNotifications] Fetch sent history failed', e)
+  }
+}
+
+// ── Send ──────────────────────────────────────────────────────────────────────
+
+async function sendPush({ title, body, image, tag, data, actions } = {}) {
   if (!isSubscribed.value || !isSuperAdmin.value) {
     console.warn('[PushNotifications] Not subscribed or not superadmin')
     return
@@ -142,6 +162,7 @@ async function sendPush({ title, body, tag, data, actions } = {}) {
   const auth = useAuthStore()
   const sub = subscription.value.toJSON()
   const payload = { title: title || 'SY.CORE', body: body || '', tag, data, actions }
+  if (image) payload.image = image
 
   try {
     const res = await fetch('/api/send-push', {
@@ -163,6 +184,75 @@ async function sendPush({ title, body, tag, data, actions } = {}) {
   }
 }
 
+async function sendToAll({ title, body, image, tag, data, actions } = {}) {
+  if (!isSuperAdmin.value) {
+    console.warn('[PushNotifications] sendToAll: not superadmin')
+    return { sent: 0, failed: 0, total: 0 }
+  }
+
+  const auth = useAuthStore()
+  const payload = { title: title || 'SY.CORE', body: body || '', tag, data, actions }
+  if (image) payload.image = image
+
+  try {
+    const res = await fetch('/api/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sendToAll: true,
+        payload,
+        email: auth.user?.email || 'unknown',
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('[PushNotifications] sendToAll failed', res.status, err)
+      return { sent: 0, failed: 0, total: 0 }
+    }
+    const result = await res.json()
+    // Refresh sent history after broadcast
+    fetchSentNotifications()
+    return result
+  } catch (e) {
+    console.error('[PushNotifications] sendToAll error', e)
+    return { sent: 0, failed: 0, total: 0 }
+  }
+}
+
+// ── Image upload ──────────────────────────────────────────────────────────────
+
+async function uploadImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.onload = async (e) => {
+      // e.target.result = "data:<type>;base64,<data>"
+      const dataUrl = e.target.result
+      const commaIdx = dataUrl.indexOf(',')
+      const base64 = dataUrl.slice(commaIdx + 1)
+
+      try {
+        const res = await fetch('/api/push-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: base64, type: file.type, name: file.name }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }))
+          return reject(new Error(err.error || 'Upload failed'))
+        }
+        const { url } = await res.json()
+        resolve(url)
+      } catch (e) {
+        reject(e)
+      }
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -176,14 +266,19 @@ export function usePushNotifications() {
     isSubscribed,
     permissionState,
     isSuperAdmin,
+    apiAvailable,
     subscribers,
     subscribe,
     unsubscribe,
     restoreSubscription,
     sendPush,
+    sendToAll,
     fetchSubscribers,
     removeSubscriber,
     exportSubscribers,
+    sentNotifications,
+    fetchSentNotifications,
+    uploadImage,
   }
 }
 

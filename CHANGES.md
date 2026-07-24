@@ -4,6 +4,9 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-07-24
 
+- Push Notifications panel redesigned as a resizable/draggable window with three tabs: **Compose** (title, body, image attachment with file upload or URL, click-through URL, notification preview, send-to-all and send-to-me), **Subscribers** (list with browser badge and "pushable" indicator, remove, export CSV), and **Sent** (registry of all dispatched notifications with recipient counts and image thumbnail)
+- Push Notifications management (subscribe/unsubscribe, send test push, subscriber list) extracted from Admin Panel into its own dedicated modal, admin-only
+- Fixed `vercel dev` locally serving raw `index.html` content for asset/JS requests (e.g. `/src/main.js` 500ing) — the SPA-fallback rewrite in `vercel.json` matched every path unconditionally; scoped it to exclude `api/`, `assets/`, `src/`, and any path with a file extension
 - User Profile: Subscribe/Unsubscribe controls for push notifications, so any user can manage this themselves without going through Admin Panel
 - Push notification permission prompt now shown to every logged-in user (previously only the superadmin account), so the subscriber list the admin broadcasts to actually grows
 - Drum Machine: admin-published Default Kit — an admin assigns bundled sound files to each of the 11 track slots once, and any user can recall it from the Kits panel ("Load Default Kit"), with automatic seeding into a brand-new user's first empty sequence

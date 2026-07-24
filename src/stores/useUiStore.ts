@@ -22,6 +22,7 @@ export interface PanelVisibility {
   isProfileOpen: boolean
   isAuthModalOpen: boolean
   isAdminPanelOpen: boolean
+  isPushNotificationsOpen: boolean
   isModuleManagerOpen: boolean
   isHelpOpen: boolean
   isManualOpen: boolean
@@ -106,6 +107,7 @@ export const useUiStore = defineStore('ui', () => {
   const isProfileOpen      = ref(false)
   const isAuthModalOpen    = ref(false)
   const isAdminPanelOpen   = ref(false)
+  const isPushNotificationsOpen = ref(false)
   const isModuleManagerOpen = ref(false)
   const isHelpOpen         = ref(false)
   const isManualOpen       = ref(false)
@@ -222,6 +224,7 @@ export const useUiStore = defineStore('ui', () => {
     visualizer:          () => isVisualizerOpen.value,
     profile:             () => isProfileOpen.value,
     adminPanel:          () => isAdminPanelOpen.value,
+    pushNotifications:   () => isPushNotificationsOpen.value,
     moduleManager:       () => isModuleManagerOpen.value,
     about:               () => isAboutOpen.value,
     helpSlideshow:       () => isHelpSlideshowOpen.value,
@@ -274,6 +277,7 @@ export const useUiStore = defineStore('ui', () => {
     visualizer:          isVisualizerOpen,
     profile:             isProfileOpen,
     adminPanel:          isAdminPanelOpen,
+    pushNotifications:   isPushNotificationsOpen,
     moduleManager:       isModuleManagerOpen,
     about:               isAboutOpen,
     helpSlideshow:       isHelpSlideshowOpen,
@@ -326,6 +330,7 @@ export const useUiStore = defineStore('ui', () => {
     isProfileOpen.value      = false
     isAuthModalOpen.value    = false
     isAdminPanelOpen.value   = false
+    isPushNotificationsOpen.value = false
     isModuleManagerOpen.value = false
     isHelpOpen.value         = false
     isManualOpen.value       = false
@@ -394,6 +399,7 @@ export const useUiStore = defineStore('ui', () => {
     arp: isArpOpen,
     favorites: isFavoritesOpen,
     profile: isProfileOpen,
+    'push-notifications': isPushNotificationsOpen,
     help: isHelpOpen,
     guides: isGuidesOpen,
     support: isSupportOpen,
@@ -568,7 +574,7 @@ export const useUiStore = defineStore('ui', () => {
     isAppInitializing,
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen, isSequencerModalOpen,
     isArpOpen, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
-    isAuthModalOpen, isAdminPanelOpen, isModuleManagerOpen, isHelpOpen, isManualOpen,
+    isAuthModalOpen, isAdminPanelOpen, isPushNotificationsOpen, isModuleManagerOpen, isHelpOpen, isManualOpen,
     isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,
     isBackingTrackOpen, isTracksPlayerOpen, isLiveSetOpen, isAppMidiMapperOpen,
     isPatchNotesOpen, isVelocityMapOpen, isLfo1Open, isLfo2Open, isAdminLoggerOpen,
