@@ -6,6 +6,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useAudioMixerChannels } from '@/composables/useAudioMixerChannels'
+import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -27,6 +28,7 @@ export function useAppActions() {
   const lfoStore = useLfoStore()
   const mappingStore = useMappingStore()
   const { flatChannels: mixerChannels } = useAudioMixerChannels()
+  const mixerStore = useAudioMixerStore()
 
   function dispatchAction(action, ccVal = 0) {
     switch (action) {
@@ -466,6 +468,8 @@ export function useAppActions() {
             const preset = namedPresets[slotIdx]
             if (preset) midiStore.loadConfigPreset(preset.id)
           }
+        } else if (action === 'mixer_master_volume_cc') {
+          mixerStore.setMasterVol(ccVal / 127)
         } else if (action.startsWith('mixer_ch')) {
           // mixer_ch3_volume_cc / mixer_ch3_mute / mixer_ch3_solo — N is
           // positional into useAudioMixerChannels()'s flatChannels, the same

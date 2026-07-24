@@ -132,6 +132,7 @@ export type AppAction =
   | 'transport_play_all'
   | 'transport_stop_all'
   | 'toggle_audio_mixer'
+  | 'mixer_master_volume_cc'
   | 'mixer_ch1_volume_cc'  | 'mixer_ch2_volume_cc'  | 'mixer_ch3_volume_cc'  | 'mixer_ch4_volume_cc'
   | 'mixer_ch5_volume_cc'  | 'mixer_ch6_volume_cc'  | 'mixer_ch7_volume_cc'  | 'mixer_ch8_volume_cc'
   | 'mixer_ch9_volume_cc'  | 'mixer_ch10_volume_cc' | 'mixer_ch11_volume_cc' | 'mixer_ch12_volume_cc'
@@ -329,6 +330,7 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   transport_play_all: 'Transport: Play All (Synced)',
   transport_stop_all: 'Transport: Stop All',
   toggle_audio_mixer: 'Toggle Audio Mixer',
+  mixer_master_volume_cc: 'Mixer Master: Volume via CC',
   mixer_ch1_volume_cc:  'Mixer Ch 1: Volume via CC',
   mixer_ch2_volume_cc:  'Mixer Ch 2: Volume via CC',
   mixer_ch3_volume_cc:  'Mixer Ch 3: Volume via CC',
@@ -515,6 +517,7 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'pc_category_cc',
   'pc_preset_cc',
   'channel_cc',
+  'mixer_master_volume_cc',
   'mixer_ch1_volume_cc',  'mixer_ch2_volume_cc',  'mixer_ch3_volume_cc',  'mixer_ch4_volume_cc',
   'mixer_ch5_volume_cc',  'mixer_ch6_volume_cc',  'mixer_ch7_volume_cc',  'mixer_ch8_volume_cc',
   'mixer_ch9_volume_cc',  'mixer_ch10_volume_cc', 'mixer_ch11_volume_cc', 'mixer_ch12_volume_cc',

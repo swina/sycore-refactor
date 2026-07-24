@@ -920,6 +920,13 @@ const APP_SECTIONS = [
       { action: 'transport_stop_all', label: 'Stop All' },
     ],
   },
+  {
+    key: 'audio_mixer', label: 'Audio Mixer',
+    items: [
+      { action: 'toggle_audio_mixer',    label: 'Toggle Audio Mixer' },
+      { action: 'mixer_master_volume_cc', label: 'Master Volume via CC' },
+    ],
+  },
 ]
 
 const collapsedActions = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))
