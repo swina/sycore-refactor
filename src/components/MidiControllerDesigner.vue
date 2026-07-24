@@ -68,6 +68,17 @@
           <option v-for="d in midiStore.inputs" :key="d.name" :value="d.name">{{ d.name }}</option>
         </select>
 
+        <!-- Generate layout button — visible when device has a known template -->
+        <button
+          v-if="matchedLayout"
+          @click="generateLayout"
+          class="flex items-center gap-1 px-2 py-1 rounded text-[9px] font-mono border border-violet-700 hover:border-violet-400 text-violet-400 hover:text-violet-200 transition-colors"
+          :title="`Generate ${matchedLayout.label} surface`"
+        >
+          <LayoutTemplate class="w-3 h-3" />
+          Generate
+        </button>
+
         <div class="w-px h-4 bg-neutral-700 mx-1" />
 
         <!-- Preset controls -->
@@ -647,6 +658,58 @@
         </div>
       </div>
 
+      <!-- Preset settings drawer (shown when no control is selected) -->
+      <div
+        v-else
+        class="w-56 flex flex-col bg-neutral-900 border-l border-neutral-800 overflow-hidden shrink-0"
+      >
+        <div class="px-3 py-2 border-b border-neutral-800 shrink-0">
+          <span class="text-[9px] uppercase tracking-widest text-neutral-500 font-bold">Preset Settings</span>
+        </div>
+        <div class="flex flex-col gap-3 px-3 py-3 overflow-y-auto">
+          <!-- Auto-generate layout -->
+          <div v-if="matchedLayout" class="flex flex-col gap-1.5">
+            <label class="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">Surface Template</label>
+            <p class="text-[8px] text-neutral-500 leading-relaxed">{{ matchedLayout.label }} layout detected.</p>
+            <button
+              @click="generateLayout"
+              class="self-start text-[9px] font-mono px-2.5 py-1 rounded border border-violet-700 hover:border-violet-400 text-violet-400 hover:text-violet-200 transition-colors"
+            >Generate Layout</button>
+            <p v-if="generateMessage" class="text-[8px] text-emerald-400">{{ generateMessage }}</p>
+          </div>
+
+          <!-- SysEx features hidden — code preserved, set v-if="true" to restore
+          <div v-if="matchedLayout" class="w-full h-px bg-neutral-800" />
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">SysEx Dump Request</label>
+            <textarea v-model="sysexInit" rows="2" placeholder="F0 43 20 00 F7"
+              class="w-full text-[10px] font-mono bg-black/40 border border-neutral-700 rounded px-2 py-1.5 text-neutral-200 placeholder-neutral-600 resize-none focus:outline-none focus:border-violet-500 leading-relaxed" />
+            <p class="text-[8px] text-neutral-600 leading-relaxed">Hex · 0x-prefixed · or decimal. Multi-line = multiple messages.</p>
+            <div v-if="sysexInit" class="flex flex-col gap-1.5">
+              <button v-if="assignedDevice" @click="handleSendSysEx" :disabled="captureActive"
+                class="self-start text-[9px] font-mono px-2.5 py-1 rounded border border-neutral-700 hover:border-violet-500/60 hover:text-violet-400 text-neutral-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >{{ captureActive ? 'Listening…' : 'Send &amp; Capture' }}</button>
+              <p v-else class="text-[8px] text-amber-500">Assign a device to enable Send.</p>
+              <p v-if="sysexSendResult?.ok" class="text-[8px] text-emerald-400">Sent {{ sysexSendResult.sent }} message(s) — waiting for device response…</p>
+              <p v-else-if="sysexSendResult && !sysexSendResult.ok" class="text-[8px] text-red-400">{{ sysexSendResult.error }}</p>
+            </div>
+          </div>
+          <div v-if="capturedDump || captureActive" class="flex flex-col gap-1.5">
+            <div class="flex items-center gap-1.5">
+              <label class="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">Captured Dump</label>
+              <span v-if="captureActive" class="text-[8px] text-violet-400 animate-pulse">● listening</span>
+              <span v-else-if="capturedDump" class="text-[8px] text-emerald-400">{{ capturedDump.split('\n').length }} msg(s)</span>
+            </div>
+            <textarea :value="capturedDump" readonly rows="4" placeholder="Waiting for device response…"
+              class="w-full text-[9px] font-mono bg-black/60 border border-neutral-800 rounded px-2 py-1.5 text-emerald-300 placeholder-neutral-600 resize-none leading-relaxed" />
+            <button v-if="capturedDump && !captureActive" @click="sysexInit = capturedDump; capturedDump = ''"
+              class="self-start text-[9px] font-mono px-2.5 py-1 rounded border border-emerald-800 hover:border-emerald-500 text-emerald-500 hover:text-emerald-300 transition-colors"
+            >Use as Init (auto-restore)</button>
+          </div>
+          -->
+        </div>
+      </div>
+
       <!-- End canvas+drawer row -->
       </div>
 
@@ -786,6 +849,7 @@ import {
   createControl,
 } from '@/lib/midi-controller-presets'
 import { APP_ACTION_LABELS, MIDI_ACTION_GROUPS, CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { findLayoutForDevice } from '@/lib/controller-layout-library'
 import { useMidiFeedback } from '@/composables/useMidiFeedback'
 import { applyParamValue } from '@/composables/useMidiCCListener'
 import { useAppActions } from '@/composables/useAppActions'
@@ -982,6 +1046,80 @@ const assignedDevice = computed({
   get: () => activePreset.value?.assignedDevice ?? '',
   set: (v) => { if (activePreset.value) { activePreset.value.assignedDevice = v; debouncedSave() } },
 })
+const sysexInit = computed({
+  get: () => activePreset.value?.sysexInit ?? '',
+  set: (v) => { if (activePreset.value) { activePreset.value.sysexInit = v || undefined; debouncedSave() } },
+})
+const matchedLayout = computed(() => assignedDevice.value ? findLayoutForDevice(assignedDevice.value) : null)
+const generateMessage = ref('')
+
+function generateLayout() {
+  if (!activePreset.value || !matchedLayout.value) return
+  const layout = matchedLayout.value
+  if (controls.value.length > 0) {
+    if (!confirm(`Replace ${controls.value.length} existing control(s) with the ${layout.label} template?`)) return
+  }
+  activePreset.value.controls = layout.controls
+  debouncedSave()
+  generateMessage.value = `Generated ${layout.controls.length} controls`
+  setTimeout(() => { generateMessage.value = '' }, 3000)
+}
+
+const sysexSendResult = ref(null) // null | { ok: boolean, error?: string, sent?: number }
+const captureActive = ref(false)
+const capturedDump = ref('') // hex lines, one SysEx message per line
+let _sysexResultTimer = null
+let _stopSysexCapture = null
+let _captureTimer = null
+
+function startSysexCapture(deviceName) {
+  if (_stopSysexCapture) { _stopSysexCapture(); _stopSysexCapture = null }
+  if (_captureTimer) { clearTimeout(_captureTimer); _captureTimer = null }
+  captureActive.value = true
+  const received = []
+
+  function finish() {
+    if (_stopSysexCapture) { _stopSysexCapture(); _stopSysexCapture = null }
+    if (_captureTimer) { clearTimeout(_captureTimer); _captureTimer = null }
+    captureActive.value = false
+    capturedDump.value = received.join('\n')
+  }
+
+  function resetSilenceTimer() {
+    if (_captureTimer) clearTimeout(_captureTimer)
+    _captureTimer = setTimeout(finish, 700)
+  }
+
+  // Max 15s regardless
+  const maxTimer = setTimeout(finish, 15000)
+
+  _stopSysexCapture = midiService.addMonitorListener((entry) => {
+    if (entry.direction !== 'in' || entry.type !== 'sysex') return
+    if (entry.device !== deviceName) return
+    const hex = entry.data.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+    received.push(hex)
+    resetSilenceTimer()
+  })
+
+  resetSilenceTimer()
+  return () => { clearTimeout(maxTimer); finish() }
+}
+
+async function handleSendSysEx() {
+  if (!sysexInit.value || !assignedDevice.value) return
+  if (_sysexResultTimer) clearTimeout(_sysexResultTimer)
+  sysexSendResult.value = null
+  capturedDump.value = ''
+  // Start capture before sending so we don't miss a fast response
+  startSysexCapture(assignedDevice.value)
+  const result = await midiService.sendSysEx(assignedDevice.value, sysexInit.value)
+  sysexSendResult.value = result
+  if (!result.ok) {
+    captureActive.value = false
+    if (_stopSysexCapture) { _stopSysexCapture(); _stopSysexCapture = null }
+  }
+  _sysexResultTimer = setTimeout(() => { sysexSendResult.value = null }, 5000)
+}
 const selectedControl = computed(() => controls.value.find(c => c.id === selectedControlId.value) ?? null)
 
 // In design mode with exactly 1 control selected, the drawer shows that control
@@ -995,6 +1133,15 @@ const drawerControl = computed(() => {
 })
 
 watch(drawerControl, () => { pendingAssignment.value = null })
+
+watch(activePresetId, () => {
+  const preset = activePreset.value
+  if (preset?.sysexInit && preset.assignedDevice) {
+    midiService.sendSysEx(preset.assignedDevice, preset.sysexInit).then(r => {
+      if (!r.ok) console.warn('[SysEx auto-init] Failed:', r.error)
+    })
+  }
+})
 
 watch(showSweep, (on) => { if (!on) { _sweepCol.value = 0; _sweepRow.value = 0; _sweepBaseY.value = 0 } })
 

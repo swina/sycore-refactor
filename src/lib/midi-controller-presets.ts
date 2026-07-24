@@ -43,6 +43,7 @@ export interface ControllerPreset {
   assignedDevice: string
   controls: ControlItem[]
   backgroundImage?: BackgroundImage
+  sysexInit?: string
 }
 
 const IDB_DOC = 'midiControllerPresets'

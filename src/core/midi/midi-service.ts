@@ -31,6 +31,23 @@ import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte } from './midi
 export type { DeviceRegistration, RoutingConfig, SplitConfig, MidiMessageType, MidiMonitorEntry };
 export { MidiSource };
 
+function _parseSysExString(input: string): number[] | null {
+  const s = input.trim();
+  let tokens: string[];
+  if (/0x/i.test(s)) {
+    tokens = s.split(/[\s,]+/).filter(Boolean);
+    const b = tokens.map(t => parseInt(t, 16));
+    return b.some(isNaN) ? null : b;
+  }
+  if (s.includes(',') && !/[a-fA-F]/.test(s)) {
+    const b = s.split(',').map(t => Number(t.trim()));
+    return b.some(isNaN) ? null : b;
+  }
+  tokens = s.split(/\s+/).filter(Boolean);
+  const b = tokens.map(t => parseInt(t, 16));
+  return b.some(isNaN) ? null : b;
+}
+
 export class MidiService {
   // ── Core references ──────────────────────────────────────────────────────
   private midiAccess: MIDIAccess | null = null;
@@ -261,6 +278,51 @@ export class MidiService {
   // ── SysEx ────────────────────────────────────────────────────────────────
 
   isSysExEnabled(): boolean { return this.sysexEnabled; }
+
+  async sendSysEx(deviceName: string, hexString: string): Promise<{ ok: boolean; error?: string; sent?: number }> {
+    const allBytes = _parseSysExString(hexString);
+    if (!allBytes) {
+      const msg = 'Invalid SysEx — could not parse string';
+      console.warn('[MidiService]', msg);
+      return { ok: false, error: msg };
+    }
+    // Split into individual F0…F7 messages (supports multi-message dumps)
+    const messages: number[][] = [];
+    let cur: number[] = [];
+    for (const b of allBytes) {
+      cur.push(b);
+      if (b === 0xF7) { if (cur[0] === 0xF0) messages.push(cur); cur = []; }
+    }
+    if (messages.length === 0) {
+      const msg = 'No valid SysEx messages found (must start F0, end F7)';
+      console.warn('[MidiService]', msg);
+      return { ok: false, error: msg };
+    }
+    if (!this.sysexEnabled) {
+      const granted = await this.enableSysEx();
+      if (!granted) return { ok: false, error: 'SysEx permission denied by browser' };
+    }
+    if (!this.midiAccess) return { ok: false, error: 'No MIDI access' };
+    const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === deviceName);
+    if (!out) {
+      const available = Array.from(this.midiAccess.outputs.values()).map((p: any) => p.name).join(', ') || '(none)';
+      console.warn(`[MidiService] SysEx: output "${deviceName}" not found. Available: ${available}`);
+      return { ok: false, error: `Output "${deviceName}" not found` };
+    }
+    let sent = 0;
+    for (const msg of messages) {
+      try {
+        out.send(msg);
+        sent++;
+        if (messages.length > 1) await new Promise(r => setTimeout(r, 20));
+      } catch (e: any) {
+        console.error('[MidiService] SysEx send failed:', e?.message ?? e);
+        return { ok: false, error: e?.message ?? 'Send failed', sent };
+      }
+    }
+    console.log(`[MidiService] SysEx → "${deviceName}": ${sent} message(s) sent`);
+    return { ok: true, sent };
+  }
 
   async enableSysEx(): Promise<boolean> {
     try {

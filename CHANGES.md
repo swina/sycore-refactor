@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-07-24
 
+- MIDI Controller Designer: **Auto-generate surface layout** — assigns a device to a preset and a "Generate Layout" button appears; one click populates the canvas with correctly positioned and pre-wired controls. Built-in templates: Akai MIDI Mix, Novation Launchpad Mini MK1, Novation Launchkey 49 MK4.
+- MIDI Controller Designer: **SysEx Init** — attach a SysEx dump string to any controller preset; fires automatically on preset activate, with a manual "Send Now" button. Supports hex (`F0 … F7`), 0x-prefixed, and decimal formats. Preset Settings drawer shown in right panel when no control is selected.
 - MIDI Controller Designer: **Audio Mixer** section added to mappable actions, including Toggle Audio Mixer and Master Volume via CC (continuous CC → `useAudioMixerStore.setMasterVol`)
 - Push Notifications panel redesigned as a resizable/draggable window with three tabs: **Compose** (title, body, image attachment with file upload or URL, click-through URL, notification preview, send-to-all and send-to-me), **Subscribers** (list with browser badge and "pushable" indicator, remove, export CSV), and **Sent** (registry of all dispatched notifications with recipient counts and image thumbnail)
 - Push Notifications management (subscribe/unsubscribe, send test push, subscriber list) extracted from Admin Panel into its own dedicated modal, admin-only
