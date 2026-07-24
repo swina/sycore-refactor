@@ -37,7 +37,7 @@ async function registerSW() {
 }
 
 async function subscribe() {
-  if (!isSupported.value || !isSuperAdmin.value) return
+  if (!isSupported.value) return
   if (permissionState.value === 'denied') return
 
   const reg = await registerSW()
@@ -82,7 +82,7 @@ async function unsubscribe() {
 }
 
 async function restoreSubscription() {
-  if (!isSupported.value || !isSuperAdmin.value) return
+  if (!isSupported.value) return
   const reg = await registerSW()
   if (!reg) return
 
@@ -103,9 +103,14 @@ const subscribers = ref([])
 async function fetchSubscribers() {
   try {
     const res = await fetch('/api/send-push')
-    if (res.ok) {
-      subscribers.value = await res.json()
+    // The /api/* serverless functions only run when deployed to Vercel (or
+    // via `vercel dev`) — under plain `vite`/`npm run dev` this 404s or
+    // returns the route's raw, un-executed source instead of JSON.
+    if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) {
+      console.warn('[PushNotifications] /api/send-push unavailable — only works when deployed to Vercel or run via `vercel dev`, not plain `vite`')
+      return
     }
+    subscribers.value = await res.json()
   } catch (e) {
     console.error('[PushNotifications] Fetch subscribers failed', e)
   }

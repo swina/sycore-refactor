@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-07-24
 
+- Push notification permission prompt now shown to every logged-in user (previously only the superadmin account), so the subscriber list the admin broadcasts to actually grows
 - Drum Machine: admin-published Default Kit — an admin assigns bundled sound files to each of the 11 track slots once, and any user can recall it from the Kits panel ("Load Default Kit"), with automatic seeding into a brand-new user's first empty sequence
 - Audio Mixer added to mappable MIDI Actions apps: Toggle Mixer plus per-channel Volume/Mute/Solo (up to 16 channels), with numbered channel-slot assignments and a save/update/load configuration system
 - Session export/import extended to cover MIDI Flow routing (device registrations, routing matrix, input routing, output filters, keyboard split, virtual instruments, saved canvases), the Chord Progression library, MIDI Controller Designer presets, and Audio Mixer configs — not just S-1 presets and basic settings

@@ -102,9 +102,11 @@ const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
 const { minimizedModals } = useMinimizedModals()
 
 
-// Init push notifications for superadmin
+// Init push notifications for any logged-in user — prompts for browser
+// permission on first visit so they're added to the subscriber list; only
+// the superadmin can actually broadcast to it (see AdminPanel.vue / sendPush).
 onMounted(async () => {
-  if (authStore.user?.email === 'swina.allen@gmail.com') {
+  if (authStore.user) {
     await restoreSubscription()
     if (!isSubscribed.value) await subscribe()
   }
