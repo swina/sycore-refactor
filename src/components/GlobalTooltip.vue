@@ -1,9 +1,10 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 
 const isVisible = ref(false)
 const content   = ref('')
 const coords    = ref({ x: 0, y: 0, isBelow: false })
+const tooltipEl = ref(null)
 
 let showTimeout = null
 
@@ -35,6 +36,19 @@ function onMouseOver(e) {
       if (y < 40) { y = rect.bottom + 15; isBelow = true }
       coords.value  = { x: rect.left + rect.width / 2, y, isBelow }
       isVisible.value = true
+
+      // Clamp horizontally so a trigger near the left/right screen edge
+      // doesn't push the (variable-width, centered) tooltip off-screen —
+      // width is only known once rendered, so measure after mount.
+      nextTick(() => {
+        const tip = tooltipEl.value
+        if (!tip) return
+        const margin = 8
+        const halfWidth = tip.offsetWidth / 2
+        const minX = halfWidth + margin
+        const maxX = window.innerWidth - halfWidth - margin
+        coords.value = { ...coords.value, x: Math.min(Math.max(coords.value.x, minX), maxX) }
+      })
     }, 300)
   }
 }
@@ -61,6 +75,7 @@ onUnmounted(() => {
     <Transition name="tooltip">
       <div
         v-if="isVisible"
+        ref="tooltipEl"
         class="fixed z-[99999] px-3 py-1.5 bg-neutral-950 border border-synth-neon/30 text-synth-neon text-[10px] font-black uppercase tracking-widest rounded-lg shadow-2xl pointer-events-none whitespace-nowrap glow-neon"
         :style="{
           left: coords.x + 'px',
