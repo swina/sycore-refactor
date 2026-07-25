@@ -26,6 +26,7 @@ export interface ChordStep {
   stepMode?: 'chord' | 'arp'   // per-step override of the slot's global playMode; unset = inherit playMode
   chordMode?: ChordStrumMode   // used when this step's effective mode is 'chord'; unset = simultaneous (today's behavior)
   arpMode?: ArpMode            // used when this step's effective mode is 'arp'; defaults to 'up' (today's hardcoded behavior)
+  arpRate?: DurationOption     // per-step arp rate override; unset = inherit slot arpRate
 }
 
 export type PlayMode = 'chord' | 'arp' | 'bass'

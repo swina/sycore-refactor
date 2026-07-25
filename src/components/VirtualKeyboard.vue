@@ -11,7 +11,7 @@ const props = defineProps({
   channel:      { type: Number, default: 0 },
   inputChannel: { type: Number, default: -1 },
 })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'noteOn', 'noteOff'])
 
 const arpStore    = useArpStore()
 const uiStore     = useUiStore()
@@ -105,10 +105,12 @@ function handleNoteOn(keyI) {
     midiStore.sendNoteOn(midiNote, 100, MidiSource.KEYBOARD)
   }
   activeNotes.value = new Set(activeNotes.value).add(midiNote)
+  emit('noteOn', midiNote, 100)
 }
 
 function handleNoteOff(keyI) {
   const midiNote = keyI + (octave.value * 12)
+  emit('noteOff', midiNote)
   if (arpStore.arpEnabled) {
     physicalVirtualKeysHeld = Math.max(0, physicalVirtualKeysHeld - 1)
     if (!arpStore.arpHold || (physicalVirtualKeysHeld === 0 && arpStore.heldNoteCount <= 1)) {

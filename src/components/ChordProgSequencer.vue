@@ -16,6 +16,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
+import ChordAssignModal from './ChordAssignModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 
 const props = defineProps({
@@ -304,7 +305,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       }
 
       if (effectiveMode === 'arp' && step?.active && step.velocity > 0 && step.notes?.length > 0) {
-        const arpTicks = DURATION_TICKS[state.arpRate] ?? 8
+        const arpTicks = DURATION_TICKS[step.arpRate ?? state.arpRate] ?? 8
         if (state.tickCounter % arpTicks === 0) {
           if (_stopPending) return
           const tickMs = 60000 / (state.bpm * 96)
@@ -682,6 +683,12 @@ function handleGateKeydown(e) {
 }
 
 const selectedStep = computed(() => store.steps[store.selectedStepIdx])
+const showChordAssign = ref(false)
+
+function onChordAssigned({ notes, name }) {
+  store.assignChordToStep(store.selectedStepIdx, name, notes)
+  showChordAssign.value = false
+}
 // The selected step's own Chord/Arp mode if it overrides the slot's global
 // playMode, else the global playMode — matches the scheduler's effectiveMode.
 const effectiveStepMode = computed(() => selectedStep.value?.stepMode ?? store.playMode)
@@ -995,13 +1002,13 @@ function velBarColor(v) {
           <button @click.stop="store.numSteps = Math.min(16, store.numSteps + 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"><ChevronRight class="w-3 h-3" /></button>
         </div>
 
-        <!-- Arp rate (only in arp mode) -->
-        <div v-if="store.playMode === 'arp'" class="flex items-center gap-1 text-[12px] font-mono">
+        <!-- Arp rate — always visible; used by Arp play mode and per-step Arp overrides -->
+        <div class="flex items-center gap-1 text-[12px] font-mono">
           <span class="text-neutral-500 font-mono">Rate</span>
           <select
             v-model="store.arpRate"
             @mousedown.stop
-            title="Arpeggio rate"
+            title="Arpeggio rate — applies to this slot (and any per-step Arp overrides)"
             class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-[12px] text-purple-300 font-mono outline-none"
           >
             <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
@@ -1166,7 +1173,14 @@ function velBarColor(v) {
           </button>
 
           <!-- Chord name -->
-          <span class="text-purple-300 text-[14px] font-bold">{{ selectedStep.chordName }}</span>
+          <div class="flex items-center gap-2">
+            <span class="text-purple-300 text-[14px] font-bold">{{ selectedStep.chordName }}</span>
+            <button
+              @click="showChordAssign = true"
+              class="text-[9px] px-1.5 py-0.5 rounded border border-neutral-700 hover:border-purple-500 hover:text-purple-400 text-neutral-500 transition-colors font-mono"
+              title="Assign custom chord via MIDI IN or Virtual Keyboard"
+            >Custom</button>
+          </div>
           <span class="text-neutral-600 text-[10px] font-mono">{{ selectedStep.notes?.join(', ') || 'no notes' }}</span>
         </div>
 
@@ -1249,6 +1263,20 @@ function velBarColor(v) {
             class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
           >
             <option v-for="mode in ARP_MODES" :key="mode" :value="mode">{{ mode }}</option>
+          </select>
+        </div>
+
+        <!-- Per-step Arp rate override (only meaningful when this step's effective mode is Arp) -->
+        <div v-if="effectiveStepMode === 'arp'" class="flex items-center gap-1" title="Arp rate for this step — overrides the slot rate when set">
+          <span class="text-neutral-500">Rate</span>
+          <select
+            :value="selectedStep.arpRate ?? ''"
+            @change="e => store.setStep(store.selectedStepIdx, { arpRate: e.target.value || undefined })"
+            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 font-mono outline-none"
+            :class="selectedStep.arpRate ? 'text-yellow-300' : 'text-neutral-500'"
+          >
+            <option value="">Slot ({{ DURATION_LABELS[store.arpRate] }})</option>
+            <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
           </select>
         </div>
 
@@ -1421,6 +1449,19 @@ function velBarColor(v) {
             title="Set every step's arp pattern"
             class="px-2 py-0.5 rounded bg-neutral-700 hover:bg-purple-700 text-white font-bold uppercase tracking-wider transition-colors text-[9px]"
           >All</button>
+        </div>
+
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- Arp Rate fill — sets this slot's arp rate (used by Arp mode and per-step Arp overrides) -->
+        <div class="flex items-center gap-1.5" title="Set the arp rate for this slot">
+          <span class="text-neutral-500">Rate</span>
+          <select
+            v-model="store.arpRate"
+            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
+          >
+            <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
+          </select>
         </div>
 
         <div class="w-px h-4 bg-neutral-800 shrink-0" />
@@ -1754,6 +1795,16 @@ function velBarColor(v) {
       class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-30 hover:opacity-80 transition-opacity"
       @mousedown.stop="e => onResizeStart(e, 'se')"
       style="background: linear-gradient(135deg, transparent 50%, #7c3aed 50%); border-radius: 0 0 4px 0;"
+    />
+
+    <!-- Custom chord assignment modal -->
+    <ChordAssignModal
+      v-if="showChordAssign && selectedStep"
+      :step-idx="store.selectedStepIdx"
+      :current-notes="selectedStep?.notes ?? []"
+      :current-name="selectedStep?.chordName ?? ''"
+      @assign="onChordAssigned"
+      @close="showChordAssign = false"
     />
   </div>
 </template>

@@ -43,7 +43,7 @@ The panel can be **minimised** (title bar only) without stopping playback, and c
 | **Play / Stop** | Starts or stops the sequence. Tone.js transport is started on first play. |
 | **Steps ◀ / ▶** | Increase or decrease the active step count (1–16). Steps beyond the count are greyed out and skipped. |
 | **Chord \| Arp** | Toggles between simultaneous voicing and staggered arpeggio mode. |
-| **Rate** | Arp step interval — visible only in Arp mode. Ranges from 128th note to whole note with dotted and triplet variants. |
+| **Rate** | Arp step interval for this slot. Ranges from 128th note to 8 bars, with dotted and triplet variants. Always visible — applies both when the slot is in Arp mode and when individual steps use a per-step Arp override. |
 | **Transpose** | Global pitch shift applied to every step (–24 to +24 semitones). Shown in yellow when non-zero. |
 | **⟳ Loop / Once** | Loop plays the sequence indefinitely. Once plays through one cycle and stops. |
 | **Chain** | Toggles Chain mode. **OFF** plays only the active slot in a loop. **ON** plays through every slot listed in the Chain Editor, in order. |
@@ -101,7 +101,7 @@ Selecting any step reveals a detail bar beneath the grid:
 | Field | Range | Notes |
 |-------|-------|-------|
 | **Active / Off** | Toggle | Inactive steps are skipped during playback but retain their data. |
-| **Chord name** | Read-only | Set by loading from the library or assigning from the chord panel. |
+| **Chord name** | Read-only | Set by loading from the library, assigning from the chord panel, or using **Custom** (see below). |
 | **Duration** | 128n → 8m | Step-specific note length. Overrides nothing globally — each step has its own timing. |
 | **Velocity** | 0–127 | Use ↑ / ↓ arrow keys to nudge by 1; Shift+Arrow nudges by 10. |
 | **Gate** | 0–100% | Portion of the step duration that the notes sound. `100%` = full legato. |
@@ -109,8 +109,39 @@ Selecting any step reveals a detail bar beneath the grid:
 | **Mode** | Auto / Chord / Arp | Per-step override of the slot's global Chord/Arp play mode. **Auto** inherits whatever the slot is currently set to — so one step can play as a strummed chord while the next plays as an arpeggio, without touching the global toggle. |
 | **Strum** | Sim / Up / Down / Up-Down / Down-Up | Only shown when this step's effective mode is **Chord**. Controls the order notes are staggered in when the chord isn't played fully simultaneous. |
 | **Pattern** | up, down, up-down, down-up, converge, diverge, pinky-up, thumb-up, random, random-other | Only shown when this step's effective mode is **Arp** — the arpeggio style for this step, using the same 10-pattern engine as the standalone Arpeggiator. |
+| **Rate** | Slot (default) · any duration value | Only shown when this step's effective mode is **Arp**. Overrides the slot's arp rate for this step only. Shown in yellow when a per-step rate is set. Select **Slot** to remove the override and inherit the slot rate again. |
 
 While the sequencer is **playing**, the Step Detail row automatically follows whichever step is currently sounding — it no longer stays frozen on the last step you clicked. Selecting a step manually still works normally when stopped.
+
+### 7.1 Custom Chord Assignment
+
+Click the **Custom** button next to the chord name to open the chord-capture modal. This lets you assign any arbitrary chord to the selected step by playing it — rather than picking from the built-in library.
+
+Two input modes are available:
+
+**MIDI IN**
+1. Click **Start Listening** — a pulsing indicator confirms the listener is active.
+2. Play and hold a chord on any connected MIDI keyboard. The notes appear as coloured badges in real time.
+3. When you release the keys the display keeps showing the last chord you played, so you can review it before assigning.
+4. Play a new chord at any time to replace the current capture.
+
+**Virtual Keyboard**
+1. Switch to the **Virtual Keyboard** tab.
+2. Click notes on the on-screen piano — notes accumulate in the display as you click.
+3. The keyboard still sounds normally through your synth while you build the chord.
+
+**Shared controls (both modes)**
+
+| Control | Description |
+|---------|-------------|
+| **Detected** | Auto-identified chord name (e.g. `Cmaj7`, `F#m`, `Bdim7`). Updated live as notes change. |
+| **Chord Name field** | Editable — auto-filled by detection; override by typing any label you like. |
+| **Notes** | Row of note labels showing all captured pitches (e.g. `C4 · E4 · G4 · B4`). |
+| **Preview** | Plays the captured chord through MIDI for 500 ms so you can hear it. |
+| **Clear** | Discards the current capture and resets the display. |
+| **Assign to Step N** | Writes the captured notes and name to the selected step. Closes the modal. |
+
+Chord detection covers 18 qualities: major, minor, dim, aug, sus2, sus4, 7, maj7, m7, mMaj7, dim7, ø7, aug7, add9, m(add9), 9, 6, m6. Voicings that don't match a known quality still assign fine — just enter a name manually in the Chord Name field before clicking Assign.
 
 ---
 
@@ -127,6 +158,7 @@ The Fill row applies a value to **all active steps at once**.
 | **Mode** | Auto / Chord / Arp | Sets every step's per-step Mode override at once. **All** applies; **Auto** clears the override so every step follows the slot's global Play Mode again. |
 | **Strum** | Sim / Up / Down / Up-Down / Down-Up | Sets every step's chord-strum direction at once. |
 | **Pattern** | Any of the 10 arp styles | Sets every step's arp pattern at once. |
+| **Rate** | Any duration value | Sets the **slot's arp rate** — the same Rate control that appears in the transport bar, mirrored here for convenience. Useful for quickly trying different arp rates while adjusting other fill settings in one place. |
 | **Clear** | Resets all steps to empty defaults (inactive, no chord, default duration). Requires confirmation via the `↺ Clear` button. |
 
 ---
@@ -247,3 +279,5 @@ The sequencer output is tagged `MidiSource.CHORD_PROG` internally, which allows 
 - **AOF tuning** — if your synth's release tail is cutting off, raise the AOF delay. If you hear ghost notes, lower it or set it to 0.
 - **Loop off for one-shot fills** — switch to *Once* mode for a chord fill that plays exactly one cycle and waits for the next trigger.
 - **Chord preview before assigning** — always click a chord in the library panel to hear it before loading it into a step. The preview uses the current MIDI channel and Chord Transpose.
+- **Custom chords from ear** — use the Custom modal's MIDI IN mode to capture a voicing you've just improvised: hold the chord, let the name auto-detect, edit it if needed, then assign. Great for capturing extended or altered voicings not in the built-in library.
+- **Stack Custom with Library** — mix library chords and custom chords freely within the same progression. Only the selected step is affected by each assign action.

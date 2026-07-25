@@ -2,6 +2,10 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-07-25
+
+- Chord Prog Sequencer: **Custom Chord Assignment** — select any step, click "Custom" to open a chord-capture modal with two input modes: **MIDI IN** (click "Start Listening", play and hold a chord on any connected MIDI keyboard) and **Virtual Keyboard** (click on-screen piano keys). The system auto-detects the chord name in real-time (C Major, Dm7, Gmaj7, etc.). The name is editable before assigning. Works for 18 chord qualities: triads, seventh chords, sus, add9, 6th, 9th, and more.
+
 ## 2026-07-24
 
 - MIDI Controller Designer: **Auto-generate surface layout** — assigns a device to a preset and a "Generate Layout" button appears; one click populates the canvas with correctly positioned and pre-wired controls. Built-in templates: Akai MIDI Mix, Novation Launchpad Mini MK1, Novation Launchkey 49 MK4.
