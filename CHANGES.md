@@ -4,6 +4,12 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-07-25
 
+- MIDI Flow: **Multi-channel conflict guard** — when two canvas nodes point to the same virtual instrument, the second node's Multi-CH panel is locked with an explanation, and the routing engine preserves the first node's channel assignments instead of overwriting them with an empty array. Stale saved configs where both nodes had channels are auto-corrected on load.
+
+- Audio Mixer: **EXT mode per instrument channel** — each external MIDI device strip now shows a **CC7** badge at the bottom. Clicking it switches to **EXT** mode: the mixer stops sending CC#7 entirely for that device (fader and mute go inactive), and the user controls volume physically on the hardware or via a hardware mixer. The flag is persisted per device. Useful for synths that don't implement MIDI CC#7 volume.
+- Chord Prog Sequencer: **Per-step Arp Rate** — each step can now have its own arp rate override (shown next to the Pattern selector in the Step Detail row when the step's effective mode is Arp). The slot rate is used as the default; selecting "Slot" from the step's rate dropdown removes the override.
+- Chord Prog Sequencer: **Arp Rate always visible** — the Rate selector in the transport bar is now always shown (was previously hidden when the slot was in Chord mode), since individual steps can override to Arp mode regardless of the slot's global play mode. Rate also added to the Fill row for quick access.
+
 - Chord Prog Sequencer: **Custom Chord Assignment** — select any step, click "Custom" to open a chord-capture modal with two input modes: **MIDI IN** (click "Start Listening", play and hold a chord on any connected MIDI keyboard) and **Virtual Keyboard** (click on-screen piano keys). The system auto-detects the chord name in real-time (C Major, Dm7, Gmaj7, etc.). The name is editable before assigning. Works for 18 chord qualities: triads, seventh chords, sus, add9, 6th, 9th, and more.
 
 ## 2026-07-24

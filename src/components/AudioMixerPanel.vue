@@ -352,16 +352,16 @@ const TYPE_FILL = {
               </div>
 
               <!-- dB readout -->
-              <div :class="['text-[9px] font-mono font-bold select-none', ch.muted() ? 'text-neutral-600' : chText(ch)]">
-                {{ ch.muted() ? 'MUTE' : toDb(ch.vol()) }}
+              <div :class="['text-[9px] font-mono font-bold select-none', ch.kind === 'instrument' && ch.noCC7() ? 'text-amber-500' : ch.muted() ? 'text-neutral-600' : chText(ch)]">
+                {{ ch.kind === 'instrument' && ch.noCC7() ? 'EXT' : ch.muted() ? 'MUTE' : toDb(ch.vol()) }}
               </div>
 
               <!-- ── Fader track (pointer-capture drag) ── -->
               <div class="flex-1 flex items-center justify-center w-full">
                 <div
-                  :class="['relative cursor-ns-resize rounded', ch.volParam && mappingStore.mappedParams?.has(ch.volParam) ? 'ring-1 ring-amber-500/50' : '']"
+                  :class="['relative rounded', ch.kind === 'instrument' && ch.noCC7() ? 'opacity-25 cursor-not-allowed' : 'cursor-ns-resize', ch.volParam && mappingStore.mappedParams?.has(ch.volParam) ? 'ring-1 ring-amber-500/50' : '']"
                   style="height: 140px; width: 28px; touch-action: none;"
-                  @pointerdown="startFaderDrag($event, ch.setVol, ch.muted)"
+                  @pointerdown="ch.kind !== 'instrument' || !ch.noCC7() ? startFaderDrag($event, ch.setVol, ch.muted) : null"
                   @contextmenu.prevent="ch.volParam && openMenu($event, { name: ch.volParam, label: ch.label + ': Volume' })"
                 >
                   <!-- Groove -->
@@ -416,6 +416,19 @@ const TYPE_FILL = {
                   :title="ch.soloed() ? 'Unsolo' : 'Solo — silences every other channel'"
                 >S</button>
               </div>
+
+              <!-- CC#7 toggle — instrument channels only -->
+              <button
+                v-if="ch.kind === 'instrument'"
+                @click="ch.toggleNoCC7()"
+                :class="['text-[8px] font-mono px-1.5 py-0.5 rounded border transition-colors',
+                  ch.noCC7()
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-600/50 hover:border-amber-400'
+                    : 'text-neutral-600 border-neutral-800 hover:text-neutral-400 hover:border-neutral-600']"
+                :title="ch.noCC7()
+                  ? 'Physical control mode: CC#7 not sent. Click to re-enable MIDI volume.'
+                  : 'Volume/Mute uses MIDI CC#7. Click to disable if this device does not support it.'"
+              >{{ ch.noCC7() ? 'EXT' : 'CC7' }}</button>
             </div>
 
             <!-- Master channel (fixed, not part of the numbered slots) ── -->

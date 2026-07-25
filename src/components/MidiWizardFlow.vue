@@ -106,10 +106,21 @@ function toggleNodeCollapsed(node) {
 }
 
 function toggleNodeOutChannel(node, ch) {
+  if (isMultiChBlocked(node)) return
   if (!node.outChannels) node.outChannels = []
   const i = node.outChannels.indexOf(ch)
   if (i === -1) node.outChannels.push(ch)
   else node.outChannels.splice(i, 1)
+}
+
+// Returns true when another canvas node for the same virtual instrument
+// already has outChannels configured — prevents two nodes from both writing
+// multichannel assignments to the same single registration, which causes a
+// MIDI feedback loop on loopback ports (e.g. LoopBe1).
+function isMultiChBlocked(node) {
+  return canvasNodes.value.some(
+    n => n.id !== node.id && n.name === node.name && n.type === 'virtual' && (n.outChannels?.length ?? 0) > 0
+  )
 }
 
 // ── Sidebar drag-to-canvas ──
@@ -203,6 +214,17 @@ function onInPortMouseup(e, node) {
 function removeCable(id) { cables.value = cables.value.filter(c => c.id !== id) }
 
 function finish() {
+  // For virtual instruments, the same registration is shared by all canvas
+  // nodes with the same name. Once a non-empty outChannels is written for a
+  // canonical name, subsequent writes (from other nodes with []) are skipped
+  // so they don't clobber the multi-channel assignment.
+  const outChannelsLocked = new Set()
+  function writeOutChannels(canonicalName, channels) {
+    if (outChannelsLocked.has(canonicalName)) return
+    midiStore.updateRegistration(canonicalName, 'outChannels', channels)
+    if (channels.length > 0) outChannelsLocked.add(canonicalName)
+  }
+
   // Group destinations by source, keeping the whole cable object (not just
   // the target id) so the app-routing branch below can read cable.filter.
   const bySource = new Map()
@@ -243,7 +265,7 @@ function finish() {
       midiStore.addRegistration(canonicalName)
       midiStore.updateRegistration(canonicalName, 'outEnabled',  true)
       midiStore.updateRegistration(canonicalName, 'outChannel',  dst.outChannel)
-      midiStore.updateRegistration(canonicalName, 'outChannels', dst.outChannels ?? [])
+      writeOutChannels(canonicalName, dst.outChannels ?? [])
       midiStore.updateRegistration(canonicalName, 'clock',       dst.sync)
       midiStore.updateRegistration(canonicalName, 'transport',   dst.transport)
       midiStore.updateRegistration(canonicalName, 'notes',       dst.notes)
@@ -293,7 +315,7 @@ function finish() {
     const isRegistered = !!midiStore.routingConfig?.registrations?.[canonicalName]
     if (!isRegistered) continue
     midiStore.updateRegistration(canonicalName, 'outChannel',  node.outChannel)
-    midiStore.updateRegistration(canonicalName, 'outChannels', node.outChannels ?? [])
+    writeOutChannels(canonicalName, node.outChannels ?? [])
     midiStore.updateRegistration(canonicalName, 'clock',       node.sync)
     midiStore.updateRegistration(canonicalName, 'transport',   node.transport)
     midiStore.updateRegistration(canonicalName, 'notes',       node.notes)
@@ -523,6 +545,15 @@ function loadConfig(name) {
   if (!entry) return
   canvasNodes.value = JSON.parse(JSON.stringify(entry.nodes))
   cables.value      = JSON.parse(JSON.stringify(entry.cables))
+  // If a stale save has two virtual nodes for the same instrument with
+  // outChannels set on both, keep only the first one's channels so that
+  // isMultiChBlocked is correctly one-sided and finish() doesn't overwrite.
+  const seenVirtual = new Set()
+  for (const node of canvasNodes.value) {
+    if (node.type !== 'virtual' || !(node.outChannels?.length > 0)) continue
+    if (seenVirtual.has(node.name)) node.outChannels = []
+    else seenVirtual.add(node.name)
+  }
   const maxId = Math.max(0, ...canvasNodes.value.map(n => n.id), ...cables.value.map(c => c.id))
   nextId = maxId + 1
   currentConfigName.value = name
@@ -1058,10 +1089,16 @@ function pendingPath() {
                      virtual rack split across CH 1, 2, 4). Overrides OUT ch
                      above when at least one channel is selected. -->
                 <div v-if="node.type === 'virtual'" class="flex flex-col gap-1 px-3 pb-2" @mousedown.stop>
-                  <span class="text-[7px] font-bold uppercase tracking-widest text-amber-400/70">
+                  <span class="text-[7px] font-bold uppercase tracking-widest"
+                    :class="isMultiChBlocked(node) ? 'text-rose-400/70' : 'text-amber-400/70'">
                     Multi-CH out{{ node.outChannels?.length ? ` (${node.outChannels.length})` : '' }}
+                    <span v-if="isMultiChBlocked(node)"> — locked</span>
                   </span>
-                  <div class="grid grid-cols-8 gap-0.5">
+                  <div v-if="isMultiChBlocked(node)"
+                    class="text-[8px] text-rose-400/80 leading-tight px-0.5">
+                    Another instance of this virtual instrument already uses Multi-CH. Use CH IN + CH OUT here instead.
+                  </div>
+                  <div v-else class="grid grid-cols-8 gap-0.5">
                     <button
                       v-for="ch in CHANNELS" :key="ch"
                       @click.stop="toggleNodeOutChannel(node, ch - 1)"

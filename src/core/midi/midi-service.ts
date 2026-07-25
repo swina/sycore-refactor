@@ -97,10 +97,34 @@ export class MidiService {
   // back into its input) — see routeMessageToVirtualOutputs.
   private virtualOutputPorts = new Map<string, string>();
 
+  // Normalise a MIDI port name for comparison — strips common OS prefixes
+  // that differ between platforms/drivers for the same physical port.
+  private normPort(s: string): string {
+    return s.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+  }
+
   registerVirtualOutput(name: string, sendFn: (data: number[]) => void, portName?: string): void {
     this.virtualOutputs.set(name, sendFn);
-    if (portName) this.virtualOutputPorts.set(name, portName);
-    else this.virtualOutputPorts.delete(name);
+    if (portName) {
+      this.virtualOutputPorts.set(name, portName);
+      // Immediately close the input side of this loopback port if it was
+      // already opened — prevents LoopBe1-style "MIDI Feedback" detection
+      // that triggers when both sides of the same virtual cable are open.
+      this._detachInputByPortName(portName);
+    } else {
+      this.virtualOutputPorts.delete(name);
+    }
+  }
+
+  private _detachInputByPortName(portName: string): void {
+    if (!this.midiAccess) return;
+    const target = this.normPort(portName);
+    this.midiAccess.inputs.forEach(input => {
+      if (this.normPort(input.name) === target) {
+        input.removeEventListener('midimessage', this.handleIngressBound);
+        input.close();
+      }
+    });
   }
 
   unregisterVirtualOutput(name: string): void {
@@ -348,8 +372,15 @@ export class MidiService {
 
   reScanInputs(): void {
     if (!this.midiAccess) return;
+    // Ports used as virtual-instrument outputs must never be opened as inputs —
+    // loopback drivers (LoopBe1, loopMIDI, etc.) detect the simultaneous
+    // open and mute themselves with a "MIDI Feedback" error.
+    const blockedPorts = new Set(
+      Array.from(this.virtualOutputPorts.values()).filter(Boolean).map(p => this.normPort(p))
+    );
     const inputs = Array.from(this.midiAccess.inputs.values());
     inputs.forEach(input => {
+      if (blockedPorts.has(this.normPort(input.name))) return;
       input.open();
       input.removeEventListener('midimessage', this.handleIngressBound);
       input.addEventListener('midimessage', this.handleIngressBound);

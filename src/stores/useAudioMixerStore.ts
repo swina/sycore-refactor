@@ -182,7 +182,24 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     return outCh
   }
 
+  // ── Instruments that don't implement CC#7 — skip all CC#7 sends for them ──
+  function _loadNoCC7(): Set<string> {
+    try { return new Set<string>(JSON.parse(localStorage.getItem(userKey('S1_MIX_INST_NO_CC7')) ?? '[]')) }
+    catch { return new Set<string>() }
+  }
+  const instrumentNoCC7 = ref<Set<string>>(_loadNoCC7())
+
+  function isInstrumentNoCC7(name: string): boolean { return instrumentNoCC7.value.has(name) }
+  function toggleInstrumentNoCC7(name: string) {
+    const next = new Set(instrumentNoCC7.value)
+    if (next.has(name)) next.delete(name)
+    else next.add(name)
+    instrumentNoCC7.value = next
+    localStorage.setItem(userKey('S1_MIX_INST_NO_CC7'), JSON.stringify([...next]))
+  }
+
   function _sendInstCC(name: string) {
+    if (instrumentNoCC7.value.has(name)) return
     const ownMuted = !!instrumentMuted.value[name]
     const muted = isEffectivelyMuted('inst:' + name, ownMuted)
     const vol   = muted ? 0 : (instrumentVols.value[name] ?? 0.8)
@@ -329,6 +346,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute, toggleDrumsLevelMute, toggleSamplerMute, toggleLiveperfMute, toggleBasslineMute,
     instrumentVols, instrumentMuted,
     getInstrumentVol, isInstrumentMuted, setInstrumentVol, toggleInstrumentMute,
+    isInstrumentNoCC7, toggleInstrumentNoCC7,
     // Solo
     soloedChannels, isSoloed, toggleSolo, toggleInstrumentSolo,
     // Virtual instrument per-channel (multi-timbral) faders

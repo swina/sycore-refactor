@@ -215,9 +215,11 @@ export function useAudioMixerChannels() {
         vol: () => mixer.getInstrumentVol(name),
         muted: () => mixer.isInstrumentMuted(name),
         soloed: () => mixer.isSoloed('inst:' + name),
+        noCC7: () => mixer.isInstrumentNoCC7(name),
         setVol: v => mixer.setInstrumentVol(name, v),
         toggleMute: () => mixer.toggleInstrumentMute(name),
         toggleSolo: () => mixer.toggleInstrumentSolo(name),
+        toggleNoCC7: () => mixer.toggleInstrumentNoCC7(name),
       }
     }
     if (assignment.type === 'virtual') {
