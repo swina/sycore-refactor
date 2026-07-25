@@ -127,6 +127,28 @@ export class MidiService {
     });
   }
 
+  // Force-closes and reopens a specific MIDI input by name, re-attaching the
+  // ingress listener. Fixes the stale-connection issue that appears after a
+  // page reload where the port shows as "connected" but events stop arriving.
+  async reconnectInput(portName: string): Promise<void> {
+    if (!this.midiAccess) return;
+    const target = this.normPort(portName);
+    const blockedPorts = new Set(
+      Array.from(this.virtualOutputPorts.values()).filter(Boolean).map(p => this.normPort(p))
+    );
+    for (const input of Array.from(this.midiAccess.inputs.values())) {
+      if (this.normPort(input.name) !== target) continue;
+      if (blockedPorts.has(target)) return; // never reopen a loopback output side
+      input.removeEventListener('midimessage', this.handleIngressBound);
+      await input.close();
+      await input.open();
+      input.removeEventListener('midimessage', this.handleIngressBound);
+      input.addEventListener('midimessage', this.handleIngressBound);
+      console.log(`[MIDI] Reconnected input: ${input.name}`);
+      break;
+    }
+  }
+
   unregisterVirtualOutput(name: string): void {
     this.virtualOutputs.delete(name);
     this.virtualOutputPorts.delete(name);

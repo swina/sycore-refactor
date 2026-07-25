@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-07-25
 
+- MIDI Flow: **Reconnect MIDI input button** — each hardware device node with an input now shows a ↺ icon in the header. Clicking it force-closes and reopens the Web MIDI port and re-attaches the ingress listener, fixing the stale-connection issue where a device shows online after a page reload but stops delivering MIDI events. If the device has a controller preset with a SysEx init, that is also sent automatically.
 - MIDI Flow: **Multi-channel conflict guard** — when two canvas nodes point to the same virtual instrument, the second node's Multi-CH panel is locked with an explanation, and the routing engine preserves the first node's channel assignments instead of overwriting them with an empty array. Stale saved configs where both nodes had channels are auto-corrected on load.
 
 - Audio Mixer: **EXT mode per instrument channel** — each external MIDI device strip now shows a **CC7** badge at the bottom. Clicking it switches to **EXT** mode: the mixer stops sending CC#7 entirely for that device (fader and mute go inactive), and the user controls volume physically on the hardware or via a hardware mixer. The flag is persisted per device. Useful for synths that don't implement MIDI CC#7 volume.

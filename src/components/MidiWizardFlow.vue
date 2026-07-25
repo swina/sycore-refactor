@@ -9,6 +9,7 @@ import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { dispatch } from '@/types/events'
 import { DEVICE_TYPE_META, typeMeta } from '@/lib/device-type-meta'
+import { loadControllerPresets } from '@/lib/midi-controller-presets'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
@@ -165,6 +166,25 @@ function removeNode(id) {
   if (node) {
     midiStore.setRouting(node.sourceId ?? node.name, [])
     midiStore.setInputRouting(node.sourceId ?? node.name, [])
+  }
+}
+
+// ── Node input reconnect ──
+const reconnectingNodes = ref(new Set())
+
+async function reconnectDevice(node) {
+  if (reconnectingNodes.value.has(node.id)) return
+  reconnectingNodes.value.add(node.id)
+  try {
+    await midiService.reconnectInput(node.name)
+    // Also send any controller preset SysEx init associated with this device
+    const presets = await loadControllerPresets()
+    const preset  = presets.find(p => p.assignedDevice === node.name && p.sysexInit)
+    if (preset) {
+      await midiService.sendSysEx(node.name, preset.sysexInit)
+    }
+  } finally {
+    reconnectingNodes.value.delete(node.id)
   }
 }
 
@@ -1029,6 +1049,16 @@ function pendingPath() {
                     title="Open Program Change panel"
                   >
                     <ExternalLink class="w-3 h-3" />
+                  </button>
+                  <button
+                    v-if="!node.sourceId && node.hasIn"
+                    @click.stop="reconnectDevice(node)"
+                    :disabled="reconnectingNodes.has(node.id)"
+                    :title="reconnectingNodes.has(node.id) ? 'Reconnecting…' : 'Reconnect MIDI input (fixes stale connection after reload)'"
+                    class="transition-colors disabled:opacity-40"
+                    :class="typeMeta(node.type).text + ' opacity-70 hover:opacity-100'"
+                  >
+                    <RefreshCw class="w-3 h-3" :class="reconnectingNodes.has(node.id) ? 'animate-spin' : ''" />
                   </button>
                   <button
                     v-if="!node.sourceId"
