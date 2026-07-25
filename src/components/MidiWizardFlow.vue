@@ -855,7 +855,15 @@ function pendingPath() {
               class="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:border-purple-500/50 hover:bg-purple-900/20 cursor-grab active:cursor-grabbing transition-colors"
             >
               <component :is="app.icon" class="w-3 h-3 text-purple-400 shrink-0" />
-              <span class="text-[9px] font-mono font-bold text-purple-200 truncate leading-tight">{{ app.name }}</span>
+              <span class="text-[9px] font-mono font-bold text-purple-200 truncate leading-tight flex-1">{{ app.name }}</span>
+              <button
+                v-if="APP_PANEL_ID[app.sourceId]"
+                @click.stop="openApp(app.sourceId)"
+                class="text-purple-400/50 hover:text-purple-300 transition-colors cursor-pointer shrink-0"
+                title="Open app"
+              >
+                <ExternalLink class="w-3 h-3" />
+              </button>
             </div>
           </template>
         </div>

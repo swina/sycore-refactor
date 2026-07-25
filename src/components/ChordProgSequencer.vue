@@ -1163,7 +1163,7 @@ function velBarColor(v) {
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
         <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 items-center">Step {{ store.selectedStepIdx + 1 }}</div>
 
-        <div class="flex flex-col">
+        <div class="flex flex-col w-1/5">
           <!-- Active toggle -->
           <button
             @click="store.toggleStepActive(store.selectedStepIdx)"
@@ -1173,28 +1173,52 @@ function velBarColor(v) {
           </button>
 
           <!-- Chord name -->
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-3">
             <span class="text-purple-300 text-[14px] font-bold">{{ selectedStep.chordName }}</span>
+            <span class="text-neutral-600 text-[10px] font-mono pt-2">{{ selectedStep.notes?.join(', ') || 'no notes' }}</span>
             <button
               @click="showChordAssign = true"
-              class="text-[9px] px-1.5 py-0.5 rounded border border-neutral-700 hover:border-purple-500 hover:text-purple-400 text-neutral-500 transition-colors font-mono"
+              class="text-[9px] px-1.5 py-0.5 mt-2 rounded border border-neutral-700 hover:border-purple-500 hover:text-purple-400 bg-purple-600 text-neutral-300 transition-colors font-mono"
               title="Assign custom chord via MIDI IN or Virtual Keyboard"
             >Custom</button>
           </div>
-          <span class="text-neutral-600 text-[10px] font-mono">{{ selectedStep.notes?.join(', ') || 'no notes' }}</span>
         </div>
 
         
-        <!-- Duration selector -->
         <div class="flex items-center gap-1 px-2 border-l h-full border-neutral-700">
-          <span class="text-neutral-500">Dur</span>
-          <select
-            :value="selectedStep.duration"
-            @change="e => store.setStep(store.selectedStepIdx, { duration: e.target.value })"
-            class="bg-neutral-800 border border-neutral-700 w-18 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
-          >
-            <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
-          </select>
+          <div class="flex flex-col">
+            <!-- Duration selector -->
+            <div class="flex">
+              <span class="text-neutral-500">Dur</span>
+              <select
+                :value="selectedStep.duration"
+                @change="e => store.setStep(store.selectedStepIdx, { duration: e.target.value })"
+                class="bg-neutral-800 border border-neutral-700 w-18 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
+              >
+                <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
+              </select>
+            </div>
+            <!-- Per-step Transpose -->
+            <div class="flex items-center gap-1 ml-auto pt-2 pl-2" title="Transpose this step's chord up/down in semitones">
+              <span class="text-neutral-500">Tr</span>
+              <button
+                @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) - 1)"
+                class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
+              >−</button>
+              <span
+                :class="['font-bold font-mono w-6 text-center', (selectedStep.transpose || 0) !== 0 ? 'text-yellow-300' : 'text-neutral-400']"
+              >{{ (selectedStep.transpose || 0) > 0 ? '+' : '' }}{{ selectedStep.transpose || 0 }}</span>
+              <button
+                @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) + 1)"
+                class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
+              >+</button>
+              <button
+                v-if="(selectedStep.transpose || 0) !== 0"
+                @click="updateSelectedStepField('transpose', 0)"
+                class="text-[8px] text-neutral-600 hover:text-neutral-300"
+              >↺</button>
+            </div>
+        </div>
         </div>
         <div class="flex flex-col gap-1 items-end px-4 border-r h-full border-neutral-700">
           <!-- Velocity -->
@@ -1280,26 +1304,7 @@ function velBarColor(v) {
           </select>
         </div>
 
-        <!-- Per-step Transpose -->
-        <div class="flex items-center gap-1 ml-auto border-l border-neutral-700 pl-4" title="Transpose this step's chord up/down in semitones">
-          <span class="text-neutral-500">Tr</span>
-          <button
-            @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) - 1)"
-            class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
-          >−</button>
-          <span
-            :class="['font-bold font-mono w-6 text-center', (selectedStep.transpose || 0) !== 0 ? 'text-yellow-300' : 'text-neutral-400']"
-          >{{ (selectedStep.transpose || 0) > 0 ? '+' : '' }}{{ selectedStep.transpose || 0 }}</span>
-          <button
-            @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) + 1)"
-            class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
-          >+</button>
-          <button
-            v-if="(selectedStep.transpose || 0) !== 0"
-            @click="updateSelectedStepField('transpose', 0)"
-            class="text-[8px] text-neutral-600 hover:text-neutral-300"
-          >↺</button>
-        </div>
+        
       </div>
 
       <!-- ── FILL ALL ──────────────────────────────────────────────────────── -->

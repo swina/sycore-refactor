@@ -76,6 +76,26 @@ const isDeviceOffline = computed(() => {
   return !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
 })
 
+// MIDI Flow multichannel output channels for the selected virtual instrument
+const virtualActiveChannels = computed(() => {
+  if (!selectedDeviceName.value) return []
+  if (!midiStore.virtualInstruments.some(v => v.name === selectedDeviceName.value)) return []
+  return selectedReg.value?.outChannels ?? []
+})
+
+// Channel display state for the multi-channel view: when outChannels are set,
+// show a row per active channel (with saved sound or empty); otherwise show
+// whatever pcChannels have been recorded.
+const multiChannelDisplayState = computed(() => {
+  const chList = virtualActiveChannels.value
+  if (chList.length === 0) return currentPcState.value
+  const pcChannels = selectedReg.value?.pcChannels ?? {}
+  return chList.map(ch => ({
+    ch,
+    ...(pcChannels[ch] ?? { soundName: null, category: null, bank: null, program: null, msb: 0, lsb: 0 }),
+  }))
+})
+
 // ── UI/Preview instrument detection ────────────────────────────
 // A device routed from MidiSource.UI is the app's primary instrument.
 // For these, we show the app Sound Library instead of a catalog.
@@ -1078,16 +1098,42 @@ function assignToPad(setId, padIdx) {
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="text-[9px] font-mono text-neutral-500 uppercase">Channel</span>
-                  <div class="relative">
-                    <select
-                      :value="(selectedReg?.pcChannel ?? 0) + 1"
-                      @change="e => setChannel(parseInt(e.target.value))"
-                      class="appearance-none bg-black/60 border border-neutral-800 rounded-lg px-3 py-1.5 text-violet-300 font-mono text-[11px] outline-none focus:border-violet-500/50 pr-7 cursor-pointer"
-                    >
-                      <option v-for="ch in 16" :key="ch" :value="ch" class="bg-black">CH {{ ch }}</option>
-                    </select>
-                    <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
-                  </div>
+                  <!-- Virtual instrument with MIDI Flow multichannel: one button per active channel -->
+                  <template v-if="virtualActiveChannels.length > 0">
+                    <div class="flex gap-1 flex-wrap">
+                      <button
+                        v-for="ch in virtualActiveChannels"
+                        :key="ch"
+                        @click="setChannel(ch + 1)"
+                        :class="[
+                          'flex flex-col items-center gap-0.5 px-2 py-1 rounded border text-[8px] font-black font-mono transition-all',
+                          (selectedReg?.pcChannel ?? 0) === ch
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-[0_0_6px_rgba(245,158,11,0.2)]'
+                            : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200'
+                        ]"
+                        :title="selectedReg?.pcChannels?.[ch]?.soundName || `CH ${ch + 1} — no preset assigned`"
+                      >
+                        <span>CH {{ ch + 1 }}</span>
+                        <span class="text-[6px] font-mono font-normal max-w-[48px] truncate leading-none"
+                          :class="selectedReg?.pcChannels?.[ch]?.soundName ? 'text-amber-400/70' : 'text-neutral-700'">
+                          {{ selectedReg?.pcChannels?.[ch]?.soundName ?? '—' }}
+                        </span>
+                      </button>
+                    </div>
+                  </template>
+                  <!-- Single channel: normal dropdown -->
+                  <template v-else>
+                    <div class="relative">
+                      <select
+                        :value="(selectedReg?.pcChannel ?? 0) + 1"
+                        @change="e => setChannel(parseInt(e.target.value))"
+                        class="appearance-none bg-black/60 border border-neutral-800 rounded-lg px-3 py-1.5 text-violet-300 font-mono text-[11px] outline-none focus:border-violet-500/50 pr-7 cursor-pointer"
+                      >
+                        <option v-for="ch in 16" :key="ch" :value="ch" class="bg-black">CH {{ ch }}</option>
+                      </select>
+                      <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
+                    </div>
+                  </template>
                 </div>
               </div>
 
@@ -1196,38 +1242,54 @@ function assignToPad(setId, padIdx) {
               <template v-else>
 
                 <!-- ── 3. Current Program Change ── -->
-                <div v-if="currentPcState.length > 0" class="shrink-0 mx-6 mt-3 bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
+                <div v-if="multiChannelDisplayState.length > 0" class="shrink-0 mx-6 mt-3 bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
                   <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
                     <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
-                    <span v-if="selectedReg?.isMulti" class="text-[7px] font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 uppercase tracking-tighter">Multi-Timbral</span>
+                    <span v-if="selectedReg?.isMulti || virtualActiveChannels.length > 0"
+                      class="text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter"
+                      :class="virtualActiveChannels.length > 0
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'">
+                      {{ virtualActiveChannels.length > 0 ? 'Multi-CH (MIDI Flow)' : 'Multi-Timbral' }}
+                    </span>
                   </div>
-                  <!-- Multi-timbral: capped height with own scroll -->
-                  <div v-if="selectedReg?.isMulti" class="overflow-y-auto custom-scrollbar divide-y divide-neutral-900/60" style="max-height: 20vh">
+                  <!-- Multi-channel / Multi-timbral: capped height with own scroll, rows clickable to switch active channel -->
+                  <div v-if="selectedReg?.isMulti || virtualActiveChannels.length > 0"
+                    class="overflow-y-auto custom-scrollbar divide-y divide-neutral-900/60" style="max-height: 20vh">
                     <div
-                      v-for="entry in currentPcState"
+                      v-for="entry in multiChannelDisplayState"
                       :key="entry.ch"
+                      @click="setChannel(entry.ch + 1)"
                       :class="[
-                        'flex items-center gap-3 px-4 py-2.5 transition-colors',
-                        entry.ch === (selectedReg?.pcChannel ?? 0) ? 'bg-violet-500/10' : 'hover:bg-white/[0.02]'
+                        'flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer',
+                        entry.ch === (selectedReg?.pcChannel ?? 0)
+                          ? virtualActiveChannels.length > 0 ? 'bg-amber-500/10' : 'bg-violet-500/10'
+                          : 'hover:bg-white/[0.03]'
                       ]"
+                      :title="`Click to send next preset to CH ${entry.ch + 1}`"
                     >
                       <span :class="[
                         'shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border',
                         entry.ch === (selectedReg?.pcChannel ?? 0)
-                          ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                          ? virtualActiveChannels.length > 0
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-violet-500/20 text-violet-300 border-violet-500/40'
                           : 'bg-neutral-900 text-neutral-500 border-neutral-800'
                       ]">CH {{ entry.ch + 1 }}</span>
-                      <span class="text-[10px] font-bold text-white truncate flex-1">{{ entry.soundName }}</span>
+                      <span class="text-[10px] font-bold truncate flex-1"
+                        :class="entry.soundName ? 'text-white' : 'text-neutral-600 italic'">
+                        {{ entry.soundName ?? 'No preset' }}
+                      </span>
                       <div class="flex items-center gap-2 shrink-0">
                         <span v-if="entry.category" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400/80 border border-violet-500/20">{{ entry.category }}</span>
                         <span v-if="entry.bank" class="text-[7px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/60">{{ entry.bank }}</span>
-                        <span class="text-[8px] font-black font-mono text-violet-400/80 text-right whitespace-nowrap">
+                        <span v-if="entry.program != null" class="text-[8px] font-black font-mono text-violet-400/80 text-right whitespace-nowrap">
                           <template v-if="(entry.msb ?? 0) > 0 || (entry.lsb ?? 0) > 0">B{{ entry.msb ?? 0 }}·</template>PC{{ entry.program }}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <!-- Mono: single row, no scroll needed -->
+                  <!-- Mono: single row -->
                   <div v-else class="flex items-center gap-3 px-4 py-2.5">
                     <span class="shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border bg-violet-500/20 text-violet-300 border-violet-500/40">
                       CH {{ (currentPcState[0]?.ch ?? 0) + 1 }}
