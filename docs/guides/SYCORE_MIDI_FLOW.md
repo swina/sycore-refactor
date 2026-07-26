@@ -104,6 +104,13 @@ Virtual Instrument nodes get two extra controls beyond the standard device contr
 | **Output port** | The real MIDI output that physically carries this virtual instrument's data. Also editable from [MIDI Devices](./SYCORE_MIDI_DEVICES.md)'s Virtual Instruments list — both controls update the same setting. |
 | **Multi-CH out** | A 16-button channel grid for multi-timbral fanout — select any combination of channels (e.g. 1, 2, 4) to duplicate every outgoing note/CC/PC onto all of them at once, instead of a single channel. Useful for a virtual multi-instrument rack where several parts should sound together from one source (e.g. Chord Sequencer OUT feeding three layered parts). When at least one channel is selected here, it overrides the regular **OUT ch** selector above (shown disabled while overridden). Leave empty to fall back to OUT ch's single-channel behavior. |
 
+### What can I add as a Virtual Instrument?
+
+A Virtual Instrument could be a standalone app (a synth typically) that accept MIDI Messages and can configure a MIDI Input port. It can be also a multipart (up to 16 MIDI channels) that SY.CORE can manage. 
+
+**In order to have the MIDI routing working correctly the MIDI IN of your app has to be the same of the MIDI output set in SY.CORE.**
+
+
 ---
 
 ## Saved Configurations
