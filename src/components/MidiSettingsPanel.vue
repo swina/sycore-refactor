@@ -175,6 +175,28 @@ async function resetDefaults() {
             </button>
           </label>
 
+          <div class="bg-amber-950/20 border border-amber-800/30 rounded-xl px-4 py-3 flex items-start gap-2">
+            <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p class="text-[11px] text-amber-200/90 leading-relaxed">
+              <span class="font-bold">MIDI echo on a device?</span> If notes or CC values repeat and fade out on their own — often only on one channel — make sure
+              <span class="font-mono">Block Incoming Clock Thru</span> above is <span class="font-bold">ON</span>. An input device broadcasting its own MIDI Clock
+              can otherwise fight the app's clock on other outputs and produce exactly this symptom.
+            </p>
+          </div>
+
+          <!-- Incoming BPM — visible when clock is received from external device -->
+          <div v-if="midiStore.incomingBpm > 0"
+            class="flex items-center justify-between bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3"
+          >
+            <div>
+              <p class="text-sm text-neutral-200 font-medium">Incoming Clock BPM</p>
+              <p class="text-[10px] text-neutral-500">Smoothed (α=0.1) from 24 PPQ ring buffer</p>
+            </div>
+            <span class="text-xl font-mono font-black text-cyan-400 shrink-0">
+              {{ midiStore.incomingBpm.toFixed(1) }}
+            </span>
+          </div>
+
           <label class="flex items-center justify-between bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 cursor-pointer hover:border-neutral-700 transition-colors">
             <div>
               <p class="text-sm text-neutral-200 font-medium">Sync MIDI Transport</p>
@@ -205,27 +227,9 @@ async function resetDefaults() {
             </button>
           </label>
 
-          <!-- Incoming BPM — visible when clock is received from external device -->
-          <div v-if="midiStore.incomingBpm > 0"
-            class="flex items-center justify-between bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3"
-          >
-            <div>
-              <p class="text-sm text-neutral-200 font-medium">Incoming Clock BPM</p>
-              <p class="text-[10px] text-neutral-500">Smoothed (α=0.1) from 24 PPQ ring buffer</p>
-            </div>
-            <span class="text-xl font-mono font-black text-cyan-400 shrink-0">
-              {{ midiStore.incomingBpm.toFixed(1) }}
-            </span>
-          </div>
+          
 
-          <div class="bg-amber-950/20 border border-amber-800/30 rounded-xl px-4 py-3 flex items-start gap-2">
-            <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-            <p class="text-[11px] text-amber-200/90 leading-relaxed">
-              <span class="font-bold">MIDI echo on a device?</span> If notes or CC values repeat and fade out on their own — often only on one channel — make sure
-              <span class="font-mono">Block Incoming Clock Thru</span> above is <span class="font-bold">ON</span>. An input device broadcasting its own MIDI Clock
-              can otherwise fight the app's clock on other outputs and produce exactly this symptom.
-            </p>
-          </div>
+          
 
         </div>
       </section>

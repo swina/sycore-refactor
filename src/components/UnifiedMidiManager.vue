@@ -36,11 +36,11 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 
 const TABS = [
   { id: 'devices',     label: 'Devices',     icon: Cpu     },
-  { id: 'routing',     label: 'Routing',     icon: GitFork },
-  { id: 'performance', label: 'Performance', icon: Zap     },
-  { id: 'mapping',     label: 'Mapping',     icon: Radio   },
-  { id: 'actions',     label: 'Actions',     icon: Sliders },
-  { id: 'sync',        label: 'Sync',        icon: Link2   },
+  // { id: 'routing',     label: 'Routing',     icon: GitFork },
+  // { id: 'performance', label: 'Performance', icon: Zap     },
+  // { id: 'mapping',     label: 'Mapping',     icon: Radio   },
+  // { id: 'actions',     label: 'Actions',     icon: Sliders },
+  // { id: 'sync',        label: 'Sync',        icon: Link2   },
   { id: 'monitor',     label: 'Monitor',     icon: Activity },
   { id: 'settings',    label: 'Settings',    icon: Settings },
 ]
@@ -225,7 +225,7 @@ function downloadCsv() {
           </h2>
 
           <!-- Tab bar -->
-          <div class="flex items-center gap-0.5 flex-1 justify-center">
+          <div class="flex items-center gap-0.5 flex-1 justify-start ml-4">
             <button
               v-for="tab in TABS"
               :key="tab.id"
