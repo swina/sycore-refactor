@@ -307,15 +307,19 @@ const audiences = [
             {{ link.label }}
           </a>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3">
           <button
             @click="launchApp"
-            class="flex items-center gap-1.5 rounded-lg bg-synth-neon px-4 py-1.5 font-mono text-[11px] font-black uppercase tracking-[0.2em] text-black transition-all hover:bg-white active:scale-95"
+            class="flex shrink-0 items-center gap-1.5 rounded-lg bg-synth-neon px-3 py-1.5 font-mono text-[11px] font-black uppercase tracking-[0.2em] text-black transition-all hover:bg-white active:scale-95 sm:px-4"
           >
             <Play class="h-3 w-3 fill-current" />
             Launch App
           </button>
-          <button class="md:hidden text-neutral-400" @click="isMobileNavOpen = !isMobileNavOpen">
+          <button
+            class="-mr-2 p-2 text-neutral-400 md:hidden"
+            aria-label="Toggle navigation menu"
+            @click="isMobileNavOpen = !isMobileNavOpen"
+          >
             <Menu v-if="!isMobileNavOpen" class="h-5 w-5" />
             <X v-else class="h-5 w-5" />
           </button>
@@ -325,7 +329,7 @@ const audiences = [
         <a
           v-for="link in navLinks" :key="link.href" :href="link.href"
           @click="isMobileNavOpen = false"
-          class="block py-2 font-mono text-xs uppercase tracking-widest text-neutral-400 hover:text-synth-neon"
+          class="block py-2.5 font-mono text-xs uppercase tracking-widest text-neutral-400 hover:text-synth-neon"
         >
           {{ link.label }}
         </a>
@@ -518,7 +522,7 @@ const audiences = [
           class="img-zoom my-10 w-full rounded-xl border border-neutral-800"
           loading="lazy"
         />
-        <div class="absolute inset-0 top-1/2 -m-10 left-2/3 h-24 mx-3 rounded-lg items-center flex justify-center bg-synth-neon/20 font-mono uppercase z-10000">
+        <div class="hidden md:flex absolute inset-0 top-1/2 -m-10 left-2/3 h-24 mx-3 rounded-lg items-center justify-center bg-synth-neon/20 font-mono uppercase z-10">
           <span>true visual patch-cable UX</span>
         </div>
       </div>
