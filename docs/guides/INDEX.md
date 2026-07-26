@@ -43,6 +43,7 @@
 | [Devices](./SYCORE_MIDI_DEVICES.md) | Auto discover and register your devices |
 | [MIDI Flow](./SYCORE_MIDI_FLOW.md) | Visual drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices |
 | [Controller Designer](./SYCORE_MIDI_CONTROLLER_DESIGNER.md) | Visual canvas for designing custom MIDI controller layouts with draggable controls and preset management |
+| [General Settings](./SYCORE_MIDI_GENERAL_SETTINGS.md) | Global channel defaults, clock/transport, Smart Latch, config presets, and how to prevent MIDI echo |
 | [MIDI Capture](./SYCORE_MIDI_CAPTURE.md) | Record, view, and export MIDI events in real time |
 | [Multi Sound — Program Change Browser](./SYCORE_DEVICE_PROGRAM_CHANGE.md) | Browse and send Program Change messages to connected devices |
 <!-- | [MIDI Manager](./SYCORE_MIDI%20MANAGER.md) | Unified MIDI control center — routing, mapping, and device management |

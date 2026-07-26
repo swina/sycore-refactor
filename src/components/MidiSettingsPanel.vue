@@ -162,6 +162,21 @@ async function resetDefaults() {
 
           <label class="flex items-center justify-between bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 cursor-pointer hover:border-neutral-700 transition-colors">
             <div>
+              <p class="text-sm text-neutral-200 font-medium">Block Incoming Clock Thru</p>
+              <p class="text-[10px] text-neutral-500">Clock/Start/Stop from an input device is used for the incoming-BPM display only, never re-sent to other outputs — keeps the app's own clock as the sole source</p>
+            </div>
+            <button
+              @click="midiStore.setBlockIncomingClockThru(midiStore.routingConfig.blockIncomingClockThru === false)"
+              :class="['w-10 h-5 rounded-full transition-colors relative shrink-0',
+                midiStore.routingConfig.blockIncomingClockThru !== false ? 'bg-synth-neon' : 'bg-neutral-700']"
+            >
+              <span :class="['absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform shadow',
+                midiStore.routingConfig.blockIncomingClockThru !== false ? 'translate-x-5 bg-black' : 'translate-x-0.5 bg-white']" />
+            </button>
+          </label>
+
+          <label class="flex items-center justify-between bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 cursor-pointer hover:border-neutral-700 transition-colors">
+            <div>
               <p class="text-sm text-neutral-200 font-medium">Sync MIDI Transport</p>
               <p class="text-[10px] text-neutral-500">Start/Stop follows incoming MIDI transport</p>
             </div>
@@ -201,6 +216,15 @@ async function resetDefaults() {
             <span class="text-xl font-mono font-black text-cyan-400 shrink-0">
               {{ midiStore.incomingBpm.toFixed(1) }}
             </span>
+          </div>
+
+          <div class="bg-amber-950/20 border border-amber-800/30 rounded-xl px-4 py-3 flex items-start gap-2">
+            <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p class="text-[11px] text-amber-200/90 leading-relaxed">
+              <span class="font-bold">MIDI echo on a device?</span> If notes or CC values repeat and fade out on their own — often only on one channel — make sure
+              <span class="font-mono">Block Incoming Clock Thru</span> above is <span class="font-bold">ON</span>. An input device broadcasting its own MIDI Clock
+              can otherwise fight the app's clock on other outputs and produce exactly this symptom.
+            </p>
           </div>
 
         </div>

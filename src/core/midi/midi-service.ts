@@ -1107,11 +1107,17 @@ export class MidiService {
       const type = status & 0xf0;
       const isNote = type === 0x90 || type === 0x80;
       const isCC = type === 0xb0;
+      // Clock/Start/Continue/Stop (0xF8-0xFF) — blocked from Thru by default
+      // (blockIncomingClockThru !== false) so a device sending its own clock
+      // can't fight the app's internally generated clock on other outputs.
+      // Still processed above for the incoming-BPM display regardless.
       const isSystem = status >= 0xF8;
+      const blockClockThru = this.routingConfig.blockIncomingClockThru !== false;
+      const isSystemThru = isSystem && !blockClockThru;
       const thru = this.routingConfig.thruFilters || { notes: true, cc: true };
       const passGlobal = (isNote && thru.notes !== false) ||
         (isCC && thru.cc !== false) ||
-        (isSystem) ||
+        (isSystemThru) ||
         (!isNote && !isCC && !isSystem);
       if (passGlobal) {
         this.router.routeMessageToOutputs(processedData as Uint8Array, inputId, now);

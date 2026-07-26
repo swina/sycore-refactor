@@ -39,6 +39,12 @@ export interface RoutingConfig {
   registrations: Record<string, DeviceRegistration>;
   globalThruEnabled: boolean;
   thruFilters: { notes: boolean; cc: boolean };
+  // When true (default, including for configs saved before this field
+  // existed — checked as `!== false`), incoming MIDI Clock/Start/Continue/Stop
+  // from any input is used only for the incoming-BPM display and is never
+  // re-sent via Global Thru, so it can't compete with the app's own generated
+  // clock on other outputs.
+  blockIncomingClockThru?: boolean;
 }
 
 /** Keyboard split configuration */

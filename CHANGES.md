@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-07-26
 
+- MIDI Settings: **Block Incoming Clock Thru** — new toggle (on by default) that stops MIDI Clock/Start/Continue/Stop received from an input device from being re-sent to other outputs via Global Thru. Incoming clock still drives the Incoming Clock BPM display, but can no longer fight the app's own generated clock on shared devices — fixes a MIDI-echo symptom (notes/CC repeating and fading out, often isolated to one channel) caused by a device broadcasting its own clock into the app.
+- MIDI Flow: new **Settings** shortcut icon in the header opens the MIDI Manager window directly on its Settings tab.
 - MIDI Controller Designer: **Virtual Instrument CC Table** — each virtual instrument can now have a named CC table (CC number + label, edited from a new button on its card in MIDI Devices). Named entries show up as an assignable action group in the Controller Designer's action picker, with a per-assignment Target Channel selector — useful since one CC table is shared across every channel of a multitimbral instrument, but a physical controller can usually only transmit on one fixed channel.
 - Chord Prog Sequencer: **step copy/paste** — right-click any step in the grid for a small menu to copy its full parameter set (chord, notes, velocity, duration, gate, transpose, mode overrides) and paste it onto another step.
 - MIDI Device Program Change panel: virtual instruments now always show all 16 MIDI channels in the channel selector and the "Current Program Change" list, not just whichever channels happen to be routed in MIDI Flow — so each of the 16 channels can be picked and assigned its own patch independently.

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Disc3, ExternalLink, Activity, Filter } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Disc3, ExternalLink, Activity, Filter, Settings } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -99,6 +99,14 @@ function openApp(sourceId) {
 // ── Instrument device node "open Program Change panel" shortcut ──
 function openDevicePc(deviceName) {
   dispatch('device-pc-open', { deviceName })
+}
+
+// ── Header "MIDI Settings" shortcut — opens the MIDI Manager window
+// (MacOsButtons chrome, draggable/resizable) straight to its Settings tab,
+// which hosts MidiSettingsPanel.vue.
+function openMidiSettings() {
+  uiStore.unifiedMidiManagerTab = 'settings'
+  uiStore.showUnifiedMidiManager = true
 }
 
 function virtualInstrumentPort(name) {
@@ -805,6 +813,13 @@ function pendingPath() {
           title="Controller Designer"
         >
           <Gamepad2 class="w-4 h-4 hover:text-synth-neon" />
+        </button>
+        <button
+          @click="openMidiSettings"
+          class="p-1 text-neutral-400 hover:text-synth-neon transition-colors shrink-0"
+          title="MIDI Settings"
+        >
+          <Settings class="w-4 h-4" />
         </button>
         <MacOsButtons @close="uiStore.isMidiFlowOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
       </div>

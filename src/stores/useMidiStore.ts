@@ -72,6 +72,7 @@ function defaultRoutingConfig(): RoutingConfig {
     registrations: {},
     globalThruEnabled: true,
     thruFilters: { notes: true, cc: true },
+    blockIncomingClockThru: true,
   }
 }
 
@@ -362,6 +363,11 @@ export const useMidiStore = defineStore('midi', () => {
 
   function saveRoutingConfig() {
     routingConfig.value = { ...routingConfig.value }
+  }
+
+  function setBlockIncomingClockThru(enabled: boolean) {
+    routingConfig.value.blockIncomingClockThru = enabled
+    saveRoutingConfig()
   }
 
   // ── Device refresh ───────────────────────────────────────────────────────
@@ -837,6 +843,7 @@ export const useMidiStore = defineStore('midi', () => {
     isTransportPlaying, toggleGlobalTransport,
     routingConfig,
     saveRoutingConfig,
+    setBlockIncomingClockThru,
     addRegistration,
     removeRegistration,
     updateRegistration,

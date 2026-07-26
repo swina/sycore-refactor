@@ -64,6 +64,7 @@ const CATEGORIES = [
       { id: 'midi-devices',    label: 'Devices',         file: 'SYCORE_MIDI_DEVICES' },
       { id: 'midi-flow',    label: 'MIDI Flow',         file: 'SYCORE_MIDI_FLOW' },
       { id: 'controller-designer',  label: 'Controller Designer',          file: 'SYCORE_MIDI_CONTROLLER_DESIGNER' },
+      { id: 'midi-general-settings', label: 'General Settings',    file: 'SYCORE_MIDI_GENERAL_SETTINGS' },
       // { id: 'midi-manager',    label: 'MIDI Manager',         file: 'SYCORE_MIDI MANAGER' },
       // { id: 'midi-routing',    label: 'Routing',         file: 'SYCORE_MIDI_ROUTING' },
       // { id: 'midi-performance',  label: 'Performance',         file: 'SYCORE_MIDI_PERFORMANCE' },
