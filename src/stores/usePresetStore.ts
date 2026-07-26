@@ -8,13 +8,29 @@ import { useMappingStore } from './useMappingStore'
 import { useLfoStore } from './useLfoStore'
 import { useArpStore } from './useArpStore'
 import { useUiStore } from './useUiStore'
+import { useDrumMachineStore } from './useDrumMachineStore'
+import { useChordProgStore } from './useChordProgStore'
 import { S1_TYPES } from '@/constants/s1-config'
 import BANK_DEFAULT from '@/data/BANK_DEFAULT.json'
 import { dispatch } from '@/types/events'
+import { debounce } from '@/lib/debounce'
 import type { Preset, PresetVariant, PresetImportOptions } from '@/types/preset'
 
 export const usePresetStore = defineStore('preset', () => {
   const authStore = useAuthStore()
+  const drumStore = useDrumMachineStore()
+  const chordProgStore = useChordProgStore()
+
+  // Twisting a Sound Engine (S-1) control is meant to reflect live in the UI
+  // (ResultsPanel) so the tweak can be captured into a saved patch. But while
+  // the drum machine / chord prog sequencer transport is running, doing that
+  // reactive UI update on every single incoming CC tick was expensive enough
+  // (re-rendering every visible knob) to steal main-thread time from Tone.js
+  // Transport scheduling and cause audible stutter. So during transport we
+  // still record the real value (for saving/session-cache) but skip the
+  // Vue-reactive UI refresh — see updateFieldValue below — and catch the UI
+  // up once transport stops.
+  const isTransportActive = computed(() => drumStore.isPlaying || chordProgStore.isPlaying)
 
   // --- State ---
   const history = ref<Preset[]>([])
@@ -553,6 +569,24 @@ export const usePresetStore = defineStore('preset', () => {
     currentCategory.value = cat
   }
 
+  // A fast run of updateFieldValue calls (fader drag, or a MIDI CC ticking
+  // in on a mapped param) collapses into one write of the latest preset
+  // state instead of one blocking localStorage write per call — each write
+  // was a synchronous JSON.stringify + setItem on the main thread, enough
+  // to stall Tone.js Transport scheduling and cause audible sequencer stutter.
+  const _persistLastSession = debounce(() => {
+    localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(lastPreset.value))
+  }, 400)
+
+  // When transport stops, sync the (possibly non-reactively mutated) preset
+  // data back into the reactive object once, so the UI catches up to
+  // whatever was twisted live during playback instead of staying stale.
+  watch(isTransportActive, (active) => {
+    if (active || !lastPreset.value) return
+    const activeVariant = useAlternativeEngine.value ? lastPreset.value.bVariant : lastPreset.value.aVariant
+    if (activeVariant?.data) activeVariant.data = { ...toRaw(activeVariant.data) }
+  })
+
   function updateFieldValue(fieldName: string, value: number) {
     if (!lastPreset.value) return
 
@@ -561,21 +595,30 @@ export const usePresetStore = defineStore('preset', () => {
     const targetData = activeVariant?.data;
 
     if (!targetData) return;
-    targetData[fieldName] = value;
 
-    // Set last modified for visual feedback
-    lastModifiedField.value = fieldName
+    if (isTransportActive.value) {
+      // Mutate the raw object directly — bypasses Vue's reactivity trap, so
+      // the value is correct for saving/session-cache immediately but no
+      // knob in ResultsPanel re-renders on this tick. See isTransportActive
+      // above and the watch() just above this function.
+      toRaw(targetData)[fieldName] = value;
+    } else {
+      targetData[fieldName] = value;
+
+      // Set last modified for visual feedback
+      lastModifiedField.value = fieldName
+
+      // Clear after a short delay
+      const currentField = fieldName
+      setTimeout(() => {
+        if (lastModifiedField.value === currentField) {
+          lastModifiedField.value = null
+        }
+      }, 1500)
+    }
 
     // Update cache
-    localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(lastPreset.value))
-
-    // Clear after a short delay
-    const currentField = fieldName
-    setTimeout(() => {
-      if (lastModifiedField.value === currentField) {
-        lastModifiedField.value = null
-      }
-    }, 1500)
+    _persistLastSession()
   }
 
   function updatePatchNotes(text: string) {

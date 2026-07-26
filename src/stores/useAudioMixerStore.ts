@@ -4,6 +4,11 @@ import { looperEngine } from '@/lib/looper-engine'
 import { midiService } from '@/core/midi/midi-service'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
+import { debounce } from '@/lib/debounce'
+
+// Persistence delay for volume/mute maps that can be driven by a rapidly
+// ticking MIDI CC (fader/knob sweep) — see debounce.ts for why this exists.
+const PERSIST_DEBOUNCE_MS = 400
 
 export type MixerChannelId =
   | 'backing' | 'tracks' | 'looper' | 'lm'
@@ -94,16 +99,16 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   const basslineVol     = ref(loadFloat('S1_MIX_BASSLINE',   0.85))
   const basslineMuted   = ref(false)
 
-  watch(backingVol,    v => localStorage.setItem(userKey('S1_MIX_BACKING'),     String(v)))
-  watch(tracksVol,     v => localStorage.setItem(userKey('S1_MIX_TRACKS'),      String(v)))
-  watch(looperVol,     v => localStorage.setItem(userKey('S1_MIX_LOOPER'),      String(v)))
-  watch(lmVol,         v => localStorage.setItem(userKey('S1_MIX_LM'),          String(v)))
-  watch(drumsVol,      v => localStorage.setItem(userKey('S1_MIX_DRUMS'),       String(v)))
-  watch(drumsLevelVol, v => localStorage.setItem(userKey('S1_MIX_DRUMS_LEVEL'), String(v)))
-  watch(samplerVol,    v => localStorage.setItem(userKey('S1_MIX_SAMPLER'),     String(v)))
-  watch(liveperfVol,   v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   String(v)))
-  watch(basslineVol,   v => localStorage.setItem(userKey('S1_MIX_BASSLINE'),   String(v)))
-  watch(masterVol,     v => localStorage.setItem(userKey('S1_MIX_MASTER'),      String(v)))
+  watch(backingVol,    debounce(v => localStorage.setItem(userKey('S1_MIX_BACKING'),     String(v)), PERSIST_DEBOUNCE_MS))
+  watch(tracksVol,     debounce(v => localStorage.setItem(userKey('S1_MIX_TRACKS'),      String(v)), PERSIST_DEBOUNCE_MS))
+  watch(looperVol,     debounce(v => localStorage.setItem(userKey('S1_MIX_LOOPER'),      String(v)), PERSIST_DEBOUNCE_MS))
+  watch(lmVol,         debounce(v => localStorage.setItem(userKey('S1_MIX_LM'),          String(v)), PERSIST_DEBOUNCE_MS))
+  watch(drumsVol,      debounce(v => localStorage.setItem(userKey('S1_MIX_DRUMS'),       String(v)), PERSIST_DEBOUNCE_MS))
+  watch(drumsLevelVol, debounce(v => localStorage.setItem(userKey('S1_MIX_DRUMS_LEVEL'), String(v)), PERSIST_DEBOUNCE_MS))
+  watch(samplerVol,    debounce(v => localStorage.setItem(userKey('S1_MIX_SAMPLER'),     String(v)), PERSIST_DEBOUNCE_MS))
+  watch(liveperfVol,   debounce(v => localStorage.setItem(userKey('S1_MIX_LIVEPERF'),   String(v)), PERSIST_DEBOUNCE_MS))
+  watch(basslineVol,   debounce(v => localStorage.setItem(userKey('S1_MIX_BASSLINE'),   String(v)), PERSIST_DEBOUNCE_MS))
+  watch(masterVol,     debounce(v => localStorage.setItem(userKey('S1_MIX_MASTER'),      String(v)), PERSIST_DEBOUNCE_MS))
 
   function effective(ch: number, id: MixerChannelId, ownMuted: boolean): number {
     const muted = isEffectivelyMuted(id, ownMuted)
@@ -210,9 +215,16 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   function getInstrumentVol(name: string): number  { return instrumentVols.value[name] ?? 0.8 }
   function isInstrumentMuted(name: string): boolean { return !!instrumentMuted.value[name] }
 
+  // Reads the current value lazily on flush, so a fast run of setInstrumentVol
+  // calls (fader drag, or a MIDI CC ticking in) collapses into one write of
+  // the latest state instead of one blocking localStorage write per call.
+  const _persistInstrumentVols = debounce(() => {
+    localStorage.setItem(userKey('S1_MIX_INST_VOLS'), JSON.stringify(instrumentVols.value))
+  }, PERSIST_DEBOUNCE_MS)
+
   function setInstrumentVol(name: string, v: number) {
     instrumentVols.value = { ...instrumentVols.value, [name]: v }
-    localStorage.setItem(userKey('S1_MIX_INST_VOLS'), JSON.stringify(instrumentVols.value))
+    _persistInstrumentVols()
     _sendInstCC(name)
   }
 
@@ -265,10 +277,14 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     midiService.sendRawCC(name, 7, cc7, ch)
   }
 
+  const _persistVirtualChannelVols = debounce(() => {
+    localStorage.setItem(userKey('S1_MIX_VIRT_CHAN_VOLS'), JSON.stringify(virtualChannelVols.value))
+  }, PERSIST_DEBOUNCE_MS)
+
   function setVirtualChannelVol(name: string, ch: number, v: number) {
     const key = _virtKey(name, ch)
     virtualChannelVols.value = { ...virtualChannelVols.value, [key]: v }
-    localStorage.setItem(userKey('S1_MIX_VIRT_CHAN_VOLS'), JSON.stringify(virtualChannelVols.value))
+    _persistVirtualChannelVols()
     _sendVirtChanCC(name, ch)
   }
 

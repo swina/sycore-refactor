@@ -298,7 +298,15 @@ export function useControllerManager() {
         const effectiveVal = matchedMapping.note !== undefined ? Math.max(data[2], 64) : data[2]
         dispatchAction(action, effectiveVal)
       }
-      updateFeedback()
+      // updateFeedback() does a full LED/display resync across every active
+      // controller — every mapping, every send() call. Continuous actions
+      // (faders/knobs: vi_cc, mixer volumes, BPM, transpose, etc.) have no
+      // on/off LED state tied to their value, so that resync is pure wasted
+      // work on every tick of a sweep — up to ~20/sec per the throttle above.
+      // At best it's wasted CPU; at worst (many mappings, many controllers)
+      // it's enough main-thread work to stall Tone.js Transport scheduling
+      // and cause audible sequencer stutter while a fader is moving.
+      if (!isContinuousAction(action)) updateFeedback()
 
       // If this CC/Note also has a MIDI Learn mapping, don't consume it —
       // let it pass through to useMidiCCListener so both systems fire.
