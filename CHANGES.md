@@ -10,6 +10,7 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 - Chord Prog Sequencer: **step copy/paste** — right-click any step in the grid for a small menu to copy its full parameter set (chord, notes, velocity, duration, gate, transpose, mode overrides) and paste it onto another step.
 - MIDI Device Program Change panel: virtual instruments now always show all 16 MIDI channels in the channel selector and the "Current Program Change" list, not just whichever channels happen to be routed in MIDI Flow — so each of the 16 channels can be picked and assigned its own patch independently.
 - MIDI Device Program Change panel: **Copy Map** — a new button next to a virtual instrument's name copies its entire 16-channel patch mapping onto another virtual instrument in one click, for setups where two virtual instrument entries route to the same standalone synth/app and should share identical per-channel patches.
+- Performance: fixed audible Drum Machine / Chord Prog Sequencer stutter when a fader or knob is moved during playback — moving a control mapped to a mixer/virtual-instrument volume or a Sound Engine parameter was doing a synchronous `localStorage` write, a full controller LED resync, and a full re-render of every Sound Engine knob on every single incoming MIDI tick, which was enough main-thread work to stall Tone.js's Transport scheduling. All three are now debounced or deferred, so continuous CC input no longer disrupts playback timing.
 
 ## 2026-07-25
 
