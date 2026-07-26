@@ -1,10 +1,12 @@
 <script setup>
 import { X } from 'lucide-vue-next'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { APP_ACTION_LABELS } from '@/lib/app-midi-actions'
+import { useMidiStore } from '@/stores/useMidiStore'
+import { actionLabel } from '@/lib/app-midi-actions'
 
 const emit = defineEmits(['close'])
 const mappingStore = useMappingStore()
+const midiStore = useMidiStore()
 
 function remove(id) {
   const filtered = mappingStore.appMidiMappings.filter(m => m.id !== id)
@@ -44,7 +46,7 @@ function remove(id) {
                 <span class="text-cyan-400">{{ m.cc != null ? 'CC ' + m.cc : 'Note ' + m.note }}</span>
               </td>
               <td class="py-2 px-1 text-violet-400">{{ m.channel === -1 ? 'Any' : 'CH ' + (m.channel + 1) }}</td>
-              <td class="py-2 px-1 text-neutral-200">{{ APP_ACTION_LABELS[m.action] || m.action }}</td>
+              <td class="py-2 px-1 text-neutral-200">{{ actionLabel(m.action, midiStore.virtualInstruments) }}</td>
               <td class="py-2 px-1 text-center">
                 <button @click="remove(m.id)" class="text-neutral-500 hover:text-red-400 transition-colors p-0.5">
                   <X class="w-3.5 h-3.5" />

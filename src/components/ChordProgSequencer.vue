@@ -499,6 +499,31 @@ function handleStepDoubleClick(idx) {
   store.toggleStepActive(idx)
 }
 
+// ── Step copy/paste (right-click a step) ─────────────────────────
+const stepClipboard = ref(null) // full ChordStep, or null
+const stepContextMenu = ref({ visible: false, x: 0, y: 0, idx: null })
+
+function openStepContextMenu(idx, e) {
+  stepContextMenu.value = { visible: true, x: e.clientX, y: e.clientY, idx }
+}
+
+function closeStepContextMenu() {
+  stepContextMenu.value = { ...stepContextMenu.value, visible: false }
+}
+
+function copyStep(idx) {
+  const step = store.steps[idx]
+  if (!step) return
+  stepClipboard.value = { ...step, notes: [...step.notes] }
+  closeStepContextMenu()
+}
+
+function pasteStep(idx) {
+  if (!stepClipboard.value) return
+  store.replaceStep(idx, stepClipboard.value)
+  closeStepContextMenu()
+}
+
 function previewStep(idx) {
   const step = store.steps[idx]
   if (!step?.active || !step.notes?.length) return
@@ -1108,6 +1133,7 @@ function velBarColor(v) {
           style="height: 72px; min-width: 0;"
           @click="handleStepClick(idx)"
           @dblclick.prevent="handleStepDoubleClick(idx)"
+          @contextmenu.prevent="openStepContextMenu(idx, $event)"
         >
           <!-- Step number -->
           <div class="w-full flex items-center justify-between px-1 pt-1">
@@ -1163,7 +1189,7 @@ function velBarColor(v) {
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
         <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 items-center">Step {{ store.selectedStepIdx + 1 }}</div>
 
-        <div class="flex flex-col w-1/5">
+        <div class="flex flex-col w-1/8">
           <!-- Active toggle -->
           <button
             @click="store.toggleStepActive(store.selectedStepIdx)"
@@ -1174,13 +1200,13 @@ function velBarColor(v) {
 
           <!-- Chord name -->
           <div class="flex items-center gap-3">
-            <span class="text-purple-300 text-[14px] font-bold">{{ selectedStep.chordName }}</span>
-            <span class="text-neutral-600 text-[10px] font-mono pt-2">{{ selectedStep.notes?.join(', ') || 'no notes' }}</span>
+            <!-- <span class="text-neutral-600 text-[10px] font-mono pt-2">{{ selectedStep.notes?.join(', ') || 'no notes' }}</span> -->
             <button
-              @click="showChordAssign = true"
-              class="text-[9px] px-1.5 py-0.5 mt-2 rounded border border-neutral-700 hover:border-purple-500 hover:text-purple-400 bg-purple-600 text-neutral-300 transition-colors font-mono"
-              title="Assign custom chord via MIDI IN or Virtual Keyboard"
+            @click="showChordAssign = true"
+            class="text-[9px] px-1.5 py-0.5 mt-2 rounded border border-neutral-700 hover:border-purple-500 hover:text-purple-400 bg-purple-600 text-neutral-300 transition-colors font-mono"
+            title="Assign custom chord via MIDI IN or Virtual Keyboard"
             >Custom</button>
+            <span class="text-purple-300 mt-2 text-[14px] font-bold">{{ selectedStep.chordName }}</span>
           </div>
         </div>
 
@@ -1188,8 +1214,8 @@ function velBarColor(v) {
         <div class="flex items-center gap-1 px-2 border-l h-full border-neutral-700">
           <div class="flex flex-col">
             <!-- Duration selector -->
-            <div class="flex">
-              <span class="text-neutral-500">Dur</span>
+            <div class="flex items-center">
+              <span class="text-neutral-500 mr-1">Dur</span>
               <select
                 :value="selectedStep.duration"
                 @change="e => store.setStep(store.selectedStepIdx, { duration: e.target.value })"
@@ -1199,8 +1225,8 @@ function velBarColor(v) {
               </select>
             </div>
             <!-- Per-step Transpose -->
-            <div class="flex items-center gap-1 ml-auto pt-2 pl-2" title="Transpose this step's chord up/down in semitones">
-              <span class="text-neutral-500">Tr</span>
+            <div class="flex items-center gap-1 ml-auto pt-2 pl-1" title="Transpose this step's chord up/down in semitones">
+              <span class="text-neutral-500">Trsp</span>
               <button
                 @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) - 1)"
                 class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
@@ -1811,5 +1837,30 @@ function velBarColor(v) {
       @assign="onChordAssigned"
       @close="showChordAssign = false"
     />
+
+    <!-- Step copy/paste context menu (right-click a step in the grid) -->
+    <div
+      v-if="stepContextMenu.visible"
+      class="fixed inset-0 z-[200]"
+      @click="closeStepContextMenu"
+      @contextmenu.prevent="closeStepContextMenu"
+    />
+    <div
+      v-if="stepContextMenu.visible"
+      class="fixed z-[201] w-40 bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl overflow-hidden text-[11px] font-mono"
+      :style="{ left: stepContextMenu.x + 'px', top: stepContextMenu.y + 'px' }"
+    >
+      <button
+        @click="copyStep(stepContextMenu.idx)"
+        class="w-full text-left px-3 py-1.5 text-neutral-300 hover:bg-purple-700/40 hover:text-white transition-colors"
+      >Copy Step {{ stepContextMenu.idx + 1 }}</button>
+      <button
+        @click="stepClipboard && pasteStep(stepContextMenu.idx)"
+        :class="[
+          'w-full text-left px-3 py-1.5 transition-colors border-t border-neutral-800',
+          stepClipboard ? 'text-neutral-300 hover:bg-purple-700/40 hover:text-white' : 'text-neutral-700 cursor-not-allowed'
+        ]"
+      >Paste to Step {{ stepContextMenu.idx + 1 }}</button>
+    </div>
   </div>
 </template>

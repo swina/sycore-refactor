@@ -249,7 +249,19 @@ export class MidiService {
         ? outConfig.outChannels
         : [outConfig.outChannel !== -1 ? outConfig.outChannel : (status & 0x0f)];
 
+      const virtDevice = { id: virtName, name: virtName };
+      const isNoteOn  = (status & 0xf0) === 0x90 && data[2] > 0;
+      const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
+      const applyLatch = (isNoteOn || isNoteOff) &&
+        (!!outConfig.latchEnabled || (this.latch.isActive && outConfig.smartLatch));
+
       channels.forEach(ch => {
+        if (applyLatch) {
+          const forward = isNoteOn
+            ? this.latch.handleNoteOn(virtDevice, outConfig, data[1], data[2], ch, '', now)
+            : this.latch.handleNoteOff(virtDevice, data[1], ch);
+          if (!forward) return;
+        }
         const newStatus = (status & 0xf0) | (ch % 16);
         const bytes = data.length >= 2 ? [newStatus, ...Array.from(data.slice(1))] : [newStatus];
         this.sendToVirtualOutput(virtName, bytes);
@@ -424,6 +436,38 @@ export class MidiService {
 
   setRoutingConfig(config: RoutingConfig): void {
     this.routingConfig = config;
+  }
+
+  /** Release all notes held by per-device latch for a specific device (called when latch is disabled). */
+  clearLatchForDevice(deviceName: string): void {
+    // Virtual instrument path — key in latchedNotesByOutput is the virtName
+    if (this.virtualOutputs.has(deviceName)) {
+      const notes = this.latch.getLatchedNotes(deviceName);
+      if (!notes.length) { this.latch.clearNotesByKey(deviceName); return; }
+      const outConfig = this.routingConfig?.registrations[deviceName];
+      const channels = new Set<number>();
+      notes.forEach(n => {
+        const ch = (outConfig?.outChannel !== undefined && outConfig.outChannel !== -1)
+          ? outConfig.outChannel : n.channel;
+        channels.add(ch);
+        this.sendToVirtualOutput(deviceName, [0x80 | (ch & 0x0f), n.note, 0]);
+      });
+      channels.forEach(ch => {
+        const s = ch % 16;
+        this.sendToVirtualOutput(deviceName, [0xb0 + s, 123, 0]);
+        this.sendToVirtualOutput(deviceName, [0xb0 + s, 64, 0]);
+      });
+      this.latch.clearNotesByKey(deviceName);
+      return;
+    }
+    // Hardware path — key in latchedNotesByOutput is the Web MIDI port ID
+    if (!this.midiAccess) return;
+    for (const out of Array.from(this.midiAccess.outputs.values())) {
+      if (out.name === deviceName) {
+        this.latch.clearLatchedNotes(out.id);
+        return;
+      }
+    }
   }
 
   setOutputRouteFilters(filters: Record<string, InputRouteFilter>): void {
@@ -872,6 +916,7 @@ export class MidiService {
         channels = [channel];
       }
 
+      const applyLatch = config?.latchEnabled || (this.latch.isActive && config?.smartLatch);
       channels.forEach(targetChannel => {
         const statusCh = targetChannel % 16;
         let status = 0;
@@ -890,6 +935,12 @@ export class MidiService {
         }
 
         if (status > 0) {
+          if (applyLatch && (type === 'noteon' || type === 'noteoff')) {
+            const forward = type === 'noteon'
+              ? this.latch.handleNoteOn(out, config, data.note, data.velocity, targetChannel, '', Date.now())
+              : this.latch.handleNoteOff(out, data.note, targetChannel);
+            if (!forward) return;
+          }
           const fullMsg = [status, ...bytes];
           this.globalSentHashes.set(fullMsg.join(','), Date.now());
           out.send(fullMsg);
@@ -918,6 +969,8 @@ export class MidiService {
         ? config.outChannels
         : [config.outChannel !== -1 ? config.outChannel : channel];
 
+      const virtDevice = { id: virtName, name: virtName };
+      const virtApplyLatch = config.latchEnabled || (this.latch.isActive && config.smartLatch);
       channels.forEach(targetChannel => {
         const statusCh = targetChannel % 16;
         let status = 0;
@@ -936,6 +989,12 @@ export class MidiService {
         }
 
         if (status > 0) {
+          if (virtApplyLatch && (type === 'noteon' || type === 'noteoff')) {
+            const forward = type === 'noteon'
+              ? this.latch.handleNoteOn(virtDevice, config, data.note, data.velocity, targetChannel, '', Date.now())
+              : this.latch.handleNoteOff(virtDevice, data.note, targetChannel);
+            if (!forward) return;
+          }
           this.sendToVirtualOutput(virtName, [status, ...bytes]);
         }
       });

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText, Copy } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { userKey } from '@/lib/userKey'
@@ -76,11 +76,13 @@ const isDeviceOffline = computed(() => {
   return !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
 })
 
-// MIDI Flow multichannel output channels for the selected virtual instrument
+// Virtual instruments always expose all 16 MIDI channels for independent
+// per-channel patch assignment, regardless of which channels MIDI Flow
+// routing happens to be using for notes.
 const virtualActiveChannels = computed(() => {
   if (!selectedDeviceName.value) return []
   if (!midiStore.virtualInstruments.some(v => v.name === selectedDeviceName.value)) return []
-  return selectedReg.value?.outChannels ?? []
+  return Array.from({ length: 16 }, (_, i) => i)
 })
 
 // Channel display state for the multi-channel view: when outChannels are set,
@@ -99,8 +101,14 @@ const multiChannelDisplayState = computed(() => {
 // ── UI/Preview instrument detection ────────────────────────────
 // A device routed from MidiSource.UI is the app's primary instrument.
 // For these, we show the app Sound Library instead of a catalog.
+// A 16-channel virtual instrument is excluded even if it's also wired to
+// receive Sound Engine output — a per-channel patch table is unambiguously
+// for programming an external multitimbral target via MIDI, so it must keep
+// showing the MIDI catalog/PC-sending UI rather than being shadowed by the
+// internal (non-MIDI) preset browser used for SY.CORE's own preview output.
 const isUiDevice = computed(() => {
   if (!selectedDeviceName.value) return false
+  if (virtualActiveChannels.value.length > 0) return false
   const uiRoutes = midiStore.routingMatrix?.[MidiSource.UI] ?? []
   return uiRoutes.includes(selectedDeviceName.value)
 })
@@ -323,7 +331,7 @@ const filteredSounds = computed(() => {
 const activeSound = ref(null)
 const lastSent    = ref(null)
 
-watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null })
+watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null; showCopyMapPicker.value = false })
 
 // Scroll the preset list to the entry matching the device's current pcProgram/pcMsb.
 // Uses the same progIdx formula as sendCatalogSound so bank offsets are respected.
@@ -669,6 +677,36 @@ function promptAddVirtualInstrument() {
   if (name && name.trim()) {
     midiStore.addVirtualInstrument(name.trim())
   }
+}
+
+// ── Copy channel map (another virtual instrument = same standalone app) ──
+const showCopyMapPicker = ref(false)
+
+// Other virtual instruments the current selection's 16-channel patch map
+// can be copied onto — useful when two virtual instrument entries route to
+// the same standalone synth/app and should share the same per-channel patches.
+const copyMapTargets = computed(() =>
+  midiStore.virtualInstruments
+    .map(v => v.name)
+    .filter(name => name !== selectedDeviceName.value)
+)
+
+function copyChannelMapTo(targetName) {
+  const reg = selectedReg.value
+  if (!reg || !targetName) return
+  if (!midiStore.routingConfig.registrations[targetName]) return
+
+  const pcChannels = reg.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {}
+  midiStore.updateRegistration(targetName, 'pcChannels', pcChannels)
+  midiStore.updateRegistration(targetName, 'pcChannel',  reg.pcChannel ?? 0)
+  midiStore.updateRegistration(targetName, 'pcBank',     reg.pcBank ?? '')
+  midiStore.updateRegistration(targetName, 'pcProgram',  reg.pcProgram ?? 0)
+  midiStore.updateRegistration(targetName, 'pcMsb',      reg.pcMsb ?? 0)
+  midiStore.updateRegistration(targetName, 'pcLsb',      reg.pcLsb ?? 0)
+
+  showCopyMapPicker.value = false
+  const count = Object.keys(pcChannels).length
+  showPcNotification(targetName, `Map copied from ${selectedDeviceName.value} (${count} ch)`)
 }
 
 const pcNotification = ref({ visible: false, device: '', name: '', category: '' })
@@ -1095,12 +1133,46 @@ function assignToPad(setId, padIdx) {
                   <div :class="['w-2 h-2 rounded-full', isDeviceOffline ? 'bg-neutral-700' : 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]']" />
                   <span class="text-sm font-black text-white uppercase tracking-wider">{{ selectedDeviceName }}</span>
                   <span v-if="isDeviceOffline" class="text-[8px] font-black bg-amber-950/40 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase">Offline</span>
+
+                  <!-- Copy this device's 16-channel patch map onto another virtual instrument
+                       (e.g. two virtual instrument entries routed to the same standalone synth app) -->
+                  <div v-if="virtualActiveChannels.length > 0 && copyMapTargets.length > 0" class="relative">
+                    <button
+                      @click="showCopyMapPicker = !showCopyMapPicker"
+                      title="Copy this 16-channel patch map to another virtual instrument"
+                      :class="[
+                        'flex items-center gap-1 px-2 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest transition-all',
+                        showCopyMapPicker
+                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                          : 'bg-neutral-900 border-neutral-700 text-neutral-500 hover:border-amber-500/40 hover:text-amber-400'
+                      ]"
+                    >
+                      <Copy class="w-2.5 h-2.5" />
+                      Copy Map
+                    </button>
+                    <div
+                      v-if="showCopyMapPicker"
+                      class="absolute left-0 top-full mt-1 z-20 w-52 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden"
+                    >
+                      <div class="px-3 py-1.5 border-b border-neutral-800">
+                        <span class="text-[7px] font-mono text-neutral-500 uppercase tracking-widest">Copy map to…</span>
+                      </div>
+                      <button
+                        v-for="name in copyMapTargets"
+                        :key="name"
+                        @click="copyChannelMapTo(name)"
+                        class="w-full text-left px-3 py-2 text-[10px] font-bold text-neutral-300 hover:bg-amber-500/10 hover:text-amber-300 transition-colors truncate"
+                      >
+                        {{ name }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="text-[9px] font-mono text-neutral-500 uppercase">Channel</span>
-                  <!-- Virtual instrument with MIDI Flow multichannel: one button per active channel -->
+                  <!-- Virtual instrument: one button per MIDI channel, each independently assignable -->
                   <template v-if="virtualActiveChannels.length > 0">
-                    <div class="flex gap-1 flex-wrap">
+                    <div class="flex gap-1 flex-wrap max-w-[420px]">
                       <button
                         v-for="ch in virtualActiveChannels"
                         :key="ch"
@@ -1250,7 +1322,7 @@ function assignToPad(setId, padIdx) {
                       :class="virtualActiveChannels.length > 0
                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                         : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'">
-                      {{ virtualActiveChannels.length > 0 ? 'Multi-CH (MIDI Flow)' : 'Multi-Timbral' }}
+                      {{ virtualActiveChannels.length > 0 ? '16-Channel' : 'Multi-Timbral' }}
                     </span>
                   </div>
                   <!-- Multi-channel / Multi-timbral: capped height with own scroll, rows clickable to switch active channel -->

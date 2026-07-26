@@ -280,6 +280,15 @@ export const useChordProgStore = defineStore('chordProg', () => {
     steps.value[idx] = { ...steps.value[idx], ...data }
   }
 
+  // Full replace, not a merge — used for step copy/paste so the target ends
+  // up with exactly the source step's parameters, including clearing any
+  // optional field (stepMode/chordMode/arpMode/arpRate) the source doesn't
+  // have set, which a Partial merge via setStep would instead leave alone.
+  function replaceStep(idx: number, data: ChordStep) {
+    if (idx < 0 || idx >= 16) return
+    steps.value[idx] = { ...data, notes: [...data.notes] }
+  }
+
   function toggleStepActive(idx: number) {
     if (idx < 0 || idx >= 16) return
     steps.value[idx] = { ...steps.value[idx], active: !steps.value[idx].active }
@@ -393,7 +402,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     steps, numSteps, isPlaying, currentStep, selectedStepIdx,
     selectedKey, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
-    setStep, toggleStepActive, assignChordToStep, cycleDuration,
+    setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, clearSteps,
     saveToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument,
     // Slots & Chain

@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Disc3, ExternalLink, Activity, Filter } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
@@ -12,11 +13,13 @@ import { DEVICE_TYPE_META, typeMeta } from '@/lib/device-type-meta'
 import { loadControllerPresets } from '@/lib/midi-controller-presets'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 
 const midiStore  = useMidiStore()
 const uiStore    = useUiStore()
 const midiFlowConfigsStore = useMidiFlowConfigsStore()
 const { devices: registryDevices } = useDeviceRegistry()
+const { openMenu } = useMidiContextMenu()
 const activeTab  = ref('routing')  // 'routing' | 'sync'
 
 function deviceType(name) {
@@ -149,6 +152,7 @@ function onCanvasDrop(e) {
     outChannel: -1,
     outChannels: [],
     sync: true, transport: true, notes: true, cc: true, pc: true,
+    latchEnabled: false, latchMaxNotes: 4, latchReplace: true,
     collapsed: false,
   })
 }
@@ -292,6 +296,9 @@ function finish() {
       midiStore.updateRegistration(canonicalName, 'cc',          dst.cc)
       midiStore.updateRegistration(canonicalName, 'pc',          dst.pc)
       midiStore.updateRegistration(canonicalName, 'pcEnabled',   dst.pc)
+      midiStore.updateRegistration(canonicalName, 'latchEnabled',  dst.latchEnabled  ?? false)
+      midiStore.updateRegistration(canonicalName, 'latchMaxNotes', dst.latchMaxNotes ?? 4)
+      midiStore.updateRegistration(canonicalName, 'latchReplace',  dst.latchReplace  ?? true)
       outputNames.push(canonicalName)
 
       // Note-range filter for device→device cables (Controller → Instrument,
@@ -342,6 +349,9 @@ function finish() {
     midiStore.updateRegistration(canonicalName, 'cc',          node.cc)
     midiStore.updateRegistration(canonicalName, 'pc',          node.pc)
     midiStore.updateRegistration(canonicalName, 'pcEnabled',   node.pc)
+    midiStore.updateRegistration(canonicalName, 'latchEnabled',  node.latchEnabled  ?? false)
+    midiStore.updateRegistration(canonicalName, 'latchMaxNotes', node.latchMaxNotes ?? 4)
+    midiStore.updateRegistration(canonicalName, 'latchReplace',  node.latchReplace  ?? true)
   }
 
   midiStore.setOutputRouteFilters(newOutputFilters)
@@ -407,6 +417,9 @@ function initFromStore() {
       outChannels: [...(reg.outChannels ?? [])],
       sync: reg.clock ?? true, transport: reg.transport ?? true,
       notes: reg.notes ?? true, cc: reg.cc ?? true, pc: reg.pc ?? true,
+      latchEnabled: reg.latchEnabled ?? false,
+      latchMaxNotes: reg.latchMaxNotes ?? 4,
+      latchReplace: reg.latchReplace ?? true,
       collapsed: false,
     }
     if (isDest) destNodes.push(node)
@@ -506,6 +519,7 @@ const routingSignature = computed(() => JSON.stringify([
     id: n.id, name: n.name, sourceId: n.sourceId,
     inChannel: n.inChannel, outChannel: n.outChannel, outChannels: n.outChannels,
     sync: n.sync, transport: n.transport, notes: n.notes, cc: n.cc, pc: n.pc,
+    latchEnabled: n.latchEnabled, latchMaxNotes: n.latchMaxNotes, latchReplace: n.latchReplace,
   })),
   cables.value.map(c => ({ fromId: c.fromId, toId: c.toId, filter: c.filter })),
 ]))
@@ -1087,6 +1101,36 @@ function pendingPath() {
                     :class="node[flag.key] ? 'bg-synth-neon/10 border-synth-neon/50 text-synth-neon' : 'bg-neutral-900 border-neutral-700 text-neutral-600'"
                   >{{ flag.label }}</button>
                 </div>
+                <!-- Per-device note latch row -->
+                <div class="flex items-center gap-2 px-3 pt-1 pb-1 flex-wrap" @mousedown.stop>
+                  <span class="text-[7px] font-bold uppercase tracking-widest text-neutral-600 shrink-0 w-8">LATCH</span>
+                  <button
+                    @click.stop="node.latchEnabled = !node.latchEnabled"
+                    @contextmenu.prevent="openMenu($event, { name: 'latch_enable_' + node.name, label: node.name + ': Latch' })"
+                    :class="node.latchEnabled ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300' : 'bg-neutral-900 border-neutral-700 text-neutral-600 hover:border-neutral-600'"
+                    class="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border transition-colors"
+                    title="Hold notes after key release. Right-click to MIDI Learn"
+                  >{{ node.latchEnabled ? 'ON' : 'OFF' }}</button>
+                  <template v-if="node.latchEnabled">
+                    <span class="text-[7px] font-mono text-neutral-600 shrink-0">MAX</span>
+                    <input
+                      type="number" min="1" max="16"
+                      :value="node.latchMaxNotes ?? 4"
+                      @change="e => node.latchMaxNotes = Math.max(1, Math.min(16, parseInt(e.target.value) || 4))"
+                      @contextmenu.prevent="openMenu($event, { name: 'latch_maxnotes_' + node.name, label: node.name + ': Latch Max Notes' })"
+                      class="w-8 bg-neutral-950 border border-neutral-700 rounded text-[9px] font-mono text-center focus:outline-none"
+                      @mousedown.stop @click.stop
+                      title="Max notes held simultaneously (1–16). Right-click to MIDI Learn"
+                    />
+                    <button
+                      @click.stop="node.latchReplace = !node.latchReplace"
+                      @contextmenu.prevent="openMenu($event, { name: 'latch_replace_' + node.name, label: node.name + ': Latch Replace' })"
+                      :class="node.latchReplace ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-neutral-900 border-neutral-700 text-neutral-500 hover:border-neutral-600'"
+                      class="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border transition-colors"
+                      title="FIFO: oldest note dropped when full. BLOCK: new notes rejected. Right-click to MIDI Learn"
+                    >{{ node.latchReplace ? 'FIFO' : 'BLOCK' }}</button>
+                  </template>
+                </div>
                 <!-- Virtual instruments aren't real WebMIDI ports — bind which
                      real output physically carries their MIDI data. -->
                 <div v-if="node.type === 'virtual'" class="flex flex-col gap-0.5 px-3 pt-2" @mousedown.stop>
@@ -1207,4 +1251,5 @@ function pendingPath() {
       </div>
     </div>
   </div>
+  <MidiMapContextMenu />
 </template>

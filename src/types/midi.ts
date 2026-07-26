@@ -24,6 +24,9 @@ export interface DeviceRegistration {
   pc: boolean;
   isMulti: boolean;
   smartLatch: boolean;
+  latchEnabled?: boolean;   // per-device latch on/off (independent of global smartLatch)
+  latchMaxNotes?: number;   // 1–16, default 4
+  latchReplace?: boolean;   // true = FIFO (oldest dropped), false = block (new note rejected)
   midiThru: boolean;
   velocityMin: number;
   velocityMax: number;
@@ -121,6 +124,12 @@ export interface LatchedNote {
   velocity: number;
 }
 
+/** One named CC entry in a virtual instrument's CC table (e.g. { cc: 74, name: 'Filter Cutoff' }) */
+export interface VirtualCcMapping {
+  cc: number;   // 0-127, unique within one instrument's table
+  name: string; // user-assigned label
+}
+
 /** A virtual instrument — a standalone app that receives MIDI but can't be discovered via WebMIDI */
 export interface VirtualRegistration {
   name: string;
@@ -129,4 +138,5 @@ export interface VirtualRegistration {
   bankLsb: number;
   program: number;
   midiOutputPort: string; // real MIDI output port to route data through (e.g. "LoopBe Internal MIDI")
+  ccTable?: VirtualCcMapping[]; // user-defined named CC controllers, exposed in MIDI Controller Designer
 }

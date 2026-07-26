@@ -179,23 +179,22 @@ export class MidiRouter {
       const isNoteOn = (status & 0xf0) === 0x90 && data[2] > 0;
       const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
 
-      // Smart Latch
+      // Smart Latch — triggers for global latch (when device opts in) OR per-device latch
       const latch = this.ctx.getSmartLatch();
-      if (latch.isActive && (isNoteOn || isNoteOff)) {
-        if (!outConfig.smartLatch) {
-          if (isNoteOn && (window as any).SY_LOG)
-            (window as any).SY_LOG(`[MIDI] Latch active but skipped for ${outDevice.name} (Device Lock is OFF)`);
-        } else {
-          const channel = status & 0x0f;
-          const note = data[1];
-          const velocity = data[2];
+      const applyLatch = (latch.isActive && outConfig.smartLatch) || !!outConfig.latchEnabled;
+      if (applyLatch && (isNoteOn || isNoteOff)) {
+        const channel = status & 0x0f;
+        const note = data[1];
+        const velocity = data[2];
 
-          if (isNoteOn) {
-            shouldForward = latch.handleNoteOn(outDevice, outConfig, note, velocity, channel, inputId, now);
-          } else if (isNoteOff) {
-            shouldForward = latch.handleNoteOff(outDevice, note, channel);
-          }
+        if (isNoteOn) {
+          shouldForward = latch.handleNoteOn(outDevice, outConfig, note, velocity, channel, inputId, now);
+        } else if (isNoteOff) {
+          shouldForward = latch.handleNoteOff(outDevice, note, channel);
         }
+      } else if (latch.isActive && (isNoteOn || isNoteOff) && !outConfig.smartLatch && !outConfig.latchEnabled) {
+        if (isNoteOn && (window as any).SY_LOG)
+          (window as any).SY_LOG(`[MIDI] Latch active but skipped for ${outDevice.name} (Device Lock is OFF)`);
       }
 
       if (!shouldForward) return;

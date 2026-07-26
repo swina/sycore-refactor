@@ -2,8 +2,16 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-07-26
+
+- MIDI Controller Designer: **Virtual Instrument CC Table** — each virtual instrument can now have a named CC table (CC number + label, edited from a new button on its card in MIDI Devices). Named entries show up as an assignable action group in the Controller Designer's action picker, with a per-assignment Target Channel selector — useful since one CC table is shared across every channel of a multitimbral instrument, but a physical controller can usually only transmit on one fixed channel.
+- Chord Prog Sequencer: **step copy/paste** — right-click any step in the grid for a small menu to copy its full parameter set (chord, notes, velocity, duration, gate, transpose, mode overrides) and paste it onto another step.
+- MIDI Device Program Change panel: virtual instruments now always show all 16 MIDI channels in the channel selector and the "Current Program Change" list, not just whichever channels happen to be routed in MIDI Flow — so each of the 16 channels can be picked and assigned its own patch independently.
+- MIDI Device Program Change panel: **Copy Map** — a new button next to a virtual instrument's name copies its entire 16-channel patch mapping onto another virtual instrument in one click, for setups where two virtual instrument entries route to the same standalone synth/app and should share identical per-channel patches.
+
 ## 2026-07-25
 
+- MIDI Flow: **Per-instrument note latch** — each hardware or virtual instrument node now has a LATCH row in its canvas card. Toggle ON to hold notes after key release. Set **Max** (1–16 notes) and **FIFO / BLOCK** mode: FIFO ejects the oldest held note when the limit is reached; BLOCK rejects new notes when full. All three controls support right-click MIDI Learn. Settings are persisted per device and survive page reloads. The per-device latch is independent of the global SmartLatch and applies to both keyboard Thru and all app-generated notes (sequencer, chord progressions, etc.).
 - MIDI Flow: **Reconnect MIDI input button** — each hardware device node with an input now shows a ↺ icon in the header. Clicking it force-closes and reopens the Web MIDI port and re-attaches the ingress listener, fixing the stale-connection issue where a device shows online after a page reload but stops delivering MIDI events. If the device has a controller preset with a SysEx init, that is also sent automatically.
 - MIDI Flow: **Multi-channel conflict guard** — when two canvas nodes point to the same virtual instrument, the second node's Multi-CH panel is locked with an explanation, and the routing engine preserves the first node's channel assignments instead of overwriting them with an empty array. Stale saved configs where both nodes had channels are auto-corrected on load.
 

@@ -6,7 +6,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { midiService }     from '@/core/midi/midi-service'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useAppActions }   from './useAppActions'
-import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { isContinuousAction } from '@/lib/app-midi-actions'
 import { loopMachineState } from '@/core/state/loopMachineState'
 
 // Profiles
@@ -255,7 +255,7 @@ export function useControllerManager() {
       if (m.note !== undefined && val === 0) return false
 
       // For CCs: Check trigger mode (Exact, Min threshold, or default > 63)
-      if (m.cc !== undefined && !CONTINUOUS_ACTIONS.has(m.action)) {
+      if (m.cc !== undefined && !isContinuousAction(m.action)) {
          const mv = m.value ?? -1
          if (mv !== -1 && val !== mv) return false
          if (mv === -1 && m.minValue !== undefined && val < m.minValue) return false
@@ -277,7 +277,7 @@ export function useControllerManager() {
       // Only fire when the value transitions INTO the triggered zone.
       // This prevents double-fire when a controller sends the same CC value
       // on both press and release (e.g. 127 + 127 instead of 127 + 0).
-      if (cc !== null && matchedMapping.cc !== undefined && !CONTINUOUS_ACTIONS.has(action)) {
+      if (cc !== null && matchedMapping.cc !== undefined && !isContinuousAction(action)) {
         const prevVal = prevCCValues.get(matchedMapping.id) ?? 0
         const mv = matchedMapping.value ?? -1
         const wasTrig = mv !== -1

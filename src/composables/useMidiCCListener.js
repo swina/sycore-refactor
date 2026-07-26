@@ -161,6 +161,23 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   if (fieldName === 'mix_sampler_mute')     { if (fromNote || val > 63) mixerStore.toggleSamplerMute(); return }
   if (fieldName === 'mix_liveperf_mute')    { if (fromNote || val > 63) mixerStore.toggleLiveperfMute(); return }
   // ─────────────────────────────────────────────────────────────────────────────
+  // ── Per-device latch controls ─────────────────────────────────────────────
+  if (fieldName.startsWith('latch_enable_')) {
+    const dev = fieldName.slice('latch_enable_'.length)
+    midiStore.updateRegistration(dev, 'latchEnabled', val > 63)
+    return
+  }
+  if (fieldName.startsWith('latch_maxnotes_')) {
+    const dev = fieldName.slice('latch_maxnotes_'.length)
+    midiStore.updateRegistration(dev, 'latchMaxNotes', Math.max(1, Math.min(16, Math.round(val / 127 * 15) + 1)))
+    return
+  }
+  if (fieldName.startsWith('latch_replace_')) {
+    const dev = fieldName.slice('latch_replace_'.length)
+    midiStore.updateRegistration(dev, 'latchReplace', val > 63)
+    return
+  }
+  // ─────────────────────────────────────────────────────────────────────────
   if (fieldName === 'ui_panel_collapse') {
     uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on
     return

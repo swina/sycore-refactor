@@ -523,3 +523,67 @@ export const CONTINUOUS_ACTIONS = new Set<AppAction>([
   'mixer_ch9_volume_cc',  'mixer_ch10_volume_cc', 'mixer_ch11_volume_cc', 'mixer_ch12_volume_cc',
   'mixer_ch13_volume_cc', 'mixer_ch14_volume_cc', 'mixer_ch15_volume_cc', 'mixer_ch16_volume_cc',
 ]);
+
+// ── Virtual instrument CC table actions ─────────────────────────────────────
+// Unlike the rest of AppAction (a fixed, hand-enumerated union), a virtual
+// instrument's CC table is user-defined and open-ended — any number of
+// instruments, any number of named CC rows each. These can't be pre-declared
+// as literal union members, so they're dynamic action ids, built at runtime
+// by MidiControllerDesigner.vue from each virtual instrument's
+// VirtualRegistration.ccTable and resolved by the helpers below instead of a
+// static lookup table.
+//
+// Two forms:
+//   vi_cc:<instrumentName>:<cc>            — picker option (no channel chosen yet)
+//   vi_cc:<instrumentName>:<cc>:<channel>  — stored/confirmed assignment (0-based channel)
+//
+// The channel is appended separately at confirm time (not baked into the
+// picker list) because the same CC table is shared across every channel of a
+// multitimbral instrument — which channel a control should target depends on
+// the assignment, not the CC's name, and most hardware controllers can only
+// transmit on one fixed channel of their own.
+const VI_CC_PREFIX = 'vi_cc:';
+
+export interface ParsedViCcAction {
+  instrumentName: string;
+  cc: number;
+  channel: number | null; // null when parsed from a channel-less picker id
+}
+
+export function parseViCcAction(action: string): ParsedViCcAction | null {
+  if (!action.startsWith(VI_CC_PREFIX)) return null;
+  const parts = action.slice(VI_CC_PREFIX.length).split(':');
+  if (parts.length >= 3) {
+    return {
+      channel: parseInt(parts[parts.length - 1], 10),
+      cc: parseInt(parts[parts.length - 2], 10),
+      instrumentName: parts.slice(0, -2).join(':'), // instrument name may itself contain ':'
+    };
+  }
+  return {
+    channel: null,
+    cc: parseInt(parts[parts.length - 1], 10),
+    instrumentName: parts.slice(0, -1).join(':'),
+  };
+}
+
+/** True for any action whose CC value should pass straight through (fader/knob), not be treated as a discrete on/off trigger. */
+export function isContinuousAction(action: string): boolean {
+  return action.startsWith(VI_CC_PREFIX) || CONTINUOUS_ACTIONS.has(action as AppAction);
+}
+
+/** Human-readable label for any action id, including dynamic vi_cc: virtual-instrument CC entries. */
+export function actionLabel(
+  action: string,
+  virtualInstruments: { name: string; ccTable?: { cc: number; name: string }[] }[]
+): string {
+  const parsed = parseViCcAction(action);
+  if (parsed) {
+    const { instrumentName, cc, channel } = parsed;
+    const row = virtualInstruments.find(v => v.name === instrumentName)?.ccTable
+      ?.find(r => r.cc === cc);
+    const base = `${instrumentName}: ${row?.name || `CC ${cc}`}`;
+    return channel != null ? `${base} (Ch ${channel + 1})` : base;
+  }
+  return (APP_ACTION_LABELS as Record<string, string>)[action] ?? action;
+}

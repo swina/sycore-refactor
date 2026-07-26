@@ -526,6 +526,20 @@
                 <p class="text-[9px] text-violet-300 font-bold leading-tight">{{ pendingAssignment.label }}</p>
               </div>
 
+              <!-- Target channel (virtual instrument CC entries only) — the CC
+                   table is shared across every channel of a multitimbral
+                   instrument, so which channel a control actually targets is
+                   chosen per-assignment, not baked into the CC table entry. -->
+              <div v-if="isViCcSelected">
+                <p class="text-[9px] text-neutral-500 uppercase tracking-widest mb-1.5">Target Channel</p>
+                <select
+                  v-model.number="viCcChannel"
+                  class="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-[10px] font-mono text-neutral-200 outline-none focus:border-violet-500"
+                >
+                  <option v-for="ch in 16" :key="ch" :value="ch">CH {{ ch }}</option>
+                </select>
+              </div>
+
               <!-- Trigger mode (actions only, not continuous) -->
               <template v-if="pendingAssignment.type === 'action' && !isContinuousSelected">
                 <div>
@@ -606,7 +620,7 @@
 
           <!-- MIDI Actions tab -->
           <template v-else-if="drawerTab === 'actions'">
-            <template v-for="(actions, group) in MIDI_ACTION_GROUPS" :key="group">
+            <template v-for="(actions, group) in actionGroups" :key="group">
               <button
                 @click="collapsedActions.has(group) ? collapsedActions.delete(group) : collapsedActions.add(group); collapsedActions = new Set(collapsedActions)"
                 class="w-full flex items-center justify-between px-3 py-1 text-[8px] uppercase tracking-widest text-amber-500/80 font-bold bg-neutral-900 sticky top-0 hover:text-amber-400 transition-colors"
@@ -620,11 +634,11 @@
                   @click="assignToMidiAction(drawerControl, action)"
                   :class="[
                     'w-full text-left px-3 py-1.5 text-[10px] transition-colors leading-tight',
-                    drawerControl.assignment?.action === action
+                    isActionAssigned(drawerControl, action)
                       ? 'text-violet-400 bg-violet-900/20'
                       : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
                   ]"
-                >{{ APP_ACTION_LABELS[action] }}</button>
+                >{{ actionLabel(action, midiStore.virtualInstruments) }}</button>
               </template>
             </template>
           </template>
@@ -848,7 +862,7 @@ import {
   createControllerPreset,
   createControl,
 } from '@/lib/midi-controller-presets'
-import { APP_ACTION_LABELS, MIDI_ACTION_GROUPS, CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { MIDI_ACTION_GROUPS, isContinuousAction, actionLabel, parseViCcAction } from '@/lib/app-midi-actions'
 import { findLayoutForDevice } from '@/lib/controller-layout-library'
 import { useMidiFeedback } from '@/composables/useMidiFeedback'
 import { applyParamValue } from '@/composables/useMidiCCListener'
@@ -996,6 +1010,19 @@ const APP_SECTIONS = [
 const collapsedActions = ref(new Set(Object.keys(MIDI_ACTION_GROUPS)))
 const collapsedApp     = ref(new Set(APP_SECTIONS.map(s => s.key)))
 
+// MIDI_ACTION_GROUPS plus one dynamic group per virtual instrument that has a
+// named CC table — those entries can't be pre-declared as static AppAction
+// literals since instruments/tables are user-defined and open-ended.
+const actionGroups = computed(() => {
+  const groups = { ...MIDI_ACTION_GROUPS }
+  midiStore.virtualInstruments.forEach(vi => {
+    if (vi.ccTable?.length) {
+      groups[`Virtual: ${vi.name}`] = vi.ccTable.map(row => `vi_cc:${vi.name}:${row.cc}`)
+    }
+  })
+  return groups
+})
+
 // Pending assignment — set when user clicks an action/param, confirmed before saving
 const pendingAssignment = ref(null) // { type: 'action'|'param', action?, paramName?, paramLabel?, label }
 const triggerMode       = ref('any')
@@ -1005,9 +1032,14 @@ const consume           = ref(true)
 const hasFeedback       = ref(false)
 const fbOn              = ref(127)
 const fbOff             = ref(0)
+const viCcChannel       = ref(1) // 1-16 display; the channel a vi_cc: assignment will send on
 
 const isContinuousSelected = computed(() =>
-  pendingAssignment.value?.action != null && CONTINUOUS_ACTIONS.has(pendingAssignment.value.action)
+  pendingAssignment.value?.action != null && isContinuousAction(pendingAssignment.value.action)
+)
+
+const isViCcSelected = computed(() =>
+  pendingAssignment.value?.action != null && parseViCcAction(pendingAssignment.value.action) != null
 )
 
 const selectedControlId = ref(null)
@@ -1578,18 +1610,41 @@ function sendControl(ctrl, value) {
 
 // ─── Assignment ───────────────────────────────────────────────────────────────
 
+// Picker options for a vi_cc: entry are channel-less, but a confirmed
+// assignment has a channel appended — compare by instrument+cc so the
+// picker still highlights the right entry regardless of which channel
+// was chosen for it.
+function isActionAssigned(ctrl, action) {
+  const assigned = ctrl.assignment?.action
+  if (!assigned) return false
+  if (assigned === action) return true
+  const viCc = parseViCcAction(action)
+  const assignedViCc = parseViCcAction(assigned)
+  return !!viCc && !!assignedViCc && viCc.instrumentName === assignedViCc.instrumentName && viCc.cc === assignedViCc.cc
+}
+
 function assignToMidiAction(ctrl, action) {
   if (!ctrl) return
   pendingAssignment.value = {
     type: 'action',
     action,
-    label: `Action: ${APP_ACTION_LABELS[action] ?? action}`,
+    label: `Action: ${actionLabel(action, midiStore.virtualInstruments)}`,
   }
   triggerMode.value = 'any'
   exactValue.value  = 127
   minValue.value    = 1
   consume.value     = true
   hasFeedback.value = false
+
+  const viCc = parseViCcAction(action)
+  if (viCc) {
+    // Default to the currently-assigned channel if re-picking the same base
+    // entry, else the instrument's own configured channel.
+    const existing = parseViCcAction(ctrl.assignment?.action ?? '')
+    const sameEntry = existing && existing.instrumentName === viCc.instrumentName && existing.cc === viCc.cc
+    const vi = midiStore.virtualInstruments.find(v => v.name === viCc.instrumentName)
+    viCcChannel.value = (sameEntry && existing.channel != null ? existing.channel : (vi?.channel ?? 0)) + 1
+  }
 }
 
 function assignToAppParam(ctrl, paramName, paramLabel) {
@@ -1610,11 +1665,19 @@ function confirmAssignment() {
   const pa = pendingAssignment.value
 
   if (pa.type === 'action') {
+    // vi_cc: entries carry the target channel as part of the action id itself
+    // (chosen via the Target Channel selector), appended only now — the
+    // picker list stays channel-less since one CC table is shared across a
+    // multitimbral instrument's channels.
+    const finalAction = isViCcSelected.value ? `${pa.action}:${viCcChannel.value - 1}` : pa.action
+    const finalLabel = isViCcSelected.value
+      ? `Action: ${actionLabel(finalAction, midiStore.virtualInstruments)}`
+      : pa.label
     if (ctrl.ccNumber != null || ctrl.noteNumber != null) {
       const stableId = `designer_ctrl_${ctrl.id}`
       const ch = (ctrl.channel ?? 1) - 1
       const isNote = ctrl.noteNumber != null
-      const isContinuous = CONTINUOUS_ACTIONS.has(pa.action)
+      const isContinuous = isContinuousAction(finalAction)
       const mappingValue = isContinuous ? -1 : (triggerMode.value === 'exact' ? exactValue.value : -1)
       // Filter out any previous entry for this control (by stable ID or same device+cc/note)
       const existing = mappingStore.appMidiMappings.filter(m => {
@@ -1631,14 +1694,14 @@ function confirmAssignment() {
         channel: ch,
         value: mappingValue,
         minValue: (!isContinuous && triggerMode.value === 'min') ? minValue.value : undefined,
-        action: pa.action,
+        action: finalAction,
         feedbackOn:  hasFeedback.value ? fbOn.value  : undefined,
         feedbackOff: hasFeedback.value ? fbOff.value : undefined,
         consume: consume.value,
       })
       mappingStore.saveAppMidiMappings(existing)
     }
-    ctrl.assignment = { type: 'midi-action', action: pa.action, label: pa.label }
+    ctrl.assignment = { type: 'midi-action', action: finalAction, label: finalLabel }
   } else {
     if (ctrl.ccNumber != null || ctrl.noteNumber != null) {
       mappingStore.learnedDevice  = assignedDevice.value || null
@@ -1901,14 +1964,14 @@ function exportMappingCatalogCsv() {
   const BOM = '\uFEFF'
   const rows = [['Type','Section','Action / Param Name','Label','Continuous']]
 
-  for (const [group, actions] of Object.entries(MIDI_ACTION_GROUPS)) {
+  for (const [group, actions] of Object.entries(actionGroups.value)) {
     for (const action of actions) {
       rows.push([
         'Action',
         group,
         action,
-        APP_ACTION_LABELS[action] ?? action,
-        CONTINUOUS_ACTIONS.has(action) ? 'Yes' : '',
+        actionLabel(action, midiStore.virtualInstruments),
+        isContinuousAction(action) ? 'Yes' : '',
       ])
     }
   }
@@ -1921,7 +1984,7 @@ function exportMappingCatalogCsv() {
         section.label,
         name,
         item.label,
-        item.action && CONTINUOUS_ACTIONS.has(item.action) ? 'Yes' : '',
+        item.action && isContinuousAction(item.action) ? 'Yes' : '',
       ])
     }
   }

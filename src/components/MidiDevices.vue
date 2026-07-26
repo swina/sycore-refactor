@@ -1,8 +1,9 @@
 <script setup>
-import { computed } from 'vue'
-import { Gamepad2, Music, Layers, Cable, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink, Wand2, Network, Radio } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
+import { Gamepad2, Music, Layers, Cable, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink, Wand2, Network, Radio, SlidersHorizontal } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import VirtualInstrumentCcTableModal from '@/components/VirtualInstrumentCcTableModal.vue'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -77,6 +78,8 @@ function promptAddVirtualInstrument() {
 function onVirtualPortChange(name, port) {
   midiStore.setVirtualInstrumentPort(name, port)
 }
+
+const ccTableEditorFor = ref(null) // virtual instrument name, or null when closed
 
 const sortedDevices = computed(() =>
   [...devices.value].sort((a, b) => {
@@ -308,6 +311,13 @@ const sortedDevices = computed(() =>
                 </div>
               </div>
               <button
+                @click="ccTableEditorFor = v.name"
+                title="Edit named CC controllers"
+                class="flex items-center gap-1 text-[9px] font-mono px-2 py-1 rounded border border-amber-900/40 text-amber-500/70 hover:text-amber-400 hover:border-amber-700 hover:bg-amber-900/20 transition-colors"
+              >
+                <SlidersHorizontal class="w-3 h-3" /> CC Table
+              </button>
+              <button
                 @click="midiStore.removeVirtualInstrument(v.name)"
                 title="Remove virtual instrument"
                 class="flex items-center gap-1 text-[9px] font-mono px-2 py-1 rounded border border-rose-900/40 text-rose-500/70 hover:text-rose-400 hover:border-rose-700 hover:bg-rose-900/20 transition-colors"
@@ -329,4 +339,10 @@ const sortedDevices = computed(() =>
       </div>
     </div>
   </div>
+
+  <VirtualInstrumentCcTableModal
+    v-if="ccTableEditorFor"
+    :instrument-name="ccTableEditorFor"
+    @close="ccTableEditorFor = null"
+  />
 </template>

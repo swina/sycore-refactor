@@ -15,7 +15,7 @@ import {
   type MidiConfigSnapshot,
   type SmartLatchConfig,
 } from '@/lib/midi-config-presets'
-import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, MidiSource as MidiSourceType, InputRouteEntry, InputRouteFilter } from '@/types/midi'
+import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, VirtualCcMapping, MidiSource as MidiSourceType, InputRouteEntry, InputRouteFilter } from '@/types/midi'
 
 // ---------------------------------------------------------------------------
 // LocalStorage keys
@@ -229,6 +229,13 @@ export const useMidiStore = defineStore('midi', () => {
     persistVirtualInstruments()
   }
 
+  // Named CC table for a virtual instrument — surfaced as assignable entries
+  // in the MIDI Controller Designer's action picker (see app-midi-actions.ts's
+  // vi_cc: dynamic action ids).
+  function setVirtualInstrumentCcTable(name: string, table: VirtualCcMapping[]) {
+    updateVirtualInstrument(name, { ccTable: table })
+  }
+
   // Rebind a virtual instrument's underlying real MIDI output port — the
   // physical hop a virtual instrument name can't have on its own, since it
   // isn't a real WebMIDI port. Re-registers the virtual output handler so
@@ -338,6 +345,9 @@ export const useMidiStore = defineStore('midi', () => {
         const removed = oldChannels.filter(ch => !newChannels.includes(ch))
         removed.forEach(ch => midiService.resetChannel(name, ch))
       }
+      if (field === 'latchEnabled' && !value) {
+        midiService.clearLatchForDevice(name)
+      }
       // Copy arrays rather than store the caller's reference — MidiWizardFlow
       // passes its own canvas node's outChannels array here on every apply.
       // Storing it by reference means a later in-place mutation of that same
@@ -371,12 +381,20 @@ export const useMidiStore = defineStore('midi', () => {
   // ── Init ─────────────────────────────────────────────────────────────────
 
   async function init(): Promise<boolean> {
+    // Must run before midiService.init() — registerVirtualOutput() is what
+    // blocks a virtual instrument's bound output port from ever being opened
+    // as an input. midiService.init() calls reScanInputs() synchronously as
+    // part of granting MIDI access, so registering after await'ing it left a
+    // window where a loopback port (e.g. LoopBe) got opened as an input and
+    // then closed a moment later, instead of never being opened at all — a
+    // race that's enough to trip LoopBe's own "MIDI Feedback" detector.
+    registerAllVirtualInstruments()
+
     const ok = await midiService.init()
     midiReady.value = ok
     if (!ok) return midiReady.value
 
     refreshDevices()
-    registerAllVirtualInstruments()
 
     midiService.addStateChangeListener(() => refreshDevices())
 
@@ -844,5 +862,6 @@ export const useMidiStore = defineStore('midi', () => {
     removeVirtualInstrument,
     updateVirtualInstrument,
     setVirtualInstrumentPort,
+    setVirtualInstrumentCcTable,
   }
 })

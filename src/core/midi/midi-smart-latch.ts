@@ -45,6 +45,9 @@ export class SmartLatch {
     inputId: string,
     now: number
   ): boolean {
+    const maxNotes = outConfig?.latchMaxNotes ?? this.maxNotes;
+    const replace  = outConfig?.latchReplace != null ? outConfig.latchReplace : this.replace;
+
     let latched = this.latchedNotesByOutput.get(outDevice.id);
     if (!latched) {
       latched = [];
@@ -55,8 +58,8 @@ export class SmartLatch {
     if (existingIdx !== -1) latched.splice(existingIdx, 1);
     latched.push({ inputId, channel, note, velocity });
 
-    if (latched.length > this.maxNotes) {
-      if (this.replace) {
+    if (latched.length > maxNotes) {
+      if (replace) {
         const oldest = latched.shift();
         if (oldest) {
           if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch FIFO: Replacing note ${oldest.note} with ${note}`);
@@ -64,7 +67,7 @@ export class SmartLatch {
         }
       } else {
         latched.pop();
-        if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch BLOCKED: Limit reached (${this.maxNotes}) and Replace is OFF`);
+        if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Latch BLOCKED: Limit reached (${maxNotes}) and Replace is OFF`);
         return false; // block
       }
     } else {
@@ -98,6 +101,11 @@ export class SmartLatch {
   /** Get latched notes for a specific output */
   getLatchedNotes(outId: string): LatchedNote[] {
     return this.latchedNotesByOutput.get(outId) || [];
+  }
+
+  /** Remove the latched-note entry for a specific output key without sending note-offs */
+  clearNotesByKey(key: string): void {
+    this.latchedNotesByOutput.delete(key);
   }
 
   /** Send note-off for all latched notes on all outputs */

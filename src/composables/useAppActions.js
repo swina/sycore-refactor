@@ -8,10 +8,11 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useAudioMixerChannels } from '@/composables/useAudioMixerChannels'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
-import { CONTINUOUS_ACTIONS } from '@/lib/app-midi-actions'
+import { CONTINUOUS_ACTIONS, parseViCcAction } from '@/lib/app-midi-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { userKey } from '@/lib/userKey'
 import { dispatch } from '@/types/events'
+import { midiService } from '@/core/midi/midi-service'
 
 
 /**
@@ -31,6 +32,18 @@ export function useAppActions() {
   const mixerStore = useAudioMixerStore()
 
   function dispatchAction(action, ccVal = 0) {
+    const viCc = parseViCcAction(action)
+    if (viCc) {
+      const vi = midiStore.virtualInstruments.find(v => v.name === viCc.instrumentName)
+      // Fall back to the instrument's own configured channel for any mapping
+      // saved before per-assignment channel selection existed.
+      const channel = viCc.channel ?? vi?.channel ?? 0
+      if (vi && !Number.isNaN(viCc.cc)) {
+        const status = 0xB0 | (channel & 0x0f)
+        midiService.sendRawToDeviceByName(viCc.instrumentName, [status, viCc.cc & 0x7f, ccVal & 0x7f])
+      }
+      return
+    }
     switch (action) {
       case 'prev_preset': if (ccVal > 63) presetStore.navigateHistory('prev'); break
       case 'next_preset': if (ccVal > 63) presetStore.navigateHistory('next'); break
