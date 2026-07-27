@@ -128,6 +128,9 @@ async function start() {
 watch(() => uiStore.isInstrumentCockpitOpen, (open) => { if (!open) stop() })
 
 onUnmounted(stop)
+
+// Lets a parent (Instrument Cockpit's nav system) toggle capture remotely.
+defineExpose({ start, stop, isActive })
 </script>
 
 <template>

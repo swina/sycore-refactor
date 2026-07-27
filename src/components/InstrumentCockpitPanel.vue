@@ -1,17 +1,19 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { Circle, Cable, ExternalLink, Volume2, VolumeX, Network, ChevronUp, Play, Square, AlertTriangle } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDeviceImages } from '@/composables/useDeviceImages'
 import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
-import { MidiSource } from '@/core/midi/midi-service'
+import { useCockpitNavigation } from '@/composables/useCockpitNavigation'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { typeMeta } from '@/lib/device-type-meta'
 import { MIDI_APPS, APP_PANEL_ID } from '@/lib/midi-apps'
 import { dispatch } from '@/types/events'
@@ -22,11 +24,14 @@ const uiStore   = useUiStore()
 const mixer     = useAudioMixerStore()
 const arpStore  = useArpStore()
 const syncStore = useSyncStore()
+const mappingStore = useMappingStore()
 const midiFlowConfigsStore = useMidiFlowConfigsStore()
 const { devices: registryDevices } = useDeviceRegistry()
 const { openMenu } = useMidiContextMenu()
 const { images: deviceImages } = useDeviceImages()
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
+
+const miniScopeRef = ref(null)
 
 const FLAG_FIELDS = [
   { key: 'midiThru',  label: 'Thru' },
@@ -131,7 +136,7 @@ function reachableNodeIds(startIds) {
   return visited
 }
 
-const hoveredTarget = ref(null)   // { kind: 'controller' | 'app' | 'port', name?, sourceId? }
+const hoveredTarget = ref(null)   // { kind: 'controller' | 'app' | 'port', name?, sourceId? } — transient, mouse-driven
 
 function hoverController(c) {
   hoveredTarget.value = { kind: c.isVirtualOutputPort ? 'port' : 'controller', name: c.name }
@@ -143,8 +148,18 @@ function clearHover() {
   hoveredTarget.value = null
 }
 
-const highlightedInstrumentNames = computed(() => {
-  const t = hoveredTarget.value
+// Persistent counterpart to hoveredTarget — set by SELECT (mouse click, MIDI,
+// or the on-screen nav cluster) on a Controller/Port, so the reachable
+// instruments stay highlighted after focus/mouse moves elsewhere. Activating
+// the same already-pinned target again un-pins it.
+const pinnedNavTarget = ref(null)   // { kind: 'controller' | 'port', name }
+
+function activatePinTarget(target) {
+  const same = pinnedNavTarget.value?.kind === target.kind && pinnedNavTarget.value?.name === target.name
+  pinnedNavTarget.value = same ? null : target
+}
+
+function resolveHighlightsFor(t) {
   if (!t) return new Set()
 
   if (t.kind === 'port') {
@@ -163,6 +178,14 @@ const highlightedInstrumentNames = computed(() => {
     if (node && !node.sourceId && instrumentNameSet.has(node.name)) names.add(node.name)
   }
   return names
+}
+
+const highlightedInstrumentNames = computed(() => {
+  const fromHover = resolveHighlightsFor(hoveredTarget.value)
+  const fromPin   = resolveHighlightsFor(pinnedNavTarget.value)
+  if (!fromHover.size) return fromPin
+  if (!fromPin.size) return fromHover
+  return new Set([...fromHover, ...fromPin])
 })
 
 // ── Instruments (bottom row) — everything that isn't a controller: hardware
@@ -235,6 +258,136 @@ const instruments = computed(() => {
 function toggleFlag(row, flag) {
   midiStore.updateRegistration(row.name, flag.key, !flag.active)
 }
+
+// ── Navigation zones — a focus cursor (see useCockpitNavigation) that steps
+// through Controllers -> Display -> Apps -> Instruments, driven identically
+// by the on-screen nav cluster and by physical MIDI buttons/encoders learned
+// against the 7 cockpit_nav_* paramNames below. ──
+const controllerItems = computed(() => controllers.value.map(c => ({
+  id: c.name,
+  activate: () => activatePinTarget({ kind: c.isVirtualOutputPort ? 'port' : 'controller', name: c.name }),
+})))
+
+const appItems = computed(() => apps.value.map(a => ({
+  id: a.sourceId,
+  activate: () => openApp(a),
+})))
+
+// One item per active CHANNEL, not per instrument — this is what ties the
+// item encoder/nav directly to the patch list shown in the display: for a
+// multi-timbral instrument with several channels, stepping "next/prev item"
+// walks through its channel rows exactly as they're listed there, and
+// SELECT lands Program Change on that exact device+channel (selectInstrumentChannel),
+// same as clicking that row directly.
+const instrumentItems = computed(() => {
+  const items = []
+  for (const row of instruments.value) {
+    for (const cp of row.channelPatchList) {
+      items.push({
+        id: row.name + ':' + cp.channel,
+        rowName: row.name,
+        channel: cp.channel,
+        activate: () => selectInstrumentChannel(row, cp),
+      })
+    }
+  }
+  return items
+})
+
+function instrumentItemFocusRing(rowName, channel = null) {
+  if (channel != null) {
+    const idx = instrumentItems.value.findIndex(it => it.rowName === rowName && it.channel === channel)
+    return idx === -1 ? '' : focusRing('instruments', idx)
+  }
+  // Card-level (whole instrument): amber if focus is on ANY of its channel rows.
+  const anyFocused = instrumentItems.value.some((it, idx) => it.rowName === rowName && nav.isFocused('instruments', idx))
+  return anyFocused ? 'outline outline-2 outline-dashed outline-orange-500 outline-offset-2' : ''
+}
+
+// Fixed order — indices below (DISPLAY_*_IDX) must match this array.
+const DISPLAY_BPM_IDX = 0, DISPLAY_MIDIFLOW_IDX = 1, DISPLAY_PANIC_IDX = 2, DISPLAY_SCOPE_IDX = 3, DISPLAY_PLAY_IDX = 4, DISPLAY_SYNC_START_IDX = 5
+
+const displayItems = computed(() => [
+  { id: 'bpm', activate: () => {} }, // no-op — BPM already has its own direct right-click MIDI Learn
+  { id: 'midiflow', activate: () => openMidiFlow() },
+  { id: 'panic', activate: () => midiStore.panic() },
+  { id: 'scope', activate: () => {
+      if (!miniScopeRef.value) return
+      miniScopeRef.value.isActive ? miniScopeRef.value.stop() : miniScopeRef.value.start()
+    } },
+  { id: 'transport', activate: () => { transportManager.isRunning.value ? stopAll() : playAll() } },
+  ...SYNC_APPS.map(s => ({ id: s.key, activate: () => { syncStore[s.key] = !syncStore[s.key] } })),
+])
+
+const zones = [
+  { id: 'controllers', items: controllerItems },
+  { id: 'display', items: displayItems },
+  { id: 'apps', items: appItems },
+  { id: 'instruments', items: instrumentItems },
+]
+
+const nav = useCockpitNavigation(zones)
+
+function focusRing(zoneId, idx) {
+  return nav.isFocused(zoneId, idx) ? 'outline outline-2 outline-dashed outline-orange-500 outline-offset-2' : ''
+}
+
+// ── Local raw MIDI listener — resolves the 7 cockpit_nav_* paramNames
+// learned via the on-screen cluster's right-click MIDI Learn menus, mirroring
+// the same local-listener pattern MidiDeviceProgramChangePanel.vue already
+// uses for its own paramNames (same key-building convention, so it correctly
+// reads back whatever confirmLearn() stored). Buttons/notes are naturally
+// single-fire; CC-driven "buttons" get their own small rising-edge guard
+// since mappingStore.midiMappings has no generic one. Encoders are decoded
+// as two's-complement relative ticks — no generic support for that exists
+// anywhere else in the app either. ──
+const _cockpitEdgeState = new Map()
+
+function decodeRelativeTick(val) {
+  if (val === 0 || val === 64) return 0
+  return val < 64 ? val : -(128 - val)
+}
+
+function edgeTriggered(id, val) {
+  const prev = _cockpitEdgeState.get(id) ?? 0
+  _cockpitEdgeState.set(id, val)
+  return prev < 64 && val >= 64
+}
+
+function _cockpitMidiListener(event) {
+  if (!event.data || event.data.length < 2) return
+  const status  = event.data[0]
+  const type    = status & 0xF0
+  const channel = status & 0x0F
+  const byte1   = event.data[1]
+  const byte2   = event.data[2] ?? 0
+  const inputId = event.target?.id
+  const deviceName = midiService.getInputs().find(i => i.id === inputId)?.name
+  if (!deviceName) return
+
+  const isCC   = type === 0xB0
+  const isNote = type === 0x90 && byte2 > 0
+  if (!isCC && !isNote) return
+
+  const key = [deviceName, `CH${channel + 1}`, isNote ? `NOTE${byte1}` : `CC${byte1}`].join(':')
+  const mapping = mappingStore.midiMappings[key]
+  if (!mapping) return
+  const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+
+  switch (paramName) {
+    case 'cockpit_nav_next_zone': if (isNote || edgeTriggered('nz', byte2)) nav.moveZone(1); break
+    case 'cockpit_nav_prev_zone': if (isNote || edgeTriggered('pz', byte2)) nav.moveZone(-1); break
+    case 'cockpit_nav_next_item': if (isNote || edgeTriggered('ni', byte2)) nav.moveItem(1); break
+    case 'cockpit_nav_prev_item': if (isNote || edgeTriggered('pi', byte2)) nav.moveItem(-1); break
+    case 'cockpit_nav_select':    if (isNote || edgeTriggered('sel', byte2)) nav.selectCurrent(); break
+    case 'cockpit_nav_zone_encoder': { const d = decodeRelativeTick(byte2); if (d) nav.moveZone(Math.sign(d)) } break
+    case 'cockpit_nav_item_encoder': { const d = decodeRelativeTick(byte2); if (d) nav.moveItem(Math.sign(d)) } break
+  }
+}
+
+let _unsubCockpitMidi = null
+onMounted(() => { _unsubCockpitMidi = midiService.addRawListener(_cockpitMidiListener) })
+onUnmounted(() => _unsubCockpitMidi?.())
 
 // { name, channel } of whatever was last picked — channel is null when a
 // whole instrument card was clicked (highlights every channel row for it),
@@ -317,12 +470,19 @@ function handleBpmChange(e) {
       <div class="ml-4 w-28 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pr-3">
         <p class="text-[8px] font-black uppercase tracking-widest text-neutral-600 bg-black py-1 text-center mb-0.5">Controllers</p>
         <div v-if="controllers.length === 0" class="text-[9px] text-neutral-700 italic text-center">None</div>
-        <div v-for="c in controllers" :key="c.name"
+        <div v-for="(c, idx) in controllers" :key="c.name"
           @mouseenter="hoverController(c)"
           @mouseleave="clearHover"
-          class="rounded-lg border-3 p-2 flex flex-col items-center gap-1 text-center transition-colors cursor-pointer"
-          :class="c.online ? 'bg-neutral-900 border-black hover:border-sky-700' : 'bg-neutral-950 border-black opacity-60'"
+          @click="activatePinTarget({ kind: c.isVirtualOutputPort ? 'port' : 'controller', name: c.name })"
+          title="Pin the instruments this reaches"
+          class="relative rounded-lg border-3 p-2 flex flex-col items-center gap-1 text-center transition-colors cursor-pointer"
+          :class="[
+            c.online ? 'bg-neutral-900 border-black hover:border-sky-700' : 'bg-neutral-950 border-black opacity-60',
+            focusRing('controllers', idx),
+          ]"
         >
+          <Pin v-if="pinnedNavTarget?.kind === (c.isVirtualOutputPort ? 'port' : 'controller') && pinnedNavTarget?.name === c.name"
+            class="w-2.5 h-2.5 text-amber-400 fill-current absolute top-1 right-1" />
           <div class="w-8 h-8 rounded-md overflow-hidden flex items-center justify-center bg-black/40 text-sky-400">
             <img v-if="c.image" :src="c.image" class="w-full h-full object-cover" :alt="c.name" />
             <component v-else :is="typeMeta('controller').icon" class="w-4 h-4" />
@@ -345,7 +505,7 @@ function handleBpmChange(e) {
           <div class="relative z-30 flex flex-col flex-1 min-h-0 gap-2">
           <div class="flex items-start justify-between">
             <!-- BPM (top-left) -->
-            <div class="flex items-center gap-1" @contextmenu.prevent="openMenu($event, { name: 'global_bpm', label: 'Global BPM' })">
+            <div class="flex items-center gap-1 rounded p-0.5" :class="focusRing('display', DISPLAY_BPM_IDX)" @contextmenu.prevent="openMenu($event, { name: 'global_bpm', label: 'Global BPM' })">
               <span class="text-[8px] text-neutral-600">BPM</span>
               <input
                 type="number" min="20" max="300"
@@ -356,21 +516,23 @@ function handleBpmChange(e) {
             </div>
             <button @click="openMidiFlow"
         class="text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-synth-neon/40 text-synth-neon/70 hover:text-synth-neon hover:border-synth-neon transition-colors"
+        :class="focusRing('display', DISPLAY_MIDIFLOW_IDX)"
       >
         <Network class="w-3 h-3" /> MIDI Flow
       </button>
             <!-- PANIC (top-right) -->
             <button @click="midiStore.panic()" title="Panic — All Notes Off"
               class="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded border border-rose-600/50 bg-rose-950/20 text-rose-400 hover:bg-rose-950/40 hover:border-rose-500 transition-colors"
+              :class="focusRing('display', DISPLAY_PANIC_IDX)"
             >
               <AlertTriangle class="w-3 h-3" /> Panic
             </button>
           </div>
 
           <div class="flex-1 min-h-0 flex items-start gap-3">
-            <div class="shrink-0 w-42 flex flex-col items-center gap-1.5">
+            <div class="shrink-0 w-42 flex flex-col items-center gap-1.5 rounded-lg p-1" :class="focusRing('display', DISPLAY_SCOPE_IDX)">
               <span class="text-sm font-mono uppercase tracking-[0.35em] text-synth-neon/80">SY.CORE</span>
-              <MiniAudioScope class="h-24 w-full" />
+              <MiniAudioScope ref="miniScopeRef" class="h-24 w-full" />
             </div>
 
             <!-- Current instrument patches + active channels -->
@@ -381,7 +543,10 @@ function handleBpmChange(e) {
                   @click="selectInstrumentChannel(row, cp)"
                   title="Select this device/channel in Program Change"
                   class="flex items-center gap-2 py-0.5 border-b font-mono text-[11px] transition-colors cursor-pointer hover:bg-white/5"
-                  :class="isSelected(row.name, cp.channel) ? 'border-violet-700/50 bg-violet-500/10' : 'border-neutral-900/60'"
+                  :class="[
+                    isSelected(row.name, cp.channel) ? 'border-violet-700/50 bg-sky-500/50' : 'border-neutral-900/60',
+                    instrumentItemFocusRing(row.name, cp.channel),
+                  ]"
                 >
                   <Circle v-if="idx === 0" class="w-1.5 h-1.5 fill-current shrink-0" :class="row.online ? 'text-emerald-400' : 'text-neutral-600'" />
                   <span v-else class="w-1.5 h-1.5 shrink-0"></span>
@@ -401,9 +566,12 @@ function handleBpmChange(e) {
               @click="transportManager.isRunning.value ? stopAll() : playAll()"
               @contextmenu.prevent="openMenu($event, { name: 'transport-play-all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
               class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95"
-              :class="transportManager.isRunning.value
-                ? 'text-red-400 border-red-500/40 bg-red-500/10 hover:bg-red-500/20'
-                : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20'"
+              :class="[
+                transportManager.isRunning.value
+                  ? 'text-red-400 border-red-500/40 bg-red-500/10 hover:bg-red-500/20'
+                  : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20',
+                focusRing('display', DISPLAY_PLAY_IDX),
+              ]"
             >
               <component :is="transportManager.isRunning.value ? Square : Play" class="w-3 h-3 fill-current" />
               <span>{{ transportManager.isRunning.value ? 'Stop' : 'Play' }}</span>
@@ -412,13 +580,16 @@ function handleBpmChange(e) {
             <!-- Synced apps (click to toggle sync to the global transport) -->
             <div class="flex items-center gap-1">
               <button
-                v-for="s in SYNC_APPS" :key="s.key"
+                v-for="(s, idx) in SYNC_APPS" :key="s.key"
                 @click="syncStore[s.key] = !syncStore[s.key]"
                 :title="(syncStore[s.key] ? 'Synced: ' : 'Not synced: ') + s.label"
                 class="text-[8px] font-mono uppercase px-1.5 py-0.5 rounded border transition-colors"
-                :class="syncStore[s.key]
-                  ? 'bg-violet-800/50 border-violet-700/40 text-emerald-400'
-                  : 'bg-violet-800/20 border-neutral-700 text-neutral-600'"
+                :class="[
+                  syncStore[s.key]
+                    ? 'bg-violet-800/50 border-violet-700/40 text-emerald-400'
+                    : 'bg-violet-800/20 border-neutral-700 text-neutral-600',
+                  focusRing('display', DISPLAY_SYNC_START_IDX + idx),
+                ]"
               >
                 {{ s.label }}
               </button>
@@ -445,6 +616,7 @@ function handleBpmChange(e) {
                 !row.online ? 'opacity-60' : '',
                 highlightedInstrumentNames.has(row.name) ? 'ring-2 ring-synth-neon border-synth-neon bg-synth-neon/10' : '',
                 isSelected(row.name) ? 'ring-2 ring-violet-400 border-violet-400' : '',
+                instrumentItemFocusRing(row.name),
               ]"
             >
               <!-- <ChevronUp class="w-3 h-3 text-neutral-700 absolute -top-2.5 left-1/2 -translate-x-1/2" /> -->
@@ -513,13 +685,16 @@ function handleBpmChange(e) {
       <div class="mr-4 w-28 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pl-3">
         <p class="text-[8px] font-black uppercase bg-black py-1 tracking-widest text-neutral-600 text-center mb-0.5">Apps</p>
         <button
-          v-for="a in apps" :key="a.sourceId"
+          v-for="(a, idx) in apps" :key="a.sourceId"
           @click="openApp(a)"
           @mouseenter="hoverApp(a)"
           @mouseleave="clearHover"
           :disabled="!a.panelId"
           class="relative rounded-lg border-3 p-2 flex flex-col items-center gap-1 text-center bg-neutral-900 border-black transition-colors"
-          :class="a.panelId ? 'hover:border-violet-700 hover:bg-neutral-800' : 'opacity-50 cursor-default'"
+          :class="[
+            a.panelId ? 'hover:border-violet-700 hover:bg-neutral-800' : 'opacity-50 cursor-default',
+            focusRing('apps', idx),
+          ]"
         >
           <!-- <ChevronLeft class="w-3 h-3 text-neutral-700 absolute top-1/2 -left-2.5 -translate-y-1/2" /> -->
           <div class="w-8 h-8 rounded-md flex items-center justify-center bg-black/40 text-violet-400">
@@ -532,4 +707,44 @@ function handleBpmChange(e) {
     </div>
   </div>
   <img src="/sycore-lab.png" class="absolute bottom-1 right-14 w-22 opacity-70 pointer-events-none select-none" />
+
+  <!-- ── On-screen nav cluster — same 4 zones as MIDI buttons/encoders below,
+       so mouse and hardware share one useCockpitNavigation instance. Each
+       button is also its own right-click MIDI Learn target. ── -->
+  <div class="absolute bottom-1 left-3 z-40 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
+    <div class="flex items-center gap-0.5 bg-black/70 rounded-full border border-neutral-800 px-1 py-0.5">
+      <span class="text-[7px] font-mono text-neutral-600 px-0.5">Z</span>
+      <button @click="nav.moveZone(-1)"
+        @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_prev_zone', label: 'Cockpit: Prev Zone' })"
+        title="Prev zone" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
+      ><ChevronLeft class="w-3 h-3" /></button>
+      <button
+        @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_zone_encoder', label: 'Cockpit: Zone Encoder' })"
+        title="Zone encoder — right-click to Learn a rotary encoder" class="p-1 text-neutral-500 hover:text-amber-400 cursor-default transition-colors"
+      ><RotateCw class="w-3 h-3" /></button>
+      <button @click="nav.moveZone(1)"
+        @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_next_zone', label: 'Cockpit: Next Zone' })"
+        title="Next zone" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
+      ><ChevronRight class="w-3 h-3" /></button>
+    </div>
+    <div class="flex items-center gap-0.5 bg-black/70 rounded-full border border-neutral-800 px-1 py-0.5">
+      <span class="text-[7px] font-mono text-neutral-600 px-0.5">I</span>
+      <button @click="nav.moveItem(-1)"
+        @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_prev_item', label: 'Cockpit: Prev Item' })"
+        title="Prev item" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
+      ><ChevronLeft class="w-3 h-3" /></button>
+      <button
+        @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_item_encoder', label: 'Cockpit: Item Encoder' })"
+        title="Item encoder — right-click to Learn a rotary encoder" class="p-1 text-neutral-500 hover:text-amber-400 cursor-default transition-colors"
+      ><RotateCw class="w-3 h-3" /></button>
+      <button @click="nav.moveItem(1)"
+        @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_next_item', label: 'Cockpit: Next Item' })"
+        title="Next item" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
+      ><ChevronRight class="w-3 h-3" /></button>
+    </div>
+    <button @click="nav.selectCurrent()"
+      @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_select', label: 'Cockpit: Select' })"
+      title="Select / Activate" class="p-1.5 rounded-full bg-synth-neon/10 border border-synth-neon/40 text-synth-neon hover:bg-synth-neon/20 transition-colors"
+    ><CircleDot class="w-3 h-3" /></button>
+  </div>
 </template>
