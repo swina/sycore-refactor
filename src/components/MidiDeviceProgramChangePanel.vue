@@ -580,6 +580,7 @@ function clearScrollCC() {
 let _pcNavHandler   = null
 let _unsubDevMidi   = null
 let _unsubDevicePcOpen = null
+let _unsubDevicePcSelect = null
 
 function _startDevMidiListener() {
   _unsubDevMidi?.()
@@ -649,12 +650,20 @@ onMounted(() => {
     uiStore.openPanel('device-program-change')
     selectDevice(deviceName)
   })
+  // Like 'device-pc-open' but doesn't steal focus — used by the Instrument
+  // Cockpit so clicking an instrument (or one of its channels) there just
+  // gets it ready to view here, without popping this panel to the front.
+  _unsubDevicePcSelect = on('device-pc-select', ({ deviceName, channel }) => {
+    selectDevice(deviceName)
+    if (channel != null) setChannel(channel)
+  })
 })
 onUnmounted(() => {
   _unsubScrollCC?.()
   _unsubDevMidi?.()
   if (_pcNavHandler) window.removeEventListener('device-pc-preset-navigate', _pcNavHandler)
   _unsubDevicePcOpen?.()
+  _unsubDevicePcSelect?.()
   clearTimeout(_pcNotifTimer)
 })
 

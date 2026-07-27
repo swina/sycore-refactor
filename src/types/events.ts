@@ -56,6 +56,12 @@ export interface SyCoreEventMap {
   'midi-main-menu': { action: 'toggle' | 'scroll' | 'select'; val: number };
   'device-pc-preset-navigate': { delta: number };
   'device-pc-open': { deviceName: string };
+  // Like 'device-pc-open' but doesn't bring the Program Change panel to
+  // front/open it if closed — just updates its selected device (and,
+  // optionally, its selected channel for multi-timbral devices), for
+  // callers (e.g. Instrument Cockpit) that want the selection to be ready
+  // without stealing focus.
+  'device-pc-select': { deviceName: string; channel?: number };
 
   // Timeline
   'timeline-lm-start': { padIdx: number; bpm: number };

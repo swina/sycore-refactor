@@ -236,7 +236,38 @@ function toggleFlag(row, flag) {
   midiStore.updateRegistration(row.name, flag.key, !flag.active)
 }
 
-function openProgramChange(row) {
+// { name, channel } of whatever was last picked — channel is null when a
+// whole instrument card was clicked (highlights every channel row for it),
+// or a specific 1-based channel when a single patch/channel line in the
+// display's list was clicked (highlights just that row).
+const selected = ref(null)
+function isSelected(name, channel = null) {
+  return !!selected.value && selected.value.name === name
+    && (selected.value.channel == null || channel == null || selected.value.channel === channel)
+}
+
+// Clicking an instrument card body (not its inner controls, which stop
+// propagation) sets that device as selected in Program Change — ready to
+// view there without stealing focus by popping that panel open — and
+// keeps it highlighted in the display's own patch list, so you can tell
+// at a glance which instrument you last picked.
+function selectInstrument(row) {
+  selected.value = { name: row.name, channel: null }
+  dispatch('device-pc-select', { deviceName: row.name })
+}
+
+// A specific patch/channel line in the display's list — sets both the
+// device AND that exact channel in Program Change (still without opening
+// it), so multi-timbral devices land on the right part, not just channel 0.
+function selectInstrumentChannel(row, cp) {
+  selected.value = { name: row.name, channel: cp.channel }
+  dispatch('device-pc-select', { deviceName: row.name, channel: cp.channel })
+}
+
+// The dedicated "Select in Program Change" button — this one DOES bring
+// the panel to the front, unlike the passive card/list clicks above.
+function openInProgramChange(row) {
+  selected.value = { name: row.name, channel: null }
   dispatch('device-pc-open', { deviceName: row.name })
 }
 
@@ -347,7 +378,10 @@ function handleBpmChange(e) {
               <p v-if="instruments.length === 0" class="text-neutral-700 italic text-center pt-2">No instruments routed</p>
               <template v-for="row in instruments" :key="row.name">
                 <div v-for="(cp, idx) in row.channelPatchList" :key="row.name + ':' + cp.channel"
-                  class="flex items-center gap-2 py-0.5 border-b border-neutral-900/60 font-mono text-[11px]"
+                  @click="selectInstrumentChannel(row, cp)"
+                  title="Select this device/channel in Program Change"
+                  class="flex items-center gap-2 py-0.5 border-b font-mono text-[11px] transition-colors cursor-pointer hover:bg-white/5"
+                  :class="isSelected(row.name, cp.channel) ? 'border-violet-700/50 bg-violet-500/10' : 'border-neutral-900/60'"
                 >
                   <Circle v-if="idx === 0" class="w-1.5 h-1.5 fill-current shrink-0" :class="row.online ? 'text-emerald-400' : 'text-neutral-600'" />
                   <span v-else class="w-1.5 h-1.5 shrink-0"></span>
@@ -397,20 +431,23 @@ function handleBpmChange(e) {
         <!-- <div class="h-2 border-neutral-800 shrink-0" v-if="instruments.length > 0"></div> -->
 
         <!-- Instruments (bottom row) -->
-        <div class="flex-1 min-h-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
+        <div class="flex justify-center min-h-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
           <div v-if="instruments.length === 0" class="text-[10px] text-neutral-700 italic text-center pt-4">No instruments routed</div>
-          <div v-else class="h-full flex gap-2">
+          <div v-else class="display-glass relative shadow-lg h-full bg-black/60 flex gap-2 w-full justify-center p-2 rounded-lg border border-black">
             <div
               v-for="row in instruments"
               :key="row.name"
-              class="relative w-36 shrink-0 rounded-xl border p-2.5 flex flex-col gap-1.5 transition-colors max-h-48"
+              @click="selectInstrument(row)"
+              title="Select in Program Change"
+              class="relative w-42 shrink-0 rounded-xl border-2 p-2.5 flex flex-col gap-1.5 transition-colors max-h-48 cursor-pointer"
               :class="[
                 row.meta.card,
                 !row.online ? 'opacity-60' : '',
                 highlightedInstrumentNames.has(row.name) ? 'ring-2 ring-synth-neon border-synth-neon bg-synth-neon/10' : '',
+                isSelected(row.name) ? 'ring-2 ring-violet-400 border-violet-400' : '',
               ]"
             >
-              <ChevronUp class="w-3 h-3 text-neutral-700 absolute -top-2.5 left-1/2 -translate-x-1/2" />
+              <!-- <ChevronUp class="w-3 h-3 text-neutral-700 absolute -top-2.5 left-1/2 -translate-x-1/2" /> -->
 
               <div class="flex items-center gap-2">
                 <div :class="['w-7 h-7 rounded-md overflow-hidden flex items-center justify-center shrink-0 bg-black/40', row.meta.text]">
@@ -436,7 +473,7 @@ function handleBpmChange(e) {
               <div class="flex gap-1">
                 <button
                   v-for="flag in row.flags" :key="flag.key"
-                  @click="toggleFlag(row, flag)"
+                  @click.stop="toggleFlag(row, flag)"
                   class="text-[8px] font-mono uppercase px-1 py-0.5 rounded border transition-colors"
                   :class="flag.active ? 'bg-emerald-900/20 border-emerald-700/40 text-emerald-400' : 'bg-neutral-800/40 border-neutral-700 text-neutral-600'"
                 >
@@ -444,8 +481,8 @@ function handleBpmChange(e) {
                 </button>
               </div>
 
-              <div class="flex items-center gap-1" @contextmenu.prevent="openMenu($event, { name: 'cockpit_vol_' + row.name, label: row.name + ' Volume' })">
-                <button @click="row.toggleMute()" :title="row.muted ? 'Unmute' : 'Mute'" class="shrink-0 text-neutral-400 hover:text-neutral-200">
+              <div class="flex items-center gap-1" @click.stop @contextmenu.prevent="openMenu($event, { name: 'cockpit_vol_' + row.name, label: row.name + ' Volume' })">
+                <button @click.stop="row.toggleMute()" :title="row.muted ? 'Unmute' : 'Mute'" class="shrink-0 text-neutral-400 hover:text-neutral-200">
                   <VolumeX v-if="row.muted" class="w-3 h-3" />
                   <Volume2 v-else class="w-3 h-3" />
                 </button>
@@ -456,12 +493,12 @@ function handleBpmChange(e) {
               </div>
 
               <div class="flex items-center gap-1 mt-auto">
-                <button v-if="row.hasSoundEngineLink" @click="openSoundEngine" title="Open Sound Engine"
+                <button v-if="row.hasSoundEngineLink" @click.stop="openSoundEngine" title="Open Sound Engine"
                   class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-synth-neon hover:border-synth-neon/50 transition-colors"
                 >
                   <ExternalLink class="w-3 h-3" />
                 </button>
-                <button @click="openProgramChange(row)" title="Open Program Change"
+                <button @click.stop="openInProgramChange(row)" title="Open in Program Change"
                   class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-violet-400 hover:border-violet-700 transition-colors"
                 >
                   <Cable class="w-3 h-3" />
@@ -494,4 +531,5 @@ function handleBpmChange(e) {
 
     </div>
   </div>
+  <img src="/sycore-lab.png" class="absolute bottom-1 right-14 w-22 opacity-70 pointer-events-none select-none" />
 </template>
