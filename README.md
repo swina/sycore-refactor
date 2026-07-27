@@ -191,6 +191,7 @@ Deploys the app to Vercel.
 
 Detailed guides are available in [`docs/guides/`](./docs/guides/):
 
+- [Manifesto](./docs/MANIFESTO.md) — why SY.CORE exists
 - [Guides Index](./docs/guides/INDEX.md) — complete list of all guides
 - Sound Engine, Audio, MIDI, and Live Performance guides
 - Product overview and advantages

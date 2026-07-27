@@ -8,6 +8,7 @@
 
 | Guide | Description |
 |-------|-------------|
+| [Manifesto](../MANIFESTO.md) | Why SY.CORE exists — the personal story and principles behind it |
 | [SY.CORE Commercial Presentation](./SYCORE_COMMERCIAL_PRESENTATION.md) | Full product overview — the problem, the solution, and the ecosystem |
 | [SY.CORE Advantages](./SYCORE_ADVANTEGES.md) | Why a browser-based app beats traditional desktop software |
 | [Note for Entrepreneurs](./SYCORE_FOR_ENTERPRENEURS.md) | Licensing notice regarding preset distribution |
