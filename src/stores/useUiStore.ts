@@ -72,6 +72,7 @@ export interface PanelVisibility {
   isMidiFlowOpen: boolean
   isMidiControllerDesignerOpen: boolean
   isMidiDevicesOpen: boolean
+  isInstrumentCockpitOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -160,6 +161,7 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiFlowOpen                = ref(false)
   const isMidiControllerDesignerOpen  = ref(false)
   const isMidiDevicesOpen             = ref(false)
+  const isInstrumentCockpitOpen       = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
@@ -434,6 +436,7 @@ export const useUiStore = defineStore('ui', () => {
     'midi-flow': isMidiFlowOpen,
     'controller-designer': isMidiControllerDesignerOpen,
     'midi-devices': isMidiDevicesOpen,
+    'instrument-cockpit': isInstrumentCockpitOpen,
     'program-change': isProgramChangeBrowserOpen,
     'midi-monitor': isMidiMonitorOpen,
     about: isAboutOpen,
@@ -582,7 +585,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isMidiControllerDesignerOpen,
-    isMidiDevicesOpen,
+    isMidiDevicesOpen, isInstrumentCockpitOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,

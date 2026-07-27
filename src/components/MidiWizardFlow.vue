@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { RefreshCw, Cable, Network, Check, ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, Disc3, ExternalLink, Activity, Filter, Settings } from 'lucide-vue-next'
+import { storeToRefs } from 'pinia'
+import { RefreshCw, Cable, Network, Check, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, ExternalLink, Activity, Filter, Settings } from 'lucide-vue-next'
+import { MIDI_APPS, APP_PANEL_ID } from '@/lib/midi-apps'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -51,8 +53,10 @@ const allDevices = computed(() =>
 
 // ── Canvas state ──
 const canvasEl    = ref(null)
-const canvasNodes = ref([])   // { id, name, hasIn, hasOut, x, y, inChannel, outChannel }
-const cables      = ref([])   // { id, fromId, toId }
+// Lives in useMidiFlowConfigsStore (not a local ref) so other components
+// (e.g. InstrumentCockpitPanel.vue) can reactively read what's actually on
+// the canvas right now — see that store's liveNodes/liveCables comment.
+const { liveNodes: canvasNodes, liveCables: cables } = storeToRefs(midiFlowConfigsStore)
 let nextId = 1
 
 const NODE_W = 220
@@ -68,29 +72,9 @@ const FLAGS = [
   { key: 'pc',        label: 'PC'   },
 ]
 
-const MIDI_APPS = [
-  { name: 'Step Sequencer',    sourceId: MidiSource.SEQUENCER,  icon: ListMusic,    hasIn: true },
-  { name: 'Chord Sequencer',   sourceId: MidiSource.CHORD_PROG, icon: Music2,       hasIn: true },
-  { name: 'Virtual Keyboard',  sourceId: MidiSource.KEYBOARD,   icon: KeyboardIcon, hasIn: true },
-  { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music     },
-  { name: 'Transport / Clock', sourceId: MidiSource.TRANSPORT,  icon: Zap       },
-  { name: 'Sound Engine',      sourceId: MidiSource.UI,         icon: Layers    },
-  { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum,   hasIn: true },
-  { name: 'Sampler',           sourceId: MidiSource.SAMPLER,    icon: Disc3,        hasIn: true },
-]
-
 const appIconMap = Object.fromEntries(MIDI_APPS.map(a => [a.sourceId, a.icon]))
 
 // ── App node "open app" shortcut — maps a MIDI_APPS sourceId to the uiStore panel id ──
-const APP_PANEL_ID = {
-  [MidiSource.SEQUENCER]:    'sequencer',
-  [MidiSource.CHORD_PROG]:   'chord-prog',
-  [MidiSource.KEYBOARD]:     'keyboard',
-  [MidiSource.ARP]:          'arp',
-  [MidiSource.UI]:           'sound-engine',
-  [MidiSource.DRUM_MACHINE]: 'drum-machine',
-  [MidiSource.SAMPLER]:      'sampler',
-}
 function openApp(sourceId) {
   const panelId = APP_PANEL_ID[sourceId]
   if (panelId) uiStore.openPanel(panelId)

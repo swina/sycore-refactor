@@ -1422,44 +1422,8 @@ function getDialIndicator(cfg, r = 18) {
 </template>
 
 <style scoped>
-.display-glass {
-  box-shadow: 
-    inset 0 0 20px rgba(0,0,0,0.9),
-    0 4px 15px rgba(0,0,0,0.5);
-}
-
-.glass-reflection {
-  background: linear-gradient(
-    135deg, 
-    rgba(255,255,255,0.12) 0%, 
-    rgba(255,255,255,0.05) 40%, 
-    rgba(255,255,255,0) 50%,
-    rgba(255,255,255,0.02) 100%
-  );
-  border-radius: inherit;
-}
-
-.scanlines {
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.1) 50%
-  ), linear-gradient(
-    90deg, 
-    rgba(255, 0, 0, 0.02), 
-    rgba(0, 255, 0, 0.01), 
-    rgba(0, 0, 255, 0.02)
-  );
-  background-size: 100% 2px, 3px 100%;
-}
-
-.display-glass::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  box-shadow: inset 0 0 10px rgba(255,255,255,0.05);
-  z-index: 25;
-}
+/* .display-glass / .glass-reflection / .scanlines moved to src/assets/main.css
+   (global) so InstrumentCockpitPanel.vue's display can share the same LCD look. */
 
 .presets-grid {
   display: grid;
