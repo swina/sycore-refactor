@@ -1,13 +1,33 @@
 <script setup>
-import { computed } from 'vue'
-import { Gamepad2, Music, Layers, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink, Wand2, Network } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Gamepad2, Music, Layers, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink, Wand2, Network, ImagePlus, X } from 'lucide-vue-next'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useDeviceImages } from '@/composables/useDeviceImages'
 
 const { devices, setDeviceType, removeDevice, clearOffline } = useDeviceRegistry()
 const midiStore = useMidiStore()
 const uiStore   = useUiStore()
+const { images: deviceImages, setImage: setDeviceImage, removeImage: removeDeviceImage } = useDeviceImages()
+
+// Single shared hidden file input — pendingImageDevice tracks which card's
+// upload button was clicked, since only one device can be mid-upload at a time.
+const imageInputRef = ref(null)
+const pendingImageDevice = ref(null)
+
+function triggerImageUpload(name) {
+  pendingImageDevice.value = name
+  imageInputRef.value?.click()
+}
+
+function onImageFileChange(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file || !pendingImageDevice.value) return
+  setDeviceImage(pendingImageDevice.value, file)
+  pendingImageDevice.value = null
+}
 
 const DEVICE_TYPES = [
   { value: 'controller',        label: 'Controller' },
@@ -66,6 +86,8 @@ const sortedDevices = computed(() =>
 <template>
   <div class="flex flex-col h-full overflow-hidden">
 
+    <input ref="imageInputRef" type="file" accept="image/*" class="hidden" @change="onImageFileChange" />
+
     <!-- Toolbar -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-neutral-800 bg-black/20 shrink-0">
       <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
@@ -115,9 +137,29 @@ const sortedDevices = computed(() =>
       >
         <!-- Card header -->
         <div class="flex items-center gap-3">
-          <!-- Type icon -->
-          <div :class="['w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-black/40', typeColor(d.type)]">
-            <component :is="typeIcon(d.type)" class="w-4 h-4" />
+          <!-- Type icon / uploaded image -->
+          <div class="relative w-9 h-9 shrink-0 group/img">
+            <button
+              type="button"
+              title="Upload device image"
+              @click="triggerImageUpload(d.name)"
+              :class="['w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden bg-black/40', !deviceImages[d.name] && typeColor(d.type)]"
+            >
+              <img v-if="deviceImages[d.name]" :src="deviceImages[d.name]" class="w-full h-full object-cover" :alt="d.name" />
+              <component v-else :is="typeIcon(d.type)" class="w-4 h-4" />
+            </button>
+            <button
+              v-if="deviceImages[d.name]"
+              type="button"
+              title="Remove image"
+              @click.stop="removeDeviceImage(d.name)"
+              class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-rose-400 opacity-0 group-hover/img:opacity-100 transition-opacity"
+            >
+              <X class="w-2.5 h-2.5" />
+            </button>
+            <div v-else class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center text-neutral-500 pointer-events-none opacity-0 group-hover/img:opacity-100 transition-opacity">
+              <ImagePlus class="w-2 h-2" />
+            </div>
           </div>
 
           <!-- Name + status -->

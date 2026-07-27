@@ -1,14 +1,14 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Play, Square, Settings, AlertTriangle, RefreshCcwDot } from 'lucide-vue-next'
-import { useTransportManager } from '@/composables/useTransportManager'
+import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 
-const transportManager = useTransportManager()
-const syncStore = useSyncStore()
+const { transportManager, playAll, stopAll } = useGlobalTransportControls()
+const syncStore = useSyncStore()   // still needed here for the sync-checkbox template bindings below
 const arpStore = useArpStore()
 const midiStore = useMidiStore()
 const { openMenu } = useMidiContextMenu()
@@ -49,40 +49,6 @@ function handleBpmChange(e) {
 
 const _onTransportPlayAll = () => { playAll() }
 const _onTransportStopAll = () => { stopAll() }
-
-function playAll() {
-  transportManager.forceStopAll()
-  transportManager.acquireTransport()
-
-  if (syncStore.syncSequencerToTransport) {
-    window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
-  }
-  if (syncStore.syncChordProgToTransport) {
-    window.dispatchEvent(new CustomEvent('cp-start'))
-  }
-  if (syncStore.syncDrumMachineToTransport) {
-    window.dispatchEvent(new CustomEvent('timeline-dm-start', { detail: {} }))
-  }
-  if (syncStore.syncBackingTrackToTransport) {
-    window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: true, restart: true } }))
-  }
-}
-
-function stopAll() {
-  if (syncStore.syncSequencerToTransport) {
-    window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false } }))
-  }
-  if (syncStore.syncChordProgToTransport) {
-    window.dispatchEvent(new CustomEvent('cp-stop'))
-  }
-  if (syncStore.syncDrumMachineToTransport) {
-    window.dispatchEvent(new CustomEvent('timeline-dm-stop'))
-  }
-  if (syncStore.syncBackingTrackToTransport) {
-    window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
-  }
-  transportManager.forceStopAll()
-}
 </script>
 
 <template>

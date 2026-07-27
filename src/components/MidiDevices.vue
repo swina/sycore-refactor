@@ -1,16 +1,36 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Gamepad2, Music, Layers, Cable, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink, Wand2, Network, Radio, SlidersHorizontal } from 'lucide-vue-next'
+import { Gamepad2, Music, Layers, Cable, Cpu, Circle, Plus, Trash2, RefreshCw, Unlink, Wand2, Network, Radio, SlidersHorizontal, ImagePlus, X } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import VirtualInstrumentCcTableModal from '@/components/VirtualInstrumentCcTableModal.vue'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useDeviceImages } from '@/composables/useDeviceImages'
 
 const { devices, setDeviceType, removeDevice, clearOffline } = useDeviceRegistry()
 const midiStore = useMidiStore()
 const uiStore   = useUiStore()
+const { images: deviceImages, setImage: setDeviceImage, removeImage: removeDeviceImage } = useDeviceImages()
+
+// Single shared hidden file input — pendingImageDevice tracks which card's
+// upload button was clicked, since only one device can be mid-upload at a time.
+const imageInputRef = ref(null)
+const pendingImageDevice = ref(null)
+
+function triggerImageUpload(name) {
+  pendingImageDevice.value = name
+  imageInputRef.value?.click()
+}
+
+function onImageFileChange(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file || !pendingImageDevice.value) return
+  setDeviceImage(pendingImageDevice.value, file)
+  pendingImageDevice.value = null
+}
 
 const { panelStyle, onDragStart, bringToFront, toggleMinimize, maximize, onResizeStart } = useDraggableResizable({
   storageKey:    'SYCORE_POS_MIDI_DEVICES',
@@ -107,6 +127,8 @@ const sortedDevices = computed(() =>
     <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-1 right-1  w-3 h-3 cursor-se-resize z-50 opacity-40 hover:opacity-80" style="background:radial-gradient(circle,#aaa 1px,transparent 1px) 0 0/3px 3px" />
     <div class="h-full flex flex-col bg-neutral-950 border border-synth-neon/30 rounded-2xl overflow-hidden shadow-2xl">
 
+      <input ref="imageInputRef" type="file" accept="image/*" class="hidden" @change="onImageFileChange" />
+
       <!-- Header -->
       <div
         class="flex items-center justify-between px-4 py-3 bg-neutral-900/60 border-b border-neutral-800 cursor-grab active:cursor-grabbing"
@@ -172,8 +194,29 @@ const sortedDevices = computed(() =>
         >
           <!-- Card header -->
           <div class="flex items-center gap-3">
-            <div :class="['w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-black/40', typeColor(d.type)]">
-              <component :is="typeIcon(d.type)" class="w-4 h-4" />
+            <!-- Type icon / uploaded image -->
+            <div class="relative w-9 h-9 shrink-0 group/img">
+              <button
+                type="button"
+                title="Upload device image"
+                @click="triggerImageUpload(d.name)"
+                :class="['w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden bg-black/40', !deviceImages[d.name] && typeColor(d.type)]"
+              >
+                <img v-if="deviceImages[d.name]" :src="deviceImages[d.name]" class="w-full h-full object-cover" :alt="d.name" />
+                <component v-else :is="typeIcon(d.type)" class="w-4 h-4" />
+              </button>
+              <button
+                v-if="deviceImages[d.name]"
+                type="button"
+                title="Remove image"
+                @click.stop="removeDeviceImage(d.name)"
+                class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-rose-400 opacity-0 group-hover/img:opacity-100 transition-opacity"
+              >
+                <X class="w-2.5 h-2.5" />
+              </button>
+              <div v-else class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center text-neutral-500 pointer-events-none opacity-0 group-hover/img:opacity-100 transition-opacity">
+                <ImagePlus class="w-2 h-2" />
+              </div>
             </div>
 
             <div class="flex-1 min-w-0">
@@ -284,8 +327,28 @@ const sortedDevices = computed(() =>
             class="rounded-xl border border-amber-500/20 bg-neutral-900/60 p-4 flex flex-col gap-3 mb-2"
           >
             <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/10 text-amber-400">
-                <Radio class="w-4 h-4" />
+              <div class="relative w-9 h-9 shrink-0 group/img">
+                <button
+                  type="button"
+                  title="Upload device image"
+                  @click="triggerImageUpload(v.name)"
+                  :class="['w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden', deviceImages[v.name] ? 'bg-black/40' : 'bg-amber-500/10 text-amber-400']"
+                >
+                  <img v-if="deviceImages[v.name]" :src="deviceImages[v.name]" class="w-full h-full object-cover" :alt="v.name" />
+                  <Radio v-else class="w-4 h-4" />
+                </button>
+                <button
+                  v-if="deviceImages[v.name]"
+                  type="button"
+                  title="Remove image"
+                  @click.stop="removeDeviceImage(v.name)"
+                  class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-rose-400 opacity-0 group-hover/img:opacity-100 transition-opacity"
+                >
+                  <X class="w-2.5 h-2.5" />
+                </button>
+                <div v-else class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center text-neutral-500 pointer-events-none opacity-0 group-hover/img:opacity-100 transition-opacity">
+                  <ImagePlus class="w-2 h-2" />
+                </div>
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-amber-200 truncate">{{ v.name }}</p>

@@ -79,3 +79,10 @@ export {
   idbTimelineAudioGet,
   idbTimelineAudioDelete,
 } from './cache/timeline-audio-cache';
+
+export {
+  idbDeviceImagePut,
+  idbDeviceImageGet,
+  idbDeviceImageDelete,
+  idbDeviceImageGetAll,
+} from './cache/device-image-cache';

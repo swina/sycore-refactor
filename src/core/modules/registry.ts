@@ -54,6 +54,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'live-performance-pad', label: 'Live Set', icon: ListMusic, category: 'performance', bg: '/live-performance-2.png' },
   { id: 'loop-machine', label: 'Samples Machine', icon: Layers, category: 'performance', bg: '/loop-machine.png' },
   { id: 'tracks-player', label: 'Tracks Player', icon: Music, category: 'performance', bg: '/backing-tracks.jpg' },
+  { id: 'instrument-cockpit', label: 'Instrument Cockpit', icon: Piano, category: 'performance', bg: '/bg-performance.png' },
 
   // ── Toolbar/footer-only utilities (no launcher tile) ────────────────────
   { id: 'types', label: 'Sound Types', icon: Layers, category: 'sound-design', showOnLauncher: false },

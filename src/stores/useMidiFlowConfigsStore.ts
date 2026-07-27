@@ -22,6 +22,15 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
   // so MIDI FLOW reopens showing which configuration is active, not blank.
   const lastConfigName = ref<string>(localStorage.getItem(userKey(LAST_CONFIG_STORAGE_KEY)) ?? '')
 
+  // The MIDI Flow canvas's current, unsaved node/cable state — lives here
+  // (rather than as local refs inside MidiWizardFlow.vue) purely so other
+  // components (e.g. InstrumentCockpitPanel.vue) can reactively read "what's
+  // actually on the canvas right now" without waiting for an explicit Save.
+  // Not persisted on its own — MidiWizardFlow.vue already derives/restores
+  // this from useMidiStore's live routing state or a saved config on mount.
+  const liveNodes = ref<any[]>([])
+  const liveCables = ref<any[]>([])
+
   function load(): MidiFlowConfigEntry[] {
     try {
       return JSON.parse(localStorage.getItem(userKey(STORAGE_KEY)) ?? '[]')
@@ -67,5 +76,5 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
     return configs.value.some(c => c.name === name)
   }
 
-  return { configs, saveConfig, getConfig, deleteConfig, hasConfig, lastConfigName, setLastConfigName }
+  return { configs, saveConfig, getConfig, deleteConfig, hasConfig, lastConfigName, setLastConfigName, liveNodes, liveCables }
 })

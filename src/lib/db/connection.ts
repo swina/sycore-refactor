@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export const DB_NAME = import.meta.env.VITE_DB_NAME || 's1core_db';
-export const DB_VERSION = 16;
+export const DB_VERSION = 18;
 
 /**
  * Store name → IDBKeyPath mapping.
@@ -35,6 +35,7 @@ export const STORES: Record<string, string | null> = {
   user_timeline_sets: 'id',
   user_system: 'id',
   timeline_audio_cache: 'id',
+  device_images: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -79,6 +80,12 @@ export function openDb(): Promise<IDBDatabase> {
       resolve(_db);
     };
     req.onerror = () => reject(req.error);
+    // Fires when another open tab/connection to this same database is still
+    // holding an older version, so the version-change transaction can't run
+    // and no store created by this upgrade will exist until it's closed.
+    req.onblocked = () => {
+      console.warn(`[idb] Upgrade to v${DB_VERSION} blocked — close other open tabs/windows of this app, then reload.`);
+    };
   });
 }
 
