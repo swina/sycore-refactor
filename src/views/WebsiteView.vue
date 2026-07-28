@@ -66,7 +66,7 @@ const freesoundActions = [
   {
     icon: Grid3x3,
     title: 'Pad → Live Set',
-    text: 'Assign the sound to any of the 16 Loop Pads, with optional BPM override. Right-click a slot for instant MIDI Learn — your controller LED tracks play state.',
+    text: 'Assign the sound to a Loop Pad, with optional BPM override. Right-click a slot for instant MIDI Learn — your controller LED tracks play state.',
   },
   {
     icon: AudioWaveform,
@@ -129,7 +129,7 @@ const soundEngineFeatures = [
 const midiCapabilities = [
   { title: 'Auto-Discovery', text: 'Devices appear automatically on connection. True plug and play — no drivers, ever.' },
   { title: 'MIDI Flow', text: 'Flow canvas: drag-and-drop device↔app / app↔app routing, note-range splits, multi-channel fanout, saved configs' },
-  { title: 'MIDI Controller Design', text: 'Visual canvas for designing custom MIDI controller layouts with draggable controls, real-time feedback, and preset management.' },
+  { title: 'MIDI Controller Design', text: 'Visual canvas for designing custom MIDI controller layouts with draggable controls, real-time feedback, and preset management — including full hardware navigation mapping for DECK.' },
   // { title: 'MIDI Mapping', text: 'Assign any CC to any function with Pass Thru / Consume logic.' },
   // { title: 'MIDI Actions', text: 'Trigger platform events from incoming MIDI — start the sequencer, toggle the looper, change presets from your pedalboard.' },
   // { title: 'MIDI Sync', text: 'Cross-subsystem transport synchronization locked to a master clock.' },
@@ -139,32 +139,39 @@ const midiCapabilities = [
 
 const liveTools = [
   {
+    icon: Sparkles,
+    title: 'DECK',
+    tag: 'Console',
+    img: withBase('/help/guides/sycore-cockpit.png'),
+    text: 'A live console view of your entire MIDI Flow rig: Controllers and Apps in side columns, routed Instruments docked along the bottom, and a central Display with shared BPM, per-channel patch names, and a mini oscilloscope. Hover any controller or app to trace its live routing straight through to the instruments it reaches. The newest addition is full hardware navigation — seven mappable actions drive the whole console, zone by zone, from a physical controller, no mouse required.',
+  },
+  {
     icon: Clock,
     title: 'Live Timeline',
     tag: 'Arrangement',
     img: withBase('/help/guides/sycore-timeline.png'),
-    text: 'A visual arrangement timeline for live performance. Sequence backing-track segments, fire MIDI and UI events at exact time positions with markers, and drive MIDI transport sync independently of the player.',
+    text: 'A visual arrangement timeline for live performance. Sequence backing-track segments and fire any of 26 marker types at exact time positions — tempo and program changes, Performance Set recall, crossfades, Drum Machine and Samples Machine transport, Audio Capture macros — with MIDI clock and transport sync independent of playback. Save and recall full arrangements as Timeline Sets.',
   },
   {
     icon: Drum,
     title: 'Drum Machine',
     tag: 'Rhythm',
     img: withBase('/help/guides/sycore-drum-machine.png'),
-    text: 'An 8-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, 8-slot pattern chain with BPM-synced sequential playback, and full preset save/load with per-preset tempo.',
+    text: 'An 11-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, up to 16-slot pattern chain with BPM-synced sequential playback, algorithmic basslines from reassigned pad slots, and full preset save/load with per-preset tempo. Any track can send MIDI Out instead — trigger your own hardware or app drum machine with its own sounds.',
   },
   {
     icon: ListMusic,
     title: 'Live Set',
     tag: 'Show Mode',
     img: withBase('/help/guides/sycore-live-set.png'),
-    text: 'The dedicated show-mode control center: 16 Soundset pads for one-touch multi-device preset recall, 16 backing-track pads, 16 loop pads, and a per-device MIDI CC volume mixer. Every pad and fader is mappable to your hardware controller. Save layouts as Snapshots.',
+    text: 'The dedicated show-mode control center: 16 Performance Set pads for one-touch multi-device preset recall, 16 backing-track pads, and 16 loop pads. Every pad is mappable to your hardware controller, and layouts save as Snapshots you can recall instantly between songs.',
   },
   {
     icon: Layers,
     title: 'Chord Progression Sequencer',
     tag: 'Harmony',
     img: withBase('/help/guides/sycore-chord-progression.png'),
-    text: 'Up to 16 steps, each carrying a full chord — or an arpeggio. Per-step duration, velocity, gate and transpose, plus a built-in progression library organised by key and genre, and algorithmic generation.',
+    text: 'Up to 16 steps, each carrying a full chord — or an arpeggio, with a per-step rate override. Per-step duration, velocity, gate and transpose, a built-in progression library organised by key and genre, algorithmic generation, and Custom Chord Assignment — capture any chord live from a MIDI keyboard or the on-screen piano, auto-detected across 18 chord qualities.',
   },
   {
     icon: Music,
@@ -185,7 +192,7 @@ const liveTools = [
     title: 'Samples Machine',
     tag: 'Loops',
     img: withBase('/help/guides/sycore-loop-machine.png'),
-    text: '24 pads of simultaneous, gapless loops — fed from local files or Freesound. Sync-quantized starts locked to a master loop, automatic global BPM retune, an always-on 24-channel mixer, one-touch Performance Sets, and auto-recording of your jam via Audio Capture. Every pad, fader and toggle is MIDI-learnable.',
+    text: '24 pads of simultaneous, gapless loops — fed from local files or Freesound. Sync-quantized starts locked to a master loop, an always-on 24-channel mixer, one-touch Performance Sets, and session-wide BPM retune plus hands-free jam recording via Audio Capture, both MIDI-mappable. Every pad, fader and toggle is MIDI-learnable.',
   },
   {
     icon: InfinityIcon,
@@ -215,7 +222,7 @@ const audioCaptureFeatures = [
   },
   {
     title: 'Normalize: Ceiling + Gate',
-    text: 'One-click normalization with a configurable peak ceiling (down to −0.1 dBFS) and a noise-gate threshold that zeroes the floor before peak detection.',
+    text: 'One-click normalization with a configurable peak ceiling (0 to −12 dBFS) and a noise-gate threshold that zeroes the floor before peak detection.',
   },
   {
     title: 'Export & Inject',
@@ -380,11 +387,14 @@ const audiences = [
         </div>
         <div class="hero-fade hero-fade-6 mt-14">
           <img
-            :src="withBase('/help/guides/sycore-refactor-mainpage.png')"
+            :src="withBase('/help/guides/sycore-deck.png')"
             alt="SY.CORE workspace"
             class="img-float mx-auto w-full max-w-4xl rounded-xl border border-neutral-800 shadow-[0_0_60px_rgba(0,163,112,0.15)]"
             loading="eager"
           />
+          <div class="text-center text-sm text-neutral-500 w-1/2 m-auto">
+            <span class="font-mono text-cyan-400">SY.CORE DECK</span> is a view showing every connected controller, app, and instrument, with live patch names, active channels, volume, and quick links into each device's real editor. </br><span class="font-mono text-cyan-400">An hybrid instrument, MIDI navigable, fully in sync.</span>
+          </div>
         </div>
       </div>
     </section>
