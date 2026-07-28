@@ -86,3 +86,9 @@ export {
   idbDeviceImageDelete,
   idbDeviceImageGetAll,
 } from './cache/device-image-cache';
+
+export {
+  idbCockpitBackgroundPut,
+  idbCockpitBackgroundGet,
+  idbCockpitBackgroundDelete,
+} from './cache/cockpit-background-cache';

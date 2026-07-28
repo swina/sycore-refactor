@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-07-28
 
+- DECK: **custom background image** — click the new image icon in the DECK title bar to upload any image as the panel's background (stored locally, per browser); an X icon appears next to it to reset back to the default background.
 - Instrument Cockpit renamed to **DECK** throughout the app (launcher tile, floating panel header/minimize label, Guides entry) and given a new icon (sparkles, replacing the piano icon); the guide is updated to match.
 - MIDI Controller Designer: **DECK Navigation** added as a mappable app-param group (Next/Prev Zone, Zone Encoder, Next/Prev Item, Item Encoder, Select) — assign any control on a preset to drive DECK's hardware navigation directly, the same paramNames its on-screen right-click MIDI Learn menus already write to.
 - MIDI Controller Designer: the ACTIONS and APPS lists in the mapping drawer are now sorted alphabetically by group/section name for easier scanning.

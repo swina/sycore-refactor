@@ -11,6 +11,7 @@ import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDeviceImages } from '@/composables/useDeviceImages'
+import { useCockpitBackground } from '@/composables/useCockpitBackground'
 import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
 import { useCockpitNavigation } from '@/composables/useCockpitNavigation'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -29,6 +30,7 @@ const midiFlowConfigsStore = useMidiFlowConfigsStore()
 const { devices: registryDevices } = useDeviceRegistry()
 const { openMenu } = useMidiContextMenu()
 const { images: deviceImages } = useDeviceImages()
+const { backgroundImage } = useCockpitBackground()
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
 
 const miniScopeRef = ref(null)
@@ -473,7 +475,9 @@ function handleBpmChange(e) {
       </button>
     </div>
 
-    <div v-else class="flex-1 min-h-0 flex gap-3 p-3 overflow-hidden cockpit-root">
+    <div v-else class="flex-1 min-h-0 flex gap-3 p-3 overflow-hidden cockpit-root"
+      :style="backgroundImage ? { backgroundImage: `url(${backgroundImage})` } : null"
+    >
 
       <!-- ── Controllers (left) ── -->
       <div class="ml-4 w-28 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pr-3">

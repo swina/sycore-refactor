@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export const DB_NAME = import.meta.env.VITE_DB_NAME || 's1core_db';
-export const DB_VERSION = 18;
+export const DB_VERSION = 20;
 
 /**
  * Store name → IDBKeyPath mapping.
@@ -36,6 +36,7 @@ export const STORES: Record<string, string | null> = {
   user_system: 'id',
   timeline_audio_cache: 'id',
   device_images: null,
+  cockpit_background: null,
 };
 
 // ---------------------------------------------------------------------------

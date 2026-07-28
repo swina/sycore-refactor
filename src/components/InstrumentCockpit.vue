@@ -1,11 +1,14 @@
 <script setup>
-import { Sparkles } from 'lucide-vue-next'
+import { ref } from 'vue'
+import { Sparkles, ImagePlus, X } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useUiStore } from '@/stores/useUiStore'
+import { useCockpitBackground } from '@/composables/useCockpitBackground'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import InstrumentCockpitPanel from '@/components/InstrumentCockpitPanel.vue'
 
 const uiStore = useUiStore()
+const { backgroundImage, setBackgroundImage, resetBackgroundImage } = useCockpitBackground()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey:    'SYCORE_POS_INSTRUMENT_COCKPIT',
@@ -18,6 +21,19 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   openRef:       () => uiStore.isInstrumentCockpitOpen,
   panelId:       'instrument-cockpit',
 })
+
+const bgInputRef = ref(null)
+
+function triggerBackgroundUpload() {
+  bgInputRef.value?.click()
+}
+
+function onBackgroundFileChange(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file) return
+  setBackgroundImage(file)
+}
 </script>
 
 <template>
@@ -41,6 +57,22 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
         </span>
         <div class="flex-1" />
         <div class="flex items-center gap-1" @mousedown.stop>
+          <input ref="bgInputRef" type="file" accept="image/*" class="hidden" @change="onBackgroundFileChange" />
+          <button
+            v-if="backgroundImage"
+            @click="resetBackgroundImage"
+            title="Reset to default DECK background"
+            class="w-6 h-6 flex items-center justify-center rounded text-neutral-500 hover:text-rose-400 transition-colors"
+          >
+            <X class="w-3.5 h-3.5" />
+          </button>
+          <button
+            @click="triggerBackgroundUpload"
+            title="Set custom DECK background image"
+            class="w-6 h-6 flex items-center justify-center rounded text-neutral-500 hover:text-synth-neon transition-colors"
+          >
+            <ImagePlus class="w-3.5 h-3.5" />
+          </button>
           <MacOsButtons
             @close="uiStore.isInstrumentCockpitOpen = false"
             @minimize="toggleMinimize"
