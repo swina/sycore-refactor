@@ -71,6 +71,29 @@ If nothing highlights, the hovered controller/app simply has no cable drawn to i
 
 ---
 
+## Hardware Navigation (MIDI)
+
+DECK can be driven entirely from a controller, without touching the mouse. Navigation moves a single focus cursor through four zones, in this order: **Controllers → Display → Apps → Instruments**. Moving zones jumps to the first item of the new zone; moving items cycles through the current zone's cards, wrapping at both ends. The focused card gets a dashed orange outline — the ring only appears once you've navigated at least once, so it stays out of the way if you never use hardware nav.
+
+Seven actions make up the full control set:
+
+| Action | Effect |
+|---|---|
+| **Prev / Next Zone** | Step the focus cursor to the previous/next zone. |
+| **Zone Encoder** | A rotary alternative to Prev/Next Zone — turn either direction to step zones. |
+| **Prev / Next Item** | Step the focus cursor to the previous/next card within the current zone. |
+| **Item Encoder** | A rotary alternative to Prev/Next Item. |
+| **Select** | Activates the focused card — same as clicking it (opens the app/panel, jumps to the instrument's Program Change, etc). |
+
+**Mapping a controller** — two ways to assign them, both writing to the same underlying paramNames so either can be used interchangeably or combined:
+
+- **Right on the panel** — the small nav cluster in DECK's bottom-left corner (zone buttons, item buttons, and the Select dot) is right-clickable: right-click any of the seven controls to open its own MIDI Learn menu and assign a note, button, or encoder directly.
+- **From MIDI Controller Designer** — pick the **DECK Navigation** group in the app-param picker to assign any control on a custom preset (e.g. a whole hardware controller dedicated to running DECK) to these same seven actions.
+
+**Encoders** are read as plain absolute CC — the default mode almost every hardware encoder ships in, no special "relative"/two's-complement controller configuration needed. Direction is derived from the wrap-safe delta between successive ticks, so continuous turning in one direction keeps stepping the same way even as the CC value wraps around 0/127. Buttons and notes fire once per press; CC-driven "buttons" get a rising-edge guard so holding one down doesn't repeat.
+
+---
+
 ## Opening DECK
 
 Launch it from the Performance Tools section of the app launcher/dock, or via Module Manager. It's a standard floating panel — drag, resize, minimize, and its position is remembered across sessions, same as every other panel.
