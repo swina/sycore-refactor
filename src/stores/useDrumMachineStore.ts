@@ -13,6 +13,23 @@ const LS_KITS_KEY = 'SYCORE_DM_KITS'
 const LS_CURRENT_KIT_KEY = 'SYCORE_DM_CURRENT_KIT'
 const TRACK_LABELS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal', 'Rim Shot', 'Cowbell', 'Tambourine'] as const
 
+// Default MIDI note per track label — standard GM percussion key map, so a
+// track wired to MIDI Out lands on the note an external drum machine/GM
+// synth already expects, with no manual mapping required.
+const GM_DRUM_NOTES: Record<string, number> = {
+  'Kick':      36, // Bass Drum 1
+  'Snare':     38, // Acoustic Snare
+  'Closed HH': 42, // Closed Hi-Hat
+  'Open HH':   46, // Open Hi-Hat
+  'Clap':      39, // Hand Clap
+  'Tom 1':     45, // Low Tom
+  'Tom 2':     41, // Low Floor Tom
+  'Cymbal':    49, // Crash Cymbal 1
+  'Rim Shot':  37, // Side Stick
+  'Cowbell':   56, // Cowbell
+  'Tambourine':54, // Tambourine
+}
+
 function DEFAULT_DRUM_STEP(): DrumStep {
   return { active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 }
 }
@@ -32,6 +49,8 @@ function makeTrack(label = ''): DrumTrack {
     filterFreq: 20000,
     reverbSend: 0,
     delaySend:  0,
+    midiOutEnabled: false,
+    midiNote:   GM_DRUM_NOTES[label] ?? 36,
     steps: Array.from({ length: 16 }, () => DEFAULT_DRUM_STEP()),
   }
 }
@@ -50,6 +69,8 @@ function serializeTrack(t: DrumTrack): SerializedDrumTrack {
     filterFreq: t.filterFreq ?? 20000,
     reverbSend: t.reverbSend ?? 0,
     delaySend:  t.delaySend  ?? 0,
+    midiOutEnabled: t.midiOutEnabled ?? false,
+    midiNote:   t.midiNote ?? (GM_DRUM_NOTES[t.label] ?? 36),
     steps:      t.steps.map(s => ({ ...s })),
   }
 }
@@ -640,6 +661,8 @@ function hydrateTrack(t: any, label: string): DrumTrack {
     filterFreq: t.filterFreq ?? 20000,
     reverbSend: t.reverbSend ?? 0,
     delaySend:  t.delaySend  ?? 0,
+    midiOutEnabled: t.midiOutEnabled ?? false,
+    midiNote:   t.midiNote ?? (GM_DRUM_NOTES[t.label ?? label] ?? 36),
     steps: Array.from({ length: 16 }, (_, s) => {
       const step = t.steps?.[s]
       if (!step) return DEFAULT_DRUM_STEP()

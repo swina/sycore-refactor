@@ -29,6 +29,8 @@ export interface DrumTrack {
   filterFreq: number;
   reverbSend: number;
   delaySend: number;
+  midiOutEnabled?: boolean;
+  midiNote?: number;
   steps: DrumStep[];
 }
 
@@ -46,6 +48,8 @@ export interface SerializedDrumTrack {
   filterFreq: number;
   reverbSend: number;
   delaySend: number;
+  midiOutEnabled?: boolean;
+  midiNote?: number;
   steps: DrumStep[];
 }
 

@@ -247,6 +247,8 @@ function buildPlayState() {
       solo:   t.solo,
       volume: t.volume,
       length: t.length ?? 16,
+      midiOutEnabled: t.midiOutEnabled ?? false,
+      midiNote: t.midiNote ?? 36,
       steps:  t.steps.map(s => ({ ...s })),
     })),
     basslineEnabled: drumStore.basslineEnabled && showBassline.value,
@@ -273,6 +275,31 @@ const hasSolo = computed(() =>
   drumStore.currentPattern.some(t => t.solo) ||
   (showBassline.value && drumStore.currentBasslinePattern.some(t => t.solo))
 )
+
+// ── MIDI Out (per-track "play an external drum machine instead") ───────────
+// fireTime is a Tone.js AudioContext time; Web MIDI sends have no audio-clock
+// scheduling of their own, so it's converted to a real setTimeout delay via
+// toneNow() — the same conversion the REC SYNC pre-roll above already uses.
+// Accent has no MIDI equivalent, so it's folded into velocity instead (same
+// ratio as drum-engine.js's own ACCENT_BOOST).
+function _sendMidiNote(note, velocity, accent, fireTime, duration) {
+  const vel = Math.max(1, Math.min(127, Math.round(velocity * (accent ? 1.35 : 1))))
+  const onDelayMs  = Math.max(0, (fireTime - toneNow()) * 1000)
+  const offDelayMs = onDelayMs + Math.max(10, duration * 1000)
+  setTimeout(() => midiStore.sendNoteOn(note, vel, midiStore.midiChannel, MidiSource.DRUM_MACHINE), onDelayMs)
+  setTimeout(() => midiStore.sendNoteOff(note, 0, midiStore.midiChannel, MidiSource.DRUM_MACHINE), offDelayMs)
+}
+
+function _sendMidiRatchet(note, stepTimeSec, divisions, { velocity, accent, baseTime, duration }) {
+  // Each subdivision gets its own short gate (rather than the full step
+  // duration) so an earlier retrigger's note-off can't race a later
+  // retrigger's note-on on external gear that tracks note state.
+  const divDur = Math.min(duration, (stepTimeSec / divisions) * 0.9)
+  for (let i = 0; i < divisions; i++) {
+    const fireTime = baseTime + (i / divisions) * stepTimeSec
+    _sendMidiNote(note, velocity, accent, fireTime, divDur)
+  }
+}
 
 function _scheduleCallback(time) {
   let state = playStateRef.current
@@ -387,8 +414,6 @@ function _scheduleCallback(time) {
 
     if (!step.active) return
 
-    drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
-
     // Gate duration: tie=0 → 1 step, tie=N → N steps
     const stepDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
 
@@ -396,15 +421,31 @@ function _scheduleCallback(time) {
       ? state.repeaterDivision
       : step.ratchet
 
-    if (divisions <= 1) {
-      drumEngine.triggerPad(trackIdx, { velocity: step.velocity, accent: step.accent, time: fireTime, duration: stepDur })
+    if (track.midiOutEnabled) {
+      // MIDI Out: drive an external drum machine/synth's own sound instead
+      // of SY.CORE's internal sample for this track.
+      if (divisions <= 1) {
+        _sendMidiNote(track.midiNote, step.velocity, step.accent, fireTime, stepDur)
+      } else {
+        _sendMidiRatchet(track.midiNote, stepTimeSec, divisions, {
+          velocity: step.velocity,
+          accent:   step.accent,
+          baseTime: fireTime,
+          duration: stepDur,
+        })
+      }
     } else {
-      drumEngine.triggerRatchet(trackIdx, stepTimeSec, divisions, {
-        velocity: step.velocity,
-        accent:   step.accent,
-        baseTime: fireTime,
-        duration: stepDur,
-      })
+      drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
+      if (divisions <= 1) {
+        drumEngine.triggerPad(trackIdx, { velocity: step.velocity, accent: step.accent, time: fireTime, duration: stepDur })
+      } else {
+        drumEngine.triggerRatchet(trackIdx, stepTimeSec, divisions, {
+          velocity: step.velocity,
+          accent:   step.accent,
+          baseTime: fireTime,
+          duration: stepDur,
+        })
+      }
     }
 
     // Set tie countdown for subsequent steps
@@ -1792,8 +1833,12 @@ function cycleChainSlot(i) {
             >
               <div class="text-[11px] font-bold text-neutral-300 truncate leading-none">{{ track.label }}</div>
               <div
-                
-                v-if="drumStore.resolveTrackSound(trackIdx)?.soundLabel"
+                v-if="track.midiOutEnabled"
+                class="text-[9px] font-black text-amber-400 truncate leading-none mt-0.5"
+                title="Internal sample skipped — sending MIDI notes instead"
+              >MIDI → {{ midiNoteName(track.midiNote ?? 36) }}</div>
+              <div
+                v-else-if="drumStore.resolveTrackSound(trackIdx)?.soundLabel"
                 :class="[
                   'text-[9px] truncate leading-none mt-0.5',
                   drumStore.resolveTrackSound(trackIdx)?.own ? 'text-purple-400' : 'text-neutral-500'
@@ -1991,6 +2036,27 @@ function cycleChainSlot(i) {
                 title="Delay send amount (1/8-note BPM-synced)"
               />
               <span class="text-[9px] font-mono text-neutral-400 w-5 text-right">{{ Math.round((track.delaySend ?? 0) * 100) }}</span>
+            </div>
+            <!-- MIDI Out -->
+            <div class="flex items-center gap-1">
+              <button
+                @click.stop="drumStore.setTrackFx(trackIdx, 'midiOutEnabled', !track.midiOutEnabled)"
+                :class="[
+                  'px-1.5 h-4 text-[8px] font-black rounded border transition-colors',
+                  track.midiOutEnabled
+                    ? 'border-amber-400 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                    : 'border-neutral-600 bg-neutral-800 text-neutral-400 hover:border-amber-500 hover:text-amber-300'
+                ]"
+                title="Send this track's steps out as MIDI notes to drive an external drum machine/synth, instead of playing the internal sample"
+              >MIDI OUT</button>
+              <button
+                v-if="track.midiOutEnabled"
+                @click.stop="drumStore.setTrackFx(trackIdx, 'midiNote', Math.min(127, (track.midiNote ?? 36) + 1))"
+                @contextmenu.prevent="drumStore.setTrackFx(trackIdx, 'midiNote', Math.max(0, (track.midiNote ?? 36) - 1))"
+                @wheel.prevent="drumStore.setTrackFx(trackIdx, 'midiNote', Math.max(0, Math.min(127, (track.midiNote ?? 36) - Math.sign($event.deltaY))))"
+                class="w-10 h-4 text-center text-[8px] font-mono rounded border border-amber-700 bg-neutral-800 text-amber-300 hover:border-amber-500 transition-colors"
+                title="MIDI note to send · click +1 · right-click −1 · scroll"
+              >{{ midiNoteName(track.midiNote ?? 36) }}</button>
             </div>
             <!-- FX copy / paste -->
             <div class="flex items-center gap-1 ml-auto shrink-0">
