@@ -64,6 +64,9 @@ const canvasControllerNames = computed(() =>
 const canvasAppSourceIds = computed(() =>
   new Set(midiFlowConfigsStore.liveNodes.filter(n => n.sourceId != null).map(n => n.sourceId))
 )
+const canvasInstrumentNames = computed(() =>
+  new Set(midiFlowConfigsStore.liveNodes.filter(n => n.sourceId == null && n.type !== 'controller').map(n => n.name))
+)
 
 // ── Controllers (left column) — plain identity, no patch/volume: they're
 // inputs, not sound sources. Canvas-present real controllers, PLUS the real
@@ -193,12 +196,18 @@ const highlightedInstrumentNames = computed(() => {
 // ── Instruments (bottom row) — everything that isn't a controller: hardware
 // + virtual instruments. Rows are built from the same reactive sources MIDI
 // Flow itself reads/writes, so anything changed elsewhere (Program Change
-// panel, MIDI Flow, Audio Mixer) shows up here live. ──
+// panel, MIDI Flow, Audio Mixer) shows up here live. Gated on canvas
+// presence (canvasInstrumentNames) just like controllers/apps above —
+// removeNode() in MIDI Flow clears routing/input-routing for a deleted node
+// but intentionally leaves its `registrations` entry alone (other panels,
+// e.g. Program Change, still read patch data from it), so without this
+// filter a device removed from the MIDI Flow canvas would keep showing up
+// here forever. ──
 const instruments = computed(() => {
   const uiOutputs = midiStore.routingMatrix[MidiSource.UI] ?? []
 
   return Object.values(midiStore.routingConfig?.registrations ?? {})
-    .filter(reg => deviceType(reg.name) !== 'controller')
+    .filter(reg => deviceType(reg.name) !== 'controller' && canvasInstrumentNames.value.has(reg.name))
     .map(reg => {
       const isVirtual = midiStore.virtualInstruments.some(v => v.name === reg.name)
       const type = deviceType(reg.name)
