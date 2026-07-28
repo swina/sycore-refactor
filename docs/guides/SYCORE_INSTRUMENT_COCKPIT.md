@@ -1,4 +1,4 @@
-# Instrument Cockpit
+# DECK
 
 **Purpose:** A performance-time synthesis of your MIDI Flow rig — one view showing every connected controller, app, and instrument, with live patch names, active channels, volume, and quick links into each device's real editor.
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-Instrument Cockpit is not a wiring tool — [MIDI Flow](./SYCORE_MIDI_FLOW.md) is still where you drag nodes and draw cables to build your rig. The Cockpit is what you glance at (and lightly touch) once that rig is wired: it reads the exact same live routing state MIDI Flow produces and lays it out as a single console — Controllers on the left, Apps on the right, a central display, and your Instruments docked along the bottom.
+DECK is not a wiring tool — [MIDI Flow](./SYCORE_MIDI_FLOW.md) is still where you drag nodes and draw cables to build your rig. DECK is what you glance at (and lightly touch) once that rig is wired: it reads the exact same live routing state MIDI Flow produces and lays it out as a single console — Controllers on the left, Apps on the right, a central display, and your Instruments docked along the bottom.
 
 Everything in it is reactive. Add a device or app to the MIDI Flow canvas and it appears here immediately; change a patch in the Program Change panel and the patch list updates without reopening anything.
 
@@ -39,7 +39,7 @@ The center LCD-styled screen is the console's core:
 | **BPM** (top-left) | The shared global tempo. Editable directly; right-click for MIDI Learn. |
 | **MIDI Flow shortcut** | Jumps to the MIDI Flow canvas to rewire the rig. |
 | **Panic** (top-right) | All-notes-off across every channel — the same action as MIDI Settings' Panic button. |
-| **SY.CORE / Mini Scope** | A compact oscilloscope reusing the Audio Visualizer's mic-capture engine, stripped down to just a waveform. Opt-in — click to start (no automatic mic prompt), and it stops capturing whenever the Cockpit is closed. **Click the scope itself to toggle between waveform and a small spectrum view.** It shares its input-device choice with the full Audio Visualizer panel. |
+| **SY.CORE / Mini Scope** | A compact oscilloscope reusing the Audio Visualizer's mic-capture engine, stripped down to just a waveform. Opt-in — click to start (no automatic mic prompt), and it stops capturing whenever DECK is closed. **Click the scope itself to toggle between waveform and a small spectrum view.** It shares its input-device choice with the full Audio Visualizer panel. |
 | **Patch list** | One line per routed instrument, per **active channel** — a multi-timbral instrument with several channels active gets one line per channel, each with its own patch name and category. Updates live as patches change elsewhere. |
 | **Play / Stop** (bottom-left) | The same global transport play/stop as the main Transport Bar — starts/stops every sync-enabled app together. |
 | **Sync badges** | Sequencer / Chord Prog / Drum Machine / Backing Track — click to toggle whether that app starts and stops with the global transport. Shared state with the Transport Bar's own sync toggles. |
@@ -64,13 +64,13 @@ Each card shows:
 
 Hovering a Controller or App highlights every Instrument it actually reaches:
 
-- For a real controller or app (an actual MIDI Flow canvas node), the Cockpit traces forward through the canvas's own cables — so multi-hop chains like *Controller → Step Sequencer → S-1* highlight correctly, not just direct connections.
+- For a real controller or app (an actual MIDI Flow canvas node), DECK traces forward through the canvas's own cables — so multi-hop chains like *Controller → Step Sequencer → S-1* highlight correctly, not just direct connections.
 - For a synthesized virtual-output-port entry (the **Port** badge), it highlights whichever virtual instruments are actually bound to that port, since there's no cable to trace.
 
 If nothing highlights, the hovered controller/app simply has no cable drawn to it yet in MIDI Flow.
 
 ---
 
-## Opening the Cockpit
+## Opening DECK
 
 Launch it from the Performance Tools section of the app launcher/dock, or via Module Manager. It's a standard floating panel — drag, resize, minimize, and its position is remembered across sessions, same as every other panel.

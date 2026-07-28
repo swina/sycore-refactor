@@ -922,47 +922,10 @@ const _DM_TRACKS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'T
 
 const APP_SECTIONS = [
   {
-    key: 'menu', label: 'Main Menu',
+    key: 'audio_mixer', label: 'Audio Mixer',
     items: [
-      { action: 'toggle_main_menu', label: 'Toggle Main Menu' },
-    ],
-  },
-  {
-    key: 'lpp', label: 'Live Performance Pad',
-    items: [
-      { action: 'open_lpp', label: 'Toggle Live Pad' },
-      ...Array.from({ length: 16 }, (_, i) => ({ paramName: `lpp_set_${i}`,  label: `Set Pad ${i + 1}` })),
-      ...Array.from({ length: 8 },  (_, i) => ({ paramName: `lpp_loop_${i}`, label: `Loop Pad ${i + 1}` })),
-      ...Array.from({ length: 8 },  (_, i) => ({ paramName: `lpp_bt_${i}`,   label: `BT Pad ${i + 1}` })),
-      { paramName: 'lpp_playstop', label: 'Play / Stop' },
-    ],
-  },
-  {
-    key: 'sampler', label: 'Sampler',
-    items: [
-      { action: 'open_sampler', label: 'Toggle Sampler' },
-      ...['A','B','C','D','E','F','G','H'].map(b => ({ paramName: `sampler_bank_${b}`, label: `Bank ${b}` })),
-      ...Array.from({ length: 7 }, (_, i) => ({ paramName: `sampler_pad_${i}`, label: `Pad ${i + 1}` })),
-    ],
-  },
-  {
-    key: 'dm', label: 'Drum Machine',
-    items: [
-      { action: 'open_drum_machine', label: 'Toggle Drum Machine' },
-      { paramName: 'dm_play_stop',    label: 'Play / Stop' },
-      { paramName: 'dm_generate',     label: 'Generate' },
-      { paramName: 'dm_repeat',       label: 'Repeat' },
-      { paramName: 'dm_fill',         label: 'Fill' },
-      { paramName: 'dm_level_master', label: 'Master Volume' },
-      ...['a','b','c','d','e','f'].map(s => ({ paramName: `dm_seq_${s}`, label: `Seq ${s.toUpperCase()}` })),
-      ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_pad_${i}`, label: `Pad: ${lbl}` })),
-      ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_vol_${i}`, label: `Vol: ${lbl}` })),
-    ],
-  },
-  {
-    key: 'live_timeline', label: 'Live Timeline',
-    items: [
-      { action: 'open_live_timeline', label: 'Toggle Live Timeline' },
+      { action: 'toggle_audio_mixer',    label: 'Toggle Audio Mixer' },
+      { action: 'mixer_master_volume_cc', label: 'Master Volume via CC' },
     ],
   },
   {
@@ -984,6 +947,48 @@ const APP_SECTIONS = [
     ],
   },
   {
+    key: 'cockpit_nav', label: 'DECK Navigation',
+    items: [
+      { paramName: 'cockpit_nav_next_zone',    label: 'Next Zone' },
+      { paramName: 'cockpit_nav_prev_zone',    label: 'Prev Zone' },
+      { paramName: 'cockpit_nav_zone_encoder', label: 'Zone Encoder' },
+      { paramName: 'cockpit_nav_next_item',    label: 'Next Item' },
+      { paramName: 'cockpit_nav_prev_item',    label: 'Prev Item' },
+      { paramName: 'cockpit_nav_item_encoder', label: 'Item Encoder' },
+      { paramName: 'cockpit_nav_select',       label: 'Select' },
+    ],
+  },
+  {
+    key: 'dm', label: 'Drum Machine',
+    items: [
+      { action: 'open_drum_machine', label: 'Toggle Drum Machine' },
+      { paramName: 'dm_play_stop',    label: 'Play / Stop' },
+      { paramName: 'dm_generate',     label: 'Generate' },
+      { paramName: 'dm_repeat',       label: 'Repeat' },
+      { paramName: 'dm_fill',         label: 'Fill' },
+      { paramName: 'dm_level_master', label: 'Master Volume' },
+      ...['a','b','c','d','e','f'].map(s => ({ paramName: `dm_seq_${s}`, label: `Seq ${s.toUpperCase()}` })),
+      ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_pad_${i}`, label: `Pad: ${lbl}` })),
+      ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_vol_${i}`, label: `Vol: ${lbl}` })),
+    ],
+  },
+  {
+    key: 'lpp', label: 'Live Performance Pad',
+    items: [
+      { action: 'open_lpp', label: 'Toggle Live Pad' },
+      ...Array.from({ length: 16 }, (_, i) => ({ paramName: `lpp_set_${i}`,  label: `Set Pad ${i + 1}` })),
+      ...Array.from({ length: 8 },  (_, i) => ({ paramName: `lpp_loop_${i}`, label: `Loop Pad ${i + 1}` })),
+      ...Array.from({ length: 8 },  (_, i) => ({ paramName: `lpp_bt_${i}`,   label: `BT Pad ${i + 1}` })),
+      { paramName: 'lpp_playstop', label: 'Play / Stop' },
+    ],
+  },
+  {
+    key: 'live_timeline', label: 'Live Timeline',
+    items: [
+      { action: 'open_live_timeline', label: 'Toggle Live Timeline' },
+    ],
+  },
+  {
     key: 'loop_machine', label: 'Loop Machine',
     items: [
       { action: 'open_loop_machine', label: 'Toggle Samples Machine' },
@@ -992,17 +997,24 @@ const APP_SECTIONS = [
     ],
   },
   {
+    key: 'menu', label: 'Main Menu',
+    items: [
+      { action: 'toggle_main_menu', label: 'Toggle Main Menu' },
+    ],
+  },
+  {
+    key: 'sampler', label: 'Sampler',
+    items: [
+      { action: 'open_sampler', label: 'Toggle Sampler' },
+      ...['A','B','C','D','E','F','G','H'].map(b => ({ paramName: `sampler_bank_${b}`, label: `Bank ${b}` })),
+      ...Array.from({ length: 7 }, (_, i) => ({ paramName: `sampler_pad_${i}`, label: `Pad ${i + 1}` })),
+    ],
+  },
+  {
     key: 'transport', label: 'Transport',
     items: [
       { action: 'transport_play_all', label: 'Play All (Synced)' },
       { action: 'transport_stop_all', label: 'Stop All' },
-    ],
-  },
-  {
-    key: 'audio_mixer', label: 'Audio Mixer',
-    items: [
-      { action: 'toggle_audio_mixer',    label: 'Toggle Audio Mixer' },
-      { action: 'mixer_master_volume_cc', label: 'Master Volume via CC' },
     ],
   },
 ]

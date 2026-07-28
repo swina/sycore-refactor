@@ -382,77 +382,12 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
 };
 
 export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
-  'Sound & Presets': [
-    'prev_preset', 'next_preset', 'first_preset', 'last_preset',
-    'new_sound', 'generate', 'regenerate', 'save_preset',
-    'select_sound_a', 'select_sound_b', 'toggle_sound_ab', 'select_sound_ab_range'
-  ],
   'Arpeggiator': [
     'toggle_arp', 'arp_mode_cc', 'arp_subdivision_cc', 'arp_rate_cc', 'arp_hold_cc'
-  ],
-  'Sequencer': [
-    'toggle_sequencer', 'seq_play', 'seq_stop', 'seq_bpm_up', 'seq_bpm_down', 'seq_bpm_cc',
-    'seq_swing_cc', 'seq_density_cc', 'seq_length_cc', 'seq_key_cc', 'seq_scale_cc', 'seq_style_cc',
-    'seq_transpose_cc', 'seq_gen_trigger', 'seq_duplicate', 'seq_reduce', 'seq_skip_step',
-    'seq_octave_cc', 'seq_range_cc', 'seq_step_select_cc', 'seq_select_1', 'seq_select_2'
-  ],
-  'Modulation': [
-    'toggle_lfo_1', 'toggle_lfo_2', 'toggle_velocity_mapping',
-    'lfo1_waveform_cc', 'lfo1_mode_cc', 'lfo1_target_cc', 'lfo1_rate_cc', 'lfo1_depth_cc',
-    'lfo2_waveform_cc', 'lfo2_mode_cc', 'lfo2_target_cc', 'lfo2_rate_cc', 'lfo2_depth_cc',
-    'velocity_target_cc', 'velocity_amount_cc', 'velocity_curve_cc'
   ],
   'Audio & Looper': [
     'toggle_audio_capture', 'toggle_looper', 'looper_record', 'looper_clear_all',
     'looper_mute_take_1', 'looper_mute_take_2', 'looper_mute_take_3', 'looper_mute_take_4'
-  ],
-  'UI & Panels': [
-    'toggle_panel', 'toggle_visualizer', 'toggle_liveset', 'open_sound_types',
-    'open_sound_history', 'open_midi_matrix', 'panel_category_cc',
-    'panel_tab_grid', 'panel_tab_flow', 'panel_tab_lfo', 'panel_tab_osc',
-    'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
-    'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select',
-    'focus_next_modal',
-    'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog', 'open_sound_engine', 'open_live_timeline',
-  ],
-  'Transport & Performance': [
-    'global_start_stop', 'transport_play_all', 'transport_stop_all', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
-    'playlist_volume_cc', 'transpose_cc', 'pass_thru', 'capture_rec_toggle'
-  ],
-  'MIDI Channel': [
-    'channel_up', 'channel_down', 'channel_cc'
-  ],
-  'Program Change Browser': [
-    'pc_device_cc', 'pc_bank_cc', 'pc_category_cc', 'pc_preset_cc',
-    'pc_preset_up', 'pc_preset_down',
-    'pc_pad_a1', 'pc_pad_a2', 'pc_pad_a3', 'pc_pad_a4',
-    'pc_pad_b1', 'pc_pad_b2', 'pc_pad_b3', 'pc_pad_b4',
-  ],
-  'Live Set': [
-    'liveset_up', 'liveset_down',
-    'liveset_pad_1', 'liveset_pad_2', 'liveset_pad_3', 'liveset_pad_4',
-    'liveset_pad_5', 'liveset_pad_6', 'liveset_pad_7', 'liveset_pad_8',
-    'liveset_pad_9', 'liveset_pad_10', 'liveset_pad_11', 'liveset_pad_12',
-    'liveset_pad_13', 'liveset_pad_14', 'liveset_pad_15', 'liveset_pad_16'
-  ],
-  'Backing Tracks': [
-    'open_tracks_player',
-    'backing_track_pad_1',  'backing_track_pad_2',  'backing_track_pad_3',  'backing_track_pad_4',
-    'backing_track_pad_5',  'backing_track_pad_6',  'backing_track_pad_7',  'backing_track_pad_8',
-    'backing_track_pad_9',  'backing_track_pad_10', 'backing_track_pad_11', 'backing_track_pad_12',
-    'backing_track_pad_13', 'backing_track_pad_14', 'backing_track_pad_15', 'backing_track_pad_16',
-  ],
-  'MIDI Config': [
-    'midi_config_preset_1', 'midi_config_preset_2', 'midi_config_preset_3', 'midi_config_preset_4',
-    'midi_config_preset_5', 'midi_config_preset_6', 'midi_config_preset_7', 'midi_config_preset_8',
-    'sysex_send',
-  ],
-  'Timeline Macro': [
-    'timeline_add_dm_rec_sync',
-    'timeline_add_audio_trim_start',
-    'timeline_add_audio_set_loop',
-    'timeline_add_audio_crop',
-    'timeline_add_audio_save_wav',
   ],
   'Audio Mixer': [
     'toggle_audio_mixer',
@@ -472,6 +407,71 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
     'mixer_ch14_volume_cc', 'mixer_ch14_mute', 'mixer_ch14_solo',
     'mixer_ch15_volume_cc', 'mixer_ch15_mute', 'mixer_ch15_solo',
     'mixer_ch16_volume_cc', 'mixer_ch16_mute', 'mixer_ch16_solo',
+  ],
+  'Backing Tracks': [
+    'open_tracks_player',
+    'backing_track_pad_1',  'backing_track_pad_2',  'backing_track_pad_3',  'backing_track_pad_4',
+    'backing_track_pad_5',  'backing_track_pad_6',  'backing_track_pad_7',  'backing_track_pad_8',
+    'backing_track_pad_9',  'backing_track_pad_10', 'backing_track_pad_11', 'backing_track_pad_12',
+    'backing_track_pad_13', 'backing_track_pad_14', 'backing_track_pad_15', 'backing_track_pad_16',
+  ],
+  'Live Set': [
+    'liveset_up', 'liveset_down',
+    'liveset_pad_1', 'liveset_pad_2', 'liveset_pad_3', 'liveset_pad_4',
+    'liveset_pad_5', 'liveset_pad_6', 'liveset_pad_7', 'liveset_pad_8',
+    'liveset_pad_9', 'liveset_pad_10', 'liveset_pad_11', 'liveset_pad_12',
+    'liveset_pad_13', 'liveset_pad_14', 'liveset_pad_15', 'liveset_pad_16'
+  ],
+  'MIDI Channel': [
+    'channel_up', 'channel_down', 'channel_cc'
+  ],
+  'MIDI Config': [
+    'midi_config_preset_1', 'midi_config_preset_2', 'midi_config_preset_3', 'midi_config_preset_4',
+    'midi_config_preset_5', 'midi_config_preset_6', 'midi_config_preset_7', 'midi_config_preset_8',
+    'sysex_send',
+  ],
+  'Modulation': [
+    'toggle_lfo_1', 'toggle_lfo_2', 'toggle_velocity_mapping',
+    'lfo1_waveform_cc', 'lfo1_mode_cc', 'lfo1_target_cc', 'lfo1_rate_cc', 'lfo1_depth_cc',
+    'lfo2_waveform_cc', 'lfo2_mode_cc', 'lfo2_target_cc', 'lfo2_rate_cc', 'lfo2_depth_cc',
+    'velocity_target_cc', 'velocity_amount_cc', 'velocity_curve_cc'
+  ],
+  'Program Change Browser': [
+    'pc_device_cc', 'pc_bank_cc', 'pc_category_cc', 'pc_preset_cc',
+    'pc_preset_up', 'pc_preset_down',
+    'pc_pad_a1', 'pc_pad_a2', 'pc_pad_a3', 'pc_pad_a4',
+    'pc_pad_b1', 'pc_pad_b2', 'pc_pad_b3', 'pc_pad_b4',
+  ],
+  'Sequencer': [
+    'toggle_sequencer', 'seq_play', 'seq_stop', 'seq_bpm_up', 'seq_bpm_down', 'seq_bpm_cc',
+    'seq_swing_cc', 'seq_density_cc', 'seq_length_cc', 'seq_key_cc', 'seq_scale_cc', 'seq_style_cc',
+    'seq_transpose_cc', 'seq_gen_trigger', 'seq_duplicate', 'seq_reduce', 'seq_skip_step',
+    'seq_octave_cc', 'seq_range_cc', 'seq_step_select_cc', 'seq_select_1', 'seq_select_2'
+  ],
+  'Sound & Presets': [
+    'prev_preset', 'next_preset', 'first_preset', 'last_preset',
+    'new_sound', 'generate', 'regenerate', 'save_preset',
+    'select_sound_a', 'select_sound_b', 'toggle_sound_ab', 'select_sound_ab_range'
+  ],
+  'Timeline Macro': [
+    'timeline_add_dm_rec_sync',
+    'timeline_add_audio_trim_start',
+    'timeline_add_audio_set_loop',
+    'timeline_add_audio_crop',
+    'timeline_add_audio_save_wav',
+  ],
+  'Transport & Performance': [
+    'global_start_stop', 'transport_play_all', 'transport_stop_all', 'smart_latch_cc', 'playlist_play_stop', 'playlist_next',
+    'playlist_volume_cc', 'transpose_cc', 'pass_thru', 'capture_rec_toggle'
+  ],
+  'UI & Panels': [
+    'toggle_panel', 'toggle_visualizer', 'toggle_liveset', 'open_sound_types',
+    'open_sound_history', 'open_midi_matrix', 'panel_category_cc',
+    'panel_tab_grid', 'panel_tab_flow', 'panel_tab_lfo', 'panel_tab_osc',
+    'panel_tab_env', 'panel_tab_filter', 'panel_tab_efx', 'panel_tab_poly',
+    'panel_tab_advanced', 'panel_tab_dynamic', 'toggle_main_menu', 'main_menu_scroll_cc', 'main_menu_select',
+    'focus_next_modal',
+    'open_lpp', 'open_sampler', 'open_drum_machine', 'open_chord_prog', 'open_sound_engine', 'open_live_timeline',
   ],
 };
 

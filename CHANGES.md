@@ -2,6 +2,12 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-07-28
+
+- Instrument Cockpit renamed to **DECK** throughout the app (launcher tile, floating panel header/minimize label, Guides entry) and given a new icon (sparkles, replacing the piano icon); the guide is updated to match.
+- MIDI Controller Designer: **DECK Navigation** added as a mappable app-param group (Next/Prev Zone, Zone Encoder, Next/Prev Item, Item Encoder, Select) — assign any control on a preset to drive DECK's hardware navigation directly, the same paramNames its on-screen right-click MIDI Learn menus already write to.
+- MIDI Controller Designer: the ACTIONS and APPS lists in the mapping drawer are now sorted alphabetically by group/section name for easier scanning.
+
 ## 2026-07-26
 
 - MIDI Settings: **Block Incoming Clock Thru** — new toggle (on by default) that stops MIDI Clock/Start/Continue/Stop received from an input device from being re-sent to other outputs via Global Thru. Incoming clock still drives the Incoming Clock BPM display, but can no longer fight the app's own generated clock on shared devices — fixes a MIDI-echo symptom (notes/CC repeating and fading out, often isolated to one channel) caused by a device broadcasting its own clock into the app.

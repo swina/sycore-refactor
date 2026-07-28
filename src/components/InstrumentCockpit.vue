@@ -1,5 +1,5 @@
 <script setup>
-import { Piano } from 'lucide-vue-next'
+import { Sparkles } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useUiStore } from '@/stores/useUiStore'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -14,7 +14,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   minWidth:      760,
   minHeight:     380,
   zIndex:        120,
-  minimizeLabel: 'Instrument Cockpit',
+  minimizeLabel: 'DECK',
   openRef:       () => uiStore.isInstrumentCockpitOpen,
   panelId:       'instrument-cockpit',
 })
@@ -37,7 +37,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
         @mousedown.stop="onDragStart"
       >
         <span class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-synth-neon shrink-0">
-          <Piano class="w-4 h-4" /> SY.CORE Cockpit
+          <Sparkles class="w-4 h-4" /> SY.CORE DECK
         </span>
         <div class="flex-1" />
         <div class="flex items-center gap-1" @mousedown.stop>

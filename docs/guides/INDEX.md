@@ -60,7 +60,7 @@
 
 | Guide | Description |
 |-------|-------------|
-| [Instrument Cockpit](./SYCORE_INSTRUMENT_COCKPIT.md) | Performance-time synthesis of your MIDI Flow rig — controllers, apps, and instruments in one console with live patches, channels, and hover-to-highlight routing |
+| [DECK](./SYCORE_INSTRUMENT_COCKPIT.md) | Performance-time synthesis of your MIDI Flow rig — controllers, apps, and instruments in one console with live patches, channels, and hover-to-highlight routing |
 | [Live Timeline](./SYCORE_LIVE_TIMELINE.md) | Visual arrangement timeline — sequence segments, fire MIDI markers, and control transport |
 | [Drum Machine](./SYCORE_DRUM_MACHINE.md) | 11-track 16-step pattern sequencer with A–F sequence banks, Fill, Repeater, style generation, and REC SYNC, Patterns DB, Euclidean Pattern Generator, Bassline generator (uses 3 tracks) |
 | [Chord Progression Sequencer](./SYCORE_CHORD_PROG_SEQUENCER.md) | Step-based harmonic sequencer with built-in chord library, arpeggio mode, and algorithmic generation |

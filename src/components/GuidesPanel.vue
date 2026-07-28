@@ -91,7 +91,7 @@ const CATEGORIES = [
     label: 'Live Performance',
     color: 'text-pink-400',
     items: [
-      { id: 'instrument-cockpit', label: 'Instrument Cockpit',  file: 'SYCORE_INSTRUMENT_COCKPIT' },
+      { id: 'instrument-cockpit', label: 'DECK',  file: 'SYCORE_INSTRUMENT_COCKPIT' },
       { id: 'live-timeline',  label: 'Live Timeline',         file: 'SYCORE_LIVE_TIMELINE' },
       { id: 'loop-machine', label: 'Samples Machine',      file: 'SYCORE_LOOP_MACHINE' },
       { id: 'live-pad',       label: 'Live Set',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },

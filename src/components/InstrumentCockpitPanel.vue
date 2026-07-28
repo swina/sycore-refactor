@@ -329,7 +329,7 @@ const zones = [
 const nav = useCockpitNavigation(zones)
 
 function focusRing(zoneId, idx) {
-  return nav.isFocused(zoneId, idx) ? 'outline outline-2 outline-dashed outline-orange-500 outline-offset-2' : ''
+  return nav.isFocused(zoneId, idx) ? 'outline outline-1 outline-dashed outline-orange-500/40 outline-offset-2' : ''
 }
 
 // ── Local raw MIDI listener — resolves the 7 cockpit_nav_* paramNames
@@ -338,14 +338,23 @@ function focusRing(zoneId, idx) {
 // uses for its own paramNames (same key-building convention, so it correctly
 // reads back whatever confirmLearn() stored). Buttons/notes are naturally
 // single-fire; CC-driven "buttons" get their own small rising-edge guard
-// since mappingStore.midiMappings has no generic one. Encoders are decoded
-// as two's-complement relative ticks — no generic support for that exists
-// anywhere else in the app either. ──
+// since mappingStore.midiMappings has no generic one. Encoders are read as
+// plain absolute CC (the default mode nearly every hardware encoder ships
+// in) — we track each encoder's last raw value and derive direction from
+// the wrap-safe delta between ticks, rather than assuming the two's-
+// complement "relative" protocol that requires special controller config
+// most users never set up (the earlier approach, and why it felt unusable). ──
 const _cockpitEdgeState = new Map()
+const _cockpitEncoderState = new Map()
 
-function decodeRelativeTick(val) {
-  if (val === 0 || val === 64) return 0
-  return val < 64 ? val : -(128 - val)
+function encoderDelta(id, val) {
+  const prev = _cockpitEncoderState.get(id)
+  _cockpitEncoderState.set(id, val)
+  if (prev === undefined) return 0
+  let diff = val - prev
+  if (diff > 64) diff -= 128
+  else if (diff < -64) diff += 128
+  return diff
 }
 
 function edgeTriggered(id, val) {
@@ -380,8 +389,8 @@ function _cockpitMidiListener(event) {
     case 'cockpit_nav_next_item': if (isNote || edgeTriggered('ni', byte2)) nav.moveItem(1); break
     case 'cockpit_nav_prev_item': if (isNote || edgeTriggered('pi', byte2)) nav.moveItem(-1); break
     case 'cockpit_nav_select':    if (isNote || edgeTriggered('sel', byte2)) nav.selectCurrent(); break
-    case 'cockpit_nav_zone_encoder': { const d = decodeRelativeTick(byte2); if (d) nav.moveZone(Math.sign(d)) } break
-    case 'cockpit_nav_item_encoder': { const d = decodeRelativeTick(byte2); if (d) nav.moveItem(Math.sign(d)) } break
+    case 'cockpit_nav_zone_encoder': { const d = encoderDelta('ze', byte2); if (d) nav.moveZone(Math.sign(d)) } break
+    case 'cockpit_nav_item_encoder': { const d = encoderDelta('ie', byte2); if (d) nav.moveItem(Math.sign(d)) } break
   }
 }
 
