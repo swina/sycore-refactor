@@ -3,7 +3,7 @@ defineEmits(['close', 'minimize', 'maximize'])
 </script>
 
 <template>
-  <div class="flex items-center gap-1.5 shrink-0 group/traffic" @mousedown.stop>
+  <div class="flex items-center gap-1.5 shrink-0 group/traffic">
     <button
       class="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-500 transition-colors flex items-center justify-center"
       title="Close"

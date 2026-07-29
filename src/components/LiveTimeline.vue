@@ -1458,6 +1458,7 @@ onUnmounted(() => {
     v-show="!isMinimized"
     class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]"
     :style="panelStyle"
+    @mousedown.capture="bringToFront"
   >
     <!-- Resize handles -->
     <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3  h-1  cursor-n-resize  z-50" />
@@ -1473,7 +1474,7 @@ onUnmounted(() => {
       @mousedown="onDragStart"
     >
       <!-- Title & Tabs -->
-      <div class="flex items-center gap-6 pointer-events-auto" @mousedown.stop>
+      <div class="flex items-center gap-6 pointer-events-auto">
         <div class="flex flex-col">
           <div class="flex items-center gap-2">
             <Clock class="w-4 h-4 text-synth-neon" />
@@ -1506,7 +1507,7 @@ onUnmounted(() => {
 
       <!-- Save / Load controls (moved from the footer to free up its space
            for the Macro/Global Transport buttons relocated off the toolbar row) -->
-      <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+      <div class="flex items-center gap-1 pointer-events-auto">
         <!-- Current set name chip -->
         <div
           class="flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900/60 border text-[9px] font-mono max-w-[120px] overflow-hidden"
@@ -1542,7 +1543,7 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <div class="flex items-center gap-1 pointer-events-auto ml-2" @mousedown.stop>
+      <div class="flex items-center gap-1 pointer-events-auto ml-2">
         <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
 

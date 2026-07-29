@@ -705,6 +705,7 @@ onUnmounted(() => {
       v-show="uiStore.isLoopMachineOpen && !isMinimized"
       :style="panelStyle"
       class="relative bg-neutral-950 border border-amber-500/30 rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
+      @mousedown.capture="bringToFront"
     >
       <!-- Resize handles -->
       <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3  h-1  cursor-n-resize  z-50" />
@@ -802,7 +803,6 @@ onUnmounted(() => {
 
           <!-- Freesound browser -->
           <button
-            @mousedown.stop
             @click="uiStore.isFreesoundBrowserOpen = true"
             class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-neutral-700 text-neutral-500 hover:border-cyan-500/40 hover:text-cyan-400 text-[9px] font-black uppercase tracking-widest transition-all"
             title="Browse Freesound"
@@ -813,7 +813,6 @@ onUnmounted(() => {
 
           <!-- Presets toggle -->
           <button
-            @mousedown.stop
             @click="showPresetPanel = !showPresetPanel"
             :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all',
               showPresetPanel

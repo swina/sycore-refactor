@@ -892,7 +892,7 @@ function assignToPad(setId, padIdx) {
 <template>
   <div class="overflow-hidden">
     <Transition name="performance" appear>
-      <div class="bg-neutral-900 max-h-[94vh] border border-violet-500/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle" v-show="!isMinimized">
+      <div class="bg-neutral-900 max-h-[94vh] border border-violet-500/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle" v-show="!isMinimized" @mousedown.capture="bringToFront">
 
         <!-- Header -->
         <div class="px-4 py-2 border-b border-neutral-800 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">

@@ -105,7 +105,7 @@ const ROUTE_FLAGS = [
   <div
     class="fixed select-none"
     :style="panelStyle"
-    @mousedown="bringToFront"
+    @mousedown.capture="bringToFront"
   >
     <div class="h-full flex flex-col bg-neutral-950 border border-synth-neon/30 glow-neon rounded-2xl overflow-hidden shadow-2xl">
 

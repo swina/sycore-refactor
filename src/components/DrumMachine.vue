@@ -1279,7 +1279,7 @@ function cycleChainSlot(i) {
       v-show="uiStore.isDrumMachineOpen && !isMinimized"
       :style="panelStyle"
       class="fixed bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden select-none"
-      @mousedown="bringToFront"
+      @mousedown.capture="bringToFront"
       @click="closeStepContext"
     >
       <!-- ── Header ──────────────────────────────────────────────────────────── -->

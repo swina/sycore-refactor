@@ -165,7 +165,7 @@ onMounted(() => {
     v-show="!isMinimized"
     :style="panelStyle"
     class="fixed flex flex-col bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl"
-    @mousedown="bringToFront"
+    @mousedown.capture="bringToFront"
   >
 
     <!-- ── Title bar ─────────────────────────────────────────────────────── -->

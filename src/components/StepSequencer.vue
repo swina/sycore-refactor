@@ -1602,10 +1602,10 @@ let generateHidden = ref(false)
 </script>
 
 <template>
-  <div v-if="isOpen" v-show="!isMinimized"
+  <div v-show="isOpen && !isMinimized"
     class="fixed bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden select-none"
     :style="panelStyle"
-    @mousedown="bringToFront"
+    @mousedown.capture="bringToFront"
   >
     <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3  right-3  h-1.5  cursor-n-resize  z-50" />
     <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3  right-3  h-1.5  cursor-s-resize  z-50" />
@@ -1625,7 +1625,7 @@ let generateHidden = ref(false)
         <span class="text-[11px] font-black uppercase tracking-widest text-white">Sequencer</span>
       </div>
       <div class="flex-1" />
-      <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+      <div class="flex items-center gap-1 pointer-events-auto">
         <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
     </div>

@@ -30,6 +30,7 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
       v-show="!isMinimized"
       class="bg-neutral-950 border border-synth-neon/30 rounded-2xl overflow-hidden flex flex-col"
       :style="panelStyle"
+      @mousedown.capture="bringToFront"
     >
       <!-- Resize handles -->
       <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3  right-3  h-1  cursor-n-resize  z-50" />

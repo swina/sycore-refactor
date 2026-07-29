@@ -745,7 +745,7 @@ function formatTime(t) {
 
 <template>
   <div v-show="isOpen">
-    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]" :style="panelStyle" v-show="!isMinimized">
+    <div class="bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]" :style="panelStyle" v-show="!isMinimized" @mousedown.capture="bringToFront">
 
     <!-- ── Header ── -->
     <div class="px-6 py-2 border-b border-violet-900 flex items-center shrink-0 bg-gradient-to-r from-violet-950/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">

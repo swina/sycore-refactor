@@ -978,6 +978,7 @@ onUnmounted(() => {
         :style="panelDRStyle"
         class="flex flex-col bg-neutral-900 max-h-[94vh] border border-emerald-500/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(0,163,112,0.15)]"
         v-show="!isMinimized"
+        @mousedown.capture="bringToFront"
       >
         <!-- Header -->
         <div

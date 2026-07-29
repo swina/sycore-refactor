@@ -405,7 +405,7 @@ const hasTakes = computed(() => looperStore.takes.some(t => !t.isEmpty))
 </script>
 
 <template>
-  <div class="bg-neutral-950 z-[1000]border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden relative" :style="panelStyle" v-show="!isMinimized">
+  <div class="bg-neutral-950 z-[1000]border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden relative" :style="panelStyle" v-show="!isMinimized" @mousedown.capture="bringToFront">
       
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-3 bg-gradient-to-b from-white/5 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">

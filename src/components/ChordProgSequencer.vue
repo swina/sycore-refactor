@@ -852,11 +852,11 @@ function velBarColor(v) {
 
 <template>
   <div
-    v-if="isOpen"
-    v-show="!isMinimized"
+    v-show="isOpen && !isMinimized"
     :style="panelStyle"
     class="fixed flex flex-col bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl overflow-hidden text-white font-sans text-sm select-none"
     style="border-top: 2px solid #7c3aed;"
+    @mousedown.capture="bringToFront"
   >
     <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
     <div

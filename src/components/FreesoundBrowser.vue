@@ -482,6 +482,7 @@ onUnmounted(() => {
         v-show="uiStore.isFreesoundBrowserOpen && !isMinimized"
         class="fixed flex flex-col bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
         :style="panelStyle"
+        @mousedown.capture="bringToFront"
       >
 
         <!-- ── Capture busy overlay ─────────────────────────────────── -->

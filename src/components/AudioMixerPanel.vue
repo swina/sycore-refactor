@@ -218,7 +218,7 @@ const TYPE_FILL = {
         v-show="uiStore.isAudioMixerOpen && !isMinimized"
         :style="panelStyle"
         class="fixed bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        @mousedown="bringToFront"
+        @mousedown.capture="bringToFront"
       >
         <!-- Header ────────────────────────────────────────────────────── -->
         <div
@@ -281,7 +281,7 @@ const TYPE_FILL = {
           >
             <Activity class="w-3.5 h-3.5" />
           </button>
-          <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
+          <div class="flex items-center gap-1 pointer-events-auto">
             <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
           </div>
         </div>

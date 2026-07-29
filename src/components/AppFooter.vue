@@ -7,7 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SlidersHorizontal, SquareStack } from 'lucide-vue-next'
+import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SlidersHorizontal, SquareStack, Sparkles } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import AppLauncherModal from '@/components/ui/AppLauncherModal.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
@@ -295,6 +295,14 @@ onUnmounted(() => {
         </div>
 
         <ThemeToggle size="sm" />
+        <button
+          v-if="authStore.user"
+          @click="uiStore.openPanel('instrument-cockpit')"
+          title="DECK"
+          class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
+        >
+          <Sparkles class="w-5 h-5 text-synth-neon" />
+        </button>
         <button
           v-if="authStore.user"
           @click="uiStore.openPanel('audio-mixer')"

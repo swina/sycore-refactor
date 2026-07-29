@@ -314,9 +314,19 @@ export const useUiStore = defineStore('ui', () => {
     focusedModalKey.value = open[next]
   }
 
+  // Only clear the stale key here — do NOT fall back to open[0]. That fallback
+  // picked whichever panel happens to come first in MODAL_CYCLE_REGISTRY's
+  // fixed declaration order, not whatever the user was actually last using.
+  // In practice this meant closing any focused transient panel (Drum Machine,
+  // Loop Machine, ...) while a persistently-open panel like ChordProgSequencer
+  // sat earlier in that object's key order silently re-pinned focusedModalKey
+  // (and therefore SynthApp.vue's focusStyle() z-index:399 override) back onto
+  // it, making it look permanently stuck on top. Clearing to null instead
+  // means the next real click/openPanel() call sets focus properly via
+  // _bumpFocus(), and cycleFocusedModal() already handles a null key cleanly.
   watch(openModalKeys, (open) => {
     if (focusedModalKey.value && !open.includes(focusedModalKey.value)) {
-      focusedModalKey.value = open.length > 0 ? open[0] : null
+      focusedModalKey.value = null
     }
   })
 

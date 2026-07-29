@@ -37,7 +37,7 @@ function onBackgroundFileChange(e) {
 </script>
 
 <template>
-  <div v-show="uiStore.isInstrumentCockpitOpen && !isMinimized" class="fixed select-none" :style="panelStyle" @mousedown="bringToFront">
+  <div v-show="uiStore.isInstrumentCockpitOpen && !isMinimized" class="fixed select-none" :style="panelStyle" @mousedown.capture="bringToFront">
     <!-- Resize handles -->
     <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3  right-3  h-1  cursor-n-resize  z-50" />
     <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3  right-3  h-1  cursor-s-resize  z-50" />
@@ -56,7 +56,7 @@ function onBackgroundFileChange(e) {
           <Sparkles class="w-4 h-4" /> SY.CORE DECK
         </span>
         <div class="flex-1" />
-        <div class="flex items-center gap-1" @mousedown.stop>
+        <div class="flex items-center gap-1">
           <input ref="bgInputRef" type="file" accept="image/*" class="hidden" @change="onBackgroundFileChange" />
           <button
             v-if="backgroundImage"

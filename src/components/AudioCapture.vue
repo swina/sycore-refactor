@@ -2744,6 +2744,7 @@ onUnmounted(() => {
       v-show="uiStore.isAudioCaptureOpen && !isMinimized"
       :style="panelStyle"
       class="bg-neutral-950 border border-cyan-500/30 rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
+      @mousedown.capture="bringToFront"
     >
       <!-- Resize handles -->
       <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3  h-1  cursor-n-resize  z-50" />

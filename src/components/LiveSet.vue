@@ -439,7 +439,7 @@ function formatTime(t) {
     v-show="!isMinimized"
     :style="panelStyle"
     class="flex flex-col overflow-hidden select-none"
-    @mousedown="bringToFront"
+    @mousedown.capture="bringToFront"
   >
     <!-- Resize handles -->
     <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3 h-1   cursor-n-resize  z-50" />

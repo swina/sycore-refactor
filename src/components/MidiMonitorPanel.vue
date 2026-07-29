@@ -205,7 +205,7 @@ onUnmounted(() => {
       :class="props.embedded
         ? 'flex flex-col h-full overflow-hidden'
         : 'fixed flex flex-col bg-neutral-900 border border-cyan-500/30 rounded-xl shadow-2xl shadow-cyan-900/10 overflow-hidden'"
-      @mousedown="bringToFront"
+      @mousedown.capture="bringToFront"
     >
       <!-- ── Header ──────────────────────────────────────────────────────── -->
       <div

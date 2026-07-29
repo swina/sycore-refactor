@@ -115,7 +115,7 @@ const sortedDevices = computed(() =>
   <div
     class="fixed select-none"
     :style="panelStyle"
-    @mousedown="bringToFront"
+    @mousedown.capture="bringToFront"
   >
     <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3 h-1   cursor-n-resize  z-50" />
     <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3 h-1   cursor-s-resize  z-50" />

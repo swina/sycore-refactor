@@ -682,7 +682,7 @@ function pendingPath() {
 </script>
 
 <template>
-  <div v-show="uiStore.isMidiFlowOpen && !isMinimized" class="fixed select-none" :style="panelStyle" @mousedown="bringToFront">
+  <div v-show="uiStore.isMidiFlowOpen && !isMinimized" class="fixed select-none" :style="panelStyle" @mousedown.capture="bringToFront">
     <!-- resize handles -->
     <div class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-50" @mousedown.stop="onResizeStart($event, 'se')" />
     <div class="absolute bottom-0 left-3 right-4 h-1.5 cursor-s-resize z-50"  @mousedown.stop="onResizeStart($event, 's')" />
@@ -717,7 +717,7 @@ function pendingPath() {
         <span class="flex-1" v-else />
 
         <!-- Saved canvas configurations -->
-        <div v-if="activeTab === 'routing'" class="relative shrink-0" @mousedown.stop>
+        <div v-if="activeTab === 'routing'" class="relative shrink-0">
           <button
             @click="showConfigsMenu = !showConfigsMenu"
             :class="showConfigsMenu ? 'text-synth-neon' : 'text-neutral-400 hover:text-synth-neon'"
