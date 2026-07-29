@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin } from 'lucide-vue-next'
+import { Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -19,6 +19,9 @@ import { typeMeta } from '@/lib/device-type-meta'
 import { MIDI_APPS, APP_PANEL_ID } from '@/lib/midi-apps'
 import { dispatch } from '@/types/events'
 import MiniAudioScope from '@/components/MiniAudioScope.vue'
+import DeckDrumMachineSummary from '@/components/DeckDrumMachineSummary.vue'
+import DeckChordProgSummary from '@/components/DeckChordProgSummary.vue'
+import DeckPlaylistSummary from '@/components/DeckPlaylistSummary.vue'
 
 const midiStore = useMidiStore()
 const uiStore   = useUiStore()
@@ -105,9 +108,46 @@ const apps = computed(() =>
     .map(a => ({ ...a, panelId: APP_PANEL_ID[a.sourceId] }))
 )
 
-function openApp(app) {
-  if (app.panelId) uiStore.openPanel(app.panelId)
+// ── Apps not driven by MIDI_APPS (not a MIDI Flow source, e.g. Playlist /
+// Backing Track Player) — always visible, unlike `apps` above which is
+// gated on canvas presence. ──
+const EXTRA_APPS = [
+  { id: 'playlist', name: 'Playlist', icon: ListMusic, kind: 'playlist' },
+]
+
+// ── Selected app — clicking an app icon shows its compact summary in the
+// display area (replacing the instrument-patch list) instead of opening its
+// full floating panel; each summary has its own "open full panel" button.
+// { sourceId } for a MIDI_APPS entry, or { kind: 'playlist' } for apps
+// outside that list. ──
+const selectedApp = ref(null)
+
+function selectApp(target) {
+  selectedApp.value = target
 }
+
+// Only Drum Machine/Chord Prog (and Playlist, via its own separate button)
+// have a compact summary — every other app keeps the old behavior of
+// opening its full panel directly, so clicking never leaves the display blank.
+function activateApp(a) {
+  if (a.sourceId === MidiSource.DRUM_MACHINE || a.sourceId === MidiSource.CHORD_PROG) {
+    selectApp({ sourceId: a.sourceId })
+  } else if (a.panelId) {
+    uiStore.openPanel(a.panelId)
+  }
+}
+
+function closeAppSummary() {
+  selectedApp.value = null
+}
+
+const selectedAppComponent = computed(() => {
+  if (!selectedApp.value) return null
+  if (selectedApp.value.kind === 'playlist') return DeckPlaylistSummary
+  if (selectedApp.value.sourceId === MidiSource.DRUM_MACHINE) return DeckDrumMachineSummary
+  if (selectedApp.value.sourceId === MidiSource.CHORD_PROG) return DeckChordProgSummary
+  return null
+})
 
 // ── Hover highlight: which instruments does a given controller/app/port
 // actually reach? For a real canvas node (controller or app), trace forward
@@ -281,7 +321,7 @@ const controllerItems = computed(() => controllers.value.map(c => ({
 
 const appItems = computed(() => apps.value.map(a => ({
   id: a.sourceId,
-  activate: () => openApp(a),
+  activate: () => activateApp(a),
 })))
 
 // One item per active CHANNEL, not per instrument — this is what ties the
@@ -425,6 +465,7 @@ function isSelected(name, channel = null) {
 // keeps it highlighted in the display's own patch list, so you can tell
 // at a glance which instrument you last picked.
 function selectInstrument(row) {
+  closeAppSummary()
   selected.value = { name: row.name, channel: null }
   dispatch('device-pc-select', { deviceName: row.name })
 }
@@ -433,6 +474,7 @@ function selectInstrument(row) {
 // device AND that exact channel in Program Change (still without opening
 // it), so multi-timbral devices land on the right part, not just channel 0.
 function selectInstrumentChannel(row, cp) {
+  closeAppSummary()
   selected.value = { name: row.name, channel: cp.channel }
   dispatch('device-pc-select', { deviceName: row.name, channel: cp.channel })
 }
@@ -440,6 +482,7 @@ function selectInstrumentChannel(row, cp) {
 // The dedicated "Select in Program Change" button — this one DOES bring
 // the panel to the front, unlike the passive card/list clicks above.
 function openInProgramChange(row) {
+  closeAppSummary()
   selected.value = { name: row.name, channel: null }
   dispatch('device-pc-open', { deviceName: row.name })
 }
@@ -558,7 +601,7 @@ function handleBpmChange(e) {
             </div>
 
             <!-- Current instrument patches + active channels -->
-            <div class="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-sky-900/40 p-1 rounded-lg text-[9px] font-mono border-l border-neutral-700 pl-3">
+            <div v-if="!selectedApp" class="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-sky-900/40 p-1 rounded-lg text-[9px] font-mono border-l border-neutral-700 pl-3">
               <p v-if="instruments.length === 0" class="text-neutral-700 italic text-center pt-2">No instruments routed</p>
               <template v-for="row in instruments" :key="row.name">
                 <div v-for="(cp, idx) in row.channelPatchList" :key="row.name + ':' + cp.channel"
@@ -579,6 +622,11 @@ function handleBpmChange(e) {
                   <span class="shrink-0 text-synth-neon/70">CH {{ cp.channel }}</span>
                 </div>
               </template>
+            </div>
+
+            <!-- Selected app's compact summary — replaces the instrument list above -->
+            <div v-else class="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-sky-900/40 p-1.5 rounded-lg border-l border-neutral-700 pl-3">
+              <component :is="selectedAppComponent" @close="closeAppSummary" />
             </div>
           </div>
 
@@ -708,7 +756,7 @@ function handleBpmChange(e) {
         <p class="text-[8px] font-black uppercase bg-black py-1 tracking-widest text-neutral-600 text-center mb-0.5">Apps</p>
         <button
           v-for="(a, idx) in apps" :key="a.sourceId"
-          @click="openApp(a)"
+          @click="activateApp(a)"
           @mouseenter="hoverApp(a)"
           @mouseleave="clearHover"
           :disabled="!a.panelId"
@@ -719,6 +767,18 @@ function handleBpmChange(e) {
           ]"
         >
           <!-- <ChevronLeft class="w-3 h-3 text-neutral-700 absolute top-1/2 -left-2.5 -translate-y-1/2" /> -->
+          <div class="w-8 h-8 rounded-md flex items-center justify-center bg-black/40 text-violet-400">
+            <component :is="a.icon" class="w-4 h-4" />
+          </div>
+          <p class="text-[9px] font-bold text-neutral-300 truncate w-full">{{ a.name }}</p>
+        </button>
+
+        <!-- Extra apps not on the MIDI Flow canvas (e.g. Playlist) — always visible -->
+        <button
+          v-for="a in EXTRA_APPS" :key="a.id"
+          @click="selectApp({ kind: a.kind })"
+          class="relative rounded-lg border-3 p-2 flex flex-col items-center gap-1 text-center bg-neutral-900 border-black transition-colors hover:border-violet-700 hover:bg-neutral-800"
+        >
           <div class="w-8 h-8 rounded-md flex items-center justify-center bg-black/40 text-violet-400">
             <component :is="a.icon" class="w-4 h-4" />
           </div>

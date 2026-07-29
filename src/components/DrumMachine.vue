@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2 } from 'lucide-vue-next'
@@ -23,6 +24,8 @@ import { defaultKitAssets, resolveDefaultKitAssetUrl } from '@/lib/default-kit-a
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
+// Canonical state (not local refs) so sibling components (DECK's per-app summary) can read it.
+const { autofillEnabled, chainEnabled } = storeToRefs(drumStore)
 const mixer          = useAudioMixerStore()
 const mappingStore   = useMappingStore()
 const arpStore       = useArpStore()
@@ -1231,7 +1234,6 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
 
 // ── Pattern chain ───────────────────────────────────────────────────────────────
 const showChain      = ref(false)
-const chainEnabled   = ref(false)
 const chainLength    = ref(16)
 const chain          = ref(Array(16).fill(null))
 const chainSlotRef   = ref(-1)
@@ -1246,7 +1248,6 @@ function resizeChain(len) {
   if (_chainSlotIdx >= clamped) _chainSlotIdx = 0
 }
 
-const autofillEnabled = ref(false)
 const autofillEvery   = ref(4)
 let _measureCount     = 0
 

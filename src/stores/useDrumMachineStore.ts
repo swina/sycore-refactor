@@ -706,6 +706,11 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   const repeaterActive = ref(false)
   const repeaterDivision = ref(2)
 
+  // AutoFill/Chain — canonical state lives here (not in DrumMachine.vue) so
+  // sibling components (e.g. DECK's per-app summary) can read it reactively.
+  const autofillEnabled = ref(false)
+  const chainEnabled = ref(false)
+
   const loaded = loadFromLS()
   const sequences = ref<DrumSequences>(
     loaded ? mergeLoadedSequences(loaded) : makeDefaultSequences()
@@ -1299,6 +1304,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
 
   return {
     bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision,
+    autofillEnabled, chainEnabled,
     sequences, activeSequence, currentPattern,
     TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,
     setStep, toggleStep, clearPattern, initDrumMachine,
