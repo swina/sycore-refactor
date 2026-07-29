@@ -3,10 +3,14 @@ import { getTransport } from 'tone'
 
 let participantCount = 0
 let _isRunning = false
+// Module-level (not per-call) — every component calling useTransportManager()
+// must observe the SAME running state, otherwise starting/stopping playback
+// from one component (e.g. the footer's TransportBar) leaves every other
+// component's own isRunning ref stale (e.g. DECK's Play button not flipping
+// to Stop even though the transport is actually running).
+const isRunning = ref(false)
 
 export function useTransportManager() {
-  const isRunning = ref(false)
-
   function acquireTransport(): void {
     participantCount++
     // Check Tone's actual transport state, not just the internal _isRunning

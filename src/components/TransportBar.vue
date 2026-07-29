@@ -19,13 +19,18 @@ const position = ref('001:1:1')
 let rafId = null
 
 function updatePosition() {
+  // Always reschedule, even while stopped — this loop is what notices
+  // isRunning flipping true later. Gating the reschedule on isRunning meant
+  // the very first call (at mount, before playback starts) saw isRunning
+  // false and let the loop die forever, so the position never updated once
+  // playback actually began.
   if (transportManager.isRunning.value) {
     const p = transportManager.getBarPosition()
     position.value = `${String(p.bar).padStart(3, '0')}:${p.beat}:${p.sixteenth}`
-    rafId = requestAnimationFrame(updatePosition)
   } else {
     position.value = '001:1:1'
   }
+  rafId = requestAnimationFrame(updatePosition)
 }
 
 onMounted(() => {

@@ -449,6 +449,27 @@ let _unsubCockpitMidi = null
 onMounted(() => { _unsubCockpitMidi = midiService.addRawListener(_cockpitMidiListener) })
 onUnmounted(() => _unsubCockpitMidi?.())
 
+// ── Transport position (bar:beat:sixteenth) — same rAF-driven readout as
+// TransportBar.vue (the footer's transport controls), just mirrored here. ──
+const position = ref('001:1:1')
+let _positionRafId = null
+
+function updatePosition() {
+  // Always reschedule, even while stopped — see TransportBar.vue's identical
+  // fix: gating the reschedule on isRunning let the loop die at mount
+  // (before playback starts) and never restart once playback began.
+  if (transportManager.isRunning.value) {
+    const p = transportManager.getBarPosition()
+    position.value = `${String(p.bar).padStart(3, '0')}:${p.beat}:${p.sixteenth}`
+  } else {
+    position.value = '001:1:1'
+  }
+  _positionRafId = requestAnimationFrame(updatePosition)
+}
+
+onMounted(() => { _positionRafId = requestAnimationFrame(updatePosition) })
+onUnmounted(() => { if (_positionRafId) cancelAnimationFrame(_positionRafId) })
+
 // { name, channel } of whatever was last picked — channel is null when a
 // whole instrument card was clicked (highlights every channel row for it),
 // or a specific 1-based channel when a single patch/channel line in the
@@ -568,36 +589,33 @@ function handleBpmChange(e) {
           <div class="absolute inset-0 z-10 pointer-events-none scanlines"></div>
 
           <div class="relative z-30 flex flex-col flex-1 min-h-0 gap-2">
-          <div class="flex items-start justify-between">
-            <!-- BPM (top-left) -->
-            <div class="flex items-center gap-1 rounded p-0.5" :class="focusRing('display', DISPLAY_BPM_IDX)" @contextmenu.prevent="openMenu($event, { name: 'global_bpm', label: 'Global BPM' })">
-              <span class="text-[8px] text-neutral-600">BPM</span>
-              <input
-                type="number" min="20" max="300"
-                :value="arpStore.arpBpm"
-                @change="handleBpmChange"
-                class="w-14 bg-black border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[12px] focus:outline-none focus:border-synth-neon transition-colors"
-              />
-            </div>
-            <button @click="openMidiFlow"
-        class="text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-synth-neon/40 text-synth-neon/70 hover:text-synth-neon hover:border-synth-neon transition-colors"
-        :class="focusRing('display', DISPLAY_MIDIFLOW_IDX)"
-      >
-        <Network class="w-3 h-3" /> MIDI Flow
-      </button>
-            <!-- PANIC (top-right) -->
-            <button @click="midiStore.panic()" title="Panic — All Notes Off"
-              class="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded border border-rose-600/50 bg-rose-950/20 text-rose-400 hover:bg-rose-950/40 hover:border-rose-500 transition-colors"
-              :class="focusRing('display', DISPLAY_PANIC_IDX)"
-            >
-              <AlertTriangle class="w-3 h-3" /> Panic
-            </button>
-          </div>
+          <!-- <div class="flex items-start justify-between">
+            
+          </div> -->
 
           <div class="flex-1 min-h-0 flex items-start gap-3">
             <div class="shrink-0 w-42 flex flex-col items-center gap-1.5 rounded-lg p-1" :class="focusRing('display', DISPLAY_SCOPE_IDX)">
               <span class="text-sm font-mono uppercase tracking-[0.35em] text-synth-neon/80">SY.CORE</span>
+              <!-- Audio Scope -->
               <MiniAudioScope ref="miniScopeRef" class="h-24 w-full" />
+              
+              <!-- PLAY Transport Global -->
+              <button
+              @click="transportManager.isRunning.value ? stopAll() : playAll()"
+              @contextmenu.prevent="openMenu($event, { name: 'transport-play-all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
+              class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[16px] font-mono uppercase tracking-widest border transition-all active:scale-95"
+              :class="[
+                transportManager.isRunning.value
+                  ? 'text-red-400 border-red-500/40 bg-red-500/10 hover:bg-red-500/20'
+                  : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20',
+                focusRing('display', DISPLAY_PLAY_IDX),
+              ]"
+              >
+                <component :is="transportManager.isRunning.value ? Square : Play" class="w-3 h-3 fill-current" />
+                <span>{{ transportManager.isRunning.value ? 'Stop' : 'Play' }}</span>
+              </button>
+              <!-- Transport position — same format as TransportBar.vue's own readout -->
+              <span class="text-[12px] font-mono text-neutral-400 tabular-nums">{{ position }}</span>
             </div>
 
             <!-- Current instrument patches + active channels -->
@@ -630,9 +648,17 @@ function handleBpmChange(e) {
             </div>
           </div>
 
-          <!-- PLAY / Transport (bottom-left) -->
+          
           <div class="flex items-center justify-between">
-            <button
+            <div class="flex items-center gap-2">
+              <!-- <button @click="openSoundEngine"
+                class="flex items-center gap-1 px-2 py-1 rounded border border-synth-neon/40 text-synth-neon/70 hover:text-synth-neon hover:border-synth-neon transition-colors"
+                :class="focusRing('display', DISPLAY_SYNC_START_IDX - 1)"
+              >
+                <Cpu class="w-3 h-3" /> Sound Engine
+              </button> -->
+
+            <!-- <button
               @click="transportManager.isRunning.value ? stopAll() : playAll()"
               @contextmenu.prevent="openMenu($event, { name: 'transport-play-all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
               class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95"
@@ -645,8 +671,25 @@ function handleBpmChange(e) {
             >
               <component :is="transportManager.isRunning.value ? Square : Play" class="w-3 h-3 fill-current" />
               <span>{{ transportManager.isRunning.value ? 'Stop' : 'Play' }}</span>
+            </button> -->
+            <!-- Transport position — same format as TransportBar.vue's own readout -->
+            <!-- <span class="text-[12px] font-mono text-neutral-400 tabular-nums">{{ position }}</span> -->
+            <!-- Global BPM (bottom-right) -->
+            <span class="text-[8px] text-neutral-600">BPM</span>
+              <input
+                type="number" min="20" max="300"
+                :value="arpStore.arpBpm"
+                @change="handleBpmChange"
+                class="w-14 bg-black border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[12px] focus:outline-none focus:border-synth-neon transition-colors"
+              />
+            </div>
+            <!-- PANIC (top-right) -->
+            <button @click="midiStore.panic()" title="Panic — All Notes Off"
+              class="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded border border-rose-600/50 bg-rose-950/20 text-rose-400 hover:bg-rose-950/40 hover:border-rose-500 transition-colors"
+              :class="focusRing('display', DISPLAY_PANIC_IDX)"
+            >
+              <AlertTriangle class="w-3 h-3" /> Panic
             </button>
-
             <!-- Synced apps (click to toggle sync to the global transport) -->
             <div class="flex items-center gap-1">
               <button
@@ -828,5 +871,13 @@ function handleBpmChange(e) {
       @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_select', label: 'Cockpit: Select' })"
       title="Select / Activate" class="p-1.5 rounded-full bg-synth-neon/10 border border-synth-neon/40 text-synth-neon hover:bg-synth-neon/20 transition-colors"
     ><CircleDot class="w-3 h-3" /></button>
+        
   </div>
+  <!-- MIDI Flow (top-center) -->
+        <button @click="openMidiFlow"
+        class="absolute right-20 bottom-1 text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-synth-neon/40 text-synth-neon/70 hover:text-synth-neon hover:border-synth-neon transition-colors"
+        :class="focusRing('display', DISPLAY_MIDIFLOW_IDX)"
+            >
+                <Network class="w-3 h-3" /> MIDI Flow
+        </button>
 </template>
