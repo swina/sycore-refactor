@@ -728,7 +728,7 @@ function handleBpmChange(e) {
 
     </div>
   </div>
-  <img src="/sycore-lab.png" class="absolute bottom-1 right-14 w-22 opacity-70 pointer-events-none select-none" />
+  <img src="/sycore-lab.png" class="absolute bottom-2 right-1 rounded-lg w-16 opacity-80 pointer-events-none select-none" />
 
   <!-- ── On-screen nav cluster — same 4 zones as MIDI buttons/encoders below,
        so mouse and hardware share one useCockpitNavigation instance. Each
