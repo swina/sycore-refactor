@@ -690,7 +690,16 @@ watch(inputType, (tab) => {
         showLibraryConfirm({ label, url: '', bpm, author: '', genre: 'Local' }, 'folder')
       },
     }
-  } else if (uiStore.soundFolderAssignTarget?.label === 'Backing Tracks Library') {
+  } else if (uiStore.soundFolderAssignTarget?.label === 'Backing Tracks Library' && !uiStore.isSoundFolderBrowserOpen) {
+    uiStore.soundFolderAssignTarget = null
+  }
+})
+
+// The browser modal can stay open across multiple assigns (e.g. confirmLibrarySave
+// resets inputType to 'list' after saving one file) — only clear the assign target
+// once the browser itself actually closes.
+watch(() => uiStore.isSoundFolderBrowserOpen, (open) => {
+  if (!open && uiStore.soundFolderAssignTarget?.label === 'Backing Tracks Library') {
     uiStore.soundFolderAssignTarget = null
   }
 })

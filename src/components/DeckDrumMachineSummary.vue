@@ -39,8 +39,27 @@ function openPanel() {
     </div>
 
     <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-2.5">
-      <div>
-        <p class="text-neutral-600 uppercase tracking-widest mb-1">Patterns</p>
+      <!-- Quick-launch: Generate / Import / Euclidean — same colors as the Drum Machine's own buttons -->
+      <div class="flex justify-center gap-1.5 mb-4 text-[11px]">
+        <button @click="openPanel" title="Generate a style-based pattern"
+          class="w-22 flex items-center justify-center gap-0.5 py-1.5 rounded-lg border font-bold transition-colors border-amber-600 bg-amber-600/20 text-amber-300 hover:bg-amber-600/40"
+        >
+          Generate
+        </button>
+        <button @click="openPanel" title="Import a pattern"
+          class="w-22 flex items-center justify-center gap-0.5 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-300 font-bold hover:border-neutral-500 transition-colors"
+        >
+          <Layers class="w-3 h-3 text-cyan-400" /> Import
+        </button>
+        <button @click="openPanel" title="Euclidean rhythm generator"
+          class="w-22 flex items-center justify-center gap-0.5 py-1.5 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-400 font-bold hover:border-neutral-500 hover:text-white transition-colors"
+        >
+          <Shuffle class="w-3 h-3 text-green-400" /> Euclidean
+        </button>
+      </div>
+
+      <div class="flex justify-center items-center text-[11px]">
+        <p class="text-neutral-600 uppercase tracking-widest m-1">Patterns</p>
         <div class="flex gap-1">
           <!-- Patterns A-F — same colors as the Drum Machine's own sequence tabs -->
           <button v-for="key in BANKS" :key="key"
@@ -48,7 +67,7 @@ function openPanel() {
             class="w-10 py-1 rounded border text-[10px] font-bold transition-colors"
             :class="drumStore.activeSequence === key
               ? 'bg-sky-900 border-sky-400 text-white'
-              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-sky-500 hover:text-amber-300'"
+              : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-sky-500 hover:text-amber-300'"
           >
             {{ key }}
           </button>
@@ -73,24 +92,7 @@ function openPanel() {
         </div>
       </div>
 
-      <!-- Quick-launch: Generate / Import / Euclidean — same colors as the Drum Machine's own buttons -->
-      <div class="flex gap-1.5">
-        <button @click="openPanel" title="Generate a style-based pattern"
-          class="w-18 flex flex-col items-center gap-0.5 py-1.5 rounded-lg border font-bold transition-colors border-amber-600 bg-amber-600/20 text-amber-300 hover:bg-amber-600/40"
-        >
-          Generate
-        </button>
-        <button @click="openPanel" title="Import a pattern"
-          class="w-18 flex flex-col items-center gap-0.5 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-300 font-bold hover:border-neutral-500 transition-colors"
-        >
-          <Layers class="w-3 h-3 text-cyan-400" /> Import
-        </button>
-        <button @click="openPanel" title="Euclidean rhythm generator"
-          class="w-18 flex flex-col items-center gap-0.5 py-1.5 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-400 font-bold hover:border-neutral-500 hover:text-white transition-colors"
-        >
-          <Shuffle class="w-3 h-3 text-green-400" /> Euclidean
-        </button>
-      </div>
+      
 
       <!-- Readouts — same treatment as the Drum Machine's own preset/kit labels -->
       <div class="mt-auto pt-1.5 border-t border-neutral-800 flex flex-col gap-1">

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic } from 'lucide-vue-next'
+import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -44,13 +44,17 @@ const FLAG_FIELDS = [
   { key: 'transport', label: 'Transp' },
 ]
 
-// Same four apps TransportBar.vue's "Sync Apps to Transport" panel toggles —
+// Same apps TransportBar.vue's "Sync Apps to Transport" panel toggles —
 // shown here as clickable status badges next to the global Play button.
+// syncRecordToTransport ("Arm Rec") arms AudioCapture.vue to start recording
+// the instant global Play starts (and stop when it stops) — see
+// useGlobalTransportControls.js's playAll()/stopAll().
 const SYNC_APPS = [
   { key: 'syncSequencerToTransport',    label: 'Sequencer' },
   { key: 'syncChordProgToTransport',    label: 'Chord Prog' },
   { key: 'syncDrumMachineToTransport',  label: 'Drum Machine' },
   { key: 'syncBackingTrackToTransport', label: 'Backing Track' },
+  { key: 'syncRecordToTransport',       label: 'Arm Rec' },
 ]
 
 function deviceType(name) {
@@ -583,7 +587,7 @@ function handleBpmChange(e) {
       <div class="flex-1 min-w-0 flex flex-col gap-3">
         <!-- <p class="text-[8px] font-black uppercase tracking-widest text-neutral-600 text-center mb-0.5">Apps</p> -->
         <!-- Main display (LCD screen) -->
-        <div class="display-glass relative rounded-xl border-2 border-black bg-black overflow-hidden shadow-2xl p-3 flex flex-col shrink-0 h-1/2 h-min-1/2">
+        <div class="display-glass relative rounded-xl border-2 border-black bg-black overflow-hidden shadow-2xl p-3 flex flex-col shrink-0 h-3/5 h-min-1/2">
           <!-- Hardware screen effect overlays — decorative only, must not carry real content or backgrounds (they'd override the ones above) -->
           <div class="absolute inset-0 z-20 pointer-events-none glass-reflection"></div>
           <div class="absolute inset-0 z-10 pointer-events-none scanlines"></div>
@@ -616,6 +620,28 @@ function handleBpmChange(e) {
               </button>
               <!-- Transport position — same format as TransportBar.vue's own readout -->
               <span class="text-[12px] font-mono text-neutral-400 tabular-nums">{{ position }}</span>
+
+              <!-- Recording indicator — only while Arm Rec armed AND actually recording; opens Audio Capture -->
+              <button
+                v-if="syncStore.syncRecordToTransport && uiStore.isCaptureRecording"
+                @click="uiStore.openPanel('audio-capture')"
+                title="Recording — open Audio Capture"
+                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-widest border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors animate-pulse"
+              >
+                <Circle class="w-2.5 h-2.5 fill-current" />
+                <span>Rec</span>
+              </button>
+
+              <!-- Transport stopped but Arm Rec is armed — surface a way back into Audio Capture to grab the take -->
+              <button
+                v-else-if="syncStore.syncRecordToTransport && !transportManager.isRunning.value"
+                @click="uiStore.openPanel('audio-capture')"
+                title="Open Audio Capture"
+                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-widest border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+              >
+                <AudioLines class="w-2.5 h-2.5 fill-current" />
+                <span>Audio Rec</span>
+              </button>
             </div>
 
             <!-- Current instrument patches + active channels -->
@@ -715,7 +741,7 @@ function handleBpmChange(e) {
         <!-- <div class="h-2 border-neutral-800 shrink-0" v-if="instruments.length > 0"></div> -->
 
         <!-- Instruments (bottom row) -->
-        <div class="flex justify-center min-h-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
+        <div class="flex justify-center min-h-0 overflow-x-auto overflow-y-hidden custom-scrollbar -mt-2">
           <div v-if="instruments.length === 0" class="text-[10px] text-neutral-700 italic text-center pt-4">No instruments routed</div>
           <div v-else class="display-glass relative shadow-lg h-full bg-black/60 flex gap-2 w-full justify-center p-2 rounded-lg border border-black">
             <div
@@ -766,7 +792,7 @@ function handleBpmChange(e) {
                 </button>
               </div>
 
-              <div class="flex items-center gap-1" @click.stop @contextmenu.prevent="openMenu($event, { name: 'cockpit_vol_' + row.name, label: row.name + ' Volume' })">
+              <!-- <div class="flex items-center gap-1" @click.stop @contextmenu.prevent="openMenu($event, { name: 'cockpit_vol_' + row.name, label: row.name + ' Volume' })">
                 <button @click.stop="row.toggleMute()" :title="row.muted ? 'Unmute' : 'Mute'" class="shrink-0 text-neutral-400 hover:text-neutral-200">
                   <VolumeX v-if="row.muted" class="w-3 h-3" />
                   <Volume2 v-else class="w-3 h-3" />
@@ -775,7 +801,7 @@ function handleBpmChange(e) {
                   @input="row.setVol(parseFloat($event.target.value))"
                   class="w-full accent-synth-neon h-1"
                 />
-              </div>
+              </div> -->
 
               <div class="flex items-center gap-1 mt-auto">
                 <button v-if="row.hasSoundEngineLink" @click.stop="openSoundEngine" title="Open Sound Engine"

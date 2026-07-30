@@ -27,6 +27,9 @@ export function useGlobalTransportControls() {
     if (syncStore.syncBackingTrackToTransport) {
       window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: true, restart: true } }))
     }
+    if (syncStore.syncRecordToTransport) {
+      window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } }))
+    }
   }
 
   function stopAll() {
@@ -41,6 +44,9 @@ export function useGlobalTransportControls() {
     }
     if (syncStore.syncBackingTrackToTransport) {
       window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
+    }
+    if (syncStore.syncRecordToTransport) {
+      window.dispatchEvent(new CustomEvent('capture-stop-rec'))
     }
     transportManager.forceStopAll()
   }

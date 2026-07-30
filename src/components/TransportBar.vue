@@ -107,6 +107,10 @@ const _onTransportStopAll = () => { stopAll() }
               <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Backing Track (Playlist)</span>
               <input type="checkbox" v-model="syncStore.syncBackingTrackToTransport" class="accent-synth-neon" />
             </label>
+            <label class="flex items-center justify-between cursor-pointer group">
+              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Arm Record (Audio Capture)</span>
+              <input type="checkbox" v-model="syncStore.syncRecordToTransport" class="accent-synth-neon" />
+            </label>
           </div>
 
           <p class="text-[7px] text-neutral-600 mt-3 leading-relaxed">

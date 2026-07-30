@@ -28,6 +28,13 @@ function prev()     { window.dispatchEvent(new CustomEvent('playlist-prev')) }
 function next()     { window.dispatchEvent(new CustomEvent('playlist-next')) }
 function playIdx(idx) { window.dispatchEvent(new CustomEvent('playlist-play', { detail: { idx, source: 'deck' } })) }
 
+function formatTime(t) {
+  if (isNaN(t) || !isFinite(t) || !t) return '0:00'
+  const m = Math.floor(t / 60)
+  const s = Math.floor(t % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 function openPanel() {
   uiStore.isTracksPlayerOpen = true
 }
@@ -94,7 +101,18 @@ onUnmounted(() => {
             ? 'bg-synth-neon/10 border-synth-neon text-synth-neon'
             : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:border-neutral-700'"
         >
-          <span class="truncate flex-1 min-w-0" :title="track.label">{{ track.label }}</span>
+          <div class="flex flex-col flex-1 min-w-0 gap-0.5">
+            <span class="truncate flex items-center gap-1.5" :title="track.label">
+              {{ track.label }}
+              <span v-if="track.bpm" class="text-[8px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded shrink-0">{{ track.bpm }} BPM</span>
+            </span>
+            <span class="truncate text-[8px] text-neutral-500 uppercase tracking-wider flex items-center gap-1">
+              <span v-if="track.genre">{{ track.genre }}</span>
+              <span v-if="track.genre && track.author" class="text-neutral-700">•</span>
+              <span v-if="track.author" class="normal-case italic text-neutral-400 truncate">{{ track.author }}</span>
+            </span>
+          </div>
+          <span class="shrink-0 text-neutral-600 tabular-nums">{{ formatTime(track.duration) }}</span>
         </div>
       </div>
     </div>
