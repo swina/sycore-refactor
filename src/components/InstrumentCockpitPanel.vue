@@ -709,13 +709,7 @@ function handleBpmChange(e) {
                 class="w-14 bg-black border border-neutral-800 rounded px-1 py-0.5 text-center text-synth-neon text-[12px] focus:outline-none focus:border-synth-neon transition-colors"
               />
             </div>
-            <!-- PANIC (top-right) -->
-            <button @click="midiStore.panic()" title="Panic — All Notes Off"
-              class="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded border border-rose-600/50 bg-rose-950/20 text-rose-400 hover:bg-rose-950/40 hover:border-rose-500 transition-colors"
-              :class="focusRing('display', DISPLAY_PANIC_IDX)"
-            >
-              <AlertTriangle class="w-3 h-3" /> Panic
-            </button>
+            
             <!-- Synced apps (click to toggle sync to the global transport) -->
             <div class="flex items-center gap-1">
               <button
@@ -741,7 +735,7 @@ function handleBpmChange(e) {
         <!-- <div class="h-2 border-neutral-800 shrink-0" v-if="instruments.length > 0"></div> -->
 
         <!-- Instruments (bottom row) -->
-        <div class="flex justify-center min-h-0 overflow-x-auto overflow-y-hidden custom-scrollbar -mt-2">
+        <div class="flex justify-center min-h-0 w-full overflow-x-auto overflow-y-hidden custom-scrollbar -mt-2">
           <div v-if="instruments.length === 0" class="text-[10px] text-neutral-700 italic text-center pt-4">No instruments routed</div>
           <div v-else class="display-glass relative shadow-lg h-full bg-black/60 flex gap-2 w-full justify-center p-2 rounded-lg border border-black">
             <div
@@ -749,7 +743,7 @@ function handleBpmChange(e) {
               :key="row.name"
               @click="selectInstrument(row)"
               title="Select in Program Change"
-              class="relative w-42 shrink-0 rounded-xl border-2 p-2.5 flex flex-col gap-1.5 transition-colors max-h-48 cursor-pointer"
+              class="relative w-30 shrink-0 rounded-xl border-2 p-2.5 flex flex-col gap-1.5 transition-colors max-h-48 cursor-pointer"
               :class="[
                 row.meta.card,
                 !row.online ? 'opacity-60' : '',
@@ -781,7 +775,7 @@ function handleBpmChange(e) {
                 </span>
               </div>
 
-              <div class="flex gap-1">
+              <!-- <div class="flex gap-1">
                 <button
                   v-for="flag in row.flags" :key="flag.key"
                   @click.stop="toggleFlag(row, flag)"
@@ -790,7 +784,7 @@ function handleBpmChange(e) {
                 >
                   {{ flag.label }}
                 </button>
-              </div>
+              </div> -->
 
               <!-- <div class="flex items-center gap-1" @click.stop @contextmenu.prevent="openMenu($event, { name: 'cockpit_vol_' + row.name, label: row.name + ' Volume' })">
                 <button @click.stop="row.toggleMute()" :title="row.muted ? 'Unmute' : 'Mute'" class="shrink-0 text-neutral-400 hover:text-neutral-200">
@@ -862,48 +856,60 @@ function handleBpmChange(e) {
   <!-- ── On-screen nav cluster — same 4 zones as MIDI buttons/encoders below,
        so mouse and hardware share one useCockpitNavigation instance. Each
        button is also its own right-click MIDI Learn target. ── -->
-  <div class="absolute bottom-1 left-3 z-40 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
+
+  <div class="flex items-center gap-3 absolute bottom-1 w-full justify-between px-22">
+    <!-- PANIC (bottom center) -->
+    <button @click="midiStore.panic()" title="Panic — All Notes Off"
+      class="bottom-1 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border border-rose-600/50 bg-rose-950/50 text-rose-400 hover:bg-red-950/80 hover:border-rose-500 transition-colors"
+      :class="focusRing('display', DISPLAY_PANIC_IDX)"
+    >
+      <AlertTriangle class="w-3 h-3" /> Panic
+    </button>
+    <div class="bottom-1 justify-center z-40 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
     <div class="flex items-center gap-0.5 bg-black/70 rounded-full border border-neutral-800 px-1 py-0.5">
-      <span class="text-[7px] font-mono text-neutral-600 px-0.5">Z</span>
+      <span class="text-[11px] font-mono text-neutral-600 px-0.5">Z</span>
       <button @click="nav.moveZone(-1)"
         @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_prev_zone', label: 'Cockpit: Prev Zone' })"
         title="Prev zone" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
-      ><ChevronLeft class="w-3 h-3" /></button>
+      ><ChevronLeft class="w-5 h-5" /></button>
       <button
         @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_zone_encoder', label: 'Cockpit: Zone Encoder' })"
         title="Zone encoder — right-click to Learn a rotary encoder" class="p-1 text-neutral-500 hover:text-amber-400 cursor-default transition-colors"
-      ><RotateCw class="w-3 h-3" /></button>
+      ><RotateCw class="w-5 h-5" /></button>
       <button @click="nav.moveZone(1)"
         @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_next_zone', label: 'Cockpit: Next Zone' })"
         title="Next zone" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
-      ><ChevronRight class="w-3 h-3" /></button>
+      ><ChevronRight class="w-5 h-5" /></button>
     </div>
     <div class="flex items-center gap-0.5 bg-black/70 rounded-full border border-neutral-800 px-1 py-0.5">
-      <span class="text-[7px] font-mono text-neutral-600 px-0.5">I</span>
+      <span class="text-[11px] font-mono text-neutral-600 px-0.5">I</span>
       <button @click="nav.moveItem(-1)"
         @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_prev_item', label: 'Cockpit: Prev Item' })"
         title="Prev item" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
-      ><ChevronLeft class="w-3 h-3" /></button>
+      ><ChevronLeft class="w-5 h-5" /></button>
       <button
         @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_item_encoder', label: 'Cockpit: Item Encoder' })"
         title="Item encoder — right-click to Learn a rotary encoder" class="p-1 text-neutral-500 hover:text-amber-400 cursor-default transition-colors"
-      ><RotateCw class="w-3 h-3" /></button>
+      ><RotateCw class="w-5 h-5" /></button>
       <button @click="nav.moveItem(1)"
         @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_next_item', label: 'Cockpit: Next Item' })"
         title="Next item" class="p-1 text-neutral-400 hover:text-synth-neon transition-colors"
-      ><ChevronRight class="w-3 h-3" /></button>
+      ><ChevronRight class="w-5 h-5" /></button>
     </div>
     <button @click="nav.selectCurrent()"
       @contextmenu.prevent="openMenu($event, { name: 'cockpit_nav_select', label: 'Cockpit: Select' })"
       title="Select / Activate" class="p-1.5 rounded-full bg-synth-neon/10 border border-synth-neon/40 text-synth-neon hover:bg-synth-neon/20 transition-colors"
-    ><CircleDot class="w-3 h-3" /></button>
+    ><CircleDot class="w-5 h-5" /></button>
         
-  </div>
-  <!-- MIDI Flow (top-center) -->
+    </div>
+    <!-- MIDI Flow (bottom-right) -->
         <button @click="openMidiFlow"
-        class="absolute right-20 bottom-1 text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-synth-neon/40 text-synth-neon/70 hover:text-synth-neon hover:border-synth-neon transition-colors"
+        class="right-20 bottom-1 text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-synth-neon/40 text-synth-neon/90 hover:text-white hover:border-synth-neon transition-colors bg-synth-neon/40"
         :class="focusRing('display', DISPLAY_MIDIFLOW_IDX)"
             >
                 <Network class="w-3 h-3" /> MIDI Flow
         </button>
+
+        
+  </div>
 </template>
