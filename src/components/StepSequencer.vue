@@ -1630,7 +1630,7 @@ let generateHidden = ref(false)
       </div>
     </div>
 
-    <div class="w-full max-w-[1024px] m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
+    <div class="w-full m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
       
       <!-- ── HEADER: Compact & Responsive ── -->
       <div class="shrink-0 px-4 py-2 border-b border-neutral-800 bg-black/40 flex flex-col sm:flex-row items-center gap-3 justify-between">
