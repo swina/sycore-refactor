@@ -5,7 +5,7 @@ import {
   Database, Wifi, ArrowRight, Check, Sparkles, Network, Disc3, Play,
   SlidersHorizontal, Repeat, Gauge, Workflow, Infinity as InfinityIcon,
   Search, Download, MonitorSmartphone, GitBranch, Menu, X,
-  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum, GithubIcon
+  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum, GithubIcon, Youtube
 } from 'lucide-vue-next'
 
 const isMobileNavOpen = ref(false)
@@ -14,6 +14,9 @@ const isMobileNavOpen = ref(false)
 const appUrl = import.meta.env.VITE_APP_URL || '/'
 const patreonUrl = 'https://www.patreon.com/cw/moodgiver/membership'
 const githubUrl = 'https://github.com/swina/sycore-refactor'
+const youtubeChannelUrl = 'https://www.youtube.com/@SYCORE-app'
+const youtubePlaylistId = 'PLDF__YESXZuE'
+const youtubePlaylistEmbedUrl = `https://www.youtube.com/embed/videoseries?list=${youtubePlaylistId}`
 
 // Every screenshot below lives in public/help/guides and is referenced by a
 // root-relative path — that only resolves correctly when the site is served
@@ -51,6 +54,7 @@ const navLinks = [
   { label: 'Live', href: '#live' },
   { label: 'Audio', href: '#audio' },
   { label: 'Freesound', href: '#freesound' },
+  { label: 'Video', href: '#video' },
   { label: 'Technology', href: '#technology' },
   { label: 'Free & Open', href: '#free' },
 ]
@@ -829,6 +833,43 @@ const scenarios = [
       </div>
     </section>
 
+    <!-- ============ VIDEO ============ -->
+    <section id="video" class="mx-auto max-w-6xl px-5 py-20 scroll-mt-16">
+      <div v-reveal class="text-center">
+        <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">On YouTube</p>
+        <h2 class="mt-3 text-3xl font-extrabold md:text-4xl">Watch it before you play it.</h2>
+        <p class="mx-auto mt-4 max-w-2xl text-neutral-400">
+          Walkthroughs, feature deep-dives, and real sessions on the
+          <a
+            :href="youtubeChannelUrl" target="_blank" rel="noopener"
+            class="text-synth-cyan underline decoration-synth-cyan/40 underline-offset-2 hover:text-white"
+          >SY.CORE YouTube channel</a>.
+        </p>
+      </div>
+      <div v-reveal="150" class="mt-10 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/40">
+        <div class="aspect-video w-full">
+          <iframe
+            class="h-full w-full"
+            :src="youtubePlaylistEmbedUrl"
+            title="SY.CORE video playlist"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen
+            loading="lazy"
+          ></iframe>
+        </div>
+      </div>
+      <div v-reveal="250" class="mt-8 text-center">
+        <a
+          :href="youtubeChannelUrl" target="_blank" rel="noopener"
+          class="inline-flex items-center gap-2 rounded-lg border border-neutral-700 px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.2em] text-neutral-300 transition-colors hover:border-red-500/50 hover:text-red-400 hover:bg-red-500/10 active:scale-95"
+        >
+          <Youtube class="h-4 w-4" />
+          Subscribe on YouTube
+        </a>
+      </div>
+    </section>
+
     <!-- ============ TECHNOLOGY ============ -->
     <section id="technology" class="border-y border-neutral-800/60 bg-grid-neon scroll-mt-16">
       <div class="mx-auto max-w-6xl px-5 py-20">
@@ -983,6 +1024,15 @@ const scenarios = [
               >
                 <GithubIcon class="h-3 w-3" />
                 View Source on GitHub
+              </a>
+              <a
+                :href="youtubeChannelUrl"
+                target="_blank"
+                rel="noopener"
+                class="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-neutral-500 hover:text-red-400 transition-colors"
+              >
+                <Youtube class="h-3 w-3" />
+                Watch on YouTube
               </a>
             </div>
           </div>
