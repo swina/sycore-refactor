@@ -1,4 +1,4 @@
-# A Manifesto for SY.CORE
+ # A Manifesto for SY.CORE
 
 *Why this exists, and what I still believe about it.*
 
@@ -75,3 +75,15 @@ What I noticed, over twenty-some years of opening one, is a specific kind of fri
 SY.CORE isn't trying to replace that workflow, and it isn't trying to compete with Ableton, FL Studio, or Reaper — that would be a strange fight to pick, and a pointless one to win. It's a personal answer to a narrower question none of those tools were built to ask: what does the software look like if the instrument, not the timeline, is the thing everything else gets arranged around? Ableton still gets the record I actually want to finish and mix. SY.CORE gets the moment right before that — the part where I'm not producing yet, I'm just playing, and I want the tool to get out of the way as fast as a DAW's setup usually doesn't.
 
 That's really what this whole manifesto has been circling. Different people will draw the line between "instrument" and "software" in different places, and that's fine — it's not a verdict on the DAW, it's just where I decided my own line needed to sit, for the specific way I like to make sound.
+
+## Where AI fits — and where it doesn't
+
+SY.CORE was designed around my own ideas and my own goals. Every principle in this document — extension not replacement, local-first, tools that disappear, the free presets — came from years of playing an S-1 and getting frustrated at 2am, not from a model. AI didn't design this platform. I did.
+
+Where AI actually shows up is behind the scenes, as a tool for building the tool: writing and refactoring code, catching bugs, running tests, helping ship updates faster than I could alone. It's a workflow accelerant for the *software*, the same category as a compiler or a linter, just a lot more capable. It has no say in what SY.CORE is for or what it should feel like to use.
+
+What AI does not do, and will not do, in this project is create music or generate musical ideas. There's no "type a prompt, get a song" button here, and there never will be. That's a hard line, not a missing feature. A prompt that outputs a finished track isn't a musician making a choice about a filter cutoff or a chord change — it's a vending machine wearing a keyboard. I think that kind of tool is fundamentally dishonest about what it's selling: it lets someone call themselves the author of something they didn't actually make a single musical decision about. That's not a workflow I'm interested in enabling, at any layer of this platform.
+
+The generative engine described earlier in this manifesto — the one that proposes patches for the S-1 — might sound like it contradicts that, so it's worth being precise about the difference. It doesn't write songs, and it doesn't make musical decisions for you. It proposes *parameter values* inside a synth you're already playing, the same way a well-designed randomize button or a preset does, just with a better ear for what makes a pad a pad in this specific instrument's parameter space. You still have to play it, shape it, decide if it's a bass or garbage, and turn it into actual music. The instrument makes the sound. You make the music. AI, here, only ever helps me build the workbench — it never picks up the instrument itself.
+
+If SY.CORE ever ships something described as AI-assisted, the test is the same one this whole manifesto keeps coming back to: does it help a musician play or create *their own* music faster, or does it try to do the musician's job for them? The first is a tool. The second is cheating, and it's not what this project is for.
