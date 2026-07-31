@@ -295,6 +295,34 @@ const audiences = [
     text: 'Unlock the full potential of your MIDI synthesizers through software that speaks hardware natively. No computer-music workflow required — the browser is just the brain of your rig.',
   },
 ]
+
+const scenarios = [
+  {
+    icon: Cable,
+    title: 'Just a MIDI Orchestrator',
+    text: 'Turn off the Drum Machine, the Chord Progression Sequencer, and the Sound Engine. What is left is routing, mapping, and sync for a rig you already love.',
+  },
+  {
+    icon: Layers,
+    title: 'Just a Chord Progression Sequencer',
+    text: 'Turn off everything else. Sketch progressions and send them out over MIDI — that is the whole workspace.',
+  },
+  {
+    icon: Radio,
+    title: 'Live Performance Rig',
+    text: 'DECK, Drum Machine, Chord Progression Sequencer, Live Timeline and Live Set, with MIDI Flow underneath. The cockpit, not the workbench.',
+  },
+  {
+    icon: AudioWaveform,
+    title: 'Sound-Design Bench',
+    text: 'Sound Engine, Sampler, Audio Visualizer and Sound Folder Browser. Patch generation and sound browsing, without a performance rig on the same screen.',
+  },
+  {
+    icon: InfinityIcon,
+    title: 'Everything',
+    text: 'All 44 modules, at once, for whoever actually wants that. Nothing here is a locked-down "lite" version of anything.',
+  },
+]
 </script>
 
 <template>
@@ -443,6 +471,29 @@ const audiences = [
             Control, trigger, and synchronize everything in real time — MIDI hub, audio tools,
             live pads, timeline, and mixer, locked to a rock-solid master clock.
           </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MODULARITY ============ -->
+    <section class="mx-auto max-w-6xl px-5 py-20">
+      <div v-reveal class="text-center">
+        <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">Modular by Design</p>
+        <h2 class="mt-3 text-3xl font-extrabold md:text-4xl">Build the rig you actually need.</h2>
+        <p class="mx-auto mt-4 max-w-2xl text-neutral-400">
+          SY.CORE is not a bundle you take whole. Module Manager lets you turn off anything you are
+          not using — the workspace only ever shows the instrument you actually asked for.
+        </p>
+      </div>
+      <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          v-for="(scenario, i) in scenarios" :key="scenario.title"
+          v-reveal="(i % 3) * 120"
+          class="card-lift rounded-xl border border-neutral-800 bg-neutral-900/40 p-8 text-center transition-colors hover:border-synth-neon/40"
+        >
+          <component :is="scenario.icon" class="mx-auto h-8 w-8 text-synth-neon" />
+          <h3 class="mt-4 font-mono text-sm font-black uppercase tracking-widest">{{ scenario.title }}</h3>
+          <p class="mt-3 text-sm text-neutral-400">{{ scenario.text }}</p>
         </div>
       </div>
     </section>
