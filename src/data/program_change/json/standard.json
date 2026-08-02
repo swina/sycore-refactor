@@ -1,0 +1,514 @@
+[
+  {
+    "pc": 1,
+    "name": "Radio Broadcast Sign-Off"
+  },
+  {
+    "pc": 2,
+    "name": "Classic Lead"
+  },
+  {
+    "pc": 3,
+    "name": "Snake Eyes"
+  },
+  {
+    "pc": 4,
+    "name": "Expressive Little Lead"
+  },
+  {
+    "pc": 5,
+    "name": "Empty Skies"
+  },
+  {
+    "pc": 6,
+    "name": "Guitar Station"
+  },
+  {
+    "pc": 7,
+    "name": "Leading The Charge"
+  },
+  {
+    "pc": 8,
+    "name": "New Era Glide"
+  },
+  {
+    "pc": 9,
+    "name": "Waveplex Mono"
+  },
+  {
+    "pc": 10,
+    "name": "Judo Tournament '84"
+  },
+  {
+    "pc": 11,
+    "name": "Lead A-Live"
+  },
+  {
+    "pc": 12,
+    "name": "Made For Chords"
+  },
+  {
+    "pc": 13,
+    "name": "Medievil"
+  },
+  {
+    "pc": 14,
+    "name": "Sonny's Headache"
+  },
+  {
+    "pc": 15,
+    "name": "Vibrant"
+  },
+  {
+    "pc": 16,
+    "name": "Sample & Hold"
+  },
+  {
+    "pc": 17,
+    "name": "Phantom Signals"
+  },
+  {
+    "pc": 18,
+    "name": "Memories"
+  },
+  {
+    "pc": 19,
+    "name": "PPG Keys"
+  },
+  {
+    "pc": 20,
+    "name": "Ante Sangre"
+  },
+  {
+    "pc": 21,
+    "name": "Entropic Brass"
+  },
+  {
+    "pc": 22,
+    "name": "Square on Square"
+  },
+  {
+    "pc": 23,
+    "name": "Beyond Mountains"
+  },
+  {
+    "pc": 24,
+    "name": "Brass Cheese"
+  },
+  {
+    "pc": 25,
+    "name": "Buzzkill"
+  },
+  {
+    "pc": 26,
+    "name": "Celestial Tides"
+  },
+  {
+    "pc": 27,
+    "name": "Club Pulse"
+  },
+  {
+    "pc": 28,
+    "name": "Dischord"
+  },
+  {
+    "pc": 29,
+    "name": "Fizzy Pop"
+  },
+  {
+    "pc": 30,
+    "name": "Gentle Light"
+  },
+  {
+    "pc": 31,
+    "name": "Hikari Sokkogeki"
+  },
+  {
+    "pc": 32,
+    "name": "Kyle's New Jacket"
+  },
+  {
+    "pc": 33,
+    "name": "Lo-Fi Organ"
+  },
+  {
+    "pc": 34,
+    "name": "Soft Keys"
+  },
+  {
+    "pc": 35,
+    "name": "Supersoft"
+  },
+  {
+    "pc": 36,
+    "name": "Tape Machine in the Red"
+  },
+  {
+    "pc": 37,
+    "name": "Worship"
+  },
+  {
+    "pc": 38,
+    "name": "Noise Pad"
+  },
+  {
+    "pc": 39,
+    "name": "Band Pass Sweeper"
+  },
+  {
+    "pc": 40,
+    "name": "Hikari Pad"
+  },
+  {
+    "pc": 41,
+    "name": "PolyWaveplex"
+  },
+  {
+    "pc": 42,
+    "name": "PWM Padder"
+  },
+  {
+    "pc": 43,
+    "name": "313 Dreaming"
+  },
+  {
+    "pc": 44,
+    "name": "Glass Chamber"
+  },
+  {
+    "pc": 45,
+    "name": "Omoide Memoire"
+  },
+  {
+    "pc": 46,
+    "name": "Rectangular Feels"
+  },
+  {
+    "pc": 47,
+    "name": "Rippler Pad"
+  },
+  {
+    "pc": 48,
+    "name": "Supernova to Tape"
+  },
+  {
+    "pc": 49,
+    "name": "Area 51"
+  },
+  {
+    "pc": 50,
+    "name": "A Boeg"
+  },
+  {
+    "pc": 51,
+    "name": "Bedroom Door"
+  },
+  {
+    "pc": 52,
+    "name": "Chirari"
+  },
+  {
+    "pc": 53,
+    "name": "Fallen Down"
+  },
+  {
+    "pc": 54,
+    "name": "Fifth Pulser Pad"
+  },
+  {
+    "pc": 55,
+    "name": "Flying Formations"
+  },
+  {
+    "pc": 56,
+    "name": "KotoPad"
+  },
+  {
+    "pc": 57,
+    "name": "Omoide Memoire 2"
+  },
+  {
+    "pc": 58,
+    "name": "Polygon Dreams"
+  },
+  {
+    "pc": 59,
+    "name": "Siel Supernova"
+  },
+  {
+    "pc": 60,
+    "name": "Sine Soup"
+  },
+  {
+    "pc": 61,
+    "name": "Super Brass"
+  },
+  {
+    "pc": 62,
+    "name": "Air Arp"
+  },
+  {
+    "pc": 63,
+    "name": "Arp 32"
+  },
+  {
+    "pc": 64,
+    "name": "A-Just Nice Arps"
+  },
+  {
+    "pc": 65,
+    "name": "Spark Cascade"
+  },
+  {
+    "pc": 66,
+    "name": "A-Tiny Trancer"
+  },
+  {
+    "pc": 67,
+    "name": "TX Arp Chime"
+  },
+  {
+    "pc": 68,
+    "name": "Body Language"
+  },
+  {
+    "pc": 69,
+    "name": "Buchla Steel Drum"
+  },
+  {
+    "pc": 70,
+    "name": "Cosmopterix"
+  },
+  {
+    "pc": 71,
+    "name": "Digital Tension"
+  },
+  {
+    "pc": 72,
+    "name": "Distort The VCA"
+  },
+  {
+    "pc": 73,
+    "name": "Nocturnal Insects"
+  },
+  {
+    "pc": 74,
+    "name": "Plucky Chord Arp"
+  },
+  {
+    "pc": 75,
+    "name": "A-Plucky One"
+  },
+  {
+    "pc": 76,
+    "name": "Sloz Lucid"
+  },
+  {
+    "pc": 77,
+    "name": "Train in the Alps"
+  },
+  {
+    "pc": 78,
+    "name": "Two Fingers"
+  },
+  {
+    "pc": 79,
+    "name": "Sands Of Time"
+  },
+  {
+    "pc": 80,
+    "name": "Rhythmic Padder"
+  },
+  {
+    "pc": 81,
+    "name": "Sample & Hold"
+  },
+  {
+    "pc": 82,
+    "name": "Sine Whispers"
+  },
+  {
+    "pc": 83,
+    "name": "BS Pluto Bass"
+  },
+  {
+    "pc": 84,
+    "name": "Industrial Lord"
+  },
+  {
+    "pc": 85,
+    "name": "Deep Bass"
+  },
+  {
+    "pc": 86,
+    "name": "Funk Station"
+  },
+  {
+    "pc": 87,
+    "name": "Scaling the Heights"
+  },
+  {
+    "pc": 88,
+    "name": "Brassnote Funk"
+  },
+  {
+    "pc": 89,
+    "name": "Air-con"
+  },
+  {
+    "pc": 90,
+    "name": "Chicago Low End"
+  },
+  {
+    "pc": 91,
+    "name": "Cut Bass"
+  },
+  {
+    "pc": 92,
+    "name": "Darkness Matters"
+  },
+  {
+    "pc": 93,
+    "name": "Don't Mess With Timmy"
+  },
+  {
+    "pc": 94,
+    "name": "Floating Moment"
+  },
+  {
+    "pc": 95,
+    "name": "Garage Bass"
+  },
+  {
+    "pc": 96,
+    "name": "Dirty & Deep"
+  },
+  {
+    "pc": 97,
+    "name": "Metal Grinder"
+  },
+  {
+    "pc": 98,
+    "name": "Reality Bass"
+  },
+  {
+    "pc": 99,
+    "name": "Station Bass"
+  },
+  {
+    "pc": 100,
+    "name": "S-BanaBak"
+  },
+  {
+    "pc": 101,
+    "name": "Cosmopterix"
+  },
+  {
+    "pc": 102,
+    "name": "Two Fingers"
+  },
+  {
+    "pc": 103,
+    "name": "Ghostly"
+  },
+  {
+    "pc": 104,
+    "name": "Cosmic Vortex"
+  },
+  {
+    "pc": 105,
+    "name": "Deep Thoughts"
+  },
+  {
+    "pc": 106,
+    "name": "LazeRacer"
+  },
+  {
+    "pc": 107,
+    "name": "Night Ride"
+  },
+  {
+    "pc": 108,
+    "name": "The Bells DS"
+  },
+  {
+    "pc": 109,
+    "name": "Test Equipment"
+  },
+  {
+    "pc": 110,
+    "name": "Ohio"
+  },
+  {
+    "pc": 111,
+    "name": "Sample & Hold"
+  },
+  {
+    "pc": 112,
+    "name": "Snow Field"
+  },
+  {
+    "pc": 113,
+    "name": "Bleep Bloop"
+  },
+  {
+    "pc": 114,
+    "name": "Crankshaft"
+  },
+  {
+    "pc": 115,
+    "name": "Creepy Ensemble"
+  },
+  {
+    "pc": 116,
+    "name": "Departure Earth"
+  },
+  {
+    "pc": 117,
+    "name": "Haunted Radio"
+  },
+  {
+    "pc": 118,
+    "name": "Miracle Grow"
+  },
+  {
+    "pc": 119,
+    "name": "Rhythmic Padder"
+  },
+  {
+    "pc": 120,
+    "name": "MiniMan"
+  },
+  {
+    "pc": 121,
+    "name": "Night Falling"
+  },
+  {
+    "pc": 122,
+    "name": "Old Franklin's Ghost"
+  },
+  {
+    "pc": 123,
+    "name": "Pulsing Network"
+  },
+  {
+    "pc": 124,
+    "name": "Rusty Nail"
+  },
+  {
+    "pc": 125,
+    "name": "SBS PowerCrusher"
+  },
+  {
+    "pc": 126,
+    "name": "Simple Simon"
+  },
+  {
+    "pc": 127,
+    "name": "T1000 Lead"
+  },
+  {
+    "pc": 128,
+    "name": "Warehouse Lead"
+  }
+]

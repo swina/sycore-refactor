@@ -5,6 +5,7 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 ## 2026-08-02
 
 - MIDI Devices: **rename a virtual instrument** — click its name in the MIDI Devices panel to edit it in place. The new name is migrated everywhere it's referenced: routing config, the routing matrix, device→app input routing, device→device Thru filters, the keyboard split config, the virtual MIDI output binding, mixer faders/mutes/solo/channel-slots, and its uploaded device image.
+- Program Change panel: **Import Standard JSON** — import a bank from a simple JSON file (an array of `{ pc, name }` entries, see `src/data/program_change/json/standard.json`) alongside the existing `.mfprojz` and Emulator X3 import options.
 
 ## 2026-07-28
 

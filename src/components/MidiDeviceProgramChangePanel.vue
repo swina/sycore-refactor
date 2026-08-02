@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText, Copy } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText, Copy, Braces } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { userKey } from '@/lib/userKey'
@@ -10,6 +10,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { parseEmulatorX3 } from '@/composables/useEmulatorX3Parser'
+import { parseStandardJson } from '@/composables/useStandardJsonParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -76,13 +77,18 @@ const isDeviceOffline = computed(() => {
   return !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
 })
 
-// Virtual instruments always expose all 16 MIDI channels for independent
-// per-channel patch assignment, regardless of which channels MIDI Flow
-// routing happens to be using for notes.
+// A virtual instrument's active channels mirror whatever MIDI Flow has
+// configured for it: outChannels (Multi) if any are set, otherwise just its
+// single outChannel (Single) — same pattern InstrumentCockpitPanel.vue uses
+// for its own per-channel patch list. Previously this always returned all 16
+// channels regardless of Single/Multi, so a Single-mode virtual instrument
+// wrongly exposed every channel here instead of just the one picked in Flow.
 const virtualActiveChannels = computed(() => {
   if (!selectedDeviceName.value) return []
   if (!midiStore.virtualInstruments.some(v => v.name === selectedDeviceName.value)) return []
-  return Array.from({ length: 16 }, (_, i) => i)
+  const reg = selectedReg.value
+  if (!reg) return []
+  return reg.outChannels && reg.outChannels.length > 0 ? reg.outChannels : [reg.outChannel]
 })
 
 // Channel display state for the multi-channel view: when outChannels are set,
@@ -164,16 +170,18 @@ function isUserBank(bankName) {
   return userBanksStore.hasBank(selectedDeviceName.value, bankName)
 }
 
-// ── .mfprojz / Emulator X3 import ────────────────────────────────
-const importInput        = ref(null)   // hidden <input type="file"> (.mfprojz)
-const importInputX3      = ref(null)   // hidden <input type="file"> (Emulator X3 .txt)
-const isImporting        = ref(false)
-const isImportingX3      = ref(false)
+// ── .mfprojz / Emulator X3 / Standard JSON import ────────────────
+const importInput         = ref(null)   // hidden <input type="file"> (.mfprojz)
+const importInputX3       = ref(null)   // hidden <input type="file"> (Emulator X3 .txt)
+const importInputStandard = ref(null)   // hidden <input type="file"> (Standard JSON)
+const isImporting         = ref(false)
+const isImportingX3       = ref(false)
+const isImportingStandard = ref(false)
 const importError        = ref('')
 const showImportRename   = ref(false)
 const pendingPresets     = ref([])
 const pendingBankName    = ref('')
-const pendingImportSource = ref(undefined)   // undefined = .mfprojz, 'emulatorx3' = Emulator X3
+const pendingImportSource = ref(undefined)   // undefined = .mfprojz/Standard JSON, 'emulatorx3' = Emulator X3
 
 function triggerImport() {
   importError.value = ''
@@ -183,6 +191,11 @@ function triggerImport() {
 function triggerImportX3() {
   importError.value = ''
   importInputX3.value?.click()
+}
+
+function triggerImportStandard() {
+  importError.value = ''
+  importInputStandard.value?.click()
 }
 
 async function onImportFile(event) {
@@ -220,6 +233,26 @@ async function onImportEmulatorX3File(event) {
     importError.value = e.message ?? 'Failed to parse file.'
   } finally {
     isImportingX3.value = false
+    event.target.value = ''
+  }
+}
+
+async function onImportStandardFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  isImportingStandard.value = true
+  importError.value = ''
+  try {
+    const presets = await parseStandardJson(file)
+    // Default bank name = filename without extension
+    pendingBankName.value = file.name.replace(/\.json$/i, '')
+    pendingPresets.value  = presets
+    pendingImportSource.value = undefined
+    showImportRename.value = true
+  } catch (e) {
+    importError.value = e.message ?? 'Failed to parse file.'
+  } finally {
+    isImportingStandard.value = false
     event.target.value = ''
   }
 }
@@ -1326,12 +1359,12 @@ function assignToPad(setId, padIdx) {
                 <div v-if="multiChannelDisplayState.length > 0" class="shrink-0 mx-6 mt-3 bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
                   <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
                     <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
-                    <span v-if="selectedReg?.isMulti || virtualActiveChannels.length > 0"
+                    <span v-if="selectedReg?.isMulti || virtualActiveChannels.length > 1"
                       class="text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter"
-                      :class="virtualActiveChannels.length > 0
+                      :class="virtualActiveChannels.length > 1
                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                         : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'">
-                      {{ virtualActiveChannels.length > 0 ? '16-Channel' : 'Multi-Timbral' }}
+                      {{ virtualActiveChannels.length > 1 ? `${virtualActiveChannels.length}-Channel` : 'Multi-Timbral' }}
                     </span>
                   </div>
                   <!-- Multi-channel / Multi-timbral: capped height with own scroll, rows clickable to switch active channel -->
@@ -1404,6 +1437,14 @@ function assignToPad(setId, padIdx) {
                     class="hidden"
                     @change="onImportEmulatorX3File"
                   />
+                  <!-- Hidden file input for Standard JSON import -->
+                  <input
+                    ref="importInputStandard"
+                    type="file"
+                    accept=".json,application/json"
+                    class="hidden"
+                    @change="onImportStandardFile"
+                  />
 
                   <div class="shrink-0 px-6 mt-4">
                     <div class="flex items-center justify-between mb-2">
@@ -1431,6 +1472,17 @@ function assignToPad(setId, padIdx) {
                           <Loader2 v-if="isImporting" class="w-2.5 h-2.5 animate-spin" />
                           <Upload v-else class="w-2.5 h-2.5" />
                           Import .mfprojz
+                        </button>
+                        <!-- Standard JSON import button -->
+                        <button
+                          @click="triggerImportStandard"
+                          :disabled="isImportingStandard"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 hover:bg-sky-500/20 hover:border-sky-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Import a bank from a Standard JSON file — an array of { pc: 1-128, name } entries"
+                        >
+                          <Loader2 v-if="isImportingStandard" class="w-2.5 h-2.5 animate-spin" />
+                          <Braces v-else class="w-2.5 h-2.5" />
+                          Import JSON
                         </button>
                       </div>
                     </div>
