@@ -17,6 +17,17 @@ export class MidiTransport {
   private isPlaying = false;
   private currentBpm = 120;
   private _nextClockScheduleTime = 0;
+  // Pending per-tick setTimeout handles scheduled for virtual outputs (see
+  // startClock's while loop). Real hardware ticks are cancelled on stop via
+  // outPort.clear() — the browser-native pending-scheduled-send queue — but
+  // virtual ticks are plain setTimeouts with no such queue, so they must be
+  // tracked and cancelled explicitly here. Without this, a restart (e.g.
+  // startClock() called again from setBpm() while already playing, which
+  // stopClock()s then reschedules) left the old generation's already-queued
+  // virtual ticks running alongside the new one — two (or more, on repeated
+  // restarts) overlapping tick streams landing on a virtual instrument at
+  // once, which reads as a wildly inflated, unstable tempo downstream.
+  private _virtualClockTimers = new Set<ReturnType<typeof window.setTimeout>>();
   // @ts-ignore — pulse count for potential future sync features
   private clockPulseCount = 0;
 
@@ -80,10 +91,12 @@ export class MidiTransport {
         });
         if (virtualNames.length > 0) {
           const delay = Math.max(0, t - performance.now());
-          window.setTimeout(() => {
+          const timer = window.setTimeout(() => {
+            this._virtualClockTimers.delete(timer);
             if (!this.isPlaying) return;
             virtualNames.forEach(name => this.ctx.sendToVirtualOutput(name, [0xF8]));
           }, delay);
+          this._virtualClockTimers.add(timer);
         }
         this._nextClockScheduleTime += intervalMs;
       }
@@ -106,6 +119,8 @@ export class MidiTransport {
         try { outPort.clear?.(); } catch {}
       });
     }
+    this._virtualClockTimers.forEach(timer => window.clearTimeout(timer));
+    this._virtualClockTimers.clear();
   }
 
   /** Direct transport send — bypasses routing matrix/broadcastMode */
