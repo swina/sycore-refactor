@@ -158,6 +158,45 @@ export class MidiService {
     return Array.from(this.virtualOutputs.keys());
   }
 
+  /**
+   * Channel-less dispatch targets among registered virtual instruments
+   * (Clock/Start/Stop/Continue carry no channel), deduped by bound physical
+   * output port. Several virtual instruments can legitimately share one
+   * port — e.g. two logical instruments split across MIDI channels over a
+   * single LoopBe cable — and sending once per virtual *name* in that case
+   * puts duplicate copies of the same message on the same physical wire,
+   * which corrupts a receiving device's tempo detection. Sends once per
+   * distinct port (or once per instrument that has no bound port at all)
+   * as long as at least one instrument sharing it has `configField` enabled.
+   */
+  private dedupedVirtualTargets(configField: 'clock' | 'transport'): string[] {
+    const groups = new Map<string, string[]>();
+    this.virtualOutputs.forEach((_fn, name) => {
+      const boundPort = this.virtualOutputPorts.get(name);
+      const key = boundPort ? this.normPort(boundPort) : `__unbound__:${name}`;
+      const group = groups.get(key);
+      if (group) group.push(name);
+      else groups.set(key, [name]);
+    });
+    const targets: string[] = [];
+    groups.forEach(names => {
+      const anyEnabled = names.some(n => {
+        const c = this.routingConfig?.registrations[n];
+        return c?.outEnabled && c?.[configField];
+      });
+      if (anyEnabled) targets.push(names[0]);
+    });
+    return targets;
+  }
+
+  getVirtualClockTargets(): string[] {
+    return this.dedupedVirtualTargets('clock');
+  }
+
+  getVirtualTransportTargets(): string[] {
+    return this.dedupedVirtualTargets('transport');
+  }
+
   /** Send raw bytes to a virtual output by name */
   private sendToVirtualOutput(name: string, data: number[]): void {
     const fn = this.virtualOutputs.get(name);
@@ -292,11 +331,12 @@ export class MidiService {
       this.globalSentHashes.set(bytes, now);
     };
 
-    const getVirtualOutputNames = () => this.getVirtualOutputNames();
+    const getVirtualClockTargets = () => this.getVirtualClockTargets();
+    const getVirtualTransportTargets = () => this.getVirtualTransportTargets();
     const sendToVirtualOutput = (name: string, data: number[]) => this.sendToVirtualOutput(name, data);
 
     this.monitor = new MidiMonitor();
-    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualOutputNames, sendToVirtualOutput });
+    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualClockTargets, getVirtualTransportTargets, sendToVirtualOutput });
     this.latch = new SmartLatch({ getMidiAccess, getRoutingConfig, getGlobalChannel });
     this.router = new MidiRouter({
       getMidiAccess,
