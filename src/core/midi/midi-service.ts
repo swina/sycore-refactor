@@ -163,18 +163,23 @@ export class MidiService {
     const fn = this.virtualOutputs.get(name);
     if (!fn) return;
 
-    // Log to monitor with proper type decoding
-    const { type: mType, channel: mCh, decoded: mDecoded } = decodeRaw(data);
-    this.monitor.append({
-      id: ++this._monitorSeq,
-      timestamp: Date.now(),
-      direction: 'out',
-      device: name,
-      channel: mCh,
-      type: mType,
-      data: Array.from(data),
-      decoded: `[${name}] ${mDecoded}`,
-    });
+    // Log to monitor with proper type decoding — skip Clock (0xF8) same as
+    // broadcast() does for real outputs, since at 24 ticks/quarter-note this
+    // would otherwise blow through the 500-entry ring buffer in a couple of
+    // seconds and evict everything else.
+    if (data[0] !== 0xF8) {
+      const { type: mType, channel: mCh, decoded: mDecoded } = decodeRaw(data);
+      this.monitor.append({
+        id: ++this._monitorSeq,
+        timestamp: Date.now(),
+        direction: 'out',
+        device: name,
+        channel: mCh,
+        type: mType,
+        data: Array.from(data),
+        decoded: `[${name}] ${mDecoded}`,
+      });
+    }
 
     fn(data);
     this.globalSentHashes.set(data.join(','), Date.now());
@@ -287,8 +292,11 @@ export class MidiService {
       this.globalSentHashes.set(bytes, now);
     };
 
+    const getVirtualOutputNames = () => this.getVirtualOutputNames();
+    const sendToVirtualOutput = (name: string, data: number[]) => this.sendToVirtualOutput(name, data);
+
     this.monitor = new MidiMonitor();
-    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig });
+    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualOutputNames, sendToVirtualOutput });
     this.latch = new SmartLatch({ getMidiAccess, getRoutingConfig, getGlobalChannel });
     this.router = new MidiRouter({
       getMidiAccess,

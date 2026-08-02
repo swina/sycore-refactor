@@ -8,6 +8,8 @@ import type { RoutingConfig } from '@/types/midi';
 export interface TransportContext {
   getMidiAccess: () => any | null;
   getRoutingConfig: () => RoutingConfig | null;
+  getVirtualOutputNames: () => string[];
+  sendToVirtualOutput: (name: string, data: number[]) => void;
 }
 
 export class MidiTransport {
@@ -64,6 +66,16 @@ export class MidiTransport {
             }
           });
         }
+        // Virtual instruments (arpeggiated/tempo-synced patches, tempo-locked
+        // FX) need the same clock ticks a real output gets — virtual sends
+        // are plain synchronous callbacks with no Web MIDI scheduling, so
+        // this fires immediately rather than at `t` like the hardware path.
+        this.ctx.getVirtualOutputNames().forEach(name => {
+          const config = this.ctx.getRoutingConfig()?.registrations[name];
+          if (config?.outEnabled && config?.clock) {
+            this.ctx.sendToVirtualOutput(name, [0xF8]);
+          }
+        });
         this._nextClockScheduleTime += intervalMs;
       }
 
@@ -90,11 +102,18 @@ export class MidiTransport {
   /** Direct transport send — bypasses routing matrix/broadcastMode */
   private sendTransportDirect(status: 0xFA | 0xFB | 0xFC): void {
     const access = this.ctx.getMidiAccess();
-    if (!access) return;
-    access.outputs.forEach((outPort: any) => {
-      const config = this.ctx.getRoutingConfig()?.registrations[outPort.name];
-      if (!config?.outEnabled || !config?.transport) return;
-      outPort.send([status]);
+    if (access) {
+      access.outputs.forEach((outPort: any) => {
+        const config = this.ctx.getRoutingConfig()?.registrations[outPort.name];
+        if (!config?.outEnabled || !config?.transport) return;
+        outPort.send([status]);
+      });
+    }
+    this.ctx.getVirtualOutputNames().forEach(name => {
+      const config = this.ctx.getRoutingConfig()?.registrations[name];
+      if (config?.outEnabled && config?.transport) {
+        this.ctx.sendToVirtualOutput(name, [status]);
+      }
     });
   }
 
