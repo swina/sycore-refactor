@@ -88,7 +88,14 @@ const virtualActiveChannels = computed(() => {
   if (!midiStore.virtualInstruments.some(v => v.name === selectedDeviceName.value)) return []
   const reg = selectedReg.value
   if (!reg) return []
-  return reg.outChannels && reg.outChannels.length > 0 ? reg.outChannels : [reg.outChannel]
+  if (reg.outChannels && reg.outChannels.length > 0) return reg.outChannels
+  // outChannel is -1 (OMNI) when Single mode hasn't had an explicit channel
+  // picked in MIDI Flow yet — valid there since OMNI just means "don't remap,
+  // pass the incoming channel through," but there is no incoming channel for
+  // a Program Change this panel sends, so embedding -1 directly into the
+  // outgoing status byte (0xC0 | -1) produced an invalid negative byte that
+  // MIDIOutput.send() silently rejected — no PC message ever went out.
+  return [reg.outChannel >= 0 ? reg.outChannel : 0]
 })
 
 // Channel display state for the multi-channel view: when outChannels are set,
@@ -448,7 +455,11 @@ function sendCatalogSound(sound) {
   const reg = selectedReg.value
   if (!reg) return
   const cfg    = bankConfig.value
-  const ch     = reg.pcChannel ?? 0
+  // Clamp a stale/OMNI (-1) pcChannel to 0 — there's no incoming channel to
+  // pass through for an outgoing Program Change, so -1 can't be embedded
+  // directly into the status byte (0xC0 | -1 is an invalid negative byte
+  // that MIDIOutput.send() silently rejects, i.e. no PC ever goes out).
+  const ch     = Math.max(0, reg.pcChannel ?? 0)
   const pField = cfg?.program_field ?? 'program'
   const prog   = sound[pField] ?? 0
 
@@ -508,7 +519,7 @@ const sendLsb    = ref(false)
 function sendManual() {
   const reg = selectedReg.value
   if (!reg) return
-  const ch = reg.pcChannel ?? 0
+  const ch = Math.max(0, reg.pcChannel ?? 0)
   if (sendMsb.value) sendToDeviceMessage([0xB0 | ch, 0,  manualMsb.value])
   if (sendLsb.value) sendToDeviceMessage([0xB0 | ch, 32, manualLsb.value])
   const prog = Math.max(0, Math.min(127, manualProg.value - 1))
@@ -846,7 +857,7 @@ function recallSet(set) {
           sendToDeviceMessage([0xC0 | ch, info.program ?? 0], entry.deviceName)
         })
       } else {
-        const ch = entry.pcChannel ?? 0
+        const ch = Math.max(0, entry.pcChannel ?? 0)
         sendToDeviceMessage([0xB0 | ch, 0,  entry.pcMsb ?? 0], entry.deviceName)
         sendToDeviceMessage([0xB0 | ch, 32, entry.pcLsb ?? 0], entry.deviceName)
         sendToDeviceMessage([0xC0 | ch, entry.pcProgram ?? 0], entry.deviceName)
