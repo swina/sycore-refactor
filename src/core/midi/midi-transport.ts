@@ -67,15 +67,24 @@ export class MidiTransport {
           });
         }
         // Virtual instruments (arpeggiated/tempo-synced patches, tempo-locked
-        // FX) need the same clock ticks a real output gets — virtual sends
-        // are plain synchronous callbacks with no Web MIDI scheduling, so
-        // this fires immediately rather than at `t` like the hardware path.
-        this.ctx.getVirtualOutputNames().forEach(name => {
+        // FX) need the same clock ticks a real output gets. Virtual sends are
+        // plain synchronous callbacks with no Web MIDI scheduling — firing
+        // them immediately here would dump this whole 100ms look-ahead batch
+        // (several ticks) all at once instead of spread across real time, so
+        // the receiving device sees bursts every ~50ms rather than a steady
+        // 24-ticks/beat stream, and derives a wildly wrong tempo from it.
+        // setTimeout at the tick's actual offset from now keeps it paced.
+        const virtualNames = this.ctx.getVirtualOutputNames().filter(name => {
           const config = this.ctx.getRoutingConfig()?.registrations[name];
-          if (config?.outEnabled && config?.clock) {
-            this.ctx.sendToVirtualOutput(name, [0xF8]);
-          }
+          return config?.outEnabled && config?.clock;
         });
+        if (virtualNames.length > 0) {
+          const delay = Math.max(0, t - performance.now());
+          window.setTimeout(() => {
+            if (!this.isPlaying) return;
+            virtualNames.forEach(name => this.ctx.sendToVirtualOutput(name, [0xF8]));
+          }, delay);
+        }
         this._nextClockScheduleTime += intervalMs;
       }
 
