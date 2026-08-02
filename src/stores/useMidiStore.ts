@@ -7,6 +7,9 @@ import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { useMappingStore } from './useMappingStore'
 import { useArpStore } from './useArpStore'
+import { useAudioMixerStore } from './useAudioMixerStore'
+import { useMidiFlowConfigsStore } from './useMidiFlowConfigsStore'
+import { useDeviceImages } from '@/composables/useDeviceImages'
 import {
   loadConfigPresets as fetchConfigPresets,
   persistConfigPresets,
@@ -248,6 +251,90 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.registerVirtualOutput(name, (data: number[]) => {
       if (port) midiService.sendRawToDeviceByName(port, data)
     }, port)
+  }
+
+  // Renames a virtual instrument everywhere its name is used as a key:
+  // its own registration (routing/PC/patch data — routingConfig's deep
+  // watcher persists + syncs midiService automatically), routingMatrix,
+  // device→app input routing, device→device Thru filters, the keyboard
+  // split config, the virtual MIDI output registered with midiService,
+  // mixer faders/mutes/solo/channel-slots, and its uploaded device image.
+  // Returns false (no-op) if the name is empty, unchanged, or already taken
+  // by another virtual instrument, registration, or real hardware device.
+  //
+  // Deliberately NOT migrated: MIDI Controller Designer's saved
+  // `vi_cc:<name>:...` CC action bindings, and named MIDI Flow canvas
+  // snapshots (useMidiFlowConfigsStore.configs). Both are explicit,
+  // point-in-time saves — same as what already happens if a real hardware
+  // device is renamed or swapped, the user re-picks it there if it doesn't
+  // match afterward. The *live* canvas (liveNodes) is migrated below, since
+  // that's active state, not a saved snapshot.
+  function renameVirtualInstrument(oldName: string, rawNewName: string): boolean {
+    const newName = rawNewName.trim()
+    if (!newName || newName === oldName) return false
+    const nameTaken =
+      virtualInstruments.value.some(v => v.name === newName) ||
+      !!routingConfig.value.registrations[newName] ||
+      !!deviceRegistry.get(newName)
+    if (nameTaken) return false
+
+    const vi = virtualInstruments.value.find(v => v.name === oldName)
+    if (!vi) return false
+    const midiOutputPort = vi.midiOutputPort
+    vi.name = newName
+    persistVirtualInstruments()
+
+    const reg = routingConfig.value.registrations[oldName]
+    if (reg) {
+      const nextRegs = { ...routingConfig.value.registrations }
+      delete nextRegs[oldName]
+      nextRegs[newName] = { ...reg, name: newName }
+      routingConfig.value.registrations = nextRegs
+    }
+
+    Object.keys(routingMatrix.value).forEach(source => {
+      if (routingMatrix.value[source]?.includes(oldName)) {
+        setRouting(source, routingMatrix.value[source].map(n => n === oldName ? newName : n))
+      }
+    })
+
+    if (oldName in inputRouting.value) {
+      const nextInput = { ...inputRouting.value }
+      nextInput[newName] = nextInput[oldName]
+      delete nextInput[oldName]
+      inputRouting.value = nextInput
+    }
+
+    const filterKeys = Object.keys(outputRouteFilters.value)
+    if (filterKeys.some(k => k.startsWith(`${oldName}→`) || k.endsWith(`→${oldName}`))) {
+      const nextFilters: Record<string, InputRouteFilter> = {}
+      filterKeys.forEach(key => {
+        const [src, dst] = key.split('→')
+        const newKey = `${src === oldName ? newName : src}→${dst === oldName ? newName : dst}`
+        nextFilters[newKey] = outputRouteFilters.value[key]
+      })
+      setOutputRouteFilters(nextFilters)
+    }
+
+    if (splitConfig.value.lowDevice === oldName)  setSplitConfig({ lowDevice: newName })
+    if (splitConfig.value.highDevice === oldName) setSplitConfig({ highDevice: newName })
+
+    midiService.unregisterVirtualOutput(oldName)
+    midiService.registerVirtualOutput(newName, (data: number[]) => {
+      const v = virtualInstruments.value.find(x => x.name === newName)
+      if (v?.midiOutputPort) midiService.sendRawToDeviceByName(v.midiOutputPort, data)
+    }, midiOutputPort)
+
+    useAudioMixerStore().renameInstrument(oldName, newName)
+    useDeviceImages().renameImage(oldName, newName)
+
+    const flowConfigsStore = useMidiFlowConfigsStore()
+    flowConfigsStore.liveNodes.forEach((node: any) => {
+      if (!node.sourceId && node.name === oldName) node.name = newName
+    })
+
+    refreshDevices()
+    return true
   }
 
   // Register all virtual instruments with the MIDI service on init
@@ -870,5 +957,6 @@ export const useMidiStore = defineStore('midi', () => {
     updateVirtualInstrument,
     setVirtualInstrumentPort,
     setVirtualInstrumentCcTable,
+    renameVirtualInstrument,
   }
 })

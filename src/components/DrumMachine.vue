@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
-import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2 } from 'lucide-vue-next'
+import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDrumMachineStore, DRUM_STYLE_NAMES } from '@/stores/useDrumMachineStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -1408,6 +1408,18 @@ function cycleChainSlot(i) {
                   >
                     <X class="w-4 h-4" />
                   </button>
+                </div>
+
+                <!-- License notice (only for categories imported from FL Studio's "Loops" packs) -->
+                <div
+                  v-if="selectedCategory.includes('Loops')"
+                  class="flex items-start gap-2 px-4 py-2.5 border-b border-neutral-800 bg-amber-500/10"
+                >
+                  <Info class="w-3.5 h-3.5 flex-none mt-0.5 text-amber-400" />
+                  <span class="text-[9.5px] leading-snug text-amber-200/90">
+                    These "Loops" patterns are MIDI loops imported from FL Studio's stock pattern library.
+                    Only use them if you own a valid FL Studio license — this avoids any copyright issues.
+                  </span>
                 </div>
 
                 <!-- Body: two columns -->

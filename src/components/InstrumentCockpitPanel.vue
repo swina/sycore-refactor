@@ -306,8 +306,14 @@ const instruments = computed(() => {
         setVol: v => useVirtualChannel ? mixer.setVirtualChannelVol(reg.name, volCh, v) : mixer.setInstrumentVol(reg.name, v),
         toggleMute: () => useVirtualChannel ? mixer.toggleVirtualChannelMute(reg.name, volCh) : mixer.toggleInstrumentMute(reg.name),
       }
+    })
+    // Offline hardware instruments are unreachable — drop them from the DECK
+    // instruments layer entirely rather than showing a dimmed, dead card.
+    // Virtual instruments are always "online" (see isVirtual above), so this
+    // only ever filters real hardware that's disconnected.
+    .filter(row => row.online)
     // Real instruments (single/multi) grouped before virtual instruments, alphabetical within each group.
-    }).sort((a, b) => Number(a.type === 'virtual') - Number(b.type === 'virtual') || a.name.localeCompare(b.name))
+    .sort((a, b) => Number(a.type === 'virtual') - Number(b.type === 'virtual') || a.name.localeCompare(b.name))
 })
 
 function toggleFlag(row, flag) {

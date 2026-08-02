@@ -2,6 +2,10 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-02
+
+- MIDI Devices: **rename a virtual instrument** — click its name in the MIDI Devices panel to edit it in place. The new name is migrated everywhere it's referenced: routing config, the routing matrix, device→app input routing, device→device Thru filters, the keyboard split config, the virtual MIDI output binding, mixer faders/mutes/solo/channel-slots, and its uploaded device image.
+
 ## 2026-07-28
 
 - DECK: **custom background image** — click the new image icon in the DECK title bar to upload any image as the panel's background (stored locally, per browser); an X icon appears next to it to reset back to the default background.

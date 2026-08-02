@@ -39,5 +39,18 @@ export function useDeviceImages() {
     images.value = next
   }
 
-  return { images, setImage, removeImage }
+  // Carries an uploaded image over to a device's new name — used when
+  // renaming a virtual instrument so its image doesn't just vanish.
+  async function renameImage(oldName, newName) {
+    const dataUrl = images.value[oldName]
+    if (!dataUrl) return
+    await idbDeviceImagePut(newName, dataUrl)
+    await idbDeviceImageDelete(oldName)
+    const next = { ...images.value }
+    delete next[oldName]
+    next[newName] = dataUrl
+    images.value = next
+  }
+
+  return { images, setImage, removeImage, renameImage }
 }

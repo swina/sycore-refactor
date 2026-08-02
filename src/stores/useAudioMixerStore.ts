@@ -302,6 +302,68 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
 
   function toggleVirtualChannelSolo(name: string, ch: number) { toggleSolo('virt:' + _virtKey(name, ch)) }
 
+  // Migrates every mixer-side reference to a device/instrument name — called
+  // by useMidiStore's renameVirtualInstrument, which is the single entry
+  // point for a rename (it also migrates routing/registration data). Keeps
+  // faders, mutes, solo state, the no-CC7 flag, and channel-slot assignments
+  // attached to the renamed instrument instead of resetting to defaults.
+  function renameInstrument(oldName: string, newName: string) {
+    if (!oldName || !newName || oldName === newName) return
+
+    const renameKey = <T,>(map: Record<string, T>): Record<string, T> => {
+      if (!(oldName in map)) return map
+      const next = { ...map }
+      next[newName] = next[oldName]
+      delete next[oldName]
+      return next
+    }
+    instrumentVols.value  = renameKey(instrumentVols.value)
+    instrumentMuted.value = renameKey(instrumentMuted.value)
+    _persistInstrumentVols()
+
+    if (instrumentNoCC7.value.has(oldName)) {
+      const next = new Set(instrumentNoCC7.value)
+      next.delete(oldName)
+      next.add(newName)
+      instrumentNoCC7.value = next
+      localStorage.setItem(userKey('S1_MIX_INST_NO_CC7'), JSON.stringify([...next]))
+    }
+
+    const oldPrefix = `${oldName}:`
+    const newPrefix = `${newName}:`
+    const renamePrefixed = <T,>(map: Record<string, T>): Record<string, T> => {
+      let changed = false
+      const next: Record<string, T> = {}
+      for (const [key, value] of Object.entries(map)) {
+        if (key.startsWith(oldPrefix)) { next[newPrefix + key.slice(oldPrefix.length)] = value; changed = true }
+        else next[key] = value
+      }
+      return changed ? next : map
+    }
+    virtualChannelVols.value  = renamePrefixed(virtualChannelVols.value)
+    virtualChannelMuted.value = renamePrefixed(virtualChannelMuted.value)
+    _persistVirtualChannelVols()
+
+    const oldInstId = 'inst:' + oldName
+    const oldVirtPrefix = 'virt:' + oldPrefix
+    if (soloedChannels.value.has(oldInstId) || [...soloedChannels.value].some(id => id.startsWith(oldVirtPrefix))) {
+      const next = new Set<string>()
+      soloedChannels.value.forEach(id => {
+        if (id === oldInstId) next.add('inst:' + newName)
+        else if (id.startsWith(oldVirtPrefix)) next.add('virt:' + newPrefix + id.slice(oldVirtPrefix.length))
+        else next.add(id)
+      })
+      soloedChannels.value = next
+    }
+
+    channelSlots.value = channelSlots.value.map(slot => {
+      if (!slot) return slot
+      if (slot.type === 'instrument' && slot.id === oldName) return { ...slot, id: newName }
+      if (slot.type === 'virtual' && slot.id.startsWith(oldPrefix)) return { ...slot, id: newPrefix + slot.id.slice(oldPrefix.length) }
+      return slot
+    })
+  }
+
   // Single-fader virtual instruments (no outChannels configured) reuse the
   // plain instrument vol/mute maps above, keyed by name — same as a MIDI
   // instrument channel, just targeting a virtual output instead of a real one.
@@ -362,7 +424,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     toggleBackingMute, toggleTracksMute, toggleLooperMute, toggleLMMute, toggleDrumsMute, toggleDrumsLevelMute, toggleSamplerMute, toggleLiveperfMute, toggleBasslineMute,
     instrumentVols, instrumentMuted,
     getInstrumentVol, isInstrumentMuted, setInstrumentVol, toggleInstrumentMute,
-    isInstrumentNoCC7, toggleInstrumentNoCC7,
+    isInstrumentNoCC7, toggleInstrumentNoCC7, renameInstrument,
     // Solo
     soloedChannels, isSoloed, toggleSolo, toggleInstrumentSolo,
     // Virtual instrument per-channel (multi-timbral) faders

@@ -99,6 +99,26 @@ function onVirtualPortChange(name, port) {
   midiStore.setVirtualInstrumentPort(name, port)
 }
 
+// Inline rename — click a virtual instrument's name to edit it in place.
+const editingVirtualName = ref(null) // name currently being edited, or null
+const editingVirtualNameDraft = ref('')
+
+function startEditVirtualName(name) {
+  editingVirtualName.value = name
+  editingVirtualNameDraft.value = name
+}
+
+function commitVirtualNameEdit() {
+  const oldName = editingVirtualName.value
+  if (oldName == null) return
+  editingVirtualName.value = null
+  const newName = editingVirtualNameDraft.value.trim()
+  if (!newName || newName === oldName) return
+  if (!midiStore.renameVirtualInstrument(oldName, newName)) {
+    window.alert(`Could not rename to "${newName}" — that name is already in use.`)
+  }
+}
+
 const ccTableEditorFor = ref(null) // virtual instrument name, or null when closed
 
 const sortedDevices = computed(() =>
@@ -351,7 +371,21 @@ const sortedDevices = computed(() =>
                 </div>
               </div>
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-bold text-amber-200 truncate">{{ v.name }}</p>
+                <input
+                  v-if="editingVirtualName === v.name"
+                  v-model="editingVirtualNameDraft"
+                  autofocus
+                  @keydown.enter="commitVirtualNameEdit"
+                  @keydown.escape="editingVirtualName = null"
+                  @blur="commitVirtualNameEdit"
+                  class="w-full bg-black/60 border border-amber-500/50 rounded px-1.5 py-0.5 text-sm font-bold text-amber-200 outline-none"
+                />
+                <p
+                  v-else
+                  @click="startEditVirtualName(v.name)"
+                  title="Click to rename"
+                  class="text-sm font-bold text-amber-200 truncate cursor-text hover:underline decoration-dotted underline-offset-2"
+                >{{ v.name }}</p>
                 <div class="flex items-center gap-2 mt-0.5">
                   <span class="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-amber-400">
                     <Circle class="w-1.5 h-1.5 fill-current" />
