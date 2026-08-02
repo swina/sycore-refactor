@@ -1136,8 +1136,16 @@ export class MidiService {
       if (type === 0x90 || type === 0x80) {
         const note = (processedData as any)[1];
         const velocity = (processedData as any)[2];
-        this.onNoteListeners.forEach(l => l(type === 0x90 ? 'on' : 'off', note, velocity, channel, inputId));
-        if (type === 0x90) this.globalNoteOnListeners.forEach(l => l(note, velocity));
+        // A Note On with velocity 0 is the standard MIDI running-status
+        // encoding for Note Off (lets a device keep reusing the 0x90 status
+        // byte instead of alternating to 0x80) — common on real controllers,
+        // especially during fast passages where running status kicks in.
+        // Treating it as a literal 'on' left every consumer here (Arp,
+        // Virtual Keyboard, sequencers, SmartLatch, etc.) seeing a note that
+        // never gets its matching 'off', i.e. a stuck note.
+        const isNoteOn = type === 0x90 && velocity > 0;
+        this.onNoteListeners.forEach(l => l(isNoteOn ? 'on' : 'off', note, velocity, channel, inputId));
+        if (isNoteOn) this.globalNoteOnListeners.forEach(l => l(note, velocity));
       } else if (type === 0xb0) {
         this.onCCListeners.forEach(l => l(event.data[1], event.data[2], channel, inputId));
       } else if (type === 0xe0) {
