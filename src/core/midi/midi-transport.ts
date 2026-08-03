@@ -8,13 +8,26 @@ import type { RoutingConfig } from '@/types/midi';
 export interface TransportContext {
   getMidiAccess: () => any | null;
   getRoutingConfig: () => RoutingConfig | null;
+  // Deduped, already-clock/transport-flag-filtered virtual output names to
+  // dispatch to. Deduped because several virtual instruments can share the
+  // same bound physical/loopback port (e.g. two logical instruments split
+  // by MIDI channel over one LoopBe cable) — Clock/Start/Stop/Continue carry
+  // no channel, so sending once per virtual *name* would put duplicate
+  // copies on the same physical wire and corrupt tempo detection downstream.
+  getVirtualClockTargets: () => string[];
+  getVirtualTransportTargets: () => string[];
+  sendToVirtualOutput: (name: string, data: number[]) => void;
 }
 
 export class MidiTransport {
   private clockInterval: any = null;
+  // Separate recurring pump for virtual outputs — see startClock() for why
+  // this can't just reuse the hardware scheduler's per-pass batch.
+  private virtualClockInterval: any = null;
   private isPlaying = false;
   private currentBpm = 120;
   private _nextClockScheduleTime = 0;
+  private _nextVirtualClockTime = 0;
   // @ts-ignore — pulse count for potential future sync features
   private clockPulseCount = 0;
 
@@ -47,6 +60,7 @@ export class MidiTransport {
     if (!this.currentBpm || this.currentBpm < 1) return;
     this.isPlaying = true;
     this._nextClockScheduleTime = performance.now();
+    this._nextVirtualClockTime = performance.now();
 
     const scheduler = () => {
       if (!this.isPlaying) return;
@@ -71,12 +85,40 @@ export class MidiTransport {
     };
 
     scheduler();
+
+    // Virtual instruments (arpeggiated/tempo-synced patches, tempo-locked
+    // FX) need the same clock ticks a real output gets, but virtual sends
+    // are plain synchronous JS callbacks with no Web MIDI scheduled-send —
+    // there's no browser-native mechanism to hand it a future timestamp and
+    // have it fire precisely on its own. A single recurring pump here (one
+    // timer, checked frequently) rather than pre-scheduling one setTimeout
+    // per tick keeps this robust under load: a swarm of individually
+    // scheduled per-tick timers was observed to get delayed/dropped when
+    // the main thread was busy (heavy MIDI/audio traffic), producing a
+    // wildly wrong apparent tempo downstream instead of just a little jitter.
+    const pumpVirtual = () => {
+      if (!this.isPlaying) return;
+      const intervalMs = 60000 / (this.currentBpm * 24);
+      const now = performance.now();
+      const targets = this.ctx.getVirtualClockTargets();
+      while (this._nextVirtualClockTime <= now) {
+        targets.forEach(name => this.ctx.sendToVirtualOutput(name, [0xF8]));
+        this._nextVirtualClockTime += intervalMs;
+      }
+      this.virtualClockInterval = window.setTimeout(pumpVirtual, 10);
+    };
+
+    pumpVirtual();
   }
 
   stopClock(): void {
     if (this.clockInterval !== null) {
       window.clearTimeout(this.clockInterval);
       this.clockInterval = null;
+    }
+    if (this.virtualClockInterval !== null) {
+      window.clearTimeout(this.virtualClockInterval);
+      this.virtualClockInterval = null;
     }
     this.isPlaying = false;
     const access = this.ctx.getMidiAccess();
@@ -90,11 +132,15 @@ export class MidiTransport {
   /** Direct transport send — bypasses routing matrix/broadcastMode */
   private sendTransportDirect(status: 0xFA | 0xFB | 0xFC): void {
     const access = this.ctx.getMidiAccess();
-    if (!access) return;
-    access.outputs.forEach((outPort: any) => {
-      const config = this.ctx.getRoutingConfig()?.registrations[outPort.name];
-      if (!config?.outEnabled || !config?.transport) return;
-      outPort.send([status]);
+    if (access) {
+      access.outputs.forEach((outPort: any) => {
+        const config = this.ctx.getRoutingConfig()?.registrations[outPort.name];
+        if (!config?.outEnabled || !config?.transport) return;
+        outPort.send([status]);
+      });
+    }
+    this.ctx.getVirtualTransportTargets().forEach(name => {
+      this.ctx.sendToVirtualOutput(name, [status]);
     });
   }
 

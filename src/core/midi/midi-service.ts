@@ -158,23 +158,67 @@ export class MidiService {
     return Array.from(this.virtualOutputs.keys());
   }
 
+  /**
+   * Channel-less dispatch targets among registered virtual instruments
+   * (Clock/Start/Stop/Continue carry no channel), deduped by bound physical
+   * output port. Several virtual instruments can legitimately share one
+   * port — e.g. two logical instruments split across MIDI channels over a
+   * single LoopBe cable — and sending once per virtual *name* in that case
+   * puts duplicate copies of the same message on the same physical wire,
+   * which corrupts a receiving device's tempo detection. Sends once per
+   * distinct port (or once per instrument that has no bound port at all)
+   * as long as at least one instrument sharing it has `configField` enabled.
+   */
+  private dedupedVirtualTargets(configField: 'clock' | 'transport'): string[] {
+    const groups = new Map<string, string[]>();
+    this.virtualOutputs.forEach((_fn, name) => {
+      const boundPort = this.virtualOutputPorts.get(name);
+      const key = boundPort ? this.normPort(boundPort) : `__unbound__:${name}`;
+      const group = groups.get(key);
+      if (group) group.push(name);
+      else groups.set(key, [name]);
+    });
+    const targets: string[] = [];
+    groups.forEach(names => {
+      const anyEnabled = names.some(n => {
+        const c = this.routingConfig?.registrations[n];
+        return c?.outEnabled && c?.[configField];
+      });
+      if (anyEnabled) targets.push(names[0]);
+    });
+    return targets;
+  }
+
+  getVirtualClockTargets(): string[] {
+    return this.dedupedVirtualTargets('clock');
+  }
+
+  getVirtualTransportTargets(): string[] {
+    return this.dedupedVirtualTargets('transport');
+  }
+
   /** Send raw bytes to a virtual output by name */
   private sendToVirtualOutput(name: string, data: number[]): void {
     const fn = this.virtualOutputs.get(name);
     if (!fn) return;
 
-    // Log to monitor with proper type decoding
-    const { type: mType, channel: mCh, decoded: mDecoded } = decodeRaw(data);
-    this.monitor.append({
-      id: ++this._monitorSeq,
-      timestamp: Date.now(),
-      direction: 'out',
-      device: name,
-      channel: mCh,
-      type: mType,
-      data: Array.from(data),
-      decoded: `[${name}] ${mDecoded}`,
-    });
+    // Log to monitor with proper type decoding — skip Clock (0xF8) same as
+    // broadcast() does for real outputs, since at 24 ticks/quarter-note this
+    // would otherwise blow through the 500-entry ring buffer in a couple of
+    // seconds and evict everything else.
+    if (data[0] !== 0xF8) {
+      const { type: mType, channel: mCh, decoded: mDecoded } = decodeRaw(data);
+      this.monitor.append({
+        id: ++this._monitorSeq,
+        timestamp: Date.now(),
+        direction: 'out',
+        device: name,
+        channel: mCh,
+        type: mType,
+        data: Array.from(data),
+        decoded: `[${name}] ${mDecoded}`,
+      });
+    }
 
     fn(data);
     this.globalSentHashes.set(data.join(','), Date.now());
@@ -287,8 +331,12 @@ export class MidiService {
       this.globalSentHashes.set(bytes, now);
     };
 
+    const getVirtualClockTargets = () => this.getVirtualClockTargets();
+    const getVirtualTransportTargets = () => this.getVirtualTransportTargets();
+    const sendToVirtualOutput = (name: string, data: number[]) => this.sendToVirtualOutput(name, data);
+
     this.monitor = new MidiMonitor();
-    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig });
+    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualClockTargets, getVirtualTransportTargets, sendToVirtualOutput });
     this.latch = new SmartLatch({ getMidiAccess, getRoutingConfig, getGlobalChannel });
     this.router = new MidiRouter({
       getMidiAccess,
