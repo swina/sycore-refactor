@@ -11,6 +11,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { parseEmulatorX3 } from '@/composables/useEmulatorX3Parser'
 import { parseStandardJson } from '@/composables/useStandardJsonParser'
+import { parseKawaiK1 } from '@/composables/useKawaiK1Parser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -121,6 +122,8 @@ const multiChannelDisplayState = computed(() => {
 // internal (non-MIDI) preset browser used for SY.CORE's own preview output.
 const isUiDevice = computed(() => {
   if (!selectedDeviceName.value) return false
+  // Explicit template assignment always wins over auto-detection.
+  if (selectedReg.value?.pcTemplate === 'roland-s1') return true
   if (virtualActiveChannels.value.length > 0) return false
   const uiRoutes = midiStore.routingMatrix?.[MidiSource.UI] ?? []
   return uiRoutes.includes(selectedDeviceName.value)
@@ -154,9 +157,21 @@ function selectHistoryPreset(preset) {
 }
 
 // ── Catalog match ───────────────────────────────────────────────
+// Devices with an explicit pcTemplate assigned (see MIDI Devices) look up
+// their catalog entry by exact template→catalog-key mapping instead of
+// fuzzy name matching, and templates with no built-in catalog (Emulator X3,
+// Standard JSON, Kawai K1, Roland S-1) never show one at all. Devices with
+// no template assigned (unset — nobody has migrated them yet) keep today's
+// fuzzy-match behavior unchanged.
+const TEMPLATE_CATALOG_KEY = {
+  mfprojz: 'Arturia MicroFreak',
+  seqtrak: 'SEQTRAK-1',
+}
 const catalogDevice = computed(() => {
   const dn = selectedDeviceName.value?.toLowerCase() ?? ''
   if (!dn) return null
+  const tmpl = selectedReg.value?.pcTemplate
+  if (tmpl) return TEMPLATE_CATALOG_KEY[tmpl] ?? null
   return Object.keys(catalogIndex).find(k =>
     dn.includes(k.toLowerCase()) || k.toLowerCase().includes(dn)
   ) ?? null
@@ -167,9 +182,24 @@ const catalogBanks = computed(() => {
   return Object.keys(catalogIndex[catalogDevice.value])
 })
 
-const userBanks = computed(() =>
-  userBanksStore.getBanksForDevice(selectedDeviceName.value).map(b => b.name)
-)
+// Legacy (source === undefined) banks were saved before .mfprojz and
+// Standard JSON imports were tagged distinctly — keep showing those under
+// either template so nothing already imported disappears once a device is
+// migrated to an explicit template.
+const TEMPLATE_BANK_SOURCES = {
+  mfprojz:    ['mfprojz', undefined],
+  json:       ['json', undefined],
+  emulatorx3: ['emulatorx3'],
+  'kawai-k1': ['kawai-k1'],
+}
+const userBanks = computed(() => {
+  const all = userBanksStore.getBanksForDevice(selectedDeviceName.value)
+  const tmpl = selectedReg.value?.pcTemplate
+  if (!tmpl) return all.map(b => b.name)
+  const allowedSources = TEMPLATE_BANK_SOURCES[tmpl]
+  if (!allowedSources) return [] // seqtrak / roland-s1 have no user-imported banks
+  return all.filter(b => allowedSources.includes(b.source)).map(b => b.name)
+})
 
 const availableBanks = computed(() => [...catalogBanks.value, ...userBanks.value])
 
@@ -177,18 +207,20 @@ function isUserBank(bankName) {
   return userBanksStore.hasBank(selectedDeviceName.value, bankName)
 }
 
-// ── .mfprojz / Emulator X3 / Standard JSON import ────────────────
+// ── .mfprojz / Emulator X3 / Standard JSON / Kawai K1 import ─────
 const importInput         = ref(null)   // hidden <input type="file"> (.mfprojz)
 const importInputX3       = ref(null)   // hidden <input type="file"> (Emulator X3 .txt)
 const importInputStandard = ref(null)   // hidden <input type="file"> (Standard JSON)
+const importInputKawaiK1  = ref(null)   // hidden <input type="file"> (Kawai K1 .syx)
 const isImporting         = ref(false)
 const isImportingX3       = ref(false)
 const isImportingStandard = ref(false)
+const isImportingKawaiK1  = ref(false)
 const importError        = ref('')
 const showImportRename   = ref(false)
 const pendingPresets     = ref([])
 const pendingBankName    = ref('')
-const pendingImportSource = ref(undefined)   // undefined = .mfprojz/Standard JSON, 'emulatorx3' = Emulator X3
+const pendingImportSource = ref(undefined)   // 'mfprojz' | 'json' | 'emulatorx3' | 'kawai-k1'
 
 function triggerImport() {
   importError.value = ''
@@ -205,6 +237,11 @@ function triggerImportStandard() {
   importInputStandard.value?.click()
 }
 
+function triggerImportKawaiK1() {
+  importError.value = ''
+  importInputKawaiK1.value?.click()
+}
+
 async function onImportFile(event) {
   const file = event.target.files?.[0]
   if (!file) return
@@ -215,7 +252,7 @@ async function onImportFile(event) {
     // Default bank name = filename without extension
     pendingBankName.value = file.name.replace(/\.mfprojz$/i, '')
     pendingPresets.value  = presets
-    pendingImportSource.value = undefined
+    pendingImportSource.value = 'mfprojz'
     showImportRename.value = true
   } catch (e) {
     importError.value = e.message ?? 'Failed to parse file.'
@@ -254,12 +291,32 @@ async function onImportStandardFile(event) {
     // Default bank name = filename without extension
     pendingBankName.value = file.name.replace(/\.json$/i, '')
     pendingPresets.value  = presets
-    pendingImportSource.value = undefined
+    pendingImportSource.value = 'json'
     showImportRename.value = true
   } catch (e) {
     importError.value = e.message ?? 'Failed to parse file.'
   } finally {
     isImportingStandard.value = false
+    event.target.value = ''
+  }
+}
+
+async function onImportKawaiK1File(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  isImportingKawaiK1.value = true
+  importError.value = ''
+  try {
+    const presets = await parseKawaiK1(file)
+    // Default bank name = filename without extension
+    pendingBankName.value = file.name.replace(/\.syx$/i, '')
+    pendingPresets.value  = presets
+    pendingImportSource.value = 'kawai-k1'
+    showImportRename.value = true
+  } catch (e) {
+    importError.value = e.message ?? 'Failed to parse file.'
+  } finally {
+    isImportingKawaiK1.value = false
     event.target.value = ''
   }
 }
@@ -1431,7 +1488,11 @@ function assignToPad(setId, padIdx) {
                 </div>
 
                 <!-- ── 4. Bank selector ── -->
-                <template v-if="catalogDevice || userBanks.length > 0 || midiStore.virtualInstruments.some(v => v.name === selectedDeviceName)">
+                <!-- Legacy (no pcTemplate assigned): show whenever there's a catalog match,
+                     already-imported banks, or the device is virtual — same as before.
+                     Explicit template assigned: always show, even before anything's been
+                     imported yet, so the one relevant import button stays reachable. -->
+                <template v-if="selectedReg?.pcTemplate || catalogDevice || userBanks.length > 0 || midiStore.virtualInstruments.some(v => v.name === selectedDeviceName)">
                   <!-- Hidden file input for .mfprojz import -->
                   <input
                     ref="importInput"
@@ -1456,14 +1517,22 @@ function assignToPad(setId, padIdx) {
                     class="hidden"
                     @change="onImportStandardFile"
                   />
+                  <!-- Hidden file input for Kawai K1 import -->
+                  <input
+                    ref="importInputKawaiK1"
+                    type="file"
+                    accept=".syx"
+                    class="hidden"
+                    @change="onImportKawaiK1File"
+                  />
 
                   <div class="shrink-0 px-6 mt-4">
                     <div class="flex items-center justify-between mb-2">
                       <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Bank</label>
                       <div class="flex items-center gap-1.5">
-                        <!-- Emulator X3 import button (virtual devices only) -->
+                        <!-- Emulator X3 import button — explicit template, or (legacy) any virtual instrument -->
                         <button
-                          v-if="midiStore.virtualInstruments.some(v => v.name === selectedDeviceName)"
+                          v-if="selectedReg?.pcTemplate === 'emulatorx3' || (!selectedReg?.pcTemplate && midiStore.virtualInstruments.some(v => v.name === selectedDeviceName))"
                           @click="triggerImportX3"
                           :disabled="isImportingX3"
                           class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
@@ -1473,8 +1542,9 @@ function assignToPad(setId, padIdx) {
                           <FileText v-else class="w-2.5 h-2.5" />
                           Import Emulator X3
                         </button>
-                        <!-- Import button -->
+                        <!-- .mfprojz import button — explicit template, or legacy (unset) -->
                         <button
+                          v-if="!selectedReg?.pcTemplate || selectedReg.pcTemplate === 'mfprojz'"
                           @click="triggerImport"
                           :disabled="isImporting"
                           class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
@@ -1484,8 +1554,9 @@ function assignToPad(setId, padIdx) {
                           <Upload v-else class="w-2.5 h-2.5" />
                           Import .mfprojz
                         </button>
-                        <!-- Standard JSON import button -->
+                        <!-- Standard JSON import button — explicit template, or legacy (unset) -->
                         <button
+                          v-if="!selectedReg?.pcTemplate || selectedReg.pcTemplate === 'json'"
                           @click="triggerImportStandard"
                           :disabled="isImportingStandard"
                           class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 hover:bg-sky-500/20 hover:border-sky-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
@@ -1494,6 +1565,18 @@ function assignToPad(setId, padIdx) {
                           <Loader2 v-if="isImportingStandard" class="w-2.5 h-2.5 animate-spin" />
                           <Braces v-else class="w-2.5 h-2.5" />
                           Import JSON
+                        </button>
+                        <!-- Kawai K1 import button — explicit template only (no legacy fallback, it's brand new) -->
+                        <button
+                          v-if="selectedReg?.pcTemplate === 'kawai-k1'"
+                          @click="triggerImportKawaiK1"
+                          :disabled="isImportingKawaiK1"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Import a Kawai K1 SysEx bank dump (.syx)"
+                        >
+                          <Loader2 v-if="isImportingKawaiK1" class="w-2.5 h-2.5 animate-spin" />
+                          <FileText v-else class="w-2.5 h-2.5" />
+                          Import Kawai K1
                         </button>
                       </div>
                     </div>
