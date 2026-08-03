@@ -406,11 +406,6 @@ export function useMidiCCListener() {
 
       if (mapping) {
         const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
-        // The bare `NOTE{n}` key (no device/channel prefix) matches this note
-        // on ANY device — flag it explicitly since that's easy to create
-        // unintentionally and easy to miss when auditing mappings.
-        const isGlobalFallback = !mappingStore.midiMappings[preciseKey] && !(deviceKey && mappingStore.midiMappings[deviceKey])
-        console.log(`[MIDI Listener] Note ${note} from "${deviceName || 'Unknown'}" (CH ${chan + 1}) -> ${paramName}${isGlobalFallback ? ' [device-agnostic mapping — matches this note on ANY device]' : ''}`)
         applyParam(paramName, velocity, true)
       }
     }

@@ -113,7 +113,6 @@ onMounted(() => {
     const mapping   = mappingStore.midiMappings[key]
     if (!mapping) return
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
-    console.log(`[AppFooter] ${isNote ? 'Note' : 'CC'} ${byte1} from "${device || 'UNRESOLVED — matched device-agnostic key ' + key}" (CH ${channel + 1}) -> ${paramName}`)
     if (paramName === 'globalTransport') midiStore.toggleGlobalTransport()
     else if (paramName === 'panic') midiStore.panic()
   })
