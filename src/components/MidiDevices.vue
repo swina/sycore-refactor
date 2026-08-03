@@ -8,6 +8,7 @@ import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDeviceImages } from '@/composables/useDeviceImages'
+import { PC_TEMPLATES } from '@/constants/pc-templates'
 
 const { devices, setDeviceType, removeDevice, clearOffline } = useDeviceRegistry()
 const midiStore = useMidiStore()
@@ -292,6 +293,18 @@ const sortedDevices = computed(() =>
               </div>
             </div>
 
+            <div class="flex items-center gap-2 bg-black/30 rounded-lg px-2 py-1.5 text-[10px]">
+              <span class="text-neutral-500 uppercase tracking-wider shrink-0">PC Template</span>
+              <select
+                :value="registration(d.name)?.pcTemplate ?? ''"
+                @change="updateReg(d.name, 'pcTemplate', $event.target.value || undefined)"
+                class="flex-1 min-w-0 bg-transparent text-neutral-200 font-mono focus:outline-none"
+              >
+                <option value="" class="bg-black">— Auto (legacy) —</option>
+                <option v-for="t in PC_TEMPLATES" :key="t.id" :value="t.id" class="bg-black">{{ t.label }}</option>
+              </select>
+            </div>
+
             <div class="flex flex-wrap gap-1.5 items-center">
               <label
                 v-for="(label, field) in { notes: 'Notes', cc: 'CC', clock: 'Clock', transport: 'Transp', midiThru: 'Thru' }"
@@ -404,6 +417,18 @@ const sortedDevices = computed(() =>
                   >
                     <option value="" class="bg-black">— None —</option>
                     <option v-for="p in midiStore.outputs" :key="p.name" :value="p.name" class="bg-black">{{ p.name }}</option>
+                  </select>
+                </div>
+                <!-- Program Change bank/patch template -->
+                <div class="flex items-center gap-1.5 mt-1.5">
+                  <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-wider">PC Template</span>
+                  <select
+                    :value="registration(v.name)?.pcTemplate ?? ''"
+                    @change="updateReg(v.name, 'pcTemplate', $event.target.value || undefined)"
+                    class="flex-1 min-w-0 bg-black/60 border border-neutral-700 rounded text-[9px] font-mono text-neutral-300 px-1.5 py-0.5 outline-none focus:border-amber-500/40"
+                  >
+                    <option value="" class="bg-black">— Auto (legacy) —</option>
+                    <option v-for="t in PC_TEMPLATES" :key="t.id" :value="t.id" class="bg-black">{{ t.label }}</option>
                   </select>
                 </div>
               </div>

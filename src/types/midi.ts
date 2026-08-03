@@ -5,6 +5,9 @@
  * the routing system, and the MIDI monitor.
  */
 
+/** Per-device Program Change bank/patch template — see src/constants/pc-templates.ts */
+export type PcTemplateId = 'mfprojz' | 'roland-s1' | 'emulatorx3' | 'seqtrak' | 'json' | 'kawai-k1';
+
 /** Per-device registration stored in the routing config */
 export interface DeviceRegistration {
   name: string;
@@ -32,6 +35,11 @@ export interface DeviceRegistration {
   velocityMax: number;
   velocityMap: 'linear' | 'log' | 'exp' | 'fixed';
   receiveSyncIn: boolean;
+  // Which Program Change bank/patch template MidiDeviceProgramChangePanel
+  // should show for this device — unset means "legacy/auto" (today's fuzzy
+  // catalog-name-match + show-every-import-button behavior), so devices
+  // nobody has migrated to an explicit template keep working unchanged.
+  pcTemplate?: PcTemplateId;
 }
 
 /** Full routing configuration, persisted as 'S1_MIDI_ROUTING' */

@@ -9,7 +9,9 @@ export interface PresetBankEntry {
   name: string
   createdAt: string
   presets: any[]
-  source?: 'emulatorx3'
+  // undefined = legacy (.mfprojz or Standard JSON, saved before these were
+  // distinguishable) — treated permissively as belonging to either template.
+  source?: 'emulatorx3' | 'mfprojz' | 'json' | 'kawai-k1'
 }
 
 export interface PresetBanks {
@@ -42,7 +44,7 @@ export const useUserBanksStore = defineStore('userBanks', () => {
     return banks.value[deviceName] ?? []
   }
 
-  function addBank(deviceName: string, bankName: string, presets: any[], source?: 'emulatorx3') {
+  function addBank(deviceName: string, bankName: string, presets: any[], source?: PresetBankEntry['source']) {
     if (!banks.value[deviceName]) banks.value[deviceName] = []
     const idx = banks.value[deviceName].findIndex(b => b.name === bankName)
     const entry: PresetBankEntry = { name: bankName, createdAt: new Date().toISOString(), presets, source }

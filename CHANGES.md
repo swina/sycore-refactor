@@ -2,6 +2,11 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-03
+
+- MIDI Devices: **Program Change template assignment** — each device (real or virtual) can now be assigned one of six PC bank/patch templates (Arturia MicroFreak, Roland S-1 Sound Engine, E-MU Emulator X3, Yamaha SEQTRAK, Standard JSON, or the new Kawai K1) from a new "PC Template" dropdown. Once assigned, the Program Change panel shows only that template's relevant catalog/import UI for the device instead of every possible option; devices with no template assigned keep today's behavior unchanged.
+- Program Change panel: **Import Kawai K1** — import a bank from a Kawai K1 SysEx dump (`.syx`), alongside the existing `.mfprojz`, Emulator X3, and Standard JSON import options.
+
 ## 2026-08-02
 
 - MIDI Devices: **rename a virtual instrument** — click its name in the MIDI Devices panel to edit it in place. The new name is migrated everywhere it's referenced: routing config, the routing matrix, device→app input routing, device→device Thru filters, the keyboard split config, the virtual MIDI output binding, mixer faders/mutes/solo/channel-slots, and its uploaded device image.
