@@ -11,7 +11,7 @@ export const MIDI_APPS = [
   { name: 'Step Sequencer',    sourceId: MidiSource.SEQUENCER,  icon: ListMusic,    hasIn: true },
   { name: 'Chord Sequencer',   sourceId: MidiSource.CHORD_PROG, icon: Music2,       hasIn: true },
   { name: 'Virtual Keyboard',  sourceId: MidiSource.KEYBOARD,   icon: KeyboardIcon, hasIn: true },
-  { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music     },
+  { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music,        hasIn: true },
   { name: 'Transport / Clock', sourceId: MidiSource.TRANSPORT,  icon: Zap       },
   { name: 'Sound Engine',      sourceId: MidiSource.UI,         icon: Layers    },
   { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum,   hasIn: true },

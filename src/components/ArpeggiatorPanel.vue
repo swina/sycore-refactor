@@ -26,37 +26,6 @@ let patternState = defaultArpPatternState()
 const physicalKeysHeld = ref(0)
 const arpModes = ref(ARP_MODES)
 
-/**
- * Check if the given input device ID is routed to the arpeggiator
- * @param {string} inputId - The MIDI input device ID
- * @returns {boolean} True if the device is routed to arpeggiator
- */
-function isInputDeviceRoutedToArpeggiator(inputId) {
-  // If no inputId, we can't verify routing - allow by default for backward compatibility
-  if (!inputId) return true
-
-  try {
-    // Get the MIDI access to look up the device name by ID
-    const midiAccess = midiService.midiAccess
-    if (!midiAccess) return true
-    const inputDevice = midiAccess.inputs.get(inputId)
-    if (!inputDevice) return true
-    
-    const inputName = inputDevice.name
-    if (!inputName) return true
-    
-    // Check if this input device is configured to route to the arpeggiator
-    const routingMatrix = midiStore.routingMatrix
-    const targetArray = routingMatrix[inputName]
-    if (!targetArray) return true
-    return targetArray.some(t => routingMatrix[MidiSource.ARP]?.includes(t))  
-  } catch (error) {
-    // If anything goes wrong, allow the note through to avoid blocking all input
-    console.warn('[Arpeggiator] Error checking input routing:', error)
-    return true
-  }
-}
-
 function calculateStepMs(bpm, subdivision) {
   const beatMs = 60000 / bpm
   const match = subdivision.match(/(\d+)\/(\d+)(d|t)?/)
@@ -211,8 +180,15 @@ onMounted(() => {
     // Filter by input channel if specified
     if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
 
-    // Filter by input device routing to arpeggiator
-    if (!isInputDeviceRoutedToArpeggiator(inputId)) return
+    // MIDI Flow device→app input routing — same gate ChordProgSequencer.vue
+    // uses. hasExplicitInputRouting requires an actual cable to the
+    // Arpeggiator node before a controller can drive it (no fail-open for
+    // unwired devices), and isDeviceRoutedToApp also enforces any per-cable
+    // note-range filter (keyboard split) drawn on that cable.
+    const inputDevice = midiService.getInputs().find(i => i.id === inputId)
+    const sourceKey = inputDevice?.name
+    if (!midiStore.hasExplicitInputRouting(sourceKey)) return
+    if (!midiStore.isDeviceRoutedToApp(sourceKey, MidiSource.ARP, note)) return
 
     if (type === 'on' && velocity > 0) {
       if (arpStore.arpHold && physicalKeysHeld.value === 0) {
