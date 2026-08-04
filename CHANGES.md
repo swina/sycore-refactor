@@ -2,6 +2,10 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-04
+
+- MIDI Flow: **Arpeggiator is now a routable app** — its canvas node has a proper IN port, so a controller can be cabled straight into it like any other app (Chord Sequencer, Drum Machine, etc.), with per-cable note-range filters (keyboard splits) now working for it too. **Behavior change:** the Arpeggiator no longer reacts to *any* connected controller by default — a device must be explicitly cabled to it on the MIDI Flow canvas before it responds, matching Chord Prog Sequencer's gating. If you were relying on "just play, it arpeggiates" with nothing wired, add a cable after updating.
+
 ## 2026-08-03
 
 - MIDI Devices: **Program Change template assignment** — each device (real or virtual) can now be assigned one of six PC bank/patch templates (Arturia MicroFreak, Roland S-1 Sound Engine, E-MU Emulator X3, Yamaha SEQTRAK, Standard JSON, or the new Kawai K1) from a new "PC Template" dropdown. Once assigned, the Program Change panel shows only that template's relevant catalog/import UI for the device instead of every possible option; devices with no template assigned keep today's behavior unchanged.
