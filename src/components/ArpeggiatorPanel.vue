@@ -11,7 +11,6 @@ import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patte
 const props = defineProps({
   isOpen:       { type: Boolean, default: false },
   channel:      { type: Number, default: 0 },
-  inputChannel: { type: Number, default: -1 },
 })
 const emit = defineEmits(['close'])
 
@@ -177,9 +176,6 @@ let _unsubNote = null
 
 onMounted(() => {
   _unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
-    // Filter by input channel if specified
-    if (props.inputChannel !== undefined && props.inputChannel !== -1 && chan !== props.inputChannel) return
-
     // MIDI Flow device→app input routing — same gate ChordProgSequencer.vue
     // uses. hasExplicitInputRouting requires an actual cable to the
     // Arpeggiator node before a controller can drive it (no fail-open for

@@ -370,7 +370,6 @@ onMounted(() => {
         <ArpeggiatorPanel
           :isOpen="uiStore.isArpOpen"
           :channel="midiStore.midiChannel - 1"
-          :inputChannel="midiStore.midiInputChannel"
           @close="uiStore.isArpOpen = false"
         />
       </div>
