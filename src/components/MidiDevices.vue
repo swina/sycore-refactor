@@ -82,6 +82,19 @@ function updateReg(name, field, value) {
   midiStore.updateRegistration(name, field, value)
 }
 
+// Full removal, unlike "Unregister" (clears routing settings but leaves the
+// device tracked, so it can be re-added later) or "Clear offline" (removes
+// from the device registry in bulk but leaves any routing/PC settings
+// behind as an orphaned registration — the exact stale-entry problem that
+// motivated this). Only meaningful for offline devices — an online one
+// would just reappear on the next scan.
+function deleteDeviceForever(d) {
+  if (!window.confirm(`Permanently remove "${d.name}"? This clears its routing/Program Change settings and any uploaded image. It'll need to be re-added if it's ever reconnected.`)) return
+  midiStore.removeRegistration(d.name)
+  removeDeviceImage(d.name)
+  removeDevice(d.id)
+}
+
 function toggleReg(name, field) {
   const reg = registration(name)
   if (!reg) { midiStore.addRegistration(name); return }
@@ -338,6 +351,15 @@ const sortedDevices = computed(() =>
               <Plus class="w-3 h-3" /> Add to routing
             </button>
           </div>
+
+          <button
+            v-if="!d.online"
+            @click="deleteDeviceForever(d)"
+            title="Permanently remove this device and its settings"
+            class="flex items-center justify-center gap-1.5 text-[9px] font-mono uppercase tracking-wider px-2 py-1.5 rounded border border-rose-900/40 text-rose-600/70 hover:text-rose-400 hover:border-rose-700 hover:bg-rose-900/20 transition-colors"
+          >
+            <Trash2 class="w-3 h-3" /> Remove Permanently
+          </button>
 
         </div>
 

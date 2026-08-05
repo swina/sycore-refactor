@@ -29,6 +29,21 @@ function deviceType(name) {
   return registryDevices.value.find(d => d.name === name)?.type ?? 'instrument-single'
 }
 
+// Whether a registered device belongs in the "add to canvas" sidebar list.
+// Real hardware needs an actual live connection — a registration can
+// outlive the device it was created for (unplugged, a loopback driver no
+// longer running), leaving nothing for a canvas node to reach. Virtual
+// instruments have no such requirement: they're just a named routing
+// target you can wire up regardless of whether the app they stand for is
+// currently running. Their own online/offline toggle (which the Program
+// Change panel and DECK do respect) represents "is that app running right
+// now" — unrelated to whether you should be able to set up routing for it
+// here, often done in advance of actually launching it.
+function canAddToCanvas(name) {
+  if (midiStore.virtualInstruments.some(v => v.name === name)) return true
+  return registryDevices.value.some(d => d.name === name && d.online)
+}
+
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey:    'SYCORE_POS_MIDI_FLOW',
   initialWidth:  900,
@@ -41,14 +56,22 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   panelId:       'midi-flow',
 })
 
-// ── Registered devices (matches DeviceListPanel source of truth) ──
+// ── Registered AND online devices (matches DeviceListPanel source of truth) ──
+// Registered alone isn't enough — a registration can outlive the device it
+// was created for (unplugged, a loopback driver no longer running, etc.),
+// and such an entry has no live connection for anything dropped onto the
+// canvas to actually reach. Those entries also have no visible card in
+// MIDI Devices (which only lists what deviceRegistry currently sees), so
+// there'd be no way to even inspect/clean them up from here either.
 const allDevices = computed(() =>
-  Object.values(midiStore.routingConfig?.registrations ?? {}).map(reg => ({
-    name:   reg.name,
-    hasIn:  reg.inEnabled,
-    hasOut: reg.outEnabled,
-    type:   deviceType(reg.name),
-  }))
+  Object.values(midiStore.routingConfig?.registrations ?? {})
+    .filter(reg => canAddToCanvas(reg.name))
+    .map(reg => ({
+      name:   reg.name,
+      hasIn:  reg.inEnabled,
+      hasOut: reg.outEnabled,
+      type:   deviceType(reg.name),
+    }))
 )
 
 // ── Canvas state ──
