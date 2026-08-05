@@ -655,13 +655,13 @@ function handleBpmChange(e) {
             </div>
 
             <!-- Current instrument patches + active channels -->
-            <div v-if="!selectedApp" class="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-sky-900/40 p-1 rounded-lg text-[9px] font-mono border-l border-neutral-700 pl-3">
+            <div v-if="!selectedApp" class="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-neutral-400/20 p-1 rounded-lg text-[9px] font-mono border-[4px] border-neutral-900 pl-1 shadow-inner" :class="focusRing('instruments', 3)">
               <p v-if="instruments.length === 0" class="text-neutral-700 italic text-center pt-2">No instruments routed</p>
               <template v-for="row in instruments" :key="row.name">
                 <div v-for="(cp, idx) in row.channelPatchList" :key="row.name + ':' + cp.channel"
                   @click="selectInstrumentChannel(row, cp)"
                   title="Select this device/channel in Program Change"
-                  class="flex items-center gap-2 py-0.5 border-b font-mono text-[11px] transition-colors cursor-pointer hover:bg-white/5"
+                  class="flex items-center gap-2 py-0.5 px-1 border-b font-mono text-[11px] rounded transition-colors cursor-pointer hover:bg-white/5"
                   :class="[
                     isSelected(row.name, cp.channel) ? 'border-violet-700/50 bg-sky-500/50' : 'border-neutral-900/60',
                     instrumentItemFocusRing(row.name, cp.channel),
@@ -669,8 +669,8 @@ function handleBpmChange(e) {
                 >
                   <Circle v-if="idx === 0" class="w-1.5 h-1.5 fill-current shrink-0" :class="row.online ? 'text-emerald-400' : 'text-neutral-600'" />
                   <span v-else class="w-1.5 h-1.5 shrink-0"></span>
-                  <span class="truncate text-neutral-500 w-42 shrink-0" :title="row.name">{{ idx === 0 ? row.name : '' }}</span>
-                  <span class="truncate flex-1 min-w-0 text-sky-400" :class="cp.patchName ? 'text-neutral-400' : 'text-neutral-700 italic'">
+                  <span class="truncate text-neutral-300 w-42 shrink-0" :title="row.name">{{ idx === 0 ? row.name : '' }}</span>
+                  <span class="truncate flex-1 min-w-0 text-sky-400" :class="cp.patchName ? 'text-neutral-300' : 'text-neutral-700 italic'">
                     {{ cp.patchName ?? 'No preset' }} {{ cp.patchCategory ? '(' + cp.patchCategory + ')' : '' }}
                   </span>
                   <span class="shrink-0 text-synth-neon/70">CH {{ cp.channel }}</span>
@@ -679,7 +679,7 @@ function handleBpmChange(e) {
             </div>
 
             <!-- Selected app's compact summary — replaces the instrument list above -->
-            <div v-else class="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-sky-900/40 p-1.5 rounded-lg border-l border-neutral-700 pl-3">
+            <div v-else class="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-neutral-400/20 p-1.5 rounded-lg border-[4px] border-neutral-900 pl-3">
               <component :is="selectedAppComponent" @close="closeAppSummary" />
             </div>
           </div>

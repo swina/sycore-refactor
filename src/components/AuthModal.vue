@@ -189,9 +189,9 @@ async function loadStarterPresets() {
             >
               {{ isLogin ? 'Create a Profile' : 'Sign In Instead' }}
             </button>
-            <p class="text-xs text-neutral-400 bg-rose-800 p-1 rounded-lg mb-1 border border-rose-200 text-center">
-                To create a profile is only necessary in order to protect your data and preferences locally. No data is ever sent to a server or published anywhere.<p>If you choose to subscribe to notifications, you will receive updates about new features and improvements. </p>
-              </p>
+            <div class="text-xs text-neutral-400 bg-rose-800 p-1 rounded-lg mb-1 border border-rose-200 text-center">
+                To create a profile is only necessary in order to protect your data and preferences locally. No data is ever sent to a server or published anywhere.<div>If you choose to subscribe to notifications, you will receive updates about new features and improvements. </div>
+              </div>
           </div>
         </template>
       </div>
