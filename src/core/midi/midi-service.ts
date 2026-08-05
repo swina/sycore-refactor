@@ -1143,10 +1143,17 @@ export class MidiService {
       }
     }
 
-    // Echo suppression
+    // Echo suppression — guards against a virtual/hardware MIDI loopback cable
+    // re-triggering itself, not against a musician genuinely repeating a
+    // note. A real loopback echo arrives within single-digit ms; 300ms was
+    // wide enough to also swallow a deliberately fast repeated note (trills,
+    // drum-style rolls, fast runs hitting the same pitch+velocity twice) —
+    // the dropped half of that on/off pair is exactly what leaves a stuck
+    // note on the receiving synth. 20ms comfortably covers real echo
+    // latency while sitting below realistic repeated-note timing.
     const rawHash = event.data.join(',');
     const globalSentTime = this.globalSentHashes.get(rawHash);
-    if (globalSentTime && now - globalSentTime < 300) return;
+    if (globalSentTime && now - globalSentTime < 20) return;
     const recent = this.lastSentMessages.get(inputId);
     if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
 
