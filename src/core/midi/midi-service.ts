@@ -370,7 +370,7 @@ export class MidiService {
       this.midiAccess = await navigator.requestMIDIAccess();
       if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] Access Granted.');
       this.setupStateChangeHandler();
-      this.reScanInputs();
+      await this.reScanInputs();
       this.router.load();
       this.router.loadBroadcastMode();
       return true;
@@ -435,7 +435,7 @@ export class MidiService {
       this.midiAccess = await navigator.requestMIDIAccess({ sysex: true });
       this.sysexEnabled = true;
       this.setupStateChangeHandler();
-      this.reScanInputs();
+      await this.reScanInputs();
       this.onStateChangeListeners.forEach(l => l(new Event('reinit')));
       if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] SysEx access granted.');
       return true;
@@ -452,7 +452,7 @@ export class MidiService {
 
   // ── Device management ────────────────────────────────────────────────────
 
-  reScanInputs(): void {
+  async reScanInputs(): Promise<void> {
     if (!this.midiAccess) return;
     // Ports used as virtual-instrument outputs must never be opened as inputs —
     // loopback drivers (LoopBe1, loopMIDI, etc.) detect the simultaneous
@@ -460,13 +460,27 @@ export class MidiService {
     const blockedPorts = new Set(
       Array.from(this.virtualOutputPorts.values()).filter(Boolean).map(p => this.normPort(p))
     );
-    const inputs = Array.from(this.midiAccess.inputs.values());
-    inputs.forEach(input => {
-      if (blockedPorts.has(this.normPort(input.name))) return;
-      input.open();
+    const inputs = Array.from(this.midiAccess.inputs.values())
+      .filter(input => !blockedPorts.has(this.normPort(input.name)));
+    // Force an explicit close()+open() cycle, not just open() — on a fresh
+    // page load some browsers/OSes leave a port's underlying connection
+    // stale (state reports 'connected' but no midimessage event ever
+    // fires) until it's actually closed and reopened; open() alone on an
+    // already-"open" port is a no-op that doesn't clear this. Same fix as
+    // the manual per-device Reconnect button (reconnectInput below), just
+    // applied automatically to every input on startup so hardware works
+    // without requiring the user to unplug/replug or click reconnect.
+    await Promise.all(inputs.map(async (input) => {
+      input.removeEventListener('midimessage', this.handleIngressBound);
+      try {
+        await input.close();
+        await input.open();
+      } catch (e) {
+        console.warn(`[MIDI] Failed to reset input "${input.name}" on startup:`, e);
+      }
       input.removeEventListener('midimessage', this.handleIngressBound);
       input.addEventListener('midimessage', this.handleIngressBound);
-    });
+    }));
     console.log(`[MIDI] Attached to ${inputs.length} inputs: ${inputs.map(i => i.name).join(', ')}`);
   }
 
