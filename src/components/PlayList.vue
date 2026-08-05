@@ -98,7 +98,7 @@
           :class="['flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors', loopPlaylist ? 'text-synth-neon border-synth-neon/30 bg-synth-neon/10' : 'text-neutral-500 border-neutral-700 hover:text-white']">
           <Repeat class="w-3 h-3" /> Loop
         </button>
-        <button @click="$emit('clear')"
+        <button @click="uiStore.lastPlaylistName = ''; $emit('clear')"
           class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border text-neutral-600 border-neutral-700 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 class="w-3 h-3" /> Clear
         </button>
@@ -139,16 +139,23 @@
           <X class="w-3 h-3" />
         </button>
       </div>
-      <button v-else @click="showSaveInput = true"
-        class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border text-neutral-400 border-neutral-700 hover:text-white transition-colors">
-        <Save class="w-3 h-3" /> Save Current Playlist
-      </button>
+      <div v-else class="flex items-center gap-1.5 flex-wrap">
+        <button v-if="canUpdateCurrentPlaylist" @click="updateCurrentPlaylist"
+          :title="`Save changes back to &quot;${uiStore.lastPlaylistName}&quot;`"
+          class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border text-synth-neon border-synth-neon/30 hover:bg-synth-neon/10 transition-colors">
+          <Save class="w-3 h-3" /> Update "{{ uiStore.lastPlaylistName }}"
+        </button>
+        <button @click="showSaveInput = true"
+          class="flex items-center gap-1.5 text-[9px] font-bold uppercase px-2 py-1 rounded border text-neutral-400 border-neutral-700 hover:text-white transition-colors">
+          <Save class="w-3 h-3" /> {{ canUpdateCurrentPlaylist ? 'Save As New' : 'Save Current Playlist' }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { ListMusic, ListPlus, GripVertical, ChevronUp, ChevronDown, X, Repeat, Trash2, Play, Save, FolderOpen, SkipBack, SkipForward, Pause, Volume2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -302,10 +309,8 @@ function setRepeatForIdx(idx, n) {
   emit('update:playlistRepeats', rp)
 }
 
-async function savePlaylist() {
-  const name = saveName.value.trim()
+async function saveToSlot(name) {
   if (!name || props.playlist.length === 0 || !authStore.user) return
-  
   const playlistData = {
     tracks: props.playlist,
     repeats: props.playlistRepeats,
@@ -313,12 +318,26 @@ async function savePlaylist() {
     loopPlaylist: props.loopPlaylist,
     savedAt: new Date().toISOString()
   }
-  
   const playlistRef = doc(db, 'users', authStore.user.uid, 'playlists', name)
   await setDoc(playlistRef, playlistData)
-  
+}
+
+async function savePlaylist() {
+  const name = saveName.value.trim()
+  await saveToSlot(name)
   saveName.value = ''
   showSaveInput.value = false
+}
+
+// True once a saved playlist has been loaded (and not since cleared) — lets
+// "Update" overwrite that same slot directly instead of the user having to
+// retype its exact name in the Save As input every time they tweak it.
+const canUpdateCurrentPlaylist = computed(() =>
+  !!uiStore.lastPlaylistName && !!savedPlaylists.value[uiStore.lastPlaylistName]
+)
+
+async function updateCurrentPlaylist() {
+  await saveToSlot(uiStore.lastPlaylistName)
 }
 
 function loadSavedPlaylist(name) {
