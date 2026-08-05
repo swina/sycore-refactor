@@ -357,11 +357,19 @@ function deleteUserBank(bankName) {
 }
 
 const selectedBank = ref('')
-watch([catalogDevice, selectedDeviceName], () => {
+// Also re-runs on pcChannel changes — each channel can carry its own saved
+// bank (reg.pcChannels[ch].bank, written by recordChannelState), so picking
+// a different channel row in "Current Program Change" needs to restore
+// *that* channel's bank, not just whatever bank happened to be open. Falls
+// back to reg.pcBank (the device-level "last written" bank) for a
+// single-channel device or a channel that's never had a patch assigned yet.
+watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel], () => {
   // restore last-used bank if available, else reset
   const reg = selectedReg.value
-  if (reg?.pcBank && availableBanks.value.includes(reg.pcBank)) {
-    selectedBank.value = reg.pcBank
+  const activeCh = reg?.pcChannel ?? 0
+  const bank = reg?.pcChannels?.[activeCh]?.bank || reg?.pcBank
+  if (bank && availableBanks.value.includes(bank)) {
+    selectedBank.value = bank
   } else {
     selectedBank.value = ''
     sounds.value = []
@@ -389,7 +397,12 @@ const bankConfig = computed(() => {
 const sounds    = ref([])
 const isLoading = ref(false)
 
-watch(selectedBank, async (bank) => {
+// Also keyed on selectedDeviceName, not just selectedBank — two devices can
+// legitimately have the same bank *name* selected (e.g. both pointed at the
+// same imported user bank), in which case selectedBank's own value never
+// changes on switch, and this watcher wouldn't otherwise re-fire at all,
+// leaving the previous device's patch list on screen.
+watch([selectedBank, selectedDeviceName], async ([bank]) => {
   if (!bank) { sounds.value = []; return }
 
   // User-imported bank: load directly from store
@@ -443,15 +456,32 @@ const filteredSounds = computed(() => {
 const activeSound = ref(null)
 const lastSent    = ref(null)
 
-watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null; showCopyMapPicker.value = false })
+// Also clears on pcChannel change (switching which channel row is active in
+// "Current Program Change") — activeSound must reset so scrollToCurrentProgram
+// re-evaluates for the newly selected channel's own saved patch, instead of
+// staying stuck highlighting whatever the previous channel had selected.
+watch([selectedDeviceName, () => selectedReg.value?.pcChannel], () => { activeSound.value = null; lastSent.value = null; showCopyMapPicker.value = false })
 
-// Scroll the preset list to the entry matching the device's current pcProgram/pcMsb.
+// Scroll the preset list to the entry matching the *currently selected
+// channel's* own saved patch (reg.pcChannels[pcChannel]), not the device-level
+// pcProgram/pcMsb/pcLsb fields — those just hold whichever channel was most
+// recently written to (see recordChannelState), not necessarily the channel
+// that's currently active, so channel-switching would otherwise scroll/
+// highlight against the wrong (previous channel's) target. Falls back to the
+// device-level fields for a single-channel device that's never recorded
+// per-channel state.
 // Uses the same progIdx formula as sendCatalogSound so bank offsets are respected.
 function scrollToCurrentProgram() {
   const list = filteredSounds.value
   if (!list.length || !bankConfig.value) return
   const reg = selectedReg.value
   if (!reg) return
+
+  const activeCh = reg.pcChannel ?? 0
+  const chInfo   = reg.pcChannels?.[activeCh]
+  const pcProgram = chInfo?.program ?? reg.pcProgram
+  const pcMsb     = chInfo?.msb ?? reg.pcMsb
+  const pcLsb     = chInfo?.lsb ?? reg.pcLsb
 
   const cfg    = bankConfig.value
   const pField = cfg.program_field ?? 'program'
@@ -460,12 +490,12 @@ function scrollToCurrentProgram() {
     if (cfg.bankSelect === 'emulatorx3') {
       const bank    = s[cfg.bank_field ?? 'bank'] ?? 0
       const progNum = Math.max(0, Math.min(127, s[pField] ?? 0))
-      return progNum === (reg.pcProgram ?? 0) && bank === (reg.pcLsb ?? 0)
+      return progNum === (pcProgram ?? 0) && bank === (pcLsb ?? 0)
     }
     const progIdx = (s[pField] ?? 0) + (cfg.program_base ?? 0)
     const progNum = Math.max(0, Math.min(127, progIdx % 128))
     const msb     = cfg.msb ? (s.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
-    return progNum === (reg.pcProgram ?? 0) && msb === (reg.pcMsb ?? 0)
+    return progNum === (pcProgram ?? 0) && msb === (pcMsb ?? 0)
   })
   if (idx < 0) return
 
@@ -476,9 +506,14 @@ function scrollToCurrentProgram() {
   })
 }
 
-// Auto-scroll when the sound list loads and no sound has been manually selected yet
-watch(filteredSounds, (list, prev) => {
-  if (list.length && !prev?.length && !activeSound.value) scrollToCurrentProgram()
+// Auto-scroll/highlight whenever the sound list (re)loads and no sound has
+// been manually clicked yet — not just on an empty→non-empty transition,
+// since switching devices can reload the list without it ever passing
+// through empty (e.g. both devices resolve to a same-sized bank), which
+// left the previously selected device's item highlighted instead of the
+// newly selected device's actual current patch.
+watch(filteredSounds, (list) => {
+  if (list.length && !activeSound.value) scrollToCurrentProgram()
 })
 
 // ── pcChannels persistence helper ──────────────────────────────
