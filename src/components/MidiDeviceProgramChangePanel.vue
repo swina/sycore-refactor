@@ -54,16 +54,30 @@ const devices = computed(() => {
     .filter(r => r.outEnabled && (r.pcEnabled || r.pc) && instrumentNames.has(r.name))
     .map(r => ({
       ...r,
-      isOnline: midiStore.outputs.some(o => o.name === r.name) || midiStore.virtualInstruments.some(v => v.name === r.name),
+      isOnline: midiStore.outputs.some(o => o.name === r.name) || midiStore.virtualInstruments.some(v => v.name === r.name && v.online !== false),
     }))
     .sort((a, b) => b.isOnline - a.isOnline || a.name.localeCompare(b.name))
 })
+
+// Left-panel device list — only devices actually online right now. `devices`
+// itself stays the full set (online or not): it's also used for Performance
+// Set snapshots (which must keep covering a device even if it's temporarily
+// offline at save time) and for pc_dev_N MIDI-Learn index mappings (which
+// must stay stable regardless of who's currently connected).
+const visibleDevices = computed(() => devices.value.filter(d => d.isOnline))
+
+// True index into the full `devices` array for a given device name — keeps
+// pc_dev_N MIDI-Learn bindings correct even though the visible list above is
+// a filtered subset with its own, different local indices.
+function deviceIndex(name) {
+  return devices.value.findIndex(d => d.name === name)
+}
 
 const selectedDeviceName = ref('')
 
 // Auto-select first online PC-enabled device on open
 onMounted(() => {
-  const first = devices.value.find(d => d.pcEnabled && d.isOnline) ?? devices.value[0]
+  const first = visibleDevices.value.find(d => d.pcEnabled) ?? visibleDevices.value[0]
   if (first) selectedDeviceName.value = first.name
   loadSets()
 })
@@ -74,7 +88,8 @@ const selectedReg = computed(() =>
 
 const isDeviceOffline = computed(() => {
   if (!selectedDeviceName.value) return false
-  if (midiStore.virtualInstruments.some(v => v.name === selectedDeviceName.value)) return false
+  const virtual = midiStore.virtualInstruments.find(v => v.name === selectedDeviceName.value)
+  if (virtual) return virtual.online === false
   return !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
 })
 
@@ -1023,16 +1038,16 @@ function assignToPad(setId, padIdx) {
                 <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">PC Devices</span>
               </div>
 
-              <div v-if="devices.length === 0" class="flex-1 flex flex-col items-center justify-center p-6 text-center gap-2">
-                <p class="text-[10px] font-mono text-neutral-600 italic">No devices with PC enabled.</p>
-                <p class="text-[9px] font-mono text-neutral-700">Enable PC on devices in MIDI Matrix.</p>
+              <div v-if="visibleDevices.length === 0" class="flex-1 flex flex-col items-center justify-center p-6 text-center gap-2">
+                <p class="text-[10px] font-mono text-neutral-600 italic">{{ devices.length > 0 ? 'No devices currently online.' : 'No devices with PC enabled.' }}</p>
+                <p v-if="devices.length === 0" class="text-[9px] font-mono text-neutral-700">Enable PC on devices in MIDI Matrix.</p>
               </div>
 
               <button
-                v-for="(dev, devIdx) in devices"
+                v-for="dev in visibleDevices"
                 :key="dev.name"
                 @click="selectDevice(dev.name)"
-                @contextmenu.prevent="openMenu($event, { name: 'pc_dev_' + devIdx, label: dev.name })"
+                @contextmenu.prevent="openMenu($event, { name: 'pc_dev_' + deviceIndex(dev.name), label: dev.name })"
                 :class="[
                   'relative w-full text-left px-4 py-3 border-b border-neutral-800/60 transition-all',
                   selectedDeviceName === dev.name
@@ -1042,11 +1057,11 @@ function assignToPad(setId, padIdx) {
               >
                 <!-- MIDI learning indicator -->
                 <span
-                  v-if="mappingStore.learningParamName === 'pc_dev_' + devIdx"
+                  v-if="mappingStore.learningParamName === 'pc_dev_' + deviceIndex(dev.name)"
                   class="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none"
                 />
                 <div class="flex items-center gap-2.5">
-                  <div :class="['w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', dev.isOnline ? 'bg-emerald-500' : 'bg-neutral-700']" />
+                  <div class="w-1.5 h-1.5 rounded-full shrink-0 mt-0.5 bg-emerald-500" />
                   <div class="flex flex-col min-w-0 flex-1">
                     <span class="text-[11px] font-bold text-white truncate leading-tight">{{ dev.name }}</span>
                     <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -1073,7 +1088,6 @@ function assignToPad(setId, padIdx) {
                           <template v-if="(dev.pcMsb ?? 0) > 0">B{{ dev.pcMsb }}·</template>PC{{ dev.pcProgram }}
                         </span>
                       </template>
-                      <span v-if="!dev.isOnline" class="text-[7px] font-mono text-neutral-700 uppercase">offline</span>
                     </div>
                   </div>
                 </div>

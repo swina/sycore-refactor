@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
-import { RefreshCw, Cable, Network, Check, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, ExternalLink, Activity, Filter, Settings } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, ExternalLink, Activity, Filter, Settings, Power } from 'lucide-vue-next'
 import { MIDI_APPS, APP_PANEL_ID } from '@/lib/midi-apps'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
@@ -95,6 +95,17 @@ function openMidiSettings() {
 
 function virtualInstrumentPort(name) {
   return midiStore.virtualInstruments.find(v => v.name === name)?.midiOutputPort ?? ''
+}
+
+// Virtual instruments have no real WebMIDI connection to detect — undefined
+// (pre-existing instruments, never toggled) reads as online, matching the
+// old always-online behavior.
+function isVirtualInstrumentOnline(name) {
+  return midiStore.virtualInstruments.find(v => v.name === name)?.online !== false
+}
+
+function toggleVirtualInstrumentOnline(node) {
+  midiStore.updateVirtualInstrument(node.name, { online: !isVirtualInstrumentOnline(node.name) })
 }
 
 function toggleNodeCollapsed(node) {
@@ -1072,6 +1083,15 @@ function pendingPath() {
                     :class="typeMeta(node.type).text + ' opacity-70 hover:opacity-100'"
                   >
                     <RefreshCw class="w-3 h-3" :class="reconnectingNodes.has(node.id) ? 'animate-spin' : ''" />
+                  </button>
+                  <button
+                    v-if="node.type === 'virtual'"
+                    @click.stop="toggleVirtualInstrumentOnline(node)"
+                    class="transition-colors"
+                    :class="isVirtualInstrumentOnline(node.name) ? 'text-emerald-400 hover:text-emerald-300' : 'text-neutral-600 hover:text-neutral-400'"
+                    :title="isVirtualInstrumentOnline(node.name) ? 'Online — click to mark offline' : 'Offline — click to mark online'"
+                  >
+                    <Power class="w-3 h-3" />
                   </button>
                   <button
                     v-if="!node.sourceId"

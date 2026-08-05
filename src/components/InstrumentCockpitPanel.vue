@@ -253,9 +253,12 @@ const instruments = computed(() => {
   return Object.values(midiStore.routingConfig?.registrations ?? {})
     .filter(reg => deviceType(reg.name) !== 'controller' && canvasInstrumentNames.value.has(reg.name))
     .map(reg => {
-      const isVirtual = midiStore.virtualInstruments.some(v => v.name === reg.name)
+      const virtualInstrument = midiStore.virtualInstruments.find(v => v.name === reg.name)
+      const isVirtual = !!virtualInstrument
       const type = deviceType(reg.name)
-      const online = isVirtual || registryDevices.value.some(d => d.name === reg.name && d.online)
+      const online = isVirtual
+        ? virtualInstrument.online !== false
+        : registryDevices.value.some(d => d.name === reg.name && d.online)
 
       // Must match MidiDeviceProgramChangePanel.vue's own key exactly (reg.pcChannel ?? 0) —
       // this is the Program Change channel, unrelated to reg.inChannel (the note-input
@@ -307,10 +310,11 @@ const instruments = computed(() => {
         toggleMute: () => useVirtualChannel ? mixer.toggleVirtualChannelMute(reg.name, volCh) : mixer.toggleInstrumentMute(reg.name),
       }
     })
-    // Offline hardware instruments are unreachable — drop them from the DECK
+    // Offline instruments are unreachable — drop them from the DECK
     // instruments layer entirely rather than showing a dimmed, dead card.
-    // Virtual instruments are always "online" (see isVirtual above), so this
-    // only ever filters real hardware that's disconnected.
+    // For real hardware "offline" means disconnected; for a virtual
+    // instrument it's the manual online/offline toggle on its MIDI Flow
+    // card (there's no real connection state to detect otherwise).
     .filter(row => row.online)
     // Real instruments (single/multi) grouped before virtual instruments, alphabetical within each group.
     .sort((a, b) => Number(a.type === 'virtual') - Number(b.type === 'virtual') || a.name.localeCompare(b.name))

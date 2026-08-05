@@ -153,4 +153,10 @@ export interface VirtualRegistration {
   program: number;
   midiOutputPort: string; // real MIDI output port to route data through (e.g. "LoopBe Internal MIDI")
   ccTable?: VirtualCcMapping[]; // user-defined named CC controllers, exposed in MIDI Controller Designer
+  // Virtual instruments have no real WebMIDI connection state to detect, so
+  // "online" is a manual flag the user sets from its MIDI Flow card — e.g.
+  // to mark it offline while the standalone synth/app it represents isn't
+  // actually running. Undefined (pre-existing instruments) is treated as
+  // online, matching the old always-online behavior.
+  online?: boolean;
 }
