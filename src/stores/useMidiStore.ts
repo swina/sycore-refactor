@@ -332,6 +332,18 @@ export const useMidiStore = defineStore('midi', () => {
     flowConfigsStore.liveNodes.forEach((node: any) => {
       if (!node.sourceId && node.name === oldName) node.name = newName
     })
+    // liveNodes above only covers the canvas as currently mounted — a saved
+    // config (loaded later, including the auto-restore-on-mount for
+    // lastConfigName) is a separate, independently persisted copy of the
+    // node list that this doesn't touch. Left unpatched, reloading it would
+    // resurrect a node under the old name, which no longer matches anything
+    // in virtualInstruments — the canvas's own sync logic then re-registers
+    // it as a brand new, non-virtual device the next time it syncs that node.
+    flowConfigsStore.configs.forEach((cfg: any) => {
+      cfg.nodes.forEach((node: any) => {
+        if (!node.sourceId && node.name === oldName) node.name = newName
+      })
+    })
 
     refreshDevices()
     return true
