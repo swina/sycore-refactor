@@ -17,8 +17,11 @@ const QUERY = `
   FROM Playlists_V2 p
   JOIN Playlist_Presets s ON p.key_id = s.song_key
   JOIN Preset_Id pid ON s.preset_key = pid.key_id
+  JOIN Instruments i ON pid.instrument_key = i.key_id
   ORDER BY p.name, s.idx
 `
+
+
 
 interface RawEntry {
   pc: number
