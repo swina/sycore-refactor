@@ -8,7 +8,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useAudioMixerChannels } from '@/composables/useAudioMixerChannels'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
-import { CONTINUOUS_ACTIONS, parseViCcAction } from '@/lib/app-midi-actions'
+import { CONTINUOUS_ACTIONS, parseViCcAction, parseViChannelAction } from '@/lib/app-midi-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { userKey } from '@/lib/userKey'
 import { dispatch } from '@/types/events'
@@ -41,6 +41,22 @@ export function useAppActions() {
       if (vi && !Number.isNaN(viCc.cc)) {
         const status = 0xB0 | (channel & 0x0f)
         midiService.sendRawToDeviceByName(viCc.instrumentName, [status, viCc.cc & 0x7f, ccVal & 0x7f])
+      }
+      return
+    }
+    const viCh = parseViChannelAction(action)
+    if (viCh) {
+      // Button press toggles this channel in/out of the instrument's
+      // multi-channel fanout — same effect as clicking it in MIDI FLOW's
+      // "Multi-CH out" grid. Operates on the store directly so it works even
+      // when the MIDI Flow panel isn't open.
+      if (ccVal > 63) {
+        const reg = midiStore.routingConfig?.registrations?.[viCh.instrumentName]
+        const current = reg?.outChannels ?? []
+        const next = current.includes(viCh.channel)
+          ? current.filter(ch => ch !== viCh.channel)
+          : [...current, viCh.channel]
+        midiStore.updateRegistration(viCh.instrumentName, 'outChannels', next)
       }
       return
     }

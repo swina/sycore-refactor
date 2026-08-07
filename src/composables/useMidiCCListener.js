@@ -177,6 +177,21 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     midiStore.updateRegistration(dev, 'latchReplace', val > 63)
     return
   }
+  // ── Virtual instrument Multi-CH out toggle (MIDI FLOW card) ──────────────
+  if (fieldName.startsWith('vi_multich_')) {
+    const m = fieldName.match(/^vi_multich_(\d+)_(.+)$/)
+    if (m) {
+      const ch = parseInt(m[1], 10)
+      const name = m[2]
+      const current = midiStore.routingConfig?.registrations?.[name]?.outChannels ?? []
+      const isOn = current.includes(ch)
+      const shouldBeOn = fromNote ? !isOn : on
+      if (shouldBeOn !== isOn) {
+        midiStore.updateRegistration(name, 'outChannels', shouldBeOn ? [...current, ch] : current.filter(c => c !== ch))
+      }
+    }
+    return
+  }
   // ─────────────────────────────────────────────────────────────────────────
   if (fieldName === 'ui_panel_collapse') {
     uiStore.isPanelCollapsed = fromNote ? !uiStore.isPanelCollapsed : on

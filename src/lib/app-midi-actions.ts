@@ -567,6 +567,30 @@ export function parseViCcAction(action: string): ParsedViCcAction | null {
   };
 }
 
+// ── Virtual instrument per-channel toggle action ─────────────────────────────
+// One mappable action per virtual instrument per channel (16 total) that lets
+// a button enable/disable that channel in the instrument's multi-channel
+// fanout — the mapped equivalent of clicking that channel in the "Multi-CH
+// out" grid on the instrument's MIDI FLOW card by hand. A discrete on/off
+// trigger (button press), not a continuous fader value.
+const VI_CH_PREFIX = 'vi_ch:';
+
+export interface ParsedViChannelAction {
+  instrumentName: string;
+  channel: number; // 0-15
+}
+
+/** Parses a `vi_ch:<instrumentName>:<channel>` per-channel toggle action id, or null. */
+export function parseViChannelAction(action: string): ParsedViChannelAction | null {
+  if (!action.startsWith(VI_CH_PREFIX)) return null;
+  const parts = action.slice(VI_CH_PREFIX.length).split(':');
+  if (parts.length < 2) return null;
+  return {
+    channel: parseInt(parts[parts.length - 1], 10),
+    instrumentName: parts.slice(0, -1).join(':'), // instrument name may itself contain ':'
+  };
+}
+
 /** True for any action whose CC value should pass straight through (fader/knob), not be treated as a discrete on/off trigger. */
 export function isContinuousAction(action: string): boolean {
   return action.startsWith(VI_CC_PREFIX) || CONTINUOUS_ACTIONS.has(action as AppAction);
@@ -585,5 +609,7 @@ export function actionLabel(
     const base = `${instrumentName}: ${row?.name || `CC ${cc}`}`;
     return channel != null ? `${base} (Ch ${channel + 1})` : base;
   }
+  const viCh = parseViChannelAction(action);
+  if (viCh) return `${viCh.instrumentName}: Channel ${viCh.channel + 1} Enable/Disable`;
   return (APP_ACTION_LABELS as Record<string, string>)[action] ?? action;
 }

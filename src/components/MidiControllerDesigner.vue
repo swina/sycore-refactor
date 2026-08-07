@@ -1028,9 +1028,12 @@ const collapsedApp     = ref(new Set(APP_SECTIONS.map(s => s.key)))
 const actionGroups = computed(() => {
   const groups = { ...MIDI_ACTION_GROUPS }
   midiStore.virtualInstruments.forEach(vi => {
-    if (vi.ccTable?.length) {
-      groups[`Virtual: ${vi.name}`] = vi.ccTable.map(row => `vi_cc:${vi.name}:${row.cc}`)
-    }
+    const actions = vi.ccTable?.length ? vi.ccTable.map(row => `vi_cc:${vi.name}:${row.cc}`) : []
+    // One toggle action per channel — enables/disables that channel in the
+    // instrument's multi-channel fanout, same as clicking it in the
+    // "Multi-CH out" grid on its MIDI FLOW card.
+    for (let ch = 0; ch < 16; ch++) actions.push(`vi_ch:${vi.name}:${ch}`)
+    groups[`Virtual: ${vi.name}`] = actions
   })
   return groups
 })

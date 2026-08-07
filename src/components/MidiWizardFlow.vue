@@ -555,6 +555,28 @@ watch(routingSignature, () => {
   finish()
 })
 
+// A virtual instrument's outChannels can also change from outside this
+// canvas — a MIDI Learn-mapped Multi-CH out button firing (see vi_multich_
+// fields in useMidiCCListener.js) writes straight to the store's
+// registration. That bypasses each canvas node's own outChannels copy
+// (only ever loaded from the store at mount/reload), so the grid's ON/OFF
+// highlighting would otherwise go stale until the canvas reloads. Mirror
+// the store's value back in whenever it disagrees with the canvas.
+const viOutChannelsSignature = computed(() => {
+  const regs = midiStore.routingConfig?.registrations ?? {}
+  return JSON.stringify(midiStore.virtualInstruments.map(v => regs[v.name]?.outChannels ?? []))
+})
+watch(viOutChannelsSignature, () => {
+  const regs = midiStore.routingConfig?.registrations ?? {}
+  for (const node of canvasNodes.value) {
+    if (node.type !== 'virtual') continue
+    const storeChannels = regs[node.name]?.outChannels ?? []
+    if (JSON.stringify(storeChannels) !== JSON.stringify(node.outChannels ?? [])) {
+      node.outChannels = [...storeChannels]
+    }
+  }
+})
+
 // ── Sidebar section collapse state ──
 const showDevicesSection = ref(true)
 const showAppsSection    = ref(true)
@@ -1226,7 +1248,8 @@ function pendingPath() {
                     <button
                       v-for="ch in CHANNELS" :key="ch"
                       @click.stop="toggleNodeOutChannel(node, ch - 1)"
-                      :title="`Duplicate onto channel ${ch}`"
+                      @contextmenu.prevent="openMenu($event, { name: 'vi_multich_' + (ch - 1) + '_' + node.name, label: node.name + ': Ch ' + ch + ' Multi-Out' })"
+                      :title="`Duplicate onto channel ${ch}. Right-click to MIDI Learn`"
                       class="text-[8px] font-mono py-0.5 rounded border transition-colors"
                       :class="node.outChannels?.includes(ch - 1)
                         ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'

@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-08-07
 
+- MIDI Controller Designer: **virtual instrument per-channel toggle actions** — every virtual instrument's ACTIONS group now includes 16 "Channel N Enable/Disable" entries, one per MIDI channel. Map each to its own button to enable/disable that channel in the instrument's multi-channel fanout — the mapped equivalent of clicking it in the "Multi-CH out" grid on that instrument's MIDI FLOW card by hand.
+- MIDI Flow: the **Multi-CH out** buttons on a virtual instrument's card now accept MIDI Learn — right-click any of the 16 channel buttons to map a controller directly to toggling that channel's fanout, without going through the Controller Designer.
 - MIDI Devices: **Arturia Analog Lab PC Template** — assign the new "Arturia Analog Lab" template to a device (real or virtual), then import an Arturia `db.db3` database directly from the Program Change panel. Every playlist in the database becomes its own bank in one click, with each preset's playlist position preserved as its MIDI bank-select value.
 
 ## 2026-08-04
