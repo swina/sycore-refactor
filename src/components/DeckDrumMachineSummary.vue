@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Drum, X, ExternalLink, Layers, Shuffle } from 'lucide-vue-next'
+import { Drum, X, ExternalLink, Layers, Shuffle, Play, Square } from 'lucide-vue-next'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -16,6 +16,14 @@ const patternName = computed(() => drumStore.currentPresetName || `Pattern ${dru
 function openPanel() {
   uiStore.openPanel('drum-machine')
 }
+
+// Simple direct toggle — same as the "stopAtEnd" bypass DrumMachine.vue's own
+// dm_play_stop MIDI Learn field already uses; the panel's own PLAY/STOP
+// button additionally supports a "stop at end of pattern" queue, but that's
+// local UI state (pendingStop) this card doesn't have access to.
+function togglePlay() {
+  drumStore.isPlaying = !drumStore.isPlaying
+}
 </script>
 
 <template>
@@ -25,6 +33,16 @@ function openPanel() {
         <Drum class="w-3 h-3" /> Drum Machine
       </span>
       <div class="flex items-center gap-1">
+        <button @click="togglePlay" :title="drumStore.isPlaying ? 'Stop' : 'Play'"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg border text-[9px] font-bold uppercase tracking-wider transition-colors"
+          :class="drumStore.isPlaying
+            ? 'bg-red-600/30 border-red-500 text-red-300 hover:bg-red-600/50'
+            : 'bg-purple-600/20 border-purple-500 text-purple-300 hover:bg-purple-600/40'"
+        >
+          <Square v-if="drumStore.isPlaying" class="w-2.5 h-2.5" />
+          <Play v-else class="w-2.5 h-2.5" />
+          {{ drumStore.isPlaying ? 'Stop' : 'Play' }}
+        </button>
         <button @click="openPanel" title="Open Drum Machine"
           class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-synth-neon hover:border-synth-neon/50 transition-colors"
         >

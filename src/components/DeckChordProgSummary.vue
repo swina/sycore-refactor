@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Music2, X, ExternalLink } from 'lucide-vue-next'
+import { Music2, X, ExternalLink, Play, Square } from 'lucide-vue-next'
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -8,6 +8,13 @@ const emit = defineEmits(['close'])
 
 const store = useChordProgStore()
 const uiStore = useUiStore()
+
+// Same direct flip as ChordProgSequencer.vue's own togglePlay() — the
+// component is always mounted (v-show, not v-if) so its isPlaying watchers
+// keep driving playback even while this card is what's shown instead.
+function togglePlay() {
+  store.isPlaying = !store.isPlaying
+}
 
 const SLOT_LETTERS = Array.from({ length: 8 }, (_, i) => String.fromCharCode(65 + i))
 
@@ -56,6 +63,16 @@ function openPanel() {
         <Music2 class="w-3 h-3" /> Chord Prog
       </span>
       <div class="flex items-center gap-1">
+        <button @click="togglePlay" :title="store.isPlaying ? 'Stop' : 'Play'"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg border text-[9px] font-bold uppercase tracking-wider transition-colors"
+          :class="store.isPlaying
+            ? 'bg-red-600/30 border-red-500 text-red-300 hover:bg-red-600/50'
+            : 'bg-purple-600/20 border-purple-500 text-purple-300 hover:bg-purple-600/40'"
+        >
+          <Square v-if="store.isPlaying" class="w-2.5 h-2.5" />
+          <Play v-else class="w-2.5 h-2.5" />
+          {{ store.isPlaying ? 'Stop' : 'Play' }}
+        </button>
         <button @click="openPanel" title="Open Chord Prog Sequencer"
           class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-synth-neon hover:border-synth-neon/50 transition-colors"
         >
