@@ -2,6 +2,10 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-07
+
+- MIDI Devices: **Arturia Analog Lab PC Template** — assign the new "Arturia Analog Lab" template to a device (real or virtual), then import an Arturia `db.db3` database directly from the Program Change panel. Every playlist in the database becomes its own bank in one click, with each preset's playlist position preserved as its MIDI bank-select value.
+
 ## 2026-08-04
 
 - MIDI Flow: **Arpeggiator is now a routable app** — its canvas node has a proper IN port, so a controller can be cabled straight into it like any other app (Chord Sequencer, Drum Machine, etc.), with per-cable note-range filters (keyboard splits) now working for it too. **Behavior change:** the Arpeggiator no longer reacts to *any* connected controller by default — a device must be explicitly cabled to it on the MIDI Flow canvas before it responds, matching Chord Prog Sequencer's gating. If you were relying on "just play, it arpeggiates" with nothing wired, add a cable after updating.

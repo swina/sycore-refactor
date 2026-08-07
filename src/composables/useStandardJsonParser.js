@@ -1,4 +1,25 @@
 /**
+ * Map already-validated { pc, name, bankmsb?, category? } entries into the
+ * preset array shape used by user-imported banks (see useUserBanksStore).
+ * Shared by parseStandardJson (file-based) and other parsers (e.g.
+ * useArturiaSqliteParser) that produce entries in the same shape.
+ */
+export function mapStandardEntries(entries) {
+  return entries
+    .slice()
+    .sort((a, b) => a.pc - b.pc)
+    .map((p, i) => ({
+      no:      i + 1,
+      name:    p.name,
+      program: p.pc,
+      msb:     p?.bankmsb ? p.bankmsb : 0,
+      lsb:     0,
+      bank:    0,
+      category: p?.category ? p.category : ''
+    }))
+}
+
+/**
  * Parse a "Standard" program-change JSON file — the same shape as
  * src/data/program_change/json/standard.json — into the preset array shape
  * used by user-imported banks (see useMfprojzParser.js / useUserBanksStore).
@@ -28,15 +49,5 @@ export async function parseStandardJson(file) {
     throw new Error('No valid entries found — each item must be { "pc": 1-128, "name": "..." }.')
   }
 
-  return entries
-    .slice()
-    .sort((a, b) => a.pc - b.pc)
-    .map((p, i) => ({
-      no:      i + 1,
-      name:    p.name,
-      program: p.pc,
-      msb:     0,
-      lsb:     0,
-      bank:    0,
-    }))
+  return mapStandardEntries(entries)
 }

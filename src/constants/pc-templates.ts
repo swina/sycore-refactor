@@ -22,4 +22,5 @@ export const PC_TEMPLATES: PcTemplateMeta[] = [
   { id: 'seqtrak',    label: 'Yamaha SEQTRAK',            description: 'Built-in AWM2/DX/Drums/Sampler banks.' },
   { id: 'json',       label: 'Standard JSON',             description: 'Import a generic bank from a { pc, name } JSON array.' },
   { id: 'kawai-k1',   label: "Kawai K1 (NILS' KAWAY)",    description: 'Import a Kawai K1 SysEx bank dump (.syx).' },
+  { id: 'arturia',    label: 'Arturia Analog Lab',        description: 'Import Analog Lab playlists from an Arturia db.db3 database — every playlist becomes its own bank.' },
 ]

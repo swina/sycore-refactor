@@ -6,7 +6,7 @@
  */
 
 /** Per-device Program Change bank/patch template — see src/constants/pc-templates.ts */
-export type PcTemplateId = 'mfprojz' | 'roland-s1' | 'emulatorx3' | 'seqtrak' | 'json' | 'kawai-k1';
+export type PcTemplateId = 'mfprojz' | 'roland-s1' | 'emulatorx3' | 'seqtrak' | 'json' | 'kawai-k1' | 'arturia';
 
 /** Per-device registration stored in the routing config */
 export interface DeviceRegistration {

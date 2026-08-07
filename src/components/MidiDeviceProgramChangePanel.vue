@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText, Copy, Braces } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText, Copy, Braces, Database, CheckCircle2 } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { userKey } from '@/lib/userKey'
@@ -12,6 +12,7 @@ import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { parseEmulatorX3 } from '@/composables/useEmulatorX3Parser'
 import { parseStandardJson } from '@/composables/useStandardJsonParser'
 import { parseKawaiK1 } from '@/composables/useKawaiK1Parser'
+import { parseArturiaSqlite } from '@/composables/useArturiaSqliteParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -206,6 +207,7 @@ const TEMPLATE_BANK_SOURCES = {
   json:       ['json', undefined],
   emulatorx3: ['emulatorx3'],
   'kawai-k1': ['kawai-k1'],
+  arturia:    ['arturia'],
 }
 const userBanks = computed(() => {
   const all = userBanksStore.getBanksForDevice(selectedDeviceName.value)
@@ -227,15 +229,18 @@ const importInput         = ref(null)   // hidden <input type="file"> (.mfprojz)
 const importInputX3       = ref(null)   // hidden <input type="file"> (Emulator X3 .txt)
 const importInputStandard = ref(null)   // hidden <input type="file"> (Standard JSON)
 const importInputKawaiK1  = ref(null)   // hidden <input type="file"> (Kawai K1 .syx)
+const importInputArturia  = ref(null)   // hidden <input type="file"> (Arturia db.db3)
 const isImporting         = ref(false)
 const isImportingX3       = ref(false)
 const isImportingStandard = ref(false)
 const isImportingKawaiK1  = ref(false)
+const isImportingArturia  = ref(false)
 const importError        = ref('')
+const importArturiaSummary = ref('')
 const showImportRename   = ref(false)
 const pendingPresets     = ref([])
 const pendingBankName    = ref('')
-const pendingImportSource = ref(undefined)   // 'mfprojz' | 'json' | 'emulatorx3' | 'kawai-k1'
+const pendingImportSource = ref(undefined)   // 'mfprojz' | 'json' | 'emulatorx3' | 'kawai-k1' | 'arturia'
 
 function triggerImport() {
   importError.value = ''
@@ -255,6 +260,12 @@ function triggerImportStandard() {
 function triggerImportKawaiK1() {
   importError.value = ''
   importInputKawaiK1.value?.click()
+}
+
+function triggerImportArturia() {
+  importError.value = ''
+  importArturiaSummary.value = ''
+  importInputArturia.value?.click()
 }
 
 async function onImportFile(event) {
@@ -336,6 +347,30 @@ async function onImportKawaiK1File(event) {
   }
 }
 
+// Arturia imports every playlist in the db at once — no single-bank rename
+// dialog (that flow is for one bank at a time; this produces N banks).
+async function onImportArturiaFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  isImportingArturia.value = true
+  importError.value = ''
+  importArturiaSummary.value = ''
+  try {
+    const banks = await parseArturiaSqlite(file)
+    const names = Object.keys(banks)
+    for (const [name, presets] of Object.entries(banks)) {
+      userBanksStore.addBank(selectedDeviceName.value, name, presets, 'arturia')
+    }
+    selectedBank.value = names[0] ?? ''
+    importArturiaSummary.value = `Imported ${names.length} playlist${names.length === 1 ? '' : 's'}: ${names.join(', ')}`
+  } catch (e) {
+    importError.value = e.message ?? 'Failed to parse Arturia database.'
+  } finally {
+    isImportingArturia.value = false
+    event.target.value = ''
+  }
+}
+
 function confirmImport() {
   const name = pendingBankName.value.trim() || 'Imported Bank'
   userBanksStore.addBank(selectedDeviceName.value, name, pendingPresets.value, pendingImportSource.value)
@@ -384,6 +419,10 @@ const bankConfig = computed(() => {
     msb: false, lsb: false, category_field: 'category',
     program_field: 'program', program_base: 0,
     bankSelect: 'emulatorx3', bank_field: 'bank',
+  }
+  if (userEntry?.source === 'arturia') return {
+    msb: true, lsb: false, category_field: 'category',
+    program_field: 'program', program_base: -1,
   }
   if (isUserBank(selectedBank.value)) return {
     msb: false, lsb: false, category_field: 'category',
@@ -598,9 +637,8 @@ function sendCatalogSound(sound) {
     msb = cfg.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
     lsb = cfg.lsb ? (sound.lsb ?? 0) : 0
     progNum = Math.max(0, Math.min(127, progIdx % 128))
-
-    sendToDeviceMessage([0xB0 | ch, 0,  msb])
-    sendToDeviceMessage([0xB0 | ch, 32, lsb])
+    sendToDeviceMessage([0xB0 | ch, 0,  sound.msb])
+    sendToDeviceMessage([0xB0 | ch, 32, sound.lsb])
     sendToDeviceMessage([0xC0 | ch, progNum])
   }
 
@@ -1574,6 +1612,14 @@ function assignToPad(setId, padIdx) {
                     class="hidden"
                     @change="onImportKawaiK1File"
                   />
+                  <!-- Hidden file input for Arturia db.db3 import -->
+                  <input
+                    ref="importInputArturia"
+                    type="file"
+                    accept=".db3,.db"
+                    class="hidden"
+                    @change="onImportArturiaFile"
+                  />
 
                   <div class="shrink-0 px-6 mt-4">
                     <div class="flex items-center justify-between mb-2">
@@ -1627,6 +1673,18 @@ function assignToPad(setId, padIdx) {
                           <FileText v-else class="w-2.5 h-2.5" />
                           Import Kawai K1
                         </button>
+                        <!-- Arturia db.db3 import button — explicit template only (no legacy fallback, it's brand new) -->
+                        <button
+                          v-if="selectedReg?.pcTemplate === 'arturia'"
+                          @click="triggerImportArturia"
+                          :disabled="isImportingArturia"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Import Analog Lab playlists from an Arturia db.db3 database — every playlist becomes its own bank"
+                        >
+                          <Loader2 v-if="isImportingArturia" class="w-2.5 h-2.5 animate-spin" />
+                          <Database v-else class="w-2.5 h-2.5" />
+                          Import Arturia DB
+                        </button>
                       </div>
                     </div>
 
@@ -1634,6 +1692,12 @@ function assignToPad(setId, padIdx) {
                     <div v-if="importError" class="mb-2 flex items-center gap-2 bg-red-950/40 border border-red-500/30 rounded-lg px-3 py-1.5">
                       <AlertTriangle class="w-3 h-3 text-red-400 shrink-0" />
                       <span class="text-[9px] font-mono text-red-400">{{ importError }}</span>
+                    </div>
+
+                    <!-- Arturia import success summary -->
+                    <div v-if="importArturiaSummary" class="mb-2 flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-3 py-1.5">
+                      <CheckCircle2 class="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span class="text-[9px] font-mono text-emerald-400">{{ importArturiaSummary }}</span>
                     </div>
 
                     <!-- Rename dialog shown after file is parsed -->
