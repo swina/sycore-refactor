@@ -37,6 +37,7 @@ import AuthModal from '@/components/AuthModal.vue'
 import SoundTypesPanel from '@/components/SoundTypesPanel.vue'
 import MidiMappingPanel from '@/components/MidiMappingPanel.vue'
 import ArpeggiatorPanel from '@/components/ArpeggiatorPanel.vue'
+import NoteLatchPanel from '@/components/NoteLatchPanel.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import LiveSet from '@/components/LiveSet.vue'
 import MidiCapture from '@/components/MidiCapture.vue'
@@ -371,6 +372,14 @@ onMounted(() => {
           :isOpen="uiStore.isArpOpen"
           :channel="midiStore.midiChannel - 1"
           @close="uiStore.isArpOpen = false"
+        />
+      </div>
+
+      <!-- Note Latch -->
+      <div :style="focusStyle('noteLatch')">
+        <NoteLatchPanel
+          :isOpen="uiStore.isNoteLatchOpen"
+          @close="uiStore.isNoteLatchOpen = false"
         />
       </div>
 

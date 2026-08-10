@@ -4,7 +4,7 @@
  * the Instrument Cockpit (InstrumentCockpitPanel.vue). Single source of
  * truth so both stay in sync if an app is ever added/renamed.
  */
-import { ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Disc3 } from 'lucide-vue-next'
+import { ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Disc3, Grid3X3, Lock } from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/midi-service'
 
 export const MIDI_APPS = [
@@ -16,6 +16,8 @@ export const MIDI_APPS = [
   { name: 'Sound Engine',      sourceId: MidiSource.UI,         icon: Layers    },
   { name: 'Drum Machine',      sourceId: MidiSource.DRUM_MACHINE, icon: Drum,   hasIn: true },
   { name: 'Sampler',           sourceId: MidiSource.SAMPLER,    icon: Disc3,        hasIn: true },
+  { name: 'Piano Roll',        sourceId: MidiSource.CAPTURE,    icon: Grid3X3   },
+  { name: 'Note Latch',        sourceId: MidiSource.NOTE_LATCH, icon: Lock,   hasIn: true },
 ]
 
 // Maps a MIDI_APPS sourceId to the uiStore panel id it opens (Transport/Clock
@@ -28,4 +30,6 @@ export const APP_PANEL_ID = {
   [MidiSource.UI]:           'sound-engine',
   [MidiSource.DRUM_MACHINE]: 'drum-machine',
   [MidiSource.SAMPLER]:      'sampler',
+  [MidiSource.CAPTURE]:      'capture',
+  [MidiSource.NOTE_LATCH]:   'note-latch',
 }

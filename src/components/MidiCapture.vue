@@ -5,7 +5,7 @@ import { buildMidiFile } from '@/lib/midi-file'
 import { storeToRefs } from 'pinia'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useCaptureStore } from '@/stores/useCaptureStore'
-import { midiService } from '@/core/midi/midi-service'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
@@ -179,26 +179,19 @@ function stopCaptureListener() {
 
 // ── Playback ──────────────────────────────────────────────────────
 const isPlayingBack = ref(false)
-const selectedOutputId = ref('all')
 const playbackChannel = ref(1)
 let playbackTimeouts = []
 
-const midiOutputs = computed(() => {
-  const regs = midiStore.routingConfig?.registrations ?? {}
-  return (midiStore.outputs || []).filter(o => {
-    const reg = regs[o.name]
-    return reg && reg.outEnabled && reg.notes
-  })
-})
-
+// Routed as a MIDI FLOW app source (MidiSource.CAPTURE, see lib/midi-apps.js)
+// instead of sending straight to a device picked in this panel — which
+// device(s) actually receive it is now whatever's cabled to "Piano Roll" on
+// the MIDI FLOW canvas (or every enabled output, in broadcast mode).
 function sendNoteOn(pitch, velocity, ch) {
-  const outId = selectedOutputId.value === 'all' ? null : selectedOutputId.value
-  midiService.sendRawNote(outId, 'noteon', pitch, velocity, (ch - 1) & 0xF)
+  midiStore.sendNoteOn(pitch, velocity, ch, MidiSource.CAPTURE)
 }
 
 function sendNoteOff(pitch, ch) {
-  const outId = selectedOutputId.value === 'all' ? null : selectedOutputId.value
-  midiService.sendRawNote(outId, 'noteoff', pitch, 0, (ch - 1) & 0xF)
+  midiStore.sendNoteOff(pitch, 0, ch, MidiSource.CAPTURE)
 }
 
 let playbackRaf = null
@@ -225,10 +218,15 @@ function startPlayback() {
 
   const ch = playbackChannel.value
   const notes = [...croppedNotes.value].sort((a, b) => a.startTime - b.startTime)
-  const minTime = notes[0].startTime
+  // Anchor to the IN marker (not the first note's own timestamp) and loop for
+  // the full IN→OUT span (not just up to the last note's end) — matches the
+  // playhead's own math (see playheadMs below) and lets trailing silence
+  // before OUT be part of the loop instead of the next pass starting early.
+  const rangeStartAbs = t0.value + rangeStartMs.value
+  const loopDurationMs = rangeEndMs.value - rangeStartMs.value
 
   notes.forEach(note => {
-    const delay = note.startTime - minTime
+    const delay = note.startTime - rangeStartAbs
     const dur = Math.max(50, note.duration || 100)
     const tOn = setTimeout(() => {
       if (!isPlayingBack.value) return
@@ -238,7 +236,6 @@ function startPlayback() {
     playbackTimeouts.push(tOn, tOff)
   })
 
-  const totalDur = Math.max(...notes.map(n => (n.startTime - minTime) + Math.max(n.duration || 100, 50)))
   const tDone = setTimeout(() => {
     playbackTimeouts = []
     if (isLooping.value) {
@@ -246,7 +243,7 @@ function startPlayback() {
     } else {
       isPlayingBack.value = false
     }
-  }, totalDur + 150)
+  }, loopDurationMs)
   playbackTimeouts.push(tDone)
 
   // RAF loop to animate playhead on the piano roll
@@ -263,17 +260,6 @@ function togglePlayback() {
   if (isPlayingBack.value) stopPlayback()
   else startPlayback()
 }
-
-// Sync playback channel to the routing registration when the output device changes
-watch(selectedOutputId, (id) => {
-  if (id === 'all') return
-  const output = (midiStore.outputs || []).find(o => o.id === id)
-  if (!output) return
-  const reg = midiStore.routingConfig?.registrations?.[output.name]
-  if (reg && reg.outChannel >= 0) {
-    playbackChannel.value = reg.outChannel + 1  // registration is 0-based, selector is 1-based
-  }
-})
 
 // Timeline: active while capturing OR playing back
 watch([() => phase.value, isPlayingBack], ([p, playing]) => {
@@ -363,14 +349,61 @@ const reviewCanvasWidth = computed(() => {
   return Math.max(containerW, contentMs * reviewPxPerMs.value)
 })
 
-const rangeStartLabel = computed(() => {
-  const beats = rangeStartMs.value / (sixteenthMs.value * 4)
-  return `${(beats + 1).toFixed(2)}`
-})
-const rangeEndLabel = computed(() => {
-  const beats = rangeEndMs.value / (sixteenthMs.value * 4)
-  return `${(beats + 1).toFixed(2)}`
-})
+// Upper bound for both range cursors — mirrors onCanvasMouseMove's drag clamp
+// so dragging and typing a bar.beat.sixteenth value agree on the same limit.
+const maxRangeMs = computed(() => (Math.max(tEnd.value, t0.value + 1000) + tailMs.value) - t0.value)
+
+// ── Bar.Beat.Sixteenth range display/input (assumes 4/4, matching the rest
+// of the app — see StepSequencer/ChordProgSequencer's own bar-length math) ──
+const BEATS_PER_BAR = 4
+const SIXTEENTHS_PER_BEAT = 4
+const SIXTEENTHS_PER_BAR = BEATS_PER_BAR * SIXTEENTHS_PER_BEAT
+
+function msToBarBeatSixteenth(ms) {
+  const totalSix = Math.round(ms / sixteenthMs.value)
+  const bar = Math.floor(totalSix / SIXTEENTHS_PER_BAR) + 1
+  const beat = Math.floor((totalSix % SIXTEENTHS_PER_BAR) / SIXTEENTHS_PER_BEAT) + 1
+  const sixteenth = totalSix % SIXTEENTHS_PER_BEAT
+  return `${bar}.${beat}.${sixteenth}`
+}
+
+// Returns ms, or null when the string has no usable bar number (so the
+// caller can leave the current range value untouched instead of zeroing it).
+function parseBarBeatSixteenth(str) {
+  const parts = String(str).trim().split('.').map(n => parseInt(n, 10))
+  if (!Number.isFinite(parts[0])) return null
+  const bar       = Math.max(1, parts[0])
+  const beat      = Number.isFinite(parts[1]) ? Math.max(1, Math.min(BEATS_PER_BAR, parts[1])) : 1
+  const sixteenth = Number.isFinite(parts[2]) ? Math.max(0, Math.min(SIXTEENTHS_PER_BEAT - 1, parts[2])) : 0
+  const totalSix = (bar - 1) * SIXTEENTHS_PER_BAR + (beat - 1) * SIXTEENTHS_PER_BEAT + sixteenth
+  return totalSix * sixteenthMs.value
+}
+
+const rangeStartLabel = computed(() => msToBarBeatSixteenth(rangeStartMs.value))
+const rangeEndLabel   = computed(() => msToBarBeatSixteenth(rangeEndMs.value))
+
+// Editable copies — only overwritten from the canonical label on mount/drag/
+// commit, never mid-keystroke, since typing doesn't touch rangeStart/EndMs
+// until commitRangeStart/End runs.
+const rangeStartInput = ref('')
+const rangeEndInput   = ref('')
+watch(rangeStartLabel, v => { rangeStartInput.value = v }, { immediate: true })
+watch(rangeEndLabel,   v => { rangeEndInput.value   = v }, { immediate: true })
+
+function commitRangeStart() {
+  const ms = parseBarBeatSixteenth(rangeStartInput.value)
+  if (ms !== null) {
+    rangeStartMs.value = Math.max(0, Math.min(rangeEndMs.value - sixteenthMs.value, ms))
+  }
+  rangeStartInput.value = rangeStartLabel.value
+}
+function commitRangeEnd() {
+  const ms = parseBarBeatSixteenth(rangeEndInput.value)
+  if (ms !== null) {
+    rangeEndMs.value = Math.max(rangeStartMs.value + sixteenthMs.value, Math.min(maxRangeMs.value, ms))
+  }
+  rangeEndInput.value = rangeEndLabel.value
+}
 
 // ── Drawing ──────────────────────────────────────────────────────
 
@@ -868,7 +901,6 @@ function onCanvasMouseMove(event) {
   const { x, y } = getMousePos(canvas, event)
   const pxPerMs = reviewPxPerMs.value
   const noteH = NOTE_H
-  const totalMs = (Math.max(tEnd.value, t0.value + 1000) + tailMs.value) - t0.value
 
   if (drag.value.type === 'rangeStart') {
     const dxMs = (x - drag.value.startX) / pxPerMs
@@ -877,7 +909,7 @@ function onCanvasMouseMove(event) {
     const dxMs = (x - drag.value.startX) / pxPerMs
     rangeEndMs.value = Math.max(
       rangeStartMs.value + sixteenthMs.value,
-      Math.min(totalMs, drag.value.origMs + dxMs)
+      Math.min(maxRangeMs.value, drag.value.origMs + dxMs)
     )
   } else if (drag.value.type === 'note') {
     const dxMs = (x - drag.value.startX) / pxPerMs
@@ -1234,17 +1266,11 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- Device / channel / info row (review only) -->
+        <!-- Channel / info row (review only) — output routing is handled by
+             MIDI FLOW: cable "Piano Roll" to a device there, or leave it
+             unwired to broadcast to every enabled output. -->
         <div v-if="phase === 'review'" class="px-5 py-2 border-b border-neutral-900 bg-neutral-900/20 flex items-center gap-3 flex-shrink-0">
           <Music class="w-3 h-3 text-neutral-500 shrink-0" />
-          <!-- Output device -->
-          <select
-            v-model="selectedOutputId"
-            class="bg-black border border-neutral-800 text-neutral-300 text-[10px] font-mono rounded px-2 py-1 outline-none focus:border-synth-neon/50 flex-1 min-w-0"
-          >
-            <option value="all">All outputs (MIDI routing)</option>
-            <option v-for="o in midiOutputs" :key="o.id" :value="o.id">{{ o.name }}</option>
-          </select>
           <!-- Channel -->
           <div class="flex items-center gap-1.5 shrink-0">
             <span class="text-[9px] font-black uppercase text-neutral-500 tracking-wider">CH</span>
@@ -1425,8 +1451,20 @@ onUnmounted(() => {
             <!-- Range + Crop (review only) -->
             <template v-if="phase === 'review'">
               <div class="w-px h-4 bg-neutral-700 shrink-0" />
-              <span class="text-[10px] font-mono text-yellow-500/80">IN: beat {{ rangeStartLabel }}</span>
-              <span class="text-[10px] font-mono text-orange-500/80">OUT: beat {{ rangeEndLabel }}</span>
+              <div class="flex items-center gap-1">
+                <span class="text-[9px] font-mono font-bold text-yellow-500/80">IN</span>
+                <input type="text" v-model="rangeStartInput"
+                  @change="commitRangeStart" @keydown.enter.prevent="$event.target.blur()"
+                  placeholder="1.1.0" title="Bar.Beat.Sixteenth (e.g. 1.1.0)"
+                  class="w-14 bg-neutral-900 border border-neutral-700 text-yellow-400 text-[10px] font-mono px-1.5 py-0.5 rounded text-center focus:outline-none focus:border-yellow-500/60" />
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="text-[9px] font-mono font-bold text-orange-500/80">OUT</span>
+                <input type="text" v-model="rangeEndInput"
+                  @change="commitRangeEnd" @keydown.enter.prevent="$event.target.blur()"
+                  placeholder="5.1.0" title="Bar.Beat.Sixteenth (e.g. 5.1.0)"
+                  class="w-14 bg-neutral-900 border border-neutral-700 text-orange-400 text-[10px] font-mono px-1.5 py-0.5 rounded text-center focus:outline-none focus:border-orange-500/60" />
+              </div>
               <button
                 @click="cropToRange"
                 :disabled="croppedNotes.length === 0"

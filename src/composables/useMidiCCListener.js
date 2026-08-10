@@ -7,6 +7,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useArpStore } from '@/stores/useArpStore'
+import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
@@ -29,6 +30,7 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     presetStore  = usePresetStore(),
     midiStore    = useMidiStore(),
     arpStore     = useArpStore(),
+    noteLatchStore = useNoteLatchStore(),
     drumStore    = useDrumMachineStore(),
     mixerStore   = useAudioMixerStore(),
     configStore  = useConfigStore(),
@@ -177,6 +179,19 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     midiStore.updateRegistration(dev, 'latchReplace', val > 63)
     return
   }
+  // ── Note Latch app (NoteLatchPanel.vue) ───────────────────────────────────
+  if (fieldName === 'note_latch_enabled') {
+    noteLatchStore.enabled = fromNote ? !noteLatchStore.enabled : on
+    return
+  }
+  if (fieldName === 'note_latch_maxnotes') {
+    noteLatchStore.maxNotes = Math.max(1, Math.min(16, Math.round(val / 127 * 15) + 1))
+    return
+  }
+  if (fieldName === 'note_latch_replace') {
+    noteLatchStore.replace = val > 63
+    return
+  }
   // ── Virtual instrument Multi-CH out toggle (MIDI FLOW card) ──────────────
   if (fieldName.startsWith('vi_multich_')) {
     const m = fieldName.match(/^vi_multich_(\d+)_(.+)$/)
@@ -223,6 +238,7 @@ export function useMidiCCListener() {
   const configStore = useConfigStore()
   const lfoStore = useLfoStore()
   const arpStore = useArpStore()
+  const noteLatchStore = useNoteLatchStore()
   const drumStore = useDrumMachineStore()
   const mixerStore = useAudioMixerStore()
 
@@ -376,7 +392,7 @@ export function useMidiCCListener() {
   }
 
   function applyParam(fieldName, val, fromNote = false) {
-    return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, drumStore, mixerStore, configStore })
+    return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, noteLatchStore, drumStore, mixerStore, configStore })
   }
 
   let unsubCC, unsubNote, unsubPitch

@@ -2,6 +2,12 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-10
+
+- MIDI Capture (Piano Roll): the **IN/OUT range cursors** are now also editable as text — type a `bar.beat.sixteenth` position (e.g. `1.1.0`, `5.1.0`) directly instead of only dragging the cursors on the timeline.
+- MIDI Capture (Piano Roll): playback is now routed as a **MIDI FLOW app source** ("Piano Roll", droppable onto the MIDI FLOW canvas like Step Sequencer/Chord Sequencer/Drum Machine) instead of picking a MIDI output device in the panel itself — cable it to a destination in MIDI FLOW, or leave it unwired to broadcast to every enabled output.
+- MIDI Flow: new **Note Latch** app — a MIDI IN/OUT node with the same ON/OFF, Max Notes, and FIFO/BLOCK controls as a device's own per-registration latch, but as an independent, cable-able node. One Note Latch can feed several instruments (real or virtual) at once, and switching it off releases every held note through its own OUT in one action — no need to un-latch each destination's own latch button individually.
+
 ## 2026-08-07
 
 - MIDI Controller Designer: **virtual instrument per-channel toggle actions** — every virtual instrument's ACTIONS group now includes 16 "Channel N Enable/Disable" entries, one per MIDI channel. Map each to its own button to enable/disable that channel in the instrument's multi-channel fanout — the mapped equivalent of clicking it in the "Multi-CH out" grid on that instrument's MIDI FLOW card by hand.

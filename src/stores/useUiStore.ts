@@ -17,6 +17,7 @@ export interface PanelVisibility {
   isSequencerOpen: boolean
   isSequencerModalOpen: boolean
   isArpOpen: boolean
+  isNoteLatchOpen: boolean
   isMidiPortOpen: boolean
   isMidiMappingOpen: boolean
   isProfileOpen: boolean
@@ -103,6 +104,7 @@ export const useUiStore = defineStore('ui', () => {
   const isSequencerOpen    = ref(false)
   const isSequencerModalOpen = ref(false)
   const isArpOpen          = ref(false)
+  const isNoteLatchOpen    = ref(false)
   const isMidiPortOpen     = ref(false)
   const isMidiMappingOpen  = ref(false)
   const isProfileOpen      = ref(false)
@@ -212,6 +214,7 @@ export const useUiStore = defineStore('ui', () => {
     sequencer:           () => isSequencerOpen.value,
     sequencerModal:      () => isSequencerModalOpen.value,
     arp:                 () => isArpOpen.value,
+    noteLatch:           () => isNoteLatchOpen.value,
     midiMapping:         () => isMidiMappingOpen.value,
     midiActions:         () => isMidiActionsOpen.value,
     midiMatrix:          () => isMidiMatrixOpen.value,
@@ -265,6 +268,7 @@ export const useUiStore = defineStore('ui', () => {
     sequencer:           isSequencerOpen,
     sequencerModal:      isSequencerModalOpen,
     arp:                 isArpOpen,
+    noteLatch:           isNoteLatchOpen,
     midiMapping:         isMidiMappingOpen,
     midiActions:         isMidiActionsOpen,
     midiMatrix:          isMidiMatrixOpen,
@@ -337,6 +341,7 @@ export const useUiStore = defineStore('ui', () => {
     isSequencerOpen.value    = false
     isSequencerModalOpen.value = false
     isArpOpen.value          = false
+    isNoteLatchOpen.value    = false
     isMidiPortOpen.value     = false
     isMidiMappingOpen.value  = false
     isProfileOpen.value      = false
@@ -409,6 +414,7 @@ export const useUiStore = defineStore('ui', () => {
     visualizer: isVisualizerOpen,
     keyboard: isKeyboardOpen,
     arp: isArpOpen,
+    'note-latch': isNoteLatchOpen,
     favorites: isFavoritesOpen,
     profile: isProfileOpen,
     'push-notifications': isPushNotificationsOpen,
@@ -586,7 +592,7 @@ export const useUiStore = defineStore('ui', () => {
   return {
     isAppInitializing,
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen, isSequencerModalOpen,
-    isArpOpen, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
+    isArpOpen, isNoteLatchOpen, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
     isAuthModalOpen, isAdminPanelOpen, isPushNotificationsOpen, isModuleManagerOpen, isHelpOpen, isManualOpen,
     isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,
     isBackingTrackOpen, isTracksPlayerOpen, isLiveSetOpen, isAppMidiMapperOpen,

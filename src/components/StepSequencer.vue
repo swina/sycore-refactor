@@ -1253,7 +1253,16 @@ onMounted(() => {
   // above, since an app's generated notes never pass through a real MIDI
   // input port. sourceApp (6th arg) tells handleIncomingNote to gate via
   // isAppSourceAllowed instead of the device-based isMidiDeviceAllowed.
+  //
+  // Must ignore the sequencer's own notes: isAppSourceAllowed fails OPEN in
+  // broadcastMode (unlike ChordProgSequencer/DrumMachine's app-note gates,
+  // which require an explicit routing cable), so without this guard every
+  // note this sequencer schedules loops straight back into "Dynamic
+  // transposition during PLAY mode" below as if a performer had played it —
+  // each pass re-derives dynamicMidiTranspose from the *already-transposed*
+  // note it just sent, compounding the drift by a fixed offset every loop.
   const unsubAppNote = midiStore.addAppNoteListener((type, note, velocity, chan, sourceApp) => {
+    if (sourceApp === MidiSource.SEQUENCER) return
     handleIncomingNote(type, note, velocity, chan, null, sourceApp)
   })
 

@@ -92,6 +92,8 @@ export enum MidiSource {
   TRANSPORT = 'TRANSPORT',
   DRUM_MACHINE = 'DRUM_MACHINE',
   SAMPLER = 'SAMPLER',
+  CAPTURE = 'CAPTURE',
+  NOTE_LATCH = 'NOTE_LATCH',
 }
 
 /** Optional note-range gate on a device→app input route (the "keyboard split" filter) */
