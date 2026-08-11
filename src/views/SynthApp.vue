@@ -44,6 +44,7 @@ import MidiCapture from '@/components/MidiCapture.vue'
 import AudioCapture from '@/components/AudioCapture.vue'
 import AudioVisualizer from '@/components/AudioVisualizer.vue'
 import StepSequencer from '@/components/StepSequencer.vue'
+import Sequencer from '@/components/Sequencer.vue'
 import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
@@ -498,6 +499,38 @@ onMounted(() => {
           @prevSlot="presetStore.navigateHistory('prev')"
           @nextSlot="presetStore.navigateHistory('next')"
           @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
+          @stop="() => {}"
+        />
+      </div>
+
+      <!-- Sequencer (new piano-roll-style step editor — see
+           docs/plans/modular/new-step-sequencer.md. Independent MIDI FLOW app
+           (MidiSource.SEQUENCER2/'sequencer2'); no preset-embedded pattern
+           storage, so no initialConfig/configChange/activeSlot/savePattern —
+           it persists purely via its own local autosave + Save/Load Library. -->
+      <div :style="focusStyle('sequencer2')">
+        <Sequencer
+          :isOpen="uiStore.isSequencer2Open"
+          :bpm="midiStore.currentBpm || 120"
+          :channel="midiStore.midiChannel"
+          :currentSoundName="presetStore.currentName || ''"
+          :currentCategory="presetStore.currentCategory || 'pad'"
+          :polyModeString="'poly'"
+          :isKeyboardOpen="uiStore.isKeyboardOpen"
+          :globalTranspose="globalTranspose"
+          :seqStepsLimit="64"
+          :canUseSeqGen="authStore.profile?.features?.canUseSeqGen ?? true"
+          :canUseSeqParam2="true"
+          :canUseSeqGlobalTranspose="authStore.profile?.features?.canUseSeqGlobalTranspose ?? true"
+          :canUseSeqSyncTrack="authStore.profile?.features?.canUseSeqSyncTrack ?? false"
+          :midiMappings="mappingStore.appMidiMappings"
+          :currentPresetCCValues="presetStore.lastPreset?.data || {}"
+          @close="uiStore.isSequencer2Open = false"
+          @bpmChange="bpm => { midiStore.setGlobalBpm(bpm); sessionBpmOverride = true }"
+          @transposeChange="handleStepSequencerTranspose"
+          @openKeyboard="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
+          @prevSlot="presetStore.navigateHistory('prev')"
+          @nextSlot="presetStore.navigateHistory('next')"
           @stop="() => {}"
         />
       </div>

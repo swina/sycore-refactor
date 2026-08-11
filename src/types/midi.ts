@@ -85,6 +85,7 @@ export interface MidiMonitorEntry {
 /** Well-known sources of MIDI messages within the app */
 export enum MidiSource {
   SEQUENCER = 'SEQUENCER',
+  SEQUENCER2 = 'SEQUENCER2',
   CHORD_PROG = 'CHORD_PROG',
   KEYBOARD = 'KEYBOARD',
   ARP = 'ARP',

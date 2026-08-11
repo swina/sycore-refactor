@@ -2,6 +2,12 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-11
+
+- MIDI Flow: new **Sequencer** app — a piano-roll-style alternative to Step Sequencer. Each step is a vertical stack of 12 clickable note bars (C–B, chromatic) with its own Octave (0–8), Accent on/off, and Probability (0–100%), so chords/notes can be programmed by clicking directly instead of only live-recording from a keyboard. Runs as an independent MIDI FLOW app (own IN/OUT, own local pattern storage) alongside the existing Step Sequencer, which is unchanged.
+- Transport Bar: **Sequencer** (the new app above) added to the "Sync Apps to Transport" dropdown, alongside Step Sequencer/Chord Prog/Drum Machine/Backing Track/Arm Record — enable it to have Play All/Stop All start and stop it too, bar-aligned like the others.
+- Instrument Cockpit (DECK): the same **Sequencer** sync toggle now also appears among the cockpit's sync-apps badges — but only once the Sequencer app is actually dropped onto the MIDI FLOW canvas, matching how the Apps column there already only lists apps present on the canvas. The existing "Sequencer" badge for the original Step Sequencer is now labeled **Step Sequencer** to disambiguate the two.
+
 ## 2026-08-10
 
 - MIDI Capture (Piano Roll): the **IN/OUT range cursors** are now also editable as text — type a `bar.beat.sixteenth` position (e.g. `1.1.0`, `5.1.0`) directly instead of only dragging the cursors on the timeline.

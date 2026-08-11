@@ -37,6 +37,7 @@ const KEYS: Record<string, string> = {
   syncDrumMachineToLooper:       'S1_SYNC_DRUM_LOOPER',
   syncDrumMachineToAudioCapture: 'S1_SYNC_DRUM_CAPTURE',
   syncSequencerToTransport:      'S1_SYNC_SEQ_TRANSPORT',
+  syncSequencer2ToTransport:     'S1_SYNC_SEQ2_TRANSPORT',
   syncChordProgToTransport:      'S1_SYNC_CP_TRANSPORT',
   syncDrumMachineToTransport:    'S1_SYNC_DM_TRANSPORT',
   syncBackingTrackToTransport:   'S1_SYNC_BT_TRANSPORT',
@@ -81,6 +82,7 @@ export interface SyncFlags {
   syncDrumMachineToLooper: Ref<boolean>
   syncDrumMachineToAudioCapture: Ref<boolean>
   syncSequencerToTransport: Ref<boolean>
+  syncSequencer2ToTransport: Ref<boolean>
   syncChordProgToTransport: Ref<boolean>
   syncDrumMachineToTransport: Ref<boolean>
   syncBackingTrackToTransport: Ref<boolean>
@@ -124,6 +126,7 @@ export const useSyncStore = defineStore('sync', () => {
   const syncDrumMachineToLooper       = ref(readBool(KEYS.syncDrumMachineToLooper))
   const syncDrumMachineToAudioCapture = ref(readBool(KEYS.syncDrumMachineToAudioCapture))
   const syncSequencerToTransport      = ref(readBool(KEYS.syncSequencerToTransport))
+  const syncSequencer2ToTransport     = ref(readBool(KEYS.syncSequencer2ToTransport))
   const syncChordProgToTransport      = ref(readBool(KEYS.syncChordProgToTransport))
   const syncDrumMachineToTransport    = ref(readBool(KEYS.syncDrumMachineToTransport))
   const syncBackingTrackToTransport   = ref(readBool(KEYS.syncBackingTrackToTransport))
@@ -137,7 +140,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
     syncLoopPadsToMidi, syncLoopPadsToSequencer, syncLoopPadsToBackingTrack, syncLoopPadsToLooper, syncLoopPadsToAudioCapture,
     syncDrumMachineToMidi, syncDrumMachineToSequencer, syncDrumMachineToBackingTrack, syncDrumMachineToLooper, syncDrumMachineToAudioCapture,
-    syncSequencerToTransport, syncChordProgToTransport, syncDrumMachineToTransport, syncBackingTrackToTransport,
+    syncSequencerToTransport, syncSequencer2ToTransport, syncChordProgToTransport, syncDrumMachineToTransport, syncBackingTrackToTransport,
     syncRecordToTransport,
   }
 

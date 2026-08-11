@@ -48,14 +48,24 @@ const FLAG_FIELDS = [
 // shown here as clickable status badges next to the global Play button.
 // syncRecordToTransport ("Arm Rec") arms AudioCapture.vue to start recording
 // the instant global Play starts (and stop when it stops) — see
-// useGlobalTransportControls.js's playAll()/stopAll().
-const SYNC_APPS = [
-  { key: 'syncSequencerToTransport',    label: 'Sequencer' },
-  { key: 'syncChordProgToTransport',    label: 'Chord Prog' },
-  { key: 'syncDrumMachineToTransport',  label: 'Drum Machine' },
-  { key: 'syncBackingTrackToTransport', label: 'Backing Track' },
-  { key: 'syncRecordToTransport',       label: 'Arm Rec' },
-]
+// useGlobalTransportControls.js's playAll()/stopAll(). Sequencer (the
+// piano-roll-style app, MidiSource.SEQUENCER2) only shows up here once it's
+// actually present as a node in MIDI FLOW — canvasAppSourceIds mirrors the
+// same gate the Apps column below already uses — since syncing a node that
+// isn't there has nothing to affect.
+const SYNC_APPS = computed(() => {
+  const apps = [
+    { key: 'syncSequencerToTransport',    label: 'Step Sequencer' },
+    { key: 'syncChordProgToTransport',    label: 'Chord Prog' },
+    { key: 'syncDrumMachineToTransport',  label: 'Drum Machine' },
+    { key: 'syncBackingTrackToTransport', label: 'Backing Track' },
+    { key: 'syncRecordToTransport',       label: 'Arm Rec' },
+  ]
+  if (canvasAppSourceIds.value.has(MidiSource.SEQUENCER2)) {
+    apps.splice(1, 0, { key: 'syncSequencer2ToTransport', label: 'Sequencer' })
+  }
+  return apps
+})
 
 function deviceType(name) {
   if (midiStore.virtualInstruments.some(v => v.name === name)) return 'virtual'
@@ -381,7 +391,7 @@ const displayItems = computed(() => [
       miniScopeRef.value.isActive ? miniScopeRef.value.stop() : miniScopeRef.value.start()
     } },
   { id: 'transport', activate: () => { transportManager.isRunning.value ? stopAll() : playAll() } },
-  ...SYNC_APPS.map(s => ({ id: s.key, activate: () => { syncStore[s.key] = !syncStore[s.key] } })),
+  ...SYNC_APPS.value.map(s => ({ id: s.key, activate: () => { syncStore[s.key] = !syncStore[s.key] } })),
 ])
 
 const zones = [

@@ -18,6 +18,9 @@ export function useGlobalTransportControls() {
     if (syncStore.syncSequencerToTransport) {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } }))
     }
+    if (syncStore.syncSequencer2ToTransport) {
+      window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    }
     if (syncStore.syncChordProgToTransport) {
       window.dispatchEvent(new CustomEvent('cp-start'))
     }
@@ -35,6 +38,9 @@ export function useGlobalTransportControls() {
   function stopAll() {
     if (syncStore.syncSequencerToTransport) {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false } }))
+    }
+    if (syncStore.syncSequencer2ToTransport) {
+      window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: false } }))
     }
     if (syncStore.syncChordProgToTransport) {
       window.dispatchEvent(new CustomEvent('cp-stop'))

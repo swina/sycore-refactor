@@ -4,11 +4,12 @@
  * the Instrument Cockpit (InstrumentCockpitPanel.vue). Single source of
  * truth so both stay in sync if an app is ever added/renamed.
  */
-import { ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Disc3, Grid3X3, Lock } from 'lucide-vue-next'
+import { ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Disc3, Grid3X3, Lock, Rows3 } from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/midi-service'
 
 export const MIDI_APPS = [
   { name: 'Step Sequencer',    sourceId: MidiSource.SEQUENCER,  icon: ListMusic,    hasIn: true },
+  { name: 'Sequencer',         sourceId: MidiSource.SEQUENCER2, icon: Rows3,        hasIn: true },
   { name: 'Chord Sequencer',   sourceId: MidiSource.CHORD_PROG, icon: Music2,       hasIn: true },
   { name: 'Virtual Keyboard',  sourceId: MidiSource.KEYBOARD,   icon: KeyboardIcon, hasIn: true },
   { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music,        hasIn: true },
@@ -24,6 +25,7 @@ export const MIDI_APPS = [
 // has no dedicated panel of its own, so it's intentionally absent here).
 export const APP_PANEL_ID = {
   [MidiSource.SEQUENCER]:    'sequencer',
+  [MidiSource.SEQUENCER2]:   'sequencer2',
   [MidiSource.CHORD_PROG]:   'chord-prog',
   [MidiSource.KEYBOARD]:     'keyboard',
   [MidiSource.ARP]:          'arp',
