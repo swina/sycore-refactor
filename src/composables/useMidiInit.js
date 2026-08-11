@@ -130,6 +130,12 @@ export function useMidiInit() {
       }
     }
 
+    // Recall each registered device's last-selected Program Change (bank +
+    // patch) — devices don't remember this themselves across a fresh MIDI
+    // session, so without this they'd stay on whatever they powered on with
+    // instead of what was actually selected before the app restarted.
+    midiService.resendAllProgramChanges()
+
     // Broadcast tempo to all devices via clock pulses, then stop after 5ms
     midiService.setBpm(arpStore.arpBpm)
     midiService.startClock()

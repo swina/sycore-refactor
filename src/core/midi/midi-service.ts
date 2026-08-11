@@ -97,6 +97,16 @@ export class MidiService {
   // back into its input) — see routeMessageToVirtualOutputs.
   private virtualOutputPorts = new Map<string, string>();
 
+  // Ports currently mid-reset by the statechange handler below (its own
+  // close()+open() cycle, not reconnectInput()), keyed by normalized name —
+  // see setupStateChangeHandler's comment for why this guard exists.
+  private _resettingInputs = new Set<string>();
+  // Last time each port finished a statechange-triggered reset, keyed by
+  // normalized name — a short cooldown on top of the in-flight guard, for
+  // browsers whose event timing doesn't line up neatly with the in-flight
+  // window alone.
+  private _lastInputResetAt = new Map<string, number>();
+
   // Normalise a MIDI port name for comparison — strips common OS prefixes
   // that differ between platforms/drivers for the same physical port.
   private normPort(s: string): string {
@@ -791,6 +801,40 @@ export class MidiService {
     this.sendToVirtualOutput(deviceName, data);
   }
 
+  /**
+   * Re-sends every registered device's last-known Program Change (bank
+   * MSB/LSB + program) on its own pcChannel — the same wire format
+   * MidiDeviceProgramChangePanel.vue's sendCatalogSound()/sendManual() send
+   * and recordChannelState() records into pcChannels. Called once on app
+   * startup (see useMidiInit.js) so hardware synths recall whatever patch
+   * was selected before the restart, since most devices don't remember that
+   * themselves across a fresh MIDI session.
+   */
+  resendAllProgramChanges(): void {
+    if (!this.routingConfig) return;
+    Object.values(this.routingConfig.registrations).forEach(reg => {
+      const channels = reg.pcChannels;
+      if (!channels) return;
+      Object.entries(channels).forEach(([chStr, info]) => {
+        if (!info || info.program == null) return;
+        const ch = Math.max(0, parseInt(chStr, 10) || 0);
+        const msb = info.msb ?? 0;
+        const lsb = info.lsb ?? 0;
+        if (reg.pcTemplate === 'emulatorx3') {
+          // Emulator X3 wire format — see sendCatalogSound(): CC64=0 fixed,
+          // CC32=bank, no CC0.
+          this.sendRawToDeviceByName(reg.name, [0xB0 | ch, 64, 0]);
+          this.sendRawToDeviceByName(reg.name, [0xB0 | ch, 32, lsb]);
+        } else {
+          this.sendRawToDeviceByName(reg.name, [0xB0 | ch, 0, msb]);
+          this.sendRawToDeviceByName(reg.name, [0xB0 | ch, 32, lsb]);
+        }
+        this.sendRawToDeviceByName(reg.name, [0xC0 | ch, info.program]);
+      });
+    });
+    if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] Re-sent Program Change state to all registered devices.');
+  }
+
   cleanupDevice(deviceId: string): void {
     const out = this.midiAccess?.outputs.get(deviceId);
     if (out) {
@@ -929,9 +973,15 @@ export class MidiService {
       }
     }
 
+    // Both step-sequencer sources (SEQUENCER, and its piano-roll-style
+    // sibling SEQUENCER2) are excluded from broadcast-mode's implicit
+    // fail-open fan-out — unlike other apps, a sequencer looping unattended
+    // shouldn't start firing notes at every enabled output just because
+    // nothing's been explicitly cabled yet in MIDI FLOW. Either source still
+    // reaches outputs normally via an explicit routing-matrix mapping.
     this.midiAccess.outputs.forEach((outPort: any) => {
       const isMatrixMatch = targetsFromMatrix.has(outPort.name) || normalizedMatrix.has(outPort.name.toLowerCase().trim());
-      const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && !hasMappings;
+      const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && (source !== MidiSource.SEQUENCER2) && !hasMappings;
       if (!isMatrixMatch && !isBroadcastTarget) return;
 
       const config = this.routingConfig?.registrations[outPort.name];
@@ -950,10 +1000,11 @@ export class MidiService {
       if (shouldAdd) targetDeviceIds.add(outPort.id);
     });
 
-    // Also check virtual outputs against the routing matrix
+    // Also check virtual outputs against the routing matrix — same
+    // SEQUENCER/SEQUENCER2 broadcast exclusion as above.
     this.virtualOutputs.forEach((_, virtName) => {
       const isMatrixMatch = targetsFromMatrix.has(virtName) || normalizedMatrix.has(virtName.toLowerCase().trim());
-      const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && !hasMappings;
+      const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && (source !== MidiSource.SEQUENCER2) && !hasMappings;
       if (!isMatrixMatch && !isBroadcastTarget) return;
       virtualTargets.add(virtName);
     });
@@ -1067,7 +1118,7 @@ export class MidiService {
     if (!this.midiAccess) return;
     this.midiAccess.onstatechange = (event) => {
       const port = (event as MIDIConnectionEvent).port;
-      if (port.type === 'input' && port.state === 'connected') {
+      if (port && port.type === 'input' && port.state === 'connected' && port.name) {
         // A bare open() here is a no-op when the browser already reports
         // this port as "connected" from a stale prior state (the same issue
         // reScanInputs() works around at startup — see its comment) — which
@@ -1076,14 +1127,52 @@ export class MidiService {
         // truly disconnecting (e.g. some environments re-fire statechange
         // events across an app reload/restart without a real USB unplug).
         // Left as a bare open(), those controllers stop sending until the
-        // user manually unplugs/replugs the cable. reconnectInput() does the
-        // full close()+open()+listener-reattach cycle instead (and also
-        // correctly skips virtual-instrument loopback output ports, unlike
-        // the old inline logic here).
-        this.reconnectInput(port.name ?? '').catch(e =>
-          console.warn(`[MIDI] Failed to reset reconnected input "${port.name}":`, e)
-        );
-        console.log(`[MIDI] Device (re)connected: ${port.name}`);
+        // user manually unplugs/replugs the cable — so this does the same
+        // close()+open()+listener-reattach cycle reconnectInput() does.
+        //
+        // Deliberately NOT routed through reconnectInput() itself, though:
+        // that method also skips ports bound as a virtual instrument's
+        // Output (blockedPorts, to protect *software loopback* drivers like
+        // LoopBe1/loopMIDI from self-muting when both sides of the same
+        // virtual cable are opened at once). Real hardware — e.g. a
+        // controller whose physical OUT is also used as a virtual
+        // instrument's target — doesn't have that failure mode, and only
+        // ever fires genuine 'connected' events here (a loopback driver's
+        // virtual cable doesn't unplug/replug). Applying that block here too
+        // meant such a device's input silently stopped receiving anything on
+        // every reconnect (across an app restart, sleep/wake, USB replug),
+        // even though it worked fine before that block existed. The manual
+        // per-device Reconnect button in MIDI Flow still goes through
+        // reconnectInput() and keeps the block, since a user manually
+        // reconnecting a port they picked as a virtual instrument's output
+        // should stay protected.
+        //
+        // Guarded against re-entrancy — close()/open() are themselves state
+        // transitions that some browsers re-report via *another* statechange
+        // event with state still 'connected' (only `connection` changed),
+        // which would otherwise re-enter this handler and spin into an
+        // endless reconnect loop instead of settling once. The in-flight Set
+        // blocks re-entrancy while a reset is running; the cooldown Map
+        // blocks a rapid repeat right after one just finished.
+        const input = port as MIDIInput;
+        const name = input.name ?? '';
+        const key = this.normPort(name);
+        const lastReset = this._lastInputResetAt.get(key) ?? 0;
+        if (!this._resettingInputs.has(key) && Date.now() - lastReset > 500) {
+          this._resettingInputs.add(key);
+          console.log(`[MIDI] Device (re)connected: ${name}`);
+          input.removeEventListener('midimessage', this.handleIngressBound);
+          Promise.resolve()
+            .then(() => input.close())
+            .then(() => input.open())
+            .catch(e => console.warn(`[MIDI] Failed to reset reconnected input "${name}":`, e))
+            .finally(() => {
+              input.removeEventListener('midimessage', this.handleIngressBound);
+              input.addEventListener('midimessage', this.handleIngressBound);
+              this._resettingInputs.delete(key);
+              this._lastInputResetAt.set(key, Date.now());
+            });
+        }
       }
       this.onStateChangeListeners.forEach(l => l(event));
     };

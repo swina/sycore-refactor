@@ -8,6 +8,21 @@
 /** Per-device Program Change bank/patch template — see src/constants/pc-templates.ts */
 export type PcTemplateId = 'mfprojz' | 'roland-s1' | 'emulatorx3' | 'seqtrak' | 'json' | 'kawai-k1' | 'arturia';
 
+/** Last-sent Program Change state for one channel of a device — written by
+ *  MidiDeviceProgramChangePanel.vue's recordChannelState(), read back to
+ *  redraw "currently selected" highlighting and to re-send on app startup
+ *  (see MidiService.resendAllProgramChanges). msb/lsb are the raw bytes
+ *  actually transmitted (already template-resolved), not necessarily the
+ *  catalog's own bank numbering. */
+export interface PcChannelState {
+  program: number | null;
+  bank: string | null;
+  soundName: string | null;
+  category: string | null;
+  msb: number;
+  lsb: number;
+}
+
 /** Per-device registration stored in the routing config */
 export interface DeviceRegistration {
   name: string;
@@ -40,6 +55,11 @@ export interface DeviceRegistration {
   // catalog-name-match + show-every-import-button behavior), so devices
   // nobody has migrated to an explicit template keep working unchanged.
   pcTemplate?: PcTemplateId;
+  // Target channel for outgoing Program Change/bank-select messages
+  // (0-based) — set via MidiDeviceProgramChangePanel.vue's channel picker.
+  pcChannel?: number;
+  // Last-sent PC state per channel — see PcChannelState.
+  pcChannels?: Record<number, PcChannelState>;
 }
 
 /** Full routing configuration, persisted as 'S1_MIDI_ROUTING' */
