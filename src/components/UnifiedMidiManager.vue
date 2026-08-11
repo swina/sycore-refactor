@@ -37,7 +37,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 const TABS = [
   { id: 'devices',     label: 'Devices',     icon: Cpu     },
   // { id: 'routing',     label: 'Routing',     icon: GitFork },
-  // { id: 'performance', label: 'Performance', icon: Zap     },
+  { id: 'performance', label: 'Performance', icon: Zap     },
   { id: 'mapping',     label: 'Mapping',     icon: Radio   },
   { id: 'actions',     label: 'Actions',     icon: Sliders },
   // { id: 'sync',        label: 'Sync',        icon: Link2   },
