@@ -1068,11 +1068,22 @@ export class MidiService {
     this.midiAccess.onstatechange = (event) => {
       const port = (event as MIDIConnectionEvent).port;
       if (port.type === 'input' && port.state === 'connected') {
-        const input = port as MIDIInput;
-        input.open();
-        input.removeEventListener('midimessage', this.handleIngressBound);
-        input.addEventListener('midimessage', this.handleIngressBound);
-        console.log(`[MIDI] New device connected: ${port.name}`);
+        // A bare open() here is a no-op when the browser already reports
+        // this port as "connected" from a stale prior state (the same issue
+        // reScanInputs() works around at startup — see its comment) — which
+        // is exactly what happens when a device already known from a
+        // previous session re-announces itself as 'connected' without ever
+        // truly disconnecting (e.g. some environments re-fire statechange
+        // events across an app reload/restart without a real USB unplug).
+        // Left as a bare open(), those controllers stop sending until the
+        // user manually unplugs/replugs the cable. reconnectInput() does the
+        // full close()+open()+listener-reattach cycle instead (and also
+        // correctly skips virtual-instrument loopback output ports, unlike
+        // the old inline logic here).
+        this.reconnectInput(port.name ?? '').catch(e =>
+          console.warn(`[MIDI] Failed to reset reconnected input "${port.name}":`, e)
+        );
+        console.log(`[MIDI] Device (re)connected: ${port.name}`);
       }
       this.onStateChangeListeners.forEach(l => l(event));
     };
