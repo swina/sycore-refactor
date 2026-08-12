@@ -877,14 +877,20 @@ onMounted(() => {
 
     // 2. MIDI FLOW device→app input routing (replaces the old output-matrix-
     // overlap heuristic — see docs/plans/modular/MIDI-Flow-Control.md).
-    // Skipped in broadcast mode, matching the previous heuristic's bypass.
-    if (!midiStore.broadcastMode) {
-      if (!midiStore.isDeviceRoutedToApp(deviceName, MidiSource.SEQUENCER2, note)) {
-        if (window.SY_LOG) {
-          window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (not routed to Sequencer in MIDI Flow)`)
-        }
-        return false
+    // Deliberately does NOT fail open, unlike most other apps' device gates
+    // — Sequencer having its OUT wired to an instrument doesn't imply
+    // anything about its IN, and an unwired IN must stay silent rather than
+    // accepting whatever device happens to be sending MIDI. Two checks are
+    // needed, not just isDeviceRoutedToApp: that function's own fail-open
+    // default is "unwired anywhere = open to everyone" (right for one-shot
+    // actions like the Virtual Keyboard, wrong here — see its comment in
+    // useMidiStore.ts), so hasExplicitInputRouting is required in addition,
+    // matching canAutoStart below and Note Latch's own convention.
+    if (!midiStore.hasExplicitInputRouting(deviceName) || !midiStore.isDeviceRoutedToApp(deviceName, MidiSource.SEQUENCER2, note)) {
+      if (window.SY_LOG) {
+        window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (not routed to Sequencer in MIDI Flow)`)
       }
+      return false
     }
 
     return true
@@ -893,10 +899,9 @@ onMounted(() => {
   // Gate for MIDI FLOW app-to-app routing (e.g. Chord Sequencer OUT → Step
   // Sequencer IN) — the app-source counterpart to isMidiDeviceAllowed,
   // which is device-specific (registrations/inChannel don't apply to an
-  // app source). Same broadcast-mode bypass convention.
+  // app source). Same no-fail-open convention as above.
   function isAppSourceAllowed(sourceApp, note) {
-    if (midiStore.broadcastMode) return true
-    return midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.SEQUENCER2, note)
+    return midiStore.hasExplicitInputRouting(sourceApp) && midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.SEQUENCER2, note)
   }
 
   // Auto-starting the sequencer's own transport is a higher-stakes action than
@@ -1109,13 +1114,16 @@ onMounted(() => {
   // input port. sourceApp (6th arg) tells handleIncomingNote to gate via
   // isAppSourceAllowed instead of the device-based isMidiDeviceAllowed.
   //
-  // Must ignore the sequencer's own notes: isAppSourceAllowed fails OPEN in
-  // broadcastMode (unlike ChordProgSequencer/DrumMachine's app-note gates,
-  // which require an explicit routing cable), so without this guard every
-  // note this sequencer schedules loops straight back into "Dynamic
-  // transposition during PLAY mode" below as if a performer had played it —
-  // each pass re-derives dynamicMidiTranspose from the *already-transposed*
-  // note it just sent, compounding the drift by a fixed offset every loop.
+  // Must ignore the sequencer's own notes regardless of routing state — if
+  // Sequencer's OUT were ever cabled back into its own IN (directly, or via
+  // a virtual instrument looped back), every note it schedules would
+  // otherwise reach "Dynamic transposition during PLAY mode" below as if a
+  // performer had played it, re-deriving dynamicMidiTranspose from the
+  // *already-transposed* note it just sent — compounding the drift by a
+  // fixed offset every loop. isAppSourceAllowed itself now requires an
+  // explicit cable into Sequencer's IN (no broadcast-mode fail-open, see its
+  // definition above), but this guard stays as a hard backstop against that
+  // specific self-referencing cable case.
   const unsubAppNote = midiStore.addAppNoteListener((type, note, velocity, chan, sourceApp) => {
     if (sourceApp === MidiSource.SEQUENCER2) return
     handleIncomingNote(type, note, velocity, chan, null, sourceApp)
