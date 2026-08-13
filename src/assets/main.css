@@ -111,6 +111,12 @@
     }
 }
 
+ul {
+    list-style: disc;
+    padding: 0 0 0 1rem;
+    margin: 0;
+}
+
 button {
     cursor: pointer;
     transition: all 0.2s ease;

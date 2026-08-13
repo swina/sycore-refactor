@@ -39,6 +39,7 @@ export const moduleRegistry: ModuleManifest[] = [
 
   // ── MIDI Tools ───────────────────────────────────────────────────────────
   { id: 'sequencer', label: 'Step Sequencer', icon: Music, category: 'midi-tools', bg: '/step-sequencer-square.png' },
+  { id: 'sequencer2', label: 'Sequencer', icon: Music, category: 'midi-tools', bg: '/step-sequencer-square.png' },
   { id: 'chord-prog', label: 'Chord Progression', icon: Music2, category: 'midi-tools', bg: '/chord-progression-sequencer.png' },
   { id: 'capture', label: 'Piano Roll', icon: Music, category: 'midi-tools', bg: '/midi-capture.jpg' },
   { id: 'device-program-change', label: 'Multi Sounds', icon: Music2, category: 'midi-tools', bg: '/device-program-change.png' },

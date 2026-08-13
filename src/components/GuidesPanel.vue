@@ -95,6 +95,7 @@ const CATEGORIES = [
       { id: 'live-timeline',  label: 'Live Timeline',         file: 'SYCORE_LIVE_TIMELINE' },
       { id: 'loop-machine', label: 'Samples Machine',      file: 'SYCORE_LOOP_MACHINE' },
       { id: 'live-pad',       label: 'Live Set',  file: 'SYCORE_LIVE_PERFORMANCE_PAD' },
+      { id: 'sequencer2',     label: 'Sequencer',          file: 'SYCORE_SEQUENCER' },
       { id: 'step-sequencer', label: 'Step Sequencer',        file: 'SYCORE_STEP_SEQUENCER' },
       { id: 'chord-progression-sequencer', label: 'Chord Progression Sequencer', file: 'SYCORE_CHORD_PROG_SEQUENCER' },
       { id: 'drum-machine', label: 'Drum Machine', file: 'SYCORE_DRUM_MACHINE' },
