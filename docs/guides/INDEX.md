@@ -64,8 +64,11 @@
 | [Live Timeline](./SYCORE_LIVE_TIMELINE.md) | Visual arrangement timeline — sequence segments, fire MIDI markers, and control transport |
 | [Drum Machine](./SYCORE_DRUM_MACHINE.md) | 11-track 16-step pattern sequencer with A–F sequence banks, Fill, Repeater, style generation, and REC SYNC, Patterns DB, Euclidean Pattern Generator, Bassline generator (uses 3 tracks) |
 | [Chord Progression Sequencer](./SYCORE_CHORD_PROG_SEQUENCER.md) | Step-based harmonic sequencer with built-in chord library, arpeggio mode, and algorithmic generation |
+| [Sequencer](./SYCORE_SEQUENCER.md) | Algorithmic composition and MIDI sequencing engine with style-based generation |
 | [Live Performance Pad](./SYCORE_LIVE_PERFORMANCE_PAD.md) | Pad-based performance panel for triggering sounds and sequences on stage |
 | [Step Sequencer](./SYCORE_STEP_SEQUENCER.md) | Algorithmic composition and MIDI sequencing engine with style-based generation |
+| [Arpeggiator](./SYCORE_ARPEGGIATOR.md) | Generates note patterns from held chords |
+| [Note Latch]('./SYCORE_NOTE_LATCH.md') | Holds incoming notes after key release |
 
 ---
 

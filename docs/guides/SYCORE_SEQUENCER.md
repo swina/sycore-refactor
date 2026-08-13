@@ -45,8 +45,8 @@ Click the **Sequencer** button.
 
 ### 5.2 — Interface at a Glance
 
-<img src="/help/guides/sycore-sequencer-steps-ui.png"/>
 
+<img src="/help/guides/sycore-sequencer.png"/>
 
 Each step is a vertical stack of 12 clickable note bars (C–B, chromatic) with its own:
 - Octave (0–8) 
@@ -103,6 +103,8 @@ The fastest way to get a pattern is to use the algorithmic generator.
 **Activate / deactivate a step:** Click any dim step cell to toggle it on; click an active (lit) cell to turn it off.
 
 **Select a step for editing:** Click the step number at the top of the cell. The **Step Editor** row appears below the grid showing:
+
+<img src="/help/guides/sycore-sequencer-steps-ui.png"/>
 
 | Control | Range | Action |
 |---------|-------|--------|
