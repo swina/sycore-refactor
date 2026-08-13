@@ -2,6 +2,11 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-12
+
+- Sequencer (piano-roll app): **P1/P2 CC# are now directly editable** — next to each parameter's named dropdown (still built from the S1 CC map for quick picking) is a numeric CC# field you can type into directly, so P1/P2 can target whatever controller number the connected instrument actually uses instead of only the S1's own mapping. Values are clamped to the valid 0–127 MIDI range on blur; unnamed CC numbers show as `CC<n>` instead of a blank label.
+- Fix: **Sequencer Generate** — each step's OCT (the octave its 12-note grid stepper shows/edits) now reflects the octave actually used when generating that step's note(s), matching the Generate panel's OCT/range settings. Previously every generated step displayed OCT 4 regardless of the octave range picked, even though the generated note itself was in the right octave — the grid stepper and the note disagreed.
+
 ## 2026-08-11
 
 - MIDI Flow: new **Sequencer** app — a piano-roll-style alternative to Step Sequencer. Each step is a vertical stack of 12 clickable note bars (C–B, chromatic) with its own Octave (0–8), Accent on/off, and Probability (0–100%), so chords/notes can be programmed by clicking directly instead of only live-recording from a keyboard. Runs as an independent MIDI FLOW app (own IN/OUT, own local pattern storage) alongside the existing Step Sequencer, which is unchanged.

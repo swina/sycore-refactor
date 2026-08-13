@@ -28,7 +28,7 @@ const props = defineProps({
   polyModeString: String,
   isKeyboardOpen: Boolean,
   globalTranspose: Number,
-  seqStepsLimit: { type: Number, default: 64 },
+  seqStepsLimit: { type: Number, default: 16 },
   canUseSeqGen: Boolean,
   canUseSeqParam2: Boolean,
   canUseSeqGlobalTranspose: Boolean,
@@ -251,6 +251,13 @@ const param2CC = ref((() => {
     return saved?.param2CC ?? 71
   } catch { return 71 }
 })())
+
+const clampCCValue = (v) => {
+  const n = Math.round(Number(v))
+  return Number.isFinite(n) ? Math.max(0, Math.min(127, n)) : 0
+}
+const clampParam1CC = () => { param1CC.value = clampCCValue(param1CC.value) }
+const clampParam2CC = () => { param2CC.value = clampCCValue(param2CC.value) }
 
 const param1Variation = ref((() => {
   try {
@@ -511,7 +518,7 @@ function generateSequence() {
     const onsetSet = new Set(onsetPositions)
 
     steps.value = Array(numSteps.value).fill(null).map((_, i) => {
-      if (!onsetSet.has(i)) return { ...DEFAULT_STEP, active: false }
+      if (!onsetSet.has(i)) return { ...DEFAULT_STEP, active: false, octave: selectedOctave.value }
 
       const chordIdx = onsetPositions.indexOf(i)
       const octave = finalOctMin + Math.floor(Math.random() * (finalOctMax - finalOctMin + 1))
@@ -526,7 +533,7 @@ function generateSequence() {
       const sustainSteps = Math.round(thisSpan * avgGateFactor)
       const tieSteps = Math.max(0, sustainSteps + (Math.floor(Math.random() * 3) - 1) - 1)
 
-      return { ...DEFAULT_STEP, active: true, notes, velocity, gate: 90, tieSteps, param1Value: Math.floor(Math.random() * 128), param2Value: Math.floor(Math.random() * 128), edited: true }
+      return { ...DEFAULT_STEP, active: true, notes, octave, velocity, gate: 90, tieSteps, param1Value: Math.floor(Math.random() * 128), param2Value: Math.floor(Math.random() * 128), edited: true }
     })
   } else {
     const numActive = Math.round(numSteps.value * (genDensity.value / 100))
@@ -541,8 +548,9 @@ function generateSequence() {
       const active = activeIndices.has(i)
       const accentHit = styleCfg.accentGrid ? styleCfg.accentGrid[i % styleCfg.accentGrid.length] : false
       let notes = [60]
+      let octave = selectedOctave.value
       if (active) {
-        const octave = finalOctMin + Math.floor(Math.random() * (finalOctMax - finalOctMin + 1))
+        octave = finalOctMin + Math.floor(Math.random() * (finalOctMax - finalOctMin + 1))
         const rootMidi = (octave + 1) * 12 + keyIdx
         const interval = scaleIntervals[Math.floor(Math.random() * scaleIntervals.length)]
         notes = [rootMidi + interval]
@@ -564,14 +572,14 @@ function generateSequence() {
       const p2Variation = Math.random() * p2VarFactor
       const param2Value = Math.max(0, Math.min(127, Math.round(p2BaseVal + (p2BaseVal * p2Variation))))
 
-      return { ...DEFAULT_STEP, active, notes, velocity, gate, tieSteps, param1Value, param2Value, edited: active }
+      return { ...DEFAULT_STEP, active, notes, octave, velocity, gate, tieSteps, param1Value, param2Value, edited: active }
     })
   }
   basePatternLength.value = numSteps.value
 }
 
 function duplicateLength() {
-  const next = Math.min(props.seqStepsLimit || 64, numSteps.value * 2)
+  const next = Math.min(props.seqStepsLimit || 16, numSteps.value * 2)
   if (next !== numSteps.value) {
     const currentSteps = [...steps.value]
     const additional = []
@@ -777,8 +785,10 @@ function exportMidi() {
   const blob = new Blob([new Uint8Array([...header, ...trackHeader, ...finalTrackData])], { type: 'audio/midi' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
+  const name = `${selectedStyle.value || 'Pattern'}-${selectedKey.value || 'C'}-${selectedScale.value || 'Major'}` 
   a.href = url
-  a.download = `S1_Sequence_${props.currentSoundName || 'Pattern'}.mid`
+
+  a.download = `SYCORE_Sequence_${name}.mid`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -1535,6 +1545,10 @@ let generateHidden = ref(false)
             <select v-model="param1CC" class="bg-black/40 border border-neutral-800 text-synth-amber rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-30 cursor-pointer [color-scheme:dark]">
               <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
             </select>
+            <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6" title="Numero CC — modificabile per adattarsi allo strumento collegato">
+              <span class="text-[8px] font-mono text-neutral-500">CC#</span>
+              <input v-model.number="param1CC" @blur="clampParam1CC" type="number" min="0" max="127" class="w-8 bg-transparent text-synth-amber text-[10px] font-mono outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+            </div>
             <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
               <span class="text-[8px] font-mono text-neutral-500" title="Variazione P1 RND">RND%</span>
               <input v-model.number="param1Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
@@ -1549,6 +1563,10 @@ let generateHidden = ref(false)
             <select v-model="param2CC" class="bg-black/40 border border-neutral-800 text-synth-amber rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-24 cursor-pointer [color-scheme:dark]">
               <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
             </select>
+            <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6" title="Numero CC — modificabile per adattarsi allo strumento collegato">
+              <span class="text-[8px] font-mono text-neutral-500">CC#</span>
+              <input v-model.number="param2CC" @blur="clampParam2CC" type="number" min="0" max="127" class="w-8 bg-transparent text-synth-amber text-[10px] font-mono outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+            </div>
             <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
               <span class="text-[8px] font-mono text-neutral-500" title="Variazione P2 RND">RND%</span>
               <input v-model.number="param2Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
@@ -1582,7 +1600,8 @@ let generateHidden = ref(false)
             <button @click="reduceLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="/2">
               <ChevronDown class="w-3.5 h-3.5" />
             </button>
-            <input v-model.number="numSteps" type="range" min="2" :max="seqStepsLimit" 
+            <!--//seqStepsLimit" -->
+            <input v-model.number="numSteps" type="range" min="2" max="16" 
               class="w-20 h-1 accent-orange-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
             <button @click="duplicateLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="x2">
               <ChevronUp class="w-3.5 h-3.5" />
@@ -1673,7 +1692,7 @@ let generateHidden = ref(false)
                 />
               </div>
 
-              <div class="flex flex-col min-w-[70px]">
+              <div class="flex flex-col min-w-[100px]">
                 <div class="flex justify-between items-center mb-0.5">
                   <span class="text-[8px] font-mono text-neutral-500 uppercase">Gate ({{ steps[selectedStepIdx].gate }}%)</span>
                   <div class="flex gap-1">
@@ -1705,7 +1724,7 @@ let generateHidden = ref(false)
                 <div class="w-px h-4 bg-neutral-700 shrink-0" />
                 <div class="flex flex-col min-w-[90px]">
                   <div class="flex justify-between items-center mb-0.5">
-                    <span class="text-[8px] font-mono text-neutral-500 uppercase truncate max-w-[50px]">{{ S1_CC_MAP[param1CC] }}</span>
+                    <span class="text-[8px] font-mono text-neutral-500 uppercase truncate max-w-[50px]">{{ S1_CC_MAP[param1CC] || `CC${param1CC}` }}</span>
                     <div class="flex gap-1">
                       <button @click="applyToAll('param1Value', steps[selectedStepIdx].param1Value)" class="text-[7px] text-synth-amber hover:underline">ALL</button>
                       <button @click="randomize('param1Value')" class="text-[7px] text-synth-amber hover:underline">RND</button>
@@ -1725,7 +1744,7 @@ let generateHidden = ref(false)
                 <div class="w-px h-4 bg-neutral-700 shrink-0" />
                 <div class="flex flex-col min-w-[90px]">
                   <div class="flex justify-between items-center mb-0.5">
-                    <span class="text-[8px] font-mono text-neutral-500 uppercase truncate max-w-[50px]">{{ S1_CC_MAP[param2CC] }}</span>
+                    <span class="text-[8px] font-mono text-neutral-500 uppercase truncate max-w-[50px]">{{ S1_CC_MAP[param2CC] || `CC${param2CC}` }}</span>
                     <div class="flex gap-1">
                       <button @click="applyToAll('param2Value', steps[selectedStepIdx].param2Value)" class="text-[7px] text-synth-amber hover:underline">ALL</button>
                       <button @click="randomize('param2Value')" class="text-[7px] text-synth-amber hover:underline">RND</button>
@@ -1752,12 +1771,12 @@ let generateHidden = ref(false)
 
           <!-- Sticky row labels: Accent / Prob / Oct header rows, then B..C -->
           <div class="flex flex-col shrink-0 sticky left-0 z-20 bg-neutral-900/95 backdrop-blur-sm rounded-lg">
-            <div class="text-[8px] font-mono text-center py-0.5 select-none">&nbsp;</div>
-            <div class="h-4 flex items-center justify-end pr-1.5 text-[7px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Accent</div>
-            <div class="h-4 flex items-center justify-end pr-1.5 text-[7px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Prob</div>
-            <div class="h-4 flex items-center justify-end pr-1.5 text-[7px] font-black uppercase tracking-wider text-neutral-500 border-t border-b border-neutral-800">Oct</div>
+            <div class="text-[9px] font-mono text-center py-0.5 select-none">&nbsp;</div>
+            <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Accent</div>
+            <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Prob</div>
+            <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-b border-neutral-800">Oct</div>
             <div v-for="semitone in GRID_SEMITONES" :key="semitone"
-              class="h-4 flex items-center justify-end pr-1.5 text-[8px] font-mono"
+              class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-mono"
               :class="NOTE_NAMES[semitone].includes('#') ? 'text-neutral-700' : 'text-neutral-400'"
             >{{ NOTE_NAMES[semitone] }}</div>
           </div>
@@ -1765,7 +1784,7 @@ let generateHidden = ref(false)
           <!-- Step columns -->
           <div
             v-for="(step, idx) in steps" :key="idx"
-            class="group relative flex flex-col w-9 shrink-0 rounded-lg border transition-all"
+            class="group relative flex flex-col w-13 shrink-0 rounded-lg border transition-all"
             :class="[
               selectedStepIdx === idx ? 'border-synth-amber ring-1 ring-synth-amber/50 bg-neutral-800' : 'border-neutral-800 bg-neutral-950/40',
               currentStep === idx && isPlaying ? 'border-amber-400 ring-1 ring-amber-400/50 z-10 shadow-[0_0_10px_rgba(245,158,11,0.25)]' : ''
@@ -1774,7 +1793,7 @@ let generateHidden = ref(false)
             <!-- Step Number -->
             <div
               @click="selectedStepIdx = idx"
-              class="text-[8px] font-mono text-center py-0.5 rounded-t-[7px] cursor-pointer"
+              class="text-[8px] font-mono text-center py-0.5 rounded-t-[9px] cursor-pointer"
               :class="step?.active ? 'bg-synth-neon/20 text-synth-neon' : 'bg-neutral-900/50 text-neutral-600'"
             >
               {{ idx + 1 }}
@@ -1785,7 +1804,7 @@ let generateHidden = ref(false)
             <!-- Accent -->
             <button
               @click="selectedStepIdx = idx; updateStep(idx, { accent: !step.accent })"
-              class="h-4 text-[7px] font-black uppercase border-t border-neutral-800 transition-colors"
+              class="h-4 text-[9px] font-black uppercase border-t border-neutral-800 transition-colors"
               :class="step.accent ? 'bg-amber-500 text-black' : 'bg-neutral-900 text-neutral-600 hover:text-neutral-400'"
               title="Accent — boosts this step's velocity when it fires"
             >A</button>
@@ -1795,7 +1814,7 @@ let generateHidden = ref(false)
               :value="step.probability"
               @click.stop="selectedStepIdx = idx"
               @change="e => updateStep(idx, { probability: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) })"
-              class="h-4 w-full text-[7px] font-mono text-center bg-black border-t border-neutral-800 text-neutral-400 outline-none focus:text-synth-neon [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              class="h-4 w-full text-[9px] font-mono text-center bg-black border-t border-neutral-800 text-neutral-400 outline-none focus:text-synth-neon [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
               title="Probability — % chance this step fires each loop"
             />
 
@@ -1804,7 +1823,7 @@ let generateHidden = ref(false)
               :value="step.octave"
               @click.stop="selectedStepIdx = idx"
               @change="e => setStepOctave(idx, Number.isNaN(parseInt(e.target.value)) ? step.octave : parseInt(e.target.value))"
-              class="h-4 w-full text-[7px] font-mono font-bold text-center bg-black border-t border-b border-neutral-800 text-synth-amber outline-none focus:text-synth-neon [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              class="h-4 w-full text-[9px] font-mono font-bold text-center bg-black border-t border-b border-neutral-800 text-synth-amber outline-none focus:text-synth-neon [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
               title="Octave — which octave the note bars below target (transposes existing notes when changed)"
             />
 
@@ -1812,10 +1831,16 @@ let generateHidden = ref(false)
             <button v-for="semitone in GRID_SEMITONES" :key="semitone"
               @click="selectedStepIdx = idx; toggleNoteBar(idx, semitone)"
               class="h-4 transition-colors"
+              
               :class="isNoteBarActive(step, semitone)
-                ? 'bg-synth-neon shadow-[0_0_4px_rgba(0,255,136,0.5)]'
+                ? step.velocity < 10 
+                ? 'bg-neutral-700 shadow-[0_0_4px_rgba(0,255,136,0.5)]' : 
+                step.velocity < 60 ? 'bg-synth-neon shadow-[0_0_4px_rgba(0,255,136,0.5)]': 
+                step.velocity < 95 ?'bg-orange-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]' : 'bg-red-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]' 
                 : (NOTE_NAMES[semitone].includes('#') ? 'bg-neutral-950 hover:bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800')"
               :title="`${NOTE_NAMES[semitone]}${step.octave}`"
+              :style="isNoteBarActive(step, semitone)
+                ? 'width: ' + step.gate + '%;':''"
             />
 
             <!-- Play Indicator -->
@@ -1827,14 +1852,14 @@ let generateHidden = ref(false)
       <!-- Footer Info -->
       <div class="shrink-0 px-4 py-2 border-t border-neutral-900 bg-black/40 flex justify-between items-center">
         <div class="flex items-center gap-4">
-          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Sequencer // Build 0.9.8</span>
+          <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Sequencer</span>
           <div class="flex items-center gap-1.5">
             <div class="w-1 h-1 rounded-full bg-synth-neon animate-pulse" />
             <span class="text-[9px] font-mono text-synth-neon uppercase">Ready</span>
           </div>
         </div>
         <div class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">
-          S-1 TWEAK // {{ selectedStyle }}
+          SY.CORE // {{ selectedStyle }}
         </div>
       </div>
 
