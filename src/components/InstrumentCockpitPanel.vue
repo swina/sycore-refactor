@@ -671,7 +671,7 @@ function handleBpmChange(e) {
                 <div v-for="(cp, idx) in row.channelPatchList" :key="row.name + ':' + cp.channel"
                   @click="selectInstrumentChannel(row, cp)"
                   title="Select this device/channel in Program Change"
-                  class="flex items-center gap-2 py-0.5 px-1 border-b font-mono text-[11px] rounded transition-colors cursor-pointer hover:bg-white/5"
+                  class="flex items-center gap-2 py-0.5 px-1 border-b font-mono text-[14px] rounded transition-colors cursor-pointer hover:bg-white/5"
                   :class="[
                     isSelected(row.name, cp.channel) ? 'border-violet-700/50 bg-sky-500/50' : 'border-neutral-900/60',
                     instrumentItemFocusRing(row.name, cp.channel),
@@ -763,7 +763,7 @@ function handleBpmChange(e) {
               :key="row.name"
               @click="selectInstrument(row)"
               title="Select in Program Change"
-              class="relative w-30 shrink-0 rounded-xl border-2 p-2.5 flex flex-col gap-1.5 transition-colors max-h-48 cursor-pointer"
+              class="relative w-36 shrink-0 rounded-xl border-2 p-2.5 flex flex-col gap-1.5 transition-colors max-h-48 cursor-pointer"
               :class="[
                 row.meta.card,
                 !row.online ? 'opacity-60' : '',
@@ -787,7 +787,7 @@ function handleBpmChange(e) {
                 </div>
               </div>
 
-              <div>
+              <div class="flex items-center gap-1">
                 <p v-if="row.patchName" class="text-[9px] text-neutral-300 truncate">{{ row.patchName }}</p>
                 <p v-else class="text-[9px] text-neutral-600 italic">No preset</p>
                 <span v-if="row.patchCategory" class="inline-block mt-0.5 text-[8px] px-1 rounded bg-violet-900/30 text-violet-400 border border-violet-900/30">
