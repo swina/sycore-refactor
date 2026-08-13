@@ -417,10 +417,8 @@ export function useAppActions() {
         uiStore.globalTranspose = Math.round((ccVal / 127) * 48) - 24; break
 
       case 'seq_select_1':
-        if (ccVal > 63) uiStore.seqActiveSlot = 1
         window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
       case 'seq_select_2':
-        if (ccVal > 63) uiStore.seqActiveSlot = 2
         window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
 
       case 'seq_swing_cc':

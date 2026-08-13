@@ -172,11 +172,7 @@ const simpleTogglePanels = [
 ]
 
 async function handleStepSequencerSave(config) {
-  if (uiStore.seqActiveSlot === 2) {
-    uiStore.seqCurrentConfig2 = config
-  } else {
-    uiStore.seqCurrentConfig = config
-  }
+  uiStore.seqCurrentConfig = config
   if (presetStore.lastPreset) {
     try {
       await presetStore.savePreset()
@@ -195,11 +191,7 @@ function setCaptureEnabled(val) {
 }
 
 function handleSendToSequencer(config) {
-  if (uiStore.seqActiveSlot === 2) {
-    uiStore.seqCurrentConfig2 = config
-  } else {
-    uiStore.seqCurrentConfig = config
-  }
+  uiStore.seqCurrentConfig = config
   uiStore.isSequencerOpen = true
   uiStore.isCaptureOpen = false
 }
@@ -481,24 +473,16 @@ onMounted(() => {
           :canUseSeqGlobalTranspose="authStore.profile?.features?.canUseSeqGlobalTranspose ?? true"
           :canUseSeqSyncTrack="authStore.profile?.features?.canUseSeqSyncTrack ?? false"
           :midiMappings="mappingStore.appMidiMappings"
-          :initialConfig="uiStore.seqActiveSlot === 2 ? uiStore.seqCurrentConfig2 : uiStore.seqCurrentConfig"
+          :initialConfig="uiStore.seqCurrentConfig"
           :currentPresetCCValues="presetStore.lastPreset?.data || {}"
-          :activeSlot="uiStore.seqActiveSlot"
           @close="uiStore.isSequencerOpen = false; uiStore.isSequencerModalOpen = false"
           @bpmChange="bpm => { midiStore.setGlobalBpm(bpm); sessionBpmOverride = true }"
           @transposeChange="handleStepSequencerTranspose"
-          @configChange="config => {
-            if (uiStore.seqActiveSlot === 2) {
-              uiStore.seqCurrentConfig2 = config
-            } else {
-              uiStore.seqCurrentConfig = config
-            }
-          }"
+          @configChange="config => { uiStore.seqCurrentConfig = config }"
           @savePattern="handleStepSequencerSave"
           @openKeyboard="uiStore.isKeyboardOpen = !uiStore.isKeyboardOpen"
           @prevSlot="presetStore.navigateHistory('prev')"
           @nextSlot="presetStore.navigateHistory('next')"
-          @activeSlotChange="slot => uiStore.seqActiveSlot = slot"
           @stop="() => {}"
         />
       </div>

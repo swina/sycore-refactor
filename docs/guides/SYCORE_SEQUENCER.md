@@ -37,19 +37,9 @@ At the heart of the sequencer is its style- and scale-based generation engine, w
 - **Quick Randomize**: Fast randomization functions for individual parameters (Velocity, Gate, CCs) to add organic variations on the fly.
 - **Clear & Safety**: Confirmation-based clear system to prevent accidental pattern loss during live sets.
 
-## 5. Using the Step Sequencer
-
-The Step Sequencer is accessed directly from the Sound Engine header. It lives alongside the sound — each preset can carry its own embedded pattern — and drives the Roland S-1 hardware with the same MIDI routing used by the keyboard and arpeggiator.
-
 ### 5.1 — Opening the Sequencer
 
-In the Sound Engine header, click the :ListMusic: **Sequencer** button (the list-music icon). The panel opens below the sound engine. While open, the button turns **amber**. If a pattern is already saved with the current sound, the button is **violet** even when the panel is closed — that is the SEQ badge.
-
-```
-[▶ / ■]  [AUTO]  [:ListMusic: violet]   ← sound has a linked pattern
-[▶ / ■]  [AUTO]  [:ListMusic: amber]    ← panel is currently open
-[▶ / ■]  [AUTO]  [:ListMusic: neutral]  ← no pattern linked yet
-```
+Click the **Sequencer** button.
 
 ---
 
@@ -68,7 +58,7 @@ Each step is a vertical stack of 12 clickable note bars (C–B, chromatic) with 
 - An indigo dot if P2 is locked on that step
 - An amber glow on the currently playing step
 
-Runs as an independent MIDI FLOW app (own IN/OUT, own local pattern storage) alongside the existing Step Sequencer
+Runs as an independent MIDI FLOW app (own IN/OUT, own local pattern storage).
 
 ---
 
@@ -187,44 +177,25 @@ Parameter locks let each step send a different CC value — the classic "per-ste
 
 ---
 
-### 5.8 — Linking a Pattern to a Sound
+### 5.8 Chain Mode
 
-A pattern that is not linked exists only in the sequencer panel — it is lost when you load another sound. Linking saves the pattern inside the preset itself.
+Chain mode lets you sequence up to 8 pattern slots in order for continuous playback.
 
-1. Design your pattern and confirm it sounds right with the current sound.
-2. Click **LINK** in the top-right of the sequencer toolbar. The button turns **violet** and reads **UNLINK**.
-3. Save the preset (💾 in the Sound Engine header). The pattern is now embedded in the preset.
+Enable chain mode by clicking the **Chain** toggle in the transport bar. When active, a chain editor row appears below the transport bar showing 8 clickable slots.
 
-When a linked pattern exists:
+| Action | Result |
+|--------|--------|
+| **Click a slot** | Cycles through `null → A → B → C → D → E → F → null` |
+| **Right-click a slot** | Clears the slot to null |
+| **Clear all button** | Empties all 8 slots |
 
-- The **SEQ badge** (violet chip) appears in the Sound Engine identity header.
-- Loading this preset from the library recalls the pattern automatically.
-- The **▶ Play** button in the Sound Engine header starts the sequencer directly without opening the panel.
-- **AUTO mode** (see below) lets an incoming MIDI note trigger the whole thing hands-free.
+While chain mode is active and the sequencer is playing, each slot is played for one bar before advancing to the next filled slot. Empty slots are skipped. A blue highlight on the slot indicates the currently playing position.
 
-To detach the pattern, click **UNLINK** — the sequencer state remains but the preset no longer carries it.
-
----
-
-### 5.9 — AUTO Mode
-
-AUTO mode starts the sequencer automatically on the first MIDI Note On received after a sound with a linked pattern is loaded. No button press required on stage.
-
-**Enable:** Click **AUTO** in the Sound Engine header — it glows when active.
-
-**What happens when a note arrives:**
-
-1. The sequencer starts from step 1.
-2. The played note becomes the **dynamic transpose root** — the entire pattern shifts so that the pattern's root note maps to the key you played.
-3. Subsequent notes continue to transpose dynamically as long as AUTO is on.
-
-This makes it possible to play the sequencer like a monophonic instrument — tap a key and the pattern plays in that key, instantly.
-
-**Disabling:** Click AUTO again. The sequencer continues playing but stops auto-starting on new notes.
+Chain configuration (slots and autofill settings) is saved and restored with presets.
 
 ---
 
-### 5.10 — Exporting as MIDI
+### 6.0 — Exporting as MIDI
 
 Click the **⬇ MIDI** export button in the toolbar. SY.CORE generates a standard `.mid` file (Format 0, 480 PPQ) containing:
 
@@ -237,7 +208,7 @@ The file is named `S1_Sequence_[SoundName].mid` and downloads immediately. Impor
 
 ---
 
-### 5.11 — Sequencer Workflow Recipes
+### 6.1 — Sequencer Workflow Recipes
 
 **Acid bassline in 60 seconds**
 
@@ -259,4 +230,4 @@ The file is named `S1_Sequence_[SoundName].mid` and downloads immediately. Impor
 
 
 ---
-*SY.CORE LABS · Step Sequencer Pro v2.5*
+*SY.CORE LABS · Sequencer Pro v2.5*

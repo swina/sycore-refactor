@@ -32,6 +32,8 @@ const RAW_KEYS = {
   midiFlowLastConfig:     'SYCORE_MIDI_FLOW_LAST_CONFIG',
   chordProgSlots:         'SYCORE_CHORD_PROG_SLOTS',
   chordProgChain:         'SYCORE_CHORD_PROG_CHAIN',
+  stepSeqBanks:           'SYCORE_STEP_SEQ_BANKS',
+  stepSeqChain:           'SYCORE_STEP_SEQ_CHAIN',
   mixerChannelSlots:      'S1_MIX_CHANNEL_SLOTS',
 }
 

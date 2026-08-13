@@ -10,6 +10,7 @@ import { useArpStore } from './useArpStore'
 import { useUiStore } from './useUiStore'
 import { useDrumMachineStore } from './useDrumMachineStore'
 import { useChordProgStore } from './useChordProgStore'
+import { useStepSequencerStore } from './useStepSequencerStore'
 import { S1_TYPES } from '@/constants/s1-config'
 import BANK_DEFAULT from '@/data/BANK_DEFAULT.json'
 import { dispatch } from '@/types/events'
@@ -228,7 +229,8 @@ export const usePresetStore = defineStore('preset', () => {
       lfo2Config: meta.lfo2Config,
       seqConfig: null,
       seqConfig2: null,
-      seqActiveSlot: 1
+      seqActiveSlot: 1,
+      seqChain: null,
     }
   }
 
@@ -285,6 +287,12 @@ export const usePresetStore = defineStore('preset', () => {
       uiStore.seqCurrentConfig2 = null
     }
     uiStore.seqActiveSlot = variant.seqActiveSlot || 1
+
+    // Sequencer chains — restore to step sequencer store
+    if (variant.seqLinked && variant.seqChain) {
+      const seqStore = useStepSequencerStore()
+      seqStore.restoreChainFromPreset(variant.seqChain)
+    }
   }
 
   /**

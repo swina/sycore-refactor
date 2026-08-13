@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, toRef } from 'vue'
-import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus } from 'lucide-vue-next'
+import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus, Layers } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -8,6 +8,7 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useStepSequencerStore, BANK_NAMES, BANK_COUNT, CHAIN_COUNT } from '@/stores/useStepSequencerStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
@@ -36,16 +37,16 @@ const props = defineProps({
   midiMappings: Object,
   initialConfig: Object,
   currentPresetCCValues: Object,
-  activeSlot: { type: Number, default: 1 },
 })
 
-const emit = defineEmits(['bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'activeSlotChange', 'close'])
+const emit = defineEmits(['bpmChange', 'transposeChange', 'prevSlot', 'nextSlot', 'savePattern', 'configChange', 'openKeyboard', 'stop', 'close'])
 
 const midiStore = useMidiStore()
 const presetStore = usePresetStore()
 const authStore = useAuthStore()
 const syncStore = useSyncStore()
 const uiStore = useUiStore()
+const seqStore = useStepSequencerStore()
 const transportManager = useTransportManager()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
@@ -180,15 +181,15 @@ function buildChordNotes(scaleDegree, scaleIntervals, keyMidi, octave, voices) {
   return notes
 }
 
-// Local state
+// Local state — active bank working copy
 const { state: seqStateStorage } = useLocalStorage('S1_SEQUENCER_BETA_STATE', {})
 
-const selectedStyle = ref('House')
-const selectedKey = ref('C')
-const selectedScale = ref('Major')
-const chordsEnabled = ref(false)
-const maxPolyphony = ref(4)
-const chordDensity = ref(4)
+const selectedStyle = ref(seqStore.activeBank.selectedStyle)
+const selectedKey = ref(seqStore.activeBank.selectedKey)
+const selectedScale = ref(seqStore.activeBank.selectedScale)
+const chordsEnabled = ref(seqStore.activeBank.chordsEnabled)
+const maxPolyphony = ref(seqStore.activeBank.maxPolyphony)
+const chordDensity = ref(seqStore.activeBank.chordDensity)
 const isPlaying = ref(false)
 const isRecording = ref(false)
 const currentStep = ref(0)
@@ -198,71 +199,26 @@ const syncTrack = computed({
   get: () => syncStore.syncTrack,
   set: (v) => { syncStore.syncTrack = v },
 })
-const genDensity = ref(75)
+const genDensity = ref(seqStore.activeBank.genDensity)
 const swingAmount = ref(0)
-const basePatternLength = ref(16)
-const selectedOctave = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.selectedOctave ?? 4
-  } catch { return 4 }
-})())
-const octaveRange = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.octaveRange ?? 0
-  } catch { return 0 }
-})())
+const basePatternLength = ref(seqStore.activeBank.basePatternLength || seqStore.activeBank.numSteps)
+const selectedOctave = ref(seqStore.activeBank.selectedOctave)
+const octaveRange = ref(seqStore.activeBank.octaveRange)
 let baseLengthTimer = null
 
-const numSteps = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.numSteps ?? 16
-  } catch { return 16 }
-})())
+const numSteps = ref(seqStore.activeBank.numSteps)
 
-const steps = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.steps 
-      ? saved.steps.map(s => {
-          const step = { ...DEFAULT_STEP, ...s }
-          step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
-          step.explicitNotes = s.explicitNotes !== undefined ? s.explicitNotes : (s.notes && s.notes.length > 0 && !(s.notes.length === 1 && s.notes[0] === 60))
-          return step
-        })
-      : Array(16).fill(null).map(() => ({ ...DEFAULT_STEP }))
-  } catch { return Array(16).fill(null).map(() => ({ ...DEFAULT_STEP })) }
-})())
+const steps = ref(seqStore.activeBank.steps.map(s => {
+  const step = { ...DEFAULT_STEP, ...s }
+  step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+  step.explicitNotes = s.explicitNotes !== undefined ? s.explicitNotes : (s.notes && s.notes.length > 0 && !(s.notes.length === 1 && s.notes[0] === 60))
+  return step
+}))
 
-const param1CC = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.param1CC ?? 74
-  } catch { return 74 }
-})())
-
-const param2CC = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.param2CC ?? 71
-  } catch { return 71 }
-})())
-
-const param1Variation = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.param1Variation ?? 25
-  } catch { return 25 }
-})())
-
-const param2Variation = ref((() => {
-  try {
-    const saved = seqStateStorage.value
-    return saved?.param2Variation ?? 25
-  } catch { return 25 }
-})())
+const param1CC = ref(seqStore.activeBank.param1CC)
+const param2CC = ref(seqStore.activeBank.param2CC)
+const param1Variation = ref(seqStore.activeBank.param1Variation)
+const param2Variation = ref(seqStore.activeBank.param2Variation)
 
 // Refs for playback state
 const playStateRef = { current: {} }
@@ -293,10 +249,99 @@ watch([isRecording, isPlaying, selectedStepIdx], () => {
 
 const skipBackingTrackSync = ref(false)
 
+function syncLocalToBank() {
+  const bank = seqStore.activeBank
+  if (!bank) return
+  bank.numSteps = numSteps.value
+  bank.basePatternLength = basePatternLength.value
+  bank.steps = steps.value.map(s => ({ ...DEFAULT_STEP, ...s }))
+  bank.param1CC = param1CC.value
+  bank.param2CC = param2CC.value
+  bank.param1Variation = param1Variation.value
+  bank.param2Variation = param2Variation.value
+  bank.selectedOctave = selectedOctave.value
+  bank.octaveRange = octaveRange.value
+  bank.selectedKey = selectedKey.value
+  bank.selectedScale = selectedScale.value
+  bank.selectedStyle = selectedStyle.value
+  bank.genDensity = genDensity.value
+  bank.chordsEnabled = chordsEnabled.value
+  bank.maxPolyphony = maxPolyphony.value
+  bank.chordDensity = chordDensity.value
+}
+
+function loadBankIntoLocal() {
+  const bank = seqStore.activeBank
+  if (!bank) return
+  numSteps.value = bank.numSteps
+  basePatternLength.value = bank.basePatternLength || bank.numSteps
+  steps.value = bank.steps.map(s => {
+    const step = { ...DEFAULT_STEP, ...s }
+    step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
+    step.explicitNotes = s.explicitNotes !== undefined ? s.explicitNotes : (s.notes && s.notes.length > 0 && !(s.notes.length === 1 && s.notes[0] === 60))
+    return step
+  })
+  param1CC.value = bank.param1CC
+  param2CC.value = bank.param2CC
+  param1Variation.value = bank.param1Variation
+  param2Variation.value = bank.param2Variation
+  selectedOctave.value = bank.selectedOctave
+  octaveRange.value = bank.octaveRange
+  selectedKey.value = bank.selectedKey
+  selectedScale.value = bank.selectedScale
+  selectedStyle.value = bank.selectedStyle
+  genDensity.value = bank.genDensity
+  chordsEnabled.value = bank.chordsEnabled
+  maxPolyphony.value = bank.maxPolyphony
+  chordDensity.value = bank.chordDensity
+}
+
+function selectBank(index) {
+  if (index === seqStore.activeBankIndex) return
+  syncLocalToBank()
+  seqStore.setActiveBank(index)
+  loadBankIntoLocal()
+  selectedStepIdx.value = 0
+  lastFollowedBank = -1
+}
+
+const gridCurrentStep = computed(() => {
+  if (!seqStore.chainEnabled) return currentStep.value
+  if (seqStore.playingBankIndex === seqStore.activeBankIndex) {
+    const pb = seqStore.playbackSteps
+    const localIdx = pb.localIndices[currentStep.value]
+    return localIdx !== undefined ? localIdx : null
+  }
+  return null
+})
+
+watch(() => seqStore.activeBankIndex, () => {
+  loadBankIntoLocal()
+})
+
+let lastFollowedBank = -1
+
+function followChainPlayback(stepIdx) {
+  if (!seqStore.chainEnabled || !isPlaying.value) {
+    lastFollowedBank = -1
+    return
+  }
+  const pb = seqStore.playbackSteps
+  const bankIdx = pb.bankIndices?.[stepIdx]
+  if (bankIdx === undefined || bankIdx === lastFollowedBank) return
+  lastFollowedBank = bankIdx
+  const localIdx = pb.localIndices?.[stepIdx] ?? 0
+  if (seqStore.activeBankIndex !== bankIdx) {
+    seqStore.setActiveBank(bankIdx)
+    loadBankIntoLocal()
+  }
+  selectedStepIdx.value = localIdx
+}
+
 
 function openSaveLibraryModal() {
   if (!authStore.user) return
-  libraryPatternName.value = `${props.currentSoundName || 'Pattern'} Slot ${props.activeSlot}`
+  libraryPatternName.value = `${props.currentSoundName || 'Pattern'} Bank ${BANK_NAMES[seqStore.activeBankIndex]}`
   showSaveLibraryModal.value = true
 }
 
@@ -476,10 +521,16 @@ watch([
   lastEmittedConfig = config
   emit('configChange', config)
   midiStore.sendCC(77, Math.max(0, Math.min(127, (props.globalTranspose || 0) + 64)), props.channel)
+  syncLocalToBank()
 
   // Sync live playback state immediately
   if (playStateRef.current) {
-    playStateRef.current.steps = steps.value
+    const pb = seqStore.playbackSteps
+    playStateRef.current.steps = pb.steps
+    playStateRef.current.numSteps = pb.numSteps
+    playStateRef.current.chainSlotIndices = pb.chainSlotIndices
+    playStateRef.current.bankIndices = pb.bankIndices
+    playStateRef.current.localIndices = pb.localIndices
     playStateRef.current.bpm = props.bpm || 120
     playStateRef.current.param1CC = param1CC.value
     playStateRef.current.param2CC = param2CC.value
@@ -957,10 +1008,22 @@ onMounted(() => {
         break
       }
       case 'seq_select_1':
-        if (val > 63) emit('activeSlotChange', 1)
+        if (val > 63) selectBank(0)
         break
       case 'seq_select_2':
-        if (val > 63) emit('activeSlotChange', 2)
+        if (val > 63) selectBank(1)
+        break
+      case 'seq_select_3':
+        if (val > 63) selectBank(2)
+        break
+      case 'seq_select_4':
+        if (val > 63) selectBank(3)
+        break
+      case 'seq_select_5':
+        if (val > 63) selectBank(4)
+        break
+      case 'seq_select_6':
+        if (val > 63) selectBank(5)
         break
     }
   }
@@ -1098,8 +1161,14 @@ onMounted(() => {
 
         // 2. Record it onto the currently active play step (overdub/overwrite)
         const stepIdx = currentStep.value
-        if (stepIdx !== null && stepIdx >= 0 && stepIdx < steps.value.length) {
-          const currentStepObj = steps.value[stepIdx]
+        const pb = seqStore.playbackSteps
+        const bankIdx = pb.bankIndices?.[stepIdx]
+        const localIdx = pb.localIndices?.[stepIdx]
+        const targetBank = bankIdx !== undefined ? seqStore.banks[bankIdx] : null
+        const targetSteps = targetBank ? targetBank.steps : steps.value
+        const targetStepIdx = localIdx !== undefined ? localIdx : stepIdx
+        if (stepIdx !== null && stepIdx >= 0 && targetStepIdx >= 0 && targetStepIdx < targetSteps.length) {
+          const currentStepObj = targetSteps[targetStepIdx]
           let newNotes = []
 
           if (lastLiveRecordStepRef.value === stepIdx) {
@@ -1125,7 +1194,12 @@ onMounted(() => {
           if (!currentStepObj.gate || currentStepObj.gate === 0) {
             updates.gate = 50
           }
-          updateStep(stepIdx, updates)
+          if (targetBank && bankIdx !== seqStore.activeBankIndex) {
+            targetSteps[targetStepIdx] = { ...targetSteps[targetStepIdx], ...updates }
+            seqStore.banks = [...seqStore.banks]
+          } else {
+            updateStep(targetStepIdx, updates)
+          }
         }
       } else if (isNoteOff) {
         // Make the note-off audible immediately
@@ -1210,20 +1284,33 @@ onMounted(() => {
     if (!isP1 && !isP2) return
 
     let stepIdx = null
+    let targetSteps = null
+    let targetStepIdx = null
     if (isPlaying.value) {
-      stepIdx = currentStep.value
+      const pb = seqStore.playbackSteps
+      const flatIdx = currentStep.value
+      const bankIdx = pb.bankIndices?.[flatIdx]
+      const localIdx = pb.localIndices?.[flatIdx]
+      if (bankIdx !== undefined && localIdx !== undefined) {
+        const bank = seqStore.banks[bankIdx]
+        targetSteps = bank.steps
+        targetStepIdx = localIdx
+        stepIdx = localIdx
+      }
     } else {
       stepIdx = selectedStepIdx.value
+      targetSteps = steps.value
+      targetStepIdx = stepIdx
     }
 
-    if (stepIdx === null || stepIdx < 0 || stepIdx >= steps.value.length) {
+    if (stepIdx === null || stepIdx < 0 || !targetSteps || targetStepIdx === null || targetStepIdx < 0 || targetStepIdx >= targetSteps.length) {
       if (!isPlaying.value && window.SY_LOG) {
         window.SY_LOG(`[Seq CC Record] Blocked: select a step to lock CC#${cc} while sequencer is stopped`)
       }
       return
     }
 
-    const currentStepObj = steps.value[stepIdx]
+    const currentStepObj = targetSteps[targetStepIdx]
 
     const updates = {}
     if (isP1) {
@@ -1239,9 +1326,21 @@ onMounted(() => {
       updates.notes = []
     }
 
-    updateStep(stepIdx, updates)
+    if (targetSteps !== steps.value && isPlaying.value) {
+      const flatIdx = currentStep.value
+      const playingBankIdx = seqStore.playbackSteps.bankIndices?.[flatIdx]
+      if (playingBankIdx !== undefined && playingBankIdx !== seqStore.activeBankIndex) {
+        targetSteps[targetStepIdx] = { ...targetSteps[targetStepIdx], ...updates }
+        seqStore.banks = [...seqStore.banks]
+        if (window.SY_LOG) {
+          window.SY_LOG(`[Seq CC Record] Step ${targetStepIdx + 1} locked ${isP1 ? 'P1' : 'P2'} (CC#${cc}) = ${val}`)
+        }
+        return
+      }
+    }
+    updateStep(targetStepIdx, updates)
     if (window.SY_LOG) {
-      window.SY_LOG(`[Seq CC Record] Step ${stepIdx + 1} locked ${isP1 ? 'P1' : 'P2'} (CC#${cc}) = ${val}`)
+      window.SY_LOG(`[Seq CC Record] Step ${targetStepIdx + 1} locked ${isP1 ? 'P1' : 'P2'} (CC#${cc}) = ${val}`)
     }
   }
 
@@ -1339,6 +1438,9 @@ watch(isPlaying, (playing) => {
 
     emit('stop')
     currentStep.value = 0
+    seqStore.playingChainIndex = null
+    seqStore.playingBankIndex = null
+    lastFollowedBank = -1
   } else {
     if (fadeOutIntervalRef.value !== null) {
       clearInterval(fadeOutIntervalRef.value)
@@ -1360,6 +1462,13 @@ watch(isPlaying, (playing) => {
         const stepIdx = stepCounter
         stepCounter = (stepCounter + 1) % state.steps.length
         const step = state.steps[stepIdx]
+
+        const bankIdx = state.bankIndices?.[stepIdx]
+        const chainSlotIdx = state.chainSlotIndices?.[stepIdx]
+        if (chainSlotIdx !== undefined) {
+          seqStore.playingBankIndex = bankIdx ?? null
+          seqStore.playingChainIndex = chainSlotIdx ?? null
+        }
 
         if (step.active) {
           if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel, MidiSource.SEQUENCER)
@@ -1389,6 +1498,7 @@ watch(isPlaying, (playing) => {
         getDraw().schedule(() => {
           currentStep.value = stepIdx
           playStateRef.current.currentStep = stepIdx
+          followChainPlayback(stepIdx)
         }, time)
       }, '16n', transportManager.isRunning.value && syncStore.syncSequencerToTransport.value ? transportManager.getNextBarPosition() : undefined)
 
@@ -1396,10 +1506,15 @@ watch(isPlaying, (playing) => {
     })
   }
 
+  const pb = seqStore.playbackSteps
   playStateRef.current = {
     isPlaying: playing,
     currentStep: currentStep.value,
-    steps: steps.value,
+    steps: pb.steps,
+    numSteps: pb.numSteps,
+    chainSlotIndices: pb.chainSlotIndices,
+    bankIndices: pb.bankIndices,
+    localIndices: pb.localIndices,
     bpm: props.bpm,
     channel: props.channel,
     param1CC: param1CC.value !== null ? Number(param1CC.value) : null,
@@ -1517,6 +1632,7 @@ async function linkSequence() {
     selectedStyle: selectedStyle.value,
   }))
   variant.seqLinked = true
+  variant.seqChain = seqStore.captureChainForPreset()
   try {
     await presetStore.savePreset()
   } catch (e) {
@@ -1531,6 +1647,7 @@ async function unlinkSequence() {
   const variant = isAlt ? preset.bVariant : preset.aVariant
   if (!variant) return
   variant.seqConfig = null
+  variant.seqChain = null
   variant.seqLinked = false
   try {
     await presetStore.savePreset()
@@ -1676,19 +1793,14 @@ let generateHidden = ref(false)
             </button>
           </div>
 
-          <!-- Dual sequence slot selector -->
+          <!-- A-F bank selector -->
           <div class="flex items-center bg-black/60 border border-neutral-800 rounded-lg p-0.5 font-mono text-[9px]">
-            <button 
-              @click="emit('activeSlotChange', 1)"
-              :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', activeSlot === 1 ? 'bg-synth-amber text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
+            <button
+              v-for="(name, i) in BANK_NAMES" :key="name"
+              @click="selectBank(i)"
+              :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', seqStore.activeBankIndex === i ? 'bg-synth-amber text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
             >
-              Seq 1
-            </button>
-            <button 
-              @click="emit('activeSlotChange', 2)"
-              :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', activeSlot === 2 ? 'bg-synth-neon text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
-            >
-              Seq 2
+              {{ name }}
             </button>
           </div>
         </div>
@@ -1821,6 +1933,22 @@ let generateHidden = ref(false)
 
         <div class="w-px h-5 bg-neutral-800" />
 
+        <!-- Chain toggle -->
+        <button
+          @click="seqStore.setChainEnabled(!seqStore.chainEnabled)"
+          :title="seqStore.chainEnabled ? 'Chain mode ON — plays through chained pattern slots' : 'Chain mode OFF — plays only the active pattern bank'"
+          :class="[
+            'flex items-center gap-1.5 h-9 px-3 rounded-lg font-black uppercase text-[10px] transition-all border',
+            seqStore.chainEnabled ? 'bg-blue-600/20 text-blue-400 border-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.3)]' : 'bg-black text-neutral-500 border-neutral-800 hover:border-blue-500/50 hover:text-blue-400'
+          ]"
+        >
+          <Layers class="w-3.5 h-3.5" />
+          <span>Chain</span>
+          <span class="text-[9px] ml-0.5" :class="seqStore.chainEnabled ? 'text-blue-300' : 'text-neutral-600'">{{ seqStore.chainEnabled ? 'ON' : 'OFF' }}</span>
+        </button>
+
+        <div class="w-px h-5 bg-neutral-800" />
+
         <!-- Sequence Length -->
         <div class="flex items-center gap-2">
           <span class="text-[9px] font-mono text-neutral-500 uppercase">Length</span>
@@ -1899,6 +2027,22 @@ let generateHidden = ref(false)
             {{ confirmClear ? 'SURE?' : 'CLEAR' }}
           </button>
         </div>
+      </div>
+
+      <!-- ── CHAIN EDITOR ── -->
+      <div v-if="seqStore.chainEnabled" class="shrink-0 px-4 py-2 border-b border-neutral-900 bg-blue-950/10 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <span class="text-[9px] font-mono text-blue-400 uppercase tracking-widest shrink-0">Chain</span>
+        <div class="flex gap-1.5 flex-1">
+          <button v-for="pos in CHAIN_COUNT" :key="pos"
+            @click="seqStore.cycleChainSlot(pos - 1)"
+            @contextmenu.prevent="seqStore.clearChainSlot(pos - 1)"
+            :class="['flex-1 min-w-[32px] h-8 rounded-lg border text-[10px] font-black font-mono transition-all',
+              seqStore.chain[pos - 1] === null ? 'border-neutral-800 bg-black text-neutral-600' : 'border-blue-500/50 bg-blue-500/10 text-blue-300',
+              seqStore.playingChainIndex === pos - 1 ? 'border-blue-400 bg-blue-500/30 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' : '']">
+            {{ seqStore.chain[pos - 1] === null ? '–' : BANK_NAMES[seqStore.chain[pos - 1]] }}
+          </button>
+        </div>
+        <button @click="seqStore.clearChain" class="shrink-0 h-8 px-2 rounded-lg text-[9px] font-black uppercase border border-red-800/40 text-red-500 hover:bg-red-500/10">Clear all</button>
       </div>
 
       <!-- ── CONTEXTUAL STEP TOOLBAR ── -->
@@ -2027,7 +2171,7 @@ let generateHidden = ref(false)
             :class="[
               'group relative flex flex-col rounded-lg border transition-all cursor-pointer',
               selectedStepIdx === idx ? 'border-synth-amber ring-1 ring-synth-amber/50 bg-neutral-800' : 'border-neutral-800 bg-neutral-950/40',
-              currentStep === idx && isPlaying ? 'border-amber-400 ring-1 ring-amber-400/50 bg-neutral-900 z-10 shadow-[0_0_10px_rgba(245,158,11,0.25)]' : ''
+              gridCurrentStep === idx && isPlaying ? 'border-amber-400 ring-1 ring-amber-400/50 bg-neutral-900 z-10 shadow-[0_0_10px_rgba(245,158,11,0.25)]' : ''
             ]"
           >
             <!-- Step Number -->
@@ -2065,7 +2209,7 @@ let generateHidden = ref(false)
               </div>
 
               <!-- Play Indicator (visible for active & inactive steps) -->
-              <div v-if="currentStep === idx && isPlaying" class="absolute inset-0 bg-amber-500/10 border-t-2 border-amber-400 pointer-events-none animate-pulse" />
+              <div v-if="gridCurrentStep === idx && isPlaying" class="absolute inset-0 bg-amber-500/10 border-t-2 border-amber-400 pointer-events-none animate-pulse" />
             </div>
 
             <!-- Context Hint -->

@@ -58,6 +58,12 @@ export interface SeqConfig {
   steps: SeqStep[];
 }
 
+/** Sequencer chain configuration saved/restored with presets */
+export interface SeqChainConfig {
+  chain: (number | null)[];
+  chainEnabled: boolean;
+}
+
 /** One of the two symmetric preset variants (A or B) */
 export interface PresetVariant {
   data: Record<string, number>;
@@ -70,6 +76,7 @@ export interface PresetVariant {
   seqConfig2: SeqConfig | null;
   seqActiveSlot: number;
   seqLinked?: boolean;
+  seqChain?: SeqChainConfig | null;
 }
 
 /** A fully-hydrated preset as stored in IndexedDB */
