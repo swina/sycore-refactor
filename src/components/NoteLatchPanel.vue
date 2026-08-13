@@ -6,6 +6,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { useDraggable } from '@/composables/useDraggable'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
@@ -16,6 +17,11 @@ const midiStore = useMidiStore()
 const store = useNoteLatchStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
+const { x, y, startDrag } = useDraggable(
+  window.innerWidth - 360,
+  100,
+  'SYCORE_POS_NOTE_LATCH'
+)
 
 // Notes currently held, keyed by `${note}:${channel}` (channel 0-based, as
 // delivered by the note listeners below). A plain Map — not reactive — so
@@ -99,6 +105,11 @@ watch(() => store.enabled, (enabled) => {
 let unsubNote = null
 let unsubAppNote = null
 
+function onHeaderMouseDown(e) {
+  if (e.target.closest('button, input, select, a, [role="button"]')) return
+  startDrag(e)
+}
+
 onMounted(() => {
   // MIDI FLOW device→app input routing. Requires an explicit cable to this
   // node (no broadcast-mode fail-open) — same convention as Arpeggiator/
@@ -138,11 +149,11 @@ onUnmounted(() => {
 
 <template>
   <Transition name="sy-modal">
-    <div v-if="isOpen" class="fixed top-20 right-4 w-80 z-[600] bg-neutral-950/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl p-4">
+    <div v-if="isOpen" class="fixed top-20 right-4 w-80 z-[600] bg-neutral-950/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl p-4" :style="{ left: x + 'px', top: y + 'px' }">
       <div class="flex flex-col gap-6">
 
         <!-- Header -->
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between cursor-grab active:cursor-grabbing select-none" @mousedown="onHeaderMouseDown">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-cyan-500/10 rounded-lg">
               <Lock class="w-5 h-5 text-cyan-400" />

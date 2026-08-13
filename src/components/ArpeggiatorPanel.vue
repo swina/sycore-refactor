@@ -7,6 +7,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
+import { useDraggable } from '@/composables/useDraggable'
 
 const props = defineProps({
   isOpen:       { type: Boolean, default: false },
@@ -18,6 +19,11 @@ const arpStore  = useArpStore()
 const midiStore = useMidiStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
+const { x, y, startDrag } = useDraggable(
+  window.innerWidth - 360,
+  100,
+  'SYCORE_POS_ARP'
+)
 
 let arpTimer = null
 let lastArpNote = null
@@ -174,6 +180,11 @@ function stopArpEngine() {
 
 let _unsubNote = null
 
+function onHeaderMouseDown(e) {
+  if (e.target.closest('button, input, select, a, [role="button"]')) return
+  startDrag(e)
+}
+
 onMounted(() => {
   _unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
     // MIDI Flow device→app input routing — same gate ChordProgSequencer.vue
@@ -234,11 +245,11 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
 
 <template>
   <Transition name="sy-modal">
-    <div v-if="isOpen" class="fixed top-20 right-4 w-80 z-[600] bg-neutral-950/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl p-4">
+    <div v-if="isOpen" class="fixed w-80 z-[600] bg-neutral-950/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl p-4" :style="{ left: x + 'px', top: y + 'px' }">
       <div class="flex flex-col gap-6">
         
         <!-- Header -->
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between cursor-grab active:cursor-grabbing select-none" @mousedown="onHeaderMouseDown">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-synth-neon/10 rounded-lg">
               <ListMusic class="w-5 h-5 text-synth-neon" />
