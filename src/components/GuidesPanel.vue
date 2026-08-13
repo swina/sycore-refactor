@@ -71,8 +71,10 @@ const CATEGORIES = [
       // { id: 'midi-mapping',      label: 'CC Mapping',         file: 'SYCORE_MIDI_MAPPING' },
       // { id: 'midi-actions',      label: 'MIDI Actions',         file: 'SYCORE_MIDI_ACTIONS' },
       // { id: 'midi-sync',    label: 'MIDI Sync',         file: 'SYCORE_MIDI_SYNC' },
-      { id: 'midi-capture',    label: 'MIDI Capture',         file: 'SYCORE_MIDI_CAPTURE' },
-      { id: 'program-change',  label: 'Multi Sound',          file: 'SYCORE_DEVICE_PROGRAM_CHANGE' },
+      // { id: 'midi-capture',    label: 'Piano Roll',         file: 'SYCORE_MIDI_CAPTURE' },
+      // { id: 'program-change',  label: 'Multi Sound',          file: 'SYCORE_DEVICE_PROGRAM_CHANGE' },
+      // { id: 'note-latch',      label: 'Note Latch',           file: 'SYCORE_NOTE_LATCH' },
+      // { id: 'arpeggiator',     label: 'Arpeggiator',          file: 'SYCORE_ARPEGGIATOR' },
     ],
   },
   {
@@ -99,6 +101,9 @@ const CATEGORIES = [
       { id: 'step-sequencer', label: 'Step Sequencer',        file: 'SYCORE_STEP_SEQUENCER' },
       { id: 'chord-progression-sequencer', label: 'Chord Progression Sequencer', file: 'SYCORE_CHORD_PROG_SEQUENCER' },
       { id: 'drum-machine', label: 'Drum Machine', file: 'SYCORE_DRUM_MACHINE' },
+      { id: 'midi-capture',    label: 'Piano Roll',         file: 'SYCORE_MIDI_CAPTURE' },
+      { id: 'arpeggiator', label: 'Arpeggiator', file: 'SYCORE_ARPEGGIATOR' },
+      { id: 'note-latch', label: 'Note Latch', file: 'SYCORE_NOTE_LATCH' },
     ],
   },
 ]
