@@ -626,7 +626,7 @@ function handleBpmChange(e) {
               <!-- PLAY Transport Global -->
               <button
               @click="transportManager.isRunning.value ? stopAll() : playAll()"
-              @contextmenu.prevent="openMenu($event, { name: 'transport-play-all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
+              @contextmenu.prevent="openMenu($event, { name: 'transport_play_all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
               class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[16px] font-mono uppercase tracking-widest border transition-all active:scale-95"
               :class="[
                 transportManager.isRunning.value
@@ -706,7 +706,7 @@ function handleBpmChange(e) {
 
             <!-- <button
               @click="transportManager.isRunning.value ? stopAll() : playAll()"
-              @contextmenu.prevent="openMenu($event, { name: 'transport-play-all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
+              @contextmenu.prevent="openMenu($event, { name: 'transport_play_all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
               class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95"
               :class="[
                 transportManager.isRunning.value

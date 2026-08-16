@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines } from 'lucide-vue-next'
+import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -17,6 +17,7 @@ import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STE
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
 import ChordAssignModal from './ChordAssignModal.vue'
+import AiPromptModal from './AiPromptModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 
 const props = defineProps({
@@ -47,6 +48,12 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
   panelId: 'chord-prog',
 })
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
+
+const showAiPrompt = ref(false)
+
+async function handleAiResult(data) {
+  await store.generateFromAiPrompt(data)
+}
 
 // ── Playback ─────────────────────────────────────────────────────────────────
 
@@ -445,7 +452,7 @@ onUnmounted(() => {
 // ── UI State ─────────────────────────────────────────────────────────────────
 
 const panicDelayMs = ref(250)
-const activeTab = ref('library')
+const activeTab = ref('generate')
 watch(activeTab, (tab) => { if (tab === 'performance') loadPcSets() })
 const libSubTab = ref(store.selectedKey >= 13 ? 'genre' : 'keys')
 const selectedProgressionName = ref('')
@@ -967,6 +974,13 @@ function velBarColor(v) {
           </div>
           
           <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
+          <button
+            @click.stop="showAiPrompt = true"
+            title="AI Prompt"
+            class="p-1.5 rounded-lg text-neutral-500 hover:text-purple-400 hover:bg-purple-950/30 transition-colors"
+          >
+            <Sparkles class="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -1511,7 +1525,7 @@ function velBarColor(v) {
       <!-- ── BOTTOM TABS ─────────────────────────────────────────────────── -->
       <div class="shrink-0 flex border-b border-neutral-800 px-3">
         <button
-          v-for="tab in ['chain', 'library', 'generate', 'save-load', 'performance']"
+          v-for="tab in ['generate', 'library', 'chain', 'performance', 'save-load']"
           :key="tab"
           @click="activeTab = tab"
           :class="[
@@ -1672,6 +1686,15 @@ function velBarColor(v) {
           </button>
 
           <div v-if="progLoading" class="text-[10px] text-neutral-500">Loading progression data…</div>
+
+          <button
+            @click.stop="showAiPrompt = true"
+            title="AI Prompt"
+            class="flex items-center gap-2 px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start"
+          >
+            <Sparkles class="w-4 h-4" />
+            AI Generate
+          </button>
         </div>
 
         <!-- Performance Set Tab -->
@@ -1862,5 +1885,15 @@ function velBarColor(v) {
         ]"
       >Paste to Step {{ stepContextMenu.idx + 1 }}</button>
     </div>
+
+    <!-- AI Prompt -->
+    <AiPromptModal
+      v-if="showAiPrompt"
+      system-prompt="You are a music theory assistant. Generate a chord progression as a JSON array of {chordName, notes} objects for a 16-step chord sequencer. notes are MIDI note numbers. Output ONLY valid JSON."
+      placeholder="e.g. ambient romantic 8 chords in C major"
+      button-label="Generate Progression"
+      @result="handleAiResult"
+      @close="showAiPrompt = false"
+    />
   </div>
 </template>

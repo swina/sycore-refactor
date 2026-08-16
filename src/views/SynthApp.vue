@@ -16,6 +16,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useLfoStore } from '@/stores/useLfoStore'
+import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 
 // Icon Map for dynamic resolution
 const iconMap = {
@@ -82,6 +83,7 @@ import MidiControllerDesigner from '@/components/MidiControllerDesigner.vue'
 import MidiDevices from '@/components/MidiDevices.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
 import SoundEngine        from '@/components/SoundEngine.vue'
+import AiSettingsPanel    from '@/components/AiSettingsPanel.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 import OpenAppsDock from '@/components/ui/OpenAppsDock.vue'
@@ -95,6 +97,7 @@ const uiStore = useUiStore()
 const mappingStore = useMappingStore()
 const configStore = useConfigStore()
 const lfoStore = useLfoStore()
+const noteLatchStore = useNoteLatchStore()
 const showPartSelector = computed(() => configStore.enablePartSelector)
 
 // Composables
@@ -376,6 +379,19 @@ onMounted(() => {
         />
       </div>
 
+      <!-- Additional Note Latch instances (MIDI FLOW multi-instance nodes) -->
+      <div
+        v-for="inst in noteLatchStore.instanceList.filter(i => i.sourceKey !== 'NOTE_LATCH')"
+        :key="inst.sourceKey"
+        :style="focusStyle(inst.sourceKey)"
+      >
+        <NoteLatchPanel
+          :source-key="inst.sourceKey"
+          :is-open="uiStore.isNoteLatchInstanceOpen(inst.sourceKey)"
+          @close="uiStore.setNoteLatchInstanceOpen(inst.sourceKey, false)"
+        />
+      </div>
+
       <!-- Virtual Keyboard -->
       <div :style="focusStyle('keyboard')">
         <Transition name="sy-modal">
@@ -548,6 +564,11 @@ onMounted(() => {
           :isOpen="uiStore.isModuleManagerOpen"
           @close="uiStore.closePanel('module-manager')"
         />
+      </div>
+
+      <!-- AI Agent -->
+      <div :style="focusStyle('aiAgent')">
+        <AiSettingsPanel v-if="uiStore.isAiAgentOpen" @close="uiStore.closePanel('ai-agent')" />
       </div>
 
       <!-- Help Slideshow -->

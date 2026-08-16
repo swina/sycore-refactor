@@ -75,6 +75,7 @@ export interface PanelVisibility {
   isMidiControllerDesignerOpen: boolean
   isMidiDevicesOpen: boolean
   isInstrumentCockpitOpen: boolean
+  isAiAgentOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -106,6 +107,9 @@ export const useUiStore = defineStore('ui', () => {
   const isSequencerModalOpen = ref(false)
   const isArpOpen          = ref(false)
   const isNoteLatchOpen    = ref(false)
+  // Additional Note Latch instance panels (source keys NOTE_LATCH:1, ...),
+  // keyed by their source key. The base instance still uses isNoteLatchOpen.
+  const noteLatchOpen = ref<Record<string, boolean>>({})
   const isSequencer2Open   = ref(false)
   const isMidiPortOpen     = ref(false)
   const isMidiMappingOpen  = ref(false)
@@ -166,6 +170,7 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiControllerDesignerOpen  = ref(false)
   const isMidiDevicesOpen             = ref(false)
   const isInstrumentCockpitOpen       = ref(false)
+  const isAiAgentOpen                 = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
@@ -254,6 +259,7 @@ export const useUiStore = defineStore('ui', () => {
     sampler:             () => isSamplerOpen.value,
     midiControllerDesigner: () => isMidiControllerDesignerOpen.value,
     midiDevices:           () => isMidiDevicesOpen.value,
+    aiAgent:               () => isAiAgentOpen.value,
   }
 
   const openModalKeys: ComputedRef<string[]> = computed(() =>
@@ -309,6 +315,7 @@ export const useUiStore = defineStore('ui', () => {
     sampler:             isSamplerOpen,
     midiControllerDesigner: isMidiControllerDesignerOpen,
     midiDevices:           isMidiDevicesOpen,
+    aiAgent:               isAiAgentOpen,
   }
 
   function cycleFocusedModal(reverse = false) {
@@ -346,6 +353,7 @@ export const useUiStore = defineStore('ui', () => {
     isSequencerModalOpen.value = false
     isArpOpen.value          = false
     isNoteLatchOpen.value    = false
+    noteLatchOpen.value = {}
     isSequencer2Open.value   = false
     isMidiPortOpen.value     = false
     isMidiMappingOpen.value  = false
@@ -393,6 +401,7 @@ export const useUiStore = defineStore('ui', () => {
     isSamplerOpen.value                   = false
     isMidiControllerDesignerOpen.value    = false
     isMidiDevicesOpen.value               = false
+    isAiAgentOpen.value = false
     isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -462,6 +471,7 @@ export const useUiStore = defineStore('ui', () => {
     'program-change': isProgramChangeBrowserOpen,
     'midi-monitor': isMidiMonitorOpen,
     about: isAboutOpen,
+    'ai-agent': isAiAgentOpen,
   }
 
   function isPanelOpen(id: string): boolean {
@@ -595,10 +605,26 @@ export const useUiStore = defineStore('ui', () => {
     if (!open) soundFolderAssignTarget.value = null
   })
 
+  // ── Note Latch instance panels (NOTE_LATCH, NOTE_LATCH:1, ...) ─────────
+  function isNoteLatchInstanceOpen(sourceKey: string): boolean {
+    if (sourceKey === 'NOTE_LATCH') return isNoteLatchOpen.value
+    return noteLatchOpen.value[sourceKey] ?? false
+  }
+  function setNoteLatchInstanceOpen(sourceKey: string, open: boolean) {
+    if (sourceKey === 'NOTE_LATCH') {
+      isNoteLatchOpen.value = open
+      return
+    }
+    noteLatchOpen.value = { ...noteLatchOpen.value, [sourceKey]: open }
+  }
+  function closeNoteLatchInstances() {
+    noteLatchOpen.value = {}
+  }
+
   return {
     isAppInitializing,
     isHistoryOpen, isTypesOpen, isKeyboardOpen, isSequencerOpen, isSequencerModalOpen,
-    isArpOpen, isNoteLatchOpen, isSequencer2Open, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
+    isArpOpen, isNoteLatchOpen, noteLatchOpen, isSequencer2Open, isMidiPortOpen, isMidiMappingOpen, isProfileOpen,
     isAuthModalOpen, isAdminPanelOpen, isPushNotificationsOpen, isModuleManagerOpen, isHelpOpen, isManualOpen,
     isSupportOpen, isVisualizerOpen, isCaptureOpen, isAudioCaptureOpen, isRoutingOpen,
     isBackingTrackOpen, isTracksPlayerOpen, isLiveSetOpen, isAppMidiMapperOpen,
@@ -607,7 +633,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isMidiControllerDesignerOpen,
-    isMidiDevicesOpen, isInstrumentCockpitOpen,
+    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
@@ -618,6 +644,7 @@ export const useUiStore = defineStore('ui', () => {
     theme, toggleTheme,
     focusedModalKey, openModalKeys, cycleFocusedModal,
     closeAll, toggleMainMenu, toggleSideMenu,
+    isNoteLatchInstanceOpen, setNoteLatchInstanceOpen, closeNoteLatchInstances,
     isPanelOpen, togglePanel, openPanel, closePanel,
     focusRequest, focusPanel, openPanelIds,
     isOpenAppsDockOpen, openAppsDockAnchor, toggleOpenAppsDock,

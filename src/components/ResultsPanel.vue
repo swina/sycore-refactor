@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onUnmounted, onMounted, nextTick } from 'vue'
-import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical, List, Undo2} from 'lucide-vue-next'
+import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical, List, Undo2, Sparkles } from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/midi-service'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -21,6 +21,8 @@ import EfxMixerVisualizer from '@/components/EfxMixerVisualizer.vue'
 import SignalFlowVisualizer from '@/components/SignalFlowVisualizer.vue'
 import VisualizerPanel from '@/components/ui/VisualizerPanel.vue'
 import SyButton from '@/components/ui/SyButton.vue'
+import AiPromptModal from '@/components/AiPromptModal.vue'
+import { useAiAgentStore } from '@/stores/useAiAgentStore'
 import { dispatch } from '@/types/events'
 
 const presetStore = usePresetStore()
@@ -51,6 +53,20 @@ const showSaveFeedback = ref(false)
 const liveSetFeedback = ref('')
 const _previewTimeouts = []
 const VISUALIZER_CATEGORIES = ['FLOW', 'LFO', 'OSCILLATOR', 'ENV', 'FILTER', 'EFX']
+
+const showAiPrompt = ref(false)
+const aiError = ref('')
+
+async function handleAiGenerate(prompt) {
+  aiError.value = ''
+  try {
+    await presetStore.generateFromAiPrompt(prompt)
+  } catch (err) {
+    aiError.value = err.message || 'AI generation failed'
+  }
+}
+
+const aiStore = useAiAgentStore()
 
 const activeCategory = computed({
   get: () => uiStore.activeVisualizerCategory,
@@ -576,6 +592,22 @@ function getDialIndicator(cfg, r = 18) {
           
           <div class="flex flex-col w-full items-end gap-2">
           <div class="flex items-center gap-2">
+            <!-- AI Generate -->
+            <button
+              @click="showAiPrompt = true"
+              @contextmenu.prevent="openMenu($event, { name: 'ai_generate', label: 'AI Generate' })"
+              :class="[
+                'relative w-10 h-10 rounded-full border flex items-center justify-center transition-all shadow-lg active:scale-90',
+                showAiPrompt
+                  ? 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500 shadow-fuchsia-500/20'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-fuchsia-400 hover:border-fuchsia-500/50'
+              ]"
+              :title="aiStore.isConfigured ? 'AI Generate — describe a sound' : 'AI Generate — configure AI Agent first'"
+            >
+              <span v-if="mappingStore.learningParamName === 'ai_generate'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
+              <Sparkles class="w-5 h-5" />
+            </button>
+
             <!-- A/B Switch (Circular) -->
           <button
             @click="toggleAB"
@@ -1415,6 +1447,26 @@ function getDialIndicator(cfg, r = 18) {
         <div class="flex items-center gap-2 bg-emerald-950/90 border border-emerald-800 text-emerald-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl">
           <Save class="w-4 h-4" />
           <span>✓ Preset Saved</span>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- AI Generate -->
+    <AiPromptModal
+      v-if="showAiPrompt"
+      :system-prompt="`You are a sound design assistant for the Roland S-1 Tweak Synth. The target sound category is ${presetStore.currentCategory}. Output ONLY a valid JSON object with each S-1 parameter set to an integer within its valid range.`"
+      placeholder="e.g. dark atmospheric pad with long release"
+      button-label="Generate Sound"
+      @result="handleAiGenerate"
+      @close="showAiPrompt = false"
+    />
+
+    <!-- AI error toast -->
+    <Transition name="fade">
+      <div v-if="aiError" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] pointer-events-none">
+        <div class="flex items-center gap-2 bg-red-950/90 border border-red-800 text-red-300 px-4 py-2 rounded-lg text-sm font-medium shadow-xl">
+          <Sparkles class="w-4 h-4 shrink-0" />
+          <span>{{ aiError }}</span>
         </div>
       </div>
     </Transition>

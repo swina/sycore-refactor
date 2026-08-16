@@ -20,6 +20,10 @@ function isS1Device(name) {
   return upper.includes('S-1') || upper.includes('ROLAND S-1')
 }
 
+// Module-level transport running flag — mirrors transportManager.isRunning so
+// the MIDI learn path can toggle Play All without needing the composable.
+let _transportRunning = false
+
 // Standalone export so components like MidiControllerDesigner can call applyParam
 // without registering duplicate MIDI listeners.
 export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
@@ -179,18 +183,24 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     midiStore.updateRegistration(dev, 'latchReplace', val > 63)
     return
   }
-  // ── Note Latch app (NoteLatchPanel.vue) ───────────────────────────────────
-  if (fieldName === 'note_latch_enabled') {
-    noteLatchStore.enabled = fromNote ? !noteLatchStore.enabled : on
-    return
-  }
-  if (fieldName === 'note_latch_maxnotes') {
-    noteLatchStore.maxNotes = Math.max(1, Math.min(16, Math.round(val / 127 * 15) + 1))
-    return
-  }
-  if (fieldName === 'note_latch_replace') {
-    noteLatchStore.replace = val > 63
-    return
+  // ── Note Latch app (NoteLatchPanel.vue) — supports suffixed param names
+  // for multi-instance latches (e.g. note_latch_enabled:1, note_latch_maxnotes:1).
+  {
+    const latchMatch = fieldName.match(/^note_latch_(enabled|maxnotes|replace)(?::(\d+))?$/)
+    if (latchMatch) {
+      const control = latchMatch[1]
+      const suffix = latchMatch[2] ? `:${latchMatch[2]}` : ''
+      const sourceKey = suffix ? `NOTE_LATCH${suffix}` : 'NOTE_LATCH'
+      const inst = noteLatchStore.ensureInstance(sourceKey)
+      if (control === 'enabled') {
+        inst.enabled = fromNote ? !inst.enabled : on
+      } else if (control === 'maxnotes') {
+        inst.maxNotes = Math.max(1, Math.min(16, Math.round(val / 127 * 15) + 1))
+      } else if (control === 'replace') {
+        inst.replace = val > 63
+      }
+      return
+    }
   }
   // ── Virtual instrument Multi-CH out toggle (MIDI FLOW card) ──────────────
   if (fieldName.startsWith('vi_multich_')) {
@@ -218,6 +228,17 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   }
   if (fieldName.startsWith('ui_cat_')) {
     if (fromNote || on) uiStore.activeVisualizerCategory = fieldName.slice(7)
+    return
+  }
+
+  // ── Global transport actions (Play All / Stop All — toggle on any press) ─
+  if (fieldName === 'transport_play_all' || fieldName === 'transport_stop_all') {
+    // Fire on any incoming value (both CC 0/127 and note-on velocity).
+    // Each fire toggles between play and stop, supporting all common MIDI
+    // controller button behaviors (momentary, toggle, alternating 127/0).
+    const wasRunning = _transportRunning
+    _transportRunning = !wasRunning
+    window.dispatchEvent(new CustomEvent(wasRunning ? 'transport-stop-all' : 'transport-play-all'))
     return
   }
 

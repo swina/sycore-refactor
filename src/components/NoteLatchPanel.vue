@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { X, Lock } from 'lucide-vue-next'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -7,21 +7,36 @@ import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggable } from '@/composables/useDraggable'
+import { isNoteLatchSourceKey, latchParamSuffix } from '@/lib/midi-apps'
+import { DEFAULT_LATCH_INSTANCE } from '@/stores/useNoteLatchStore'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
+  // Unique routing source key for this latch instance: the base 'NOTE_LATCH'
+  // (default, backward compatible) or a suffixed key like 'NOTE_LATCH:1'.
+  sourceKey: { type: String, default: DEFAULT_LATCH_INSTANCE.sourceKey },
 })
 const emit = defineEmits(['close'])
 
 const midiStore = useMidiStore()
-const store = useNoteLatchStore()
+const noteLatchStore = useNoteLatchStore()
 const mappingStore = useMappingStore()
 const { openMenu } = useMidiContextMenu()
 const { x, y, startDrag } = useDraggable(
   window.innerWidth - 360,
   100,
-  'SYCORE_POS_NOTE_LATCH'
+  `SYCORE_POS_NOTE_LATCH_${props.sourceKey}`
 )
+
+// Per-instance latch state (enabled/maxNotes/replace/latchedCount) lives in
+// the store keyed by sourceKey, so each MIDI FLOW node is fully independent.
+const instance = computed(() => noteLatchStore.ensureInstance(props.sourceKey))
+
+const isBase = computed(() => props.sourceKey === DEFAULT_LATCH_INSTANCE.sourceKey)
+// MIDI-learn param names are suffixed per instance so each latch can be
+// learned independently (base instance keeps its legacy unsuffixed names).
+const learn = (control) => `${control}${latchParamSuffix(props.sourceKey)}`
+const isLearning = (control) => mappingStore.learningParamName === learn(control)
 
 // Notes currently held, keyed by `${note}:${channel}` (channel 0-based, as
 // delivered by the note listeners below). A plain Map — not reactive — so
@@ -31,10 +46,10 @@ const { x, y, startDrag } = useDraggable(
 const latchedNotes = new Map()
 
 function forwardNoteOn(note, velocity, channel) {
-  midiStore.sendNoteOn(note, velocity, channel + 1, MidiSource.NOTE_LATCH)
+  midiStore.sendNoteOn(note, velocity, channel + 1, props.sourceKey)
 }
 function forwardNoteOff(note, channel) {
-  midiStore.sendNoteOff(note, 0, channel + 1, MidiSource.NOTE_LATCH)
+  midiStore.sendNoteOff(note, 0, channel + 1, props.sourceKey)
 }
 
 // Same concept as a device's own per-registration latch (latchEnabled/
@@ -47,7 +62,7 @@ function forwardNoteOff(note, channel) {
 // buttons, and turning it off releases every note through that one OUT
 // instead of requiring each destination to be un-latched individually.
 function handleNoteOn(note, velocity, channel) {
-  if (!store.enabled) {
+  if (!instance.value.enabled) {
     forwardNoteOn(note, velocity, channel)
     return
   }
@@ -56,8 +71,8 @@ function handleNoteOn(note, velocity, channel) {
   if (latchedNotes.has(key)) latchedNotes.delete(key)
   latchedNotes.set(key, { note, velocity, channel })
 
-  if (latchedNotes.size > store.maxNotes) {
-    if (store.replace) {
+  if (latchedNotes.size > instance.value.maxNotes) {
+    if (instance.value.replace) {
       // FIFO: release the oldest held note to make room for this one.
       const oldestKey = latchedNotes.keys().next().value
       const oldest = latchedNotes.get(oldestKey)
@@ -66,16 +81,16 @@ function handleNoteOn(note, velocity, channel) {
     } else {
       // BLOCK: reject the new note outright, don't forward it.
       latchedNotes.delete(key)
-      store.latchedCount = latchedNotes.size
+      noteLatchStore.setLatchedCount(props.sourceKey, latchedNotes.size)
       return
     }
   }
   forwardNoteOn(note, velocity, channel)
-  store.latchedCount = latchedNotes.size
+  noteLatchStore.setLatchedCount(props.sourceKey, latchedNotes.size)
 }
 
 function handleNoteOff(note, channel) {
-  if (!store.enabled) {
+  if (!instance.value.enabled) {
     forwardNoteOff(note, channel)
     return
   }
@@ -92,13 +107,13 @@ function handleNoteOff(note, channel) {
 function releaseAll() {
   latchedNotes.forEach(n => forwardNoteOff(n.note, n.channel))
   latchedNotes.clear()
-  store.latchedCount = 0
+  noteLatchStore.setLatchedCount(props.sourceKey, 0)
 }
 
 // Switching the master latch off is the whole point of this app existing
 // separately from the per-device latch: it releases every held note through
 // this one OUT (reaching everything cabled to it) in a single action.
-watch(() => store.enabled, (enabled) => {
+watch(() => instance.value.enabled, (enabled) => {
   if (!enabled) releaseAll()
 })
 
@@ -120,7 +135,7 @@ onMounted(() => {
     const inputDevice = midiService.getInputs().find(i => i.id === inputId)
     const sourceKey = inputDevice?.name
     if (!midiStore.hasExplicitInputRouting(sourceKey)) return
-    if (!midiStore.isDeviceRoutedToApp(sourceKey, MidiSource.NOTE_LATCH, note)) return
+    if (!midiStore.isDeviceRoutedToApp(sourceKey, props.sourceKey, note)) return
     if (type === 'on' && velocity > 0) handleNoteOn(note, velocity, chan)
     else handleNoteOff(note, chan)
   })
@@ -128,13 +143,13 @@ onMounted(() => {
   // MIDI FLOW app-to-app routing (e.g. Chord Sequencer OUT → Note Latch IN).
   // Must ignore this app's own notes — sendNoteOn/Off above broadcasts
   // through the same app-note channel this listens on, and without the
-  // MidiSource.NOTE_LATCH filter every latched note would feed straight
-  // back in as if a performer had played it (the exact self-feedback bug
-  // fixed on StepSequencer.vue's own app-note listener).
+  // source filter every latched note would feed straight back in as if a
+  // performer had played it (the exact self-feedback bug fixed on
+  // StepSequencer.vue's own app-note listener).
   unsubAppNote = midiStore.addAppNoteListener((type, note, velocity, chan, sourceApp) => {
-    if (sourceApp === MidiSource.NOTE_LATCH) return
+    if (sourceApp === props.sourceKey) return
     if (!midiStore.hasExplicitInputRouting(sourceApp)) return
-    if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.NOTE_LATCH, note)) return
+    if (!midiStore.isDeviceRoutedToApp(sourceApp, props.sourceKey, note)) return
     if (type === 'on' && velocity > 0) handleNoteOn(note, velocity, chan)
     else handleNoteOff(note, chan)
   })
@@ -159,7 +174,7 @@ onUnmounted(() => {
               <Lock class="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <h3 class="text-xs font-black text-white uppercase tracking-wider">Note Latch</h3>
+              <h3 class="text-xs font-black text-white uppercase tracking-wider">Note Latch{{ isBase ? '' : ` ${latchParamSuffix(props.sourceKey)}` }}</h3>
               <p class="text-[8px] font-mono text-neutral-500 uppercase tracking-tighter">Hold Notes · Multi-Output</p>
             </div>
           </div>
@@ -172,25 +187,25 @@ onUnmounted(() => {
         <div class="flex items-center justify-between p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
           <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Latch</span>
           <button
-            @click="store.enabled = !store.enabled"
-            @contextmenu.prevent="openMenu($event, { name: 'note_latch_enabled', label: 'Note Latch: On/Off' })"
-            :class="['relative w-12 h-6 rounded-full transition-all', store.enabled ? 'bg-cyan-500' : 'bg-neutral-800']"
+            @click="instance.enabled = !instance.enabled"
+            @contextmenu.prevent="openMenu($event, { name: learn('note_latch_enabled'), label: 'Note Latch: On/Off' })"
+            :class="['relative w-12 h-6 rounded-full transition-all', instance.enabled ? 'bg-cyan-500' : 'bg-neutral-800']"
             title="Hold notes after key release. Right-click to MIDI Learn"
           >
-            <span v-if="mappingStore.learningParamName === 'note_latch_enabled'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
-            <div :class="['absolute top-1 w-4 h-4 rounded-full bg-white transition-all', store.enabled ? 'left-7' : 'left-1']" />
+            <span v-if="isLearning('note_latch_enabled')" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
+            <div :class="['absolute top-1 w-4 h-4 rounded-full bg-white transition-all', instance.enabled ? 'left-7' : 'left-1']" />
           </button>
         </div>
 
         <!-- Max Notes -->
-        <div class="flex flex-col gap-2 relative" @contextmenu.prevent="openMenu($event, { name: 'note_latch_maxnotes', label: 'Note Latch: Max Notes' })">
-          <span v-if="mappingStore.learningParamName === 'note_latch_maxnotes'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
+        <div class="flex flex-col gap-2 relative" @contextmenu.prevent="openMenu($event, { name: learn('note_latch_maxnotes'), label: 'Note Latch: Max Notes' })">
+          <span v-if="isLearning('note_latch_maxnotes')" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
           <div class="flex justify-between items-center">
             <span class="text-[8px] font-mono text-neutral-500 uppercase">Max Notes</span>
-            <span class="text-[10px] font-mono text-cyan-400">{{ store.maxNotes }}</span>
+            <span class="text-[10px] font-mono text-cyan-400">{{ instance.maxNotes }}</span>
           </div>
           <input
-            v-model.number="store.maxNotes"
+            v-model.number="instance.maxNotes"
             type="range" min="1" max="16"
             class="h-1 accent-cyan-500 bg-neutral-800 rounded-full appearance-none cursor-pointer"
             title="Max notes held simultaneously (1–16). Right-click to MIDI Learn"
@@ -201,20 +216,20 @@ onUnmounted(() => {
         <div class="flex items-center justify-between p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
           <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Mode</span>
           <button
-            @click="store.replace = !store.replace"
-            @contextmenu.prevent="openMenu($event, { name: 'note_latch_replace', label: 'Note Latch: FIFO/Block' })"
-            :class="['relative px-4 py-1 rounded-lg text-[10px] font-black transition-all border', store.replace ? 'bg-amber-500 text-black border-amber-500' : 'bg-black text-neutral-500 border-neutral-800']"
+            @click="instance.replace = !instance.replace"
+            @contextmenu.prevent="openMenu($event, { name: learn('note_latch_replace'), label: 'Note Latch: FIFO/Block' })"
+            :class="['relative px-4 py-1 rounded-lg text-[10px] font-black transition-all border', instance.replace ? 'bg-amber-500 text-black border-amber-500' : 'bg-black text-neutral-500 border-neutral-800']"
             title="FIFO: oldest note dropped when full. BLOCK: new notes rejected. Right-click to MIDI Learn"
           >
-            <span v-if="mappingStore.learningParamName === 'note_latch_replace'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
-            {{ store.replace ? 'FIFO' : 'BLOCK' }}
+            <span v-if="isLearning('note_latch_replace')" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
+            {{ instance.replace ? 'FIFO' : 'BLOCK' }}
           </button>
         </div>
 
         <!-- Held notes readout -->
         <div class="flex items-center justify-between px-1">
           <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">Held Notes</span>
-          <span class="text-[10px] font-mono" :class="store.latchedCount > 0 ? 'text-cyan-400' : 'text-neutral-600'">{{ store.latchedCount }} / {{ store.maxNotes }}</span>
+          <span class="text-[10px] font-mono" :class="instance.latchedCount > 0 ? 'text-cyan-400' : 'text-neutral-600'">{{ instance.latchedCount }} / {{ instance.maxNotes }}</span>
         </div>
 
       </div>

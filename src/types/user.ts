@@ -24,6 +24,8 @@ export interface UserProfile {
   generationsCount: number;
   __passwordHash?: string;
   createdAt: string;
+  freesoundApiKey?: string;
+  aiApiKey?: string;
 }
 
 /** Available user roles */

@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
-import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info } from 'lucide-vue-next'
+import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info, Sparkles } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDrumMachineStore, DRUM_STYLE_NAMES } from '@/stores/useDrumMachineStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -15,6 +15,7 @@ import { useConfigStore } from '@/stores/useConfigStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import AiPromptModal from './AiPromptModal.vue'
 import { useFreesoundCache } from '@/composables/useFreesoundCache'
 import * as drumEngine from '@/lib/drum-engine'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -58,6 +59,11 @@ const showImportMenu  = ref(false)
 const selectedCategory = ref('Rock')
 const selectedPattern = ref(0)
 const lastImportedPattern = ref(null) // { category, title }
+const showAiPrompt = ref(false)
+
+async function handleAiResult(data) {
+  await drumStore.applyAiPattern(data)
+}
 let _importedCategoryIdx = 0
 let _importedPatternIdx = 0
 const copySourceSeq       = ref(null)
@@ -1582,9 +1588,14 @@ function cycleChainSlot(i) {
         </div>
 
         <MacOsButtons @close="uiStore.isDrumMachineOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
+        <button
+          @click="showAiPrompt = true"
+          title="AI Prompt"
+          class="p-1.5 rounded-lg text-neutral-500 hover:text-yellow-400 hover:bg-yellow-950/30 transition-colors"
+        >
+          <Sparkles class="w-4 h-4" />
+        </button>
       </div>
-
-      <!-- ── Preset panel ───────────────────────────────────────────────────── -->
       <Transition
         enter-active-class="transition-all duration-200 ease-out"
         enter-from-class="opacity-0 -translate-y-1"
@@ -3061,6 +3072,16 @@ function cycleChainSlot(i) {
       </div>
     </Teleport>
   </Teleport>
+
+  <!-- AI Prompt -->
+  <AiPromptModal
+    v-if="showAiPrompt"
+    system-prompt="You are a drum pattern designer. Generate a drum pattern as a JSON object mapping track names (Kick, Snare, Closed HH, Open HH, Clap, Tom 1, Tom 2, Cymbal, Rim Shot, Cowbell, Tambourine) to arrays of exactly 16 integers (0 or 1). Also include a Bassline array of 16 MIDI note numbers (36-60) or 0. Output ONLY valid JSON."
+    placeholder="e.g. deep house groove with a driving bassline"
+    button-label="Generate Pattern"
+    @result="handleAiResult"
+    @close="showAiPrompt = false"
+  />
 </template>
 
 <style scoped>

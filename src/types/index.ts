@@ -10,3 +10,4 @@ export * from './user';
 export * from './drum-machine';
 export * from './audio';
 export * from './events';
+export * from './ai';

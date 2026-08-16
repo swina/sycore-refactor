@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, toRef } from 'vue'
-import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, FolderOpen, FolderPlus, Layers } from 'lucide-vue-next'
+import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, FolderOpen, FolderPlus, Layers, Sparkles } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -17,6 +17,7 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { dispatch } from '@/types/events'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import AiPromptModal from './AiPromptModal.vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -66,6 +67,12 @@ const showLoadLibraryModal = ref(false)
 const libraryPatternName = ref('')
 const libraryPatterns = ref([])
 const loadingLibrary = ref(false)
+const showAiPrompt = ref(false)
+
+async function handleAiResult(data) {
+  await seqStore.generateFromAiPrompt(data)
+  loadBankIntoLocal()
+}
 
 const DEFAULT_STEP = {
   active: false,
@@ -682,14 +689,16 @@ function stepMidiNote(step, semitoneIdx) {
 }
 
 function isNoteBarActive(step, semitoneIdx) {
-  return step.notes.includes(stepMidiNote(step, semitoneIdx))
+  return step.notes && step.notes.some(n => n % 12 === semitoneIdx)
 }
 
 function toggleNoteBar(idx, semitoneIdx) {
   const step = steps.value[idx]
-  const midiNote = stepMidiNote(step, semitoneIdx)
-  const has = step.notes.includes(midiNote)
-  const notes = has ? step.notes.filter(n => n !== midiNote) : [...step.notes, midiNote].sort((a, b) => a - b)
+  // Check if any note at this semitone exists across all octaves
+  const existing = step.notes?.find(n => n % 12 === semitoneIdx)
+  const notes = existing
+    ? step.notes.filter(n => n !== existing)
+    : [...(step.notes || []), stepMidiNote(step, semitoneIdx)].sort((a, b) => a - b)
   updateStep(idx, { notes, active: true, explicitNotes: true })
 }
 
@@ -1522,6 +1531,13 @@ let generateHidden = ref(false)
       </div>
       <div class="flex-1" />
       <div class="flex items-center gap-1 pointer-events-auto">
+        <button
+          @click.stop="showAiPrompt = true"
+          title="AI Prompt"
+          class="p-1.5 rounded-lg text-neutral-500 hover:text-amber-400 hover:bg-amber-950/30 transition-colors"
+        >
+          <Sparkles class="w-4 h-4" />
+        </button>
         <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
     </div>
@@ -1919,7 +1935,8 @@ let generateHidden = ref(false)
           <!-- Sticky row labels: Accent / Prob / Oct header rows, then B..C -->
           <div class="flex flex-col shrink-0 sticky left-0 z-20 bg-neutral-900/95 backdrop-blur-sm rounded-lg">
             <div class="text-[9px] font-mono text-center py-0.5 select-none">&nbsp;</div>
-            <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Accent</div>
+            <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Notes</div>
+            <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">A</div>
             <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Prob</div>
             <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-b border-neutral-800">Oct</div>
             <div v-for="semitone in GRID_SEMITONES" :key="semitone"
@@ -1947,6 +1964,11 @@ let generateHidden = ref(false)
               <span v-if="hasP1Lock(step)" class="inline-block w-1 h-1 rounded-full bg-cyan-400 shadow-[0_0_3px_#22d3ee] ml-0.5" title="P1 Locked" />
               <span v-if="hasP2Lock(step)" class="inline-block w-1 h-1 rounded-full bg-indigo-400 shadow-[0_0_3px_#818cf8] ml-0.5" title="P2 Locked" />
             </div>
+
+            <!-- Note name -->
+            <div class="h-4 flex items-center justify-center text-[7px] font-mono font-bold text-synth-amber border-t border-neutral-800 truncate px-0.5"
+              :title="step.notes?.join(', ') || ''"
+            >{{ step.active ? formatStepNotes(step.notes) : '—' }}</div>
 
             <!-- Accent -->
             <button
@@ -2117,6 +2139,16 @@ let generateHidden = ref(false)
         </div>
       </Transition>
     </div>
+
+    <!-- AI Prompt -->
+    <AiPromptModal
+      v-if="showAiPrompt"
+      system-prompt="You are a step-sequencer music designer. Generate a sequence as a JSON array of exactly 16 objects, each with {active: boolean, notes: array of 1-2 MIDI note numbers (40-96), velocity: 1-127, gate: 25-100}. Output ONLY valid JSON."
+      placeholder="e.g. minimal techno sequence in C minor"
+      button-label="Generate Sequence"
+      @result="handleAiResult"
+      @close="showAiPrompt = false"
+    />
   </div>
 </template>
 

@@ -6,14 +6,17 @@ import {
 } from 'lucide-vue-next'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
+import { useAiAgentStore } from '@/stores/useAiAgentStore'
 import { S1_MUSICAL_VARIATIONS } from '@/constants/s1-musical-variations'
 
 const emit = defineEmits(['close'])
 
 const presetStore = usePresetStore()
 const configStore = useConfigStore()
+const aiStore = useAiAgentStore()
 
 const showPrompt = ref(false)
+const aiError = ref('')
 
 const activeTypes = computed(() => configStore.appSoundTypes.filter(t => t.enabled))
 
@@ -54,11 +57,35 @@ function selectVariation(v) {
 }
 
 function handleGenerate() {
+  if (presetStore.currentCategory === 'ai') {
+    if (presetStore.aiPrompt.trim()) {
+      handleAiGenerate()
+    }
+    return
+  }
   if (presetStore.hasUnsavedChanges) {
     showPrompt.value = true
   } else {
     presetStore.generate()
     emit('close')
+  }
+}
+
+async function handleAiGenerate() {
+  aiError.value = ''
+  if (!aiStore.isConfigured) {
+    aiError.value = 'AI Agent not configured. Open AI Agent settings to set up a provider and model.'
+    return
+  }
+  if (!aiStore.isOnline) {
+    aiError.value = 'AI Agent requires an internet connection.'
+    return
+  }
+  try {
+    await presetStore.generateFromAiPrompt(presetStore.aiPrompt)
+    emit('close')
+  } catch (err) {
+    aiError.value = err.message || 'AI generation failed'
   }
 }
 
@@ -181,9 +208,9 @@ function discardAndGenerate() {
               </div>
             </Transition>
           </div>
-          <button @click="handleGenerate" :disabled="showPrompt && presetStore.isSaving"
-            class="flex items-center justify-center gap-2 bg-synth-neon text-black px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white transition-colors shadow-lg active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-          >
+          <button @click="handleGenerate" :disabled="showPrompt && presetStore.isSaving || (presetStore.currentCategory === 'ai' && !presetStore.aiPrompt.trim())"
+                class="flex items-center justify-center gap-2 bg-synth-neon text-black px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white transition-colors shadow-lg active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+              >
             <RefreshCw class="w-4 h-4" /> Generate
           </button>
         </div>
@@ -225,6 +252,8 @@ function discardAndGenerate() {
               >
                 <Sparkles class="w-5 h-5" /> Generate sound
               </button>
+
+              <p v-if="aiError" class="text-sm text-red-400 mt-4">{{ aiError }}</p>
 
               <span class="text-[10px] font-mono text-neutral-500 mt-8">
                 * Describe sound character, waveform, filter, or genre.

@@ -3,7 +3,7 @@ import {
   Mic, FolderOpen, Clock, Drum, ListMusic,
   Cpu, Headphones, Play, LayoutGrid, KeyboardMusic, Activity, Network,
   Gamepad2, Heart, User, HelpCircle, Mail, BookOpen, RotateCw,
-  Settings, Repeat, SlidersHorizontal, History, Settings2, Sparkles,
+  Settings, Repeat, SlidersHorizontal, History, Settings2, Sparkles, Bot,
 } from 'lucide-vue-next'
 import type { ModuleManifest, ModuleCategory } from './types'
 
@@ -85,6 +85,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'admin', label: 'Admin Panel', icon: Settings, category: 'system', showOnLauncher: false },
   { id: 'about', label: 'About', icon: Cpu, category: 'system', showOnLauncher: false },
   { id: 'module-manager', label: 'Module Manager', icon: LayoutGrid, category: 'system', showOnLauncher: false },
+  { id: 'ai-agent', label: 'AI Agent', icon: Bot, category: 'system', bg: '/bg-settings.png' },
 ]
 
 /** Groups the registry by category, preserving first-seen category order. */

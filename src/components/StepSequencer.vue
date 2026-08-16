@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, toRef } from 'vue'
-import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus, Layers } from 'lucide-vue-next'
+import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, RotateCcw, FolderOpen, FolderPlus, Layers, Sparkles } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -17,6 +17,7 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { dispatch } from '@/types/events'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import AiPromptModal from './AiPromptModal.vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -48,6 +49,13 @@ const syncStore = useSyncStore()
 const uiStore = useUiStore()
 const seqStore = useStepSequencerStore()
 const transportManager = useTransportManager()
+
+const showAiPrompt = ref(false)
+
+async function handleAiResult(data) {
+  await seqStore.generateFromAiPrompt(data)
+  loadBankIntoLocal()
+}
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
@@ -1752,6 +1760,13 @@ let generateHidden = ref(false)
       </div>
       <div class="flex-1" />
       <div class="flex items-center gap-1 pointer-events-auto">
+        <button
+          @click.stop="showAiPrompt = true"
+          title="AI Prompt"
+          class="p-1.5 rounded-lg text-neutral-500 hover:text-amber-400 hover:bg-amber-950/30 transition-colors"
+        >
+          <Sparkles class="w-4 h-4" />
+        </button>
         <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
       </div>
     </div>
@@ -2375,6 +2390,16 @@ let generateHidden = ref(false)
         </div>
       </Transition>
     </div>
+
+    <!-- AI Prompt -->
+    <AiPromptModal
+      v-if="showAiPrompt"
+      system-prompt="You are a step-sequencer music designer. Generate a sequence as a JSON array of exactly 16 objects, each with {active: boolean, notes: array of 1-2 MIDI note numbers (40-96), velocity: 1-127, gate: 25-100}. Output ONLY valid JSON."
+      placeholder="e.g. minimal techno sequence in C minor"
+      button-label="Generate Sequence"
+      @result="handleAiResult"
+      @close="showAiPrompt = false"
+    />
   </div>
 </template>
 

@@ -61,7 +61,7 @@ const _onTransportStopAll = () => { stopAll() }
     <!-- Play All / Stop All -->
     <button
       @click="transportManager.isRunning.value ? stopAll() : playAll()"
-      @contextmenu.prevent="openMenu($event, { name: 'transport-play-all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
+      @contextmenu.prevent="openMenu($event, { name: 'transport_play_all', label: transportManager.isRunning.value ? 'Stop All' : 'Play All' })"
       class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all active:scale-95"
       :class="transportManager.isRunning.value
         ? 'text-red-400 border-red-500/40 bg-red-500/10 hover:bg-red-500/20'

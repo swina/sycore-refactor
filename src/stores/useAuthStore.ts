@@ -72,6 +72,14 @@ export const useAuthStore = defineStore('auth', () => {
     if (profile.value) profile.value = { ...profile.value, freesoundApiKey: trimmed } as any
   }
 
+  async function saveAiApiKey(key: string): Promise<void> {
+    if (!user.value) return
+    const trimmed = (key || '').trim()
+    const userRef = doc(db, 'users', user.value.uid)
+    await setDoc(userRef, { aiApiKey: trimmed } as any, { merge: true })
+    if (profile.value) profile.value = { ...profile.value, aiApiKey: trimmed } as any
+  }
+
   async function logout(): Promise<void> {
     await auth.signOut()
     user.value    = null
@@ -81,6 +89,6 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user, profile, loadingAuth,
     isAdmin,
-    getLimits, init, logout, saveFreesoundApiKey,
+    getLimits, init, logout, saveFreesoundApiKey, saveAiApiKey,
   }
 })

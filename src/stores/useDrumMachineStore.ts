@@ -1302,6 +1302,70 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     }
   })
 
+  /**
+   * Apply an AI-generated drum pattern JSON to the active sequence.
+   * Expects a JSON object mapping track labels to 16-step 0/1 arrays.
+   * If a "Bassline" key with non-zero MIDI notes is present, applies it too.
+   * @param {string} json — raw JSON string from the AI
+   */
+  async function applyAiPattern(json: string): Promise<boolean> {
+    try {
+      const raw = json.replace(/```json|```/g, '').trim()
+      const start = raw.indexOf('{')
+      const end = raw.lastIndexOf('}')
+      if (start === -1 || end === -1) throw new Error('AI did not return valid JSON')
+      const parsed = JSON.parse(raw.slice(start, end + 1))
+
+      const seq = [...(sequences.value[activeSequence.value] || [])]
+      if (!seq.length) return false
+
+      TRACK_LABELS.forEach((label, trackIdx) => {
+        if (trackIdx >= seq.length) return
+        const grid = parsed[label]
+        if (!Array.isArray(grid)) {
+          seq[trackIdx] = {
+            ...seq[trackIdx],
+            steps: Array.from({ length: 16 }, () => ({ ...DEFAULT_DRUM_STEP() })),
+          }
+          return
+        }
+        seq[trackIdx] = {
+          ...seq[trackIdx],
+          steps: Array.from({ length: 16 }, (_, s) => {
+            const hit = Number(grid[s])
+            return hit > 0
+              ? { active: true, velocity: 100, accent: false, ratchet: 1, tie: 0 }
+              : { ...DEFAULT_DRUM_STEP() }
+          }),
+        }
+      })
+
+      sequences.value[activeSequence.value] = seq
+
+      if (Array.isArray(parsed.Bassline) && parsed.Bassline.some((n: any) => Number(n) > 0)) {
+        const bassSeq = [...(basslineSequences.value[activeSequence.value] || [])]
+        if (bassSeq.length) {
+          bassSeq[0] = {
+            ...bassSeq[0],
+            steps: parsed.Bassline.map((n: any) => {
+              const note = Number(n)
+              if (note > 0 && Number.isFinite(note)) {
+                return { active: true, velocity: 90, accent: false, ratchet: 1, tie: 0, note }
+              }
+              return { ...DEFAULT_DRUM_STEP(), note: undefined }
+            }),
+          }
+          basslineSequences.value[activeSequence.value] = bassSeq
+        }
+      }
+
+      return true
+    } catch (err) {
+      console.error('[DrumMachineStore] applyAiPattern failed', err)
+      return false
+    }
+  }
+
   return {
     bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision,
     autofillEnabled, chainEnabled,
@@ -1318,6 +1382,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     generateDrumPattern,
     generateDrumPatternRaw,
     generateEuclideanPattern,
+    applyAiPattern,
     IMPORTED_PATTERNS,
     loadImportedPattern,
     // Bassline

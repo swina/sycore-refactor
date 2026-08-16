@@ -1,23 +1,79 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
-// State for the Note Latch app (NoteLatchPanel.vue) — a MIDI FLOW app source
-// (MidiSource.NOTE_LATCH) that holds incoming notes the same way a device's
-// own per-registration latch (latchEnabled/latchMaxNotes/latchReplace, see
-// MidiWizardFlow.vue's "Multi-CH out" card and midi-smart-latch.ts) does,
-// but as an independent, cable-able node instead of a per-destination
-// toggle — so one latch can feed several instruments (real or virtual) at
-// once, and switching it off releases every latched note through its own
-// OUT rather than requiring each destination's latch to be toggled off
-// individually.
+export interface NoteLatchInstance {
+  sourceKey: string   // unique routing key, e.g. NOTE_LATCH:1
+  name: string        // display name, e.g. "Note Latch 1"
+  enabled: boolean
+  maxNotes: number
+  replace: boolean    // true = FIFO (oldest dropped when full), false = BLOCK (new rejected)
+  latchedCount: number
+}
+
+// The default instance kept for backward compatibility with the original
+// single Note Latch node (MidiSource.NOTE_LATCH).
+export const DEFAULT_LATCH_INSTANCE = {
+  sourceKey: 'NOTE_LATCH',
+  name: 'Note Latch',
+}
+
 export const useNoteLatchStore = defineStore('noteLatch', () => {
-  const enabled  = ref(false)
-  const maxNotes = ref(4)
-  const replace  = ref(true) // true = FIFO (oldest note dropped when full), false = BLOCK (new note rejected)
+  const instances = ref<Record<string, NoteLatchInstance>>({})
 
-  // Plain number, not a Set/Map — just a UI readout of how many notes are
-  // currently held, kept in sync by NoteLatchPanel.vue's own latch state.
-  const latchedCount = ref(0)
+  const instanceList = computed(() => Object.values(instances.value))
 
-  return { enabled, maxNotes, replace, latchedCount }
+  function makeInstance(sourceKey: string, name: string): NoteLatchInstance {
+    return {
+      sourceKey,
+      name: name || sourceKey,
+      enabled: false,
+      maxNotes: 4,
+      replace: true,
+      latchedCount: 0,
+    }
+  }
+
+  /** Ensure an instance exists (returns the created or existing one). */
+  function ensureInstance(sourceKey: string, name?: string): NoteLatchInstance {
+    if (!instances.value[sourceKey]) {
+      instances.value = {
+        ...instances.value,
+        [sourceKey]: makeInstance(sourceKey, name || sourceKey),
+      }
+    }
+    return instances.value[sourceKey]
+  }
+
+  /** Remove an instance entirely. Returns true if it existed. */
+  function removeInstance(sourceKey: string): boolean {
+    if (!instances.value[sourceKey]) return false
+    const next = { ...instances.value }
+    delete next[sourceKey]
+    instances.value = next
+    return true
+  }
+
+  function getInstance(sourceKey: string): NoteLatchInstance | null {
+    return instances.value[sourceKey] ?? null
+  }
+
+  function setEnabled(sourceKey: string, enabled: boolean) {
+    const inst = ensureInstance(sourceKey)
+    inst.enabled = enabled
+  }
+
+  function setLatchedCount(sourceKey: string, count: number) {
+    const inst = ensureInstance(sourceKey)
+    inst.latchedCount = count
+  }
+
+  // Register the default instance so listeners/UI behave even before a canvas
+  // node is dropped (matches the original always-present singleton).
+  ensureInstance(DEFAULT_LATCH_INSTANCE.sourceKey, DEFAULT_LATCH_INSTANCE.name)
+
+  return {
+    instances, instanceList,
+    ensureInstance, removeInstance, getInstance,
+    setEnabled, setLatchedCount,
+  }
 })

@@ -978,39 +978,31 @@ function recallSet(set) {
   activeSetId.value = set.id
   if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
   set.devices.forEach(entry => {
-    if (!midiStore.routingConfig.registrations[entry.deviceName]) return
-
-    midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
-    midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
-    midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
-    midiStore.updateRegistration(entry.deviceName, 'pcMsb',     entry.pcMsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcLsb',     entry.pcLsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
+    const reg = midiStore.routingConfig.registrations[entry.deviceName]
+    if (reg) {
+      midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
+      midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
+      midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
+      midiStore.updateRegistration(entry.deviceName, 'pcMsb',     entry.pcMsb ?? 0)
+      midiStore.updateRegistration(entry.deviceName, 'pcLsb',     entry.pcLsb ?? 0)
+      midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
+    }
 
     if (entry.isUiDevice) {
       if (entry.lastPresetId) {
         const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
         if (preset) presetStore.recallPreset(preset, false)
       }
-    } else {
-      const multiEntries = Object.entries(entry.pcChannels)
-      if (multiEntries.length > 0) {
-        multiEntries.forEach(([chStr, info]) => {
-          const ch = parseInt(chStr)
-          sendToDeviceMessage([0xB0 | ch, 0,  info.msb ?? 0], entry.deviceName)
-          sendToDeviceMessage([0xB0 | ch, 32, info.lsb ?? 0], entry.deviceName)
-          sendToDeviceMessage([0xC0 | ch, info.program ?? 0], entry.deviceName)
-        })
-      } else {
-        const ch = Math.max(0, entry.pcChannel ?? 0)
-        sendToDeviceMessage([0xB0 | ch, 0,  entry.pcMsb ?? 0], entry.deviceName)
-        sendToDeviceMessage([0xB0 | ch, 32, entry.pcLsb ?? 0], entry.deviceName)
-        sendToDeviceMessage([0xC0 | ch, entry.pcProgram ?? 0], entry.deviceName)
-      }
     }
   })
-  // Scroll the preset list to reflect the recalled program for the selected device
-  nextTick(() => scrollToCurrentProgram())
+
+  // Sync routing config to midiService (watcher runs synchronously after
+  // routingConfig.value replacement in saveRoutingConfig) then resend all
+  // Program Changes — same mechanism as app startup (useMidiInit.js).
+  nextTick(() => {
+    midiService.resendAllProgramChanges()
+    nextTick(() => scrollToCurrentProgram())
+  })
 }
 
 function updateSet(id) {

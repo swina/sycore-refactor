@@ -35,3 +35,36 @@ export const APP_PANEL_ID = {
   [MidiSource.CAPTURE]:      'capture',
   [MidiSource.NOTE_LATCH]:   'note-latch',
 }
+
+const NOTE_LATCH_BASE = MidiSource.NOTE_LATCH
+
+// Note Latch supports multiple simultaneous instances, each a distinct
+// source key (`NOTE_LATCH:1`, `NOTE_LATCH:2`, ...) so MIDI FLOW can cable
+// several into the same flow and each panel owns its own latch state. The
+// base instance `NOTE_LATCH` (no suffix) is the original, backward-compatible
+// node. Helpers below keep the suffix convention shared across the canvas,
+// the store, panels, and MIDI-learn param names.
+export function isNoteLatchSourceKey(sourceKey) {
+  return sourceKey === NOTE_LATCH_BASE || String(sourceKey).startsWith(NOTE_LATCH_BASE + ':')
+}
+
+export function latchInstanceSuffix(sourceKey) {
+  return sourceKey === NOTE_LATCH_BASE ? '' : String(sourceKey).slice((NOTE_LATCH_BASE + ':').length)
+}
+
+export function latchSourceKey(suffix) {
+  return suffix ? `${NOTE_LATCH_BASE}:${suffix}` : NOTE_LATCH_BASE
+}
+
+export function nextLatchSourceKey(existingKeys) {
+  for (let i = 1; ; i++) {
+    const key = latchSourceKey(String(i))
+    if (!existingKeys.includes(key)) return key
+  }
+}
+
+// MIDI-learn param-name suffix for an instance ('' for the base, ':N' for N)
+export function latchParamSuffix(sourceKey) {
+  const s = latchInstanceSuffix(sourceKey)
+  return s ? `:${s}` : ''
+}

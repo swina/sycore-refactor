@@ -3,6 +3,8 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
+import { sendAiPrompt } from '@/lib/ai-service'
+import { useAiAgentStore } from './useAiAgentStore'
 import type { ArpMode } from '@/lib/arp-patterns'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -330,6 +332,64 @@ export const useChordProgStore = defineStore('chordProg', () => {
     loadProgressionByName(progressionData, name)
   }
 
+  /**
+   * Generate a chord progression from a natural-language prompt via the AI
+   * Agent. Asks the model for a JSON array of { chordName, notes } objects,
+   * then fills the active steps.
+   * @param {string} prompt — e.g. "ambient romantic 8 chords"
+   */
+  async function generateFromAiPrompt(prompt: string): Promise<boolean> {
+    const aiStore = useAiAgentStore()
+    if (!aiStore.isConfigured) return false
+
+    const keyNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    const rootMidi = 48 + (selectedKey.value % 12)
+    const keyLabel = keyNames[((selectedKey.value % 12) + 12) % 12]
+
+    const systemPrompt = [
+      'You are a music theory assistant for a 16-step chord sequencer.',
+      `Write a chord progression in the key of ${keyLabel}, ${numSteps.value} chords long, that matches the requested mood.`,
+      `Output ONLY a valid JSON array (no markdown fences, no commentary) of objects with "chordName" (e.g. "Cmaj7", "Am7", "F") and "notes" — a flat array of MIDI note numbers. ` +
+      `The notes should sit near MIDI ${rootMidi} (that octave is the root of ${keyLabel}).`,
+      'Keep each chord to 3-5 notes, and use a cohesive key.'
+    ].join('\n')
+
+    try {
+      const result = await sendAiPrompt(
+        aiStore.selectedProvider,
+        aiStore.endpoint,
+        aiStore.model,
+        aiStore.apiKey,
+        systemPrompt,
+        prompt,
+      )
+      if (!result.success || !result.data) throw new Error(result.error || 'AI generation failed')
+
+      const raw = result.data.replace(/```json|```/g, '').trim()
+      const start = raw.indexOf('[')
+      const end = raw.lastIndexOf(']')
+      if (start === -1 || end === -1) throw new Error('AI did not return valid JSON')
+      const parsed = JSON.parse(raw.slice(start, end + 1))
+
+      const fresh = Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
+      for (let i = 0; i < numSteps.value; i++) {
+        const c = parsed[i % parsed.length]
+        if (!c) continue
+        fresh[i] = {
+          ...DEFAULT_CHORD_STEP,
+          chordName: c.chordName || `Chord ${i + 1}`,
+          notes: Array.isArray(c.notes) ? c.notes.map(Number).filter(n => Number.isFinite(n)) : [],
+          active: Array.isArray(c.notes) && c.notes.length > 0,
+        }
+      }
+      steps.value = fresh
+      return true
+    } catch (err) {
+      console.error('[ChordProgStore] AI generation failed', err)
+      return false
+    }
+  }
+
   function clearSteps() {
     steps.value = Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
   }
@@ -403,7 +463,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     selectedKey, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
-    loadProgressionByName, generateAlgorithmic, clearSteps,
+    loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,
     saveToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,

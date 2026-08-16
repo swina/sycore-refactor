@@ -2,12 +2,13 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RefreshCw, Cable, Network, Check, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, ExternalLink, Activity, Filter, Settings, Power } from 'lucide-vue-next'
-import { MIDI_APPS, APP_PANEL_ID } from '@/lib/midi-apps'
+import { MIDI_APPS, APP_PANEL_ID, isNoteLatchSourceKey, nextLatchSourceKey, latchInstanceSuffix } from '@/lib/midi-apps'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { dispatch } from '@/types/events'
@@ -19,6 +20,7 @@ import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 
 const midiStore  = useMidiStore()
 const uiStore    = useUiStore()
+const noteLatchStore = useNoteLatchStore()
 const midiFlowConfigsStore = useMidiFlowConfigsStore()
 const { devices: registryDevices } = useDeviceRegistry()
 const { openMenu } = useMidiContextMenu()
@@ -96,9 +98,20 @@ const FLAGS = [
 ]
 
 const appIconMap = Object.fromEntries(MIDI_APPS.map(a => [a.sourceId, a.icon]))
+// Note Latch instance nodes (NOTE_LATCH:1, ...) aren't in MIDI_APPS, so they
+// fall back to the base latch icon.
+function appIconFor(sourceId) {
+  return appIconMap[sourceId] ?? appIconMap[MidiSource.NOTE_LATCH]
+}
 
 // ── App node "open app" shortcut — maps a MIDI_APPS sourceId to the uiStore panel id ──
 function openApp(sourceId) {
+  // Multi-instance Note Latch: open that instance's own panel instead of the
+  // shared one.
+  if (isNoteLatchSourceKey(sourceId)) {
+    uiStore.setNoteLatchInstanceOpen(sourceId, true)
+    return
+  }
   const panelId = APP_PANEL_ID[sourceId]
   if (panelId) uiStore.openPanel(panelId)
 }
@@ -165,11 +178,25 @@ function onCanvasDrop(e) {
   if (!raw) return
   const device = JSON.parse(raw)
   const rect = canvasEl.value.getBoundingClientRect()
+
+  // Multi-instance Note Latch: each dropped node gets its own unique source
+  // key (NOTE_LATCH, NOTE_LATCH:1, NOTE_LATCH:2, ...) so routing is distinct
+  // per instance and its panel owns separate latch state.
+  let sourceId = device.sourceId ?? null
+  if (isNoteLatchSourceKey(device.sourceId)) {
+    const existing = [
+      ...canvasNodes.value.map(n => n.sourceId),
+      ...Object.keys(noteLatchStore.instances),
+    ].filter(Boolean)
+    sourceId = nextLatchSourceKey(existing)
+    noteLatchStore.ensureInstance(sourceId, device.name)
+  }
+
   canvasNodes.value.push({
     id: nextId++,
     name: device.name,
-    sourceId: device.sourceId ?? null,   // null = hardware device
-    type: device.sourceId ? null : (device.type ?? deviceType(device.name)),
+    sourceId: sourceId,          // null = hardware device
+    type: sourceId ? null : (device.type ?? deviceType(device.name)),
     hasIn:  device.hasIn,
     hasOut: true,
     x: Math.max(0, e.clientX - rect.left - NODE_W / 2),
@@ -196,6 +223,11 @@ function removeNode(id) {
   if (node) {
     midiStore.setRouting(node.sourceId ?? node.name, [])
     midiStore.setInputRouting(node.sourceId ?? node.name, [])
+    // Drop the latch instance's panel state when its canvas node is removed.
+    if (node.sourceId && isNoteLatchSourceKey(node.sourceId)) {
+      noteLatchStore.removeInstance(node.sourceId)
+      uiStore.setNoteLatchInstanceOpen(node.sourceId, false)
+    }
   }
 }
 
@@ -476,6 +508,27 @@ function initFromStore() {
     else destNodes.push(node)
   }
 
+  // Multi-instance Note Latch nodes — any source key matching the latch
+  // convention beyond the base one (NOTE_LATCH:1, ...) gets its own canvas
+  // node and a registered latch instance, so saved flows with several
+  // latches rebuild faithfully.
+  const extraLatchKeys = new Set([...sourceKeys, ...inputSourceKeys, ...inputDestApps].filter(isNoteLatchSourceKey))
+  for (const app of MIDI_APPS) extraLatchKeys.delete(app.sourceId)
+  for (const sourceKey of extraLatchKeys) {
+    noteLatchStore.ensureInstance(sourceKey, `Note Latch ${latchInstanceSuffix(sourceKey)}`)
+    const id = nextId++
+    nodeMap.set(sourceKey, id)
+    const node = {
+      id, name: `Note Latch ${latchInstanceSuffix(sourceKey)}`, sourceId: sourceKey,
+      hasIn: true, hasOut: true,
+      x: 0, y: 0,
+      inChannel: -1, outChannel: -1,
+      sync: true, transport: true, notes: true, cc: true, pc: true,
+    }
+    if (sourceKeys.has(sourceKey) || inputSourceKeys.has(sourceKey)) sourceNodes.push(node)
+    else destNodes.push(node)
+  }
+
   // Layout: sources on left, destinations on right
   const HW_ROW_H  = 140
   const APP_ROW_H = 52
@@ -627,6 +680,13 @@ function loadConfig(name) {
   if (!entry) return
   canvasNodes.value = JSON.parse(JSON.stringify(entry.nodes))
   cables.value      = JSON.parse(JSON.stringify(entry.cables))
+  // Register any Note Latch instance nodes in the store so their panels and
+  // per-instance state exist even before anything is cabled.
+  for (const node of canvasNodes.value) {
+    if (node.sourceId && isNoteLatchSourceKey(node.sourceId)) {
+      noteLatchStore.ensureInstance(node.sourceId, node.name)
+    }
+  }
   // If a stale save has two virtual nodes for the same instrument with
   // outChannels set on both, keep only the first one's channels so that
   // isMultiChBlocked is correctly one-sided and finish() doesn't overwrite.
@@ -1095,7 +1155,7 @@ function pendingPath() {
                 :class="node.sourceId ? 'bg-purple-900/30 border-purple-900/50' : typeMeta(node.type).header"
               >
                 <span class="flex items-center gap-1.5 flex-1 pr-2 min-w-0">
-                  <component v-if="node.sourceId" :is="appIconMap[node.sourceId]" class="w-3 h-3 text-purple-400 shrink-0" />
+                  <component v-if="node.sourceId" :is="appIconFor(node.sourceId)" class="w-3 h-3 text-purple-400 shrink-0" />
                   <component v-else :is="typeMeta(node.type).icon" class="w-3 h-3 shrink-0" :class="typeMeta(node.type).text" />
                   <span class="text-[9px] font-mono font-bold truncate leading-tight"
                     :class="node.sourceId ? 'text-purple-200' : 'text-white'"
@@ -1103,7 +1163,7 @@ function pendingPath() {
                 </span>
                 <span class="flex items-center gap-1.5 shrink-0">
                   <button
-                    v-if="node.sourceId && APP_PANEL_ID[node.sourceId]"
+                    v-if="node.sourceId && (APP_PANEL_ID[node.sourceId] || isNoteLatchSourceKey(node.sourceId))"
                     @click.stop="openApp(node.sourceId)"
                     class="text-purple-400/70 hover:text-purple-300 transition-colors"
                     title="Open app"

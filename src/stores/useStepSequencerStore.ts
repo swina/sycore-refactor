@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
+import { sendAiPrompt } from '@/lib/ai-service'
+import { useAiAgentStore } from './useAiAgentStore'
 
 export const BANK_NAMES = ['A', 'B', 'C', 'D', 'E', 'F']
 export const BANK_COUNT = 6
@@ -296,6 +298,68 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     banks.value = [...banks.value]
   }
 
+  /**
+   * Generate a step sequence from a natural-language prompt via the AI
+   * Agent. Asks the model for a JSON array of per-step objects with a
+   * "notes" array of MIDI note numbers, then applies it to the active bank.
+   * @param {string} prompt — e.g. "minimal techno sequence in C minor"
+   */
+  async function generateFromAiPrompt(prompt: string): Promise<boolean> {
+    const aiStore = useAiAgentStore()
+    if (!aiStore.isConfigured) return false
+
+    const bank = activeBank.value
+    const keyLabel = `${bank.selectedKey} ${bank.selectedScale}`
+
+    const systemPrompt = [
+      'You are a step-sequencer music designer.',
+      `The sequencer is set to ${keyLabel}, ${bank.numSteps} steps per bar, ${bank.maxPolyphony}-note polyphony.`,
+      `Output ONLY a valid JSON array (no markdown fences, no commentary) of exactly ${bank.numSteps} objects, each with:`,
+      '"active": boolean, "notes": array of 1-2 MIDI note numbers (40-96), "velocity": 1-127, "gate": 25-100.',
+      'Stay in the requested key and style. Use rests for musical phrasing.'
+    ].join('\n')
+
+    try {
+      const result = await sendAiPrompt(
+        aiStore.selectedProvider,
+        aiStore.endpoint,
+        aiStore.model,
+        aiStore.apiKey,
+        systemPrompt,
+        prompt,
+      )
+      if (!result.success || !result.data) throw new Error(result.error || 'AI generation failed')
+
+      const raw = result.data.replace(/```json|```/g, '').trim()
+      const start = raw.indexOf('[')
+      const end = raw.lastIndexOf(']')
+      if (start === -1 || end === -1) throw new Error('AI did not return valid JSON')
+      const parsed = JSON.parse(raw.slice(start, end + 1))
+
+      bank.steps = parsed.map((s: any) => {
+        const notes = Array.isArray(s.notes) && s.notes.length ? s.notes.map(Number) : [60]
+        const lowest = Math.min(...notes)
+        const octave = Math.max(0, Math.min(8, Math.floor(lowest / 12) - 1))
+        return {
+          active: !!s.active,
+          notes,
+          velocity: Number.isFinite(Number(s.velocity)) ? Math.max(1, Math.min(127, Math.round(Number(s.velocity)))) : 100,
+          gate: Number.isFinite(Number(s.gate)) ? Math.max(25, Math.min(100, Math.round(Number(s.gate)))) : 75,
+          octave,
+          tieSteps: 0,
+          param1Value: 64,
+          param2Value: 64,
+          edited: true,
+        }
+      })
+      banks.value = [...banks.value]
+      return true
+    } catch (err) {
+      console.error('[StepSequencerStore] AI generation failed', err)
+      return false
+    }
+  }
+
   return {
     banks,
     activeBankIndex,
@@ -314,5 +378,6 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     restoreChainFromPreset,
     captureActiveBankForLink,
     restoreLinkedBank,
+    generateFromAiPrompt,
   }
 })

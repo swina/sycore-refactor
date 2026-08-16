@@ -15,6 +15,8 @@ import { S1_TYPES } from '@/constants/s1-config'
 import BANK_DEFAULT from '@/data/BANK_DEFAULT.json'
 import { dispatch } from '@/types/events'
 import { debounce } from '@/lib/debounce'
+import { sendAiPrompt } from '@/lib/ai-service'
+import { useAiAgentStore } from './useAiAgentStore'
 import type { Preset, PresetVariant, PresetImportOptions } from '@/types/preset'
 
 export const usePresetStore = defineStore('preset', () => {
@@ -52,6 +54,7 @@ export const usePresetStore = defineStore('preset', () => {
   const currentPatchNotes = ref<string | null>(null)
   const lastModifiedField = ref<string | null>(null)
   const currentVariation = ref<{ name: string; values: Record<string, number> } | null>(null)
+  const aiPrompt = ref('')
 
   // --- Getters ---
   const filteredHistory = computed(() => {
@@ -830,6 +833,93 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
+  /**
+   * Generate a new preset from a natural-language prompt via the AI Agent.
+   * Asks the model to emit a JSON object of S-1 parameters constrained to
+   * the active category's valid ranges, then builds a preset from it.
+   * @param {string} prompt — user description of the sound to generate
+   */
+  async function generateFromAiPrompt(prompt: string) {
+    if (!authStore.user) return
+    const aiStore = useAiAgentStore()
+    if (!aiStore.isConfigured) return
+
+    const categoryConfig = (S1_TYPES as Record<string, any>)[currentCategory.value] || (S1_TYPES as Record<string, any>)['experimental']
+    const fieldList = Object.entries(categoryConfig)
+      .filter(([, range]) => Array.isArray(range))
+      .map(([field, range]) => `${field} (${(range as number[])[0]}-${(range as number[])[1]})`)
+
+    const systemPrompt = [
+      'You are a sound design assistant for the Roland S-1 Tweak Synth.',
+      `The target sound category is "${currentCategory.value}".`,
+      `Output ONLY a valid JSON object (no markdown fences, no commentary) with each parameter set to an integer within its valid range:`,
+      fieldList.join(', '),
+      'Choose values that best match the described sound character.',
+    ].join('\n')
+
+    isGenerating.value = true
+    showResults.value = false
+
+    try {
+      const result = await sendAiPrompt(
+        aiStore.selectedProvider,
+        aiStore.endpoint,
+        aiStore.model,
+        aiStore.apiKey,
+        systemPrompt,
+        prompt,
+      )
+      if (!result.success || !result.data) throw new Error(result.error || 'AI generation failed')
+
+      const raw = result.data.replace(/```json|```/g, '').trim()
+      const start = raw.indexOf('{')
+      const end = raw.lastIndexOf('}')
+      if (start === -1 || end === -1) throw new Error('AI did not return valid JSON')
+      const parsed = JSON.parse(raw.slice(start, end + 1))
+
+      const data: Record<string, number> = {}
+      for (const [field, range] of Object.entries(categoryConfig)) {
+        if (!Array.isArray(range)) continue
+        const [min, max] = range as [number, number]
+        let val = Number(parsed[field])
+        if (!Number.isFinite(val)) {
+          val = Math.round(min + Math.random() * (max - min))
+        }
+        data[field] = Math.max(min, Math.min(max, Math.round(val)))
+      }
+
+      const newPreset: Preset = {
+        id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: generateRandomName(currentCategory.value),
+        category: currentCategory.value,
+        device: 'S-1',
+        aVariant: _createVariant(data, _generatePatchNotes(data)),
+        bVariant: _createVariant(data, _generatePatchNotes(data)),
+        patchNotes: _generatePatchNotes(data),
+        createdAt: new Date().toISOString()
+      }
+
+      engineCacheA.value = newPreset.aVariant
+      engineCacheB.value = newPreset.bVariant
+      useAlternativeEngine.value = false
+      lastPreset.value = newPreset
+      currentName.value = newPreset.name
+      currentPatchNotes.value = newPreset.patchNotes
+      sessionGeneratedIds.value = [...sessionGeneratedIds.value, newPreset.id]
+
+      _applyMetadataToStores(newPreset.aVariant)
+      applyPresetCCs(newPreset.aVariant)
+      localStorage.setItem(userKey('sycore_last_session'), JSON.stringify(newPreset))
+
+      showResults.value = true
+    } catch (err) {
+      console.error('AI generation failed', err)
+      throw err
+    } finally {
+      isGenerating.value = false
+    }
+  }
+
   function navigateHistory(direction: 'first' | 'last' | 'next' | 'prev') {
     let list = filteredHistory.value
     let idx = list.findIndex(p => p.id === lastPreset.value?.id)
@@ -875,11 +965,11 @@ export const usePresetStore = defineStore('preset', () => {
     history, filteredHistory, historyCategoryFilter, currentCategory, lastPreset,
     isGenerating, isSaving, showResults, engineCacheA, engineCacheB, useAlternativeEngine,
     sessionGeneratedIds, currentName, currentPatchNotes, hasUnsavedChanges, lastModifiedField,
-    currentVariation,
+    currentVariation, aiPrompt,
     remainingGens, limitReached,
     loadHistory, recallPreset, applyPresetCCs, selectEngine, savePreset, importPreset,
     deletePreset, deleteAllPresets, toggleFavorite, setCategory,
-    updateFieldValue, updatePatchNotes, clearSessionCache, generate, navigateHistory, init,
+    updateFieldValue, updatePatchNotes, clearSessionCache, generate, generateFromAiPrompt, navigateHistory, init,
     seedDefaultBank
   }
 })
