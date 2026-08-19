@@ -5,8 +5,8 @@ import { useUiStore }              from '@/stores/useUiStore'
 import { useMidiStore }            from '@/stores/useMidiStore'
 import { useDrumMachineStore }     from '@/stores/useDrumMachineStore'
 import { useMappingStore }      from '@/stores/useMappingStore'
-import { usePresetStore }       from '@/stores/usePresetStore'
 import { useLivePadStore }      from '@/stores/useLivePadStore'
+import { usePerformanceSets }   from '@/composables/usePerformanceSets'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useFreesoundCache }    from '@/composables/useFreesoundCache'
@@ -18,7 +18,6 @@ import { userKey }              from '@/lib/userKey'
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
-const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
 const drumStore    = useDrumMachineStore()
 
@@ -51,7 +50,6 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 
 // ── Constants ─────────────────────────────────────────────────────
 const LS_KEY      = 'SYCORE_LOOP_MACHINE_PADS'
-const LS_PC_SETS  = 'SYCORE_PC_PERFORMANCE_SETS'
 const LS_LPP_SETS = 'SYCORE_LPP_SETS'
 const LS_PRESETS  = 'SYCORE_LM_PRESETS'
 const PAD_COUNT   = 24
@@ -198,9 +196,9 @@ function deletePreset(id) {
   try { localStorage.setItem(userKey(LS_PRESETS), JSON.stringify(lmPresets.value)) } catch {}
 }
 
-// ── Performance Sets (shared with LivePerformancePad) ─────────────
+// ── Performance Sets (shared + IndexedDB-backed via usePerformanceSets) ──
 const emptySetPad = () => ({ setId: null, setName: null })
-const pcSets   = ref([])
+const { pcSets, loadSets, recallSet: recallStoredSet } = usePerformanceSets()
 const setPads  = ref(Array(16).fill(null).map(emptySetPad))
 
 const activePerfSetIdx = computed({
@@ -209,8 +207,8 @@ const activePerfSetIdx = computed({
 })
 
 function _loadPerfSets() {
+  loadSets()
   try {
-    pcSets.value = JSON.parse(localStorage.getItem(userKey(LS_PC_SETS)) || '[]')
     const saved  = JSON.parse(localStorage.getItem(userKey(LS_LPP_SETS)) || 'null')
     if (Array.isArray(saved)) {
       const arr = [...saved]
@@ -222,39 +220,7 @@ function _loadPerfSets() {
 
 function recallSet(set) {
   if (!set) return
-  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
-  set.devices.forEach(entry => {
-    if (!midiStore.routingConfig?.registrations?.[entry.deviceName]) return
-    midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
-    midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
-    midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
-    midiStore.updateRegistration(entry.deviceName, 'pcMsb',      entry.pcMsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcLsb',      entry.pcLsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
-    if (entry.isUiDevice) {
-      if (entry.lastPresetId) {
-        const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
-        if (preset) presetStore.recallPreset(preset, false)
-      }
-    } else {
-      const port = midiStore.outputs.find(o => o.name === entry.deviceName)
-      if (!port) return
-      const multi = Object.entries(entry.pcChannels)
-      if (multi.length > 0) {
-        multi.forEach(([chStr, info]) => {
-          const ch = parseInt(chStr)
-          port.send([0xB0 | ch, 0,  info.msb ?? 0])
-          port.send([0xB0 | ch, 32, info.lsb ?? 0])
-          port.send([0xC0 | ch, info.program ?? 0])
-        })
-      } else {
-        const ch = entry.pcChannel ?? 0
-        port.send([0xB0 | ch, 0,  entry.pcMsb ?? 0])
-        port.send([0xB0 | ch, 32, entry.pcLsb ?? 0])
-        port.send([0xC0 | ch, entry.pcProgram ?? 0])
-      }
-    }
-  })
+  recallStoredSet(set)
 }
 
 function triggerSetPad(idx) {

@@ -8,6 +8,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useUserBanksStore } from '@/stores/useUserBanksStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
+import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { parseEmulatorX3 } from '@/composables/useEmulatorX3Parser'
 import { parseStandardJson } from '@/composables/useStandardJsonParser'
@@ -39,6 +40,9 @@ const presetStore    = usePresetStore()
 const userBanksStore = useUserBanksStore()
 const mappingStore   = useMappingStore()
 const { openMenu }   = useMidiContextMenu()
+
+// ── Performance Sets (shared, IndexedDB-backed) ───────────────────
+const { pcSets, loadSets, saveSet, updateSet, deleteSet, recallSet: recallStoredSet } = usePerformanceSets()
 
 // ── Device list (left column) — only PC-enabled devices ────────
 const devices = computed(() => {
@@ -916,24 +920,11 @@ function showPcNotification(device, name, category = '') {
   _pcNotifTimer = setTimeout(() => { pcNotification.value.visible = false }, 3000)
 }
 
-// ── Performance Sets ────────────────────────────────────────────
-const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
-const pcSets         = ref([])
+// ── Performance Sets (shared + IndexedDB-backed via usePerformanceSets) ──
 const activeSetId    = ref(null)
 const showSaveDialog = ref(false)
 const newSetName     = ref('')
 const newSetNameInput = ref(null)
-
-function loadSets() {
-  try {
-    const raw = localStorage.getItem(userKey(LS_PC_SETS))
-    if (raw) pcSets.value = JSON.parse(raw)
-  } catch { pcSets.value = [] }
-}
-
-function persistSets() {
-  localStorage.setItem(userKey(LS_PC_SETS),JSON.stringify(pcSets.value))
-}
 
 function openSaveDialog() {
   newSetName.value = ''
@@ -941,96 +932,19 @@ function openSaveDialog() {
   nextTick(() => newSetNameInput.value?.focus())
 }
 
-function saveCurrentSet() {
+async function saveCurrentSet() {
   const name = newSetName.value.trim()
   if (!name) return
-
-  const snapshot = devices.value.map(dev => {
-    const reg  = midiStore.routingConfig.registrations[dev.name]
-    const isUi = (midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)
-    return {
-      deviceName:     dev.name,
-      pcChannel:      reg?.pcChannel ?? 0,
-      pcBank:         reg?.pcBank    ?? '',
-      pcProgram:      reg?.pcProgram ?? 0,
-      pcMsb:          reg?.pcMsb ?? 0,
-      pcLsb:          reg?.pcLsb ?? 0,
-      pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
-      isUiDevice:     isUi,
-      lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
-      lastPresetName: isUi ? (presetStore.lastPreset?.name ?? null) : null,
-    }
-  })
-
-  pcSets.value = [{
-    id:          Date.now().toString(),
-    name,
-    createdAt:   new Date().toISOString(),
-    midiChannel: midiStore.midiChannel,
-    devices:     snapshot,
-  }, ...pcSets.value]
-
-  persistSets()
+  await saveSet(name)
   showSaveDialog.value = false
 }
 
-function recallSet(set) {
+async function recallSet(set) {
   activeSetId.value = set.id
-  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
-  set.devices.forEach(entry => {
-    const reg = midiStore.routingConfig.registrations[entry.deviceName]
-    if (reg) {
-      midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
-      midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
-      midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
-      midiStore.updateRegistration(entry.deviceName, 'pcMsb',     entry.pcMsb ?? 0)
-      midiStore.updateRegistration(entry.deviceName, 'pcLsb',     entry.pcLsb ?? 0)
-      midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
-    }
-
-    if (entry.isUiDevice) {
-      if (entry.lastPresetId) {
-        const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
-        if (preset) presetStore.recallPreset(preset, false)
-      }
-    }
-  })
-
-  // Sync routing config to midiService (watcher runs synchronously after
-  // routingConfig.value replacement in saveRoutingConfig) then resend all
-  // Program Changes — same mechanism as app startup (useMidiInit.js).
-  nextTick(() => {
-    midiService.resendAllProgramChanges()
-    nextTick(() => scrollToCurrentProgram())
-  })
-}
-
-function updateSet(id) {
-  const snapshot = devices.value.map(dev => {
-    const reg  = midiStore.routingConfig.registrations[dev.name]
-    const isUi = (midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)
-    return {
-      deviceName:     dev.name,
-      pcChannel:      reg?.pcChannel ?? 0,
-      pcBank:         reg?.pcBank    ?? '',
-      pcProgram:      reg?.pcProgram ?? 0,
-      pcMsb:          reg?.pcMsb ?? 0,
-      pcLsb:          reg?.pcLsb ?? 0,
-      pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
-      isUiDevice:     isUi,
-      lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
-      lastPresetName: isUi ? (presetStore.lastPreset?.name ?? null) : null,
-    }
-  })
-  pcSets.value = pcSets.value.map(s =>
-    s.id === id ? { ...s, devices: snapshot, midiChannel: midiStore.midiChannel, updatedAt: new Date().toISOString() } : s
-  )
-  persistSets()
-}
-
-function deleteSet(id) {
-  pcSets.value = pcSets.value.filter(s => s.id !== id)
-  persistSets()
+  await recallStoredSet(set)
+  // Scroll/highlight the preset list to the *active* channel's restored patch
+  // (scrollToCurrentProgram re-evaluates per-channel saved state).
+  nextTick(() => scrollToCurrentProgram())
 }
 
 // ── Assign set to LPP performance pad ───────────────────────────
@@ -1734,10 +1648,10 @@ function assignToPad(setId, padIdx) {
                         <span
                           v-if="isUserBank(bank)"
                           @click.stop="deleteUserBank(bank)"
-                          class="opacity-0 group-hover:opacity-100 ml-0.5 text-neutral-600 hover:text-red-400 transition-all"
+                          class="ml-0.5 text-neutral-600 hover:text-red-400 transition-colors"
                           title="Delete this bank"
                         >
-                          <X class="w-2.5 h-2.5" />
+                          <Trash2 class="w-2.5 h-2.5" />
                         </span>
                       </button>
                     </div>

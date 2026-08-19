@@ -19,6 +19,7 @@ import { useSyncStore }    from '@/stores/useSyncStore'
 import { useUiStore }      from '@/stores/useUiStore'
 import { useAuthStore }    from '@/stores/useAuthStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import catalogIndex        from '@/data/program_change/program_change.json'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc, serverTimestamp, db } from '@/lib/idb'
@@ -153,7 +154,8 @@ const pcBrowserSearch  = ref('')
 const pcBrowserLoading = ref(false)
 
 // Performance set picker state
-const availPerfSets  = ref([])   // loaded from SYCORE_PC_PERFORMANCE_SETS when dialog opens
+const { pcSets, loadSets: loadPerfSets } = usePerformanceSets()
+const availPerfSets  = computed(() => pcSets.value)
 const newMkrPerfSet  = ref({ setId: '', setName: '' })
 const newMkrLm       = ref({ padIdx: 0 })
 const newMkrDm       = ref({ presetName: '', seqKey: '', chainEnabled: null })
@@ -1052,11 +1054,15 @@ function openAddMarker() {
     lsb:       null,
     soundName: '',
   }
-  // Load saved performance sets
-  try {
-    const raw = localStorage.getItem(userKey('SYCORE_PC_PERFORMANCE_SETS'))
-    availPerfSets.value = raw ? JSON.parse(raw) : []
-  } catch { availPerfSets.value = [] }
+  // Load saved performance sets (IndexedDB via usePerformanceSets)
+  loadPerfSets().then(() => {
+    if (!newMkrPerfSet.value.setId) {
+      newMkrPerfSet.value = {
+        setId:   availPerfSets.value[0]?.id   || '',
+        setName: availPerfSets.value[0]?.name || '',
+      }
+    }
+  })
   newMkrPerfSet.value = {
     setId:   availPerfSets.value[0]?.id   || '',
     setName: availPerfSets.value[0]?.name || '',

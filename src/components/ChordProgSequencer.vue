@@ -8,7 +8,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { userKey } from '@/lib/userKey'
-import { usePresetStore } from '@/stores/usePresetStore'
+import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -30,7 +30,6 @@ const emit = defineEmits(['close'])
 const midiStore = useMidiStore()
 const arpStore = useArpStore()
 const authStore = useAuthStore()
-const presetStore = usePresetStore()
 const transportManager = useTransportManager()
 const store = useChordProgStore()
 const syncStore = useSyncStore()
@@ -68,6 +67,8 @@ const DURATION_TICKS = {
   '1m': 384,   '2m': 768,  '4m': 1536, '8m': 3072,
 }
 
+const NOTES_NAME = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
 const playStateRef = { current: {} }
 const repeatEventIdRef = ref(null)
 const rafRef = ref(null)
@@ -94,6 +95,11 @@ const captureRecording = ref(false)
 
 watch(captureBarCount, v => localStorage.setItem(userKey('S1_CP_CAPTURE_BARS'), v.toString()))
 watch(captureAutoStop, v => localStorage.setItem(userKey('S1_CP_CAPTURE_AUTOSTOP'), v ? 'true' : 'false'))
+
+function chordNotes (step) {
+  if (!step?.active || !step.notes?.length) return []
+  return step.notes.map(n => NOTES_NAME[(n + (seqTranspose.value || 0) + (step.transpose || 0)) % 12] + Math.floor((n + (seqTranspose.value || 0) + (step.transpose || 0)) / 12))
+}
 
 function buildPlayState() {
   let steps = store.steps
@@ -799,54 +805,18 @@ function applyFillArpMode() {
   for (let i = 0; i < store.numSteps; i++) store.setStep(i, { arpMode: fillArpMode.value })
 }
 
-// ── Performance Sets (from MidiDeviceProgramChangePanel / localStorage) ───────
+// ── Performance Sets (shared + IndexedDB-backed via usePerformanceSets) ──
 
-const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
-const pcSets = ref([])
+const { pcSets, loadSets, recallSet: recallStoredSet } = usePerformanceSets()
 const activePcSetId = ref(null)
 
 function loadPcSets() {
-  try {
-    const raw = localStorage.getItem(userKey(LS_PC_SETS))
-    pcSets.value = raw ? JSON.parse(raw) : []
-  } catch { pcSets.value = [] }
+  loadSets()
 }
 
-function recallPcSet(set) {
+async function recallPcSet(set) {
   activePcSetId.value = set.id
-  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
-  set.devices.forEach(entry => {
-    if (!midiStore.routingConfig?.registrations?.[entry.deviceName]) return
-    midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
-    midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
-    midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
-    midiStore.updateRegistration(entry.deviceName, 'pcMsb',     entry.pcMsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcLsb',     entry.pcLsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
-    if (entry.isUiDevice) {
-      if (entry.lastPresetId) {
-        const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
-        if (preset) presetStore.recallPreset(preset, false)
-      }
-    } else {
-      const port = midiStore.outputs.find(o => o.name === entry.deviceName)
-      if (!port) return
-      const multiEntries = Object.entries(entry.pcChannels ?? {})
-      if (multiEntries.length > 0) {
-        multiEntries.forEach(([chStr, info]) => {
-          const ch = parseInt(chStr)
-          port.send([0xB0 | ch, 0,  info.msb ?? 0])
-          port.send([0xB0 | ch, 32, info.lsb ?? 0])
-          port.send([0xC0 | ch, info.program ?? 0])
-        })
-      } else {
-        const ch = entry.pcChannel ?? 0
-        port.send([0xB0 | ch, 0,  entry.pcMsb ?? 0])
-        port.send([0xB0 | ch, 32, entry.pcLsb ?? 0])
-        port.send([0xC0 | ch, entry.pcProgram ?? 0])
-      }
-    }
-  })
+  await recallStoredSet(set)
 }
 
 function velBarColor(v) {
@@ -1168,8 +1138,7 @@ function velBarColor(v) {
               'text-[14px] font-mono truncate block leading-tight',
               step.active ? (isCurrentPlayingStep(idx) ? 'text-yellow-300' : 'text-white') : 'text-neutral-600'
             ]">
-              {{ step.chordName }}
-            </span>
+              {{ step.chordName }}  </span>
           </div>
 
           <!-- Duration badge -->
@@ -1220,7 +1189,10 @@ function velBarColor(v) {
             class="text-[9px] px-1.5 py-0.5 mt-2 rounded border border-neutral-700 hover:border-purple-500 hover:text-purple-400 bg-purple-600 text-neutral-300 transition-colors font-mono"
             title="Assign custom chord via MIDI IN or Virtual Keyboard"
             >Custom</button>
-            <span class="text-purple-300 mt-2 text-[14px] font-bold">{{ selectedStep.chordName }}</span>
+            <div class="flex flex-col items-start">
+              <span class="text-purple-300 mt-2 text-[12px] font-bold">{{ selectedStep.chordName }} </span>
+              <span class="text-purple-400 text-[9px] font-normal">{{ chordNotes(selectedStep).join(' ') }}</span>
+            </div>
           </div>
         </div>
 

@@ -8,7 +8,7 @@ import {
 import { useFreesoundCache }  from '@/composables/useFreesoundCache'
 import { useMidiStore }       from '@/stores/useMidiStore'
 import { useArpStore }        from '@/stores/useArpStore'
-import { usePresetStore }     from '@/stores/usePresetStore'
+import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import { useLivePadStore }    from '@/stores/useLivePadStore'
 import { useMappingStore }    from '@/stores/useMappingStore'
 import { useSyncStore }       from '@/stores/useSyncStore'
@@ -38,7 +38,6 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 const { resolveUrl: resolveFreesoundUrl, cacheFileBlob } = useFreesoundCache()
 const midiStore    = useMidiStore()
 const arpStore     = useArpStore()
-const presetStore  = usePresetStore()
 const livePadStore = useLivePadStore()
 const mappingStore = useMappingStore()
 const syncStore    = useSyncStore()
@@ -58,7 +57,6 @@ const recSyncActive = computed(() =>
 )
 
 // ── localStorage ─────────────────────────────────────────────────
-const LS_PC_SETS        = 'SYCORE_PC_PERFORMANCE_SETS'
 const LS_LPP_SETS       = 'SYCORE_LPP_SETS'
 const LS_LPP_SNAPSHOTS  = 'SYCORE_LPP_SNAPSHOTS'
 const LS_LPP_LOOP_PADS  = 'SYCORE_LPP_LOOP_PADS'
@@ -68,8 +66,8 @@ function getLS(key, def) {
 }
 function setLS(key, val) { try { localStorage.setItem(userKey(key), JSON.stringify(val)) } catch {} }
 
-// ── Performance Sets (saved from MidiDeviceProgramChangePanel) ────
-const pcSets = ref([])
+// ── Performance Sets (shared + IndexedDB-backed via usePerformanceSets) ──
+const { pcSets, loadSets, recallSet: recallStoredSet } = usePerformanceSets()
 
 const emptySetPad = () => ({ setId: null, setName: null })
 
@@ -184,39 +182,7 @@ const totalProgressPct = computed(() =>
 // ── Recall Performance Set ────────────────────────────────────────
 function recallSet(set) {
   if (!set) return
-  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
-  set.devices.forEach(entry => {
-    if (!midiStore.routingConfig?.registrations?.[entry.deviceName]) return
-    midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
-    midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
-    midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
-    midiStore.updateRegistration(entry.deviceName, 'pcMsb',      entry.pcMsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcLsb',      entry.pcLsb ?? 0)
-    midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
-    if (entry.isUiDevice) {
-      if (entry.lastPresetId) {
-        const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
-        if (preset) presetStore.recallPreset(preset, false)
-      }
-    } else {
-      const port = midiStore.outputs.find(o => o.name === entry.deviceName)
-      if (!port) return
-      const multi = Object.entries(entry.pcChannels)
-      if (multi.length > 0) {
-        multi.forEach(([chStr, info]) => {
-          const ch = parseInt(chStr)
-          port.send([0xB0 | ch, 0,  info.msb ?? 0])
-          port.send([0xB0 | ch, 32, info.lsb ?? 0])
-          port.send([0xC0 | ch, info.program ?? 0])
-        })
-      } else {
-        const ch = entry.pcChannel ?? 0
-        port.send([0xB0 | ch, 0,  entry.pcMsb ?? 0])
-        port.send([0xB0 | ch, 32, entry.pcLsb ?? 0])
-        port.send([0xC0 | ch, entry.pcProgram ?? 0])
-      }
-    }
-  })
+  recallStoredSet(set)
 }
 
 // ── Pad triggers ──────────────────────────────────────────────────
@@ -603,7 +569,7 @@ function _handleLoopPadAssign(e) {
 
 // ── Init ──────────────────────────────────────────────────────────
 function loadState() {
-  pcSets.value       = getLS(LS_PC_SETS, [])
+  loadSets()
   lppSnapshots.value = getLS(LS_LPP_SNAPSHOTS, [])
   const saved = getLS(LS_LPP_SETS, null)
   if (Array.isArray(saved)) {
@@ -674,11 +640,11 @@ function _onTimelinePerfSet(e) {
   if (typeof idx === 'number' && idx >= 0 && idx < 16) triggerSetPad(idx)
 }
 
-function _onTimelineLoadPerfSet(e) {
+async function _onTimelineLoadPerfSet(e) {
   const setId = e.detail?.setId
   if (!setId) return
   // Refresh sets from storage to ensure latest data
-  pcSets.value = getLS(LS_PC_SETS, [])
+  await loadSets()
   const set = pcSets.value.find(s => s.id === setId)
   if (set) {
     activePerfSetIdx.value = -1
@@ -686,10 +652,10 @@ function _onTimelineLoadPerfSet(e) {
   }
 }
 
-function _onLppSetAssign(e) {
+async function _onLppSetAssign(e) {
   const { setId, padIdx } = e.detail ?? {}
   if (!setId || typeof padIdx !== 'number' || padIdx < 0 || padIdx >= 16) return
-  pcSets.value = getLS(LS_PC_SETS, [])
+  await loadSets()
   assignSetPad(padIdx, setId)
 }
 
@@ -725,9 +691,9 @@ onUnmounted(() => {
 })
 
 // Refresh PC sets list and sync pad names when panel opens
-watch(() => props.isOpen, (open) => {
+watch(() => props.isOpen, async (open) => {
   if (!open) return
-  pcSets.value = getLS(LS_PC_SETS, [])
+  await loadSets()
   setPads.value = setPads.value.map(pad => {
     if (!pad.setId) return pad
     const set = pcSets.value.find(s => s.id === pad.setId)

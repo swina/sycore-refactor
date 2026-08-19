@@ -207,28 +207,32 @@ export class MidiService {
     return this.dedupedVirtualTargets('transport');
   }
 
+  /** Log an outbound raw message to the MIDI monitor (skip Clock to avoid flooding). */
+  logOutbound(deviceName: string, data: number[]): void {
+    if (data[0] === 0xF8) return;
+    const { type: mType, channel: mCh, decoded: mDecoded } = decodeRaw(data);
+    this.monitor.append({
+      id: ++this._monitorSeq,
+      timestamp: Date.now(),
+      direction: 'out',
+      device: deviceName,
+      channel: mCh,
+      type: mType,
+      data: Array.from(data),
+      decoded: `[${deviceName}] ${mDecoded}`,
+    });
+  }
+
   /** Send raw bytes to a virtual output by name */
   private sendToVirtualOutput(name: string, data: number[]): void {
     const fn = this.virtualOutputs.get(name);
     if (!fn) return;
 
-    // Log to monitor with proper type decoding — skip Clock (0xF8) same as
-    // broadcast() does for real outputs, since at 24 ticks/quarter-note this
-    // would otherwise blow through the 500-entry ring buffer in a couple of
-    // seconds and evict everything else.
-    if (data[0] !== 0xF8) {
-      const { type: mType, channel: mCh, decoded: mDecoded } = decodeRaw(data);
-      this.monitor.append({
-        id: ++this._monitorSeq,
-        timestamp: Date.now(),
-        direction: 'out',
-        device: name,
-        channel: mCh,
-        type: mType,
-        data: Array.from(data),
-        decoded: `[${name}] ${mDecoded}`,
-      });
-    }
+    // Log to monitor — skip Clock (0xF8) same as broadcast() does for real
+    // outputs, since at 24 ticks/quarter-note this would otherwise blow
+    // through the 500-entry ring buffer in a couple of seconds and evict
+    // everything else.
+    this.logOutbound(name, data);
 
     fn(data);
     this.globalSentHashes.set(data.join(','), Date.now());
@@ -794,7 +798,16 @@ export class MidiService {
     if (this.midiAccess) {
       const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === deviceName);
       if (out) {
-        try { out.send(data); return; } catch {}
+        try {
+          out.send(data);
+          this.logOutbound(deviceName, data);
+          return;
+        } catch (e) {
+          console.warn(`[MIDI] sendRawToDeviceByName "${deviceName}": send failed, falling back to virtual.`, e);
+        }
+      } else {
+        const available = Array.from(this.midiAccess.outputs.values()).map((p: any) => p.name).join(', ') || '(none)';
+        console.warn(`[MIDI] sendRawToDeviceByName: no physical output named "${deviceName}". Available: ${available}`);
       }
     }
     // Try virtual output
@@ -812,9 +825,19 @@ export class MidiService {
    */
   resendAllProgramChanges(): void {
     if (!this.routingConfig) return;
+    let sent = 0;
     Object.values(this.routingConfig.registrations).forEach(reg => {
-      const channels = reg.pcChannels;
-      if (!channels) return;
+      const channels = { ...(reg.pcChannels ?? {}) };
+      // Fall back to the registration's own active-channel fields when
+      // pcChannels is empty (e.g. nothing clicked since the config loaded) —
+      // same channel selection the panel's sendCatalogSound() uses.
+      if (Object.keys(channels).length === 0 && reg.pcProgram != null) {
+        channels[Math.max(0, reg.pcChannel ?? 0)] = {
+          program: reg.pcProgram,
+          msb: reg.pcMsb ?? 0,
+          lsb: reg.pcLsb ?? 0,
+        };
+      }
       Object.entries(channels).forEach(([chStr, info]) => {
         if (!info || info.program == null) return;
         const ch = Math.max(0, parseInt(chStr, 10) || 0);
@@ -830,9 +853,10 @@ export class MidiService {
           this.sendRawToDeviceByName(reg.name, [0xB0 | ch, 32, lsb]);
         }
         this.sendRawToDeviceByName(reg.name, [0xC0 | ch, info.program]);
+        sent++;
       });
     });
-    if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] Re-sent Program Change state to all registered devices.');
+    if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Re-sent ${sent} Program Change message(s) to registered devices.`);
   }
 
   cleanupDevice(deviceId: string): void {

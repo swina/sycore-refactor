@@ -341,7 +341,8 @@ export function useAppActions() {
         break
 
       case 'transport_play_all':
-        if (ccVal > 63) window.dispatchEvent(new CustomEvent('transport-play-all'))
+        // Value-driven: CC 127 → play all, CC 0 → stop all.
+        window.dispatchEvent(new CustomEvent(ccVal > 63 ? 'transport-play-all' : 'transport-stop-all'))
         break
       case 'transport_stop_all':
         if (ccVal > 63) window.dispatchEvent(new CustomEvent('transport-stop-all'))

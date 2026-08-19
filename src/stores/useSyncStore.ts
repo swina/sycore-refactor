@@ -40,6 +40,7 @@ const KEYS: Record<string, string> = {
   syncSequencer2ToTransport:     'S1_SYNC_SEQ2_TRANSPORT',
   syncChordProgToTransport:      'S1_SYNC_CP_TRANSPORT',
   syncDrumMachineToTransport:    'S1_SYNC_DM_TRANSPORT',
+  syncLoopMachineToTransport:    'S1_SYNC_LM_TRANSPORT',
   syncBackingTrackToTransport:   'S1_SYNC_BT_TRANSPORT',
   syncRecordToTransport:         'S1_SYNC_REC_TRANSPORT',
 }
@@ -85,6 +86,7 @@ export interface SyncFlags {
   syncSequencer2ToTransport: Ref<boolean>
   syncChordProgToTransport: Ref<boolean>
   syncDrumMachineToTransport: Ref<boolean>
+  syncLoopMachineToTransport: Ref<boolean>
   syncBackingTrackToTransport: Ref<boolean>
   syncRecordToTransport: Ref<boolean>
 }
@@ -129,6 +131,7 @@ export const useSyncStore = defineStore('sync', () => {
   const syncSequencer2ToTransport     = ref(readBool(KEYS.syncSequencer2ToTransport))
   const syncChordProgToTransport      = ref(readBool(KEYS.syncChordProgToTransport))
   const syncDrumMachineToTransport    = ref(readBool(KEYS.syncDrumMachineToTransport))
+  const syncLoopMachineToTransport    = ref(readBool(KEYS.syncLoopMachineToTransport))
   const syncBackingTrackToTransport   = ref(readBool(KEYS.syncBackingTrackToTransport))
   const syncRecordToTransport         = ref(readBool(KEYS.syncRecordToTransport))
 
@@ -140,7 +143,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncChordProgToSequencer, syncChordProgToBackingTrack, syncChordProgToLooper, syncChordProgToAudioCapture,
     syncLoopPadsToMidi, syncLoopPadsToSequencer, syncLoopPadsToBackingTrack, syncLoopPadsToLooper, syncLoopPadsToAudioCapture,
     syncDrumMachineToMidi, syncDrumMachineToSequencer, syncDrumMachineToBackingTrack, syncDrumMachineToLooper, syncDrumMachineToAudioCapture,
-    syncSequencerToTransport, syncSequencer2ToTransport, syncChordProgToTransport, syncDrumMachineToTransport, syncBackingTrackToTransport,
+    syncSequencerToTransport, syncSequencer2ToTransport, syncChordProgToTransport, syncDrumMachineToTransport, syncLoopMachineToTransport, syncBackingTrackToTransport,
     syncRecordToTransport,
   }
 

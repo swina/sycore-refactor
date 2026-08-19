@@ -104,6 +104,10 @@ const _onTransportStopAll = () => { stopAll() }
               <input type="checkbox" v-model="syncStore.syncChordProgToTransport" class="accent-synth-neon" />
             </label>
             <label class="flex items-center justify-between cursor-pointer group">
+              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Samples Machine</span>
+              <input type="checkbox" v-model="syncStore.syncLoopMachineToTransport" class="accent-synth-neon" />
+            </label>
+            <label class="flex items-center justify-between cursor-pointer group">
               <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Drum Machine</span>
               <input type="checkbox" v-model="syncStore.syncDrumMachineToTransport" class="accent-synth-neon" />
             </label>

@@ -231,14 +231,14 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     return
   }
 
-  // ── Global transport actions (Play All / Stop All — toggle on any press) ─
+  // ── Global transport actions (Play All / Stop All — value-driven) ────────
   if (fieldName === 'transport_play_all' || fieldName === 'transport_stop_all') {
-    // Fire on any incoming value (both CC 0/127 and note-on velocity).
-    // Each fire toggles between play and stop, supporting all common MIDI
-    // controller button behaviors (momentary, toggle, alternating 127/0).
-    const wasRunning = _transportRunning
-    _transportRunning = !wasRunning
-    window.dispatchEvent(new CustomEvent(wasRunning ? 'transport-stop-all' : 'transport-play-all'))
+    // CC 127 → play all, CC 0 → stop all. Value-driven so momentary buttons
+    // (which send 127 on press and 0 on release) trigger a single play/stop
+    // instead of double-toggling. Works for any learned CC number.
+    const shouldPlay = fieldName !== 'transport_stop_all' && val >= 64
+    _transportRunning = shouldPlay
+    window.dispatchEvent(new CustomEvent(shouldPlay ? 'transport-play-all' : 'transport-stop-all'))
     return
   }
 

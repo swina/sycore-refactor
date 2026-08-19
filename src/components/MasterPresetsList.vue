@@ -4,12 +4,16 @@ import { X, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Laye
 import { useMidiStore } from '@/stores/useMidiStore'
 import { userKey } from '@/lib/userKey'
 import { usePresetStore } from '@/stores/usePresetStore'
+import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import { MidiSource } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 
 const emit = defineEmits(['close'])
 const midiStore   = useMidiStore()
 const presetStore = usePresetStore()
+
+// ── Performance Sets (shared, IndexedDB-backed) ───────────────────
+const { pcSets, loadSets, saveSet, updateSet, deleteSet, recallSet: recallStoredSet } = usePerformanceSets()
 
 // ── Device list (left column) — only PC-enabled devices ────────
 const devices = computed(() => {
@@ -239,23 +243,10 @@ function setChannel(ch) {
 }
 
 // ── Performance Sets ────────────────────────────────────────────
-const LS_PC_SETS = 'SYCORE_PC_PERFORMANCE_SETS'
-const pcSets         = ref([])
 const activeSetId    = ref(null)
 const showSaveDialog = ref(false)
 const newSetName     = ref('')
 const newSetNameInput = ref(null)
-
-function loadSets() {
-  try {
-    const raw = localStorage.getItem(userKey(LS_PC_SETS))
-    if (raw) pcSets.value = JSON.parse(raw)
-  } catch { pcSets.value = [] }
-}
-
-function persistSets() {
-  localStorage.setItem(userKey(LS_PC_SETS),JSON.stringify(pcSets.value))
-}
 
 function openSaveDialog() {
   newSetName.value = ''
@@ -263,98 +254,16 @@ function openSaveDialog() {
   nextTick(() => newSetNameInput.value?.focus())
 }
 
-function saveCurrentSet() {
+async function saveCurrentSet() {
   const name = newSetName.value.trim()
   if (!name) return
-
-  const snapshot = devices.value.map(dev => {
-    const reg  = midiStore.routingConfig.registrations[dev.name]
-    const isUi = (midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)
-    return {
-      deviceName:     dev.name,
-      pcChannel:      reg?.pcChannel ?? 0,
-      pcBank:         reg?.pcBank    ?? '',
-      pcProgram:      reg?.pcProgram ?? 0,
-      pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
-      isUiDevice:     isUi,
-      lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
-      lastPresetName: isUi ? (presetStore.lastPreset?.name ?? null) : null,
-    }
-  })
-
-  pcSets.value = [{
-    id:          Date.now().toString(),
-    name,
-    createdAt:   new Date().toISOString(),
-    midiChannel: midiStore.midiChannel,
-    devices:     snapshot,
-  }, ...pcSets.value]
-
-  persistSets()
+  await saveSet(name)
   showSaveDialog.value = false
 }
 
-function recallSet(set) {
+async function recallSet(set) {
   activeSetId.value = set.id
-  if (set.midiChannel) midiStore.setMidiChannel(set.midiChannel)
-  set.devices.forEach(entry => {
-    if (!midiStore.routingConfig.registrations[entry.deviceName]) return
-
-    midiStore.updateRegistration(entry.deviceName, 'pcChannel',  entry.pcChannel)
-    midiStore.updateRegistration(entry.deviceName, 'pcBank',     entry.pcBank)
-    midiStore.updateRegistration(entry.deviceName, 'pcProgram',  entry.pcProgram)
-    midiStore.updateRegistration(entry.deviceName, 'pcChannels', JSON.parse(JSON.stringify(entry.pcChannels)))
-
-    if (entry.isUiDevice) {
-      if (entry.lastPresetId) {
-        const preset = presetStore.history.find(p => p.id === entry.lastPresetId)
-        if (preset) presetStore.recallPreset(preset, false)
-      }
-    } else {
-      const port = midiStore.outputs.find(o => o.name === entry.deviceName)
-      if (!port) return
-      const multiEntries = Object.entries(entry.pcChannels)
-      if (multiEntries.length > 0) {
-        multiEntries.forEach(([chStr, info]) => {
-          const ch = parseInt(chStr)
-          port.send([0xB0 | ch, 0,  0])
-          port.send([0xB0 | ch, 32, 0])
-          port.send([0xC0 | ch, info.program ?? 0])
-        })
-      } else {
-        const ch = entry.pcChannel ?? 0
-        port.send([0xB0 | ch, 0,  0])
-        port.send([0xB0 | ch, 32, 0])
-        port.send([0xC0 | ch, entry.pcProgram ?? 0])
-      }
-    }
-  })
-}
-
-function updateSet(id) {
-  const snapshot = devices.value.map(dev => {
-    const reg  = midiStore.routingConfig.registrations[dev.name]
-    const isUi = (midiStore.routingMatrix?.[MidiSource.UI] ?? []).includes(dev.name)
-    return {
-      deviceName:     dev.name,
-      pcChannel:      reg?.pcChannel ?? 0,
-      pcBank:         reg?.pcBank    ?? '',
-      pcProgram:      reg?.pcProgram ?? 0,
-      pcChannels:     reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {},
-      isUiDevice:     isUi,
-      lastPresetId:   isUi ? (presetStore.lastPreset?.id   ?? null) : null,
-      lastPresetName: isUi ? (presetStore.lastPreset?.name ?? null) : null,
-    }
-  })
-  pcSets.value = pcSets.value.map(s =>
-    s.id === id ? { ...s, devices: snapshot, midiChannel: midiStore.midiChannel, updatedAt: new Date().toISOString() } : s
-  )
-  persistSets()
-}
-
-function deleteSet(id) {
-  pcSets.value = pcSets.value.filter(s => s.id !== id)
-  persistSets()
+  await recallStoredSet(set)
 }
 </script>
 
