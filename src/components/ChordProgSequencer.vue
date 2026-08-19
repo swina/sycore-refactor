@@ -16,6 +16,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
+import { parseMidiFile } from '@/lib/midi-file'
 import ChordAssignModal from './ChordAssignModal.vue'
 import AiPromptModal from './AiPromptModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
@@ -49,9 +50,42 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 const showAiPrompt = ref(false)
+const midiFileInputRef = ref(null)
+const midiImportResult = ref(null)
+const selectedMidiTrack = ref(0)
+const midiImportBpm = ref(120)
 
 async function handleAiResult(data) {
   await store.generateFromAiPrompt(data)
+}
+
+let _lastParseResult = null
+
+function handleMidiFileImport(e) {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    const buf = new Uint8Array(reader.result)
+    const result = parseMidiFile(buf)
+    _lastParseResult = result
+    midiImportResult.value = result.tracks
+    midiImportBpm.value = result.bpm
+    selectedMidiTrack.value = 0
+    if (result.bpm) arpStore.arpBpm = result.bpm
+    e.target.value = ''
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+function applyMidiImportTrack() {
+  const result = _lastParseResult
+  if (!result) return
+  const track = result.tracks[selectedMidiTrack.value]
+  if (!track) return
+  store.loadFromMidiImport(track, result.ticksPerBeat)
+  midiImportResult.value = null
+  _lastParseResult = null
 }
 
 // ── Playback ─────────────────────────────────────────────────────────────────
@@ -1172,7 +1206,7 @@ function velBarColor(v) {
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
         <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 items-center">Step {{ store.selectedStepIdx + 1 }}</div>
 
-        <div class="flex flex-col w-1/8">
+        <div class="flex flex-col w-1/5">
           <!-- Active toggle -->
           <button
             @click="store.toggleStepActive(store.selectedStepIdx)"
@@ -1636,9 +1670,17 @@ function velBarColor(v) {
 
         <!-- Generate Tab -->
         <div v-else-if="activeTab === 'generate'" class="flex-1 p-4 flex flex-col gap-4 overflow-y-auto">
-          <div class="text-[10px] text-neutral-400 leading-relaxed">
-            Generate a random progression from the currently selected key source. Chords are distributed across all active steps.
-          </div>
+            <!-- Hidden file input -->
+            <input
+              ref="midiFileInputRef"
+              type="file"
+              accept=".mid,.midi"
+              class="hidden"
+              @change="handleMidiFileImport"
+            />
+            <div class="text-[10px] text-neutral-400 leading-relaxed">
+              Generate a random progression from the currently selected key source. Chords are distributed across all active steps.
+            </div>
 
           <!-- Key display -->
           <div class="flex items-center gap-3">
@@ -1657,16 +1699,67 @@ function velBarColor(v) {
             Generate Progression
           </button>
 
-          <div v-if="progLoading" class="text-[10px] text-neutral-500">Loading progression data…</div>
+          <!-- MIDI File Import -->
+          <div class="border-t border-neutral-800 pt-4 mt-2">
+            <div class="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mb-2">Import .mid File</div>
 
-          <button
-            @click.stop="showAiPrompt = true"
-            title="AI Prompt"
-            class="flex items-center gap-2 px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start"
-          >
-            <Sparkles class="w-4 h-4" />
-            AI Generate
-          </button>
+            <button
+              @click.stop="showAiPrompt = true"
+              title="AI Prompt"
+              class="flex items-center gap-2 px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start mb-3"
+            >
+              <Sparkles class="w-4 h-4" />
+              AI Generate
+            </button>
+
+            <button
+              @click="midiFileInputRef?.click()"
+              class="flex items-center gap-2 px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start"
+            >
+              <Music2 class="w-4 h-4" />
+              Import MIDI
+            </button>
+
+            <!-- Track selector overlay -->
+            <Transition name="sy-modal">
+              <div
+                v-if="midiImportResult"
+                class="mt-3 p-3 rounded-lg border border-emerald-600/40 bg-emerald-950/30"
+              >
+                <div class="text-[10px] text-neutral-400 mb-2">Select track to import ({{ midiImportBpm }} BPM):</div>
+                <div class="flex flex-wrap gap-1.5 mb-3">
+                  <button
+                    v-for="(track, idx) in midiImportResult"
+                    :key="idx"
+                    @click="selectedMidiTrack = idx"
+                    :class="[
+                      'px-2 py-1 rounded text-[10px] font-mono transition-colors border',
+                      selectedMidiTrack === idx
+                        ? 'bg-emerald-700 border-emerald-500 text-white'
+                        : 'bg-neutral-800 border-neutral-700 text-neutral-300 hover:border-emerald-600 hover:text-emerald-300'
+                    ]"
+                  >
+                    {{ track.name || `Track ${idx + 1}` }}
+                    <span class="text-neutral-500 ml-1">({{ track.notes.length }}n)</span>
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="applyMidiImportTrack"
+                    class="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest transition-colors"
+                  >
+                    Load to Steps
+                  </button>
+                  <button
+                    @click="midiImportResult = null; _lastParseResult = null"
+                    class="px-3 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] font-mono transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
         </div>
 
         <!-- Performance Set Tab -->

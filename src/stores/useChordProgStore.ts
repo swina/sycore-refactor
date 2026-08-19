@@ -448,6 +448,66 @@ export const useChordProgStore = defineStore('chordProg', () => {
     if (pattern.midiChannel) midiChannel.value = pattern.midiChannel
   }
 
+  function loadFromMidiImport(track: { name: string; notes: Array<{ noteNumber: number; velocity: number; startTick: number }> }, ticksPerBeat: number) {
+    const NOTES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
+    function guessChordName(notes: number[]): string {
+      if (notes.length === 0) return '—'
+      if (notes.length === 1) return NOTES[notes[0] % 12] + Math.floor(notes[0] / 12)
+      const sorted = [...new Set(notes.map(n => n % 12))].sort((a, b) => a - b)
+      return sorted.map(s => NOTES[s]).join('') || `Chord`
+    }
+
+    const tickGroups = new Map<number, number[]>()
+    for (const n of track.notes) {
+      if (!tickGroups.has(n.startTick)) tickGroups.set(n.startTick, [])
+      tickGroups.get(n.startTick)!.push(n.noteNumber)
+    }
+
+    const sortedTicks = [...tickGroups.keys()].sort((a, b) => a - b)
+    const fresh = Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
+
+    for (let i = 0; i < Math.min(16, sortedTicks.length); i++) {
+      const tick = sortedTicks[i]
+      const noteNumbers = tickGroups.get(tick)!
+      const nextTick = sortedTicks[i + 1] ?? tick + ticksPerBeat
+      const tickDuration = nextTick - tick
+      const dur = midiTickToDuration(tickDuration, ticksPerBeat)
+      fresh[i] = {
+        ...DEFAULT_CHORD_STEP,
+        chordName: guessChordName(noteNumbers),
+        notes: [...noteNumbers],
+        active: true,
+        velocity: 100,
+        duration: dur,
+      }
+    }
+
+    steps.value = fresh
+    numSteps.value = Math.min(16, sortedTicks.length)
+  }
+
+  function midiTickToDuration(ticks: number, tpb: number): DurationOption {
+    const beats = ticks / tpb
+    const closest = DURATION_OPTIONS.slice().sort((a, b) => {
+      const aBeats = durationToBeats(a)
+      const bBeats = durationToBeats(b)
+      return Math.abs(aBeats - beats) - Math.abs(bBeats - beats)
+    })
+    return closest[0] ?? '4n'
+  }
+
+  function durationToBeats(d: DurationOption): number {
+    const map: Record<string, number> = {
+      '128n': 0.03125, '64n': 0.0625, '32n': 0.125,
+      '16t': 0.1667, '16n': 0.25, '16n.': 0.375,
+      '8t': 0.3333, '8n': 0.5, '8n.': 0.75,
+      '4t': 0.6667, '4n': 1, '4n.': 1.5,
+      '2n': 2, '2n.': 3,
+      '1m': 4, '2m': 8, '4m': 16, '8m': 32,
+    }
+    return map[d] ?? 1
+  }
+
   watch(uid, (newUid) => {
     const s: ChordProgSnapshot | null = newUid ? loadSaved() : null
     steps.value = ensureSteps16(s?.steps ?? Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP })))
@@ -465,6 +525,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,
     saveToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument,
+    loadFromMidiImport,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,
     slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled,

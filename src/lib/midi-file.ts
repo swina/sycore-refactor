@@ -6,6 +6,101 @@ export interface CapturedNote {
   duration:  number;   // ms (0 while note is still held)
 }
 
+// ── Parsed MIDI file types ──────────────────────────────────────
+
+export interface MidiImportNote {
+  noteNumber: number;
+  velocity:   number;
+  startTick:  number;
+  duration:   number;     // in ticks
+}
+
+export interface MidiImportTrack {
+  name:  string;
+  notes: MidiImportNote[];
+}
+
+export interface MidiImportResult {
+  tracks:       MidiImportTrack[];
+  bpm:          number;
+  ticksPerBeat: number;
+}
+
+// ── Parse a standard MIDI file (.mid) ───────────────────────────
+// Extracts note events grouped by track, with track names and BPM.
+// Only chord/notes events are included — CC, pitch bend, etc. are discarded.
+
+import { parseMidi } from 'midi-file'
+
+export function parseMidiFile(data: Uint8Array): MidiImportResult {
+  const midiData = parseMidi(data)
+
+  let bpm = 120
+  const ticksPerBeat = midiData.header.ticksPerBeat ?? 480
+
+  const tracks: MidiImportTrack[] = midiData.tracks.map((events, _trackIdx) => {
+    let trackName = `Track ${_trackIdx + 1}`
+    const rawNotes: { noteNumber: number; velocity: number; startTick: number; channel: number }[] = []
+    const noteOnMap = new Map<string, { startTick: number; velocity: number }>()
+    let absoluteTick = 0
+
+    for (const ev of events) {
+      absoluteTick += ev.deltaTime
+
+      if ((ev as any).meta) {
+        if ((ev as any).type === 'trackName') {
+          trackName = (ev as any).text ?? trackName
+        }
+        if ((ev as any).type === 'setTempo') {
+          bpm = Math.round(60_000_000 / (ev as any).microsecondsPerBeat)
+        }
+        continue
+      }
+
+      if (ev.type === 'noteOn' && ev.velocity > 0) {
+        const key = `${ev.noteNumber}-${ev.channel}`
+        noteOnMap.set(key, { startTick: absoluteTick, velocity: ev.velocity })
+      } else if (ev.type === 'noteOff' || (ev.type === 'noteOn' && ev.velocity === 0)) {
+        const key = `${ev.noteNumber}-${ev.channel}`
+        const on = noteOnMap.get(key)
+        if (on) {
+          noteOnMap.delete(key)
+          rawNotes.push({
+            noteNumber: ev.noteNumber,
+            velocity: on.velocity,
+            startTick: on.startTick,
+            channel: ev.channel,
+          })
+        }
+      }
+    }
+
+    // Build chord groups: notes that start on the same tick
+    const tickGroups = new Map<number, MidiImportNote[]>()
+    for (const n of rawNotes) {
+      if (!tickGroups.has(n.startTick)) tickGroups.set(n.startTick, [])
+      tickGroups.get(n.startTick)!.push({
+        noteNumber: n.noteNumber,
+        velocity: n.velocity,
+        startTick: n.startTick,
+        duration: n.startTick,
+      })
+    }
+
+    const notes: MidiImportNote[] = []
+    for (const [tick, group] of tickGroups) {
+      for (const n of group) {
+        notes.push(n)
+      }
+    }
+    notes.sort((a, b) => a.startTick - b.startTick)
+
+    return { name: trackName, notes }
+  })
+
+  return { tracks, bpm, ticksPerBeat }
+}
+
 // ── MIDI variable-length encoding ───────────────────────────────
 function varLen(n: number): number[] {
   if (n < 0x80) return [n];

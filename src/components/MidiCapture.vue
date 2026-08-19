@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { X, Minus, Download, RotateCcw, Play, Square, Scissors, SendHorizonal, Trash2, Magnet, Music, Repeat } from 'lucide-vue-next'
-import { buildMidiFile } from '@/lib/midi-file'
+import { buildMidiFile, parseMidiFile } from '@/lib/midi-file'
 import { storeToRefs } from 'pinia'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useCaptureStore } from '@/stores/useCaptureStore'
@@ -35,6 +35,7 @@ const captureStore = useCaptureStore()
 const { frozenNotes, phase, rangeStartMs, rangeEndMs } = storeToRefs(captureStore)
 
 const canvasRef = ref(null)
+const midiImportInputRef = ref(null)
 const rulerCanvasRef = ref(null)
 const noteLabelsRef = ref(null)
 const scrollWrapRef = ref(null)
@@ -1114,6 +1115,48 @@ function exportMidi() {
   URL.revokeObjectURL(url)
 }
 
+function handleMidiImport(e) {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    const buf = new Uint8Array(reader.result)
+    const result = parseMidiFile(buf)
+    _lastMidiImport = { result, bpm: result.bpm, msPerTick: (60000 / result.bpm) / result.ticksPerBeat }
+    midiImportTracks.value = result.tracks
+    e.target.value = ''
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+let _lastMidiImport = null
+const midiImportTracks = ref(null)
+const selectedMidiTrack = ref(0)
+
+function applyMidiImportTrack() {
+  if (!_lastMidiImport) return
+  const { result, msPerTick } = _lastMidiImport
+  const track = result.tracks[selectedMidiTrack.value]
+  if (!track || !track.notes.length) { midiImportTracks.value = null; _lastMidiImport = null; return }
+  const importedNotes = track.notes.map(n => ({
+    pitch: n.noteNumber,
+    velocity: n.velocity,
+    duration: n.duration * msPerTick,
+    startTime: n.startTick * msPerTick,
+    channel: 0,
+  }))
+  importedNotes.sort((a, b) => a.startTime - b.startTime)
+  const abs0 = importedNotes[0].startTime
+  const absEnd = importedNotes[importedNotes.length - 1].startTime + importedNotes[importedNotes.length - 1].duration
+  captureStore.frozenNotes = importedNotes
+  captureStore.rangeStartMs = abs0
+  captureStore.rangeEndMs = absEnd
+  captureStore.phase = 'review'
+  midiImportTracks.value = null
+  _lastMidiImport = null
+  nextTick(() => drawReviewPianoRoll())
+}
+
 function doReset() {
   stopPlayback()
   stopTimelineLoop()
@@ -1475,7 +1518,7 @@ onUnmounted(() => {
             </template>
           </div>
 
-          <div class="flex gap-2 text-[9px] flex-wrap justify-end">
+          <div class="flex gap-2 text-[9px] flex-wrap justify-end relative">
             <!-- Loop toggle -->
             <button
               v-if="phase === 'review'"
@@ -1535,6 +1578,62 @@ onUnmounted(() => {
             >
               <Download class="w-3 h-3" /> MIDI
             </button>
+
+            <!-- Import MIDI -->
+            <input
+              ref="midiImportInputRef"
+              type="file"
+              accept=".mid,.midi"
+              class="hidden"
+              @change="handleMidiImport"
+            />
+            <button
+              @click="midiImportInputRef?.click()"
+              class="px-3 py-1.5 bg-emerald-700 text-[9px] text-white rounded-lg hover:bg-emerald-600 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-1.5"
+              title="Import .mid file into piano roll"
+            >
+              <Music class="w-3 h-3" /> Import
+            </button>
+
+            <!-- Track selector -->
+            <Transition name="sy-modal">
+              <div
+                v-if="midiImportTracks"
+                class="absolute bottom-full right-0 mb-2 p-3 rounded-lg border border-emerald-600/40 bg-neutral-950 shadow-2xl z-[962] min-w-[260px]"
+              >
+                <div class="text-[10px] text-neutral-400 mb-2">Select track to import:</div>
+                <div class="flex flex-wrap gap-1.5 mb-3">
+                  <button
+                    v-for="(track, idx) in midiImportTracks"
+                    :key="idx"
+                    @click="selectedMidiTrack = idx"
+                    :class="[
+                      'px-2 py-1 rounded text-[10px] font-mono transition-colors border',
+                      selectedMidiTrack === idx
+                        ? 'bg-emerald-700 border-emerald-500 text-white'
+                        : 'bg-neutral-800 border-neutral-700 text-neutral-300 hover:border-emerald-600 hover:text-emerald-300'
+                    ]"
+                  >
+                    {{ track.name || `Track ${idx + 1}` }}
+                    <span class="text-neutral-500 ml-1">({{ track.notes.length }})</span>
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="applyMidiImportTrack"
+                    class="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest transition-colors"
+                  >
+                    Load
+                  </button>
+                  <button
+                    @click="midiImportTracks = null; _lastMidiImport = null"
+                    class="px-3 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[10px] font-mono transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </Transition>
           </div>
         </div>
 
