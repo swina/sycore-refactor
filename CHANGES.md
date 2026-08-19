@@ -2,6 +2,11 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-19
+
+- **Import standard MIDI files (.mid)** — Chord Progression and Piano Roll can now import `.mid` files directly. Chord Progression loads each track as a new slot with per-step chords parsed from simultaneous note-ons. Piano Roll imports every track's notes into the capture grid, preserving pitch, velocity, and timing. Tempo and track names are read from the file.
+- Fix: re-send Program Change on app startup so hardware synths recall their last patch.
+
 ## 2026-08-12
 
 - Sequencer (piano-roll app): **P1/P2 CC# are now directly editable** — next to each parameter's named dropdown (still built from the S1 CC map for quick picking) is a numeric CC# field you can type into directly, so P1/P2 can target whatever controller number the connected instrument actually uses instead of only the S1's own mapping. Values are clamped to the valid 0–127 MIDI range on blur; unnamed CC numbers show as `CC<n>` instead of a blank label.
