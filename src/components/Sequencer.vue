@@ -550,6 +550,21 @@ watch(() => props.bpm, (bpm) => {
   midiStore.setBpm(bpm)
 })
 
+const TEMPO_MULTIPLIERS = [
+  { label: '1/32', interval: '32n', beatsPerStep: 0.125 },
+  { label: '1/16', interval: '16n', beatsPerStep: 0.25 },
+  { label: '1/8',  interval: '8n',  beatsPerStep: 0.5 },
+  { label: '1/4',  interval: '4n',  beatsPerStep: 1 },
+  { label: '1/2',  interval: '2n',  beatsPerStep: 2 },
+  { label: '1/1',  interval: '1m',  beatsPerStep: 4 },
+  { label: '2/1',  interval: '2m',  beatsPerStep: 8 },
+  { label: '3/1',  interval: '2m.', beatsPerStep: 12 },
+  { label: '4/1',  interval: '4m',  beatsPerStep: 16 },
+]
+const tempoMultiplier = ref(TEMPO_MULTIPLIERS[4]) // default 1/1
+const sequenceDirection = ref('up')
+const SEQ_DIRECTIONS = ['up', 'down', 'up-down', 'random']
+
 watch(swingAmount, (val) => {
   getTransport().swing = val / 100
   getTransport().swingSubdivision = '16n'
@@ -1318,6 +1333,7 @@ watch(isPlaying, (playing) => {
     }
 
     let stepCounter = 0
+    let stepDirection = 1 // 1 = up, -1 = down (for up-down mode)
 
     toneStart().then(() => {
       getTransport().bpm.value = props.bpm
@@ -1327,9 +1343,26 @@ watch(isPlaying, (playing) => {
       repeatEventIdRef.value = getTransport().scheduleRepeat((time) => {
         const state = playStateRef.current
         if (!state.isPlaying) return
-        stepCounter = stepCounter % state.steps.length
-        const stepIdx = stepCounter
-        stepCounter = (stepCounter + 1) % state.steps.length
+        const len = state.steps.length
+        let stepIdx
+        const dir = sequenceDirection.value
+        if (dir === 'random') {
+          stepIdx = Math.floor(Math.random() * len)
+        } else {
+          stepCounter = ((stepCounter % len) + len) % len
+          stepIdx = stepCounter
+          if (dir === 'up') {
+            stepCounter = (stepCounter + 1) % len
+          } else if (dir === 'down') {
+            stepCounter = (stepCounter - 1 + len) % len
+          } else if (dir === 'up-down') {
+            stepCounter += stepDirection
+            if (stepCounter >= len || stepCounter < 0) {
+              stepDirection *= -1
+              stepCounter += stepDirection * 2
+            }
+          }
+        }
         const step = state.steps[stepIdx]
 
         const bankIdx = state.bankIndices?.[stepIdx]
@@ -1348,7 +1381,7 @@ watch(isPlaying, (playing) => {
           if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel, MidiSource.SEQUENCER2)
           if (state.param2CC !== null) midiStore.sendCC(state.param2CC, step.param2Value, state.channel, MidiSource.SEQUENCER2)
 
-          const stepDurationMs = 60000 / (state.bpm * 4)
+          const stepDurationMs = 60000 / (state.bpm * 4) * (tempoMultiplier.value.beatsPerStep * 4)
           let noteDurationMs = stepDurationMs * (step.gate / 100)
           if (step.tieSteps > 0) noteDurationMs += stepDurationMs * Math.min(step.tieSteps, state.steps.length - 1)
           noteDurationMs = Math.max(noteDurationMs, 10)
@@ -1378,7 +1411,7 @@ watch(isPlaying, (playing) => {
           playStateRef.current.currentStep = stepIdx
           followChainPlayback(stepIdx)
         }, time)
-      }, '16n', transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value ? transportManager.getNextBarPosition() : undefined)
+      }, tempoMultiplier.value.interval, transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value ? transportManager.getNextBarPosition() : undefined)
 
       transportManager.acquireTransport()
     })
@@ -1563,6 +1596,37 @@ let generateHidden = ref(false)
             <span class="text-3xl text-red-800 font-mono tabular-nums leading-none">
               {{ transportPosition }}
             </span>
+          </div>
+
+          <!-- Tempo Multiplier -->
+          <div class="flex items-center gap-1">
+            <span class="text-[9px] text-neutral-500 font-mono">×</span>
+            <select
+              v-model="tempoMultiplier"
+              class="bg-black/60 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-amber-400 outline-none appearance-none cursor-pointer"
+              title="Steps per beat"
+            >
+              <option
+                v-for="opt in TEMPO_MULTIPLIERS"
+                :key="opt.label"
+                :value="opt"
+              >{{ opt.label }}</option>
+            </select>
+          </div>
+
+          <!-- Direction -->
+          <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
+            <button
+              v-for="dir in SEQ_DIRECTIONS"
+              :key="dir"
+              @click="sequenceDirection = dir"
+              :class="[
+                'px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider transition-colors',
+                sequenceDirection === dir
+                  ? 'bg-amber-600 text-black'
+                  : 'text-neutral-500 hover:text-neutral-300'
+              ]"
+            >{{ dir === 'up-down' ? '↕' : dir === 'up' ? '↑' : dir === 'down' ? '↓' : '↔' }}</button>
           </div>
 
           <!-- Active Sound Info: Expanded with Nav -->
