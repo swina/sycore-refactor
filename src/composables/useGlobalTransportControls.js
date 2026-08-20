@@ -18,13 +18,13 @@ export function useGlobalTransportControls() {
 
   const _pendingTimeouts = new Set()
 
-  function delayMs(beats: number): number {
+  function delayMs(beats) {
     if (!beats || beats <= 0) return 0
     const bpm = arpStore.arpBpm || 120
     return beats * (60 / bpm) * 1000
   }
 
-  function scheduleStart(beats: number, fn: () => void): void {
+  function scheduleStart(beats, fn) {
     const ms = delayMs(beats)
     if (ms <= 0) { fn(); return }
     const tid = setTimeout(() => {
@@ -34,7 +34,7 @@ export function useGlobalTransportControls() {
     _pendingTimeouts.add(tid)
   }
 
-  function clearPendingStarts(): void {
+  function clearPendingStarts() {
     _pendingTimeouts.forEach(tid => clearTimeout(tid))
     _pendingTimeouts.clear()
   }
