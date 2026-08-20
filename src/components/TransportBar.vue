@@ -92,64 +92,64 @@ const _onTransportStopAll = () => { stopAll() }
 
           <div class="space-y-2">
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Step Sequencer</span>
+              <span class="text-[11px] font-mono text-neutral-300 group-hover:text-white transition-colors">Step Sequencer</span>
               <div class="flex items-center gap-2">
                 <input type="number" min="0" max="64" v-model.number="syncStore.appDelays['Step Sequencer']"
-                  class="w-8 bg-black border border-neutral-800 rounded text-[8px] font-mono text-center text-neutral-400 outline-none"
+                  class="w-10 bg-black border border-neutral-800 rounded text-[11px] font-mono text-center text-neutral-400 outline-none"
                   title="Start delay in beats" />
                 <input type="checkbox" v-model="syncStore.syncSequencerToTransport" class="accent-synth-neon" />
               </div>
             </label>
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Sequencer</span>
+              <span class="text-[11px] font-mono text-neutral-300 group-hover:text-white transition-colors">Sequencer</span>
               <div class="flex items-center gap-2">
                 <input type="number" min="0" max="64" v-model.number="syncStore.appDelays['Sequencer']"
-                  class="w-8 bg-black border border-neutral-800 rounded text-[8px] font-mono text-center text-neutral-400 outline-none"
+                  class="w-10 bg-black border border-neutral-800 rounded text-[11px] font-mono text-center text-neutral-400 outline-none"
                   title="Start delay in beats" />
                 <input type="checkbox" v-model="syncStore.syncSequencer2ToTransport" class="accent-synth-neon" />
               </div>
             </label>
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Chord Prog</span>
+              <span class="text-[11px] font-mono text-neutral-300 group-hover:text-white transition-colors">Chord Prog</span>
               <div class="flex items-center gap-2">
                 <input type="number" min="0" max="64" v-model.number="syncStore.appDelays['Chord Prog']"
-                  class="w-8 bg-black border border-neutral-800 rounded text-[8px] font-mono text-center text-neutral-400 outline-none"
+                  class="w-10 bg-black border border-neutral-800 rounded text-[11px] font-mono text-center text-neutral-400 outline-none"
                   title="Start delay in beats" />
                 <input type="checkbox" v-model="syncStore.syncChordProgToTransport" class="accent-synth-neon" />
               </div>
             </label>
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Samples Machine</span>
+              <span class="text-[11px] font-mono text-neutral-300 group-hover:text-white transition-colors">Samples Machine</span>
               <div class="flex items-center gap-2">
                 <input type="number" min="0" max="64" v-model.number="syncStore.appDelays['Samples Machine']"
-                  class="w-8 bg-black border border-neutral-800 rounded text-[8px] font-mono text-center text-neutral-400 outline-none"
+                  class="w-10 bg-black border border-neutral-800 rounded text-[11px] font-mono text-center text-neutral-400 outline-none"
                   title="Start delay in beats" />
                 <input type="checkbox" v-model="syncStore.syncLoopMachineToTransport" class="accent-synth-neon" />
               </div>
             </label>
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Drum Machine</span>
+              <span class="text-[11px] font-mono text-neutral-300 group-hover:text-white transition-colors">Drum Machine</span>
               <div class="flex items-center gap-2">
                 <input type="number" min="0" max="64" v-model.number="syncStore.appDelays['Drum Machine']"
-                  class="w-8 bg-black border border-neutral-800 rounded text-[8px] font-mono text-center text-neutral-400 outline-none"
+                  class="w-10 bg-black border border-neutral-800 rounded text-[11px] font-mono text-center text-neutral-400 outline-none"
                   title="Start delay in beats" />
                 <input type="checkbox" v-model="syncStore.syncDrumMachineToTransport" class="accent-synth-neon" />
               </div>
             </label>
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Backing Track</span>
+              <span class="text-[11px] font-mono text-neutral-300 group-hover:text-white transition-colors">Backing Track</span>
               <div class="flex items-center gap-2">
                 <input type="number" min="0" max="64" v-model.number="syncStore.appDelays['Backing Track']"
-                  class="w-8 bg-black border border-neutral-800 rounded text-[8px] font-mono text-center text-neutral-400 outline-none"
+                  class="w-10 bg-black border border-neutral-800 rounded text-[11px] font-mono text-center text-neutral-400 outline-none"
                   title="Start delay in beats" />
                 <input type="checkbox" v-model="syncStore.syncBackingTrackToTransport" class="accent-synth-neon" />
               </div>
             </label>
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-[10px] font-mono text-neutral-300 group-hover:text-white transition-colors">Arm Record</span>
+              <span class="text-[11px] font-mono text-neutral-300 group-hover:text-white transition-colors">Arm Record</span>
               <div class="flex items-center gap-2">
                 <input type="number" min="0" max="64" v-model.number="syncStore.appDelays['Arm Record']"
-                  class="w-8 bg-black border border-neutral-800 rounded text-[8px] font-mono text-center text-neutral-400 outline-none"
+                  class="w-10 bg-black border border-neutral-800 rounded text-[11px] font-mono text-center text-neutral-400 outline-none"
                   title="Start delay in beats" />
                 <input type="checkbox" v-model="syncStore.syncRecordToTransport" class="accent-synth-neon" />
               </div>
