@@ -89,9 +89,20 @@ export interface SyncFlags {
   syncLoopMachineToTransport: Ref<boolean>
   syncBackingTrackToTransport: Ref<boolean>
   syncRecordToTransport: Ref<boolean>
+  /** Per-app start delay in beats (keyed by app name). 0 = no delay. */
+  appDelays: Ref<Record<string, number>>
 }
 
 // ── Store ───────────────────────────────────────────────────────────────────
+
+const APP_DELAYS_KEY = 'S1_SYNC_APP_DELAYS'
+
+function readDelays(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(userKey(APP_DELAYS_KEY))
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
 
 export const useSyncStore = defineStore('sync', () => {
   const authStore = useAuthStore()
@@ -135,6 +146,8 @@ export const useSyncStore = defineStore('sync', () => {
   const syncBackingTrackToTransport   = ref(readBool(KEYS.syncBackingTrackToTransport))
   const syncRecordToTransport         = ref(readBool(KEYS.syncRecordToTransport))
 
+  const appDelays = ref<Record<string, number>>(readDelays())
+
   const REFS: SyncFlags = {
     syncTrack, syncRecordAudioCapture, syncBackingTrackToLooper, syncSequencerToLooper,
     syncLooperToMidi, syncLooperToSequencer, syncLooperToBackingTrack, syncLooperToAudioCapture,
@@ -145,16 +158,24 @@ export const useSyncStore = defineStore('sync', () => {
     syncDrumMachineToMidi, syncDrumMachineToSequencer, syncDrumMachineToBackingTrack, syncDrumMachineToLooper, syncDrumMachineToAudioCapture,
     syncSequencerToTransport, syncSequencer2ToTransport, syncChordProgToTransport, syncDrumMachineToTransport, syncLoopMachineToTransport, syncBackingTrackToTransport,
     syncRecordToTransport,
+    appDelays,
   }
 
   Object.entries(REFS).forEach(([name, r]) => {
+    if (name === 'appDelays') return
     watch(r, (v: boolean) => localStorage.setItem(userKey(KEYS[name]), v ? 'true' : 'false'))
   })
 
+  watch(appDelays, (v) => {
+    localStorage.setItem(userKey(APP_DELAYS_KEY), JSON.stringify(v))
+  }, { deep: true })
+
   watch(uid, (newUid) => {
     Object.entries(REFS).forEach(([name, r]) => {
+      if (name === 'appDelays') return
       r.value = newUid ? readBool(KEYS[name]) : false
     })
+    appDelays.value = newUid ? readDelays() : {}
   })
 
   return REFS
