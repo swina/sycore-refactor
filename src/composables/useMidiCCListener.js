@@ -279,6 +279,7 @@ export function useMidiCCListener() {
   const arpStore = useArpStore()
   const noteLatchStore = useNoteLatchStore()
   const drumStore = useDrumMachineStore()
+  const cpStore = useChordProgStore()
   const mixerStore = useAudioMixerStore()
 
   const originalModValueMap = {}
@@ -479,6 +480,10 @@ export function useMidiCCListener() {
         applyParam(paramName, velocity, true)
       }
     }
+  }
+
+  function applyParam(fieldName, val, fromNote = false) {
+    return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, noteLatchStore, drumStore, cpStore, mixerStore, configStore })
   }
 
   function onPitchBend(val, chan, inputId) {

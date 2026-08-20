@@ -1705,7 +1705,8 @@ function velBarColor(v) {
         </div>
 
         <!-- Generate Tab -->
-        <div v-else-if="activeTab === 'generate'" class="flex-1 p-4 flex flex-col gap-4 overflow-y-auto">
+        <div v-else-if="activeTab === 'generate'" class="flex-1 p-4 flex gap-4 overflow-y-auto custom-scrollbar">
+            <div class="flex flex-col">
             <!-- Hidden file input -->
             <input
               ref="midiFileInputRef"
@@ -1724,7 +1725,7 @@ function velBarColor(v) {
             <span class="text-[11px] font-bold text-purple-300">{{ KEY_FILE_NAMES[store.selectedKey] }}</span>
             <span class="text-[9px] text-neutral-600">(change in Library tab)</span>
           </div>
-
+            </div>
           <!-- Generate button -->
           <button
             @click="handleGenerate"
