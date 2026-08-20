@@ -85,6 +85,8 @@ const { liveNodes: canvasNodes, liveCables: cables } = storeToRefs(midiFlowConfi
 let nextId = 1
 
 const NODE_W = 220
+const APP_NODE_W = 160
+function nodeWidth(node) { return node.sourceId ? APP_NODE_W : NODE_W }
 const PORT_Y = 16  // port dot center Y within node (center of header row)
 
 const CHANNELS = Array.from({ length: 16 }, (_, i) => i + 1)
@@ -266,7 +268,7 @@ function onNodeMousedown(e, node) {
 }
 
 // ── Port positions (canvas-relative coords) ──
-const outPos = (n) => ({ x: n.x + NODE_W, y: n.y + PORT_Y })
+const outPos = (n) => ({ x: n.x + nodeWidth(n), y: n.y + PORT_Y })
 const inPos  = (n) => ({ x: n.x,          y: n.y + PORT_Y })
 
 // ── Cable drawing ──
@@ -1170,14 +1172,14 @@ function pendingPath() {
             v-for="node in canvasNodes"
             :key="node.id"
             class="absolute"
-            :style="{ left: node.x + 'px', top: node.y + 'px', width: NODE_W + 'px', zIndex: 2 }"
+            :style="{ left: node.x + 'px', top: node.y + 'px', width: nodeWidth(node) + 'px', zIndex: 2 }"
             @mousedown="onNodeMousedown($event, node)"
           >
             <!-- IN port (hardware, or an app that supports MIDI IN) -->
             <svg
               v-if="!node.sourceId || node.hasIn"
               class="absolute"
-              :style="{ left: '-9px', top: (PORT_Y - 8) + 'px', width: '18px', height: '18px', zIndex: 3, pointerEvents: 'all', cursor: 'crosshair' }"
+              :style="{ left: '-9px', top: (PORT_Y - 10) + 'px', width: '18px', height: '18px', zIndex: 3, pointerEvents: 'all', cursor: 'crosshair' }"
               @mouseup.stop="onInPortMouseup($event, node)"
             >
               <circle cx="9" cy="9" r="5" fill="#0f172a" stroke="#3b82f6" stroke-width="2" />
@@ -1188,13 +1190,15 @@ function pendingPath() {
             <div
               class="rounded-xl overflow-hidden shadow-xl transition-colors cursor-grab active:cursor-grabbing border"
               :class="node.sourceId
-                ? 'bg-purple-950/30 border-purple-800/50 hover:border-purple-500/50'
+                ? 'bg-purple-950/30 border-purple-800/50 w-[160px] hover:border-purple-500/50'
                 : typeMeta(node.type).card"
             >
               <!-- Card header -->
               <div
-                class="flex items-center justify-between px-3 py-2 border-b"
-                :class="node.sourceId ? 'bg-purple-900/30 border-purple-900/50' : typeMeta(node.type).header"
+                class="flex items-center justify-between border-b"
+                :class="node.sourceId
+                  ? 'bg-purple-900/30 border-purple-900/50 px-2 py-1.5'
+                  : typeMeta(node.type).header + ' px-3 py-2'"
               >
                 <span class="flex items-center gap-1.5 flex-1 pr-2 min-w-0">
                   <component v-if="node.sourceId" :is="appIconFor(node.sourceId)" class="w-3 h-3 text-purple-400 shrink-0" />
@@ -1365,7 +1369,7 @@ function pendingPath() {
             <!-- OUT port -->
             <svg
               class="absolute"
-              :style="{ right: '-9px', top: (PORT_Y - 8) + 'px', width: '18px', height: '18px', zIndex: 3, pointerEvents: 'all', cursor: 'crosshair' }"
+              :style="{ right: '-9px', top: (PORT_Y - 10) + 'px', width: '18px', height: '18px', zIndex: 3, pointerEvents: 'all', cursor: 'crosshair' }"
               @mousedown.stop="onOutPortMousedown($event, node)"
             >
               <circle cx="9" cy="9" r="5" fill="#0f172a" stroke="#a3e635" stroke-width="2" />
