@@ -16,7 +16,7 @@ export function useGlobalTransportControls() {
   const syncStore = useSyncStore()
   const arpStore = useArpStore()
 
-  const _pendingTimeouts = new Set<ReturnType<typeof setTimeout>>()
+  const _pendingTimeouts = new Set()
 
   function delayMs(beats: number): number {
     if (!beats || beats <= 0) return 0
