@@ -27,7 +27,7 @@ export const useNoteLatchStore = defineStore('noteLatch', () => {
       sourceKey,
       name: name || sourceKey,
       enabled: false,
-      maxNotes: 4,
+      maxNotes: 1,
       replace: true,
       latchedCount: 0,
     }

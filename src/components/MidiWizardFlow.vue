@@ -364,8 +364,17 @@ function finish() {
       // appCables below), so this only applies when the source is hardware.
       if (!src.sourceId && cable.filter) {
         const { lowNote = 0, highNote = 127 } = cable.filter
-        if (lowNote > 0 || highNote < 127) {
+        if (lowNote > 0 || highNote < 127 || (cable.filter.channels && cable.filter.channels.length > 0)) {
           newOutputFilters[`${src.name}→${canonicalName}`] = cable.filter
+        }
+      }
+
+      // Note-range + channel filter for app→device cables (e.g. Sequencer →
+      // Instrument In) — enforced in broadcast() the same way the Thru path
+      // enforces device→device filters. Source key is the MidiSource enum.
+      if (src.sourceId && cable.filter) {
+        if (cable.filter.lowNote > 0 || cable.filter.highNote < 127 || (cable.filter.channels && cable.filter.channels.length > 0)) {
+          newOutputFilters[`${src.sourceId}→${canonicalName}`] = cable.filter
         }
       }
     }
@@ -757,16 +766,20 @@ function isHwToHwCable(cable) {
   return !isAppCable(cable) && !isDeviceToAppCable(cable)
 }
 
+function cableHasActiveFilter(cable) {
+  return cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127 || (cable.filter.channels && cable.filter.channels.length > 0))
+}
+
 function isCableFilterable(cable) {
-  return isDeviceToAppCable(cable) || isHwToHwCable(cable)
+  return isDeviceToAppCable(cable) || isHwToHwCable(cable) || (isAppCable(cable) && !isDeviceToAppCable(cable))
 }
 
 const editingCableId = ref(null)
 
 function onCableClick(cable) {
   if (isCableFilterable(cable)) {
-    if (!cable.filter) cable.filter = { lowNote: 0, highNote: 127 }
-    editingCableId.value = editingCableId.value === cable.id ? null : cable.id
+            if (!cable.filter) cable.filter = { lowNote: 0, highNote: 127 }
+            editingCableId.value = editingCableId.value === cable.id ? null : cable.id
   } else {
     removeCable(cable.id)
   }
@@ -786,6 +799,14 @@ const editingCablePos = computed(() => editingCable.value ? cableMidpoint(editin
 function removeEditingCable() {
   if (editingCable.value) removeCable(editingCable.value.id)
   editingCableId.value = null
+}
+
+function toggleCableChannel(ch) {
+  if (!editingCable.value) return
+  if (!editingCable.value.filter.channels) editingCable.value.filter.channels = []
+  const idx = editingCable.value.filter.channels.indexOf(ch)
+  if (idx === -1) editingCable.value.filter.channels.push(ch)
+  else editingCable.value.filter.channels.splice(idx, 1)
 }
 
 function pendingPath() {
@@ -1051,7 +1072,7 @@ function pendingPath() {
                 fill="none"
                 :stroke="isDeviceToAppCable(cable) ? '#3b82f6' : (isAppCable(cable) ? '#8b5cf6' : '#a3e635')"
                 stroke-width="2" stroke-opacity="0.65"
-                :stroke-dasharray="isCableFilterable(cable) && cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127) ? '5 3' : null"
+                :stroke-dasharray="isCableFilterable(cable) && cableHasActiveFilter(cable) ? '5 3' : null"
                 style="pointer-events:none;"
               />
             </g>
@@ -1074,16 +1095,16 @@ function pendingPath() {
             @click.stop="onCableClick(cable)"
             @mousedown.stop
             class="absolute z-20 w-5 h-5 rounded-full border flex items-center justify-center transition-colors"
-            :class="cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127)
+            :class="cableHasActiveFilter(cable)
               ? 'bg-blue-500/30 border-blue-400/60 text-blue-200 hover:bg-blue-500/50'
               : 'bg-neutral-900 border-neutral-700 text-neutral-500 hover:text-blue-300 hover:border-blue-400/50'"
             :style="{ left: cableMidpoint(cable).x + 'px', top: cableMidpoint(cable).y + 'px', transform: 'translate(-50%, -50%)' }"
-            title="Set note-range filter (keyboard split)"
+            title="Set note-range / channel filter"
           >
             <Filter class="w-2.5 h-2.5" />
           </button>
 
-          <!-- Note-range filter popover (device→app cables — "keyboard split") -->
+          <!-- Note-range + channel filter popover (device→app and hw→hw cables) -->
           <template v-if="editingCable">
             <div class="fixed inset-0 z-30" @click="editingCableId = null" />
             <div
@@ -1112,6 +1133,27 @@ function pendingPath() {
                     type="number" min="0" max="127" v-model.number="editingCable.filter.highNote"
                     class="w-14 bg-black border border-neutral-700 rounded px-1.5 py-1 text-[10px] text-white font-mono outline-none focus:border-synth-neon/60"
                   />
+                </div>
+              </div>
+              <div class="border-t border-neutral-800 pt-2 flex flex-col gap-1.5">
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-[8px] font-mono text-neutral-500 uppercase tracking-widest">MIDI Ch.</span>
+                  <button
+                    v-if="editingCable.filter.channels && editingCable.filter.channels.length > 0"
+                    @click="editingCable.filter.channels = []"
+                    class="text-[7px] font-black uppercase tracking-wider text-neutral-600 hover:text-white transition-colors"
+                    title="Clear channel filter (pass all)"
+                  >Clear</button>
+                </div>
+                <div class="flex gap-1 flex-wrap max-w-[300px]">
+                  <button
+                    v-for="ch in 16" :key="ch"
+                    @click="toggleCableChannel(ch - 1)"
+                    class="w-8 h-7 rounded text-[10px] font-mono font-bold transition-colors"
+                    :class="(editingCable.filter.channels || []).includes(ch - 1)
+                      ? 'bg-blue-500/40 text-blue-200 border border-blue-400/50'
+                      : 'bg-black text-neutral-400 border border-neutral-800 hover:border-neutral-600'"
+                  >{{ ch }}</button>
                 </div>
               </div>
               <button

@@ -163,14 +163,20 @@ export class MidiRouter {
 
       // Note-range filter — MIDI Flow's per-cable "keyboard split" for
       // device→device connections (Controller → Instrument).
-      if (isNote) {
-        const filter = this.ctx.getOutputRouteFilter(inputName, outDevice.name);
-        if (filter) {
-          const note = data[1];
-          const lo = filter.lowNote ?? 0;
-          const hi = filter.highNote ?? 127;
-          if (note < lo || note > hi) return;
-        }
+      const filter = isNote ? this.ctx.getOutputRouteFilter(inputName, outDevice.name) : undefined;
+      if (isNote && filter) {
+        const note = data[1];
+        const lo = filter.lowNote ?? 0;
+        const hi = filter.highNote ?? 127;
+        if (note < lo || note > hi) return;
+      }
+
+      // Channel filter — per-cable MIDI channel gate for multi-part
+      // instruments. When set, only messages on the listed channels pass
+      // through this Thru connection.
+      if (filter?.channels && filter.channels.length > 0 && status < 0xF0) {
+        const msgChannel = status & 0x0f;
+        if (!filter.channels.includes(msgChannel)) return;
       }
 
       let bytes = data;

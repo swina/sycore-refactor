@@ -2,6 +2,14 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-20
+
+- **MIDI per-cable channel filter** — MIDI Flow cables (device→device, device→app, app→device) now support a multi-channel filter. Click a cable's filter icon to select which MIDI channels pass through. Works in Thru routing, app input routing, and app→output broadcast. Channel filter gates on the output channel (after remapping), so selecting CH 2 on a cable sends to the device on CH 2 regardless of the source channel.
+- **App→device cable filters** — App-sourced cables (e.g. Sequencer Out → Instrument In) now support the same note-range and channel filters as device→device cables, enforced in `broadcast()`.
+- **MIDI device auto-polling** — `MidiService` now polls device lists every 2 seconds to catch devices that the Web MIDI API's `onstatechange` event misses (common on Windows). Newly detected inputs get the close+open+reattach cycle that fixes stale-port state without requiring a physical replug.
+- **Sequencer UI refactor** — Tempo multiplier, direction, length, transpose, and swing controls rearranged into dedicated toolbar rows. Scale/Octave selectors restyled. Generation settings row cleaned up.
+- Fix: default Note Latch `maxNotes` changed from 4 to 1.
+
 ## 2026-08-19
 
 - **Import standard MIDI files (.mid)** — Chord Progression and Piano Roll can now import `.mid` files directly. Chord Progression loads each track as a new slot with per-step chords parsed from simultaneous note-ons. Piano Roll imports every track's notes into the capture grid, preserving pitch, velocity, and timing. Tempo and track names are read from the file.

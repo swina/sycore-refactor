@@ -107,6 +107,104 @@ export class MidiService {
   // window alone.
   private _lastInputResetAt = new Map<string, number>();
 
+  // ── Periodic device polling ──────────────────────────────────────────────
+  // Some Web MIDI implementations (especially on Windows) do not reliably
+  // fire onstatechange when a device is connected or disconnected after the
+  // initial requestMIDIAccess(). The poll catches those missed transitions by
+  // comparing the current port list against a cached snapshot every 2 s.
+  private _devicePollTimer: ReturnType<typeof setInterval> | null = null;
+  private _lastKnownOutputNames = new Set<string>();
+  private _lastKnownInputNames = new Set<string>();
+
+  private _startDevicePoll(): void {
+    this._stopDevicePoll();
+    // Snapshot the initial list so the first poll is a no-op.
+    this._syncLastKnown();
+    this._devicePollTimer = setInterval(() => this._checkDeviceChanges(), 2000);
+  }
+
+  private _stopDevicePoll(): void {
+    if (this._devicePollTimer !== null) {
+      clearInterval(this._devicePollTimer);
+      this._devicePollTimer = null;
+    }
+  }
+
+  private _syncLastKnown(): void {
+    this._lastKnownOutputNames.clear();
+    this._lastKnownInputNames.clear();
+    if (this.midiAccess) {
+      for (const p of this.midiAccess.outputs.values()) {
+        this._lastKnownOutputNames.add(this.normPort(p.name ?? ''));
+      }
+      for (const p of this.midiAccess.inputs.values()) {
+        this._lastKnownInputNames.add(this.normPort(p.name ?? ''));
+      }
+    }
+  }
+
+  private _checkDeviceChanges(): void {
+    if (!this.midiAccess) return;
+    const currentOutputs = new Set<string>();
+    const currentInputs = new Set<string>();
+    for (const p of this.midiAccess.outputs.values()) {
+      currentOutputs.add(this.normPort(p.name ?? ''));
+    }
+    for (const p of this.midiAccess.inputs.values()) {
+      currentInputs.add(this.normPort(p.name ?? ''));
+    }
+
+    const outputsChanged =
+      currentOutputs.size !== this._lastKnownOutputNames.size ||
+      ![...currentOutputs].every(n => this._lastKnownOutputNames.has(n));
+    const inputsChanged =
+      currentInputs.size !== this._lastKnownInputNames.size ||
+      ![...currentInputs].every(n => this._lastKnownInputNames.has(n));
+
+    if (!outputsChanged && !inputsChanged) return;
+
+    console.log(`[MIDI] Device poll detected change — outputs ${outputsChanged ? 'changed' : 'same'}, inputs ${inputsChanged ? 'changed' : 'same'}`);
+
+    // For any newly appeared input, run the close+open+reattach cycle to
+    // clear the stale-port state that otherwise requires a physical replug.
+    this._resetNewInputs(currentInputs);
+
+    // Update cached snapshot.
+    this._syncLastKnown();
+
+    // Notify store (triggers refreshDevices).
+    const fakeEvent = new Event('statechange');
+    this.onStateChangeListeners.forEach(l => l(fakeEvent));
+  }
+
+  private _resetNewInputs(currentInputs: Set<string>): void {
+    if (!this.midiAccess) return;
+    const blockedPorts = new Set(
+      Array.from(this.virtualOutputPorts.values()).filter(Boolean).map(p => this.normPort(p))
+    );
+    for (const input of this.midiAccess.inputs.values()) {
+      const key = this.normPort(input.name ?? '');
+      if (!currentInputs.has(key)) continue;
+      if (this._lastKnownInputNames.has(key)) continue;
+      if (blockedPorts.has(key)) continue;
+      const lastReset = this._lastInputResetAt.get(key) ?? 0;
+      if (this._resettingInputs.has(key) || Date.now() - lastReset < 500) continue;
+      this._resettingInputs.add(key);
+      console.log(`[MIDI] Poll-resetting new input: ${input.name}`);
+      input.removeEventListener('midimessage', this.handleIngressBound);
+      Promise.resolve()
+        .then(() => input.close())
+        .then(() => input.open())
+        .catch(e => console.warn(`[MIDI] Failed to reset poll-detected input "${input.name}":`, e))
+        .finally(() => {
+          input.removeEventListener('midimessage', this.handleIngressBound);
+          input.addEventListener('midimessage', this.handleIngressBound);
+          this._resettingInputs.delete(key);
+          this._lastInputResetAt.set(key, Date.now());
+        });
+    }
+  }
+
   // Normalise a MIDI port name for comparison — strips common OS prefixes
   // that differ between platforms/drivers for the same physical port.
   private normPort(s: string): string {
@@ -285,14 +383,20 @@ export class MidiService {
 
       // Note-range filter — MIDI Flow's per-cable "keyboard split" for
       // device→device connections (Controller → virtual Instrument).
-      if (isNote) {
-        const filter = this.getOutputRouteFilter(inputName, virtName);
-        if (filter) {
-          const note = data[1];
-          const lo = filter.lowNote ?? 0;
-          const hi = filter.highNote ?? 127;
-          if (note < lo || note > hi) return;
-        }
+      const filter = isNote ? this.getOutputRouteFilter(inputName, virtName) : undefined;
+      if (isNote && filter) {
+        const note = data[1];
+        const lo = filter.lowNote ?? 0;
+        const hi = filter.highNote ?? 127;
+        if (note < lo || note > hi) return;
+      }
+
+      // Channel filter — per-cable MIDI channel gate for multi-part
+      // instruments. When set, only messages on the listed channels pass
+      // through this Thru connection.
+      if (filter?.channels && filter.channels.length > 0 && status < 0xF0) {
+        const msgChannel = status & 0x0f;
+        if (!filter.channels.includes(msgChannel)) return;
       }
 
       if (status >= 0xF0) {
@@ -385,6 +489,7 @@ export class MidiService {
       if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] Access Granted.');
       this.setupStateChangeHandler();
       await this.reScanInputs();
+      this._startDevicePoll();
       this.router.load();
       this.router.loadBroadcastMode();
       return true;
@@ -393,6 +498,12 @@ export class MidiService {
       if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Access Failed: ${e.message}`);
       return false;
     }
+  }
+
+  // ── Lifecycle cleanup ─────────────────────────────────────────────────────
+
+  dispose(): void {
+    this._stopDevicePoll();
   }
 
   // ── SysEx ────────────────────────────────────────────────────────────────
@@ -1039,6 +1150,21 @@ export class MidiService {
       if (!out) return;
 
       const config = this.routingConfig?.registrations[out.name];
+
+      // Note-range + channel filter for app→device cables (MIDI Flow) —
+      // same outputRouteFilters map used by device→device Thru and
+      // device→virtual-instrument Thru, but keyed by the app's MidiSource
+      // (e.g. "SEQUENCER→Launchkey MK4 49 MIDI").
+      const outputFilter = this.getOutputRouteFilter(source as string, out.name);
+      if (outputFilter) {
+        if ((type === 'noteon' || type === 'noteoff') &&
+            (outputFilter.lowNote != null || outputFilter.highNote != null)) {
+          const lo = outputFilter.lowNote ?? 0;
+          const hi = outputFilter.highNote ?? 127;
+          if (data.note < lo || data.note > hi) return;
+        }
+      }
+
       // outChannels (multi-timbral fanout) takes precedence over the single
       // outChannel remap when set — duplicates the message onto every
       // listed channel instead of picking just one.
@@ -1055,6 +1181,12 @@ export class MidiService {
 
       const applyLatch = config?.latchEnabled || (this.latch.isActive && config?.smartLatch);
       channels.forEach(targetChannel => {
+        // Channel filter gates on the output channel (after remapping), not
+        // the source channel — so selecting CH 2 on the cable means "send to
+        // this device on CH 2" regardless of what channel the app emits on.
+        if (outputFilter?.channels && outputFilter.channels.length > 0) {
+          if (!outputFilter.channels.includes(targetChannel & 0x0f)) return;
+        }
         const statusCh = targetChannel % 16;
         let status = 0;
         let bytes: number[] = [];
@@ -1091,6 +1223,17 @@ export class MidiService {
       const config = this.routingConfig?.registrations[virtName];
       if (!config || !config.outEnabled) return;
 
+          // Note-range + channel filter for app→virtual-instrument cables (MIDI Flow)
+          const outputFilter = this.getOutputRouteFilter(source as string, virtName);
+          if (outputFilter) {
+            if ((type === 'noteon' || type === 'noteoff') &&
+                (outputFilter.lowNote != null || outputFilter.highNote != null)) {
+              const lo = outputFilter.lowNote ?? 0;
+              const hi = outputFilter.highNote ?? 127;
+              if (data.note < lo || data.note > hi) return;
+            }
+          }
+
       let shouldAdd = true;
       switch (type) {
         case 'noteon': case 'noteoff': case 'allnotesoff': shouldAdd = config.notes; break;
@@ -1109,6 +1252,10 @@ export class MidiService {
       const virtDevice = { id: virtName, name: virtName };
       const virtApplyLatch = config.latchEnabled || (this.latch.isActive && config.smartLatch);
       channels.forEach(targetChannel => {
+        // Channel filter gates on the output channel (after remapping)
+        if (outputFilter?.channels && outputFilter.channels.length > 0) {
+          if (!outputFilter.channels.includes(targetChannel & 0x0f)) return;
+        }
         const statusCh = targetChannel % 16;
         let status = 0;
         let bytes: number[] = [];
@@ -1142,7 +1289,19 @@ export class MidiService {
     if (!this.midiAccess) return;
     this.midiAccess.onstatechange = (event) => {
       const port = (event as MIDIConnectionEvent).port;
-      if (port && port.type === 'input' && port.state === 'connected' && port.name) {
+      if (port && port.name) {
+        const key = this.normPort(port.name);
+        if (port.state === 'connected') {
+          // Ensure the poll cache stays in sync so the next poll doesn't
+          // redundantly re-detect the same device and spam logs/listeners.
+          if (port.type === 'output') this._lastKnownOutputNames.add(key);
+          else if (port.type === 'input') this._lastKnownInputNames.add(key);
+        } else if (port.state === 'disconnected') {
+          if (port.type === 'output') this._lastKnownOutputNames.delete(key);
+          else if (port.type === 'input') this._lastKnownInputNames.delete(key);
+        }
+
+        if (port.type === 'input' && port.state === 'connected' && port.name) {
         // A bare open() here is a no-op when the browser already reports
         // this port as "connected" from a stale prior state (the same issue
         // reScanInputs() works around at startup — see its comment) — which
@@ -1196,6 +1355,7 @@ export class MidiService {
               this._resettingInputs.delete(key);
               this._lastInputResetAt.set(key, Date.now());
             });
+        }
         }
       }
       this.onStateChangeListeners.forEach(l => l(event));

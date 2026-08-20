@@ -117,10 +117,13 @@ export enum MidiSource {
   NOTE_LATCH = 'NOTE_LATCH',
 }
 
-/** Optional note-range gate on a device→app input route (the "keyboard split" filter) */
+/** Optional note-range gate on a device→app input route (the "keyboard split" filter).
+ *  Also used for device→device Thru cable filters, including a channel filter
+ *  for multi-part instruments (only forward messages on the given MIDI channels). */
 export interface InputRouteFilter {
-  lowNote?: number;   // 0-127; omitted/undefined = 0 (no lower bound)
-  highNote?: number;  // 0-127; omitted/undefined = 127 (no upper bound)
+  lowNote?: number;    // 0-127; omitted/undefined = 0 (no lower bound)
+  highNote?: number;   // 0-127; omitted/undefined = 127 (no upper bound)
+  channels?: number[]; // 0-15; omitted/undefined = no channel filter (pass all)
 }
 
 /** One app fed by a given input device, in MIDI FLOW's device→app routing */

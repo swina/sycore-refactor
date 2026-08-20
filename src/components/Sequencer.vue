@@ -1600,7 +1600,7 @@ let generateHidden = ref(false)
 
           <!-- Tempo Multiplier -->
           <div class="flex items-center gap-1">
-            <span class="text-[9px] text-neutral-500 font-mono">×</span>
+            <span class="text-[9px] text-neutral-500 font-mono">Time</span>
             <select
               v-model="tempoMultiplier"
               class="bg-black/60 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-amber-400 outline-none appearance-none cursor-pointer"
@@ -1615,6 +1615,7 @@ let generateHidden = ref(false)
           </div>
 
           <!-- Direction -->
+          <span class="text-[9px] text-neutral-500 font-mono">Direction</span>  
           <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
             <button
               v-for="dir in SEQ_DIRECTIONS"
@@ -1683,27 +1684,28 @@ let generateHidden = ref(false)
       <!-- ── GENERATION SETTINGS ROW ── -->
       <div class="shrink-0 flex items-center gap-4 px-4 py-2 border-b border-neutral-900 bg-black/20">
         <div class="flex items-center gap-2">
-          <span class="text-[12px] font-mono text-neutral-500 uppercase">Scale</span>
-          <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800/50">
-            <select v-model="selectedKey" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase w-[40px]">Scale</span>
+          <!-- <div class="flex items-center gap-1 p-1 rounded-lg border border-neutral-800/50"> -->
+            <select v-model="selectedKey" class="bg-black/40 border border-neutral-800 text-synth-amber rounded-lg px-2 py-1 text-[14px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="key in NOTE_NAMES" :key="key" :value="key" class="bg-neutral-900">{{ key }}</option>
             </select>
-            <select v-model="selectedScale" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
+            <select v-model="selectedScale" class="bg-black/40 border border-neutral-800 text-synth-amber rounded-lg px-2 py-1 text-[14px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="scale in Object.keys(SCALES)" :key="scale" :value="scale" class="bg-neutral-900">{{ scale }}</option>
             </select>
-          </div>
+          <!-- </div> -->
         </div>
 
         <div class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Oct</span>
-          <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800/50">
-            <select v-model="selectedOctave" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none border-r border-neutral-800 cursor-pointer [color-scheme:dark]">
+          <!-- <div class="flex items-center gap-1 p-1 rounded-lg border border-neutral-800/50"> -->
+            <select v-model="selectedOctave" class="bg-black/40 border border-neutral-800 text-synth-amber rounded-lg px-2 py-1 text-[14px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="o in [0,1,2,3,4,5,6,7,8]" :key="o" :value="o" class="bg-neutral-900">{{ o }}</option>
             </select>
-            <select v-model="octaveRange" class="bg-neutral-900 text-synth-amber font-bold text-[14px] uppercase px-1 outline-none cursor-pointer [color-scheme:dark]">
+            <span class="text-[12px] font-mono text-neutral-500 uppercase">Range</span>
+            <select v-model="octaveRange" class="bg-black/40 border border-neutral-800 text-synth-amber rounded-lg px-2 py-1 text-[14px] font-bold uppercase outline-none cursor-pointer [color-scheme:dark]">
               <option v-for="r in [-3,-2,-1,0,1,2,3]" :key="r" :value="r" class="bg-neutral-900">{{ r >= 0 ? '+' + r : r }}</option>
             </select>
-          </div>
+          <!-- </div> -->
         </div>
 
         <div class="flex items-center gap-2">
@@ -1732,11 +1734,64 @@ let generateHidden = ref(false)
         </button>
       </div>
       
-      <div class="flex w-full gap-3 px-4">
+      <div class="shrink-0 flex flex-wrap items-center gap-4 p-1 pl-4 border-b border-neutral-900 bg-neutral-900/50">
+        <!-- Sequence Length -->
+        <div class="flex items-center gap-2">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase w-[40px]">Length</span>
+          <div class="flex items-center bg-black border border-neutral-800 rounded-lg px-2 h-8 gap-2">
+            <button @click="reduceLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="/2">
+              <ChevronDown class="w-3.5 h-3.5" />
+            </button>
+            <!--//seqStepsLimit" -->
+            <input v-model.number="numSteps" type="range" min="2" max="16" 
+              class="w-20 h-1 accent-orange-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+            <button @click="duplicateLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="x2">
+              <ChevronUp class="w-3.5 h-3.5" />
+            </button>
+            <div class="w-px h-3 bg-neutral-800 ml-1" />
+            <span class="text-[12px] font-mono text-orange-500 w-6 text-right font-bold">{{ numSteps }}</span>
+          </div>
+        </div>
+
+        <div class="w-px h-5 bg-neutral-800" />
+
+        <!-- Global Transpose Control -->
+        <div class="flex items-center gap-2">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Transpose</span>
+          <div class="flex items-center bg-black border border-neutral-800 rounded-lg px-1 h-8 gap-0.5">
+            <button 
+              @click="emit('transposeChange', Math.max(-24, (globalTranspose || 0) - 1))" 
+              class="w-5 h-full flex items-center justify-center text-neutral-500 hover:text-synth-neon transition-colors text-xs font-bold"
+            >–</button>
+            <input
+              type="number"
+              :value="globalTranspose"
+              @input="e => emit('transposeChange', Math.max(-24, Math.min(24, Number(e.target.value))))"
+              class="w-8 bg-transparent text-synth-amber font-mono text-sm outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <button 
+              @click="emit('transposeChange', Math.min(24, (globalTranspose || 0) + 1))" 
+              class="w-5 h-full flex items-center justify-center text-neutral-500 hover:text-synth-neon transition-colors text-xs font-bold"
+            >+</button>
+          </div>
+        </div>
+        <div class="w-px h-5 bg-neutral-800" />
+
+        <!-- Swing Control -->
+        <div class="flex items-center gap-2">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Swing</span>
+          <div class="flex items-center bg-black border border-neutral-800 rounded-lg w-24 px-2 h-8 gap-3">
+            <input v-model.number="swingAmount" type="range" min="0" max="100" class="w-14 h-1 accent-emerald-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+            <span class="text-[12px] font-mono text-amber-500 w-8 text-right">{{ swingAmount }}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex w-full gap-3 px-4 py-2 border-b border-neutral-900 bg-black/20 flex-wrap">
         <!-- Param Assign -->
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
-            <span class="text-[12px] font-mono text-neutral-500 uppercase leading-none">P1</span>
+            <span class="text-[12px] font-mono text-neutral-500 uppercase leading-none w-[40px]">P1</span>
             <select v-model="param1CC" class="bg-black/40 border border-neutral-800 text-synth-amber rounded px-1.5 py-0.5 text-[14px] font-mono outline-none w-30 cursor-pointer [color-scheme:dark]">
               <option v-for="opt in allS1Params" :key="opt.cc" :value="opt.cc" class="bg-neutral-900">{{ opt.label }}</option>
             </select>
@@ -1770,8 +1825,11 @@ let generateHidden = ref(false)
           </div>
         </div>
       </div>
+
+      
+      
       <!-- ── MAIN TOOLBAR ── -->
-      <div class="shrink-0 flex flex-wrap items-center gap-4 p-3 border-b border-neutral-900 bg-neutral-900/50">
+      <div class="shrink-0 flex flex-wrap items-center gap-4 p-1 pl-3 border-b border-neutral-900 bg-black/70">
         <!-- Transport Controls -->
         <div class="flex items-center gap-1">
           <button @click="isPlaying = !isPlaying"
@@ -1785,6 +1843,39 @@ let generateHidden = ref(false)
             <Circle class="w-3.5 h-3.5 fill-current" />
           </button>
         </div>
+
+        <!-- Tempo Multiplier -->
+          <div class="flex items-center gap-1">
+            <span class="text-[12px] text-neutral-500 font-mono">Time</span>
+            <select
+              v-model="tempoMultiplier"
+              class="bg-black/60 border border-neutral-800 rounded px-1 py-0.5 text-[14px] font-mono text-amber-400 outline-none appearance-none cursor-pointer"
+              title="Steps per beat"
+            >
+              <option
+                v-for="opt in TEMPO_MULTIPLIERS"
+                :key="opt.label"
+                :value="opt"
+              >{{ opt.label }}</option>
+            </select>
+          </div>
+
+          <!-- Direction -->
+          <span class="text-[12px] text-neutral-500 font-mono">Direction</span>  
+          <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
+            <button
+              v-for="dir in SEQ_DIRECTIONS"
+              :key="dir"
+              @click="sequenceDirection = dir"
+              :title="`Direction: ${ dir }`"
+              :class="[
+                'px-1.5 py-0.5 rounded text-[14px] font-mono font-bold uppercase tracking-wider transition-colors',
+                sequenceDirection === dir
+                  ? 'bg-amber-600 text-black'
+                  : 'text-neutral-500 hover:text-neutral-300'
+              ]"
+            >{{ dir === 'up-down' ? '↕' : dir === 'up' ? '↑' : dir === 'down' ? '↓' : 'R' }}</button>
+          </div>
 
         <div class="w-px h-5 bg-neutral-800" />
 
@@ -1803,57 +1894,6 @@ let generateHidden = ref(false)
         </button>
 
         <div class="w-px h-5 bg-neutral-800" />
-
-        <!-- Sequence Length -->
-        <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Length</span>
-          <div class="flex items-center bg-black border border-neutral-800 rounded px-2 h-9 gap-2">
-            <button @click="reduceLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="/2">
-              <ChevronDown class="w-3.5 h-3.5" />
-            </button>
-            <!--//seqStepsLimit" -->
-            <input v-model.number="numSteps" type="range" min="2" max="16" 
-              class="w-20 h-1 accent-orange-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-            <button @click="duplicateLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="x2">
-              <ChevronUp class="w-3.5 h-3.5" />
-            </button>
-            <div class="w-px h-3 bg-neutral-800 ml-1" />
-            <span class="text-[9px] font-mono text-orange-500 w-6 text-right font-bold">{{ numSteps }}</span>
-          </div>
-        </div>
-
-        <div class="w-px h-5 bg-neutral-800" />
-
-        <!-- Global Transpose Control -->
-        <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Transpose</span>
-          <div class="flex items-center bg-black border border-neutral-800 rounded px-1 h-9 gap-0.5">
-            <button 
-              @click="emit('transposeChange', Math.max(-24, (globalTranspose || 0) - 1))" 
-              class="w-5 h-full flex items-center justify-center text-neutral-500 hover:text-synth-neon transition-colors text-xs font-bold"
-            >–</button>
-            <input
-              type="number"
-              :value="globalTranspose"
-              @input="e => emit('transposeChange', Math.max(-24, Math.min(24, Number(e.target.value))))"
-              class="w-8 bg-transparent text-synth-amber font-mono text-sm outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-            <button 
-              @click="emit('transposeChange', Math.min(24, (globalTranspose || 0) + 1))" 
-              class="w-5 h-full flex items-center justify-center text-neutral-500 hover:text-synth-neon transition-colors text-xs font-bold"
-            >+</button>
-          </div>
-        </div>
-        <div class="w-px h-5 bg-neutral-800" />
-
-        <!-- Swing Control -->
-        <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Swing</span>
-          <div class="flex items-center bg-black border border-neutral-800 rounded w-24 px-2 h-9 gap-3">
-            <input v-model.number="swingAmount" type="range" min="0" max="100" class="w-14 h-1 accent-emerald-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-            <span class="text-[9px] font-mono text-amber-500 w-8 text-right">{{ swingAmount }}%</span>
-          </div>
-        </div>
 
         <!-- Toolbar Actions -->
         <div class="flex items-center gap-1 ml-auto">

@@ -612,15 +612,21 @@ export const useMidiStore = defineStore('midi', () => {
   // name for device→app routing, or another app's MidiSource id for
   // app-to-app routing — inputRouting is just string-keyed, so both share
   // this one function and one data model.
-  function isDeviceRoutedToApp(sourceKey: string, appSourceId: string, note?: number): boolean {
+  function isDeviceRoutedToApp(sourceKey: string, appSourceId: string, note?: number, channel?: number): boolean {
     const entries = inputRouting.value[sourceKey]
     if (!entries || entries.length === 0) return true
     const entry = entries.find(e => e.app === appSourceId)
     if (!entry) return false
-    if (note == null || !entry.filter) return true
-    const lo = entry.filter.lowNote  ?? 0
-    const hi = entry.filter.highNote ?? 127
-    return note >= lo && note <= hi
+    if (!entry.filter) return true
+    if (note != null) {
+      const lo = entry.filter.lowNote  ?? 0
+      const hi = entry.filter.highNote ?? 127
+      if (note < lo || note > hi) return false
+    }
+    if (channel != null && entry.filter.channels && entry.filter.channels.length > 0) {
+      if (!entry.filter.channels.includes(channel)) return false
+    }
+    return true
   }
 
   // isDeviceRoutedToApp's fail-open default (unwired source = open to
