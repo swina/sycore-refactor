@@ -9,6 +9,7 @@ import { useLfoStore } from '@/stores/useLfoStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 import { dispatch } from '@/types/events'
@@ -36,6 +37,7 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     arpStore     = useArpStore(),
     noteLatchStore = useNoteLatchStore(),
     drumStore    = useDrumMachineStore(),
+    cpStore      = useChordProgStore(),
     mixerStore   = useAudioMixerStore(),
     configStore  = useConfigStore(),
   } = stores
@@ -142,7 +144,13 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   }
   // ── Chord Prog ───────────────────────────────────────────────────────────────
   if (fieldName === 'cp_play') {
-    window.dispatchEvent(new CustomEvent('cp-start'))
+    if (fromNote) {
+      if (cpStore.isPlaying) window.dispatchEvent(new CustomEvent('cp-stop'))
+      else window.dispatchEvent(new CustomEvent('cp-start'))
+    } else {
+      if (on) window.dispatchEvent(new CustomEvent('cp-start'))
+      else window.dispatchEvent(new CustomEvent('cp-stop'))
+    }
     return
   }
   if (fieldName.startsWith('cp_slot_')) {
@@ -423,7 +431,7 @@ export function useMidiCCListener() {
   }
 
   function applyParam(fieldName, val, fromNote = false) {
-    return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, noteLatchStore, drumStore, mixerStore, configStore })
+    return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, noteLatchStore, drumStore, cpStore, mixerStore, configStore })
   }
 
   let unsubCC, unsubNote, unsubPitch
