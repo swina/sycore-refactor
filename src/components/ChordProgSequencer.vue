@@ -13,6 +13,8 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
@@ -35,6 +37,8 @@ const transportManager = useTransportManager()
 const store = useChordProgStore()
 const syncStore = useSyncStore()
 const uiStore = useUiStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 const { progressionData, progressionNames, loading: progLoading, loadByIndex } = useProgressionLoader()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
@@ -485,6 +489,7 @@ onUnmounted(() => {
   previewTimeouts.forEach(id => clearTimeout(id))
   window.removeEventListener('cp-start', _onCpStart)
   window.removeEventListener('cp-stop', _onCpStop)
+  window.removeEventListener('cp-slot-select', _onCpSlotSelect)
   _unsubMidiNote?.()
   _unsubAppNote?.()
 })
@@ -672,6 +677,34 @@ async function handleDeletePattern(id) {
 
 const _onCpStart = () => { store.isPlaying = true }
 const _onCpStop = () => { store.isPlaying = false }
+const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
+
+// ── MIDI feedback for Learn-mapped params ──────────────────────────────────
+function sendChMappingFeedback(paramNamePrefix, isOn) {
+  const val = isOn ? 127 : 0
+  for (const entry of Object.values(mappingStore.midiMappings)) {
+    const m = entry
+    if (typeof m !== 'object' || !m.paramName?.startsWith(paramNamePrefix)) continue
+    const out = m.device ? midiService.getOutputs().find(o => o.name === m.device) : midiService.getOutputs()[0]
+    if (!out) continue
+    const ch = (m.channel ?? 0) & 0x0f
+    if ('cc' in m) {
+      try { out.send([0xB0 | ch, m.cc, val]) } catch {}
+    } else if ('note' in m) {
+      try { out.send([0x90 | ch, m.note, val]) } catch {}
+    }
+  }
+}
+
+watch(() => store.isPlaying, (playing) => {
+  sendChMappingFeedback('cp_play', playing)
+})
+
+watch(() => store.activeSlotIndex, (idx) => {
+  for (let i = 0; i < (store.SLOT_COUNT ?? 8); i++) {
+    sendChMappingFeedback('cp_slot_' + i, i === idx)
+  }
+})
 
 // MIDI FLOW device→app input routing: a device wired to Chord Sequencer in
 // the canvas starts playback on note-on (see docs/plans/modular/MIDI-Flow-Control.md).
@@ -707,6 +740,7 @@ onMounted(() => {
   loadPcSets()
   window.addEventListener('cp-start', _onCpStart)
   window.addEventListener('cp-stop', _onCpStop)
+  window.addEventListener('cp-slot-select', _onCpSlotSelect)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
   _unsubAppNote = midiStore.addAppNoteListener(_onAppNoteIn)
 })
@@ -1000,6 +1034,7 @@ function velBarColor(v) {
         <!-- Play / Stop -->
         <button
           @click.stop="togglePlay"
+          @contextmenu.prevent="openMenu($event, { name: 'cp_play', label: 'Chord Prog: Play' })"
           :class="[
             'flex items-center gap-1 px-3 py-1 rounded text-[12x] font-mono uppercase tracking-wider transition-all',
             store.isPlaying
@@ -1018,6 +1053,7 @@ function velBarColor(v) {
             v-for="i in store.SLOT_COUNT"
             :key="i"
             @click.stop="handleSlotSelect(i - 1)"
+            @contextmenu.prevent="openMenu($event, { name: 'cp_slot_' + (i - 1), label: 'Chord Prog: Slot ' + String.fromCharCode(64 + i) })"
             :title="store.isPlaying && store.playingSlotIndex === i - 1 ? 'Now playing (chain)' : undefined"
             :class="[
               'relative w-8 h-8 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',

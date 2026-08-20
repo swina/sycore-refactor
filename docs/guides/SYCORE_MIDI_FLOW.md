@@ -72,7 +72,7 @@ Click any device→app cable to open its note-range popover. Set **Low**/**High*
 ### MIDI Channels Filter
 
 The output will be filtered only to the selected channels. With no channels selection (default) any filter is applied. 
-This feature can be used 
+This feature can be useful to connect a keyboard split to drive 2 different sounds from the same keyboard.
 
 ### Removing Connections
 

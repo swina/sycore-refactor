@@ -140,6 +140,16 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     if (!isNaN(idx)) drumStore.setTrackVolume(idx, val / 127)
     return
   }
+  // ── Chord Prog ───────────────────────────────────────────────────────────────
+  if (fieldName === 'cp_play') {
+    window.dispatchEvent(new CustomEvent('cp-start'))
+    return
+  }
+  if (fieldName.startsWith('cp_slot_')) {
+    const idx = parseInt(fieldName.slice(8))
+    if (!isNaN(idx) && (fromNote || val > 0)) window.dispatchEvent(new CustomEvent('cp-slot-select', { detail: { idx } }))
+    return
+  }
   if (fieldName === 'dm_master_vol') {
     window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: val / 127 }))
     return
