@@ -9,6 +9,7 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 - **MIDI device auto-polling** — `MidiService` now polls device lists every 2 seconds to catch devices that the Web MIDI API's `onstatechange` event misses (common on Windows). Newly detected inputs get the close+open+reattach cycle that fixes stale-port state without requiring a physical replug.
 - **Sequencer UI refactor** — Tempo multiplier, direction, length, transpose, and swing controls rearranged into dedicated toolbar rows. Scale/Octave selectors restyled. Generation settings row cleaned up.
 - Fix: default Note Latch `maxNotes` changed from 4 to 1.
+- **Per-app start delay for Sync Apps to Transport** — Each app in the "Sync Apps to Transport" panel now has a delay-in-beats input (0–64). When Play All is pressed, the app starts after the specified number of beats, calculated from the current BPM. Delays are per-app and persisted. Stop All cancels any pending delayed starts.
 
 ## 2026-08-19
 
