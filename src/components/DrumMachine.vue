@@ -566,10 +566,32 @@ async function loadAllSamples(pattern) {
   }
 }
 
-watch(() => drumStore.activeSequence, async () => {
+// Send MIDI feedback for right-click MIDI-learned mappings (e.g. dm_seq_A).
+// Looks up all entries in mappingStore.midiMappings matching paramNamePrefix
+// and sends value (0 or 127) to the mapped device/output.
+function sendMidiMappingFeedback(paramNamePrefix, isOn) {
+  const val = isOn ? 127 : 0
+  for (const entry of Object.values(mappingStore.midiMappings)) {
+    const m = entry
+    if (typeof m !== 'object' || !m.paramName?.startsWith(paramNamePrefix)) continue
+    const out = m.device ? midiService.getOutputs().find(o => o.name === m.device) : midiService.getOutputs()[0]
+    if (!out) continue
+    const ch = (m.channel ?? 0) & 0x0f
+    if ('cc' in m) {
+      try { out.send([0xB0 | ch, m.cc, val]) } catch {}
+    } else if ('note' in m) {
+      try { out.send([0x90 | ch, m.note, val]) } catch {}
+    }
+  }
+}
+
+watch(() => drumStore.activeSequence, async (newSeq, oldSeq) => {
   await nextTick()
   await loadAllSamples(drumStore.currentPattern)
   pushAllFxToEngine(drumStore.currentPattern)
+  // Send feedback: on for the active sequence, off for the previous one
+  sendMidiMappingFeedback('dm_seq_', false)
+  sendMidiMappingFeedback('dm_seq_' + newSeq.toLowerCase(), true)
 })
 
 // ── Master volume (footer) — applied as a multiplier on all track volumes at trigger time ─

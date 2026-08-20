@@ -69,6 +69,11 @@ Each app node's header also has an **open-app** shortcut (external-link icon) th
 
 Click any device→app cable to open its note-range popover. Set **Low**/**High** (0–127) to restrict which notes flow through that connection — e.g. split one keyboard so the low half feeds the Drum Machine and the high half feeds the Step Sequencer. Leaving the full 0–127 range means no filtering.
 
+### MIDI Channels Filter
+
+The output will be filtered only to the selected channels. With no channels selection (default) any filter is applied. 
+This feature can be used 
+
 ### Removing Connections
 
 Click on any cable to delete it (or open its note-range popover and use the remove action). An invisible wide hit-area path makes clicking easy.
