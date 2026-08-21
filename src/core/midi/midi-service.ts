@@ -918,7 +918,10 @@ export class MidiService {
         }
       } else {
         const available = Array.from(this.midiAccess.outputs.values()).map((p: any) => p.name).join(', ') || '(none)';
-        console.warn(`[MIDI] sendRawToDeviceByName: no physical output named "${deviceName}". Available: ${available}`);
+        // Virtual instruments are handled by sendToVirtualOutput below — no warning needed.
+        if (!this.virtualOutputs?.has(deviceName)) {
+          console.warn(`[MIDI] sendRawToDeviceByName: no physical output named "${deviceName}". Available: ${available}`);
+        }
       }
     }
     // Try virtual output

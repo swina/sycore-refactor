@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-08-21
 
+- **Access Virus .syx bank import** — MidiDeviceProgramChangePanel now supports importing Access Virus SysEx bank dumps (.syx) via the `access-virus` pcTemplate. Parses 128 single-program dumps, extracting names from the @-prefixed field at offset 248. Add `parseAccessVirusSyx` parser, `access-virus` template in `pc-templates.ts`, `PcTemplateId` type, and import button/flow in the component.
+
 - **Favorite chords** — ChordAssignModal now has a "Favorites" tab that lists saved chords with preview and assign. Click the "Favorite" button on any built chord in the Chord Builder tab to save it. Stored in IndexedDB (`user_favorite_chords` store).
 - **Chord comparison preview in Assign modal** — ChordAssignModal now shows the previous step's chord (if any) and the current step's chord alongside the new suggestion, with a "Preview A→B→C" button that plays prev → current → new in sequence for comparison.
 - **Chord suggestion modal** — ChordAssignModal now has a "Suggest" tab that shows 18 common chord types (maj, min, 7, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, etc.) with inversions. Pick a root note, select a chord type, choose an inversion, then preview and assign to the current step.

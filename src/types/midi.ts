@@ -6,7 +6,7 @@
  */
 
 /** Per-device Program Change bank/patch template — see src/constants/pc-templates.ts */
-export type PcTemplateId = 'mfprojz' | 'roland-s1' | 'emulatorx3' | 'seqtrak' | 'json' | 'kawai-k1' | 'arturia';
+export type PcTemplateId = 'mfprojz' | 'roland-s1' | 'emulatorx3' | 'seqtrak' | 'json' | 'kawai-k1' | 'access-virus' | 'arturia';
 
 /** Last-sent Program Change state for one channel of a device — written by
  *  MidiDeviceProgramChangePanel.vue's recordChannelState(), read back to

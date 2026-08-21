@@ -13,6 +13,7 @@ import { parseMfprojz } from '@/composables/useMfprojzParser'
 import { parseEmulatorX3 } from '@/composables/useEmulatorX3Parser'
 import { parseStandardJson } from '@/composables/useStandardJsonParser'
 import { parseKawaiK1 } from '@/composables/useKawaiK1Parser'
+import { parseAccessVirusSyx } from '@/composables/useAccessVirusSyxParser'
 import { parseArturiaSqlite } from '@/composables/useArturiaSqliteParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -211,6 +212,7 @@ const TEMPLATE_BANK_SOURCES = {
   json:       ['json', undefined],
   emulatorx3: ['emulatorx3'],
   'kawai-k1': ['kawai-k1'],
+  'access-virus': ['access-virus'],
   arturia:    ['arturia'],
 }
 const userBanks = computed(() => {
@@ -233,18 +235,21 @@ const importInput         = ref(null)   // hidden <input type="file"> (.mfprojz)
 const importInputX3       = ref(null)   // hidden <input type="file"> (Emulator X3 .txt)
 const importInputStandard = ref(null)   // hidden <input type="file"> (Standard JSON)
 const importInputKawaiK1  = ref(null)   // hidden <input type="file"> (Kawai K1 .syx)
+const importInputVirusSyx = ref(null)   // hidden <input type="file"> (Access Virus .syx)
 const importInputArturia  = ref(null)   // hidden <input type="file"> (Arturia db.db3)
 const isImporting         = ref(false)
 const isImportingX3       = ref(false)
 const isImportingStandard = ref(false)
 const isImportingKawaiK1  = ref(false)
+const isImportingVirusSyx = ref(false)
 const isImportingArturia  = ref(false)
 const importError        = ref('')
 const importArturiaSummary = ref('')
 const showImportRename   = ref(false)
 const pendingPresets     = ref([])
 const pendingBankName    = ref('')
-const pendingImportSource = ref(undefined)   // 'mfprojz' | 'json' | 'emulatorx3' | 'kawai-k1' | 'arturia'
+const pendingBankLsb     = ref(0)
+const pendingImportSource = ref(undefined)   // 'mfprojz' | 'json' | 'emulatorx3' | 'kawai-k1' | 'access-virus' | 'arturia'
 
 function triggerImport() {
   importError.value = ''
@@ -375,18 +380,49 @@ async function onImportArturiaFile(event) {
   }
 }
 
+function triggerImportVirusSyx() {
+  importError.value = ''
+  importInputVirusSyx.value?.click()
+}
+
+async function onImportVirusSyxFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  isImportingVirusSyx.value = true
+  importError.value = ''
+  try {
+    const presets = await parseAccessVirusSyx(file)
+    pendingBankName.value = file.name.replace(/\.syx$/i, '')
+    pendingBankLsb.value = presets.length > 0 ? presets[0].msb : 0
+    pendingPresets.value  = presets
+    pendingImportSource.value = 'access-virus'
+    showImportRename.value = true
+  } catch (e) {
+    importError.value = e.message ?? 'Failed to parse Access Virus file.'
+  } finally {
+    isImportingVirusSyx.value = false
+    event.target.value = ''
+  }
+}
+
 function confirmImport() {
   const name = pendingBankName.value.trim() || 'Imported Bank'
+  // Apply the bank LSB to every preset so sendCatalogSound sends the correct CC32 value
+  if (pendingImportSource.value === 'access-virus' && pendingBankLsb.value > 0) {
+    pendingPresets.value = pendingPresets.value.map(p => ({ ...p, lsb: pendingBankLsb.value }))
+  }
   userBanksStore.addBank(selectedDeviceName.value, name, pendingPresets.value, pendingImportSource.value)
   selectedBank.value = name
   showImportRename.value = false
   pendingPresets.value   = []
+  pendingBankLsb.value   = 0
   pendingImportSource.value = undefined
 }
 
 function cancelImport() {
   showImportRename.value = false
   pendingPresets.value   = []
+  pendingBankLsb.value   = 0
   pendingImportSource.value = undefined
 }
 
@@ -1518,6 +1554,14 @@ function assignToPad(setId, padIdx) {
                     class="hidden"
                     @change="onImportKawaiK1File"
                   />
+                  <!-- Hidden file input for Access Virus SysEx import -->
+                  <input
+                    ref="importInputVirusSyx"
+                    type="file"
+                    accept=".syx"
+                    class="hidden"
+                    @change="onImportVirusSyxFile"
+                  />
                   <!-- Hidden file input for Arturia db.db3 import -->
                   <input
                     ref="importInputArturia"
@@ -1579,6 +1623,18 @@ function assignToPad(setId, padIdx) {
                           <FileText v-else class="w-2.5 h-2.5" />
                           Import Kawai K1
                         </button>
+                        <!-- Access Virus .syx import button — explicit template only -->
+                        <button
+                          v-if="selectedReg?.pcTemplate === 'access-virus'"
+                          @click="triggerImportVirusSyx"
+                          :disabled="isImportingVirusSyx"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-pink-500/10 border border-pink-500/25 text-pink-400 hover:bg-pink-500/20 hover:border-pink-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                          title="Import an Access Virus SysEx bank dump (.syx)"
+                        >
+                          <Loader2 v-if="isImportingVirusSyx" class="w-2.5 h-2.5 animate-spin" />
+                          <FileText v-else class="w-2.5 h-2.5" />
+                          Import Access Virus
+                        </button>
                         <!-- Arturia db.db3 import button — explicit template only (no legacy fallback, it's brand new) -->
                         <button
                           v-if="selectedReg?.pcTemplate === 'arturia'"
@@ -1620,6 +1676,15 @@ function assignToPad(setId, padIdx) {
                           @keydown.escape="cancelImport"
                           class="flex-1 bg-black/60 border border-teal-500/30 rounded-lg px-2.5 py-1.5 text-[11px] text-teal-200 font-mono outline-none focus:border-teal-500/60 placeholder:text-neutral-700"
                         />
+                        <div v-if="pendingImportSource === 'access-virus'" class="flex items-center gap-1.5 shrink-0">
+                          <span class="text-[8px] font-mono text-neutral-500 uppercase tracking-widest">Bank</span>
+                          <input
+                            v-model.number="pendingBankLsb"
+                            type="number"
+                            min="0" max="127"
+                            class="w-14 bg-black/60 border border-neutral-700 rounded-lg px-2 py-1.5 text-[11px] text-teal-200 font-mono outline-none focus:border-teal-500/60 text-center"
+                          />
+                        </div>
                         <button @click="confirmImport" class="px-2.5 py-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:bg-teal-500/30 transition-all text-[9px] font-black uppercase">Add</button>
                         <button @click="cancelImport" class="p-1.5 rounded-lg text-neutral-600 hover:text-neutral-400 transition-colors">
                           <X class="w-3.5 h-3.5" />
