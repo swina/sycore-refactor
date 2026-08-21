@@ -110,6 +110,7 @@ Selecting any step reveals a detail bar beneath the grid:
 | **Strum** | Sim / Up / Down / Up-Down / Down-Up | Only shown when this step's effective mode is **Chord**. Controls the order notes are staggered in when the chord isn't played fully simultaneous. |
 | **Pattern** | up, down, up-down, down-up, converge, diverge, pinky-up, thumb-up, random, random-other | Only shown when this step's effective mode is **Arp** — the arpeggio style for this step, using the same 10-pattern engine as the standalone Arpeggiator. |
 | **Rate** | Slot (default) · any duration value | Only shown when this step's effective mode is **Arp**. Overrides the slot's arp rate for this step only. Shown in yellow when a per-step rate is set. Select **Slot** to remove the override and inherit the slot rate again. |
+| **Favorite** | Add current chord to favorites | Collect your favorite chords |
 
 While the sequencer is **playing**, the Step Detail row automatically follows whichever step is currently sounding — it no longer stays frozen on the last step you clicked. Selecting a step manually still works normally when stopped.
 
@@ -118,6 +119,14 @@ While the sequencer is **playing**, the Step Detail row automatically follows wh
 Click the **Custom** button next to the chord name to open the chord-capture modal. This lets you assign any arbitrary chord to the selected step by playing it — rather than picking from the built-in library.
 
 Two input modes are available:
+
+**CHORD BUILDER**
+
+Shows 18 common chord types (maj, min, 7, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, etc.) with inversions. Pick a root note, select a chord type, choose an inversion, then preview and assign to the current step
+
+**FAVORITE CHORDS**
+
+Collect your favorite chords and assign to any slot later.
 
 **MIDI IN**
 1. Click **Start Listening** — a pulsing indicator confirms the listener is active.
@@ -199,6 +208,8 @@ Shows every chord in the selected progression.
 
 ## 11. Generate Tab
 
+**GENERATE PROGRESSION**
+
 Generates a random progression automatically from the currently loaded key source.
 
 1. Select your **key or genre** in the Library tab.
@@ -207,6 +218,16 @@ Generates a random progression automatically from the currently loaded key sourc
 4. The **Fill duration** setting in the Fill row is applied to all generated steps. Tick the **~** checkbox in the Fill row before generating if you want random per-step durations.
 
 > The Generate button is disabled while progression data is loading.
+
+**AI GENERATE**
+
+Click the AI Generate button and enter a prompt describing the type of chord progression you want to generate.
+
+> To use the AI generator, you must have an OpenAI API key. Enter your key in the Settings panel
+
+**IMPORT MIDI**
+
+Chord Progression and Piano Roll can now import `.mid` files directly. Chord Progression loads each track as a new slot with per-step chords parsed from simultaneous note-ons. Piano Roll imports every track's notes into the capture grid, preserving pitch, velocity, and timing. Tempo and track names are read from the file.
 
 ---
 

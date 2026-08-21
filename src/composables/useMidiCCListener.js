@@ -158,6 +158,17 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     if (!isNaN(idx) && (fromNote || val > 0)) window.dispatchEvent(new CustomEvent('cp-slot-select', { detail: { idx } }))
     return
   }
+  // ── Sequencer (Step Sequencer) ──────────────────────────────────────────────────
+  if (fieldName === 'seq_play') {
+    const shouldPlay = fromNote ? !uiStore.isSequencerPlaying : on
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: shouldPlay } }))
+    return
+  }
+  if (fieldName.startsWith('seq_bank_')) {
+    const idx = parseInt(fieldName.slice(9))
+    if (!isNaN(idx) && (fromNote || val > 0)) window.dispatchEvent(new CustomEvent('seq-bank-select', { detail: { idx } }))
+    return
+  }
   if (fieldName === 'dm_master_vol') {
     window.dispatchEvent(new CustomEvent('dm-master-volume', { detail: val / 127 }))
     return

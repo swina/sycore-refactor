@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic, Save, X } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -17,6 +17,7 @@ import { useCockpitNavigation } from '@/composables/useCockpitNavigation'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { typeMeta } from '@/lib/device-type-meta'
 import { MIDI_APPS, APP_PANEL_ID } from '@/lib/midi-apps'
+import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import { dispatch } from '@/types/events'
 import MiniAudioScope from '@/components/MiniAudioScope.vue'
 import DeckDrumMachineSummary from '@/components/DeckDrumMachineSummary.vue'
@@ -35,8 +36,32 @@ const { openMenu } = useMidiContextMenu()
 const { images: deviceImages } = useDeviceImages()
 const { backgroundImage } = useCockpitBackground()
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
+const { pcSets, loadSets, saveSet, recallSet: recallStoredSet } = usePerformanceSets()
 
 const miniScopeRef = ref(null)
+
+const showSaveSetDialog = ref(false)
+const newSetName = ref('')
+const newSetNameInput = ref(null)
+const activeSetId = ref(null)
+
+function openSaveSetDialog() {
+  newSetName.value = ''
+  showSaveSetDialog.value = true
+  nextTick(() => newSetNameInput.value?.focus())
+}
+
+async function saveCurrentSet() {
+  const name = newSetName.value.trim()
+  if (!name) return
+  await saveSet(name)
+  showSaveSetDialog.value = false
+}
+
+async function recallSet(set) {
+  activeSetId.value = set.id
+  await recallStoredSet(set)
+}
 
 const FLAG_FIELDS = [
   { key: 'midiThru',  label: 'Thru' },
@@ -470,7 +495,7 @@ function _cockpitMidiListener(event) {
 }
 
 let _unsubCockpitMidi = null
-onMounted(() => { _unsubCockpitMidi = midiService.addRawListener(_cockpitMidiListener) })
+onMounted(() => { _unsubCockpitMidi = midiService.addRawListener(_cockpitMidiListener); loadSets() })
 onUnmounted(() => _unsubCockpitMidi?.())
 
 // ── Transport position (bar:beat:sixteenth) — same rAF-driven readout as
@@ -749,6 +774,8 @@ function handleBpmChange(e) {
             </div>
           </div>
           </div>
+
+          
         </div>
 
         <!-- Bus line down to instruments -->
@@ -830,8 +857,56 @@ function handleBpmChange(e) {
                 </button>
               </div>
             </div>
+            
           </div>
         </div>
+        <!-- Performance Sets -->
+          <div class="flex items-center gap-1 w-full justify-center">
+            <button
+              @click="openSaveSetDialog"
+              title="Save current instrument patches as a Performance Set"
+              class="flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border transition-all bg-violet-500/10 border-violet-500/20 text-violet-400 hover:bg-violet-500/20 hover:border-violet-500/40"
+            >
+              <ListMusic class="w-2.5 h-2.5" /> Save Set
+            </button>
+            <div v-if="showSaveSetDialog" class="flex items-center gap-1">
+              <input
+                ref="newSetNameInput"
+                v-model="newSetName"
+                type="text"
+                placeholder="Set name…"
+                maxlength="40"
+                @keydown.enter="saveCurrentSet"
+                @keydown.esc="showSaveSetDialog = false"
+                class="w-28 bg-black/60 border border-violet-500/40 rounded-lg px-2 py-1 text-[10px] text-white font-mono outline-none focus:border-violet-400 placeholder:text-neutral-700"
+              />
+              <button
+                @click="saveCurrentSet"
+                :disabled="!newSetName.trim()"
+                class="shrink-0 px-1.5 py-1 rounded-lg bg-violet-500 text-black text-[8px] font-black uppercase tracking-widest hover:bg-violet-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Save class="w-2.5 h-2.5" />
+              </button>
+              <button @click="showSaveSetDialog = false" class="shrink-0 p-1 text-neutral-600 hover:text-neutral-400 transition-colors">
+                <X class="w-2.5 h-2.5" />
+              </button>
+            </div>
+            <!-- <span v-if="pcSets.length > 0" class="flex items-center gap-1 text-[8px] font-mono text-neutral-500">
+              <button
+                v-for="set in pcSets.slice(0, 5)"
+                :key="set.id"
+                @click="recallSet(set)"
+                :class="[
+                  'px-1.5 py-0.5 rounded border text-[8px] font-mono transition-colors',
+                  activeSetId === set.id
+                    ? 'bg-violet-500/20 border-violet-500/40 text-violet-300'
+                    : 'bg-neutral-900/60 border-neutral-800 text-neutral-500 hover:text-violet-400 hover:border-violet-500/30'
+                ]"
+                :title="set.devices.length + ' devices'"
+              >{{ set.name }}</button>
+              <span v-if="pcSets.length > 5" class="text-neutral-600">+{{ pcSets.length - 5 }}</span>
+            </span> -->
+          </div>
       </div>
 
       <!-- ── Apps (right) ── -->

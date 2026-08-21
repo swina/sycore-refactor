@@ -4,8 +4,8 @@ import { userKey } from '@/lib/userKey'
 import { sendAiPrompt } from '@/lib/ai-service'
 import { useAiAgentStore } from './useAiAgentStore'
 
-export const BANK_NAMES = ['A', 'B', 'C', 'D', 'E', 'F']
-export const BANK_COUNT = 6
+export const BANK_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+export const BANK_COUNT = 8
 export const CHAIN_COUNT = 8
 
 export const DEFAULT_STEP = {
@@ -79,12 +79,15 @@ function loadBanks(): SeqBank[] | null {
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed) && parsed.length === BANK_COUNT) {
-      return parsed.map((b: any) => ({
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const banks = parsed.slice(0, BANK_COUNT).map((b: any) => ({
         ...makeBank(),
         ...b,
         steps: Array.isArray(b.steps) ? b.steps.map((s: any) => ({ ...DEFAULT_STEP, ...s })) : makeBank().steps,
       }))
+      // Pad with empty banks if saved data has fewer than BANK_COUNT
+      while (banks.length < BANK_COUNT) banks.push(makeBank())
+      return banks
     }
   } catch {}
   return null

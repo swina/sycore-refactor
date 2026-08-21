@@ -292,7 +292,6 @@ export function useControllerManager() {
 
       lastTriggerTimes.set(action, now)
 
-      log(`User Override: Executing Custom Action ${action} (mapping id=${matchedMapping.id ?? '?'}, device="${matchedMapping.device}", ${matchedMapping.note !== undefined ? `note=${matchedMapping.note}` : `cc=${matchedMapping.cc}`}, incoming device="${deviceName}")`)
       if (action !== 'pass_thru') {
         // Note mappings: normalize velocity so any press passes the >63 threshold
         const effectiveVal = matchedMapping.note !== undefined ? Math.max(data[2], 64) : data[2]

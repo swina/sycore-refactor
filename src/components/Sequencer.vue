@@ -14,6 +14,8 @@ import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { dispatch } from '@/types/events'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -45,6 +47,8 @@ const midiStore = useMidiStore()
 const presetStore = usePresetStore()
 const authStore = useAuthStore()
 const syncStore = useSyncStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 const uiStore = useUiStore()
 const seqStore = useStepSequencerStore()
 const transportManager = useTransportManager()
@@ -561,7 +565,7 @@ const TEMPO_MULTIPLIERS = [
   { label: '3/1',  interval: '2m.', beatsPerStep: 12 },
   { label: '4/1',  interval: '4m',  beatsPerStep: 16 },
 ]
-const tempoMultiplier = ref(TEMPO_MULTIPLIERS[4]) // default 1/1
+const tempoMultiplier = ref(TEMPO_MULTIPLIERS[2]) // default 1/1
 const sequenceDirection = ref('up')
 const SEQ_DIRECTIONS = ['up', 'down', 'up-down', 'random']
 
@@ -924,6 +928,12 @@ onMounted(() => {
   }
   window.addEventListener('toggle-sequencer2', handleToggle2)
 
+  const handleBankSelect = (e) => {
+    const idx = e.detail?.idx
+    if (idx != null && idx >= 0 && idx < BANK_COUNT) selectBank(idx)
+  }
+  window.addEventListener('seq-bank-select', handleBankSelect)
+
   const isMidiDeviceAllowed = (chan, inputId, note) => {
     if (!inputId) return true
 
@@ -1263,6 +1273,7 @@ onMounted(() => {
     midiService.isSequencerPlaying = false
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('toggle-sequencer2', handleToggle2)
+    window.removeEventListener('seq-bank-select', handleBankSelect)
     unsubNote?.()
     unsubAppNote?.()
     unsubCC?.()
@@ -1599,7 +1610,7 @@ let generateHidden = ref(false)
           </div>
 
           <!-- Tempo Multiplier -->
-          <div class="flex items-center gap-1">
+          <!-- <div class="flex items-center gap-1">
             <span class="text-[9px] text-neutral-500 font-mono">Time</span>
             <select
               v-model="tempoMultiplier"
@@ -1612,10 +1623,10 @@ let generateHidden = ref(false)
                 :value="opt"
               >{{ opt.label }}</option>
             </select>
-          </div>
+          </div> -->
 
           <!-- Direction -->
-          <span class="text-[9px] text-neutral-500 font-mono">Direction</span>  
+          <!-- <span class="text-[9px] text-neutral-500 font-mono">Direction</span>  
           <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
             <button
               v-for="dir in SEQ_DIRECTIONS"
@@ -1628,7 +1639,7 @@ let generateHidden = ref(false)
                   : 'text-neutral-500 hover:text-neutral-300'
               ]"
             >{{ dir === 'up-down' ? '↕' : dir === 'up' ? '↑' : dir === 'down' ? '↓' : '↔' }}</button>
-          </div>
+          </div> -->
 
           <!-- Active Sound Info: Expanded with Nav -->
           <!-- <div v-if="currentSoundName" class="flex items-center gap-3 px-3 py-1 bg-black/40 rounded-lg border border-neutral-800/50 min-w-[180px]">
@@ -1650,6 +1661,7 @@ let generateHidden = ref(false)
             <button
               v-for="(name, i) in BANK_NAMES" :key="name"
               @click="selectBank(i)"
+              @contextmenu.prevent="openMenu($event, { name: 'seq_bank_' + i, label: 'Sequencer: Pattern ' + name })"
               :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', seqStore.activeBankIndex === i ? 'bg-synth-amber text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
             >
               {{ name }}
@@ -1833,6 +1845,7 @@ let generateHidden = ref(false)
         <!-- Transport Controls -->
         <div class="flex items-center gap-1">
           <button @click="isPlaying = !isPlaying"
+            @contextmenu.prevent="openMenu($event, { name: 'seq_play', label: 'Sequencer: Play' })"
             :class="['flex items-center gap-2 px-4 h-9 rounded-lg font-black uppercase text-[10px] transition-all', isPlaying ? 'bg-amber-500 text-black' : 'bg-neutral-500 text-black']">
             <Square v-if="isPlaying" class="w-3.5 h-3.5 fill-current" />
             <Play v-else class="w-3.5 h-3.5 fill-current" />

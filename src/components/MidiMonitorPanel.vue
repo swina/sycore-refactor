@@ -54,6 +54,7 @@ const typeFilter = ref({
 
 // ─── Log buffer ───────────────────────────────────────────────────────────────
 let _log = []
+let _seq = 0
 const entries    = shallowRef([])
 const entryCount = ref(0)
 const logEndRef  = ref(null)
@@ -88,7 +89,7 @@ function _appendEntry(entry) {
 function _handleSystemLog(e) {
   if (!uiStore.isMidiMonitorOpen || !monitoring.value) return
   _appendEntry({
-    id: Date.now(),
+    id: ++_seq,
     timestamp: Date.now(),
     direction: 'in',
     device: 'SYSTEM',

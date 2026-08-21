@@ -9,6 +9,13 @@ import {
   migrateLegacyPerformanceSets,
 } from '@/lib/midi-performance-sets'
 
+// Module-level shared state — all composable instances share the same ref
+// so saving from one panel is immediately visible in all others without
+// needing to reload from IndexedDB.
+const pcSets   = ref([])
+const isLoaded = ref(false)
+let _migrated  = false
+
 /**
  * Shared Performance Sets logic — single source of truth used by
  * MidiDeviceProgramChangePanel, MasterPresetsList, LivePerformancePad,
@@ -26,10 +33,6 @@ export function usePerformanceSets() {
   const midiStore      = useMidiStore()
   const presetStore    = usePresetStore()
   const { devices: registryDevices } = useDeviceRegistry()
-
-  const pcSets   = ref([])
-  const isLoaded = ref(false)
-  let _migrated  = false
 
   // Re-fetch from IndexedDB on every call (not cached) so a set saved in one
   // panel is visible when another panel re-opens. The localStorage migration

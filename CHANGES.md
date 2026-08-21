@@ -4,6 +4,10 @@ A running log of new features added to SY.CORE, newest first. Bug fixes and inte
 
 ## 2026-08-21
 
+- **Instrument Cockpit Save Performance Set** — Added Save/Recall Performance Set button in the Instrument Cockpit bottom bar. Saves and restores the current instrument patches and device configuration. Uses the same `usePerformanceSets` composable as the Multi Sound panel.
+
+- **Step Sequencer 8 patterns** — Expanded pattern slots from 6 (A-F) to 8 (A-H). `BANK_COUNT`/`BANK_NAMES` updated in `useStepSequencerStore`.
+- **Sequencer MIDI Learn fix** — Play/Stop `seq_play` now routes through `toggle-sequencer2` (the channel the Sequencer actually listens on), and pattern selection via `seq_bank_0..7` dispatches `seq-bank-select` handled in the component.
 - **Access Virus .syx bank import** — MidiDeviceProgramChangePanel now supports importing Access Virus SysEx bank dumps (.syx) via the `access-virus` pcTemplate. Parses 128 single-program dumps, extracting names from the @-prefixed field at offset 248. Add `parseAccessVirusSyx` parser, `access-virus` template in `pc-templates.ts`, `PcTemplateId` type, and import button/flow in the component.
 
 - **Favorite chords** — ChordAssignModal now has a "Favorites" tab that lists saved chords with preview and assign. Click the "Favorite" button on any built chord in the Chord Builder tab to save it. Stored in IndexedDB (`user_favorite_chords` store).
