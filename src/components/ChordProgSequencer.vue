@@ -1705,42 +1705,44 @@ function velBarColor(v) {
         </div>
 
         <!-- Generate Tab -->
-        <div v-else-if="activeTab === 'generate'" class="flex-1 p-4 flex gap-4 overflow-y-auto custom-scrollbar">
-            <div class="flex flex-col">
-            <!-- Hidden file input -->
-            <input
-              ref="midiFileInputRef"
-              type="file"
-              accept=".mid,.midi"
-              class="hidden"
-              @change="handleMidiFileImport"
-            />
-            <div class="text-[10px] text-neutral-400 leading-relaxed">
-              Generate a random progression from the currently selected key source. Chords are distributed across all active steps.
-            </div>
+        <div v-else-if="activeTab === 'generate'" class="flex-1 p-4 flex gap-4 overflow-y-auto custom-scrollbar justify-between">
+            <div class="flex flex-col gap-2">
+              
+              <!-- Hidden file input -->
+              <input
+                ref="midiFileInputRef"
+                type="file"
+                accept=".mid,.midi"
+                class="hidden"
+                @change="handleMidiFileImport"
+              />
+             
+              
+              <!-- Generate button -->
+              <button
+                @click="handleGenerate"
+                :disabled="progLoading || progressionNames.length === 0"
+                class="flex items-center gap-2 px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start"
+                >
+                <Zap class="w-4 h-4" />
+                Generate Progression
+              </button>
+              <!-- Key display -->
+              <div class="flex items-center gap-3">
+                <span class="text-[10px] text-neutral-500 font-mono">Source:</span>
+                <span class="text-[11px] font-bold text-purple-300">{{ KEY_FILE_NAMES[store.selectedKey] }}</span>
+                <span class="text-[9px] text-neutral-600">(change in Library tab)</span>
+              </div>
+              <div class="text-[10px] text-neutral-400 leading-relaxed max-w-[300px]">
+                Generate a random progression from the currently selected key source. 
+                Chords are distributed across all active steps.
+              </div>
 
-          <!-- Key display -->
-          <div class="flex items-center gap-3">
-            <span class="text-[10px] text-neutral-500 font-mono">Source:</span>
-            <span class="text-[11px] font-bold text-purple-300">{{ KEY_FILE_NAMES[store.selectedKey] }}</span>
-            <span class="text-[9px] text-neutral-600">(change in Library tab)</span>
           </div>
-            </div>
-          <!-- Generate button -->
-          <button
-            @click="handleGenerate"
-            :disabled="progLoading || progressionNames.length === 0"
-            class="flex items-center gap-2 px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start"
-          >
-            <Zap class="w-4 h-4" />
-            Generate Progression
-          </button>
 
-          <!-- MIDI File Import -->
-          <div class="border-t border-neutral-800 pt-4 mt-2">
-            <div class="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mb-2">Import .mid File</div>
-
-            <button
+          <div class="flex flex-col gap-2">
+            <div class="text-[10px] text-neutral-400 leading-relaxed max-w-[300px]">
+              <button
               @click.stop="showAiPrompt = true"
               title="AI Prompt"
               class="flex items-center gap-2 px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start mb-3"
@@ -1748,15 +1750,23 @@ function velBarColor(v) {
               <Sparkles class="w-4 h-4" />
               AI Generate
             </button>
-
+            <div class="text-[10px] text-neutral-400 leading-relaxed max-w-[300px]">
+              To use the AI generator, you must have an OpenAI API key. Enter your key in the Settings panel. Then click the AI Generate button and enter a prompt describing the type of chord progression you want to generate.
+            </div>
+          </div>
+          </div>
+          
+          <!-- MIDI File Import -->
+          <div class="flex flex-col gap-2">
             <button
               @click="midiFileInputRef?.click()"
               class="flex items-center gap-2 px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-[11px] uppercase tracking-widest transition-colors self-start"
-            >
+              >
               <Music2 class="w-4 h-4" />
               Import MIDI
             </button>
-
+            <div class="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mb-2">Import .mid File</div>
+          
             <!-- Track selector overlay -->
             <Transition name="sy-modal">
               <div
