@@ -870,6 +870,11 @@ function onCanvasMouseDown(event) {
 
   const noteIdx = getNoteAtPos(x, y)
   if (noteIdx < 0) {
+    if (event.button === 2) {
+      addNoteAtPos(x, y)
+      event.preventDefault()
+      return
+    }
     // Click on empty space: deselect
     selectedNoteIdx.value = null
     inlineEdit.value = null
@@ -1395,7 +1400,7 @@ onUnmounted(() => {
           <!-- Review mode hint overlay -->
           <div v-if="phase === 'review'" class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
             <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">
-              Ctrl+Click to add · Click to select · Drag to move · Right-click to delete · Drag handles to set range
+              Ctrl+Click or Right-click to add · Click to select · Drag to move · Right-click note to delete · Drag handles to set range
             </span>
           </div>
         </div>
