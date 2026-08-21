@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles } from 'lucide-vue-next'
+import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles, Star } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -9,6 +9,7 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { usePerformanceSets } from '@/composables/usePerformanceSets'
+import { useFavoriteChords } from '@/composables/useFavoriteChords'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -504,6 +505,7 @@ const selectedProgressionName = ref('')
 const savePatternName = ref('')
 const savingPattern = ref(false)
 const saveError = ref('')
+const saveAllSlots = ref(false)
 
 // Load progression data when selected key changes
 watch(() => store.selectedKey, (idx) => {
@@ -554,6 +556,7 @@ function handleStepDoubleClick(idx) {
 // ── Step copy/paste (right-click a step) ─────────────────────────
 const stepClipboard = ref(null) // full ChordStep, or null
 const stepContextMenu = ref({ visible: false, x: 0, y: 0, idx: null })
+const slotContextMenu = ref({ visible: false, x: 0, y: 0, idx: null })
 
 function openStepContextMenu(idx, e) {
   stepContextMenu.value = { visible: true, x: e.clientX, y: e.clientY, idx }
@@ -561,6 +564,43 @@ function openStepContextMenu(idx, e) {
 
 function closeStepContextMenu() {
   stepContextMenu.value = { ...stepContextMenu.value, visible: false }
+}
+
+function openSlotContextMenu(idx, e) {
+  slotContextMenu.value = { visible: true, x: e.clientX, y: e.clientY, idx }
+}
+
+function closeSlotContextMenu() {
+  slotContextMenu.value = { ...slotContextMenu.value, visible: false }
+}
+
+function copySlotToSlot(fromIdx, toIdx) {
+  store.copySlot(fromIdx, toIdx)
+  closeSlotContextMenu()
+}
+
+function favoriteCurrentStep() {
+  const step = selectedStep.value
+  if (!step?.active || !step.notes?.length) return
+  const notes = step.notes
+  const lowest = Math.min(...notes)
+  const root = lowest % 12
+  const octave = Math.floor(lowest / 12)
+  addFavorite(step.chordName || 'Chord', root, notes, octave)
+}
+
+function favoriteSlotAsChords(slotIdx) {
+  const slot = store.slots[slotIdx]
+  if (!slot) return
+  const activeSteps = slot.steps.filter(s => s.active && s.notes?.length)
+  if (activeSteps.length === 0) return
+  for (const step of activeSteps) {
+    const notes = step.notes
+    const lowest = Math.min(...notes)
+    const root = lowest % 12
+    const octave = Math.floor(lowest / 12)
+    addFavorite(step.chordName || 'Chord', root, notes, octave)
+  }
 }
 
 function copyStep(idx) {
@@ -658,8 +698,13 @@ async function handleSave() {
   savingPattern.value = true
   saveError.value = ''
   try {
-    const ok = await store.saveToLibrary(savePatternName.value.trim())
-    if (ok) savePatternName.value = ''
+    const ok = saveAllSlots.value
+      ? await store.saveAllSlotsToLibrary(savePatternName.value.trim())
+      : await store.saveToLibrary(savePatternName.value.trim())
+    if (ok) {
+      savePatternName.value = ''
+      saveAllSlots.value = false
+    }
   } catch (e) {
     saveError.value = 'Save failed'
   } finally {
@@ -668,7 +713,11 @@ async function handleSave() {
 }
 
 function handleLoadPattern(pattern) {
-  store.loadFromDocument(pattern)
+  if (pattern.type === 'all') {
+    store.loadAllSlotsFromDocument(pattern)
+  } else {
+    store.loadFromDocument(pattern)
+  }
 }
 
 async function handleDeletePattern(id) {
@@ -789,6 +838,7 @@ function handleGateKeydown(e) {
 }
 
 const selectedStep = computed(() => store.steps[store.selectedStepIdx])
+const prevStep = computed(() => store.selectedStepIdx > 0 ? store.steps[store.selectedStepIdx - 1] : null)
 const showChordAssign = ref(false)
 
 function onChordAssigned({ notes, name }) {
@@ -876,6 +926,7 @@ function applyFillArpMode() {
 // ── Performance Sets (shared + IndexedDB-backed via usePerformanceSets) ──
 
 const { pcSets, loadSets, recallSet: recallStoredSet } = usePerformanceSets()
+const { favoriteChords, loadFavorites, addFavorite, removeFavorite } = useFavoriteChords()
 const activePcSetId = ref(null)
 
 function loadPcSets() {
@@ -1053,7 +1104,7 @@ function velBarColor(v) {
             v-for="i in store.SLOT_COUNT"
             :key="i"
             @click.stop="handleSlotSelect(i - 1)"
-            @contextmenu.prevent="openMenu($event, { name: 'cp_slot_' + (i - 1), label: 'Chord Prog: Slot ' + String.fromCharCode(64 + i) })"
+            @contextmenu.prevent="openSlotContextMenu(i - 1, $event)"
             :title="store.isPlaying && store.playingSlotIndex === i - 1 ? 'Now playing (chain)' : undefined"
             :class="[
               'relative w-8 h-8 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
@@ -1240,7 +1291,7 @@ function velBarColor(v) {
 
       <!-- ── STEP DETAIL ────────────────────────────────────────────────── -->
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
-        <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 items-center">Step {{ store.selectedStepIdx + 1 }}</div>
+        <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 text-center items-center w-[60px]">Step {{ store.selectedStepIdx + 1 }}</div>
 
         <div class="flex flex-col w-1/5">
           <!-- Active toggle -->
@@ -1385,6 +1436,14 @@ function velBarColor(v) {
             <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
           </select>
         </div>
+
+        <!-- Favorite button -->
+        <button
+          v-if="selectedStep?.active && selectedStep.notes?.length"
+          @click="favoriteCurrentStep()"
+          class="ml-auto px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 border transition-colors bg-amber-950/30 border-amber-700/40 text-amber-400 hover:bg-amber-900/50 hover:border-amber-500 shrink-0"
+          title="Save this chord to favorites"
+        ><Star class="w-3 h-3" /> Favorite</button>
 
         
       </div>
@@ -1849,7 +1908,7 @@ function velBarColor(v) {
 
           <!-- Save panel -->
           <div class="w-64 shrink-0 border-r border-neutral-800 flex flex-col p-3 gap-3">
-            <div class="text-[9px] font-bold uppercase tracking-widest text-neutral-500">Save Current</div>
+            <div class="text-[9px] font-bold uppercase tracking-widest text-neutral-500">Save</div>
             <template v-if="authStore.user">
               <input
                 v-model="savePatternName"
@@ -1857,14 +1916,21 @@ function velBarColor(v) {
                 class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-[11px] text-white outline-none focus:border-purple-500 w-full"
                 @keydown.enter="handleSave"
               />
-              <button
-                @click="handleSave"
-                :disabled="savingPattern || !savePatternName.trim()"
-                class="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
-              >
-                <Save class="w-3.5 h-3.5" />
-                {{ savingPattern ? 'Saving…' : 'Save' }}
-              </button>
+              <div class="flex items-center gap-2">
+                <button
+                  @click="handleSave"
+                  :disabled="savingPattern || !savePatternName.trim()"
+                  class="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
+                >
+                  <Save class="w-3.5 h-3.5" />
+                  {{ savingPattern ? 'Saving…' : 'Save' }}
+                </button>
+                <label class="flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-mono text-neutral-500 hover:text-neutral-300">
+                  <input type="checkbox" v-model="saveAllSlots" class="accent-purple-500" />
+                  All Slots
+                </label>
+              </div>
+              <div v-if="saveAllSlots" class="text-[9px] text-cyan-400 font-mono">Saves all 8 slots + chain configuration</div>
               <div v-if="saveError" class="text-[10px] text-red-400">{{ saveError }}</div>
             </template>
             <div v-else class="text-[10px] text-neutral-600">Sign in to save progressions</div>
@@ -1883,7 +1949,11 @@ function velBarColor(v) {
                 class="flex items-center gap-2 px-3 py-1.5 border-b border-neutral-800/50 hover:bg-neutral-800/30 group"
               >
                 <div class="flex-1 min-w-0">
-                  <div class="text-[11px] font-bold text-white truncate">{{ pattern.name }}</div>
+                  <div class="text-[11px] font-bold text-white truncate flex items-center gap-1.5">
+                    {{ pattern.name }}
+                    <span v-if="pattern.type === 'all'" class="text-[7px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-700/40">All Slots</span>
+                    <span v-else class="text-[7px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-purple-950/40 text-purple-400 border border-purple-700/40">Single</span>
+                  </div>
                   <div class="text-[9px] text-neutral-600 font-mono">
                     {{ KEY_FILE_NAMES[pattern.selectedKey] || '—' }} · {{ pattern.numSteps }} steps
                   </div>
@@ -1969,6 +2039,8 @@ function velBarColor(v) {
       :step-idx="store.selectedStepIdx"
       :current-notes="selectedStep?.notes ?? []"
       :current-name="selectedStep?.chordName ?? ''"
+      :prev-notes="prevStep?.notes ?? []"
+      :prev-name="prevStep?.chordName ?? ''"
       @assign="onChordAssigned"
       @close="showChordAssign = false"
     />
@@ -1996,6 +2068,35 @@ function velBarColor(v) {
           stepClipboard ? 'text-neutral-300 hover:bg-purple-700/40 hover:text-white' : 'text-neutral-700 cursor-not-allowed'
         ]"
       >Paste to Step {{ stepContextMenu.idx + 1 }}</button>
+    </div>
+
+    <!-- Slot copy context menu (right-click a slot A-H) -->
+    <div
+      v-if="slotContextMenu.visible"
+      class="fixed inset-0 z-[200]"
+      @click="closeSlotContextMenu"
+      @contextmenu.prevent="closeSlotContextMenu"
+    />
+    <div
+      v-if="slotContextMenu.visible"
+      class="fixed z-[201] w-44 bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl overflow-hidden text-[11px] font-mono"
+      :style="{ left: slotContextMenu.x + 'px', top: slotContextMenu.y + 'px' }"
+    >
+      <div class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-500 border-b border-neutral-800">
+        Copy {{ String.fromCharCode(65 + slotContextMenu.idx) }} to…
+      </div>
+      <button
+        v-for="i in store.SLOT_COUNT"
+        :key="i"
+        v-show="i - 1 !== slotContextMenu.idx"
+        @click="copySlotToSlot(slotContextMenu.idx, i - 1)"
+        class="w-full text-left px-3 py-1.5 text-neutral-300 hover:bg-purple-700/40 hover:text-white transition-colors"
+      >Slot {{ String.fromCharCode(64 + i) }}</button>
+      <div class="border-t border-neutral-800" />
+      <button
+        @click="favoriteSlotAsChords(slotContextMenu.idx); closeSlotContextMenu()"
+        class="w-full text-left px-3 py-1.5 text-neutral-300 hover:bg-amber-700/40 hover:text-amber-300 transition-colors flex items-center gap-1.5"
+      ><Star class="w-3 h-3" /> Favorite All Chords</button>
     </div>
 
     <!-- AI Prompt -->

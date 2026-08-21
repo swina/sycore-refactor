@@ -2,6 +2,14 @@
 
 A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
 
+## 2026-08-21
+
+- **Favorite chords** — ChordAssignModal now has a "Favorites" tab that lists saved chords with preview and assign. Click the "Favorite" button on any built chord in the Chord Builder tab to save it. Stored in IndexedDB (`user_favorite_chords` store).
+- **Chord comparison preview in Assign modal** — ChordAssignModal now shows the previous step's chord (if any) and the current step's chord alongside the new suggestion, with a "Preview A→B→C" button that plays prev → current → new in sequence for comparison.
+- **Chord suggestion modal** — ChordAssignModal now has a "Suggest" tab that shows 18 common chord types (maj, min, 7, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, etc.) with inversions. Pick a root note, select a chord type, choose an inversion, then preview and assign to the current step.
+- **Copy slot to slot** — Right-click a slot (A-H) in the Chord Prog Sequencer to open a context menu that copies that slot's content to any other slot.
+- **Save/Load all 8 chord progression slots** — Chord Prog Sequencer Save/Load tab now has a "Save All Slots" checkbox that persists all 8 slots (A-H), the active slot index, and the chain configuration as a single library entry. Loaded all-slots patterns restore the full slot set, chain, and active slot. Pattern list shows "All Slots" / "Single" badges.
+
 ## 2026-08-20
 
 - **MIDI per-cable channel filter** — MIDI Flow cables (device→device, device→app, app→device) now support a multi-channel filter. Click a cable's filter icon to select which MIDI channels pass through. Works in Thru routing, app input routing, and app→output broadcast. Channel filter gates on the output channel (after remapping), so selecting CH 2 on a cable sends to the device on CH 2 regardless of the source channel.

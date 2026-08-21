@@ -72,6 +72,7 @@ function parsePath(segments: PathSegments): { store: string; key: string } {
       playlists: 'user_playlists',
       sequences: 'user_sequences',
       chord_progressions: 'user_chord_progressions',
+      favorite_chords: 'user_favorite_chords',
       backing_tracks: 'user_backing_tracks',
       timeline_sets: 'user_timeline_sets',
       system: 'user_system',

@@ -59,6 +59,7 @@ export {
 export { presetRepo, PresetRepository } from './repositories/preset-repo';
 export { userRepo, UserRepository } from './repositories/user-repo';
 export { settingsRepo, SettingsRepository } from './repositories/settings-repo';
+export { favoriteChordsRepo, FavoriteChordsRepository } from './repositories/favorite-chords-repo';
 
 // Cache modules
 export {

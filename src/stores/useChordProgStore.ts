@@ -33,7 +33,16 @@ export interface ChordStep {
 
 export type PlayMode = 'chord' | 'arp' | 'bass'
 
-export interface ChordProgSnapshot {
+export interface ChordProgAllSlotsSnapshot {
+  type: 'all'
+  slots: Array<{ steps: ChordStep[]; numSteps: number; playMode: PlayMode; arpRate: DurationOption }>
+  activeSlotIndex: number
+  chain: number[]
+  chainEnabled: boolean
+  selectedKey: number
+  midiChannel: number
+}
+  export interface ChordProgSnapshot {
   steps: ChordStep[]
   numSteps: number
   selectedKey: number
@@ -207,6 +216,21 @@ export const useChordProgStore = defineStore('chordProg', () => {
     playMode.value = slot.playMode
     arpRate.value = slot.arpRate
     activeSlotIndex.value = index
+  }
+
+  // Copy one slot's data to another slot
+  function copySlot(fromIndex: number, toIndex: number) {
+    if (fromIndex < 0 || fromIndex >= SLOT_COUNT) return
+    if (toIndex < 0 || toIndex >= SLOT_COUNT) return
+    slotSave(activeSlotIndex.value)
+    const src = slots.value[fromIndex]
+    slots.value[toIndex] = {
+      steps: src.steps.map(s => ({ ...s, notes: [...s.notes] })),
+      numSteps: src.numSteps,
+      playMode: src.playMode,
+      arpRate: src.arpRate,
+    }
+    persistSlots()
   }
 
   // Set a chain position to a slot index (0-7) or -1 to clear
@@ -402,11 +426,41 @@ export const useChordProgStore = defineStore('chordProg', () => {
     await setDoc(docRef, {
       id,
       name,
+      type: 'single',
       steps: JSON.parse(JSON.stringify(steps.value)),
       numSteps: numSteps.value,
       selectedKey: selectedKey.value,
       playMode: playMode.value,
       arpRate: arpRate.value,
+      midiChannel: midiChannel.value,
+      createdAt: new Date().toISOString(),
+    } as any)
+    await loadLibrary()
+    return true
+  }
+
+  async function saveAllSlotsToLibrary(name: string): Promise<boolean> {
+    if (!authStore.user) return false
+    const uid = authStore.user.uid
+    const id = `chordprog_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    const docRef = doc(db, 'users', uid, 'chord_progressions', id)
+
+    // Snapshot active slot first, then persist all slots
+    slotSave(activeSlotIndex.value)
+    await setDoc(docRef, {
+      id,
+      name,
+      type: 'all',
+      slots: slots.value.map(s => ({
+        steps: s.steps.map(st => ({ ...st })),
+        numSteps: s.numSteps,
+        playMode: s.playMode,
+        arpRate: s.arpRate,
+      })),
+      activeSlotIndex: activeSlotIndex.value,
+      chain: [...chain.value],
+      chainEnabled: chainEnabled.value,
+      selectedKey: selectedKey.value,
       midiChannel: midiChannel.value,
       createdAt: new Date().toISOString(),
     } as any)
@@ -446,6 +500,27 @@ export const useChordProgStore = defineStore('chordProg', () => {
     if (pattern.playMode) playMode.value = pattern.playMode
     if (pattern.arpRate) arpRate.value = pattern.arpRate
     if (pattern.midiChannel) midiChannel.value = pattern.midiChannel
+  }
+
+  function loadAllSlotsFromDocument(pattern: ChordProgAllSlotsSnapshot) {
+    if (pattern.slots) {
+      slots.value = pattern.slots.map((s: any) => ({
+        steps: s.steps?.map((st: any) => ({ ...DEFAULT_CHORD_STEP, ...st })) ?? makeEmptySlot().steps,
+        numSteps: s.numSteps ?? 8,
+        playMode: s.playMode ?? 'chord',
+        arpRate: s.arpRate ?? '16n',
+      }))
+    }
+    if (pattern.selectedKey !== undefined) selectedKey.value = pattern.selectedKey
+    if (pattern.midiChannel !== undefined) midiChannel.value = pattern.midiChannel
+    if (pattern.chain) chain.value = pattern.chain
+    if (pattern.chainEnabled !== undefined) chainEnabled.value = pattern.chainEnabled
+    if (pattern.activeSlotIndex !== undefined) {
+      activeSlotIndex.value = pattern.activeSlotIndex
+      slotLoad(pattern.activeSlotIndex)
+    }
+    persistSlots()
+    persistChain()
   }
 
   function loadFromMidiImport(track: { name: string; notes: Array<{ noteNumber: number; velocity: number; startTick: number }> }, ticksPerBeat: number) {
@@ -524,11 +599,11 @@ export const useChordProgStore = defineStore('chordProg', () => {
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,
-    saveToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument,
+    saveToLibrary, saveAllSlotsToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument, loadAllSlotsFromDocument,
     loadFromMidiImport,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,
     slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled,
-    slotSave, slotLoad, chainSet, chainInsert, chainRemove, chainClear, getChainSteps,
+    slotSave, slotLoad, copySlot, chainSet, chainInsert, chainRemove, chainClear, getChainSteps,
   }
 })
