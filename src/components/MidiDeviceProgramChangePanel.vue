@@ -68,16 +68,8 @@ const devices = computed(() => {
 // Left-panel device list — only devices actually online right now. `devices`
 // itself stays the full set (online or not): it's also used for Performance
 // Set snapshots (which must keep covering a device even if it's temporarily
-// offline at save time) and for pc_dev_N MIDI-Learn index mappings (which
-// must stay stable regardless of who's currently connected).
+// offline at save time).
 const visibleDevices = computed(() => devices.value.filter(d => d.isOnline))
-
-// True index into the full `devices` array for a given device name — keeps
-// pc_dev_N MIDI-Learn bindings correct even though the visible list above is
-// a filtered subset with its own, different local indices.
-function deviceIndex(name) {
-  return devices.value.findIndex(d => d.name === name)
-}
 
 const selectedDeviceName = ref('')
 
@@ -621,14 +613,7 @@ const currentPcState = computed(() => {
 function sendToDeviceMessage(data, deviceName) {
   const dn = deviceName ?? selectedDeviceName.value
   if (!dn) return
-  if (midiStore.virtualInstruments.some(v => v.name === dn)) {
-    midiService.sendRawToDeviceByName(dn, data)
-  } else {
-    const port = midiStore.outputs.find(o => o.name === dn)
-    if (port) {
-      try { port.send(data) } catch {}
-    }
-  }
+  midiService.sendRawToDeviceByName(dn, data)
 }
 
 // ── Send from catalog ───────────────────────────────────────────
@@ -861,9 +846,9 @@ function _startDevMidiListener() {
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
     if (!paramName?.startsWith('pc_dev_')) return
 
-    const idx = parseInt(paramName.slice('pc_dev_'.length))
-    if (!isNaN(idx) && idx >= 0 && idx < devices.value.length) {
-      selectDevice(devices.value[idx].name)
+    const deviceName = paramName.slice('pc_dev_'.length)
+    if (deviceName && devices.value.some(d => d.name === deviceName)) {
+      selectDevice(deviceName)
     }
   })
 }
@@ -1062,7 +1047,7 @@ function assignToPad(setId, padIdx) {
                 v-for="dev in visibleDevices"
                 :key="dev.name"
                 @click="selectDevice(dev.name)"
-                @contextmenu.prevent="openMenu($event, { name: 'pc_dev_' + deviceIndex(dev.name), label: dev.name })"
+                @contextmenu.prevent="openMenu($event, { name: 'pc_dev_' + dev.name, label: dev.name })"
                 :class="[
                   'relative w-full text-left px-4 py-3 border-b border-neutral-800/60 transition-all',
                   selectedDeviceName === dev.name
@@ -1072,7 +1057,7 @@ function assignToPad(setId, padIdx) {
               >
                 <!-- MIDI learning indicator -->
                 <span
-                  v-if="mappingStore.learningParamName === 'pc_dev_' + deviceIndex(dev.name)"
+                  v-if="mappingStore.learningParamName === 'pc_dev_' + dev.name"
                   class="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none"
                 />
                 <div class="flex items-center gap-2.5">

@@ -168,23 +168,7 @@ export function usePerformanceSets() {
 
   function _sendToDevice(deviceName, data) {
     if (!deviceName) return
-    if (midiStore.virtualInstruments.some(v => v.name === deviceName)) {
-      midiService.sendRawToDeviceByName(deviceName, data)
-    } else {
-      // Same proven resolution as the panel's sendToDeviceMessage(): direct
-      // MIDIOutput.send() for physical ports, so recall reaches hardware
-      // exactly like clicking a patch does. Logged to the MIDI monitor so
-      // the recall shows up under the device's Program Changes.
-      const port = midiStore.outputs.find(o => o.name === deviceName)
-      if (port) {
-        try {
-          port.send(data)
-          midiService.logOutbound(deviceName, data)
-        } catch (e) {
-          console.warn(`[PerformanceSets] send to "${deviceName}" failed`, e)
-        }
-      }
-    }
+    midiService.sendRawToDeviceByName(deviceName, data)
   }
 
   function sendStoredProgramChanges(set) {

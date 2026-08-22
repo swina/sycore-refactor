@@ -582,6 +582,17 @@ export class MidiService {
       .filter(input => !blockedPorts.has(this.normPort(input.name)));
     for (const input of inputs) {
       input.removeEventListener('midimessage', this.handleIngressBound);
+      try {
+        // open() alone on an already-open port is a spec no-op, but on
+        // Chromium it actually re-establishes the internal stream that
+        // goes stale after a page reload — without the destructive
+        // close()+open() cycle that corrupts some USB MIDI devices
+        // (Worlde, etc.) and requires a physical unplug/replug to fix.
+        await input.open();
+      } catch (e) {
+        console.warn(`[MIDI] Failed to open input "${input.name}" on startup:`, e);
+      }
+      input.removeEventListener('midimessage', this.handleIngressBound);
       input.addEventListener('midimessage', this.handleIngressBound);
     }
     console.log(`[MIDI] Attached to ${inputs.length} inputs: ${inputs.map(i => i.name).join(', ')}`);
@@ -883,26 +894,51 @@ export class MidiService {
   }
 
   sendRawToDeviceByName(deviceName: string, data: number[]): void {
-    // Try real MIDI output
-    if (this.midiAccess) {
-      const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === deviceName);
-      if (out) {
-        try {
-          out.send(data);
-          this.logOutbound(deviceName, data);
-          return;
-        } catch (e) {
-          console.warn(`[MIDI] sendRawToDeviceByName "${deviceName}": send failed, falling back to virtual.`, e);
-        }
-      } else {
-        const available = Array.from(this.midiAccess.outputs.values()).map((p: any) => p.name).join(', ') || '(none)';
-        // Virtual instruments are handled by sendToVirtualOutput below — no warning needed.
-        if (!this.virtualOutputs?.has(deviceName)) {
-          console.warn(`[MIDI] sendRawToDeviceByName: no physical output named "${deviceName}". Available: ${available}`);
+    if (!this.midiAccess) {
+      this.sendToVirtualOutput(deviceName, data);
+      return;
+    }
+
+    // 1. Check the routing matrix: the device may be mapped to an output
+    //    port whose name differs from the registration name (e.g. a device
+    //    named "BassStation" routed to output "AG06/AG03-1").  If routing
+    //    exists, send to every routed port.
+    const routedPorts = this.router.getRouting(deviceName);
+    if (routedPorts.length > 0) {
+      let sent = false;
+      for (const portName of routedPorts) {
+        const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === portName);
+        if (out) {
+          try {
+            out.send(data);
+            this.logOutbound(deviceName, data);
+            sent = true;
+          } catch (e) {
+            console.warn(`[MIDI] sendRawToDeviceByName routed "${deviceName}"→"${portName}": send failed.`, e);
+          }
         }
       }
+      if (sent) return;
     }
-    // Try virtual output
+
+    // 2. Fallback: try to find a physical output with the same name
+    const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === deviceName);
+    if (out) {
+      try {
+        out.send(data);
+        this.logOutbound(deviceName, data);
+        return;
+      } catch (e) {
+        console.warn(`[MIDI] sendRawToDeviceByName "${deviceName}": send failed, falling back to virtual.`, e);
+      }
+    } else {
+      const available = Array.from(this.midiAccess.outputs.values()).map((p: any) => p.name).join(', ') || '(none)';
+      if (!this.virtualOutputs?.has(deviceName)) {
+        console.warn(`[MIDI] sendRawToDeviceByName: no route nor output named "${deviceName}". Available: ${available}`);
+      }
+    }
+
+    // 3. Try virtual output
     this.sendToVirtualOutput(deviceName, data);
   }
 
