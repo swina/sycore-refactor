@@ -559,7 +559,11 @@ const stepContextMenu = ref({ visible: false, x: 0, y: 0, idx: null })
 const slotContextMenu = ref({ visible: false, x: 0, y: 0, idx: null })
 
 function openStepContextMenu(idx, e) {
-  stepContextMenu.value = { visible: true, x: e.clientX, y: e.clientY, idx }
+  const menuW = 160
+  const menuH = 60
+  const x = Math.min(e.clientX, window.innerWidth - menuW - 8)
+  const y = Math.min(e.clientY, window.innerHeight - menuH - 8)
+  stepContextMenu.value = { visible: true, x: Math.max(8, x), y: Math.max(8, y), idx }
 }
 
 function closeStepContextMenu() {
@@ -567,7 +571,10 @@ function closeStepContextMenu() {
 }
 
 function openSlotContextMenu(idx, e) {
-  slotContextMenu.value = { visible: true, x: e.clientX, y: e.clientY, idx }
+  const menuW = 176
+  const x = Math.min(e.clientX, window.innerWidth - menuW - 8)
+  const y = Math.min(e.clientY, window.innerHeight - 260 - 8)
+  slotContextMenu.value = { visible: true, x: Math.max(8, x), y: Math.max(8, y), idx }
 }
 
 function closeSlotContextMenu() {
@@ -2055,7 +2062,7 @@ function velBarColor(v) {
     <div
       v-if="stepContextMenu.visible"
       class="fixed z-[201] w-40 bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl overflow-hidden text-[11px] font-mono"
-      :style="{ left: stepContextMenu.x + 'px', top: stepContextMenu.y + 'px' }"
+      :style="{ left: (stepContextMenu.x -200) + 'px', top: (stepContextMenu.y-30) + 'px' }"
     >
       <button
         @click="copyStep(stepContextMenu.idx)"
