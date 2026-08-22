@@ -1448,9 +1448,16 @@ watch(isPlaying, (playing) => {
 
 watch(isPlaying, (playing) => {
   if (playing) {
-    const tick = () => {
-      const pos = String(getTransport().position).split('.')[0].split(':')
-      transportPosition.value = `${parseInt(pos[0]) + 1}:${parseInt(pos[1]) + 1}:${parseInt(pos[2]) + 1}`
+    let lastUpdate = 0
+    const tick = (now) => {
+      // Throttle position update to ~30fps — every frame (60fps) reads
+      // Tone.js transport position + string parsing, which causes
+      // [Violation] warnings and stalls MIDI message processing.
+      if (now - lastUpdate >= 33) {
+        lastUpdate = now
+        const pos = String(getTransport().position).split('.')[0].split(':')
+        transportPosition.value = `${parseInt(pos[0]) + 1}:${parseInt(pos[1]) + 1}:${parseInt(pos[2]) + 1}`
+      }
       rafRef.value = requestAnimationFrame(tick)
     }
     rafRef.value = requestAnimationFrame(tick)
