@@ -78,7 +78,7 @@ function serializeTrack(t: DrumTrack): SerializedDrumTrack {
 type DrumSequences = Record<string, DrumTrack[]>
 
 function makeDefaultSequences(): DrumSequences {
-  return (['A', 'B', 'C', 'D', 'E', 'F'] as const).reduce((acc, key) => {
+  return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => {
     acc[key] = TRACK_LABELS.map(label => makeTrack(label))
     return acc
   }, {} as DrumSequences)
@@ -682,7 +682,7 @@ function mergeLoadedSequences(loaded: any): DrumSequences {
   const defaults = makeDefaultSequences()
   if (!loaded?.sequences) return defaults
   const merged: DrumSequences = {}
-  for (const key of ['A', 'B', 'C', 'D', 'E', 'F']) {
+  for (const key of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
     const loadedSeq = loaded.sequences[key]
     if (!Array.isArray(loadedSeq)) { merged[key] = defaults[key]; continue }
     merged[key] = TRACK_LABELS.map((label, i) => {
@@ -743,7 +743,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   }
 
   function makeDefaultBasslineSequences(): Record<string, DrumTrack[]> {
-    return (['A', 'B', 'C', 'D', 'E', 'F'] as const).reduce((acc, key) => {
+return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => {
       acc[key] = Array.from({ length: NUM_BASSLINE_VOICES }, (_, i) => makeBasslineTrack(i))
       return acc
     }, {} as Record<string, DrumTrack[]>)
@@ -753,7 +753,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
     const defaults = makeDefaultBasslineSequences()
     if (!loaded?.basslineSequences) return defaults
     const merged: Record<string, DrumTrack[]> = {}
-    for (const key of ['A', 'B', 'C', 'D', 'E', 'F']) {
+    for (const key of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
       const loadedSeq = loaded.basslineSequences[key]
       if (!Array.isArray(loadedSeq)) { merged[key] = defaults[key]; continue }
       merged[key] = Array.from({ length: NUM_BASSLINE_VOICES }, (_, i) => {
@@ -962,7 +962,7 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   }
 
   function resolveTrackSound(trackIdx: number) {
-    const order = ['A', 'B', 'C', 'D', 'E', 'F']
+    const order = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     let idx = order.indexOf(activeSequence.value)
     while (idx >= 0) {
       const t = sequences.value[order[idx]]?.[trackIdx]

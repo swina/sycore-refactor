@@ -21,7 +21,7 @@ const mappingStore = useMappingStore()
 const livePadStore = useLivePadStore()
 const drumStore    = useDrumMachineStore()
 
-const DM_SEQS = ['A', 'B', 'C', 'D', 'E', 'F']
+const DM_SEQS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
 function dmSelectPreset(id) {
   const preset = drumStore.presets.find(p => p.id === id)

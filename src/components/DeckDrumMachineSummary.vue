@@ -9,7 +9,7 @@ const emit = defineEmits(['close'])
 const drumStore = useDrumMachineStore()
 const uiStore = useUiStore()
 
-const BANKS = ['A', 'B', 'C', 'D', 'E', 'F']
+const BANKS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
 const patternName = computed(() => drumStore.currentPresetName || `Pattern ${drumStore.activeSequence}`)
 

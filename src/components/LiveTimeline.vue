@@ -94,15 +94,18 @@ const segments = ref(getLS(LS_SEGS,  []))
 const markers  = ref(getLS(LS_MARKS, []))
 
 // ─── UI ────────────────────────────────────────────────────────────────────
-const tab   = ref('timeline')  // 'timeline' | 'arrange'
-const scale = ref(0.5)         // px per second (min 0.5 = 1px/2s)
+const tab       = ref('timeline')  // 'timeline' | 'arrange'
+const scale     = ref(0.25)        // px per beat (quarter note)
+const timelineBpm = ref(midiStore.currentBpm || 120)
 
 const showAddSeg    = ref(false)
 const showAddMarker = ref(false)
 
 const newSeg = ref({ trackIdx: 0, segStart: 0, segEnd: 0, label: '', notes: '' })
-const newMkr   = ref({ position: 0, type: 'tempo', label: '', value: 120 })
-const newMkrPc = ref({ device: '', channel: 1, msb: null, lsb: null, soundName: '' })
+const newMkr    = ref({ position: 0, type: 'tempo', label: '', value: 120 })
+const newMkrPos = ref('1:0')
+const newMkrPc  = ref({ device: '', channel: 1, msb: null, lsb: null, soundName: '' })
+const newMkrCp  = ref({ seqKey: '', chainEnabled: null })
 
 // Add Segment: source tab ('playlist' | 'library') + library state
 const segSource       = ref('playlist')
@@ -192,6 +195,9 @@ const MARKER_TYPES = [
   { value: 'program-change',  label: 'Program Change (PC)',  hasValue: true  },
   { value: 'seq-start',        label: 'Start Sequencer',          hasValue: false },
   { value: 'seq-stop',         label: 'Stop Sequencer',           hasValue: false },
+  { value: 'cp-start',         label: 'Start Chord Prog',         hasValue: false },
+  { value: 'cp-stop',          label: 'Stop Chord Prog',          hasValue: false },
+  { value: 'cp-select-pattern',label: 'Select Chord Prog Slot',   hasValue: true  },
   { value: 'transport-start',  label: 'MIDI Sync Start',          hasValue: false },
   { value: 'transport-stop',   label: 'MIDI Sync Stop',           hasValue: false },
   { value: 'clock-start',      label: 'Start Clock (ticks only)', hasValue: false },
@@ -259,6 +265,7 @@ const activeSegIdx = ref(-1)
 
 let _posAtStart          = 0
 let _startedAt           = 0
+let _effectiveBpm        = 120
 let _rafId               = null
 const _fired             = new Set()
 let _lastTransportWasPlay = false  // tracks last transport-start/stop marker state
@@ -281,6 +288,9 @@ const MKR_COLORS = {
   'program-change': '#f97316',
   'seq-start':       '#22d3ee',
   'seq-stop':        '#f43f5e',
+  'cp-start':        '#7c3aed',
+  'cp-stop':         '#dc2626',
+  'cp-select-pattern':'#a855f7',
   'transport-start': '#4ade80',
   'transport-stop':  '#fb923c',
   'clock-start':     '#10b981',
@@ -308,6 +318,9 @@ const MKR_ICONS = {
   'program-change': 'PC',
   'seq-start':       '▶',
   'seq-stop':        '■',
+  'cp-start':        '⏵',
+  'cp-stop':         '⏹',
+  'cp-select-pattern':'↕',
   'transport-start': '▷',
   'transport-stop':  '◻',
   'clock-start':     '⏱',
@@ -335,6 +348,9 @@ const MKR_ABBREV = {
   'program-change': 'PC',
   'seq-start':       'SEQ▶',
   'seq-stop':        'SEQ■',
+  'cp-start':        'CP▶',
+  'cp-stop':         'CP■',
+  'cp-select-pattern':'CPSL',
   'transport-start': 'SYN▶',
   'transport-stop':  'SYN■',
   'clock-start':     'CLK▶',
@@ -379,8 +395,10 @@ function mDisplayValue(m) {
     case 'program-change': return m.soundName ? m.soundName : `PC ${m.value}`
     case 'lm-start':       return `Pad ${(m.padIdx ?? 0) + 1}`
     case 'dm-start':       return [m.presetName, m.seqKey ? `Seq ${m.seqKey}` : ''].filter(Boolean).join(' / ') || '(current)'
-    case 'goto':           return formatTime(m.targetSec ?? 0) + (m.repeat ? ' ↻' : '')
+    case 'cp-start':       return [m.seqKey ? `Slot ${m.seqKey}` : '', m.chainEnabled ? 'Chain' : ''].filter(Boolean).join(' / ') || '(current)'
+    case 'goto':           return formatTime(m.targetBeat ?? 0) + (m.repeat ? ' ↻' : '')
     case 'dm-rec-sync':    return `${m.measures ?? 4} bars`
+    case 'cp-select-pattern': return `Slot ${String.fromCharCode(65 + (m.value ?? 0))}`
     case 'audio-set-loop': return `${m.measures ?? 2} bars`
     case 'audio-save-wav': return m.filename || 'drum_machine.wav'
     default:               return ''
@@ -393,7 +411,7 @@ const playlist = computed(() => livePadStore.playlist)
 const segBounds = computed(() => {
   let pos = 0
   return segments.value.map(seg => {
-    const dur = Math.max(0.1, (seg.segEnd || 0) - (seg.segStart || 0))
+    const dur = Math.max(1, (seg.segEnd || 0) - (seg.segStart || 0))
     const start = pos
     pos += dur
     return { start, end: pos, dur }
@@ -404,7 +422,7 @@ const totalDuration = computed(() => {
   if (segBounds.value.length) return segBounds.value[segBounds.value.length - 1].end
   if (markers.value.length) {
     const lastPos = Math.max(...markers.value.map(m => m.position))
-    return lastPos + 10 // 10s of padding after the last marker
+    return lastPos + 16 // 4 bars of padding after the last marker
   }
   return 0
 })
@@ -417,31 +435,40 @@ const progressPct = computed(() => {
 })
 
 const rulerTicks = computed(() => {
-  const total = Math.ceil(totalDuration.value) + 60
-  const nice  = [1, 2, 5, 10, 15, 30, 60, 120, 300]
-  const target = Math.round(80 / scale.value)
-  const interval = nice.find(n => n >= target) || 300
+  const totalBars = Math.ceil(totalDuration.value / 4) + 16
+  const target = Math.round(24 / scale.value)
+  const barIntervals = [1, 2, 4, 8, 16, 32, 64]
+  const interval = barIntervals.find(n => n * 4 * scale.value >= target) || 64
   const ticks = []
-  for (let t = 0; t <= total; t += interval) {
-    ticks.push({ t, x: t * scale.value, label: formatTime(t) })
+  for (let bar = 0; bar <= totalBars; bar += interval) {
+    const beatPos = bar * 4
+    ticks.push({ t: beatPos, x: beatPos * scale.value, label: (bar + 1).toString() })
   }
   return ticks
 })
 
 // ─── Format ────────────────────────────────────────────────────────────────
-function formatTime(t) {
-  if (!isFinite(t) || isNaN(t)) return '0:00'
-  const m = Math.floor(t / 60)
-  const s = Math.floor(t % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+function formatTime(beats) {
+  if (!isFinite(beats) || isNaN(beats)) return '0:00'
+  const bar = Math.floor(beats / 4)
+  const beat = (beats % 4).toFixed(1)
+  return `${bar + 1}:${beat}`
+}
+
+function beatsToSec(beats, bpm) {
+  return (beats / (bpm || 120)) * 60
+}
+
+function secToBeats(sec, bpm) {
+  return sec * ((bpm || 120) / 60)
 }
 
 // ─── Playback engine ───────────────────────────────────────────────────────
 function play() {
   if (isPlaying.value || totalDuration.value === 0) return
   const resumingFromPause = isPaused.value
-  // On fresh start (not pause-resume), reset the player so the same-idx guard doesn't block
   if (!resumingFromPause) window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
+  _effectiveBpm = timelineBpm.value
   _posAtStart = timelinePos.value
   _startedAt  = performance.now()
   isPlaying.value = true
@@ -491,7 +518,8 @@ function stop() {
 }
 
 function _tick() {
-  timelinePos.value = _posAtStart + (performance.now() - _startedAt) / 1000
+  const elapsed = (performance.now() - _startedAt) / 1000
+  timelinePos.value = _posAtStart + elapsed * (_effectiveBpm / 60)
 
   if (totalDuration.value > 0 && timelinePos.value >= totalDuration.value) {
     if (loopTimeline.value) {
@@ -552,9 +580,10 @@ function _checkSegments() {
       // This ensures correct playback whether starting from the segment's beginning or mid-segment,
       // and whether segStart is 0 or non-zero.
       if (track?.duration > 0) {
+        const trackBpm = getTrackBpm(seg.trackIdx) || timelineBpm.value
         const bounds = segBounds.value[next]
-        const audioTarget = (seg.segStart || 0) + (pos - bounds.start)
-        const ratio = Math.max(0, Math.min(1, audioTarget / track.duration))
+        const audioTargetSeconds = beatsToSec((seg.segStart || 0) + (pos - bounds.start), trackBpm)
+        const ratio = Math.max(0, Math.min(1, audioTargetSeconds / track.duration))
         setTimeout(() => window.dispatchEvent(new CustomEvent('playlist-seek', { detail: ratio })), 150)
       }
     }
@@ -581,7 +610,10 @@ function _fireMarker(m) {
   switch (m.type) {
     case 'tempo': {
       const bpm = Number(m.value)
-      if (bpm > 0) midiStore.setGlobalBpm(bpm)
+      if (bpm > 0) {
+        midiStore.setGlobalBpm(bpm)
+        if (isPlaying.value) _effectiveBpm = bpm
+      }
       break
     }
     case 'perf-set': {
@@ -636,6 +668,22 @@ function _fireMarker(m) {
       break
     case 'seq-stop':
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false, source: 'timeline' } }))
+      break
+    case 'cp-start':
+      if (m.seqKey) {
+        const slotIdx = 'ABCDEFGH'.indexOf(m.seqKey)
+        if (slotIdx >= 0) window.dispatchEvent(new CustomEvent('cp-slot-select', { detail: { idx: slotIdx } }))
+      }
+      if (m.chainEnabled != null) {
+        window.dispatchEvent(new CustomEvent('cp-chain-toggle', { detail: { enabled: m.chainEnabled } }))
+      }
+      window.dispatchEvent(new CustomEvent('cp-start'))
+      break
+    case 'cp-stop':
+      window.dispatchEvent(new CustomEvent('cp-stop'))
+      break
+    case 'cp-select-pattern':
+      window.dispatchEvent(new CustomEvent('cp-slot-select', { detail: { idx: Math.max(0, Math.min(7, m.value ?? 0)) } }))
       break
     // Full transport sync: sends 0xFC → 0xFA + starts clock ticks
     case 'transport-start':
@@ -700,8 +748,7 @@ function _fireMarker(m) {
       stop()
       break
     case 'goto': {
-      const target = m.targetSec ?? 0
-      // Stop current playback so the same-idx guard in BackingTrackPlayer doesn't block restart
+      const target = m.targetBeat ?? m.targetSec ?? 0
       window.dispatchEvent(new CustomEvent('toggle-backing-track', { detail: { play: false } }))
       timelinePos.value = target
       _posAtStart = target
@@ -744,8 +791,8 @@ function clickMarker(id) {
 function parseTimeStr(s) {
   s = String(s).trim()
   if (s.includes(':')) {
-    const [m, sec] = s.split(':')
-    return Math.max(0, (Number(m) || 0) * 60 + (Number(sec) || 0))
+    const [bar, beat] = s.split(':')
+    return Math.max(0, (Number(bar) - 1) * 4 + (Number(beat) || 0))
   }
   return Math.max(0, Number(s) || 0)
 }
@@ -755,7 +802,7 @@ function updateSegStart(val) {
   if (idx < 0) return
   const t   = parseTimeStr(val)
   const seg = segments.value[idx]
-  seg.segStart = Math.max(0, Math.min(t, seg.segEnd - 1))
+  seg.segStart = Math.max(0, Math.min(t, seg.segEnd - 4))
 }
 
 function updateSegEnd(val) {
@@ -763,8 +810,7 @@ function updateSegEnd(val) {
   if (idx < 0) return
   const t      = parseTimeStr(val)
   const seg    = segments.value[idx]
-  const maxDur = playlist.value[seg.trackIdx]?.duration || 3600
-  seg.segEnd   = Math.min(maxDur, Math.max(seg.segStart + 1, t))
+  seg.segEnd   = Math.max(seg.segStart + 4, t)
 }
 
 function updateMarkerPos(val) {
@@ -1042,11 +1088,12 @@ async function confirmSaveToLib() {
 // ─── Marker ops ────────────────────────────────────────────────────────────
 function openAddMarker() {
   newMkr.value = {
-    position: Math.round(timelinePos.value * 10) / 10,
+    position: Math.round(timelinePos.value),
     type:     'tempo',
     label:    '',
     value:    midiStore.currentBpm || 120,
   }
+  newMkrPos.value = formatTime(Math.round(timelinePos.value))
   newMkrPc.value = {
     device:    outDevices.value[0] || '',
     channel:   1,
@@ -1069,6 +1116,7 @@ function openAddMarker() {
   }
   newMkrLm.value   = { padIdx: 0 }
   newMkrDm.value   = { presetName: '', seqKey: '', chainEnabled: null }
+  newMkrCp.value   = { seqKey: '', chainEnabled: null }
   newMkrDmRec.value = { measures: 4 }
   newMkrAudioLoop.value = { measures: 2 }
   newMkrGoto.value = { targetTime: '0:00', repeat: false }
@@ -1078,6 +1126,7 @@ function openAddMarker() {
 function confirmAddMarker() {
   const type = newMkr.value.type
   let val = newMkr.value.value
+  newMkr.value.position = parseTimeStr(newMkrPos.value)
 
   if (type === 'perf-set') {
     val = Math.max(0, Math.min(15, Number(val)))
@@ -1108,9 +1157,14 @@ function confirmAddMarker() {
       seqKey:       newMkrDm.value.seqKey     || '',
       chainEnabled: newMkrDm.value.chainEnabled,
     }
+  } else if (type === 'cp-start') {
+    extra = {
+      seqKey:       newMkrCp.value.seqKey     || '',
+      chainEnabled: newMkrCp.value.chainEnabled,
+    }
   } else if (type === 'goto') {
     extra = {
-      targetSec: parseTimeStr(newMkrGoto.value.targetTime),
+      targetBeat: parseTimeStr(newMkrGoto.value.targetTime),
       repeat:    newMkrGoto.value.repeat,
     }
   } else if (type === 'dm-rec-sync') {
@@ -1135,15 +1189,12 @@ function confirmAddMarker() {
   // After adding dm-rec-sync, suggest chaining subsequent macro markers
   if (type === 'dm-rec-sync') {
     const bpm = midiStore.currentBpm || 120
-    const beatSec = 60 / bpm
     const measures = extra.measures ?? 4
-    // Recording starts at next bar boundary (up to 1 bar latency), lasts N measures
-    // 1 bar = 4 beats = 4 * beatSec
-    const recDur = 4 * beatSec + measures * 4 * beatSec
+    const recDurBeats = 4 + measures * 4
     macroChain.value = {
       dmRecPos: Number(newMkr.value.position),
       dmRecMeasures: measures,
-      recDurationSec: recDur,
+      recDurationSec: recDurBeats,
       chainTrim: true,
       chainLoop: true,
       chainLoopMeasures: 2,
@@ -1156,11 +1207,7 @@ function confirmAddMarker() {
 
 function confirmMacroChain() {
   const mc = macroChain.value
-  const bpm = midiStore.currentBpm || 120
-  const beatSec = 60 / bpm
-  // Recording starts at next bar boundary after marker fires (+1 bar worst case)
-  // 1 bar = 4 beats
-  const recEndPos = mc.dmRecPos + 4 * beatSec + mc.dmRecMeasures * 4 * beatSec
+  const recEndPos = mc.dmRecPos + mc.recDurationSec
   let offset = 0
 
   if (mc.chainTrim) {
@@ -1171,7 +1218,7 @@ function confirmMacroChain() {
       label: '',
       value: 0,
     })
-    offset += 0.5
+    offset += 0.25
   }
   if (mc.chainLoop) {
     markers.value.push({
@@ -1182,7 +1229,7 @@ function confirmMacroChain() {
       value: mc.chainLoopMeasures,
       measures: mc.chainLoopMeasures,
     })
-    offset += 0.5
+    offset += 0.25
   }
   if (mc.chainCrop) {
     markers.value.push({
@@ -1192,7 +1239,7 @@ function confirmMacroChain() {
       label: '',
       value: 0,
     })
-    offset += 0.5
+    offset += 0.25
   }
   if (mc.chainSave) {
     markers.value.push({
@@ -1202,7 +1249,7 @@ function confirmMacroChain() {
       label: '',
       value: 0,
     })
-    offset += 0.5
+    offset += 0.25
   }
   // Always stop the timeline at the end of the macro chain
   markers.value.push({
@@ -1562,17 +1609,17 @@ onUnmounted(() => {
       <div class="flex items-center gap-3 px-4 py-2 border-b border-neutral-900/50 shrink-0">
         <!-- Zoom -->
         <span class="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Zoom</span>
-        <button @click="scale = Math.max(0.5, scale - (scale <= 2 ? 0.5 : 5))" class="p-1 text-neutral-500 hover:text-white transition-colors">
+        <button @click="scale = Math.max(0.2, scale - (scale <= 2 ? 0.2 : 5))" class="p-1 text-neutral-500 hover:text-white transition-colors">
           <ZoomOut class="w-3.5 h-3.5" />
         </button>
         <input
-          type="range" v-model.number="scale" min="0.5" max="200" step="0.5"
+          type="range" v-model.number="scale" min="0.2" max="200" step="0.2"
           class="w-64 h-1 bg-neutral-800 rounded-full appearance-none cursor-pointer accent-[#00ff88]"
         />
-        <button @click="scale = Math.min(200, scale + (scale < 2 ? 0.5 : 5))" class="p-1 text-neutral-500 hover:text-white transition-colors">
+        <button @click="scale = Math.min(200, scale + (scale < 2 ? 0.2 : 5))" class="p-1 text-neutral-500 hover:text-white transition-colors">
           <ZoomIn class="w-3.5 h-3.5" />
         </button>
-        <span class="text-[9px] font-mono text-neutral-600">{{ scale < 1 ? `1px/${(1/scale).toFixed(0)}s` : `${scale}px/s` }}</span>
+        <span class="text-[9px] font-mono text-neutral-600">{{ scale < 1 ? `1px/${(1/scale).toFixed(0)}s` : `${scale.toFixed(2)}px/s` }}</span>
 
         <!-- Reset playhead -->
         <button @click="stop" title="Reset to start" class="p-1 text-neutral-600 hover:text-white transition-colors ml-1">
@@ -1832,7 +1879,7 @@ onUnmounted(() => {
                 @change="updateSegStart($event.target.value)"
                 @keyup.enter="$event.target.blur()"
                 class="w-14 bg-transparent border-b border-neutral-700 text-neutral-300 outline-none text-center hover:border-neutral-500 focus:border-synth-neon transition-colors cursor-text"
-                title="Segment in-point (m:ss or seconds)"
+                title="Segment in-point (bars:beats)"
               />
               <span class="text-neutral-700">→</span>
               <input
@@ -1840,7 +1887,7 @@ onUnmounted(() => {
                 @change="updateSegEnd($event.target.value)"
                 @keyup.enter="$event.target.blur()"
                 class="w-14 bg-transparent border-b border-neutral-700 text-neutral-300 outline-none text-center hover:border-neutral-500 focus:border-synth-neon transition-colors cursor-text"
-                title="Segment out-point (m:ss or seconds)"
+                title="Segment out-point (bars:beats)"
               />
               <span class="ml-1 text-neutral-700">({{ formatTime(selectedSeg.segEnd - selectedSeg.segStart) }})</span>
               <span class="ml-2 text-neutral-600">@ {{ formatTime(segBounds[selectedSegIdx]?.start) }}</span>
@@ -1885,7 +1932,7 @@ onUnmounted(() => {
                 :style="{ borderColor: 'inherit' }"
                 @focus="$event.target.style.borderColor = mColor(selectedMarker.type)"
                 @blur="$event.target.style.borderColor = ''"
-                title="Marker position (m:ss or seconds)"
+                title="Marker position (bars:beats)"
               />
               <span v-if="mDisplayValue(selectedMarker)" :style="{ color: mColor(selectedMarker.type) }">{{ mDisplayValue(selectedMarker) }}</span>
               <template v-if="selectedMarker.type === 'program-change'">
@@ -2003,7 +2050,7 @@ onUnmounted(() => {
               @blur="commitSeek($event.target.value)"
               class="w-16 bg-transparent border-b border-synth-neon text-xs font-black text-synth-neon font-mono outline-none text-center"
               autofocus
-              title="Seek to position (m:ss or seconds)"
+              title="Seek to position (bars:beats)"
             />
             <span
               v-else
@@ -2013,6 +2060,16 @@ onUnmounted(() => {
             >{{ formatTime(timelinePos) }}</span>
             <span class="text-[12px] font-mono text-neutral-600">/ {{ formatTime(totalDuration) }}</span>
           </div>
+        </div>
+
+        <!-- Timeline BPM -->
+        <div class="flex items-center gap-1 text-[10px] font-mono" title="Base BPM for timeline timing">
+          <span class="text-neutral-600">♩</span>
+          <input
+            v-model.number="timelineBpm"
+            type="number" min="20" max="300"
+            class="w-12 bg-neutral-900 border border-neutral-800 rounded px-1 py-0.5 text-xs text-purple-300 font-mono text-center outline-none focus:border-purple-500"
+          />
         </div>
 
         <!-- <button @click="emit('close')" class="text-neutral-600 hover:text-white transition-colors ml-2">
@@ -2251,6 +2308,16 @@ onUnmounted(() => {
               <div v-if="m.type === 'audio-save-wav'" class="text-[9px] font-mono text-neutral-500">
                 <span class="text-amber-400">⬇</span> {{ m.filename || 'drum_machine.wav' }}
               </div>
+<!-- Chord Prog start -->
+              <div v-if="m.type === 'cp-start'" class="text-[9px] font-mono text-purple-400">
+                <span v-if="m.seqKey" class="text-purple-300 font-bold">Slot {{ m.seqKey }}</span>
+                <span v-if="m.chainEnabled != null" class="ml-1">{{ m.chainEnabled ? 'Chain:ON' : 'Chain:OFF' }}</span>
+                <span v-if="!m.seqKey && m.chainEnabled == null" class="text-neutral-700 italic">current slot</span>
+              </div>
+              <!-- Chord Prog Select Pattern -->
+              <div v-if="m.type === 'cp-select-pattern'" class="text-[9px] font-mono text-purple-400">
+                Slot {{ String.fromCharCode(65 + (m.value ?? 0)) }}
+              </div>
               <!-- Stop Timeline -->
               <div v-if="m.type === 'tl-stop'" class="text-[9px] font-mono text-neutral-500">
                 Stop timeline playback
@@ -2286,11 +2353,11 @@ onUnmounted(() => {
 
           <div class="space-y-4">
             <div>
-              <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">Position (seconds)</label>
+              <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">Position (bars:beats)</label>
               <input
-                v-model.number="newMkr.position"
-                type="number" min="0" step="0.1"
-                class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-synth-neon outline-none"
+                v-model="newMkrPos"
+                type="text" placeholder="e.g. 5:2"
+                class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-synth-neon outline-none font-mono"
               />
             </div>
 
@@ -2407,6 +2474,36 @@ onUnmounted(() => {
                   v-model="newMkrDm.chainEnabled"
                   class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-pink-500 outline-none"
                 >
+<option :value="null">— No change —</option>
+                  <option :value="true">Enable chain</option>
+                  <option :value="false">Disable chain</option>
+                </select>
+              </div>
+              <div class="text-[10px] font-mono text-neutral-600">Select a preset, sequence, and chain state the drum machine loads when this marker fires.</div>
+            </template>
+
+            <!-- Chord Prog start -->
+            <template v-if="newMkr.type === 'cp-start'">
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Slot <span class="text-neutral-600">(optional)</span>
+                </label>
+                <select
+                  v-model="newMkrCp.seqKey"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-500 outline-none"
+                >
+                  <option value="">— Keep current slot —</option>
+                  <option v-for="k in ['A','B','C','D','E','F','G','H']" :key="k" :value="k">Slot {{ k }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                  Chain <span class="text-neutral-600">(optional)</span>
+                </label>
+                <select
+                  v-model="newMkrCp.chainEnabled"
+                  class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-500 outline-none"
+                >
                   <option :value="null">— No change —</option>
                   <option :value="true">Enable chain</option>
                   <option :value="false">Disable chain</option>
@@ -2418,15 +2515,15 @@ onUnmounted(() => {
             <template v-if="newMkr.type === 'goto'">
               <div>
                 <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
-                  Target Time <span class="text-neutral-600">(mm:ss)</span>
+                  Target Position <span class="text-neutral-600">(bars:beats)</span>
                 </label>
                 <input
                   v-model="newMkrGoto.targetTime"
-                  type="text" placeholder="e.g. 1:30"
+                  type="text" placeholder="e.g. 5:2"
                   class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-violet-500 outline-none font-mono"
                 />
                 <div class="mt-1 text-[9px] font-mono text-neutral-600">
-                  = {{ parseTimeStr(newMkrGoto.targetTime).toFixed(1) }}s
+                  → {{ formatTime(parseTimeStr(newMkrGoto.targetTime)) }}
                 </div>
               </div>
               <div class="flex items-center gap-3">
@@ -2517,6 +2614,17 @@ onUnmounted(() => {
                 Fires Stop All on the global transport — stops all synced sequencers and halts Tone.Transport.
               </div>
             </template>
+
+            <!-- Chord Prog Select Pattern -->
+            <div v-if="newMkr.type === 'cp-select-pattern'">
+              <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">Slot A–H</label>
+              <select
+                v-model.number="newMkr.value"
+                class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-500 outline-none"
+              >
+                <option v-for="i in 8" :key="i - 1" :value="i - 1">{{ String.fromCharCode(64 + i) }}</option>
+              </select>
+            </div>
 
             <!-- Program Change — device + channel + PC -->
             <template v-if="newMkr.type === 'program-change'">
@@ -2663,7 +2771,7 @@ onUnmounted(() => {
             <span class="text-xs font-black uppercase tracking-widest text-orange-400">Chain Macro Steps</span>
             <span class="text-sm text-neutral-300">Add subsequent audio processing markers?</span>
             <span class="text-xs text-neutral-600 mt-1">
-              Recording {{ macroChain.dmRecMeasures }} bars at {{ midiStore.currentBpm || 120 }} BPM will take ≈ {{ macroChain.recDurationSec.toFixed(1) }}s <span class="text-neutral-700">(incl. ~1 bar for bar-aligned start)</span>.
+              Recording {{ macroChain.dmRecMeasures }} bars will take ≈ {{ macroChain.recDurationSec }} beats <span class="text-neutral-700">(incl. ~1 bar for bar-aligned start)</span>.
               The remaining markers will be placed at {{ formatTime(macroChain.dmRecPos + macroChain.recDurationSec) }}.
             </span>
           </div>

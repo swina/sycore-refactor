@@ -53,7 +53,7 @@ export interface SerializedDrumTrack {
   steps: DrumStep[];
 }
 
-/** A complete sequence keyed by label A–F, each containing 8 tracks */
+/** A complete sequence keyed by label A–H, each containing 8 tracks */
 export type DrumSequence = Record<string, DrumTrack[]>;
 
 /** A style definition for drum pattern generation */
@@ -88,7 +88,7 @@ export type DrumTrackLabel =
   | 'Rim Shot' | 'Cowbell' | 'Tambourine';
 
 /** Sequence key */
-export type SequenceKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+export type SequenceKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
 
 /** Drum style name */
 export type DrumStyleName =

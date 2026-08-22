@@ -1258,7 +1258,7 @@ function stepClass(step, stepIdx, isCurrentStep, trackLength) {
   return `bg-purple-600 border-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.5)] ${op} ${baseRing}`
 }
 
-const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F']
+const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
 // ── Pattern chain ───────────────────────────────────────────────────────────────
 const showChain      = ref(false)
@@ -1297,7 +1297,7 @@ function handlePlayStop() {
 }
 
 function cycleChainSlot(i) {
-  const order = [null, 'A', 'B', 'C', 'D', 'E', 'F']
+  const order = [null, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
   chain.value[i] = order[(order.indexOf(chain.value[i]) + 1) % order.length]
 }
 </script>
@@ -2113,7 +2113,7 @@ function cycleChainSlot(i) {
               >COPY FX</button>
               <template v-if="fxClipboard">
                 <button
-                  v-for="seq in ['A','B','C','D','E','F']"
+                  v-for="seq in ['A','B','C','D','E','F','G','H']"
                   :key="seq"
                   @click.stop="pasteTrackFxTo(trackIdx, seq)"
                   :class="[
@@ -2125,7 +2125,7 @@ function cycleChainSlot(i) {
                   :title="'Paste FX to pattern ' + seq"
                 >{{ seq }}</button>
                 <button
-                  @click.stop="['A','B','C','D','E','F'].forEach(s => pasteTrackFxTo(trackIdx, s))"
+                  @click.stop="['A','B','C','D','E','F','G','H'].forEach(s => pasteTrackFxTo(trackIdx, s))"
                   class="px-1 h-4 text-[7px] font-black rounded border border-cyan-600 bg-cyan-900/30 text-cyan-400 hover:bg-cyan-500/30 hover:text-cyan-200 transition-colors"
                   title="Paste FX to all patterns"
                 >ALL</button>

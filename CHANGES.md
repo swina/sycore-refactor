@@ -4,6 +4,12 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-08-22
 
+- **Live Timeline bars/beats timing** — Timeline position is now in beats (quarter notes) instead of seconds. Ruler shows bar numbers, `formatTime` displays `bars:beats`, playback uses BPM from `timelineBpm` ref (editable in toolbar). Segments and markers store positions in beats. Tempo markers update the effective BPM mid-playback. Added `beatsToSec`/`secToBeats` helpers for audio seeking conversion.
+
+- **Chord Prog markers** — Added `cp-start`, `cp-stop`, and `cp-select-pattern` marker types. `cp-start` supports optional slot A–H and chain toggle extras (like `dm-start`). Dispatches `cp-start`/`cp-stop`/`cp-slot-select` events that ChordProgSequencer already listens for.
+
+- **Drum Machine 8 patterns** — Expanded pattern slots from 6 (A-F) to 8 (A-H). `SequenceKey` type, `makeDefaultSequences`, `makeDefaultBasslineSequences`, `mergeLoadedSequences`, `mergeLoadedBassline`, and `resolveTrackSound` updated in `useDrumMachineStore`. `SEQUENCES`, chain order, and inline arrays updated in `DrumMachine.vue`. `BANKS` in `DeckDrumMachineSummary.vue` and `DM_SEQS` in `LoopMachine.vue` also updated.
+
 - **Fix: USB MIDI devices not sending after app restart** — Removed the `close()`/`open()` cycle from `reScanInputs()`, the `onstatechange` handler, and the polling fallback in `midi-service.ts`. For some USB MIDI devices (Worlde, etc.), closing and reopening the port at startup corrupts the driver-level data stream — the port reports "connected" but never fires `midimessage` events until the cable is physically unplugged/replugged. Now listeners are re-attached without cycling the port state, which the browser already manages on `requestMIDIAccess()`.
 
 ## 2026-08-21
