@@ -5,9 +5,9 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SlidersHorizontal, SquareStack, Sparkles, BookOpen } from 'lucide-vue-next'
+import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SquareStack, Sparkles, BookOpen, Radio } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import AppLauncherModal from '@/components/ui/AppLauncherModal.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
@@ -15,6 +15,7 @@ import TransportBar from '@/components/TransportBar.vue'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/midi-service'
+import { deviceRegistry } from '@/core/midi/DeviceRegistry'
 
 const emit = defineEmits(['bpm-override'])
 
@@ -35,6 +36,63 @@ const showPartSelector = computed(() => configStore.enablePartSelector)
 function onToggleOpenAppsDock(event) {
   const rect = event.currentTarget.getBoundingClientRect()
   uiStore.toggleOpenAppsDock({ x: rect.left + rect.width / 2, y: rect.top })
+}
+
+// ── Reload MIDI Devices ─────────────────────────────────────────────────────
+const showMidiScan = ref(false)
+const midiScanLog = ref([])
+const midiRegistryDevices = ref([])
+
+async function reloadMidiDevices() {
+  const log = (msg, type = 'info') => midiScanLog.value.push({ msg, type, time: new Date().toLocaleTimeString() })
+  midiScanLog.value = []
+  showMidiScan.value = true
+
+  log('Starting MIDI device scan...', 'info')
+  await nextTick()
+
+  const beforeInputs = midiService.getInputs().map(i => i.name)
+  const beforeOutputs = midiService.getOutputs().map(o => o.name)
+  log(`Before scan: ${beforeInputs.length} input(s), ${beforeOutputs.length} output(s)`, 'info')
+  beforeInputs.forEach(n => log(`  Input: ${n}`, 'device'))
+  beforeOutputs.forEach(n => log(`  Output: ${n}`, 'device'))
+
+  log('Re-scanning all MIDI inputs (close+reopen)...', 'action')
+  try {
+    await midiService.reScanInputs()
+    log('Input re-scan complete.', 'success')
+  } catch (e) {
+    log(`Error re-scanning inputs: ${e.message}`, 'error')
+  }
+
+  log('Refreshing device list...', 'action')
+  midiStore.refreshDevices()
+  await nextTick()
+
+  const afterInputs = midiService.getInputs().map(i => i.name)
+  const afterOutputs = midiService.getOutputs().map(o => o.name)
+  log(`After scan: ${afterInputs.length} input(s), ${afterOutputs.length} output(s)`, 'info')
+  afterInputs.forEach(n => log(`  Input: ${n}`, 'device'))
+  afterOutputs.forEach(n => log(`  Output: ${n}`, 'device'))
+
+  const newInputs = afterInputs.filter(n => !beforeInputs.includes(n))
+  const lostInputs = beforeInputs.filter(n => !afterInputs.includes(n))
+  if (newInputs.length) log(`New inputs found: ${newInputs.join(', ')}`, 'success')
+  if (lostInputs.length) log(`Lost inputs: ${lostInputs.join(', ')}`, 'warn')
+  if (!newInputs.length && !lostInputs.length) log('No changes detected since last scan.', 'info')
+
+  const registryDevices = deviceRegistry.getAll()
+  midiRegistryDevices.value = registryDevices
+  const online = registryDevices.filter(d => d.online).length
+  const total = registryDevices.length
+  log(`Device registry: ${online}/${total} online`, online === total ? 'success' : 'warn')
+  registryDevices.forEach(d => {
+    const status = d.online ? 'ONLINE' : 'OFFLINE'
+    const dir = [d.hasInput ? 'IN' : '', d.hasOutput ? 'OUT' : ''].filter(Boolean).join('/') || '—'
+    log(`  [${status}] ${d.name} (${dir}, ${d.type})`, d.online ? 'device' : 'warn')
+  })
+
+  log('Scan complete.', 'info')
 }
 
 // ── Backing Track transport state (synced via window events) ──────────────────
@@ -304,11 +362,11 @@ onUnmounted(() => {
         </button>
         <button
           v-if="authStore.user"
-          @click="uiStore.openPanel('audio-mixer')"
-          title="Audio Mixer"
+          @click="reloadMidiDevices()"
+          title="Reload MIDI Devices"
           class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
         >
-          <SlidersHorizontal class="w-5 h-5 text-synth-neon" />
+          <Radio class="w-5 h-5 text-synth-neon" />
         </button>
         <button
           v-if="authStore.user"
@@ -339,6 +397,67 @@ onUnmounted(() => {
     </div>
 
   </footer>
+
+  <!-- MIDI Device Scan Modal -->
+  <Teleport to="body">
+    <div
+      v-if="showMidiScan"
+      class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"
+      @click.self="showMidiScan = false"
+    >
+      <div class="w-[520px] max-h-[80vh] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-800 shrink-0">
+          <h2 class="text-sm font-bold uppercase tracking-widest text-purple-400">MIDI Device Scan</h2>
+          <button
+            @click="showMidiScan = false"
+            class="w-7 h-7 flex items-center justify-center rounded hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Log output -->
+        <div class="flex-1 overflow-y-auto p-3 custom-scrollbar font-mono text-[11px] leading-relaxed space-y-0.5">
+          <div v-for="(entry, i) in midiScanLog" :key="i" class="flex gap-2">
+            <span class="text-neutral-600 shrink-0 w-14 text-right text-[9px]">{{ entry.time }}</span>
+            <span
+              :class="{
+                'text-neutral-400': entry.type === 'info',
+                'text-green-400': entry.type === 'success',
+                'text-yellow-400': entry.type === 'warn',
+                'text-red-400': entry.type === 'error',
+                'text-purple-300': entry.type === 'action',
+                'text-neutral-300': entry.type === 'device',
+              }"
+            >{{ entry.msg }}</span>
+          </div>
+          <div v-if="midiScanLog.length === 0" class="flex items-center gap-2 py-4">
+            <span class="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <span class="text-neutral-400">Scanning...</span>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-4 py-3 border-t border-neutral-800 flex justify-between items-center shrink-0">
+          <div class="text-[10px] text-neutral-600">
+            {{ midiRegistryDevices.filter(d => d.online).length }} online ·
+            {{ midiRegistryDevices.length }} known devices
+          </div>
+          <div class="flex gap-2">
+            <button
+              @click="reloadMidiDevices()"
+              class="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold uppercase tracking-wider transition-colors"
+            >Rescan</button>
+            <button
+              @click="showMidiScan = false"
+              class="px-4 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold uppercase tracking-wider transition-colors"
+            >Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <AppLauncherModal v-if="uiStore.isMainMenuOpen" @close="uiStore.isMainMenuOpen = false" />
 </template>

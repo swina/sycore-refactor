@@ -192,16 +192,9 @@ export class MidiService {
       this._resettingInputs.add(key);
       console.log(`[MIDI] Poll-resetting new input: ${input.name}`);
       input.removeEventListener('midimessage', this.handleIngressBound);
-      Promise.resolve()
-        .then(() => input.close())
-        .then(() => input.open())
-        .catch(e => console.warn(`[MIDI] Failed to reset poll-detected input "${input.name}":`, e))
-        .finally(() => {
-          input.removeEventListener('midimessage', this.handleIngressBound);
-          input.addEventListener('midimessage', this.handleIngressBound);
-          this._resettingInputs.delete(key);
-          this._lastInputResetAt.set(key, Date.now());
-        });
+      input.addEventListener('midimessage', this.handleIngressBound);
+      this._resettingInputs.delete(key);
+      this._lastInputResetAt.set(key, Date.now());
     }
   }
 
@@ -587,25 +580,10 @@ export class MidiService {
     );
     const inputs = Array.from(this.midiAccess.inputs.values())
       .filter(input => !blockedPorts.has(this.normPort(input.name)));
-    // Force an explicit close()+open() cycle, not just open() — on a fresh
-    // page load some browsers/OSes leave a port's underlying connection
-    // stale (state reports 'connected' but no midimessage event ever
-    // fires) until it's actually closed and reopened; open() alone on an
-    // already-"open" port is a no-op that doesn't clear this. Same fix as
-    // the manual per-device Reconnect button (reconnectInput below), just
-    // applied automatically to every input on startup so hardware works
-    // without requiring the user to unplug/replug or click reconnect.
-    await Promise.all(inputs.map(async (input) => {
-      input.removeEventListener('midimessage', this.handleIngressBound);
-      try {
-        await input.close();
-        await input.open();
-      } catch (e) {
-        console.warn(`[MIDI] Failed to reset input "${input.name}" on startup:`, e);
-      }
+    for (const input of inputs) {
       input.removeEventListener('midimessage', this.handleIngressBound);
       input.addEventListener('midimessage', this.handleIngressBound);
-    }));
+    }
     console.log(`[MIDI] Attached to ${inputs.length} inputs: ${inputs.map(i => i.name).join(', ')}`);
   }
 
@@ -1305,60 +1283,24 @@ export class MidiService {
         }
 
         if (port.type === 'input' && port.state === 'connected' && port.name) {
-        // A bare open() here is a no-op when the browser already reports
-        // this port as "connected" from a stale prior state (the same issue
-        // reScanInputs() works around at startup — see its comment) — which
-        // is exactly what happens when a device already known from a
-        // previous session re-announces itself as 'connected' without ever
-        // truly disconnecting (e.g. some environments re-fire statechange
-        // events across an app reload/restart without a real USB unplug).
-        // Left as a bare open(), those controllers stop sending until the
-        // user manually unplugs/replugs the cable — so this does the same
-        // close()+open()+listener-reattach cycle reconnectInput() does.
-        //
-        // Deliberately NOT routed through reconnectInput() itself, though:
-        // that method also skips ports bound as a virtual instrument's
-        // Output (blockedPorts, to protect *software loopback* drivers like
-        // LoopBe1/loopMIDI from self-muting when both sides of the same
-        // virtual cable are opened at once). Real hardware — e.g. a
-        // controller whose physical OUT is also used as a virtual
-        // instrument's target — doesn't have that failure mode, and only
-        // ever fires genuine 'connected' events here (a loopback driver's
-        // virtual cable doesn't unplug/replug). Applying that block here too
-        // meant such a device's input silently stopped receiving anything on
-        // every reconnect (across an app restart, sleep/wake, USB replug),
-        // even though it worked fine before that block existed. The manual
-        // per-device Reconnect button in MIDI Flow still goes through
-        // reconnectInput() and keeps the block, since a user manually
-        // reconnecting a port they picked as a virtual instrument's output
-        // should stay protected.
-        //
-        // Guarded against re-entrancy — close()/open() are themselves state
-        // transitions that some browsers re-report via *another* statechange
-        // event with state still 'connected' (only `connection` changed),
-        // which would otherwise re-enter this handler and spin into an
-        // endless reconnect loop instead of settling once. The in-flight Set
-        // blocks re-entrancy while a reset is running; the cooldown Map
-        // blocks a rapid repeat right after one just finished.
-        const input = port as MIDIInput;
-        const name = input.name ?? '';
-        const key = this.normPort(name);
-        const lastReset = this._lastInputResetAt.get(key) ?? 0;
-        if (!this._resettingInputs.has(key) && Date.now() - lastReset > 500) {
-          this._resettingInputs.add(key);
-          console.log(`[MIDI] Device (re)connected: ${name}`);
-          input.removeEventListener('midimessage', this.handleIngressBound);
-          Promise.resolve()
-            .then(() => input.close())
-            .then(() => input.open())
-            .catch(e => console.warn(`[MIDI] Failed to reset reconnected input "${name}":`, e))
-            .finally(() => {
-              input.removeEventListener('midimessage', this.handleIngressBound);
-              input.addEventListener('midimessage', this.handleIngressBound);
-              this._resettingInputs.delete(key);
-              this._lastInputResetAt.set(key, Date.now());
-            });
-        }
+        // Just re-attach the midimessage listener — close()+open() cycles
+        // corrupt the driver-level connection for some USB MIDI devices
+        // (Worlde, etc.), causing them to show as "connected" but never
+        // fire midimessage events.  The browser already opens the port
+        // when it reports state='connected', so only the listener needs
+        // to be wired up.  Guarded against re-entrancy.
+          const input = port as MIDIInput;
+          const name = input.name ?? '';
+          const key = this.normPort(name);
+          const lastReset = this._lastInputResetAt.get(key) ?? 0;
+          if (!this._resettingInputs.has(key) && Date.now() - lastReset > 500) {
+            this._resettingInputs.add(key);
+            console.log(`[MIDI] Device (re)connected: ${name}`);
+            input.removeEventListener('midimessage', this.handleIngressBound);
+            input.addEventListener('midimessage', this.handleIngressBound);
+            this._resettingInputs.delete(key);
+            this._lastInputResetAt.set(key, Date.now());
+          }
         }
       }
       this.onStateChangeListeners.forEach(l => l(event));

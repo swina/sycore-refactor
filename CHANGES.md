@@ -1,6 +1,10 @@
 # Changes
 
-A running log of new features added to SY.CORE, newest first. Bug fixes and internal refactors aren't tracked here — see `git log` for the full history.
+A running log of new features added to SY.CORE, newest first.
+
+## 2026-08-22
+
+- **Fix: USB MIDI devices not sending after app restart** — Removed the `close()`/`open()` cycle from `reScanInputs()`, the `onstatechange` handler, and the polling fallback in `midi-service.ts`. For some USB MIDI devices (Worlde, etc.), closing and reopening the port at startup corrupts the driver-level data stream — the port reports "connected" but never fires `midimessage` events until the cable is physically unplugged/replugged. Now listeners are re-attached without cycling the port state, which the browser already manages on `requestMIDIAccess()`.
 
 ## 2026-08-21
 
