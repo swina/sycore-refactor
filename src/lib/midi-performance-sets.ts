@@ -61,9 +61,9 @@ export async function loadPerformanceSets(): Promise<PerformanceSet[]> {
   return []
 }
 
-export async function persistPerformanceSets(sets: PerformanceSet[]): Promise<void> {
+export async function persistPerformanceSets(sets: PerformanceSet[], soloSets?: SoloPerformanceSet[]): Promise<void> {
   try {
-    await setDoc(userDoc(), { sets })
+    await setDoc(userDoc(), { sets, soloSets: soloSets ?? [] })
   } catch (e) {
     console.error('[PerformanceSets] Failed to persist sets', e)
   }
@@ -92,3 +92,45 @@ export async function migrateLegacyPerformanceSets(): Promise<void> {
     console.error('[PerformanceSets] Failed to migrate legacy sets', e)
   }
 }
+
+/** A single-instrument patch snapshot for Solo Performance Slots. */
+export interface SoloPerformanceSet {
+  id: string;
+  name: string;
+  deviceName: string;
+  pcChannel: number;
+  pcProgram: number;
+  pcMsb: number;
+  pcLsb: number;
+  pcTemplate: string;
+  soundName: string;
+  createdAt: string;
+}
+
+/** Load solo performance sets from IndexedDB. */
+export async function loadSoloSets(): Promise<SoloPerformanceSet[]> {
+  try {
+    const snap = await getDoc(userDoc())
+    if (snap.exists()) {
+      const data = snap.data()
+      return Array.isArray(data?.soloSets) ? data.soloSets : []
+    }
+  } catch (e) {
+    console.error('[SoloSets] Failed to load solo sets', e)
+  }
+  return []
+}
+
+/** Persist solo performance sets to IndexedDB (merged alongside main sets). */
+export async function persistSoloSets(soloSets: SoloPerformanceSet[]): Promise<void> {
+  try {
+    // Read existing doc first to preserve the `sets` field
+    const snap = await getDoc(userDoc())
+    const existing = snap.exists() ? snap.data() : {}
+    await setDoc(userDoc(), { ...existing, soloSets })
+  } catch (e) {
+    console.error('[SoloSets] Failed to persist solo sets', e)
+  }
+}
+
+export const LS_SOLO_SLOTS = 'SYCORE_SOLO_SLOTS'

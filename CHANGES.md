@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-08-22
 
+- **Solo Performance Sets** — New sub-tab in the Device PC panel for saving/recalling a single instrument's Program Change into 8 assignable slots (A-H). Each slot stores a device name, MSB/LSB, PC number, and patch name. Click a pad to instantly send PC to the device. Right-click for MIDI Learn per slot (`solo_slot_A`..`solo_slot_H`). Library sidebar shows saved solo sets; click a set to assign it to the first empty slot. Deck summary card shows device+patch from the first non-empty slot. Persisted in IndexedDB alongside existing Performance Sets.
+
 - **Live Timeline bars/beats timing** — Timeline position is now in beats (quarter notes) instead of seconds. Ruler shows bar numbers, `formatTime` displays `bars:beats`, playback uses BPM from `timelineBpm` ref (editable in toolbar). Segments and markers store positions in beats. Tempo markers update the effective BPM mid-playback. Added `beatsToSec`/`secToBeats` helpers for audio seeking conversion.
 
 - **Chord Prog markers** — Added `cp-start`, `cp-stop`, and `cp-select-pattern` marker types. `cp-start` supports optional slot A–H and chain toggle extras (like `dm-start`). Dispatches `cp-start`/`cp-stop`/`cp-slot-select` events that ChordProgSequencer already listens for.

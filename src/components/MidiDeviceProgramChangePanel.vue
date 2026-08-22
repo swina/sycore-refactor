@@ -18,6 +18,7 @@ import { parseArturiaSqlite } from '@/composables/useArturiaSqliteParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { useSoloPerformanceSets, SOLO_SLOT_LETTERS } from '@/composables/useSoloPerformanceSets'
 import { MidiSource, midiService } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 import { on } from '@/types/events'
@@ -43,6 +44,11 @@ const mappingStore   = useMappingStore()
 const { openMenu }   = useMidiContextMenu()
 
 // ── Performance Sets (shared, IndexedDB-backed) ───────────────────
+
+// ── Solo Performance Sets (shared) ──────────────────────────────
+const { soloSets, soloSlots, load: loadSoloSets, saveSoloSet, deleteSoloSet, assignSlot, clearSlot, triggerSlot, getSlotAssignment } = useSoloPerformanceSets()
+const soloTab = ref(localStorage.getItem("SYCORE_SOLO_PERF_TAB") === "solo-sets" ? "solo-sets" : "perf-sets")
+watch(soloTab, v => localStorage.setItem("SYCORE_SOLO_PERF_TAB", v))
 const { pcSets, loadSets, saveSet, updateSet, deleteSet, recallSet: recallStoredSet } = usePerformanceSets()
 
 // ── Device list (left column) — only PC-enabled devices ────────
@@ -77,7 +83,7 @@ const selectedDeviceName = ref('')
 onMounted(() => {
   const first = visibleDevices.value.find(d => d.pcEnabled) ?? visibleDevices.value[0]
   if (first) selectedDeviceName.value = first.name
-  loadSets()
+  loadSets(); loadSoloSets()
 })
 
 const selectedReg = computed(() =>
@@ -947,6 +953,47 @@ const showSaveDialog = ref(false)
 const newSetName     = ref('')
 const newSetNameInput = ref(null)
 
+// ── Solo Performance Set state ─────────────────────────────────
+const soloDeviceName = ref(localStorage.getItem("SYCORE_SOLO_DEVICE") || "")
+watch(soloDeviceName, v => localStorage.setItem("SYCORE_SOLO_DEVICE", v))
+const soloSetName = ref("")
+const soloDeviceReg = computed(() => soloDeviceName.value ? midiStore.routingConfig?.registrations?.[soloDeviceName.value] : null)
+const soloDevicePatch = computed(() => {
+  const cur = currentPcState.value
+  if (cur.length && cur[0]?.soundName) return cur[0].soundName
+  if (cur.length) return "PC " + (cur[0]?.program ?? 0)
+  if (!soloDeviceReg.value) return "No device selected"
+  return "PC " + (soloDeviceReg.value.pcProgram ?? 0)
+})
+
+async function saveCurrentSoloSet() {
+  const name = soloSetName.value.trim()
+  if (!name || !soloDeviceName.value) return
+  const reg = soloDeviceReg.value
+  if (!reg) return
+  const ch = Math.max(0, reg.pcChannel ?? 0)
+  const pcCh = reg.pcChannels?.[ch]
+  await saveSoloSet(name, soloDeviceName.value, {
+    pcChannel: ch,
+    pcProgram: pcCh?.program ?? reg.pcProgram ?? 0,
+    pcMsb: pcCh?.msb ?? reg.pcMsb ?? 0,
+    pcLsb: pcCh?.lsb ?? reg.pcLsb ?? 0,
+    pcTemplate: reg.pcTemplate ?? "standard",
+    soundName: pcCh?.soundName || reg.soundName || "",
+  })
+  soloSetName.value = ""
+}
+
+function browseSoloDevice() {
+  if (!soloDeviceName.value) return
+  selectDevice(soloDeviceName.value)
+}
+
+function assignSoloToSlot(soloSetId) {
+  const firstEmpty = soloSlots.value.findIndex(s => !s?.soloSetId)
+  if (firstEmpty >= 0) assignSlot(firstEmpty, soloSetId)
+}
+
 function openSaveDialog() {
   newSetName.value = ''
   showSaveDialog.value = true
@@ -1105,8 +1152,25 @@ function assignToPad(setId, padIdx) {
               </div>
             </div>
 
-            <!-- ── Performance Sets section ── -->
+            <!-- ── Performance Sets / Solo Sets section ── -->
             <div class="shrink-0 border-t border-neutral-900 flex flex-col max-h-[40%]">
+
+              <!-- Sub-tab bar -->
+              <div class="flex shrink-0 border-b border-neutral-800">
+                <button
+                  @click="soloTab = 'perf-sets'"
+                  :class="['flex-1 py-1.5 text-[8px] font-bold uppercase tracking-widest transition-colors',
+                    soloTab === 'perf-sets' ? 'text-violet-300 bg-violet-900/20 border-b-2 border-violet-500' : 'text-neutral-500 hover:text-neutral-300']"
+                >Performance Sets</button>
+                <button
+                  @click="soloTab = 'solo-sets'"
+                  :class="['flex-1 py-1.5 text-[8px] font-bold uppercase tracking-widest transition-colors',
+                    soloTab === 'solo-sets' ? 'text-amber-300 bg-amber-900/20 border-b-2 border-amber-500' : 'text-neutral-500 hover:text-neutral-300']"
+                >Solo Sets</button>
+              </div>
+
+              <!-- ── Performance Sets (old content, wrapped in v-if) ── -->
+              <template v-if="soloTab === 'perf-sets'">
 
               <!-- Sets header + save button -->
               <div class="px-4 py-2.5 flex items-center justify-between shrink-0">
@@ -1176,7 +1240,7 @@ function assignToPad(setId, padIdx) {
                     </button>
                     <button
                       @click="togglePadPicker(set.id)"
-                      :title="lppPadBySetId[set.id] != null ? `Assigned to Pad ${lppPadBySetId[set.id] + 1} — click to reassign` : 'Assign to a performance pad'"
+                      :title="lppPadBySetId[set.id] != null ? 'Assigned to Pad ' + (lppPadBySetId[set.id] + 1) + ' — click to reassign' : 'Assign to a performance pad'"
                       :class="[
                         'shrink-0 p-1.5 rounded-lg border transition-all opacity-0 group-hover:opacity-100',
                         assigningSetId === set.id
@@ -1212,7 +1276,7 @@ function assignToPad(setId, padIdx) {
                         v-for="padIdx in 16"
                         :key="padIdx"
                         @click="assignToPad(set.id, padIdx - 1)"
-                        :title="lppSetPads[padIdx - 1]?.setId && lppSetPads[padIdx - 1].setId !== set.id ? `Replace: ${lppSetPads[padIdx - 1].setName}` : `Assign to Pad ${padIdx}`"
+                        :title="lppSetPads[padIdx - 1]?.setId && lppSetPads[padIdx - 1].setId !== set.id ? 'Replace: ' + (lppSetPads[padIdx - 1].setName) : 'Assign to Pad ' + padIdx"
                         :class="[
                           'flex flex-col items-center justify-center h-8 rounded border text-center transition-all',
                           lppSetPads[padIdx - 1]?.setId === set.id
@@ -1237,8 +1301,105 @@ function assignToPad(setId, padIdx) {
                 No sets saved yet
               </div>
 
+              </template>
+
+              <!-- ── Solo Sets tab ── -->
+              <template v-else>
+                <!-- Solo device selector -->
+                <div class="px-3 py-2 border-b border-neutral-800 shrink-0">
+                  <label class="text-[7px] font-mono text-neutral-600 uppercase tracking-widest block mb-1">Device</label>
+                  <select
+                    v-model="soloDeviceName"
+                    class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white font-mono outline-none"
+                  >
+                    <option value="">— Select device —</option>
+                    <option v-for="dev in visibleDevices" :key="dev.name" :value="dev.name">{{ dev.name }}</option>
+                  </select>
+                </div>
+
+                <!-- Current patch display -->
+                <div v-if="soloDeviceName" class="px-3 py-1.5 border-b border-neutral-800 shrink-0 flex items-center gap-2">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[9px] font-mono text-neutral-400 truncate">{{ soloDevicePatch }}</div>
+                    <div class="text-[7px] font-mono text-neutral-600">CH{{ (soloDeviceReg?.pcChannel ?? 0) + 1 }} PC{{ soloDeviceReg?.pcProgram ?? 0 }}</div>
+                  </div>
+                  <button
+                    @click="browseSoloDevice"
+                    title="Browse patches"
+                    class="shrink-0 px-2 py-1 rounded border border-neutral-700 text-neutral-400 hover:text-amber-400 hover:border-amber-500 text-[8px] font-bold uppercase tracking-wider transition-colors"
+                  >Browse</button>
+                </div>
+
+                <!-- Save solo set -->
+                <div class="px-3 py-1.5 border-b border-neutral-800 shrink-0 flex gap-1.5 items-center">
+                  <input
+                    v-model="soloSetName"
+                    type="text"
+                    placeholder="Solo set name…"
+                    maxlength="40"
+                    @keydown.enter="saveCurrentSoloSet"
+                    class="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white font-mono outline-none focus:border-amber-500 placeholder:text-neutral-700"
+                  />
+                  <button
+                    @click="saveCurrentSoloSet"
+                    :disabled="!soloSetName.trim() || !soloDeviceName"
+                    class="shrink-0 px-2 py-1 rounded bg-amber-600 text-white text-[8px] font-bold uppercase tracking-wider hover:bg-amber-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  ><Save class="w-2.5 h-2.5" /></button>
+                </div>
+
+                <!-- Saved solo sets library sidebar -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar border-b border-neutral-800">
+                  <div v-if="soloSets.length === 0" class="px-3 py-3 text-[8px] font-mono text-neutral-700 italic text-center">No solo sets saved</div>
+                  <div
+                    v-for="set in soloSets"
+                    :key="set.id"
+                    class="group flex items-center gap-1.5 px-3 py-1.5 border-t border-neutral-900/40 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                    @click="assignSoloToSlot(set.id)"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <div class="text-[9px] font-bold text-neutral-200 truncate leading-tight">{{ set.name }}</div>
+                      <div class="text-[7px] font-mono text-neutral-600 truncate">{{ set.deviceName }} · {{ set.soundName || ('PC' + set.pcProgram) }}</div>
+                    </div>
+                    <button
+                      @click.stop="deleteSoloSet(set.id)"
+                      class="shrink-0 p-1 rounded text-neutral-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                      title="Delete"
+                    ><Trash2 class="w-2.5 h-2.5" /></button>
+                  </div>
+                </div>
+
+                <!-- 8 Solo Slot pads -->
+                <div class="px-3 py-2 shrink-0">
+                  <div class="text-[7px] font-mono text-neutral-600 uppercase tracking-widest mb-1.5">Solo Slots</div>
+                  <div class="grid grid-cols-4 gap-1">
+                    <button
+                      v-for="(slot, idx) in soloSlots"
+                      :key="idx"
+                      @click="triggerSlot(idx)"
+                      @contextmenu.prevent="openMenu($event, { name: 'solo_slot_' + SOLO_SLOT_LETTERS[idx], label: 'Solo Set: Slot ' + SOLO_SLOT_LETTERS[idx] })"
+                      :class="[
+                        'relative flex flex-col items-center justify-center h-10 rounded border text-center transition-all',
+                        getSlotAssignment(idx)
+                          ? 'bg-amber-900/20 border-amber-600/40 text-amber-300 hover:bg-amber-900/40 hover:border-amber-500'
+                          : 'bg-neutral-900/40 border-neutral-800/60 text-neutral-500 hover:border-amber-500/30 hover:text-amber-400'
+                      ]"
+                    >
+                      <!-- MIDI learning indicator -->
+                      <span
+                        v-if="mappingStore.learningParamName === 'solo_slot_' + SOLO_SLOT_LETTERS[idx]"
+                        class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none"
+                      />
+                      <span class="text-[8px] font-black leading-none">{{ SOLO_SLOT_LETTERS[idx] }}</span>
+                      <span class="text-[6px] font-mono leading-none mt-0.5 truncate w-full px-0.5">
+                        {{ getSlotAssignment(idx)?.soundName || getSlotAssignment(idx)?.name || '—' }}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </template>
+
             </div>
-          </div>
+            </div>
 
           <!-- ── RIGHT: browser ── -->
           <div class="flex-1 flex flex-col overflow-hidden">

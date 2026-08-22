@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic, Save, X } from 'lucide-vue-next'
+import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Star, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic, Save, X } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -23,6 +23,7 @@ import MiniAudioScope from '@/components/MiniAudioScope.vue'
 import DeckDrumMachineSummary from '@/components/DeckDrumMachineSummary.vue'
 import DeckChordProgSummary from '@/components/DeckChordProgSummary.vue'
 import DeckPlaylistSummary from '@/components/DeckPlaylistSummary.vue'
+import DeckSoloPerformanceSummary from '@/components/DeckSoloPerformanceSummary.vue'
 
 const midiStore = useMidiStore()
 const uiStore   = useUiStore()
@@ -151,6 +152,7 @@ const apps = computed(() =>
 // Backing Track Player) — always visible, unlike `apps` above which is
 // gated on canvas presence. ──
 const EXTRA_APPS = [
+  { id: "solo-perf", name: "Solo", icon: Star, sourceId: "SOLO_PERFORMANCE", kind: "app" },
   { id: 'playlist', name: 'Playlist', icon: ListMusic, kind: 'playlist' },
 ]
 
@@ -185,6 +187,7 @@ const selectedAppComponent = computed(() => {
   if (selectedApp.value.kind === 'playlist') return DeckPlaylistSummary
   if (selectedApp.value.sourceId === MidiSource.DRUM_MACHINE) return DeckDrumMachineSummary
   if (selectedApp.value.sourceId === MidiSource.CHORD_PROG) return DeckChordProgSummary
+  if (selectedApp.value.sourceId === "SOLO_PERFORMANCE") return DeckSoloPerformanceSummary
   return null
 })
 
@@ -934,7 +937,7 @@ function handleBpmChange(e) {
         <!-- Extra apps not on the MIDI Flow canvas (e.g. Playlist) — always visible -->
         <button
           v-for="a in EXTRA_APPS" :key="a.id"
-          @click="selectApp({ kind: a.kind })"
+          @click="selectApp(a.sourceId ? { kind: a.kind, sourceId: a.sourceId } : { kind: a.kind })"
           class="relative rounded-lg border-3 p-2 flex flex-col items-center gap-1 text-center bg-neutral-900 border-black transition-colors hover:border-violet-700 hover:bg-neutral-800"
         >
           <div class="w-8 h-8 rounded-md flex items-center justify-center bg-black/40 text-violet-400">
