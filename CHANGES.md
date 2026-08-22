@@ -4,7 +4,7 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-08-22
 
-- **Solo Performance Sets** — New sub-tab in the Device PC panel for saving/recalling a single instrument's Program Change into 8 assignable slots (A-H). Each slot stores a device name, MSB/LSB, PC number, and patch name. Click a pad to instantly send PC to the device. Right-click for MIDI Learn per slot (`solo_slot_A`..`solo_slot_H`). Library sidebar shows saved solo sets; click a set to assign it to the first empty slot. Deck summary card shows device+patch from the first non-empty slot. Persisted in IndexedDB alongside existing Performance Sets.
+- **Solo Performance Sets** — 8 assignable pads (A-H) in the Device PC panel's Solo Sets tab. Each pad stores a device name, MSB/LSB, PC number, and patch name. Two modes: Recall (click to send PC, red highlight) and Assign (select a pad, then pick a patch from the browser). MIDI Learn per slot (`solo_slot_A`..`solo_slot_H`). Named sets save/recall all 8 pads. Deck summary card shows device+patch and instant recall. MidiControllerDesigner now has `Progression A`-`H` actions for Chord Prog. Shared `activeSlotIdx` state syncs highlight between PC panel and Deck card. Persisted in localStorage.
 
 - **Live Timeline bars/beats timing** — Timeline position is now in beats (quarter notes) instead of seconds. Ruler shows bar numbers, `formatTime` displays `bars:beats`, playback uses BPM from `timelineBpm` ref (editable in toolbar). Segments and markers store positions in beats. Tempo markers update the effective BPM mid-playback. Added `beatsToSec`/`secToBeats` helpers for audio seeking conversion.
 

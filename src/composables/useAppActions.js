@@ -422,6 +422,20 @@ export function useAppActions() {
       case 'seq_select_2':
         window.dispatchEvent(new CustomEvent('sequencer-action', { detail: { action, val: ccVal } })); break
 
+      case 'cp_select_A':
+      case 'cp_select_B':
+      case 'cp_select_C':
+      case 'cp_select_D':
+      case 'cp_select_E':
+      case 'cp_select_F':
+      case 'cp_select_G':
+      case 'cp_select_H':
+        if (ccVal > 63) {
+          const idx = 'ABCDEFGH'.indexOf(action.slice(-1))
+          if (idx >= 0) window.dispatchEvent(new CustomEvent('cp-slot-select', { detail: { idx } }))
+        }
+        break
+
       case 'seq_swing_cc':
       case 'seq_density_cc':
       case 'seq_length_cc':

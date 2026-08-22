@@ -46,7 +46,7 @@ const { openMenu }   = useMidiContextMenu()
 // ── Performance Sets (shared, IndexedDB-backed) ───────────────────
 
 // ── Solo Performance Sets (shared) ──────────────────────────────
-const { soloSets, soloSlots, load: loadSoloSets, saveSoloSet, deleteSoloSet, assignSlot, clearSlot, triggerSlot, getSlotAssignment } = useSoloPerformanceSets()
+const { soloSlots, activeSlotIdx, namedSets, assignSlot, clearSlot, triggerSlot, saveNamedSet, deleteNamedSet, recallNamedSet, refreshNamedSets } = useSoloPerformanceSets()
 const soloTab = ref(localStorage.getItem("SYCORE_SOLO_PERF_TAB") === "solo-sets" ? "solo-sets" : "perf-sets")
 watch(soloTab, v => localStorage.setItem("SYCORE_SOLO_PERF_TAB", v))
 const { pcSets, loadSets, saveSet, updateSet, deleteSet, recallSet: recallStoredSet } = usePerformanceSets()
@@ -83,7 +83,7 @@ const selectedDeviceName = ref('')
 onMounted(() => {
   const first = visibleDevices.value.find(d => d.pcEnabled) ?? visibleDevices.value[0]
   if (first) selectedDeviceName.value = first.name
-  loadSets(); loadSoloSets()
+  loadSets()
 })
 
 const selectedReg = computed(() =>
@@ -626,6 +626,7 @@ function sendToDeviceMessage(data, deviceName) {
 function selectSound(sound) {
   activeSound.value = sound
   sendCatalogSound(sound)
+  if (assignMode.value && activeSlotIdx.value >= 0) assignCurrentToSlot()
 }
 
 function sendCatalogSound(sound) {
@@ -850,6 +851,17 @@ function _startDevMidiListener() {
     const mapping = mappingStore.midiMappings[key]
     if (!mapping) return
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+    if (paramName?.startsWith('solo_slot_')) {
+      const letter = paramName.slice('solo_slot_'.length)
+      const idx = SOLO_SLOT_LETTERS.indexOf(letter)
+      if (idx >= 0) {
+        activeSlotIdx.value = idx
+        triggerSlot(idx)
+        const slot = getSlotAssignment(idx)
+        if (slot) showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`)
+      }
+      return
+    }
     if (!paramName?.startsWith('pc_dev_')) return
 
     const deviceName = paramName.slice('pc_dev_'.length)
@@ -954,45 +966,75 @@ const newSetName     = ref('')
 const newSetNameInput = ref(null)
 
 // ── Solo Performance Set state ─────────────────────────────────
-const soloDeviceName = ref(localStorage.getItem("SYCORE_SOLO_DEVICE") || "")
-watch(soloDeviceName, v => localStorage.setItem("SYCORE_SOLO_DEVICE", v))
-const soloSetName = ref("")
-const soloDeviceReg = computed(() => soloDeviceName.value ? midiStore.routingConfig?.registrations?.[soloDeviceName.value] : null)
-const soloDevicePatch = computed(() => {
-  const cur = currentPcState.value
-  if (cur.length && cur[0]?.soundName) return cur[0].soundName
-  if (cur.length) return "PC " + (cur[0]?.program ?? 0)
-  if (!soloDeviceReg.value) return "No device selected"
-  return "PC " + (soloDeviceReg.value.pcProgram ?? 0)
-})
+const assignMode = ref(false)
+const soloSetName = ref('')
+const soloSetSaving = ref(false)
+const soloSetRecallId = ref(null)
 
-async function saveCurrentSoloSet() {
-  const name = soloSetName.value.trim()
-  if (!name || !soloDeviceName.value) return
-  const reg = soloDeviceReg.value
+function toggleAssignMode() {
+  assignMode.value = !assignMode.value
+  if (!assignMode.value) activeSlotIdx.value = -1
+}
+
+function selectTargetSlot(idx) {
+  if (assignMode.value) {
+    activeSlotIdx.value = activeSlotIdx.value === idx ? -1 : idx
+  } else {
+    triggerSlot(idx)
+    activeSlotIdx.value = activeSlotIdx.value === idx ? -1 : idx
+    const slot = getSlotAssignment(idx)
+    if (slot) showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`)
+  }
+}
+
+function getSlotAssignment(idx) {
+  return soloSlots.value[idx] || null
+}
+
+function assignCurrentToSlot() {
+  const idx = activeSlotIdx.value
+  if (idx < 0 || !selectedDeviceName.value) return
+  const reg = midiStore.routingConfig?.registrations?.[selectedDeviceName.value]
   if (!reg) return
   const ch = Math.max(0, reg.pcChannel ?? 0)
   const pcCh = reg.pcChannels?.[ch]
-  await saveSoloSet(name, soloDeviceName.value, {
+  const cur = currentPcState.value
+  const soundName = cur.length ? (cur[0]?.soundName || "") : (pcCh?.soundName || "")
+  const program = cur.length ? (cur[0]?.program ?? 0) : (pcCh?.program ?? reg.pcProgram ?? 0)
+  const msb = cur.length ? (cur[0]?.msb ?? 0) : (pcCh?.msb ?? reg.pcMsb ?? 0)
+  const lsb = cur.length ? (cur[0]?.lsb ?? 0) : (pcCh?.lsb ?? reg.pcLsb ?? 0)
+  assignSlot(idx, selectedDeviceName.value, {
     pcChannel: ch,
-    pcProgram: pcCh?.program ?? reg.pcProgram ?? 0,
-    pcMsb: pcCh?.msb ?? reg.pcMsb ?? 0,
-    pcLsb: pcCh?.lsb ?? reg.pcLsb ?? 0,
+    pcProgram: program,
+    pcMsb: msb,
+    pcLsb: lsb,
     pcTemplate: reg.pcTemplate ?? "standard",
-    soundName: pcCh?.soundName || reg.soundName || "",
+    soundName,
   })
-  soloSetName.value = ""
+  activeSlotIdx.value = -1
+  assignMode.value = false
 }
 
-function browseSoloDevice() {
-  if (!soloDeviceName.value) return
-  selectDevice(soloDeviceName.value)
+function saveCurrentSoloSet() {
+  const name = soloSetName.value.trim()
+  if (!name) return
+  soloSetSaving.value = true
+  saveNamedSet(name)
+  soloSetName.value = ''
+  soloSetSaving.value = false
 }
 
-function assignSoloToSlot(soloSetId) {
-  const firstEmpty = soloSlots.value.findIndex(s => !s?.soloSetId)
-  if (firstEmpty >= 0) assignSlot(firstEmpty, soloSetId)
+function deleteNamedSoloSet(id) {
+  deleteNamedSet(id)
+  if (soloSetRecallId.value === id) soloSetRecallId.value = null
 }
+
+function recallNamedSoloSet(id) {
+  soloSetRecallId.value = id
+  recallNamedSet(id)
+}
+
+
 
 function openSaveDialog() {
   newSetName.value = ''
@@ -1305,83 +1347,46 @@ function assignToPad(setId, padIdx) {
 
               <!-- ── Solo Sets tab ── -->
               <template v-else>
-                <!-- Solo device selector -->
-                <div class="px-3 py-2 border-b border-neutral-800 shrink-0">
-                  <label class="text-[7px] font-mono text-neutral-600 uppercase tracking-widest block mb-1">Device</label>
-                  <select
-                    v-model="soloDeviceName"
-                    class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white font-mono outline-none"
-                  >
-                    <option value="">— Select device —</option>
-                    <option v-for="dev in visibleDevices" :key="dev.name" :value="dev.name">{{ dev.name }}</option>
-                  </select>
-                </div>
-
-                <!-- Current patch display -->
-                <div v-if="soloDeviceName" class="px-3 py-1.5 border-b border-neutral-800 shrink-0 flex items-center gap-2">
-                  <div class="flex-1 min-w-0">
-                    <div class="text-[9px] font-mono text-neutral-400 truncate">{{ soloDevicePatch }}</div>
-                    <div class="text-[7px] font-mono text-neutral-600">CH{{ (soloDeviceReg?.pcChannel ?? 0) + 1 }} PC{{ soloDeviceReg?.pcProgram ?? 0 }}</div>
-                  </div>
+                <!-- Mode toggle + hint -->
+                <div class="px-3 py-2 border-b border-neutral-800 shrink-0 flex items-center gap-2">
                   <button
-                    @click="browseSoloDevice"
-                    title="Browse patches"
-                    class="shrink-0 px-2 py-1 rounded border border-neutral-700 text-neutral-400 hover:text-amber-400 hover:border-amber-500 text-[8px] font-bold uppercase tracking-wider transition-colors"
-                  >Browse</button>
-                </div>
-
-                <!-- Save solo set -->
-                <div class="px-3 py-1.5 border-b border-neutral-800 shrink-0 flex gap-1.5 items-center">
-                  <input
-                    v-model="soloSetName"
-                    type="text"
-                    placeholder="Solo set name…"
-                    maxlength="40"
-                    @keydown.enter="saveCurrentSoloSet"
-                    class="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white font-mono outline-none focus:border-amber-500 placeholder:text-neutral-700"
-                  />
-                  <button
-                    @click="saveCurrentSoloSet"
-                    :disabled="!soloSetName.trim() || !soloDeviceName"
-                    class="shrink-0 px-2 py-1 rounded bg-amber-600 text-white text-[8px] font-bold uppercase tracking-wider hover:bg-amber-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  ><Save class="w-2.5 h-2.5" /></button>
-                </div>
-
-                <!-- Saved solo sets library sidebar -->
-                <div class="flex-1 overflow-y-auto custom-scrollbar border-b border-neutral-800">
-                  <div v-if="soloSets.length === 0" class="px-3 py-3 text-[8px] font-mono text-neutral-700 italic text-center">No solo sets saved</div>
-                  <div
-                    v-for="set in soloSets"
-                    :key="set.id"
-                    class="group flex items-center gap-1.5 px-3 py-1.5 border-t border-neutral-900/40 hover:bg-white/[0.02] transition-colors cursor-pointer"
-                    @click="assignSoloToSlot(set.id)"
+                    @click="toggleAssignMode"
+                    :class="[
+                      'px-2 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all',
+                      assignMode
+                        ? 'bg-amber-600/30 border-amber-500 text-amber-300'
+                        : 'bg-emerald-600/20 border-emerald-600/40 text-emerald-400'
+                    ]"
                   >
-                    <div class="flex-1 min-w-0">
-                      <div class="text-[9px] font-bold text-neutral-200 truncate leading-tight">{{ set.name }}</div>
-                      <div class="text-[7px] font-mono text-neutral-600 truncate">{{ set.deviceName }} · {{ set.soundName || ('PC' + set.pcProgram) }}</div>
-                    </div>
-                    <button
-                      @click.stop="deleteSoloSet(set.id)"
-                      class="shrink-0 p-1 rounded text-neutral-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                      title="Delete"
-                    ><Trash2 class="w-2.5 h-2.5" /></button>
-                  </div>
+                    {{ assignMode ? 'Assign: ON' : 'Recall' }}
+                  </button>
+                  <span class="text-[8px] font-mono text-neutral-600">
+                    {{ assignMode ? 'Click a slot, then pick a patch from the browser' : 'Click a slot to send PC to its device' }}
+                  </span>
                 </div>
 
                 <!-- 8 Solo Slot pads -->
-                <div class="px-3 py-2 shrink-0">
-                  <div class="text-[7px] font-mono text-neutral-600 uppercase tracking-widest mb-1.5">Solo Slots</div>
+                <div class="flex-1 flex flex-col justify-center px-3 py-2 shrink-0">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[7px] font-mono text-neutral-600 uppercase tracking-widest">Solo Slots</span>
+                    <span v-if="assignMode && activeSlotIdx >= 0" class="text-[7px] font-mono text-amber-400">Target: {{ SOLO_SLOT_LETTERS[activeSlotIdx] }}</span>
+                    <span v-else-if="activeSlotIdx >= 0" class="text-[7px] font-mono text-red-400">Sent!</span>
+                  </div>
                   <div class="grid grid-cols-4 gap-1">
                     <button
                       v-for="(slot, idx) in soloSlots"
                       :key="idx"
-                      @click="triggerSlot(idx)"
+                      @click="selectTargetSlot(idx)"
                       @contextmenu.prevent="openMenu($event, { name: 'solo_slot_' + SOLO_SLOT_LETTERS[idx], label: 'Solo Set: Slot ' + SOLO_SLOT_LETTERS[idx] })"
                       :class="[
                         'relative flex flex-col items-center justify-center h-10 rounded border text-center transition-all',
-                        getSlotAssignment(idx)
-                          ? 'bg-amber-900/20 border-amber-600/40 text-amber-300 hover:bg-amber-900/40 hover:border-amber-500'
-                          : 'bg-neutral-900/40 border-neutral-800/60 text-neutral-500 hover:border-amber-500/30 hover:text-amber-400'
+                        activeSlotIdx === idx && assignMode
+                          ? 'bg-amber-500/30 border-amber-400 ring-1 ring-amber-400 text-amber-200'
+                          : activeSlotIdx === idx && !assignMode
+                            ? 'bg-red-500/30 border-red-400 ring-1 ring-red-400 text-red-200'
+                            : getSlotAssignment(idx)
+                              ? 'bg-amber-900/20 border-amber-600/40 text-amber-300 hover:bg-amber-900/40 hover:border-amber-500'
+                              : 'bg-neutral-900/40 border-neutral-800/60 text-neutral-500 hover:border-amber-500/30 hover:text-amber-400'
                       ]"
                     >
                       <!-- MIDI learning indicator -->
@@ -1394,6 +1399,50 @@ function assignToPad(setId, padIdx) {
                         {{ getSlotAssignment(idx)?.soundName || getSlotAssignment(idx)?.name || '—' }}
                       </span>
                     </button>
+                  </div>
+                </div>
+
+                <!-- Save / Load Solo Sets -->
+                <div class="shrink-0 border-t border-neutral-800">
+                  <!-- Save row -->
+                  <div class="px-3 py-1.5 flex gap-1.5 items-center">
+                    <input
+                      v-model="soloSetName"
+                      type="text"
+                      placeholder="Save all 8 slots as…"
+                      maxlength="40"
+                      @keydown.enter="saveCurrentSoloSet"
+                      class="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white font-mono outline-none focus:border-amber-500 placeholder:text-neutral-700"
+                    />
+                    <button
+                      @click="saveCurrentSoloSet"
+                      :disabled="!soloSetName.trim() || soloSetSaving"
+                      class="shrink-0 px-2 py-1 rounded bg-amber-600 text-white text-[8px] font-bold uppercase tracking-wider hover:bg-amber-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    ><Save class="w-2.5 h-2.5" /></button>
+                  </div>
+                  <!-- Saved sets list -->
+                  <div v-if="namedSets.length > 0" class="max-h-24 overflow-y-auto custom-scrollbar border-t border-neutral-900/60">
+                    <div
+                      v-for="set in namedSets"
+                      :key="set.id"
+                      class="group flex items-center gap-1.5 px-3 py-1.5 border-t border-neutral-900/40 hover:bg-white/[0.02] transition-colors"
+                    >
+                      <div
+                        class="flex-1 min-w-0 cursor-pointer"
+                        @click="recallNamedSoloSet(set.id)"
+                      >
+                        <div :class="['text-[9px] font-bold truncate leading-tight', soloSetRecallId === set.id ? 'text-amber-300' : 'text-neutral-200']">{{ set.name }}</div>
+                        <div class="text-[7px] font-mono text-neutral-600 truncate">{{ set.slots.filter(s => s).length }} of 8 slots assigned</div>
+                      </div>
+                      <button
+                        @click="deleteNamedSoloSet(set.id)"
+                        class="shrink-0 p-1 rounded text-neutral-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete"
+                      ><Trash2 class="w-2.5 h-2.5" /></button>
+                    </div>
+                  </div>
+                  <div v-else class="px-3 py-1.5 text-[8px] font-mono text-neutral-700 italic text-center border-t border-neutral-900/60">
+                    No saved solo sets
                   </div>
                 </div>
               </template>

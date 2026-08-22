@@ -1,29 +1,30 @@
 <script setup>
 import { computed } from 'vue'
-import { Star, X, ExternalLink, Play, Square } from 'lucide-vue-next'
+import { Star, X, ExternalLink } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSoloPerformanceSets, SOLO_SLOT_LETTERS } from '@/composables/useSoloPerformanceSets'
 
 const emit = defineEmits(['close'])
 
 const uiStore = useUiStore()
-const { soloSlots, soloSets, triggerSlot, getSlotAssignment, load } = useSoloPerformanceSets()
-
-load()
+const { soloSlots, activeSlotIdx, triggerSlot } = useSoloPerformanceSets()
 
 function openPanel() {
   uiStore.openPanel('device-program-change')
 }
 
-// Show the first non-empty slot's device + patch info
 const activeInfo = computed(() => {
   for (const slot of soloSlots.value) {
-    if (!slot?.soloSetId) continue
-    const set = soloSets.value.find(s => s.id === slot.soloSetId)
-    if (set) return { deviceName: set.deviceName, soundName: set.soundName || `PC ${set.pcProgram}`, pcProgram: set.pcProgram }
+    if (!slot?.deviceName) continue
+    return { deviceName: slot.deviceName, soundName: slot.soundName || `PC ${slot.pcProgram}` }
   }
   return null
 })
+
+function handleSlotClick(idx) {
+  activeSlotIdx.value = activeSlotIdx.value === idx ? -1 : idx
+  triggerSlot(idx)
+}
 </script>
 
 <template>
@@ -47,32 +48,32 @@ const activeInfo = computed(() => {
     </div>
 
     <div class="flex-1 min-h-0 flex flex-col gap-1.5">
-      <!-- Device + patch info -->
       <div v-if="activeInfo" class="px-2 py-1 bg-neutral-800/40 rounded-lg">
         <div class="text-[10px] font-bold text-white truncate">{{ activeInfo.deviceName }}</div>
         <div class="text-[8px] font-mono text-amber-400 truncate">{{ activeInfo.soundName }}</div>
       </div>
       <div v-else class="px-2 py-2 text-[8px] font-mono text-neutral-700 italic text-center">
-        No solo sets assigned
+        No solo slots assigned
       </div>
 
-      <!-- Solo slot pads -->
       <div class="grid grid-cols-8 gap-1 mt-1">
         <button
           v-for="(slot, idx) in soloSlots"
           :key="idx"
-          @click="triggerSlot(idx)"
+          @click="handleSlotClick(idx)"
           :class="[
             'flex flex-col items-center justify-center h-9 rounded border text-center transition-all',
-            getSlotAssignment(idx)
-              ? 'bg-amber-900/20 border-amber-600/40 text-amber-300 hover:bg-amber-900/40 hover:border-amber-500'
-              : 'bg-neutral-900/40 border-neutral-800/60 text-neutral-500'
+            activeSlotIdx === idx
+              ? 'bg-red-500/30 border-red-400 ring-1 ring-red-400 text-red-200'
+              : slot
+                ? 'bg-amber-900/20 border-amber-600/40 text-amber-300 hover:bg-amber-900/40 hover:border-amber-500'
+                : 'bg-neutral-900/40 border-neutral-800/60 text-neutral-500'
           ]"
-          :title="getSlotAssignment(idx)?.name || 'Empty'"
+          :title="slot?.soundName || 'Empty'"
         >
           <span class="text-[9px] font-black leading-none">{{ SOLO_SLOT_LETTERS[idx] }}</span>
           <span class="text-[6px] font-mono leading-none mt-0.5 truncate w-full px-0.5">
-            {{ getSlotAssignment(idx)?.soundName || getSlotAssignment(idx)?.name || '—' }}
+            {{ slot?.soundName || '—' }}
           </span>
         </button>
       </div>
