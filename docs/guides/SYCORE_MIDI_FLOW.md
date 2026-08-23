@@ -32,15 +32,18 @@ Each device shows **IN**/**OUT** capability badges and has both an OUT port and 
 ### MIDI Apps (Virtual Sources)
 
 | App | Source ID | Has IN |
-|---|---|---|
+|---|---|---|---|
 | Step Sequencer | `SEQUENCER` | ✓ |
+| Sequencer (Piano Roll) | `SEQUENCER2` | ✓ |
 | Chord Sequencer | `CHORD_PROG` | ✓ |
+| Piano Roll (MIDI Capture) | `MIDI_CAPTURE` | ✓ |
 | Virtual Keyboard | `KEYBOARD` | ✓ |
-| Arpeggiator | `ARP` | |
+| Arpeggiator | `ARP` | ✓ |
 | Transport / Clock | `TRANSPORT` | |
 | Sound Engine | `UI` | |
 | Drum Machine | `DRUM_MACHINE` | ✓ |
 | Sampler | `SAMPLER` | ✓ |
+| Note Latch | `NOTE_LATCH` | ✓ |
 
 Every app has an **OUT** port. Apps marked "Has IN" also expose an **IN** port, so they can receive routed MIDI from a device or from another app (e.g. Chord Sequencer OUT → Virtual Keyboard IN).
 
@@ -51,9 +54,9 @@ Every app has an **OUT** port. Apps marked "Has IN" also expose an **IN** port, 
 Drop sidebar items onto the dot-grid canvas. Each dropped item becomes a movable node card:
 
 - **App nodes** — purple-toned cards with the app icon, an OUT port, and an IN port if the app accepts input
-- **Device nodes** — color-coded cards (by device type) with device name, IN port (left), OUT port (right), flag toggles, and channel selectors
+- **Device nodes** — color-coded cards (by device type) with device name, IN port (left), OUT port (right), flag toggles, and channel selectors. Hardware device nodes with an input show a **↺ reconnect** button in the header — click it to force-close and reopen the Web MIDI port and re-attach the ingress listener, fixing stale connections after a page reload.
 
-Each app node's header also has an **open-app** shortcut (external-link icon) that jumps straight to that app's panel. Instrument device nodes (Instrument Single/Multi and Virtual Instrument — not Controllers) get the same icon, but it opens the **Device Program Change** panel pre-selected to that device instead. Every node's header also has the **X** button to remove it.
+Each app node's header also has an **open-app** shortcut (external-link icon) that jumps straight to that app's panel. Instrument device nodes (Instrument Single/Multi and Virtual Instrument — not Controllers) get the same icon, but it opens the **Device Program Change** panel pre-selected to that device instead. Every node's header also has the **X** button to remove it, or click the **collapse icon** to minimize the node to header-only, saving canvas space while keeping the node present and wired.
 
 ### Building Connections
 
@@ -63,16 +66,17 @@ Each app node's header also has an **open-app** shortcut (external-link icon) th
    - **Lime** (`#a3e635`) — device to device
    - **Blue** (`#3b82f6`) — device to app (device→app input routing)
    - **Purple** (`#8b5cf6`) — app to app (app→app input routing)
-4. A dashed cable indicates a device→app connection with an active note-range filter
+4. A dashed cable indicates a device→app or app→device connection with an active note-range filter
 
 ### Note-Range Filters (Keyboard Split)
 
-Click any device→app cable to open its note-range popover. Set **Low**/**High** (0–127) to restrict which notes flow through that connection — e.g. split one keyboard so the low half feeds the Drum Machine and the high half feeds the Step Sequencer. Leaving the full 0–127 range means no filtering.
+Click any device→app or app→device cable to open its note-range popover. Set **Low**/**High** (0–127) to restrict which notes flow through that connection — e.g. split one keyboard so the low half feeds the Drum Machine and the high half feeds the Step Sequencer. Leaving the full 0–127 range means no filtering. App→device cables also support this filter, so a sequencer output can be restricted to a specific note range before reaching its destination.
 
 ### MIDI Channels Filter
 
-The output will be filtered only to the selected channels. With no channels selection (default) any filter is applied. 
-This feature can be useful to connect a keyboard split to drive 2 different sounds from the same keyboard.
+Click any cable's filter icon to select which MIDI channels pass through the connection. Works for device→device, device→app, and app→device cables. The filter gates on the output channel (after remapping), so selecting CH 2 sends to the destination on CH 2 regardless of the source channel. With no channels selected (default), no filter is applied and all channels pass through.
+
+This is useful for connecting a keyboard split to drive different sounds on different channels from the same keyboard, or for restricting a sequencer's output to specific instrument channels.
 
 ### Removing Connections
 
@@ -116,7 +120,23 @@ A Virtual Instrument could be a standalone app (a synth typically) that accept M
 **In order to have the MIDI routing working correctly the MIDI IN of your app has to be the same of the MIDI output set in SY.CORE.**
 
 
+### Multi-Channel Conflict Guard
+
+When two canvas nodes point to the same virtual instrument, the second node's Multi-CH panel is locked with an explanation, and the routing engine preserves the first node's channel assignments instead of overwriting them. Stale saved configs where both nodes had channels are auto-corrected on load.
+
 ---
+
+## Per-Instrument Note Latch
+
+Each hardware or virtual instrument node now has a **LATCH** row in its canvas card. Toggle ON to hold notes after key release.
+
+| Control | Range | Description |
+|---------|-------|-------------|
+| **LATCH toggle** | ON / OFF | Enables/disables note latching for this instrument. Right-click to MIDI Learn. |
+| **Max** | 1–16 | Maximum number of held notes. When the buffer is full: |
+| **Mode** | FIFO / BLOCK | **FIFO** ejects the oldest held note when full; **BLOCK** rejects new notes until one is released. |
+
+The per-device latch is independent of the global SmartLatch and applies to both keyboard Thru and all app-generated notes (sequencer, chord progressions, etc.). Right-click any control to MIDI Learn. Settings are persisted per device.
 
 ## Saved Configurations
 

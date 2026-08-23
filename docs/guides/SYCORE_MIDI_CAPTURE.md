@@ -128,10 +128,13 @@ All durations are calculated from the current BPM. Clicking a cell sets the sele
 | **■ Stop** | Stops all pending note-ons and sends note-off to all used pitches |
 | **🔁 Loop** | Restarts playback automatically after the last note |
 
+### IN/OUT Range Cursors as Text
+
+The orange range handles (IN ▲ and OUT ▲) are also editable as text — type a `bar.beat.sixteenth` position (e.g. `1.1.0`, `5.1.0`) directly into the fields above the piano roll instead of only dragging the handles. This enables precise cropping to exact bar boundaries without manual adjustment.
+
 ### Output Routing
 
-- **Output dropdown:** Choose a specific MIDI output port, or `All outputs` to use the active MIDI routing.
-- **Channel selector:** Channel to use for playback (1–16), independent of the capture channel.
+Playback is routed as a **MIDI Flow app source** ("Piano Roll") instead of picking a MIDI output device directly in the panel. Drop the "Piano Roll" node onto the MIDI Flow canvas and cable it to a destination, or leave it unwired to broadcast to every enabled output.
 
 ### Playback Engine
 

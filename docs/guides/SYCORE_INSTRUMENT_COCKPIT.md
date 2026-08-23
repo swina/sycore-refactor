@@ -1,6 +1,6 @@
 # DECK
 
-**Purpose:** A performance-time synthesis of your MIDI Flow rig — one view showing every connected controller, app, and instrument, with live patch names, active channels, volume, and quick links into each device's real editor.
+**Purpose:** A performance-time synthesis of your MIDI Flow rig — one view showing every connected controller, app, and instrument, with live patch names, active channels, volume, and quick links into each device's real editor. Custom background image support, save/recall Performance Sets, independent Play/Stop for Drum Machine and Chord Prog.
 
 <img src="/help/guides/sycore-cockpit.png"/>
 
@@ -11,6 +11,14 @@
 DECK is not a wiring tool — [MIDI Flow](./SYCORE_MIDI_FLOW.md) is still where you drag nodes and draw cables to build your rig. DECK is what you glance at (and lightly touch) once that rig is wired: it reads the exact same live routing state MIDI Flow produces and lays it out as a single console — Controllers on the left, Apps on the right, a central display, and your Instruments docked along the bottom.
 
 Everything in it is reactive. Add a device or app to the MIDI Flow canvas and it appears here immediately; change a patch in the Program Change panel and the patch list updates without reopening anything.
+
+### Custom Background Image
+
+Click the image icon in the DECK title bar to upload any image as the panel's background (stored locally, per browser). An X icon appears next to it to reset back to the default background.
+
+### Performance Sets
+
+DECK includes a **Save/Recall Performance Set** button in its bottom bar. This saves and restores the current instrument patches and device configuration using the same `usePerformanceSets` composable as the Multi Sound panel — useful for switching between complete patch configurations mid-performance.
 
 ---
 
@@ -41,7 +49,7 @@ The center LCD-styled screen is the console's core:
 | **Panic** (top-right) | All-notes-off across every channel — the same action as MIDI Settings' Panic button. |
 | **SY.CORE / Mini Scope** | A compact oscilloscope reusing the Audio Visualizer's mic-capture engine, stripped down to just a waveform. Opt-in — click to start (no automatic mic prompt), and it stops capturing whenever DECK is closed. **Click the scope itself to toggle between waveform and a small spectrum view.** It shares its input-device choice with the full Audio Visualizer panel. |
 | **Patch list** | One line per routed instrument, per **active channel** — a multi-timbral instrument with several channels active gets one line per channel, each with its own patch name and category. Updates live as patches change elsewhere. |
-| **Play / Stop** (bottom-left) | The same global transport play/stop as the main Transport Bar — starts/stops every sync-enabled app together. |
+| **Play / Stop** (bottom-left) | The same global transport play/stop as the main Transport Bar — starts/stops every sync-enabled app together. Drum Machine and Chord Prog summary cards also have their own independent Play/Stop buttons, so either engine can be started without touching the main transport. |
 | **Sync badges** | Sequencer / Chord Prog / Drum Machine / Backing Track — click to toggle whether that app starts and stops with the global transport. Shared state with the Transport Bar's own sync toggles. |
 
 ---

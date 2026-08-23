@@ -89,6 +89,7 @@ The grid shows up to 16 cells. Each cell displays:
 | **Double click** | Toggles the step **active / off** without changing its chord data. |
 | **Click duration badge** | Cycles the duration forward through all available values. |
 | **Shift+click / Right-click duration badge** | Cycles the duration in reverse. |
+| **Right-click step** | Opens a context menu to **Copy** or **Paste** the step's full parameter set (chord, notes, velocity, duration, gate, transpose, mode overrides). |
 
 The **currently playing step** is highlighted in yellow. The **selected step** is highlighted in purple.
 
@@ -119,14 +120,18 @@ While the sequencer is **playing**, the Step Detail row automatically follows wh
 Click the **Custom** button next to the chord name to open the chord-capture modal. This lets you assign any arbitrary chord to the selected step by playing it — rather than picking from the built-in library.
 
 Two input modes are available:
-
 **CHORD BUILDER**
 
-Shows 18 common chord types (maj, min, 7, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, etc.) with inversions. Pick a root note, select a chord type, choose an inversion, then preview and assign to the current step
+Shows 18 common chord types (maj, min, 7, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, etc.) with inversions. Pick a root note, select a chord type, choose an inversion, then preview and assign to the current step. The preview shows the previous step's chord (if any) alongside the new suggestion, and a "Preview A→B→C" button plays prev → current → new in sequence for comparison.
+
+**SUGGEST**
+
+The Suggest tab shows up to 18 common chord types — maj, min, 7, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, and more — with inversion options. Select a root note, pick a type, choose an inversion (root, 1st, 2nd, 3rd), preview the voicing, and assign it to the current step. Also shows a comparison view of the previous step's chord and the current chord alongside the new suggestion for quick A/B/C evaluation.
 
 **FAVORITE CHORDS**
 
-Collect your favorite chords and assign to any slot later.
+
+Collect your favorite chords and assign to any slot later. Click the **Favorite** button on any built chord in the Chord Builder or Suggest tab to save it to your favorites list (stored in IndexedDB). The Favorites tab lists all saved chords with preview and assign buttons.
 
 **MIDI IN**
 1. Click **Start Listening** — a pulsing indicator confirms the listener is active.
@@ -238,8 +243,9 @@ Requires a SY.CORE account.
 ### Saving
 
 1. Enter a name in the text field.
-2. Press **Save** or hit **Enter**.
-3. The current steps (chord data, duration, velocity, gate, per-step transpose) and the active step count are persisted to the cloud under your account.
+2. Toggle **Save All Slots** to persist all 8 slots (A–H), the active slot index, and the chain configuration as a single library entry. When unchecked, only the currently active slot is saved.
+3. Press **Save** or hit **Enter**.
+4. The current steps (chord data, duration, velocity, gate, per-step transpose) and the active step count are persisted to the cloud under your account.
 
 ### Loading
 
@@ -247,6 +253,8 @@ Your saved progressions appear in the right column. Hover a row to reveal:
 
 - **Load** (folder icon) — replaces the current sequence with the saved pattern.
 - **Delete** (trash icon) — permanently removes the pattern from the library.
+
+Patterns saved with "Save All Slots" show an **"All Slots"** badge; single-slot saves show **"Single"**. Loading an all-slots pattern restores the full slot set, chain, and active slot.
 
 ---
 
@@ -256,7 +264,21 @@ List of available Performance Sets to select and load the devices patches.
 
 ---
 
-## 14. Playback Engine Details
+## 14. Timeline Markers
+
+The Chord Progression Sequencer exposes three marker types usable in the [Live Timeline](./SYCORE_LIVE_TIMELINE.md):
+
+| Marker Type | Effect |
+|-------------|--------|
+| `cp-start` | Starts chord progression playback. Supports optional slot (A–H) and chain toggle extras. Dispatches `cp-start` event. |
+| `cp-stop` | Stops chord progression playback. Dispatches `cp-stop` event. |
+| `cp-select-pattern` | Selects a specific pattern slot (A–H). Dispatches `cp-slot-select` event. |
+
+The timeline processes these markers automatically when the playhead passes their position, so a full arrangement can trigger different chord progression slots at specific bars without manual intervention.
+
+---
+
+## 15. Playback Engine Details
 
 The sequencer uses a **384th-note tick grid** (4× the standard 96 PPQ) to support all standard durations including dotted and triplet values as exact integers.
 
@@ -280,7 +302,7 @@ A delayed **All Notes Off** panic (`AOF ms`) fires after stop to catch any notes
 
 ---
 
-## 15. MIDI Sync
+## 16. MIDI Sync
 
 | Option | Where to enable |
 |--------|----------------|
@@ -291,7 +313,7 @@ The sequencer output is tagged `MidiSource.CHORD_PROG` internally, which allows 
 
 ---
 
-## 16. Tips & Best Practices
+## 17. Tips & Best Practices
 
 - **Combine with the Step Sequencer** — run a bass/lead pattern in the Step Sequencer on one MIDI channel while the Chord Prog Sequencer drives pads or strings on another.
 - **Use per-step transpose for modulation** — assign the same chord to multiple steps, then use per-step Tr offsets to create a modulating progression without changing the chord.

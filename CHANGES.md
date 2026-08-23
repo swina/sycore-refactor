@@ -2,6 +2,13 @@
 
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-08-23
+
+- **README.md updated** — Added missing feature entries: Solo Performance Sets, Live Timeline bars/beats timing, Sequencer (piano roll) app, Note Latch, 8-pattern slots for Drum Machine (A-H) and Step Sequencer (A-H). Updated Drum Machine from A-F to A-H.
+- **MANIFESTO.md AI section rewritten** — Reframed AI as a dual-role tool: (1) for building the platform and (2) for the musician's own workflow — learning music theory, discovering chord voicings, proposing patch parameters, generating pattern starting points.
+- **All guides updated** — Updated `INDEX.md`, `SYCORE_DRUM_MACHINE.md` (A-H), `SYCORE_CHORD_PROG_SEQUENCER.md` (suggestions, favorites, copy/paste, save all slots, timeline markers), `SYCORE_MIDI_FLOW.md` (channel filters, arp IN port, note latch, reconnect, collapse, new apps), `SYCORE_MIDI_CONTROLLER_DESIGNER.md` (auto-generate, SysEx init, CC table, DECK nav, audio mixer actions), `SYCORE_INSTRUMENT_COCKPIT.md` (custom background, performance set save/recall, independent Play/Stop), `SYCORE_LIVE_TIMELINE.md` (bars/beats, chord-prog markers), `SYCORE_DEVICE_PROGRAM_CHANGE.md` (PC templates, all import formats, copy map), `SYCORE_MIDI_CAPTURE.md` (text cursors, MIDI Flow app source), `SYCORE_ARPEGGIATOR.md` (IN port, routable app), and `SYCORE_MIDI_GENERAL_SETTINGS.md`. Created new `SYCORE_AUDIO_MIXER.md` guide.
+- Fixed `AGENTS.md` — `npm run check` → `npm test` (the correct script name).
+
 ## 2026-08-22
 
 - **Solo Performance Sets** — 8 assignable pads (A-H) in the Device PC panel's Solo Sets tab. Each pad stores a device name, MSB/LSB, PC number, and patch name. Two modes: Recall (click to send PC, red highlight) and Assign (select a pad, then pick a patch from the browser). MIDI Learn per slot (`solo_slot_A`..`solo_slot_H`). Named sets save/recall all 8 pads. Deck summary card shows device+patch and instant recall. MidiControllerDesigner now has `Progression A`-`H` actions for Chord Prog. Shared `activeSlotIdx` state syncs highlight between PC panel and Deck card. Persisted in localStorage.

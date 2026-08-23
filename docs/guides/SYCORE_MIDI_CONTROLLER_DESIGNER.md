@@ -1,6 +1,6 @@
 # MIDI Controller Designer
 
-**Purpose:** Visual canvas for designing custom MIDI controller layouts with draggable controls, real-time feedback, and preset management.
+**Purpose:** Visual canvas for designing custom MIDI controller layouts with draggable controls, real-time feedback, and preset management. Auto-generate surface layouts from built-in templates (Akai MIDI Mix, Novation Launchpad Mini MK1, Novation Launchkey 49 MK4). Attach SysEx init strings that fire on preset activate.
 
 <img src="/help/guides/sycore-controller-designer.png"/>
 
@@ -41,6 +41,14 @@ Each control has editable properties via the **Properties Panel** (right sidebar
 - **Preset Selector** — dropdown to switch between saved presets
 - **Save** (`:Save:`) — persists all presets to IndexedDB via `persistControllerPresets()`
 
+### Auto-Generate Surface Layout
+
+If the currently selected device has a known template (Akai MIDI Mix, Novation Launchpad Mini MK1, Novation Launchkey 49 MK4), a **Generate Layout** button appears in the toolbar. One click populates the canvas with correctly positioned and pre-wired controls matching that controller's physical layout, with CC numbers and channels pre-assigned.
+
+### SysEx Init
+
+Attach a SysEx dump string to any controller preset via the **Preset Settings** drawer (visible in the right panel when no control is selected). The SysEx fires automatically on preset activate, with a manual **Send Now** button. Supports hex (`F0 … F7`), 0x-prefixed, and decimal formats.
+
 ### Preset Enable/Disable
 
 Enabled presets (toggled from the footer indicator) broadcast their controls to the MIDI engine. Multiple presets can be active simultaneously — controls merge by device assignment.
@@ -70,3 +78,31 @@ Drag vertically across any pad control in **Simulate Mode** to trigger a MIDI CC
 ## Feedback & Monitor
 
 Controls show real-time value feedback when receiving MIDI CC messages from assigned devices. The value indicator updates on every incoming CC matching the control's configured number and channel.
+
+---
+
+## Mappable Actions & Apps
+
+The **Actions** and **Apps** lists in the mapping drawer are sorted alphabetically by group/section name for easier scanning.
+
+### Virtual Instrument CC Table
+
+Each virtual instrument can have a named CC table (CC number + label), edited from a button on its card in [MIDI Devices](./SYCORE_MIDI_DEVICES.md). Named entries appear as an assignable action group in the Controller Designer's action picker, with a per-assignment **Target Channel** selector — useful since one CC table is shared across every channel of a multitimbral instrument, but a physical controller can usually only transmit on one fixed channel.
+
+### DECK Navigation
+
+The **DECK Navigation** group in the app-param picker exposes seven actions for driving DECK from a hardware controller without touching the mouse:
+
+| Action | Effect |
+|--------|--------|
+| **Next/Prev Zone** | Step the focus cursor between Controllers, Display, Apps, and Instruments |
+| **Zone Encoder** | Rotary alternative to Prev/Next Zone |
+| **Next/Prev Item** | Step through cards within the current zone |
+| **Item Encoder** | Rotary alternative to Prev/Next Item |
+| **Select** | Activate the focused card (opens app/panel/jumps to Program Change) |
+
+These write to the same paramNames that DECK's on-screen right-click MIDI Learn menus use, so either approach can be used interchangeably.
+
+### Audio Mixer
+
+The **Audio Mixer** action group provides per-channel Volume, Mute, and Solo controls (up to 16 channels), plus a Toggle Mixer action — each with numbered channel-slot assignments and a save/update/load configuration system.

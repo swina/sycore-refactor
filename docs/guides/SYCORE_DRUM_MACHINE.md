@@ -4,7 +4,7 @@ The **Drum Machine** is
 
 - **11-tracks · 16-steps pattern sequencer** built for live performance. Each track holds a loaded sample and an independent step sequence with per-step velocity, accent, and ratchet. 
 - **Track FX**: Pan, Pitch, Tone, Reverb, Delay (Copy/Paste FX to patterns)
-- **6 pattern banks** (A–F) let you switch between arrangements on the fly, 
+- **8 pattern banks** (A–H) let you switch between arrangements on the fly, 
 - **Chain Mode**: chain up to 8 patterns with autofill support
 - **Fill & Autofill**: system overlays a 1-4 bars variation without interrupting the main loop, can be automated every N bars
 - **Generate**: engine produces style-aware patterns in one click (11 styles)
@@ -45,18 +45,18 @@ The panel opens as a floating, **draggable and resizable** window (initial 960 �
 
 ## Sequences A–F
 
-Six independent pattern banks share the same 8 tracks but hold separate step data and sound assignments.
+Eight independent pattern banks share the same 8 tracks but hold separate step data and sound assignments.
 
 | Action | Result |
 |--------|--------|
-| Click a tab (A–F) while **stopped** | Switches immediately |
-| Click a tab (A–F) while **playing** | Switch is **quantized** — applied at the next bar boundary (step 1). The tab pulses until the switch fires |
+| Click a tab (A–H) while **stopped** | Switches immediately |
+| Click a tab (A–H) while **playing** | Switch is **quantized** — applied at the next bar boundary (step 1). The tab pulses until the switch fires |
 | **Copy pattern** (header) | Copies the active sequence into a chosen target bank |
 | **Clear pattern** (header) | Erases all steps in the active sequence |
 
 ### Sound inheritance
 
-If a slot in sequence B (or C, D, E, F) has no sample loaded, it falls back to the nearest earlier sequence that does. The sample label displays in **purple** when it belongs to the current sequence, or **grey** when inherited from a previous one.
+If a slot in sequence B (or C, D, E, F, G, H) has no sample loaded, it falls back to the nearest earlier sequence that does. The sample label displays in **purple** when it belongs to the current sequence, or **grey** when inherited from a previous one.
 
 ---
 
@@ -92,7 +92,7 @@ Clicking the **FX** button on any track expands a horizontal FX strip below that
 ### FX Copy / Paste
 
 - **COPY FX** — copies the current track's five FX values to a clipboard.
-- After copying, six sequence buttons (A–F) appear. Click any to paste those values into the same track slot in that sequence. Click **ALL** to paste to every sequence at once.
+- After copying, eight sequence buttons (A–H) appear. Click any to paste those values into the same track slot in that sequence. Click **ALL** to paste to every sequence at once.
 - A **FX COPIED** toast confirms the copy. The active sequence is highlighted cyan; other sequences are dim.
 
 FX settings are stored per track per sequence and are included in presets.
@@ -152,7 +152,7 @@ Located between the track grid and the footer, the transport bar holds the main 
 
 | Control | Description |
 |---------|-------------|
-| **Sequence tabs A–F** | Switch patterns. Respects **Sync Retrig** (checkbox in transport bar): ON = quantized to bar boundary while playing; OFF = immediate switch. MIDI-learnable |
+| **Sequence tabs A–H** | Switch patterns. Respects **Sync Retrig** (checkbox in transport bar): ON = quantized to bar boundary while playing; OFF = immediate switch. MIDI-learnable |
 | **▶ / ■** | Start / Stop the sequencer. BPM syncs from the global arpeggiator BPM on open. **Stop@end** checkbox arms a pending stop at the next bar boundary; **+Fill** plays a fill on the final bar |
 | **BPM display** | Read-only; reflects the current global tempo |
 | **Chain** | Toggle button to enable pattern chain playback. When active, a chain editor row appears below the transport bar with 8 slots. Click a slot to cycle through A–F (or null). The sequencer advances through the filled slots sequentially, wrapping at the end |
@@ -311,7 +311,7 @@ Enable chain mode by clicking the **Chain** toggle in the transport bar. When ac
 
 | Action | Result |
 |--------|--------|
-| **Click a slot** | Cycles through `null → A → B → C → D → E → F → null` |
+| **Click a slot** | Cycles through `null → A → B → C → D → E → F → G → H → null` |
 | **Right-click a slot** | Clears the slot to null |
 | **Clear all button** | Empties all 8 slots |
 
@@ -359,13 +359,13 @@ Click the **Presets** button in the header to open the preset drawer.
 | **Overwrite** | Hover a preset row → click the amber save icon. A **PRESET SAVED** toast confirms the write |
 | **Delete** | Hover a preset row → click the red trash icon |
 
-Presets store all six sequences (A–F) including step data, per-track sound assignments, per-track FX settings, and the active sequence at save time.
+Presets store all eight sequences (A–H) including step data, per-track sound assignments, per-track FX settings, and the active sequence at save time.
 
 ---
 
 ## Init
 
-The **Init** button in the header clears all six sequences and all sound assignments, resetting the Drum Machine to a blank state. An inline confirmation ("Clear all? Yes / No") must be acknowledged before the data is erased.
+The **Init** button in the header clears all eight sequences and all sound assignments, resetting the Drum Machine to a blank state. An inline confirmation ("Clear all? Yes / No") must be acknowledged before the data is erased.
 
 ---
 
@@ -376,7 +376,7 @@ Right-click any labelled control to open the MIDI Learn context menu. An orange 
 | Parameter | Control | Type |
 |-----------|---------|------|
 | `dm_play_stop` | Play / Stop | Trigger or toggle CC |
-| `dm_seq_a` … `dm_seq_f` | Switch to sequence A–F | Trigger |
+| `dm_seq_a` … `dm_seq_h` | Switch to sequence A–H | Trigger |
 | `dm_fill` | Trigger Fill | Trigger |
 | `dm_generate` | Generate pattern | Trigger |
 | `dm_repeat` | Toggle Repeater | Trigger or toggle CC |
@@ -393,7 +393,7 @@ Triggers respond to Note On or any CC value > 0. Sequence switches are quantized
 
 | Data | Storage | Survives reload |
 |------|---------|-----------------|
-| All 6 sequences (steps, velocity, accent, ratchet, lengths) | `localStorage` | ✔ |
+| All 8 sequences (steps, velocity, accent, ratchet, lengths) | `localStorage` | ✔ |
 | Sound assignments per sequence per track | `localStorage` (blob keys in IndexedDB) | ✔ |
 | FX settings (pan, pitch, tone, reverb, delay) per track per sequence | `localStorage` | ✔ |
 | BPM, Swing, Repeater settings | `localStorage` | ✔ |

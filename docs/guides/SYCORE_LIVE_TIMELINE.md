@@ -3,7 +3,9 @@
 **Live Timeline** is a draggable/resizable panel component that provides a visual arrangement
 timeline for live performance. It sequences backing track segments, fires MIDI/UI events at
 specific time positions (markers), and controls MIDI transport sync independently of the
-Backing Track Player's own sync logic.
+Backing Track Player's own sync logic. Timeline position is displayed in bars:beats format
+with bar-number rulers, driven by an editable per-session BPM. Tempo markers change the
+effective BPM mid-playback.
 
 <img src="/help/guides/sycore-timeline.png"/>
 ---
@@ -16,7 +18,7 @@ Backing Track Player's own sync logic.
 - **BPM display**: live `midiStore.currentBpm`
 - **Active segment name**: shown while a segment is playing
 - **Transport controls**: Stop (■) | Play/Pause (▶/⏸) buttons
-- **Position counter**: `MM:SS / total`
+- **Position counter**: `bars:beats` format (e.g. `9:3`) — shows current bar and beat, driven by `timelineBpm`
 - **Close button**
 
 ### Toolbar (Timeline tab only)
@@ -34,7 +36,7 @@ Backing Track Player's own sync logic.
 ### Canvas (Timeline tab)
 
 - **BPM badge** (fixed overlay, top-left): shows live global BPM, does not scroll with canvas
-- **Time ruler** (top, 28px): click anywhere to seek the playhead
+- **Time ruler** (top, 28px) with bar numbers: click anywhere to seek the playhead
 - **Marker label cards** (28–90px): per-marker mini-card showing icon + type badge, label, value
 - **Segment lane** (90px–bottom): colored segment blocks with label and per-track BPM badge
 - **Marker vertical lines**: colored lines extending through the segment lane
@@ -88,6 +90,9 @@ Markers fire at their `position` (seconds) as the playhead passes them. Each mar
 | `transport-stop` | MIDI Sync Stop | — | Sets `_lastTransportWasPlay = false`, calls `midiStore.sendStop()` |
 | `clock-start` | Start Clock (ticks only) | — | Calls `midiStore.startClock()` — sends 0xF8 ticks only, no 0xFA |
 | `clock-stop` | Stop Clock (ticks only) | — | Calls `midiStore.stopClock()` |
+| `cp-start` | Start Chord Prog | Slot (A–H) + Chain toggle | Dispatches `cp-start` event — starts chord progression playback with optional slot/chain extras |
+| `cp-stop` | Stop Chord Prog | — | Dispatches `cp-stop` event |
+| `cp-select-pattern` | Select Chord Prog Slot | Slot (A–H) | Dispatches `cp-slot-select` event |
 
 ### `perf-set` vs `load-perf-set`
 

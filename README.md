@@ -27,7 +27,8 @@ SY.CORE is a professional-grade, local-first web application that serves as a ce
 
 ### MIDI Tools
 - **Devices** — auto-discover and register your MIDI hardware, plus Virtual Instruments (software synths reachable through a virtual MIDI cable) with a bindable real output port.
-- **Flow** — visual drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices. Supports device→app and app→app routing with per-connection note-range filters (keyboard splits), multi-channel fanout for multi-timbral virtual instruments (e.g. duplicate one part onto CH 1, 2 and 4), one-click shortcuts to open a routed app or a device's Program Change panel straight from its canvas node, and named saved canvas configurations that auto-restore on reopen.
+- **Flow** — visual drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices. Supports device→app and app→app routing with per-connection note-range filters (keyboard splits) and channel filters, multi-channel fanout for multi-timbral virtual instruments (e.g. duplicate one part onto CH 1, 2 and 4), one-click shortcuts to open a routed app or a device's Program Change panel straight from its canvas node, and named saved canvas configurations that auto-restore on reopen.
+- **Note Latch** — independent MIDI IN/OUT app that holds notes after key release with configurable Max Notes (1–16) and FIFO/BLOCK mode. Cable it into the MIDI Flow canvas to apply latching to one or more instruments at once, with a single OFF switch to release every held note.
 - **Controller Designer** — visual canvas for designing custom MIDI controller layouts with draggable controls and preset management.
 - **Monitor** — real-time MIDI event monitoring and logging, one click away from the MIDI Flow canvas footer for checking messages while you wire up routing.
 - **MIDI Manager** — unified MIDI control center for routing, mapping, and device management.
@@ -39,10 +40,12 @@ SY.CORE is a professional-grade, local-first web application that serves as a ce
 
 ### Live Performance
 - **Live Performance Pad** — pad-based performance panel for triggering sounds and sequences on stage.
-- **Live Timeline** — visual arrangement timeline with segments, MIDI markers, and transport control.
-- **Step Sequencer** — algorithmic composition and MIDI sequencing engine with style-based generation.
+- **Solo Performance Sets** — 8 assignable pads (A–H) in the Device PC panel for instant Program Change recall during performance. Each pad stores a device name, MSB/LSB, PC number, and patch name. Two modes: Assign (pick a patch from the browser) and Recall (click to send PC). MIDI Learn per slot. Named sets save/recall all 8 pads; the Deck summary card shows device+patch with instant recall.
+- **Live Timeline** — visual arrangement timeline with segments, MIDI markers, and transport control. Position displayed in bars:beats format with bar-number rulers, driven by an editable per-session BPM. Tempo markers change the effective BPM mid-playback.
+- **Step Sequencer** — algorithmic composition and MIDI sequencing engine with style-based generation. 8 pattern slots (A–H).
+- **Sequencer** — chromatic piano-roll-style step sequencer with 12-note vertical bars per step (C–B), per-step octave, accent, and probability controls. Runs as an independent MIDI Flow app with its own IN/OUT and local pattern storage.
 - **Chord Progression Sequencer** — step-based harmonic sequencer with built-in chord library, algorithmic generation, and 8 independent progression slots (A–H) chainable into a longer arrangement. Chord/Arp play mode, chord-strum direction, and arpeggio pattern can all be overridden per step, so a single progression can mix strummed chords and arpeggios freely.
-- **Drum Machine** — 8-track 16-step pattern sequencer with A–F sequence banks, Fill, Repeater, style generation, and REC SYNC.
+- **Drum Machine** — 8-track 16-step pattern sequencer with A–H sequence banks, Fill, Repeater, style generation, and REC SYNC.
 
 ### Platform
 - **Module Manager** — enable or disable individual app modules to keep the workspace focused on what you actually use; disabled modules are hidden from every toolbar, dock, and quick-launcher.
