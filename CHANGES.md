@@ -1,5 +1,5 @@
 # Changes
-
+ 
 A running log of new features added to SY.CORE, newest first.
 
 ## 2026-08-23

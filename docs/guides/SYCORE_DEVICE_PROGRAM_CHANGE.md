@@ -10,7 +10,7 @@
 `Multi Sound` is a full-featured, per-device MIDI Program Change (PC) browser and dispatcher. It surfaces as a modal overlay and provides three distinct interaction modes:
 
 | Mode | Trigger condition | Description |
-|---|---|---|---|
+|---|---|---|
 | **Catalog mode** | Device name matches a key in `program_change.json` | Browse built-in sound banks with search/filter; one-click send. |
 | **PC Template mode** | Device has an assigned PC Template | Shows only that template's relevant catalog/import UI for the device. Templates include: Arturia MicroFreak, Roland S-1 Sound Engine, E-MU Emulator X3, Yamaha SEQTRAK, Kawai K1, Access Virus, Standard JSON. Devices with no template keep the default behavior. |
 | **User-bank mode** | A user-imported bank is active | Same UX as catalog, but populated from local user data from any supported import format. |
@@ -57,6 +57,18 @@ Each set snapshot contains, per device:
 Operations: **Save** (new set), **Recall** (restore all devices + re-send MIDI), **Update** (overwrite existing), **Delete**.
 
 On recall, for hardware devices, if `pcChannels` contains multi-channel state, all channels are replayed; otherwise the single-channel `pcProgram` is sent.
+
+### Solo Sets
+
+- 8 assignable pads (A-H) in the Device PC panel's Solo Sets tab. Each pad stores a device name, MSB/LSB, PC number, and patch name. 
+
+Two modes: 
+- **Recall** click to send PC, red highlight 
+- **Assign** select a pad, then pick a patch from the browser. 
+
+> MIDI Learn per slot (`solo_slot_A`..`solo_slot_H`). 
+> Named sets save/recall all 8 pads. 
+> Deck summary card shows device+patch and instant recall. 
 
 ---
 
@@ -118,8 +130,8 @@ SY.CORE supports multiple import formats for loading preset banks into the Progr
 |--------|--------|-------------|
 | **.mfprojz** | Arturia MIDI Control Center | ZIP archive containing MBP preset files. Parsed to extract preset names, categories, and slot numbers. |
 | **.db.db3** | Arturia Analog Lab | SQLite database from Arturia Analog Lab. Every playlist becomes its own bank, with each preset's playlist position preserved as the bank-select value. |
-| **.syx (Kawasaki K1)** | Kawai K1 | SysEx dump from a Kawai K1 synthesizer. Parsed into a named bank. |
-| **.syx (Access Virus)** | Access Virus | SysEx bank dump containing up to 128 single-program dumps. Names extracted from the @-prefixed field at offset 248. |
+| **.syx (Kawai K1)** | Kawai K1 | SysEx dump from a Kawai K1 synthesizer. Parsed into a named bank. |
+| **.syx (OsTirus-Access Virus Emulation)** | OsTirus | SysEx bank dump containing up to 128 single-program dumps. Names extracted from the @-prefixed field at offset 248. |
 | **Standard JSON** | Any | Simple JSON file — an array of `{ pc, name }` entries (see `src/data/program_change/json/standard.json`). |
 
 ### Parse pipeline (.mfprojz)
@@ -154,9 +166,9 @@ The **catalog browser** maps device name to a pre-indexed sound library. The use
 
 The **.mfprojz import** directly ingests project exports from Arturia MIDI Control Center without any intermediate steps. A full preset bank is available in the browser within seconds of export, named as a user bank and instantly accessible for live use. **Analog Lab db.db3 import** makes every playlist a named bank.
 
-### For Access Virus owners
+### For OsTirus (Access Virus emulation) owners
 
-The **.syx import** for Access Virus reads 128-program SysEx bank dumps, extracting preset names from the @-prefixed field, so the entire Virus library is browsable by name rather than by program number.
+The **.syx import** for OsTirus (Access Virus emulator) reads 128-program SysEx bank dumps, extracting preset names from the @-prefixed field, so the entire Virus library is browsable by name rather than by program number.
 
 ### For Kawai K1 owners
 

@@ -36,14 +36,14 @@ SY.CORE is a professional-grade, local-first web application that serves as a ce
 - **Actions** — per-device app action binding (MIDI CC/Note → high-level actions: start sequencer, toggle looper, change preset).
 - **Sync** — cross-subsystem transport synchronization matrix, backed by a single global BPM control that keeps Tone.js playback and outgoing MIDI clock to hardware in lockstep across every synced app.
 - **MIDI Capture** — record, view, and export MIDI events in real time.
-- **Multi Sound / Program Change Browser** — browse and send Program Change messages to connected devices, organize sounds into custom named banks per device, and import external preset listings (e.g. E-MU Emulator X3 exports).
+- **Multi Sound / Program Change Browser** — browse and send Program Change messages to connected devices, organize sounds into custom named banks per device, and import external preset listings (like E-MU Emulator X3 exports, Arturia MicroFreak, Arturia Pigments or SQLite based bank database, Yamaha SEQTrak, GForce Basstation, OsTirus syx import ).
 
 ### Live Performance
 - **Live Performance Pad** — pad-based performance panel for triggering sounds and sequences on stage.
 - **Solo Performance Sets** — 8 assignable pads (A–H) in the Device PC panel for instant Program Change recall during performance. Each pad stores a device name, MSB/LSB, PC number, and patch name. Two modes: Assign (pick a patch from the browser) and Recall (click to send PC). MIDI Learn per slot. Named sets save/recall all 8 pads; the Deck summary card shows device+patch with instant recall.
 - **Live Timeline** — visual arrangement timeline with segments, MIDI markers, and transport control. Position displayed in bars:beats format with bar-number rulers, driven by an editable per-session BPM. Tempo markers change the effective BPM mid-playback.
-- **Step Sequencer** — algorithmic composition and MIDI sequencing engine with style-based generation. 8 pattern slots (A–H).
 - **Sequencer** — chromatic piano-roll-style step sequencer with 12-note vertical bars per step (C–B), per-step octave, accent, and probability controls. Runs as an independent MIDI Flow app with its own IN/OUT and local pattern storage.
+- **Step Sequencer** — algorithmic composition and MIDI sequencing engine with style-based generation. 8 pattern slots (A–H).
 - **Chord Progression Sequencer** — step-based harmonic sequencer with built-in chord library, algorithmic generation, and 8 independent progression slots (A–H) chainable into a longer arrangement. Chord/Arp play mode, chord-strum direction, and arpeggio pattern can all be overridden per step, so a single progression can mix strummed chords and arpeggios freely.
 - **Drum Machine** — 8-track 16-step pattern sequencer with A–H sequence banks, Fill, Repeater, style generation, and REC SYNC.
 
