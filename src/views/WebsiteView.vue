@@ -5,7 +5,7 @@ import {
   Database, Wifi, ArrowRight, Check, Sparkles, Network, Disc3, Play,
   SlidersHorizontal, Repeat, Gauge, Workflow, Infinity as InfinityIcon,
   Search, Download, MonitorSmartphone, GitBranch, Menu, X,
-  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum, GithubIcon, Youtube
+  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum,Piano,GithubIcon, Youtube
 } from 'lucide-vue-next'
 
 const isMobileNavOpen = ref(false)
@@ -161,7 +161,7 @@ const liveTools = [
     title: 'Drum Machine',
     tag: 'Rhythm',
     img: withBase('/help/guides/sycore-drum-machine.png'),
-    text: 'An 11-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, up to 16-slot pattern chain with BPM-synced sequential playback, algorithmic basslines from reassigned pad slots, and full preset save/load with per-preset tempo. Any track can send MIDI Out instead — trigger your own hardware or app drum machine with its own sounds.',
+    text: 'An 11-track step sequencer with style-based generation (House, Techno, Jazz, EDM, Pop and more), per-step velocity and accent, fill mode, autofill scheduling, up to 16-slot pattern chain with BPM-synced sequential playback, algorithmic basslines from reassigned pad slots, and full preset save/load with per-preset tempo. Any track can send MIDI Out instead — trigger your own hardware or app drum machine with its own sounds. AI Generator: generate a full drum pattern from a text prompt, or a single track from a MIDI input.',
   },
   {
     icon: ListMusic,
@@ -175,14 +175,14 @@ const liveTools = [
     title: 'Chord Progression Sequencer',
     tag: 'Harmony',
     img: withBase('/help/guides/sycore-chord-progression.png'),
-    text: 'Up to 16 steps, each carrying a full chord — or an arpeggio, with a per-step rate override. Per-step duration, velocity, gate and transpose, a built-in progression library organised by key and genre, algorithmic generation, and Custom Chord Assignment — capture any chord live from a MIDI keyboard or the on-screen piano, auto-detected across 18 chord qualities.',
+    text: 'Up to 16 steps, each carrying a full chord — or an arpeggio, with a per-step rate override. Per-step duration, velocity, gate and transpose, a built-in progression library organised by key and genre, algorithmic generation, and Custom Chord Assignment — capture any chord live from a MIDI keyboard or the on-screen piano, auto-detected across 18 chord qualities. AI Generator: generate a full progression from a text prompt, or a single chord from a MIDI input.',
   },
   {
     icon: Music,
-    title: 'Step Sequencer',
+    title: 'Sequencer',
     tag: 'Algorithmic',
-    img: withBase('/help/guides/sycore-step-sequencer.png'),
-    text: 'Style-based generation — House, Techno, Acid, Minimal, Drum&Bass, Funk, Ambient and more — locked to key and scale. Up to 64 steps, native polyphony, per-step parameter locks (2 CCs), gate and tie control.',
+    img: withBase('/help/guides/SY.CORE-Sequencer.png'),
+    text: 'Style-based generation — House, Techno, Acid, Minimal, Drum&Bass, Funk, Ambient and more — locked to key and scale. Up to 16 steps, 8 Patterns, 8 Slots Pattern Chain, native polyphony, per-step parameter locks (2 CCs), gate and tie control, play direction (Up, Down, UpDown, Random) with custom timing by tempo divisions. AI Generator: generate a full pattern from a text prompt, or a single step from a MIDI input.',
   },
   {
     icon: Cpu,
@@ -325,6 +325,11 @@ const scenarios = [
     icon: InfinityIcon,
     title: 'Everything',
     text: 'All 44 modules, at once, for whoever actually wants that. Nothing here is a locked-down "lite" version of anything.',
+  },
+  {
+    icon: Piano,
+    title: 'Virtual Instruments',
+    text: 'Connect any standalone app to SY.CORE, create custom MIDI mappings, and use the Chord Progression Sequencer, Step Sequencer, or Drum Machine to drive it. The browser is just the brain of your rig.',
   },
 ]
 </script>
