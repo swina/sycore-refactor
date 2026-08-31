@@ -1,6 +1,6 @@
 # MIDI PERFORMANCE
 
-<img src="../../public/help/guides/sycore-midi-performance-grid.png"/>
+<img src="../../help/guides/sycore-midi-performance-grid.png"/>
 
 **Purpose:** Source-to-output routing matrix — controls which SY.CORE internal sources (and physical inputs) route to which hardware outputs.
 
@@ -24,7 +24,7 @@
 
 **Features beyond the matrix:**
 
-<img src="../../public/help/guides/sycore-midi-performance-extra.png"/>
+<img src="../../help/guides/sycore-midi-performance-extra.png"/>
 
 - **Smart Latch** — holds incoming notes. Configurable: max notes (1–8), fade-out time (0–5000ms), FIFO replace mode.
 - **Broadcast Mode** — overrides the matrix; sends all messages to all active devices simultaneously. Dims the matrix UI when active.

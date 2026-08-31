@@ -25,7 +25,7 @@ MIDI Capture operates in three mutually exclusive phases:
 
 ## Interface Layout
 
-<img src="../../public/help/guides/sycore-midi-capture.png"/>
+<img src="../../help/guides/sycore-midi-capture.png"/>
 
 
 ---
@@ -94,7 +94,7 @@ A 36px wide canvas on the left edge shows pitch names (C4, B3, …). It redraws 
 
 ## Inline Note Editor
 
-<img src="../../public/help/guides/sycore-midi-capture-edit.png"/>
+<img src="../../help/guides/sycore-midi-capture-edit.png"/>
 
 Appears at the bottom of the panel when a note is selected. Changes apply **live** to the piano roll without confirmation.
 

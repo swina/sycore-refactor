@@ -2,7 +2,7 @@
 
 **Purpose:** Visual canvas for designing custom MIDI controller layouts with draggable controls, real-time feedback, and preset management. Auto-generate surface layouts from built-in templates (Akai MIDI Mix, Novation Launchpad Mini MK1, Novation Launchkey 49 MK4). Attach SysEx init strings that fire on preset activate.
 
-<img src="../../public/help/guides/sycore-controller-designer.png"/>
+<img src="../../help/guides/sycore-controller-designer.png"/>
 
 ---
 

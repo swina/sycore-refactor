@@ -3,7 +3,7 @@
 The **Sequencer** is a powerful algorithmic composition and MIDI sequencing engine integrated into SY.CORE. It allows you to create complex patterns, chord progressions, and automations quickly and intuitively, with a particular focus on live performance and creative generation.
 
 
-<img src="../../public/help/guides/sycore-sequencer.png"/>
+<img src="../../help/guides/sycore-sequencer.png"/>
 
 
 ---
@@ -46,7 +46,7 @@ Click the **Sequencer** button.
 ### 5.2 — Interface at a Glance
 
 
-<img src="../../public/help/guides/sycore-sequencer.png"/>
+<img src="../../help/guides/sycore-sequencer.png"/>
 
 Each step is a vertical stack of 12 clickable note bars (C–B, chromatic) with its own:
 - Octave (0–8) 
@@ -104,7 +104,7 @@ The fastest way to get a pattern is to use the algorithmic generator.
 
 **Select a step for editing:** Click the step number at the top of the cell. The **Step Editor** row appears below the grid showing:
 
-<img src="../../public/help/guides/sycore-sequencer-steps-ui.png"/>
+<img src="../../help/guides/sycore-sequencer-steps-ui.png"/>
 
 | Control | Range | Action |
 |---------|-------|--------|

@@ -6,7 +6,7 @@
 ---
 ## Quick Reference
 
-<!-- <img src="../../public/help/guides/sycore-MIDI-Setup-Guide.png"/> -->
+<!-- <img src="../../help/guides/sycore-MIDI-Setup-Guide.png"/> -->
 
 ## Before You Start
 
@@ -87,7 +87,7 @@ Click **Add to routing** on the device you want to use. Registered devices persi
 
 ## Step 4 — Wire It Up in MIDI Flow
 
-<img src="../../public/help/guides/sycore-midi-routing-flow.png"/>
+<img src="../../help/guides/sycore-midi-routing-flow.png"/>
 
 Open **MIDI Flow**. Full reference: [MIDI Flow guide](./SYCORE_MIDI_FLOW.md).
 

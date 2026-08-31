@@ -4,7 +4,7 @@ The **Samples Machine** is a 24-pad simultaneous loop player built for live perf
 
 > **Not to be confused with the [Audio Looper](./SYCORE_LOOPER.md)** — the Looper *records* live audio into layered tracks; the Samples Machine *plays back* pre-loaded loop samples on pads.
 
-<img src="../../public/help/guides/sycore-loop-machine.png"/>
+<img src="../../help/guides/sycore-loop-machine.png"/>
 
 ---
 

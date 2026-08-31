@@ -6,7 +6,7 @@ The **Sampler** is an 8-pad, multi-bank sample player with MIDI velocity, chroma
 
 ## Opening the Panel
 
-<img src="../../public/help/guides/sycore-sampler.png"/>
+<img src="../../help/guides/sycore-sampler.png"/>
 
 | Method | Action |
 |--------|--------|
@@ -28,7 +28,7 @@ Eight independent pattern banks (**A–H**) each hold 8 pads with completely sep
 
 ## The Pad Grid
 
-<img src="../../public/help/guides/sycore-sampler-pads.png"/>
+<img src="../../help/guides/sycore-sampler-pads.png"/>
 
 8 pads are arranged in a horizontal row. Pads 7 and 8 (indices 6 & 7) are **Granular pads** (marked **G**) and have extra grain controls when selected.
 
@@ -70,7 +70,7 @@ Click any loaded pad to select it and reveal the detail strip below the grid. Si
 
 ### Header Row
 
-<img src="../../public/help/guides/sycore-sampler-header.png"/>
+<img src="../../help/guides/sycore-sampler-header.png"/>
 
 | Control | Description |
 |---------|-------------|
@@ -84,12 +84,12 @@ Click any loaded pad to select it and reveal the detail strip below the grid. Si
 
 ### Waveform
 
-<img src="../../public/help/guides/sycore-sampler-waveform.png"/>
+<img src="../../help/guides/sycore-sampler-waveform.png"/>
 
 
 ### Level
 
-<img src="../../public/help/guides/sycore-sampler-level.png"/>
+<img src="../../help/guides/sycore-sampler-level.png"/>
 
 | Knob | Range | Default | Notes |
 |------|-------|---------|-------|
@@ -98,7 +98,7 @@ Click any loaded pad to select it and reveal the detail strip below the grid. Si
 
 ### Filter
 
-<img src="../../public/help/guides/sycore-sampler-filter.png"/>
+<img src="../../help/guides/sycore-sampler-filter.png"/>
 
 | Control | Range | Default | Notes |
 |---------|-------|---------|-------|
@@ -118,7 +118,7 @@ Lo-fi sample rate options and their character:
 
 ### FX
 
-<img src="../../public/help/guides/sycore-sampler-fx.png"/>
+<img src="../../help/guides/sycore-sampler-fx.png"/>
 
 | Knob | Range | Default |
 |------|-------|---------|
@@ -129,7 +129,7 @@ Send levels to the shared reverb and delay buses.
 
 ### Loop
 
-<img src="../../public/help/guides/sycore-sampler-loop.png"/>
+<img src="../../help/guides/sycore-sampler-loop.png"/>
 
 | Control | Range | Default | Notes |
 |---------|-------|---------|-------|
@@ -139,7 +139,7 @@ Send levels to the shared reverb and delay buses.
 
 ### ENV (ADSR)
 
-<img src="../../public/help/guides/sycore-sampler-env.png"/>
+<img src="../../help/guides/sycore-sampler-env.png"/>
 
 | Knob | Range | Default |
 |------|-------|---------|
@@ -152,7 +152,7 @@ The envelope is applied to every triggered note. Decay ramps to the Sustain leve
 
 ### MAP (MIDI Key Range)
 
-<img src="../../public/help/guides/sycore-sampler-map.png"/>
+<img src="../../help/guides/sycore-sampler-map.png"/>
 
 | Field | MIDI range | Default | Notes |
 |-------|-----------|---------|-------|
@@ -164,7 +164,7 @@ Notes outside Lo–Hi are ignored even when the pad is armed.
 
 ### Grain (Pads 7 & 8 — indices 6 & 7)
 
-<img src="../../public/help/guides/sycore-sampler-grain.png"/>
+<img src="../../help/guides/sycore-sampler-grain.png"/>
 Pads 7 and 8 use a granular engine. When selected, four additional knobs appear:
 
 | Knob | Range | Default | Notes |

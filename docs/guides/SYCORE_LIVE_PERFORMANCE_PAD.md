@@ -12,7 +12,7 @@ All three can run simultaneously. MIDI mappings allow any pad, track, or fader t
 
 ## Interface Layout
 
-<img src="../../public/help/guides/sycore-live-set.png"/>
+<img src="../../help/guides/sycore-live-set.png"/>
 
 ---
 
@@ -36,7 +36,7 @@ Three sub-tabs for configuration:
 
 ## Performance Sets
 
-<img src="../../public/help/guides/sycore-live-set-performance.png"/>
+<img src="../../help/guides/sycore-live-set-performance.png"/>
 
 ### What is a Performance Set?
 
@@ -69,7 +69,7 @@ Right-click any pad to open the MIDI learn context menu. Param name: `lpp_set_N`
 
 ## Backing Tracks
 
-<img src="../../public/help/guides/sycore-live-set-backing-tracks.png"/>
+<img src="../../help/guides/sycore-live-set-backing-tracks.png"/>
 
 The backing track section uses the `PlaylistPadGrid` component — 16 clickable track pads driven by `livePadStore.playlist`.
 
@@ -107,7 +107,7 @@ When the local toggle is on and a backing track starts or stops, `capture-start-
 
 ## Loop Pads
 
-<img src="../../public/help/guides/sycore-live-set-loop-pads.png"/>
+<img src="../../help/guides/sycore-live-set-loop-pads.png"/>
 
 A 16-pad grid (two rows of 8) for triggering looped audio samples. Pads are independent of Performance Sets and can run simultaneously with a backing track.
 

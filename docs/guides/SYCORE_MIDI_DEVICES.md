@@ -1,6 +1,6 @@
 # MIDI DEVICES
 
-<img src="../../public/help/guides/sycore-midi-devices.png"/>
+<img src="../../help/guides/sycore-midi-devices.png"/>
 
 Open the **Devices** from the Main Page.
 

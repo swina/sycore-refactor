@@ -6,7 +6,7 @@
 
 ## Module Manager
 
-<img src="../../public/help/guides/sycore-modules-manager.png"/>
+<img src="../../help/guides/sycore-modules-manager.png"/>
 
 The **Module Manager** (admin-only panel) controls which modules appear in the application launcher, toolbar, MIDI mappings, and keyboard shortcuts. Disabling a module hides it from the UI **but does not remove its code or data** — it can be re-enabled at any time.
 
@@ -36,7 +36,7 @@ The Module Manager is available from the **Settings** panel (gear icon) when you
 
 ## AI Settings
 
-<img src="../../public/help/guides/sycore-ai-settings.png"/>
+<img src="../../help/guides/sycore-ai-settings.png"/>
 
 The **AI Settings** panel lets you configure which AI provider the app uses for features like:
 - **AI Generate** in the Chord Progression Sequencer

@@ -7,7 +7,7 @@ Backing Track Player's own sync logic. Timeline position is displayed in bars:be
 with bar-number rulers, driven by an editable per-session BPM. Tempo markers change the
 effective BPM mid-playback.
 
-<img src="../../public/help/guides/sycore-timeline.png"/>
+<img src="../../help/guides/sycore-timeline.png"/>
 ---
 
 ## UI Structure

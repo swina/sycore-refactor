@@ -1,6 +1,6 @@
 # MIDI Actions
 
-<img src="../../public/help/guides/sycore-midi-actions.png"/>
+<img src="../../help/guides/sycore-midi-actions.png"/>
 
 **Purpose:** Per-device app action binding — maps MIDI CC/Note inputs to high-level SY.CORE actions (e.g. start sequencer, toggle looper, change preset).
 
