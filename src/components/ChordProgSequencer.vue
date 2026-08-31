@@ -1298,7 +1298,7 @@ function velBarColor(v) {
 
       <!-- ── STEP DETAIL ────────────────────────────────────────────────── -->
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
-        <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 text-center items-center w-[60px]">Step {{ store.selectedStepIdx + 1 }}</div>
+        <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 justify-center items-center w-[60px]">Step {{ store.selectedStepIdx + 1 }}</div>
 
         <div class="flex flex-col w-1/5">
           <!-- Active toggle -->
@@ -1329,7 +1329,7 @@ function velBarColor(v) {
           <div class="flex flex-col">
             <!-- Duration selector -->
             <div class="flex items-center">
-              <span class="text-neutral-500 mr-1">Dur</span>
+              <span class="text-neutral-500 mr-1 w-8">Dur</span>
               <select
                 :value="selectedStep.duration"
                 @change="e => store.setStep(store.selectedStepIdx, { duration: e.target.value })"
@@ -1339,8 +1339,8 @@ function velBarColor(v) {
               </select>
             </div>
             <!-- Per-step Transpose -->
-            <div class="flex items-center gap-1 ml-auto pt-2 pl-1" title="Transpose this step's chord up/down in semitones">
-              <span class="text-neutral-500">Trsp</span>
+            <div class="flex items-center gap-1 pt-2" title="Transpose this step's chord up/down in semitones">
+              <span class="text-neutral-500 w-8">Trsp</span>
               <button
                 @click="updateSelectedStepField('transpose', (selectedStep.transpose || 0) - 1)"
                 class="w-4 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px]"
@@ -1358,12 +1358,12 @@ function velBarColor(v) {
                 class="text-[8px] text-neutral-600 hover:text-neutral-300"
               >↺</button>
             </div>
+          </div>
         </div>
-        </div>
-        <div class="flex flex-col gap-1 items-end px-4 border-r h-full border-neutral-700">
+        <div class="flex flex-col gap-1 items-end px-4 pt-1.5 border-r h-full border-neutral-700">
           <!-- Velocity -->
           <div class="flex items-center gap-1">
-            <span class="text-neutral-500">Vel</span>
+            <span class="text-neutral-500 w-8">Vel</span>
             <input
               type="number"
               :value="selectedStep.velocity"
@@ -1376,7 +1376,7 @@ function velBarColor(v) {
           </div>
           <!-- Gate -->
           <div class="flex items-center gap-1">
-            <span class="text-neutral-500">Gate</span>
+            <span class="text-neutral-500 w-8">Gate</span>
             <input
               type="number"
               :value="selectedStep.gate"
@@ -1393,57 +1393,60 @@ function velBarColor(v) {
         <!-- Per-step Chord/Arp override — lets individual steps play as Chord/Strum
              while others in the same progression play as Arp, independent of the
              slot's global Play Mode toggle. Auto = inherit the global mode. -->
-        <div class="flex items-center gap-1" title="Override Chord/Arp for just this step — Auto follows the global Play Mode">
-          <span class="text-neutral-500">Mode</span>
-          <div class="flex items-center rounded overflow-hidden border border-neutral-700">
-            <button
-              v-for="opt in [{ v: undefined, label: 'Auto' }, { v: 'chord', label: 'Chord' }, { v: 'arp', label: 'Arp' }]"
-              :key="opt.label"
-              @click="store.setStep(store.selectedStepIdx, { stepMode: opt.v })"
-              :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', (selectedStep.stepMode ?? undefined) === opt.v ? 'bg-cyan-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
-            >{{ opt.label }}</button>
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-1" title="Override Chord/Arp for just this step — Auto follows the global Play Mode">
+            <span class="text-neutral-500 w-12">Mode</span>
+            <div class="flex items-center rounded overflow-hidden border border-neutral-700">
+              <button
+                v-for="opt in [{ v: undefined, label: 'Auto' }, { v: 'chord', label: 'Chord' }, { v: 'arp', label: 'Arp' }]"
+                :key="opt.label"
+                @click="store.setStep(store.selectedStepIdx, { stepMode: opt.v })"
+                :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', (selectedStep.stepMode ?? undefined) === opt.v ? 'bg-cyan-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+              >{{ opt.label }}</button>
+            </div>
+          </div>
+
+          <!-- Per-step Chord strum direction (only meaningful when this step's effective mode is Chord) -->
+          <div v-if="effectiveStepMode === 'chord'" class="flex items-center gap-1" title="Strum direction for this step's chord — Sim = simultaneous (default)">
+            <span class="text-neutral-500 w-12">Strum</span>
+            <div class="flex items-center rounded overflow-hidden border border-neutral-700">
+              <button
+                v-for="opt in [{ v: undefined, label: 'Sim' }, { v: 'up', label: 'Up' }, { v: 'down', label: 'Dn' }, { v: 'up-down', label: 'U-D' }, { v: 'down-up', label: 'D-U' }]"
+                :key="opt.label"
+                @click="store.setStep(store.selectedStepIdx, { chordMode: opt.v })"
+                :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', (selectedStep.chordMode ?? undefined) === opt.v ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
+              >{{ opt.label }}</button>
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+          <!-- Per-step Arp pattern (only meaningful when this step's effective mode is Arp) -->
+          <div v-if="effectiveStepMode === 'arp'" class="flex items-center gap-1" title="Arpeggio pattern for this step">
+            <span class="text-neutral-500 w-12">Pattern</span>
+            <select
+              :value="selectedStep.arpMode ?? 'up'"
+              @change="e => store.setStep(store.selectedStepIdx, { arpMode: e.target.value })"
+              class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none text-[10px]"
+            >
+              <option v-for="mode in ARP_MODES" :key="mode" :value="mode">{{ mode }}</option>
+            </select>
+          </div>
+        
+          <!-- Per-step Arp rate override (only meaningful when this step's effective mode is Arp) -->
+          <div v-if="effectiveStepMode === 'arp'" class="flex items-center gap-1" title="Arp rate for this step — overrides the slot rate when set">
+            <span class="text-neutral-500">Rate</span>
+            <select
+              :value="selectedStep.arpRate ?? ''"
+              @change="e => store.setStep(store.selectedStepIdx, { arpRate: e.target.value || undefined })"
+              class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 font-mono outline-none text-[10px]"
+              :class="selectedStep.arpRate ? 'text-yellow-300' : 'text-neutral-500'"
+            >
+              <option value="">Slot ({{ DURATION_LABELS[store.arpRate] }})</option>
+              <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
+            </select>
+          </div>
           </div>
         </div>
-
-        <!-- Per-step Chord strum direction (only meaningful when this step's effective mode is Chord) -->
-        <div v-if="effectiveStepMode === 'chord'" class="flex items-center gap-1" title="Strum direction for this step's chord — Sim = simultaneous (default)">
-          <span class="text-neutral-500">Strum</span>
-          <div class="flex items-center rounded overflow-hidden border border-neutral-700">
-            <button
-              v-for="opt in [{ v: undefined, label: 'Sim' }, { v: 'up', label: 'Up' }, { v: 'down', label: 'Dn' }, { v: 'up-down', label: 'U-D' }, { v: 'down-up', label: 'D-U' }]"
-              :key="opt.label"
-              @click="store.setStep(store.selectedStepIdx, { chordMode: opt.v })"
-              :class="['px-1.5 py-0.5 text-[10px] font-mono uppercase transition-colors', (selectedStep.chordMode ?? undefined) === opt.v ? 'bg-purple-700 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white']"
-            >{{ opt.label }}</button>
-          </div>
-        </div>
-
-        <!-- Per-step Arp pattern (only meaningful when this step's effective mode is Arp) -->
-        <div v-if="effectiveStepMode === 'arp'" class="flex items-center gap-1" title="Arpeggio pattern for this step">
-          <span class="text-neutral-500">Pattern</span>
-          <select
-            :value="selectedStep.arpMode ?? 'up'"
-            @change="e => store.setStep(store.selectedStepIdx, { arpMode: e.target.value })"
-            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 font-mono outline-none"
-          >
-            <option v-for="mode in ARP_MODES" :key="mode" :value="mode">{{ mode }}</option>
-          </select>
-        </div>
-
-        <!-- Per-step Arp rate override (only meaningful when this step's effective mode is Arp) -->
-        <div v-if="effectiveStepMode === 'arp'" class="flex items-center gap-1" title="Arp rate for this step — overrides the slot rate when set">
-          <span class="text-neutral-500">Rate</span>
-          <select
-            :value="selectedStep.arpRate ?? ''"
-            @change="e => store.setStep(store.selectedStepIdx, { arpRate: e.target.value || undefined })"
-            class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 font-mono outline-none"
-            :class="selectedStep.arpRate ? 'text-yellow-300' : 'text-neutral-500'"
-          >
-            <option value="">Slot ({{ DURATION_LABELS[store.arpRate] }})</option>
-            <option v-for="d in DURATION_OPTIONS" :key="d" :value="d">{{ DURATION_LABELS[d] }}</option>
-          </select>
-        </div>
-
         <!-- Favorite button -->
         <button
           v-if="selectedStep?.active && selectedStep.notes?.length"
