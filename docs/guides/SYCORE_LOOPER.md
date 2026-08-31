@@ -4,7 +4,7 @@ The Audio Looper is a high-fidelity, sample-accurate performance tool designed f
 
 ***This tool is still under development to fix stability issues***
 
-<img src="/help/guides/sycore-looper.png"/>
+<img src="../../public/help/guides/sycore-looper.png"/>
 
 ## 🎸 For the Musician (Performance Features)
 

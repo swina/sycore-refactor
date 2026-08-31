@@ -2,7 +2,7 @@
 
 ## MIDI FLOW
 
-<img src="/help/guides/sycore-midi-routing-flow.png"/>
+<img src="../../public/help/guides/sycore-midi-routing-flow.png"/>
 
 The MIDI FLOW is a graphical flow diagram to create/update/restore MIDI ROUTING configuration designed in order to simplify your MIDI connections.
 In SY.CORE there are 2 type of MIDI Devices:
@@ -33,7 +33,7 @@ To create a MIDI ROUTING between MIDI DEVICES:
 
 A typical controller + one synth setup looks like this:
 
-<img src="/help/guides/sycore-midi-routing-flow-midi-devices.png"/>
+<img src="../../public/help/guides/sycore-midi-routing-flow-midi-devices.png"/>
 
 
 *For the midi controllers you can leave to MIDI OUT Channel to OMNI if you don't know the controller output channel or you can't set the MIDI OUT CH on the device*
@@ -51,7 +51,7 @@ To create a MIDI ROUTING between the app functionalities and the MIDI DEVICES re
 
 MIDI APPS don't have an MIDI IN connector. This virtual MIDI devices are only sending MIDI OUT messages.
 
-<img src="/help/guides/sycore-midi-routing.png"/>
+<img src="../../public/help/guides/sycore-midi-routing.png"/>
 
 Switch to the **Routing** tab. You will see one row per registered device in **Grid view**.
 

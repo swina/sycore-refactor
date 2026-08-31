@@ -137,6 +137,8 @@ const renderedHtml = computed(() => {
     return id ? `href="#" data-guide="${id}"` : match
   })
   // Prefix image src paths with BASE_URL so they resolve under subpath deployments
+  // Handles both absolute /help/guides/... and relative ../../public/help/guides/... paths
+  html = html.replace(/src="\.\.\/\.\.\/public\/help\/guides\//g, `src="${import.meta.env.BASE_URL}help/guides/`)
   html = html.replace(/src="\//g, `src="${import.meta.env.BASE_URL}`)
   return html
 })

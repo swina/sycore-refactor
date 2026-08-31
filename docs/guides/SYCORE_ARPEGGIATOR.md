@@ -2,7 +2,7 @@
 
 The **Arpeggiator** is a MIDI FLOW app source that generates note patterns from held chords, synced to a configurable BPM and subdivision. It sits as a cable-able node on the MIDI Flow canvas with its own **IN** port — route a controller or app into it via a cable, just like the Chord Progression Sequencer and Drum Machine. Play a chord and it automatically cycles through the notes in one of 10 pattern modes.
 
-<img src="/help/guides/sycore-arpeggiator-app.png"/>
+<img src="../../public/help/guides/sycore-arpeggiator-app.png"/>
 
 ---
 

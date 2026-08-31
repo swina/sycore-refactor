@@ -3,7 +3,7 @@
 
 > *Where algorithmic intelligence meets hardware mastery. Zero latency. Offline-first. Stage-ready.*
 
-<img src="/help/guides/landing.png" width="640"/>   
+<img src="../../public/help/guides/landing.png" width="640"/>   
 ---
 
 ## The Problem Every Electronic Musician Knows

@@ -16,18 +16,18 @@ Every parameter change made in this panel sends an immediate MIDI CC to the Rola
 
 ## Interface at a Glance
 
-<img src="/help/guides/sycore-sound-engine-01.png" width="640"/>
+<img src="../../public/help/guides/sycore-sound-engine-01.png" width="640"/>
 
 
 ---
 
 ## Section 1 — Sound Identity Header
 
-<img src="/help/guides/sycore-sound-engine-header.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-header.png"/>
 
 ### The Hardware Display
 
-<img src="/help/guides/sycore-sound-engine-header-name.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-header-name.png"/>
 The identity block is styled as a hardware LCD screen with glass reflection and scanline overlays. It shows:
 
 | Element | Description |
@@ -54,7 +54,7 @@ The identity block is styled as a hardware LCD screen with glass reflection and 
 
 ## Section 2 — Actions (Column 3)
 
-<img src="/help/guides/sycore-sound-engine-header-actions-1.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-header-actions-1.png"/>
 
 ### Engine A/B Switch
 
@@ -83,14 +83,14 @@ Both variants share the same preset name and metadata but have completely indepe
 
 ## Section 3 — Performance Modulation Controls
 
-<img src="/help/guides/sycore-sound-engine-header-modulations-arp.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-header-modulations-arp.png"/>
 
 All modulation controls sit in a second row of the actions column, positioned below the core buttons.
 
 
 ### LFO 1 and LFO 2
 
-<img src="/help/guides/sycore-sound-engine-LFOs.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-LFOs.png"/>
 
 Each LFO has a two-part pill button:
 
@@ -104,7 +104,7 @@ Each LFO has a two-part pill button:
 
 ### Velocity Modulation (VEL)
 
-<img src="/help/guides/sycore-sound-engine-velocity-mapping.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-velocity-mapping.png"/>
 
 ```
 [VEL]  [⚙]
@@ -116,7 +116,7 @@ Each LFO has a two-part pill button:
 
 ### Arpeggiator (ARP)
 
-<img src="/help/guides/sycore-sound-engine-arpeggiator.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-arpeggiator.png"/>
 
 ```
 [ARP]  [⚙]
@@ -196,7 +196,7 @@ This gives a complete overview of all parameters at a glance — useful for soun
 
 When a category tab is clicked, the panel expands to a two-column detail layout:
 
-<img src="/help/guides/sycore-sound-engine-visualizer.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-visualizer.png"/>
 
 
 ---
@@ -264,7 +264,7 @@ Each option is a button. The active option is highlighted with the category colo
 
 When no sound is loaded, the panel shows a "Generate Sound" call-to-action. When collapsed with a sound loaded, a large circular Generate button fills the panel, animated with a rotating neon ring border.
 
-<img src="/help/guides/sycore-sound-engine-generate.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-generate.png"/>
 
 Clicking **Generate** calls `presetStore.generate()`. The engine:
 1. Randomly selects or respects the current category/type filter
@@ -278,7 +278,7 @@ Clicking **Generate** calls `presetStore.generate()`. The engine:
 
 ## Section 8 — Real-Time Visualizers
 
-<img src="/help/guides/sycore-sound-engine-visualizer.png"/>
+<img src="../../public/help/guides/sycore-sound-engine-visualizer.png"/>
 
 Each parameter category has a dedicated real-time visualizer that responds to parameter changes immediately.
 

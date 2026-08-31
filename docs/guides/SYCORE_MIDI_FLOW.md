@@ -2,7 +2,7 @@
 
 **Purpose:** Visual, drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices — including device→app and app→app input routing.
 
-<img src="/help/guides/sycore-midi-flow.png"/>
+<img src="../../public/help/guides/sycore-midi-flow.png"/>
 
 ---
 

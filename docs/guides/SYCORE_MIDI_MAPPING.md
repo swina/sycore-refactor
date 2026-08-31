@@ -1,6 +1,6 @@
  # Mapping 
 
-<img src="/help/guides/sycore-midi-mapping.png"/>
+<img src="../../public/help/guides/sycore-midi-mapping.png"/>
 
 **Purpose:** MIDI CC → application parameter mapping with preset management.
 

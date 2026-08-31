@@ -17,7 +17,7 @@ The Freesound Browser requires a personal API key from freesound.org. The key is
 
 ### Saving the key in SY.CORE
 
-<img src="/help/guides/sycore-freesound.org-browser-apikey.png"/>
+<img src="../../public/help/guides/sycore-freesound.org-browser-apikey.png"/>
 
 
 1. Open the **User Profile** panel — click the user icon in the footer or press the profile button
@@ -46,7 +46,7 @@ The browser opens centered on screen. Press **Esc** or click the backdrop to clo
 
 The browser is a floating, draggable, resizable panel.
 
-<img src="/help/guides/sycore-freesound.org-browser.png"/>
+<img src="../../public/help/guides/sycore-freesound.org-browser.png"/>
 
 
 - **Drag** — click and drag the header bar to reposition
@@ -83,7 +83,7 @@ The preview player is a single shared `Audio` element — opening a new preview 
 
 ## Actions per Sound
 
-<img src="/help/guides/sycore-freesound.org-browser-actions.png"/>
+<img src="../../public/help/guides/sycore-freesound.org-browser-actions.png"/>
 
 Each result row exposes three action buttons on hover:
 

@@ -39,7 +39,7 @@ Tab persistence across close/reopen is handled naturally because `uiStore` is a 
 
 ### Tab 2 — Routing
 
-<img src="/help/guides/sycore-midi-routing.png"/>
+<img src="../../public/help/guides/sycore-midi-routing.png"/>
 
 **Purpose:** The core MIDI routing registry — which devices are active, what message types they pass, and how they interconnect.
 

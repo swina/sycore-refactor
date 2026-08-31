@@ -6,7 +6,7 @@
 
 ## Interface Layout
 
-<img src="/help/guides/sycore-audio-capture.png"/>
+<img src="../../public/help/guides/sycore-audio-capture.png"/>
 
 
 ## Core Concepts
@@ -157,7 +157,7 @@ To restore: import the `.s1loop.json` file via the **Import** button (or the fil
 
 Clicking **→ Loop Pad** opens a 4×4 modal grid showing all 16 pads with their current assignments:
 
-<img src="/help/guides/sycore-audio-capture-to-loop-pad.png"/>
+<img src="../../public/help/guides/sycore-audio-capture-to-loop-pad.png"/>
 
 - Occupied pads show track name, duration, and BPM.
 - Empty pads show "empty".

@@ -2,7 +2,7 @@
 
 **Note Latch** is a MIDI FLOW app source that holds incoming notes after key release, then forwards them through the normal MIDI FLOW OUT port. Multiple instruments (real or virtual) can share a single latch, and switching the latch off releases every held note at once — no need to unlatch each destination individually.
 
-<img src="/help/guides/sycore-note-latch.png"/>
+<img src="../../public/help/guides/sycore-note-latch.png"/>
 
 ---
 

@@ -2,7 +2,7 @@
 
 The **Chord Progression Sequencer** is a dedicated step-based engine for building and performing harmonic sequences in SY.CORE. Each step holds a complete chord — or triggers it as an arpeggio — with individual control over timing, velocity, gate, and transpose. A built-in library of progressions organised by musical key and genre lets you go from zero to a full sequence in seconds.
 
-<img src="/help/guides/sycore-chord-progression.png"/>
+<img src="../../public/help/guides/sycore-chord-progression.png"/>
 ---
 
 ## 1. Overview
@@ -31,7 +31,7 @@ The panel can be **minimised** (title bar only) without stopping playback, and c
 
 ## 3. Interface at a Glance
 
-<img src="/help/guides/sycore-chord-progression.png"/>
+<img src="../../public/help/guides/sycore-chord-progression.png"/>
 
 ---
 

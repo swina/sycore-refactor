@@ -2,7 +2,7 @@
 
 **Purpose:** A performance-time synthesis of your MIDI Flow rig — one view showing every connected controller, app, and instrument, with live patch names, active channels, volume, and quick links into each device's real editor. Custom background image support, save/recall Performance Sets, independent Play/Stop for Drum Machine and Chord Prog.
 
-<img src="/help/guides/sycore-cockpit.png"/>
+<img src="../../public/help/guides/sycore-cockpit.png"/>
 
 ---
 
