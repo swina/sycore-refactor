@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-08-31
 
+- **Added Doumentation Sections:** - Modules Manager. The Module Manager (admin-only panel) controls which modules appear in the application launcher, toolbar, MIDI mappings, and keyboard shortcuts. Disabling a module hides it from the UI but does not remove its code or data — it can be re-enabled at any time. AI Settings: The AI Settings panel lets you configure which AI provider the app uses
+
 - **Website: clickable images open in fullscreen modal + Documentation section** — All screenshots on the website now open in a fullscreen overlay when clicked (event delegation on the root wrapper, `cursor-pointer` on `.img-zoom`). Added a new "Documentation" section between Technology and Free & Open with a CTA button that opens the full `GuidesPanel` component. "Documentation" nav link appears in the desktop nav, mobile nav, and footer as a button. Branch `feat/08-31/update-and-display-saved-progression`.
 
 - **Chord Prog Sequencer: AI loading modal** — When generating from an AI prompt, a full-screen loading overlay ("Loading progression…" with spinner) now shows while the AI call is in flight, blocking interaction until the chords are assigned. Branch `feat/08-31/update-and-display-saved-progression`.

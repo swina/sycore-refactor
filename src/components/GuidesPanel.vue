@@ -50,6 +50,14 @@ const CATEGORIES = [
     ],
   },
   {
+    label: 'Platform',
+    color: 'text-amber-400',
+    items: [
+      { id: 'module-manager', label: 'Module Manager & AI Settings', file: 'SYCORE_MODULE_MANAGER' },
+      { id: 'session',        label: 'User Session — Backup & Restore', file: 'SYCORE_SESSION_MANAGER' },
+    ],
+  },
+  {
     label: 'Sound Engine',
     color: 'text-emerald-400',
     items: [
@@ -106,6 +114,7 @@ const CATEGORIES = [
       { id: 'note-latch', label: 'Note Latch', file: 'SYCORE_NOTE_LATCH' },
     ],
   },
+ 
 ]
 
 const ALL_ITEMS = CATEGORIES.flatMap(c => c.items)

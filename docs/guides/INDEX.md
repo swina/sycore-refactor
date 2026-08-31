@@ -77,8 +77,9 @@
 
 | Guide | Description |
 |-------|-------------|
+| [Module Manager & AI Settings](./SYCORE_MODULE_MANAGER.md) | Configure which modules are enabled in the UI and set up AI providers for generative features |
 | [User Session — Backup & Restore](./SYCORE_SESSION_MANAGER.md) | Export your full user data set (presets, Chord Progressions, MIDI Flow routing, Controller Designer & Mixer configs, mappings, settings) to a single JSON file and restore it later |
 
 ---
 
-*Last updated: 2026-08-23*
+*Last updated: 2026-08-31*
