@@ -32,7 +32,7 @@ Each device shows **IN**/**OUT** capability badges and has both an OUT port and 
 ### MIDI Apps (Virtual Sources)
 
 | App | Source ID | Has IN |
-|---|---|---|---|
+|---|---|---|
 | Step Sequencer | `SEQUENCER` | ✓ |
 | Sequencer (Piano Roll) | `SEQUENCER2` | ✓ |
 | Chord Sequencer | `CHORD_PROG` | ✓ |
