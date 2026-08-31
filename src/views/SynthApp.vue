@@ -79,6 +79,7 @@ import MidiWizardFlow     from '@/components/MidiWizardFlow.vue'
 import MidiMonitorPanel   from '@/components/MidiMonitorPanel.vue'
 import InstrumentCockpit  from '@/components/InstrumentCockpit.vue'
 import SamplerPanel            from '@/components/SamplerPanel.vue'
+import LiveInputPanel          from '@/components/LiveInputPanel.vue'
 import MidiControllerDesigner from '@/components/MidiControllerDesigner.vue'
 import MidiDevices from '@/components/MidiDevices.vue'
 import LiveTimeline       from '@/components/LiveTimeline.vue'
@@ -156,6 +157,7 @@ const alwaysMountedPanels = [
   { focusKey: 'loopMachine', component: LoopMachine },
   { focusKey: 'drumMachine', component: DrumMachine },
   { focusKey: 'sampler', component: SamplerPanel },
+  { focusKey: 'liveInput', component: LiveInputPanel },
   { focusKey: 'midiControllerDesigner', component: MidiControllerDesigner },
   { focusKey: 'visualizer', component: AudioVisualizer },
   { focusKey: 'session', component: SessionManager },

@@ -4,6 +4,9 @@
  * Drawn from the looper, sampler, and audio mixer stores.
  */
 
+import type { FxChain, ModMatrixSlot } from '@/core/audio/types'
+import type { FilterType } from '@/core/audio/filterMath'
+
 // ---------------------------------------------------------------------------
 // Looper
 // ---------------------------------------------------------------------------
@@ -55,6 +58,8 @@ export interface SamplerPad {
   endPoint: number;
   loopMode: boolean;
   filterFreq: number;
+  filterType?: FilterType;
+  filterResonance?: number;
   reverbSend: number;
   delaySend: number;
   sampleRate: number;
@@ -74,6 +79,14 @@ export interface SamplerPad {
   grainOverlap?: number;
   grainPosition?: number;
   grainPitch?: number;
+  // Optional per-pad effects chain (Phase 2 of
+  // docs/plans/Sycore-DSP-Integration-Feasibility.md) -- absent = no FX
+  // node instantiated, same lazy-seed pattern as everything else here.
+  fx?: FxChain;
+  // Modulation Matrix cables (Phase 5 of
+  // docs/plans/Sycore-DSP-Integration-Feasibility.md) -- absent = no live
+  // cables built, same lazy-seed pattern as everything else here.
+  modMatrix?: ModMatrixSlot[];
 }
 
 /** A single step in a sampler pattern */

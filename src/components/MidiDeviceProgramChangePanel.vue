@@ -983,8 +983,48 @@ function selectTargetSlot(idx) {
     triggerSlot(idx)
     activeSlotIdx.value = activeSlotIdx.value === idx ? -1 : idx
     const slot = getSlotAssignment(idx)
-    if (slot) showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`)
+    if (slot) {
+      showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`)
+      followSoloSlotInBrowser(slot)
+    }
   }
+}
+
+/** Point the browser at the device/channel/program a solo slot saved, so the
+ *  patch list updates to highlight the patch the slot recalls. Restores the
+ *  slot's device registration state the same way a Performance Set recall
+ *  does (see recallSet), so the bank/sound-list watchers rebuild the right
+ *  catalog bank and scrollToCurrentProgram lands on the saved program. */
+function followSoloSlotInBrowser(slot) {
+  if (!slot?.deviceName || slot.pcProgram == null) return
+  const reg = midiStore.routingConfig?.registrations?.[slot.deviceName]
+  if (!reg) return
+  const ch = Math.max(0, slot.pcChannel ?? 0)
+  // Solo slots don't store the bank *name* — reuse whatever bank the registration
+  // already recorded for that channel (or the device-level pcBank as a fallback)
+  // so the patch list opens on the right catalog bank instead of resetting.
+  const existing = reg.pcChannels?.[ch]
+  const bank = existing?.bank || reg.pcBank || ''
+  const pcChannels = {
+    ...(reg.pcChannels ?? {}),
+    [ch]: {
+      program: slot.pcProgram,
+      bank,
+      soundName: slot.soundName ?? existing?.soundName ?? '',
+      category: existing?.category ?? '',
+      msb: slot.pcMsb ?? 0,
+      lsb: slot.pcLsb ?? 0,
+    },
+  }
+  selectDevice(slot.deviceName)
+  midiStore.updateRegistration(slot.deviceName, 'pcBank', bank)
+  midiStore.updateRegistration(slot.deviceName, 'pcChannels', pcChannels)
+  midiStore.updateRegistration(slot.deviceName, 'pcProgram', slot.pcProgram)
+  midiStore.updateRegistration(slot.deviceName, 'pcMsb', slot.pcMsb ?? 0)
+  midiStore.updateRegistration(slot.deviceName, 'pcLsb', slot.pcLsb ?? 0)
+  // pcChannel last, so the channel/bank watchers observe the restored state
+  midiStore.updateRegistration(slot.deviceName, 'pcChannel', ch)
+  nextTick(() => scrollToCurrentProgram())
 }
 
 function getSlotAssignment(idx) {
@@ -1032,6 +1072,13 @@ function deleteNamedSoloSet(id) {
 function recallNamedSoloSet(id) {
   soloSetRecallId.value = id
   recallNamedSet(id)
+  // Follow the recalled set in the browser: pick the slot that matches the
+  // currently selected device if one exists, otherwise the first assigned
+  // slot, and point the patch list at its saved device/channel/program.
+  const assigned = soloSlots.value.filter(s => s?.deviceName && s.pcProgram != null)
+  if (!assigned.length) return
+  const slot = assigned.find(s => s.deviceName === selectedDeviceName.value) ?? assigned[0]
+  followSoloSlotInBrowser(slot)
 }
 
 

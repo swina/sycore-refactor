@@ -1,4 +1,9 @@
-import { getContext } from 'tone'
+import { getContext, Gain, Filter, Panner, AmplitudeEnvelope } from 'tone'
+import { EffectChain, blankFxChain } from '../core/audio/effects'
+import { resonanceToQ, resonanceToGainDb, safeCutoffHz } from '../core/audio/filterMath'
+import { DEFAULT_ADSR, safeAdsr } from '../core/audio/envelope'
+import { applyModMatrix, applyVelocityModulation } from '../core/audio/modMatrix'
+import { useLfoStore } from '@/stores/useLfoStore'
 
 const ACCENT_BOOST = 1.35
 const NUM_PADS = 11
@@ -15,12 +20,29 @@ let _delayReturn        = null
 const _buffers      = Array(NUM_PADS).fill(null)
 const _padGains     = Array(NUM_PADS).fill(null)
 const _filters      = Array(NUM_PADS).fill(null)
+const _filterTypes  = Array(NUM_PADS).fill('lowpass')
+const _filterResonances = Array(NUM_PADS).fill(0)  // 0-127 byte
+const _adsr         = Array(NUM_PADS).fill(null)   // { attack, decay, sustain, release }, plain seconds/0-1
+const _fxChains     = Array(NUM_PADS).fill(null)
 const _panners      = Array(NUM_PADS).fill(null)
 const _reverbSends  = Array(NUM_PADS).fill(null)
 const _delaySends   = Array(NUM_PADS).fill(null)
 const _faderLevels  = Array(NUM_PADS).fill(1.0)
 const _pitchOffsets = Array(NUM_PADS).fill(0)    // semitones
 let _activeSources  = []
+
+// Modulation Matrix (Phase 5): each pad's true dialed-in baseline for every
+// modulatable destination (see core/audio/modMatrix.ts's ModMatrixTargets
+// doc comment for why these can't just be read back off the nodes),
+// current slot list, and the live-cable Tone.Scale nodes applyModMatrix()
+// last built (disposed before every rebuild).
+const _filterFreqs        = Array(NUM_PADS).fill(20000)
+const _panValues          = Array(NUM_PADS).fill(0)
+const _fxWetDryValues     = Array(NUM_PADS).fill(100) // 0-100, FxChain.wetDry scale
+const _modMatrixSlots     = Array(NUM_PADS).fill(null)
+const _modMatrixCables    = Array(NUM_PADS).fill(null)
+let _lfo1Signal = null
+let _lfo2Signal = null
 
 function _getCtx() {
   return getContext().rawContext
@@ -42,6 +64,13 @@ function _makeReverbIR(ctx, duration = 1.5) {
 function _ensureGraph() {
   if (_masterGain) return
   const ctx = _getCtx()
+
+  // Shared, app-wide LFO signals (useLfoStore.ts) -- the Modulation
+  // Matrix's lfo1/lfo2 sources. Grabbed once here (called lazily, well
+  // after the Vue app/Pinia has mounted) rather than at module import time.
+  const lfoStore = useLfoStore()
+  _lfo1Signal = lfoStore.lfo1Signal
+  _lfo2Signal = lfoStore.lfo2Signal
 
   // Master → compressor → destination
   _compressor = ctx.createDynamicsCompressor()
@@ -85,20 +114,28 @@ function _ensureGraph() {
   _delay.connect(_delayReturn)
   _delayReturn.connect(_compressor)
 
-  // Per-pad chain: padGain → filter → panner → masterGain
-  //                                 panner → reverbSend → reverb
-  //                                 panner → delaySend  → delay
+  // Per-pad chain: padGain → filter → fxChain → panner → masterGain
+  //                                            panner → reverbSend → reverb
+  //                                            panner → delaySend  → delay
+  // padGain/filter/panner are Tone.js nodes (not raw Web Audio) so the
+  // Modulation Matrix (Phase 5) can connect Tone.Signal-based sources onto
+  // their frequency/gain/pan params — see
+  // docs/plans/Sycore-DSP-Integration-Feasibility.md.
+  // fxChain starts fully dry (blankFxChain()) so a pad sounds unchanged
+  // until setPadFx() gives it a real chain.
   for (let i = 0; i < NUM_PADS; i++) {
-    _padGains[i] = ctx.createGain()
-    _padGains[i].gain.value = 1.0
+    _adsr[i] = { ...DEFAULT_ADSR }
+    _modMatrixSlots[i] = []
+    _modMatrixCables[i] = []
 
-    _filters[i] = ctx.createBiquadFilter()
-    _filters[i].type = 'lowpass'
-    _filters[i].frequency.value = 20000
-    _filters[i].Q.value = 0.5
+    _padGains[i] = new Gain(1.0)
 
-    _panners[i] = ctx.createStereoPanner()
-    _panners[i].pan.value = 0
+    _filters[i] = new Filter({ frequency: 20000, type: 'lowpass', Q: resonanceToQ(0) })
+
+    _fxChains[i] = new EffectChain()
+    _fxChains[i].rebuild(blankFxChain())
+
+    _panners[i] = new Panner(0)
 
     _reverbSends[i] = ctx.createGain()
     _reverbSends[i].gain.value = 0
@@ -107,7 +144,8 @@ function _ensureGraph() {
     _delaySends[i].gain.value = 0
 
     _padGains[i].connect(_filters[i])
-    _filters[i].connect(_panners[i])
+    _filters[i].connect(_fxChains[i].input)
+    _fxChains[i].output.connect(_panners[i])
     _panners[i].connect(_masterGain)
     _panners[i].connect(_reverbSends[i])
     _panners[i].connect(_delaySends[i])
@@ -134,6 +172,42 @@ export async function loadSample(padIdx, url) {
   }
 }
 
+// Per-note transient Tone.AmplitudeEnvelope, shaping the already
+// velocity/accent-scaled transient `gain` before it reaches the pad's
+// persistent chain -- an ADSR envelope is inherently tied to one note's
+// lifecycle (attack at note-on, release at note-off/duration-end), unlike
+// the pad-level filter/gain/panner/fxChain from earlier phases, which are
+// legitimately shared/persistent across every hit on that pad. Replaces
+// the old manual gain-ramp duration gate with real attack/decay/sustain/
+// release shaping. Caller disposes the returned envelope once its source
+// has finished playing (see each trigger function's `src.onended`).
+function _triggerVoiceEnvelope(padIdx, gainNode, fireAt, duration) {
+  const env = new AmplitudeEnvelope(safeAdsr(_adsr[padIdx] ?? {}))
+  // Unlike Tone.Gain/Tone.Panner (whose `.input` IS the wrapped native
+  // node), Tone.AmplitudeEnvelope's `.input` is itself a nested Tone.Gain
+  // (`this.input = this._gainNode`, a `new Gain(...)`, not a plain
+  // `createGain()` node) — a plain native node's `.connect()` needs
+  // `.input.input` to actually reach a native node.
+  gainNode.connect(env.input.input)
+  env.connect(_padGains[padIdx])
+  if (duration > 0) {
+    env.triggerAttackRelease(duration, fireAt)
+  } else {
+    env.triggerAttack(fireAt)
+  }
+  return env
+}
+
+// Velocity is a one-time Modulation Matrix source (core/audio/modMatrix.ts)
+// -- resolved fresh at each trigger, nudging this pad's shared filter/
+// padGain/panner/fxChain from their cached dial-in baseline. No-op when
+// this pad has no velocity-sourced slots.
+function _applyVelocityMod(padIdx, velocity, fireAt) {
+  const slots = _modMatrixSlots[padIdx]
+  if (!slots || !slots.length) return
+  applyVelocityModulation(slots, velocity / 127, _makeModMatrixTargets(padIdx), fireAt)
+}
+
 export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0, duration = 0 } = {}) {
   const buf = _buffers[padIdx]
   if (!buf) return
@@ -148,21 +222,18 @@ export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0, d
   const volScale = (velocity / 127) * _faderLevels[padIdx] * (accent ? ACCENT_BOOST : 1.0)
   gain.gain.value = Math.min(1.5, volScale)
 
-  // Gate the sound to the requested duration
-  if (duration > 0) {
-    const fireAt = Math.max(ctx.currentTime, time)
-    gain.gain.setValueAtTime(Math.min(1.5, volScale), fireAt)
-    gain.gain.linearRampToValueAtTime(0.001, fireAt + duration)
-  }
-
   src.connect(gain)
-  gain.connect(_padGains[padIdx])
 
   const fireAt = Math.max(ctx.currentTime, time)
+  _applyVelocityMod(padIdx, velocity, fireAt)
+  const env = _triggerVoiceEnvelope(padIdx, gain, fireAt, duration)
   src.start(fireAt)
 
   _activeSources.push(src)
-  src.onended = () => { _activeSources = _activeSources.filter(s => s !== src) }
+  src.onended = () => {
+    _activeSources = _activeSources.filter(s => s !== src)
+    env.dispose()
+  }
 }
 
 export function triggerPadWithNote(padIdx, midiNote, { velocity = 100, accent = false, time = 0, duration = 0, filterFreq = null } = {}) {
@@ -181,12 +252,6 @@ export function triggerPadWithNote(padIdx, midiNote, { velocity = 100, accent = 
   const volScale = (velocity / 127) * _faderLevels[padIdx] * (accent ? ACCENT_BOOST : 1.0)
   gain.gain.value = Math.min(1.5, volScale)
 
-  if (duration > 0) {
-    const fireAt = Math.max(ctx.currentTime, time)
-    gain.gain.setValueAtTime(Math.min(1.5, volScale), fireAt)
-    gain.gain.linearRampToValueAtTime(0.001, fireAt + duration)
-  }
-
   // Per-trigger filter override
   if (filterFreq != null && _filters[padIdx]) {
     const cur = _filters[padIdx].frequency.value
@@ -195,13 +260,17 @@ export function triggerPadWithNote(padIdx, midiNote, { velocity = 100, accent = 
   }
 
   src.connect(gain)
-  gain.connect(_padGains[padIdx])
 
   const fireAt = Math.max(ctx.currentTime, time)
+  _applyVelocityMod(padIdx, velocity, fireAt)
+  const env = _triggerVoiceEnvelope(padIdx, gain, fireAt, duration)
   src.start(fireAt)
 
   _activeSources.push(src)
-  src.onended = () => { _activeSources = _activeSources.filter(s => s !== src) }
+  src.onended = () => {
+    _activeSources = _activeSources.filter(s => s !== src)
+    env.dispose()
+  }
 }
 
 export function triggerRatchet(padIdx, stepTimeSec, divisions, { velocity = 100, accent = false, baseTime = 0, duration = 0 } = {}) {
@@ -225,21 +294,18 @@ export function triggerRatchet(padIdx, stepTimeSec, divisions, { velocity = 100,
     const gain = ctx.createGain()
     gain.gain.value = Math.min(1.5, Math.max(0, volScale))
 
-    // Gate the sound to the requested duration
-    if (duration > 0) {
-      const fireAt = Math.max(ctx.currentTime, fireTime)
-      gain.gain.setValueAtTime(Math.min(1.5, Math.max(0, volScale)), fireAt)
-      gain.gain.linearRampToValueAtTime(0.001, fireAt + duration)
-    }
-
     src.connect(gain)
-    gain.connect(_padGains[padIdx])
 
     const fireAt = Math.max(ctx.currentTime, fireTime)
+    _applyVelocityMod(padIdx, velocity, fireAt)
+    const env = _triggerVoiceEnvelope(padIdx, gain, fireAt, duration)
     src.start(fireAt)
 
     _activeSources.push(src)
-    src.onended = () => { _activeSources = _activeSources.filter(s => s !== src) }
+    src.onended = () => {
+      _activeSources = _activeSources.filter(s => s !== src)
+      env.dispose()
+    }
   }
 }
 
@@ -248,7 +314,9 @@ export function setPadVolume(padIdx, vol) {
 }
 
 export function setPadPan(padIdx, pan) {
-  if (_panners[padIdx]) _panners[padIdx].pan.value = Math.max(-1, Math.min(1, pan))
+  const v = Math.max(-1, Math.min(1, pan))
+  _panValues[padIdx] = v
+  if (_panners[padIdx]) _panners[padIdx].pan.value = v
 }
 
 export function setPadPitch(padIdx, semitones) {
@@ -256,7 +324,89 @@ export function setPadPitch(padIdx, semitones) {
 }
 
 export function setPadFilter(padIdx, freq) {
-  if (_filters[padIdx]) _filters[padIdx].frequency.value = Math.max(20, Math.min(20000, freq))
+  const v = safeCutoffHz(freq)
+  _filterFreqs[padIdx] = v
+  if (_filters[padIdx]) _filters[padIdx].frequency.value = v
+}
+
+// Filter type (lowpass/highpass/bandpass/lowshelf/highshelf/notch/allpass/
+// peaking) — also recomputes `gain` since only lowshelf/highshelf/peaking
+// use it (see filterMath.ts's resonanceToGainDb).
+export function setPadFilterType(padIdx, type) {
+  const filter = _filters[padIdx]
+  if (!filter) return
+  _filterTypes[padIdx] = type
+  filter.type = type
+  filter.gain.value = resonanceToGainDb(type, _filterResonances[padIdx])
+}
+
+// Resonance, 0-127 byte (same convention as velocity/rootKey/etc elsewhere
+// in sycore) — maps to Q for every filter type, and additionally to `gain`
+// for the shelf/peaking types (see filterMath.ts).
+export function setPadFilterResonance(padIdx, resonance) {
+  const filter = _filters[padIdx]
+  if (!filter) return
+  _filterResonances[padIdx] = resonance
+  filter.Q.value = resonanceToQ(resonance)
+  filter.gain.value = resonanceToGainDb(_filterTypes[padIdx], resonance)
+}
+
+// Rebuilds a pad's FX chain from an `FxChain` config (see core/audio/types.ts).
+// Tears down and reconstructs the algorithm nodes -- an editing-time
+// operation (call when the user changes the chain), not something to call
+// on every trigger.
+export function setPadFx(padIdx, fxChain) {
+  _fxWetDryValues[padIdx] = fxChain?.wetDry ?? 100
+  _fxChains[padIdx]?.rebuild(fxChain)
+}
+
+// Builds this pad's ModMatrixTargets from its current nodes + cached
+// dial-in baselines (core/audio/modMatrix.ts).
+function _makeModMatrixTargets(padIdx) {
+  return {
+    filter: _filters[padIdx],
+    padGain: _padGains[padIdx],
+    panner: _panners[padIdx],
+    fxChain: _fxChains[padIdx],
+    lfo1Signal: _lfo1Signal ?? undefined,
+    lfo2Signal: _lfo2Signal ?? undefined,
+    baseValues: {
+      filterFreq: _filterFreqs[padIdx],
+      filterQ: resonanceToQ(_filterResonances[padIdx]),
+      ampVolume: 1.0, // _padGains[padIdx] is a pure pass-through -- no volume knob touches it (see triggerPad's transient gain)
+      ampPan: _panValues[padIdx],
+      wetDryMix: _fxWetDryValues[padIdx],
+    },
+  }
+}
+
+// Rebuilds a pad's LIVE modulation cables (lfo1/lfo2 sources -- velocity is
+// one-time, applied fresh on every trigger instead, see triggerPad/
+// triggerPadWithNote/triggerRatchet). Editing-time operation, like
+// setPadFx() -- not something to call on every trigger.
+export function setPadModMatrix(padIdx, slots) {
+  _modMatrixSlots[padIdx] = slots ?? []
+  for (const d of _modMatrixCables[padIdx] ?? []) d.dispose()
+  _modMatrixCables[padIdx] = applyModMatrix(_modMatrixSlots[padIdx], _makeModMatrixTargets(padIdx))
+}
+
+// Amp envelope (attack/decay/release in seconds, sustain normalized 0-1) --
+// read by _triggerVoiceEnvelope() to build each note's transient
+// Tone.AmplitudeEnvelope. Takes effect on the next trigger, not
+// retroactively on any currently-sounding note (same as every other synth's
+// ADSR knobs -- there's no well-defined way to reshape a curve already
+// mid-flight).
+export function setPadAttack(padIdx, attack) {
+  if (_adsr[padIdx]) _adsr[padIdx].attack = attack
+}
+export function setPadDecay(padIdx, decay) {
+  if (_adsr[padIdx]) _adsr[padIdx].decay = decay
+}
+export function setPadSustain(padIdx, sustain) {
+  if (_adsr[padIdx]) _adsr[padIdx].sustain = sustain
+}
+export function setPadRelease(padIdx, release) {
+  if (_adsr[padIdx]) _adsr[padIdx].release = release
 }
 
 export function setPadReverbSend(padIdx, amt) {

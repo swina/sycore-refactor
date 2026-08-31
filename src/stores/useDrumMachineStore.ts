@@ -4,6 +4,7 @@ import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
 import { IMPORTED_PATTERNS, patternToDrumSteps } from '@/data/imported-patterns'
+import { DEFAULT_ADSR } from '@/core/audio/envelope'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -47,6 +48,12 @@ function makeTrack(label = ''): DrumTrack {
     pan:        0,
     pitch:      0,
     filterFreq: 20000,
+    filterType: 'lowpass',
+    filterResonance: 0,
+    attack:  DEFAULT_ADSR.attack,
+    decay:   DEFAULT_ADSR.decay,
+    sustain: DEFAULT_ADSR.sustain,
+    release: DEFAULT_ADSR.release,
     reverbSend: 0,
     delaySend:  0,
     midiOutEnabled: false,
@@ -67,11 +74,19 @@ function serializeTrack(t: DrumTrack): SerializedDrumTrack {
     pan:        t.pan        ?? 0,
     pitch:      t.pitch      ?? 0,
     filterFreq: t.filterFreq ?? 20000,
+    filterType: t.filterType ?? 'lowpass',
+    filterResonance: t.filterResonance ?? 0,
+    attack:     t.attack  ?? DEFAULT_ADSR.attack,
+    decay:      t.decay   ?? DEFAULT_ADSR.decay,
+    sustain:    t.sustain ?? DEFAULT_ADSR.sustain,
+    release:    t.release ?? DEFAULT_ADSR.release,
     reverbSend: t.reverbSend ?? 0,
     delaySend:  t.delaySend  ?? 0,
     midiOutEnabled: t.midiOutEnabled ?? false,
     midiNote:   t.midiNote ?? (GM_DRUM_NOTES[t.label] ?? 36),
     steps:      t.steps.map(s => ({ ...s })),
+    fx:         t.fx,
+    modMatrix:  t.modMatrix,
   }
 }
 
@@ -659,6 +674,12 @@ function hydrateTrack(t: any, label: string): DrumTrack {
     pan:        t.pan        ?? 0,
     pitch:      t.pitch      ?? 0,
     filterFreq: t.filterFreq ?? 20000,
+    filterType: t.filterType ?? 'lowpass',
+    filterResonance: t.filterResonance ?? 0,
+    attack:     t.attack  ?? DEFAULT_ADSR.attack,
+    decay:      t.decay   ?? DEFAULT_ADSR.decay,
+    sustain:    t.sustain ?? DEFAULT_ADSR.sustain,
+    release:    t.release ?? DEFAULT_ADSR.release,
     reverbSend: t.reverbSend ?? 0,
     delaySend:  t.delaySend  ?? 0,
     midiOutEnabled: t.midiOutEnabled ?? false,
@@ -675,6 +696,8 @@ function hydrateTrack(t: any, label: string): DrumTrack {
         note:     step.note     ?? undefined,
       }
     }),
+    fx: t.fx,
+    modMatrix: t.modMatrix,
   }
 }
 
@@ -1006,6 +1029,12 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     track.pan        = fx.pan        ?? 0
     track.pitch      = fx.pitch      ?? 0
     track.filterFreq = fx.filterFreq ?? 20000
+    track.filterType = fx.filterType ?? 'lowpass'
+    track.filterResonance = fx.filterResonance ?? 0
+    track.attack     = fx.attack  ?? DEFAULT_ADSR.attack
+    track.decay      = fx.decay   ?? DEFAULT_ADSR.decay
+    track.sustain    = fx.sustain ?? DEFAULT_ADSR.sustain
+    track.release    = fx.release ?? DEFAULT_ADSR.release
     track.reverbSend = fx.reverbSend ?? 0
     track.delaySend  = fx.delaySend  ?? 0
     _save()

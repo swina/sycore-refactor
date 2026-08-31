@@ -241,7 +241,20 @@
             <div class="grid grid-cols-2 gap-x-6 gap-y-2">
               <KnobDial :modelValue="selectedPadData.pitch"      :min="-24" :max="24"    :step="1"     :defaultVal="0"     label="Pitch"  :format="fmtSemi" @change="v => updatePadParam(selectedPad, 'pitch', v)" />
               <KnobDial :modelValue="selectedPadData.filterFreq" :min="80"  :max="20000" :step="10"    :defaultVal="20000" label="Filter" :format="fmtHz"   @change="v => updatePadParam(selectedPad, 'filterFreq', v)" />
+              <KnobDial :modelValue="selectedPadData.filterResonance ?? 0" :min="0" :max="127" :step="1" :defaultVal="0" label="Reso" :format="fmtInt" @change="v => updatePadParam(selectedPad, 'filterResonance', v)" />
             </div>
+            <select :value="selectedPadData.filterType ?? 'lowpass'" @change="e => updatePadParam(selectedPad, 'filterType', e.target.value)"
+              class="bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 w-full"
+              title="Filter type">
+              <option value="lowpass">Lowpass</option>
+              <option value="highpass">Highpass</option>
+              <option value="bandpass">Bandpass</option>
+              <option value="lowshelf">Low Shelf</option>
+              <option value="highshelf">High Shelf</option>
+              <option value="notch">Notch</option>
+              <option value="allpass">All-pass</option>
+              <option value="peaking">Peaking</option>
+            </select>
             <select :value="selectedPadData.sampleRate ?? 44100" @change="e => updatePadStore(selectedPad, 'sampleRate', +e.target.value)"
               class="bg-black border border-neutral-700 rounded px-1 py-0.5 text-[11px] font-mono text-white outline-none focus:border-violet-500 w-full">
               <option :value="44100">44.1k — Hi-Fi</option>
@@ -496,6 +509,7 @@ const fmtPct  = v => `${(v * 100).toFixed(0)}%`
 const fmtMs   = v => `${(v * 1000).toFixed(0)}ms`
 const fmtSemi = v => v === 0 ? '0' : v > 0 ? `+${v}` : `${v}`
 const fmtHz   = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0)
+const fmtInt  = v => v.toFixed(0)
 const fmtPan  = v => v === 0 ? 'C' : v < 0 ? `L${(-v * 100).toFixed(0)}` : `R${(v * 100).toFixed(0)}`
 const fmtTime = (pct, duration) => duration ? `${(pct * duration * 1000).toFixed(0)}ms` : `${(pct * 100).toFixed(0)}%`
 const fmtLoopTime = v => fmtTime(v, selectedPadData.value?.duration)
@@ -1299,7 +1313,7 @@ async function _playPadsForNote(type, note, velocity) {
       const rootKey    = pad.rootKey ?? 72
       const pitchShift = chromatic ? (note - rootKey) : 0
       const volScaled  = (pad.volume ?? 0.85) * (velocity / 127) * samplerMasterVol.value
-      const effectivePad = { ...pad, volume: volScaled, pitch: (pad.pitch ?? 0) + pitchShift, _midiNote: note }
+      const effectivePad = { ...pad, volume: volScaled, pitch: (pad.pitch ?? 0) + pitchShift, _midiNote: note, _midiVelocity: velocity }
 
       let blobUrl = _blobUrlCache[padIdx]
       if (!blobUrl) {

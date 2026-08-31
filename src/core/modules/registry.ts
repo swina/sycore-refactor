@@ -65,6 +65,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'arp', label: 'Arpeggiator', icon: ListMusic, category: 'midi-tools', showOnLauncher: false },
   { id: 'program-change', label: 'Program Change Browser', icon: Music2, category: 'midi-tools', showOnLauncher: false },
   { id: 'visualizer', label: 'Audio Visualizer', icon: Activity, category: 'audio-tools', showOnLauncher: false },
+  { id: 'live-input', label: 'Live Input', icon: Mic, category: 'audio-tools', badge: 'Beta', bg: '/audio-capture-mixer.jpg' },
   { id: 'audio-mixer', label: 'Audio Mixer', icon: SlidersHorizontal, category: 'audio-tools', showOnLauncher: false },
   { id: 'midi-performance', label: 'MIDI Performance', icon: Network, category: 'midi-config', showOnLauncher: false, badge: 'Legacy' },
   { id: 'routing', label: 'MIDI Routing', icon: Cable, category: 'midi-config', showOnLauncher: false },

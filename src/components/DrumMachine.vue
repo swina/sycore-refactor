@@ -206,13 +206,19 @@ watch(() => drumStore.bpm, v => drumEngine.setDelayTime(v))
 const showFx = ref(Array(drumStore.TRACK_LABELS.length).fill(false))
 
 // ── FX clipboard (copy/paste across sequences for the same track slot) ────────
-const fxClipboard = ref(null) // { pan, pitch, filterFreq, reverbSend, delaySend }
+const fxClipboard = ref(null) // { pan, pitch, filterFreq, filterType, filterResonance, reverbSend, delaySend }
 
 function copyTrackFx(track) {
   fxClipboard.value = {
     pan:        track.pan        ?? 0,
     pitch:      track.pitch      ?? 0,
     filterFreq: track.filterFreq ?? 20000,
+    filterType: track.filterType ?? 'lowpass',
+    filterResonance: track.filterResonance ?? 0,
+    attack:     track.attack  ?? 0.005,
+    decay:      track.decay   ?? 0,
+    sustain:    track.sustain ?? 1,
+    release:    track.release ?? 0.05,
     reverbSend: track.reverbSend ?? 0,
     delaySend:  track.delaySend  ?? 0,
   }
@@ -230,6 +236,12 @@ function pasteTrackFxTo(trackIdx, targetSeq) {
     drumEngine.setPadPan(trackIdx, t.pan ?? 0)
     drumEngine.setPadPitch(trackIdx, t.pitch ?? 0)
     drumEngine.setPadFilter(trackIdx, t.filterFreq ?? 20000)
+    drumEngine.setPadFilterType(trackIdx, t.filterType ?? 'lowpass')
+    drumEngine.setPadFilterResonance(trackIdx, t.filterResonance ?? 0)
+    drumEngine.setPadAttack(trackIdx, t.attack ?? 0.005)
+    drumEngine.setPadDecay(trackIdx, t.decay ?? 0)
+    drumEngine.setPadSustain(trackIdx, t.sustain ?? 1)
+    drumEngine.setPadRelease(trackIdx, t.release ?? 0.05)
     drumEngine.setPadReverbSend(trackIdx, t.reverbSend ?? 0)
     drumEngine.setPadDelaySend(trackIdx, t.delaySend ?? 0)
   }
@@ -239,6 +251,12 @@ function trackHasFx(track) {
   return (track.pan ?? 0) !== 0
     || (track.pitch ?? 0) !== 0
     || (track.filterFreq ?? 20000) !== 20000
+    || (track.filterType ?? 'lowpass') !== 'lowpass'
+    || (track.filterResonance ?? 0) !== 0
+    || (track.attack  ?? 0.005) !== 0.005
+    || (track.decay   ?? 0)     !== 0
+    || (track.sustain ?? 1)     !== 1
+    || (track.release ?? 0.05)  !== 0.05
     || (track.reverbSend ?? 0) !== 0
     || (track.delaySend ?? 0) !== 0
 }
@@ -633,6 +651,12 @@ function pushAllFxToEngine(pattern) {
     drumEngine.setPadPan(i, track.pan ?? 0)
     drumEngine.setPadPitch(i, track.pitch ?? 0)
     drumEngine.setPadFilter(i, track.filterFreq ?? 20000)
+    drumEngine.setPadFilterType(i, track.filterType ?? 'lowpass')
+    drumEngine.setPadFilterResonance(i, track.filterResonance ?? 0)
+    drumEngine.setPadAttack(i, track.attack ?? 0.005)
+    drumEngine.setPadDecay(i, track.decay ?? 0)
+    drumEngine.setPadSustain(i, track.sustain ?? 1)
+    drumEngine.setPadRelease(i, track.release ?? 0.05)
     drumEngine.setPadReverbSend(i, track.reverbSend ?? 0)
     drumEngine.setPadDelaySend(i, track.delaySend ?? 0)
   })
@@ -2026,62 +2050,134 @@ function cycleChainSlot(i) {
         </div>
 
           <!-- FX strip -->
-          <div v-if="showFx[trackIdx]" class="flex items-center gap-3 px-2 py-1.5 border-t border-violet-900/40 bg-violet-700/70">
-            <span class="text-[9px] font-black uppercase tracking-widest text-white-400 shrink-0 w-4">FX</span>
+          <div v-if="showFx[trackIdx]" class="flex flex-wrap items-center gap-3 px-2 py-1.5 border-t border-violet-900/40 bg-violet-800/70">
+            <span class="text-[10px] font-black uppercase tracking-widest text-white-400 shrink-0 w-4">FX</span>
             <!-- Pan -->
             <div class="flex items-center gap-1">
-              <span class="text-[9px] text-neutral-400 shrink-0">Pan</span>
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Pan</span>
               <input type="range" min="-1" max="1" step="0.01"
                 :value="track.pan ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'pan', parseFloat($event.target.value)); drumEngine.setPadPan(trackIdx, parseFloat($event.target.value))"
                 class="w-16 h-1 accent-violet-500 cursor-pointer"
                 title="Pan (-1 left → +1 right)"
               />
-              <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ ((track.pan ?? 0) * 100).toFixed(0) }}</span>
+              <span class="text-[10px] font-mono text-neutral-400 w-6 text-right">{{ ((track.pan ?? 0) * 100).toFixed(0) }}</span>
             </div>
             <!-- Pitch -->
             <div class="flex items-center gap-1">
-              <span class="text-[9px] text-neutral-400 shrink-0">Pitch</span>
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Pitch</span>
               <input type="range" min="-12" max="12" step="1"
                 :value="track.pitch ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'pitch', parseInt($event.target.value)); drumEngine.setPadPitch(trackIdx, parseInt($event.target.value))"
                 class="w-14 h-1 accent-violet-500 cursor-pointer"
                 title="Pitch (semitones)"
               />
-              <span class="text-[9px] font-mono text-neutral-400 w-6 text-right">{{ (track.pitch ?? 0) > 0 ? '+' : '' }}{{ track.pitch ?? 0 }}st</span>
+              <span class="text-[10px] font-mono text-neutral-400 w-6 text-right">{{ (track.pitch ?? 0) > 0 ? '+' : '' }}{{ track.pitch ?? 0 }}st</span>
             </div>
             <!-- Filter -->
             <div class="flex items-center gap-1">
-              <span class="text-[9px] text-neutral-400 shrink-0">Tone</span>
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Tone</span>
               <input type="range" min="200" max="20000" step="100"
                 :value="track.filterFreq ?? 20000"
                 @input="drumStore.setTrackFx(trackIdx, 'filterFreq', parseInt($event.target.value)); drumEngine.setPadFilter(trackIdx, parseInt($event.target.value))"
                 class="w-16 h-1 accent-violet-500 cursor-pointer"
                 title="Low-pass filter frequency"
               />
-              <span class="text-[9px] font-mono text-neutral-400 w-10 text-right">{{ (track.filterFreq ?? 20000) >= 1000 ? ((track.filterFreq ?? 20000)/1000).toFixed(1)+'k' : (track.filterFreq ?? 20000) }}Hz</span>
+              <span class="text-[10px] font-mono text-neutral-400 w-10 text-right">{{ (track.filterFreq ?? 20000) >= 1000 ? ((track.filterFreq ?? 20000)/1000).toFixed(1)+'k' : (track.filterFreq ?? 20000) }}Hz</span>
+            </div>
+            <!-- Filter type -->
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Type</span>
+              <select
+                :value="track.filterType ?? 'lowpass'"
+                @change="e => { drumStore.setTrackFx(trackIdx, 'filterType', e.target.value); drumEngine.setPadFilterType(trackIdx, e.target.value) }"
+                class="bg-black border border-neutral-700 rounded text-[10px] font-mono text-neutral-300 px-1 py-0.5 focus:outline-none focus:border-violet-500/50"
+                title="Filter type"
+              >
+                <option value="lowpass">LP</option>
+                <option value="highpass">HP</option>
+                <option value="bandpass">BP</option>
+                <option value="lowshelf">Lo Shelf</option>
+                <option value="highshelf">Hi Shelf</option>
+                <option value="notch">Notch</option>
+                <option value="allpass">All-pass</option>
+                <option value="peaking">Peak</option>
+              </select>
+            </div>
+            <!-- Filter resonance -->
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Res</span>
+              <input type="range" min="0" max="127" step="1"
+                :value="track.filterResonance ?? 0"
+                @input="drumStore.setTrackFx(trackIdx, 'filterResonance', parseInt($event.target.value)); drumEngine.setPadFilterResonance(trackIdx, parseInt($event.target.value))"
+                class="w-14 h-1 accent-violet-500 cursor-pointer"
+                title="Filter resonance"
+              />
+              <span class="text-[10px] font-mono text-neutral-400 w-6 text-right">{{ track.filterResonance ?? 0 }}</span>
+            </div>
+            <!-- Amp envelope (Attack/Decay/Sustain/Release) -->
+            <div class="flex w-full"></div>
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Atk</span>
+              <input type="range" min="0" max="2" step="0.005"
+                :value="track.attack ?? 0.005"
+                @input="drumStore.setTrackFx(trackIdx, 'attack', parseFloat($event.target.value)); drumEngine.setPadAttack(trackIdx, parseFloat($event.target.value))"
+                class="w-14 h-1 accent-violet-500 cursor-pointer"
+                title="Amp envelope attack"
+              />
+              <span class="text-[10px] font-mono text-neutral-400 w-8 text-right">{{ Math.round((track.attack ?? 0.005) * 1000) }}ms</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Dcy</span>
+              <input type="range" min="0" max="3" step="0.01"
+                :value="track.decay ?? 0"
+                @input="drumStore.setTrackFx(trackIdx, 'decay', parseFloat($event.target.value)); drumEngine.setPadDecay(trackIdx, parseFloat($event.target.value))"
+                class="w-14 h-1 accent-violet-500 cursor-pointer"
+                title="Amp envelope decay"
+              />
+              <span class="text-[10px] font-mono text-neutral-400 w-8 text-right">{{ Math.round((track.decay ?? 0) * 1000) }}ms</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Sus</span>
+              <input type="range" min="0" max="1" step="0.01"
+                :value="track.sustain ?? 1"
+                @input="drumStore.setTrackFx(trackIdx, 'sustain', parseFloat($event.target.value)); drumEngine.setPadSustain(trackIdx, parseFloat($event.target.value))"
+                class="w-14 h-1 accent-violet-500 cursor-pointer"
+                title="Amp envelope sustain"
+              />
+              <span class="text-[10px] font-mono text-neutral-400 w-6 text-right">{{ Math.round((track.sustain ?? 1) * 100) }}</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Rel</span>
+              <input type="range" min="0" max="3" step="0.01"
+                :value="track.release ?? 0.05"
+                @input="drumStore.setTrackFx(trackIdx, 'release', parseFloat($event.target.value)); drumEngine.setPadRelease(trackIdx, parseFloat($event.target.value))"
+                class="w-14 h-1 accent-violet-500 cursor-pointer"
+                title="Amp envelope release"
+              />
+              <span class="text-[10px] font-mono text-neutral-400 w-8 text-right">{{ Math.round((track.release ?? 0.05) * 1000) }}ms</span>
             </div>
             <!-- Reverb send -->
             <div class="flex items-center gap-1">
-              <span class="text-[9px] text-neutral-400 shrink-0">Rev</span>
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Rev</span>
               <input type="range" min="0" max="1" step="0.01"
                 :value="track.reverbSend ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'reverbSend', parseFloat($event.target.value)); drumEngine.setPadReverbSend(trackIdx, parseFloat($event.target.value))"
                 class="w-14 h-1 accent-cyan-500 cursor-pointer"
                 title="Reverb send amount"
               />
-              <span class="text-[9px] font-mono text-neutral-400 w-5 text-right">{{ Math.round((track.reverbSend ?? 0) * 100) }}</span>
+              <span class="text-[10px] font-mono text-neutral-400 w-5 text-right">{{ Math.round((track.reverbSend ?? 0) * 100) }}</span>
             </div>
             <!-- Delay send -->
             <div class="flex items-center gap-1">
-              <span class="text-[9px] text-neutral-400 shrink-0">Dly</span>
+              <span class="text-[10px] text-neutral-400 shrink-0 bg-black px-0.5">Dly</span>
               <input type="range" min="0" max="1" step="0.01"
                 :value="track.delaySend ?? 0"
                 @input="drumStore.setTrackFx(trackIdx, 'delaySend', parseFloat($event.target.value)); drumEngine.setPadDelaySend(trackIdx, parseFloat($event.target.value))"
                 class="w-14 h-1 accent-cyan-500 cursor-pointer"
                 title="Delay send amount (1/8-note BPM-synced)"
               />
-              <span class="text-[9px] font-mono text-neutral-400 w-5 text-right">{{ Math.round((track.delaySend ?? 0) * 100) }}</span>
+              <span class="text-[10px] font-mono text-neutral-400 w-5 text-right">{{ Math.round((track.delaySend ?? 0) * 100) }}</span>
             </div>
             <!-- MIDI Out -->
             <div class="flex items-center gap-1">

@@ -59,6 +59,7 @@ export interface PanelVisibility {
   isLoopMachineOpen: boolean
   isDrumMachineOpen: boolean
   isSamplerOpen: boolean
+  isLiveInputOpen: boolean
   isLivePerformancePadOpen: boolean
   isLiveTimelineOpen: boolean
   isCaptureRecording: boolean
@@ -152,6 +153,7 @@ export const useUiStore = defineStore('ui', () => {
   const isLoopMachineOpen        = ref(false)
   const isDrumMachineOpen        = ref(false)
   const isSamplerOpen            = ref(false)
+  const isLiveInputOpen          = ref(false)
   const isLivePerformancePadOpen = ref(false)
   const isLiveTimelineOpen       = ref(false)
   const isCaptureRecording       = ref(false)
@@ -399,6 +401,7 @@ export const useUiStore = defineStore('ui', () => {
     isLoopMachineOpen.value        = false
     isDrumMachineOpen.value        = false
     isSamplerOpen.value                   = false
+    isLiveInputOpen.value                 = false
     isMidiControllerDesignerOpen.value    = false
     isMidiDevicesOpen.value               = false
     isAiAgentOpen.value = false
@@ -460,6 +463,7 @@ export const useUiStore = defineStore('ui', () => {
     'loop-machine': isLoopMachineOpen,
     'drum-machine': isDrumMachineOpen,
     sampler: isSamplerOpen,
+    'live-input': isLiveInputOpen,
     'device-program-change': isDeviceProgramChangePanelOpen,
     'freesound-browser': isFreesoundBrowserOpen,
     'audio-mixer': isAudioMixerOpen,
@@ -632,7 +636,7 @@ export const useUiStore = defineStore('ui', () => {
     isFavoritesOpen, isPortalOpen, isMidiActionsOpen, isPanicOpen,
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
-    isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isMidiControllerDesignerOpen,
+    isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isLiveInputOpen, isMidiControllerDesignerOpen,
     isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,

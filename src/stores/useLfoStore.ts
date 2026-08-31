@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, watch, onUnmounted } from 'vue'
+import { Signal } from 'tone'
 import { useMidiStore } from './useMidiStore'
 import { usePresetStore } from './usePresetStore'
 import { useUiStore } from './useUiStore'
@@ -73,6 +74,15 @@ export const useLfoStore = defineStore('lfo', () => {
   const lfo1 = reactive<LfoState>(createDefaultLfo())
   const lfo2 = reactive<LfoState>(createDefaultLfo())
 
+  // Local Tone.Signal mirrors of each LFO's raw waveform value (bipolar
+  // -1..1), for sycore's drum/sampler Modulation Matrix (Phase 5 of
+  // docs/plans/Sycore-DSP-Integration-Feasibility.md) to connect Tone.Scale
+  // nodes onto. Independent of `targetParameter`/MIDI CC below -- these
+  // update whenever the LFO is active, whether or not it's also targeting
+  // an external hardware parameter.
+  const lfo1Signal = new Signal({ value: 0, units: 'audioRange' })
+  const lfo2Signal = new Signal({ value: 0, units: 'audioRange' })
+
   let animationFrame: number | null = null
   let lastTime = performance.now()
   const phases: Record<string, number> = { lfo1: 0, lfo2: 0 }
@@ -99,10 +109,7 @@ export const useLfoStore = defineStore('lfo', () => {
   }
 
   function processLfo(id: string, lfo: LfoState, dt: number) {
-    if (!lfo.active || !lfo.targetParameter) return
-
-    const cc = (PARAM_TO_CC as Record<string, number>)[lfo.targetParameter]
-    if (cc === undefined) return
+    if (!lfo.active) return
 
     let rateHz = lfo.rate
     if (lfo.mode === 'sync') {
@@ -138,6 +145,17 @@ export const useLfoStore = defineStore('lfo', () => {
         break
     }
     lfo._lastP = p
+
+    // Drive the local Tone.Signal mirror for DSP modulation routing --
+    // independent of whether this LFO is also targeting an external MIDI CC
+    // parameter below. Bipolar -1..1, matching the raw waveform value above;
+    // DSP destinations pick their own depth/range via each ModMatrixSlot's
+    // amountPct (see core/audio/modMatrix.ts).
+    ;(id === 'lfo1' ? lfo1Signal : lfo2Signal).value = val
+
+    if (!lfo.targetParameter) return
+    const cc = (PARAM_TO_CC as Record<string, number>)[lfo.targetParameter]
+    if (cc === undefined) return
 
     const activeVariant = presetStore.useAlternativeEngine
       ? presetStore.lastPreset?.bVariant
@@ -232,6 +250,7 @@ export const useLfoStore = defineStore('lfo', () => {
 
   return {
     lfo1, lfo2,
+    lfo1Signal, lfo2Signal,
     WAVEFORMS,
     SYNC_DIVISIONS,
     startEngine,

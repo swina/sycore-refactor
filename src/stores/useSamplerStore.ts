@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
+import type { FxChain, ModMatrixSlot } from '@/core/audio/types'
+import type { FilterType } from '@/core/audio/filterMath'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -51,6 +53,25 @@ export interface SamplerPad {
   grainDirection?: number  // 0=forward, 1=backward, 2=alternating, 3=random
   grainStereo?: number
   grainCount?: number
+  // Filter type/resonance (Phase 3 of
+  // docs/plans/Sycore-DSP-Integration-Feasibility.md) -- absent = 'lowpass'
+  // / 0 (resonance byte, same MIDI-byte convention as velocity/rootKey/etc),
+  // matches today's hardcoded lowpass-only behavior exactly when unset.
+  filterType?: FilterType
+  filterResonance?: number
+  // Optional per-pad effects chain (Phase 2 of
+  // docs/plans/Sycore-DSP-Integration-Feasibility.md) -- absent = no FX
+  // node instantiated, same lazy-seed pattern as everything else here.
+  fx?: FxChain
+  // Modulation Matrix cables (Phase 5 of
+  // docs/plans/Sycore-DSP-Integration-Feasibility.md) -- absent = no live
+  // cables built, same lazy-seed pattern as everything else here.
+  modMatrix?: ModMatrixSlot[]
+  // Internal, set only by SamplerPanel.vue's MIDI/app-note trigger path
+  // alongside `_midiNote` -- raw 0-127 velocity for the Modulation Matrix's
+  // one-time velocity source (core/audio/modMatrix.ts). Not persisted, not
+  // user-editable.
+  _midiVelocity?: number
 }
 
 export interface SamplerStep {
@@ -94,6 +115,8 @@ function defaultPad(bankId: string, padIdx: number): SamplerPad {
     endPoint: 1,
     loopMode: false,
     filterFreq: 20000,
+    filterType: 'lowpass',
+    filterResonance: 0,
     reverbSend: 0,
     delaySend: 0,
     sampleRate: 44100,
