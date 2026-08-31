@@ -6,6 +6,10 @@ A running log of new features added to SY.CORE, newest first.
 
 - **Added Doumentation Sections:** - Modules Manager. The Module Manager (admin-only panel) controls which modules appear in the application launcher, toolbar, MIDI mappings, and keyboard shortcuts. Disabling a module hides it from the UI but does not remove its code or data — it can be re-enabled at any time. AI Settings: The AI Settings panel lets you configure which AI provider the app uses
 
+- **Website: standalone Vercel project** — Created `website/` directory with its own Vite+Vue project for deploying the marketing site to Vercel (no GitHub Pages subpath issues). Includes symlinks to markdown guides and images. Images served from root (`/help/guides/...`). Build: `cd website && npm run build`. Branch `feat/08-31/update-and-display-saved-progression`.
+
+- **GuidesPanel: fix image paths for in-app rendering** — Convert relative `../../help/guides/` paths back to `/help/guides/` at render time so images load correctly inside the app's guide panel. Branch `feat/08-31/update-and-display-saved-progression`.
+
 - **Website: clickable images open in fullscreen modal + Documentation section** — All screenshots on the website now open in a fullscreen overlay when clicked (event delegation on the root wrapper, `cursor-pointer` on `.img-zoom`). Added a new "Documentation" section between Technology and Free & Open with a CTA button that opens the full `GuidesPanel` component. "Documentation" nav link appears in the desktop nav, mobile nav, and footer as a button. Branch `feat/08-31/update-and-display-saved-progression`.
 
 - **Chord Prog Sequencer: AI loading modal** — When generating from an AI prompt, a full-screen loading overlay ("Loading progression…" with spinner) now shows while the AI call is in flight, blocking interaction until the chords are assigned. Branch `feat/08-31/update-and-display-saved-progression`.
