@@ -5,10 +5,33 @@ import {
   Database, Wifi, ArrowRight, Check, Sparkles, Network, Disc3, Play,
   SlidersHorizontal, Repeat, Gauge, Workflow, Infinity as InfinityIcon,
   Search, Download, MonitorSmartphone, GitBranch, Menu, X,
-  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum,Piano,GithubIcon, Youtube
+  Gift, CodeXml, Heart, ListPlus, Grid3x3, AudioWaveform, Drum,Piano,GithubIcon, Youtube,
+  BookOpen
 } from 'lucide-vue-next'
+import GuidesPanel from '@/components/GuidesPanel.vue'
 
 const isMobileNavOpen = ref(false)
+const showGuides = ref(false)
+const fullscreenImage = ref(null)
+
+function openImage(src) {
+  fullscreenImage.value = src
+}
+
+function closeFullscreen() {
+  fullscreenImage.value = null
+}
+
+function onPageClick(e) {
+  if (e.target.tagName === 'IMG') {
+    fullscreenImage.value = e.target.src
+  }
+}
+
+function openDocs() {
+  showGuides.value = true
+  isMobileNavOpen.value = false
+}
 
 // URL of the PWA app deployment — set VITE_APP_URL at build time.
 const appUrl = import.meta.env.VITE_APP_URL || '/'
@@ -335,7 +358,7 @@ const scenarios = [
 </script>
 
 <template>
-  <div class="h-screen overflow-y-auto overflow-x-hidden bg-neutral-950 text-white font-sans scroll-smooth">
+  <div class="h-screen overflow-y-auto overflow-x-hidden bg-neutral-950 text-white font-sans scroll-smooth" @click="onPageClick">
 
     <!-- ============ NAV ============ -->
     <header class="sticky top-0 z-50 border-b border-neutral-800/80 bg-neutral-950/80 backdrop-blur-md">
@@ -350,6 +373,10 @@ const scenarios = [
           >
             {{ link.label }}
           </a>
+          <button
+            @click="openDocs"
+            class="font-mono text-[11px] uppercase tracking-widest text-neutral-400 transition-colors hover:text-synth-neon"
+          >Documentation</button>
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
           <button
@@ -370,13 +397,17 @@ const scenarios = [
         </div>
       </nav>
       <div v-if="isMobileNavOpen" class="border-t border-neutral-800 bg-neutral-950 px-5 py-3 md:hidden">
-        <a
-          v-for="link in navLinks" :key="link.href" :href="link.href"
-          @click="isMobileNavOpen = false"
-          class="block py-2.5 font-mono text-xs uppercase tracking-widest text-neutral-400 hover:text-synth-neon"
-        >
-          {{ link.label }}
-        </a>
+<a
+            v-for="link in navLinks" :key="link.href" :href="link.href"
+            @click="isMobileNavOpen = false"
+            class="block py-2.5 font-mono text-xs uppercase tracking-widest text-neutral-400 hover:text-synth-neon"
+          >
+            {{ link.label }}
+          </a>
+          <button
+            @click="openDocs"
+            class="block py-2.5 w-full text-left font-mono text-xs uppercase tracking-widest text-neutral-400 hover:text-synth-neon"
+          >Documentation</button>
       </div>
     </header>
 
@@ -946,6 +977,28 @@ const scenarios = [
       </div>
     </section>
 
+    <!-- ============ DOCUMENTATION / GUIDES ============ -->
+    <section id="docs" class="border-t border-neutral-800/60 bg-neutral-900/30 scroll-mt-16">
+      <div class="mx-auto max-w-6xl px-5 py-20 text-center">
+        <p v-reveal class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">Documentation</p>
+        <h2 class="mt-3 text-3xl font-extrabold md:text-4xl">
+          Read the <span class="text-synth-neon">Guides.</span>
+        </h2>
+        <p class="mx-auto mt-4 max-w-2xl text-neutral-400">
+          Browse the full SY.CORE documentation — from first-launch MIDI setup through every
+          module's controls, performance features, and pro tips.
+        </p>
+        <button
+          v-reveal="150"
+          @click="showGuides = true"
+          class="cta-pulse mt-8 inline-flex items-center gap-2 rounded-lg bg-synth-neon px-6 py-3 font-mono text-xs font-black uppercase tracking-[0.2em] text-black transition-all hover:bg-white active:scale-95"
+        >
+          <BookOpen class="h-4 w-4" />
+          Open Full Documentation
+        </button>
+      </div>
+    </section>
+
     <!-- ============ FREE / OPEN SOURCE / DONATIONWARE ============ -->
     <section id="free" class="border-t border-neutral-800/60 bg-neutral-900/30 scroll-mt-16">
       <div class="mx-auto max-w-6xl px-5 py-20">
@@ -1049,6 +1102,10 @@ const scenarios = [
               {{ link.label }}
             </a>
             <button
+              @click="openDocs"
+              class="text-left font-mono text-[11px] uppercase tracking-widest text-neutral-500 hover:text-synth-neon"
+            >Documentation</button>
+            <button
               @click="launchApp"
               class="text-left font-mono text-[11px] uppercase tracking-widest text-synth-neon hover:text-white"
             >
@@ -1061,6 +1118,24 @@ const scenarios = [
         </div>
       </div>
     </footer>
+
+    <!-- Fullscreen Image Modal -->
+    <Teleport to="body">
+      <div
+        v-if="fullscreenImage"
+        class="fixed inset-0 z-[700] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+        @click="closeFullscreen"
+      >
+        <img
+          :src="fullscreenImage"
+          class="max-h-full max-w-full rounded-xl border border-neutral-700 shadow-2xl"
+          @click.stop
+        />
+      </div>
+    </Teleport>
+
+    <!-- Documentation Guides -->
+    <GuidesPanel v-if="showGuides" @close="showGuides = false" />
   </div>
 </template>
 
@@ -1118,6 +1193,7 @@ const scenarios = [
 /* ---- Screenshot hover zoom ---- */
 .img-zoom {
   transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease;
+  cursor: pointer;
 }
 .img-zoom:hover {
   transform: scale(1.015);

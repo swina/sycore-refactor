@@ -74,7 +74,7 @@ async function toggleModule(mod) {
       </div>
 
       <!-- Body -->
-      <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+      <div class="flex-1 w-3/4 m-auto overflow-y-auto p-6 space-y-8 custom-scrollbar">
         <section v-for="group in groups" :key="group.category">
           <div class="flex items-center gap-2 mb-3 px-1">
             <component :is="group.icon" class="w-4 h-4 text-synth-neon" />

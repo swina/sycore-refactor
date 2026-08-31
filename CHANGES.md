@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-08-31
 
+- **Website: clickable images open in fullscreen modal + Documentation section** — All screenshots on the website now open in a fullscreen overlay when clicked (event delegation on the root wrapper, `cursor-pointer` on `.img-zoom`). Added a new "Documentation" section between Technology and Free & Open with a CTA button that opens the full `GuidesPanel` component. "Documentation" nav link appears in the desktop nav, mobile nav, and footer as a button. Branch `feat/08-31/update-and-display-saved-progression`.
+
 - **Chord Prog Sequencer: AI loading modal** — When generating from an AI prompt, a full-screen loading overlay ("Loading progression…" with spinner) now shows while the AI call is in flight, blocking interaction until the chords are assigned. Branch `feat/08-31/update-and-display-saved-progression`.
 
 - **Chord Prog Sequencer: Update button in Saved Progressions + loaded name in header** — Each saved progression in the Save/Load tab now has an Update button that overwrites it with the current steps (preserving id/createdAt). When a progression is loaded, its name appears in the header bar next to "Chord Prog". Added `updateLibraryPattern` to `useChordProgStore`. Branch `feat/08-31/update-and-display-saved-progression`.

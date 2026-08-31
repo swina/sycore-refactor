@@ -86,7 +86,7 @@ onMounted(async () => {
 
         <div class="space-y-3">
           <label class="text-xs font-black uppercase tracking-widest text-neutral-400">Model</label>
-          <div v-if="aiStore.availableModels.length" class="flex gap-2">
+          <div v-if="aiStore.availableModels.length" class="flex flex-col gap-2">
             <select
               :value="aiStore.availableModels.includes(aiStore.model) ? aiStore.model : ''"
               @change="aiStore.setModel(($event.target as HTMLSelectElement).value)"
