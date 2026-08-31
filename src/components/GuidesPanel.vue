@@ -136,6 +136,8 @@ const renderedHtml = computed(() => {
     const id = fileToId[filename]
     return id ? `href="#" data-guide="${id}"` : match
   })
+  // Prefix image src paths with BASE_URL so they resolve under subpath deployments
+  html = html.replace(/src="\//g, `src="${import.meta.env.BASE_URL}`)
   return html
 })
 
