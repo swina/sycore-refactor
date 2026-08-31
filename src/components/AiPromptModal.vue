@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { X, Sparkles, Loader2, Check, RotateCcw } from 'lucide-vue-next'
+import { X, Sparkles, Loader2, Check, RotateCcw, Clock, History } from 'lucide-vue-next'
 import { useAiAgentStore } from '@/stores/useAiAgentStore'
 import { sendAiPrompt } from '@/lib/ai-service'
+import { userKey } from '@/lib/userKey'
 
 const props = defineProps<{
   systemPrompt: string
   placeholder?: string
   buttonLabel?: string
+  /** Stable identifier for the app this modal is embedded in — used to
+   *  scope the saved "last prompt" so each app remembers its own. Falls
+   *  back to a slug derived from systemPrompt when not given. */
+  appKey?: string
 }>()
 
 const emit = defineEmits<{
@@ -20,6 +25,46 @@ const prompt = ref('')
 const isLoading = ref(false)
 const error = ref('')
 const resultRaw = ref('')
+
+// ── Last submitted prompt (per app) ─────────────────────────────
+// The same modal is reused by Chord Progression, Drum Machine, both
+// sequencers, the Sound preview panel, etc. — each has its own systemPrompt,
+// so the remembered prompt is scoped by appKey (see sites that pass it).
+const LS_LAST_PROMPT = 'SYCORE_AI_LAST_PROMPT'
+
+function defaultAppKey() {
+  return props.systemPrompt
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+}
+
+const appId = computed(() => props.appKey || defaultAppKey())
+
+function loadLastPrompt() {
+  try {
+    return localStorage.getItem(userKey(`${LS_LAST_PROMPT}_${appId.value}`)) ?? ''
+  } catch { return '' }
+}
+
+const lastPrompt = ref(loadLastPrompt())
+
+function persistLastPrompt() {
+  const text = prompt.value.trim()
+  if (!text) return
+  lastPrompt.value = text
+  try {
+    localStorage.setItem(userKey(`${LS_LAST_PROMPT}_${appId.value}`), text)
+  } catch {}
+}
+
+function reuseLastPrompt() {
+  if (!lastPrompt.value) return
+  prompt.value = lastPrompt.value
+  resultRaw.value = ''
+  error.value = ''
+}
 
 const canGenerate = computed(() => aiStore.isConfigured && aiStore.isOnline && prompt.value.trim() && !isLoading.value)
 const hasResult = computed(() => resultRaw.value.length > 0)
@@ -48,6 +93,7 @@ function reset() {
 
 async function handleGenerate() {
   if (!canGenerate.value) return
+  persistLastPrompt()
   isLoading.value = true
   error.value = ''
   resultRaw.value = ''
@@ -106,6 +152,21 @@ function handleDiscard() {
         </div>
 
         <template v-if="!hasResult">
+          <!-- Last prompt indicator -->
+          <div
+            v-if="lastPrompt && !isLoading"
+            class="flex items-center gap-1.5 text-[10px] font-mono text-neutral-500 mb-1"
+          >
+            <Clock class="w-3 h-3 shrink-0" />
+            <span class="truncate flex-1 min-w-0">Last: {{ lastPrompt }}</span>
+            <button
+              @click="reuseLastPrompt"
+              title="Reuse this prompt"
+              class="shrink-0 px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-synth-neon hover:border-synth-neon/30 transition-colors text-[8px] font-bold uppercase tracking-wider"
+            >
+              <History class="w-2.5 h-2.5" />
+            </button>
+          </div>
           <textarea
             v-if="!isLoading"
             v-model="prompt"

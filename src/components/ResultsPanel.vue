@@ -1454,6 +1454,7 @@ function getDialIndicator(cfg, r = 18) {
     <!-- AI Generate -->
     <AiPromptModal
       v-if="showAiPrompt"
+      app-key="sound-engine"
       :system-prompt="`You are a sound design assistant for the Roland S-1 Tweak Synth. The target sound category is ${presetStore.currentCategory}. Output ONLY a valid JSON object with each S-1 parameter set to an integer within its valid range.`"
       placeholder="e.g. dark atmospheric pad with long release"
       button-label="Generate Sound"

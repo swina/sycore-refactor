@@ -77,7 +77,7 @@ export const DEFAULT_CHORD_STEP: ChordStep = {
   notes: [],
   velocity: 100,
   duration: '4n',
-  gate: 80,
+  gate: 90,
   transpose: 0,
   stepMode: undefined,
   chordMode: undefined,
@@ -427,6 +427,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
       id,
       name,
       type: 'single',
+      slotIndex: activeSlotIndex.value,
       steps: JSON.parse(JSON.stringify(steps.value)),
       numSteps: numSteps.value,
       selectedKey: selectedKey.value,
@@ -483,6 +484,36 @@ export const useChordProgStore = defineStore('chordProg', () => {
     } finally {
       loadingLibrary.value = false
     }
+  }
+
+  async function updateLibraryPattern(pattern: any) {
+    if (!authStore.user) return
+    const uid = authStore.user.uid
+    const docRef = doc(db, 'users', uid, 'chord_progressions', pattern.id)
+    const data = { ...pattern }
+    if (data.type === 'all') {
+      slotSave(activeSlotIndex.value)
+      data.slots = slots.value.map(s => ({
+        steps: s.steps.map(st => ({ ...st })),
+        numSteps: s.numSteps,
+        playMode: s.playMode,
+        arpRate: s.arpRate,
+      }))
+      data.activeSlotIndex = activeSlotIndex.value
+      data.chain = [...chain.value]
+      data.chainEnabled = chainEnabled.value
+      data.selectedKey = selectedKey.value
+      data.midiChannel = midiChannel.value
+    } else {
+      data.steps = JSON.parse(JSON.stringify(steps.value))
+      data.numSteps = numSteps.value
+      data.selectedKey = selectedKey.value
+      data.playMode = playMode.value
+      data.arpRate = arpRate.value
+      data.midiChannel = midiChannel.value
+    }
+    await setDoc(docRef, data)
+    await loadLibrary()
   }
 
   async function deleteFromLibrary(id: string) {
@@ -599,7 +630,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,
-    saveToLibrary, saveAllSlotsToLibrary, loadLibrary, deleteFromLibrary, loadFromDocument, loadAllSlotsFromDocument,
+    saveToLibrary, saveAllSlotsToLibrary, updateLibraryPattern, loadLibrary, deleteFromLibrary, loadFromDocument, loadAllSlotsFromDocument,
     loadFromMidiImport,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,

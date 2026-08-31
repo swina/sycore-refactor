@@ -2267,6 +2267,7 @@ let generateHidden = ref(false)
     <!-- AI Prompt -->
     <AiPromptModal
       v-if="showAiPrompt"
+      app-key="sequencer"
       system-prompt="You are a step-sequencer music designer. Generate a sequence as a JSON array of exactly 16 objects, each with {active: boolean, notes: array of 1-2 MIDI note numbers (40-96), velocity: 1-127, gate: 25-100}. Output ONLY valid JSON."
       placeholder="e.g. minimal techno sequence in C minor"
       button-label="Generate Sequence"

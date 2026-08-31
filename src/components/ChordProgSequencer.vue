@@ -55,13 +55,19 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 const showAiPrompt = ref(false)
+const aiLoading = ref(false)
 const midiFileInputRef = ref(null)
 const midiImportResult = ref(null)
 const selectedMidiTrack = ref(0)
 const midiImportBpm = ref(120)
 
 async function handleAiResult(data) {
-  await store.generateFromAiPrompt(data)
+  aiLoading.value = true
+  try {
+    await store.generateFromAiPrompt(data)
+  } finally {
+    aiLoading.value = false
+  }
 }
 
 let _lastParseResult = null
@@ -503,6 +509,8 @@ watch(activeTab, (tab) => { if (tab === 'performance') loadPcSets() })
 const libSubTab = ref(store.selectedKey >= 13 ? 'genre' : 'keys')
 const selectedProgressionName = ref('')
 const savePatternName = ref('')
+const loadedPatternName = ref(localStorage.getItem(userKey('S1_CP_LOADED_NAME')) || '')
+watch(loadedPatternName, v => localStorage.setItem(userKey('S1_CP_LOADED_NAME'), v))
 const savingPattern = ref(false)
 const saveError = ref('')
 const saveAllSlots = ref(false)
@@ -720,6 +728,7 @@ async function handleSave() {
 }
 
 function handleLoadPattern(pattern) {
+  loadedPatternName.value = pattern.name
   if (pattern.type === 'all') {
     store.loadAllSlotsFromDocument(pattern)
   } else {
@@ -729,6 +738,10 @@ function handleLoadPattern(pattern) {
 
 async function handleDeletePattern(id) {
   await store.deleteFromLibrary(id)
+}
+
+async function handleUpdatePattern(pattern) {
+  await store.updateLibraryPattern(pattern)
 }
 
 const _onCpStart = () => { store.isPlaying = true }
@@ -868,11 +881,11 @@ watch(() => store.currentStep, (idx) => {
 
 // ── Fill All ──────────────────────────────────────────────────────────────────
 
-const fillDuration = ref('4n')
+const fillDuration = ref('1m')
 const fillDurationRandom = ref(false)
 const fillVelocity = ref(100)
 const fillVelocityRandom = ref(false)
-const fillGate = ref(80)
+const fillGate = ref(90)
 const fillGateRandom = ref(false)
 const fillTranspose = ref(0)
 const fillTransposeRandom = ref(false)
@@ -969,6 +982,10 @@ function velBarColor(v) {
       <div class="flex items-center gap-2 w-full">
         <Music2 class="w-4 h-4 text-purple-400 shrink-0" />
         <h2 class="text-lg font-black uppercase tracking-widest text-purple-400 shrink-0">Chord Prog</h2>
+        <div v-if="loadedPatternName" class="flex items-center gap-1.5 px-2 py-0.5 bg-black/60 border border-purple-700/40 rounded text-[11px] font-mono text-purple-300 w-[300px] max-w-[300px] truncate" :title="loadedPatternName">
+          <FolderOpen class="w-3 h-3 shrink-0" />
+          <span class="">{{ loadedPatternName }}</span>
+        </div>
 
         <!-- BPM display -->
         <!--
@@ -1914,7 +1931,7 @@ function velBarColor(v) {
         </div>
 
         <!-- Save / Load Tab -->
-        <div v-else-if="activeTab === 'save-load'" class="flex-1 flex gap-0 overflow-hidden min-h-0">
+        <div v-else-if="activeTab === 'save-load'" class="flex-1 flex gap-0 overflow-hidden custom-scrollbar min-h-0">
 
           <!-- Save panel -->
           <div class="w-64 shrink-0 border-r border-neutral-800 flex flex-col p-3 gap-3">
@@ -1961,8 +1978,8 @@ function velBarColor(v) {
                 <div class="flex-1 min-w-0">
                   <div class="text-[11px] font-bold text-white truncate flex items-center gap-1.5">
                     {{ pattern.name }}
-                    <span v-if="pattern.type === 'all'" class="text-[7px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-700/40">All Slots</span>
-                    <span v-else class="text-[7px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-purple-950/40 text-purple-400 border border-purple-700/40">Single</span>
+                    <span v-if="pattern.type === 'all'" class="text-[7px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-700/40">8 Slots</span>
+                    <span v-else class="text-[7px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-purple-950/40 text-purple-400 border border-purple-700/40">{{ String.fromCharCode(65 + (pattern.slotIndex ?? 0)) }}</span>
                   </div>
                   <div class="text-[9px] text-neutral-600 font-mono">
                     {{ KEY_FILE_NAMES[pattern.selectedKey] || '—' }} · {{ pattern.numSteps }} steps
@@ -1974,6 +1991,13 @@ function velBarColor(v) {
                   title="Load"
                 >
                   <FolderOpen class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  @click="handleUpdatePattern(pattern)"
+                  class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-cyan-800 text-neutral-400 hover:text-cyan-300 transition-all"
+                  title="Update (overwrite with current steps)"
+                >
+                  <Save class="w-3.5 h-3.5" />
                 </button>
                 <button
                   @click="handleDeletePattern(pattern.id)"
@@ -2109,9 +2133,19 @@ function velBarColor(v) {
       ><Star class="w-3 h-3" /> Favorite All Chords</button>
     </div>
 
+    <!-- AI Loading Overlay -->
+    <div
+      v-if="aiLoading"
+      class="absolute inset-0 z-[300] flex flex-col items-center justify-center bg-neutral-900/90 rounded-lg"
+    >
+      <div class="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mb-3" />
+      <span class="text-sm font-mono text-purple-300 animate-pulse">Loading progression…</span>
+    </div>
+
     <!-- AI Prompt -->
     <AiPromptModal
       v-if="showAiPrompt"
+      app-key="chord-prog"
       system-prompt="You are a music theory assistant. Generate a chord progression as a JSON array of {chordName, notes} objects for a 16-step chord sequencer. notes are MIDI note numbers. Output ONLY valid JSON."
       placeholder="e.g. ambient romantic 8 chords in C major"
       button-label="Generate Progression"
