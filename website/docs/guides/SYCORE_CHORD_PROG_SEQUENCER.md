@@ -31,7 +31,7 @@ The panel can be **minimised** (title bar only) without stopping playback, and c
 
 ## 3. Interface at a Glance
 
-<img src="../../help/guides/sycore-chord-progression-sequencer.png"/>
+<img src="../../help/guides/sycore-chord-progressions-sequencer.png"/>
 
 ---
 
