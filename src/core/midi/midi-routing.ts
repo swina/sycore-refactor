@@ -151,6 +151,12 @@ export class MidiRouter {
       const isRouted = hasMappings ? isRoutedByMatrix : (isRoutedByMatrix || this.broadcastMode);
       if (!isRouted) return;
 
+      // Don't Thru-routing back to a device that's also used as an input
+      // (controller), unless explicitly matrix-routed — prevents MIDI
+      // feedback loops where the controller echoes the message back on
+      // a different port ID than the one it came in on.
+      if (!isRoutedByMatrix && outConfig.inEnabled) return;
+
       // Loop prevention
       const normIn = inputName.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
       const normOut = outDevice.name.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();

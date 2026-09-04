@@ -356,6 +356,11 @@ export class MidiService {
       const isRouted = hasMappings ? isRoutedByMatrix : (isRoutedByMatrix || this.router.getBroadcastMode());
       if (!isRouted) return;
 
+      // Don't Thru-routing back to a virtual device that's also used as an
+      // input (controller), unless explicitly matrix-routed — prevents MIDI
+      // feedback loops.
+      if (!isRoutedByMatrix && outConfig.inEnabled) return;
+
       // Physical-loop guard: if this instrument's own bound Output port is
       // the same device we're currently routing FROM, forwarding here would
       // send straight back out to that same device — many keyboards/synths
@@ -1139,6 +1144,10 @@ export class MidiService {
       const config = this.routingConfig?.registrations[outPort.name];
       if (!config || !config.outEnabled) return;
       if (outPort.id === skipDeviceId || outPort.name === skipDeviceName) return;
+      // Don't send app-generated messages to devices that are also used as
+      // inputs (controllers), unless explicitly matrix-routed — prevents
+      // MIDI feedback loops where the controller echoes the message back.
+      if (!isMatrixMatch && config.inEnabled) return;
 
       let shouldAdd = true;
       switch (type) {
