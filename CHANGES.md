@@ -2,6 +2,12 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-09-04
+
+- **Add MIDI Learn per chord step** — Each of the 16 chord steps in ChordProgSequencer now supports MIDI Learn (right-click → MIDI Map). Right-clicking a step opens both the copy/paste menu and the MIDI Map context menu. Steps show an amber ring when mapped and a pulsing orange dot during MIDI Learn (`cp_step_0`–`cp_step_15`). When a mapped MIDI message is received, the chord plays and holds. Clicking any step (or triggering another step via MIDI) stops the held chord and starts the new one. Branch: current.
+
+- **Fix: AiPromptModal z-index** — Raised from `z-[130]` to `z-[400]` so the AI Prompt modal renders above the Drum Machine draggable panel (which uses a dynamic z-index up to 399). Branch: current.
+
 ## 2026-08-31
 
 - **Added Doumentation Sections:** - Modules Manager. The Module Manager (admin-only panel) controls which modules appear in the application launcher, toolbar, MIDI mappings, and keyboard shortcuts. Disabling a module hides it from the UI but does not remove its code or data — it can be re-enabled at any time. AI Settings: The AI Settings panel lets you configure which AI provider the app uses

@@ -494,11 +494,13 @@ onUnmounted(() => {
   if (_panicTimeout) { clearTimeout(_panicTimeout); midiStore.panic() }
   if (rafRef.value !== null) cancelAnimationFrame(rafRef.value)
   previewTimeouts.forEach(id => clearTimeout(id))
+  stopHeldChord()
   window.removeEventListener('cp-start', _onCpStart)
   window.removeEventListener('cp-stop', _onCpStop)
   window.removeEventListener('cp-slot-select', _onCpSlotSelect)
   _unsubMidiNote?.()
   _unsubAppNote?.()
+  _unsubRawMidi?.()
 })
 
 // ── UI State ─────────────────────────────────────────────────────────────────
@@ -546,7 +548,7 @@ function handleSlotSelect(idx) {
 
 function handleStepClick(idx) {
   store.selectedStepIdx = idx
-  if (!store.isPlaying) previewStep(idx)
+  if (!store.isPlaying) triggerChordStep(idx)
 }
 
 // The "now playing" highlight only makes sense when the slot being shown
@@ -572,6 +574,7 @@ function openStepContextMenu(idx, e) {
   const x = Math.min(e.clientX, window.innerWidth - menuW - 8)
   const y = Math.min(e.clientY, window.innerHeight - menuH - 8)
   stepContextMenu.value = { visible: true, x: Math.max(8, x), y: Math.max(8, y), idx }
+  openMenu(e, { name: 'cp_step_' + idx, label: 'Chord Prog: Step ' + (idx + 1) })
 }
 
 function closeStepContextMenu() {
@@ -663,6 +666,33 @@ const selectedChord = ref(null) // { chordName, notes }
 const chordTranspose = ref(0)
 const previewTimeouts = []
 const previewActiveNotes = [] // { note, channel } — track exactly what's sounding
+const heldChordNotes = [] // { note, channel } — notes from MIDI Learn-triggered chords, held until next trigger
+
+function stopHeldChord() {
+  heldChordNotes.forEach(({ note, channel }) =>
+    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
+  heldChordNotes.length = 0
+}
+
+function triggerChordStep(idx) {
+  const step = store.steps[idx]
+  if (!step?.active || !step.notes?.length) return
+  // Stop any held chord + any preview notes
+  stopHeldChord()
+  previewTimeouts.forEach(id => clearTimeout(id))
+  previewTimeouts.length = 0
+  previewActiveNotes.forEach(({ note, channel }) =>
+    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
+  previewActiveNotes.length = 0
+  store.selectedStepIdx = idx
+  const channel = midiStore.midiChannel
+  const shift = (seqTranspose.value || 0) + (step.transpose || 0)
+  step.notes.forEach(note => {
+    const n = Math.max(0, Math.min(127, note + shift))
+    midiStore.sendNoteOn(n, step.velocity || 90, channel, MidiSource.CHORD_PROG)
+    heldChordNotes.push({ note: n, channel })
+  })
+}
 
 function previewChord(chord) {
   selectedChord.value = chord
@@ -778,6 +808,7 @@ watch(() => store.activeSlotIndex, (idx) => {
 // MIDI FLOW device→app input routing: a device wired to Chord Sequencer in
 // the canvas starts playback on note-on (see docs/plans/modular/MIDI-Flow-Control.md).
 let _unsubMidiNote = null
+let _unsubRawMidi = null
 function _onMidiNoteIn(type, note, velocity, chan, inputId) {
   if (type !== 'on' || velocity <= 0) return
   const inputDevice = midiService.getInputs().find(i => i.id === inputId)
@@ -812,7 +843,35 @@ onMounted(() => {
   window.addEventListener('cp-slot-select', _onCpSlotSelect)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
   _unsubAppNote = midiStore.addAppNoteListener(_onAppNoteIn)
+  _unsubRawMidi = midiService.addRawListener(_onRawMidiIn)
 })
+
+function _onRawMidiIn(event) {
+  if (!event.data || event.data.length < 3) return
+  const status  = event.data[0]
+  const type    = status & 0xF0
+  const channel = status & 0x0F
+  const byte1   = event.data[1]
+  const byte2   = event.data[2]
+  const isCC    = type === 0xB0 && byte2 > 0
+  const isNote  = type === 0x90 && byte2 > 0
+  if (!isCC && !isNote) return
+  const inputPort = midiService.getInputs().find(i => i.id === event.target?.id)
+  const device    = inputPort?.name || null
+  const keyParts  = []
+  if (device) keyParts.push(device)
+  keyParts.push(`CH${channel + 1}`)
+  keyParts.push(isNote ? `NOTE${byte1}` : `CC${byte1}`)
+  const key     = keyParts.join(':')
+  const mapping = mappingStore.midiMappings[key]
+  if (!mapping) return
+  const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+  if (!paramName.startsWith('cp_step_')) return
+  const idx = parseInt(paramName.slice('cp_step_'.length))
+  if (!isNaN(idx) && idx >= 0 && idx < 16 && idx < store.numSteps) {
+    triggerChordStep(idx)
+  }
+}
 
 // Auto-save current slot whenever steps/numSteps/playMode/arpRate change
 watch([() => store.steps, () => store.numSteps, () => store.playMode, () => store.arpRate], () => {
@@ -1253,6 +1312,7 @@ function velBarColor(v) {
           :key="idx"
           :class="[
             'relative flex flex-col items-center justify-between rounded border transition-all overflow-hidden',
+            mappingStore.mappedParams.has('cp_step_' + idx) ? 'ring-1 ring-amber-500/60' : '',
             idx >= store.numSteps ? 'opacity-25 pointer-events-none' : '',
             isCurrentPlayingStep(idx) ? 'border-yellow-400 bg-yellow-400/10' : '',
             idx === store.selectedStepIdx && !isCurrentPlayingStep(idx) ? 'border-purple-500 bg-purple-900/20' : '',
@@ -1310,6 +1370,11 @@ function velBarColor(v) {
               :style="{ width: step.velocity ? `${(step.velocity / 127) * 100}%` : '0%' }"
             />
           </div>
+          <!-- MIDI Learn indicator dot -->
+          <span
+            v-if="mappingStore.learningParamName === 'cp_step_' + idx"
+            class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none"
+          />
         </button>
       </div>
 

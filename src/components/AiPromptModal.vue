@@ -131,7 +131,7 @@ function handleDiscard() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  <div class="fixed inset-0 z-[400] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
     <div class="bg-neutral-950 border border-neutral-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
       <div class="p-6 border-b border-neutral-900 flex justify-between items-center">
         <div class="flex items-center gap-3">
