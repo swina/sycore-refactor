@@ -2,6 +2,15 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-09-05
+
+- **Fix: MIDI feedback loop in MIDI Flow routing** — When a controller is wired to an instrument via MIDI Flow, app-generated messages were also being sent back to the controller's output port, causing echo/feedback loops in multi-device setups. Three guard additions:
+  - `broadcast()` (app→device): skip output ports that are also used as inputs (controllers) unless explicitly matrix-routed
+  - `routeMessageToOutputs` (Thru): same guard — don't Thru back to controller output ports on different port IDs
+  - `routeMessageToVirtualOutputs` (Thru): same guard for virtual outputs
+  - Two-way MIDI communication now limited to instrument→sound engine paths as intended.
+  - Branch: `fix/09-05/midi-feedback-only-for-sound-engine`.
+
 ## 2026-09-04
 
 - **Add MIDI Learn per chord step** — Each of the 16 chord steps in ChordProgSequencer now supports MIDI Learn (right-click → MIDI Map). Right-clicking a step opens both the copy/paste menu and the MIDI Map context menu. Steps show an amber ring when mapped and a pulsing orange dot during MIDI Learn (`cp_step_0`–`cp_step_15`). When a mapped MIDI message is received, the chord plays and holds. Clicking any step (or triggering another step via MIDI) stops the held chord and starts the new one. Branch: current.
