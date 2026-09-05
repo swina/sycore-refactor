@@ -2,7 +2,15 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-09-06
+
+- **MIDI Learn on Panic button** — Right-click the header Panic button to MIDI Learn a controller for `cp_panic`. When triggered via MIDI, it calls `stopHeldChord()` and flashes feedback momentarily.
+- **MIDI Learn button opens standard modal in STEP DETAIL** — The MIDI Learn button now calls `openMenu` from `useMidiContextMenu` instead of calling `learnForParam` directly, so the standard MidiMapContextMenu modal (with pulse animation and "Move a controller…" UI) opens for the selected step.
+- **Fix: MIDI handlers guarded by `isOpen`** — `_onRawMidiIn`, `_onMidiNoteIn`, and `_onAppNoteIn` now check `props.isOpen` before processing, preventing saved MIDI mappings or MIDI Flow routings from auto-triggering steps or playback when the Chord Prog panel is closed or not yet focused.
+- **MIDI step trigger always plays (no toggle)** — `triggerChordStep` now accepts a `forcePlay` parameter; MIDI controller-triggered steps (`_onRawMidiIn`) pass `true` so triggering a step always plays it (stopping any other step first) instead of toggling off the same step.
 ## 2026-09-05
+
+- **Neon glow on playing steps** — Added `shadow-[0_0_12px_rgba(250,204,21,0.4)]` neon ring glow to the currently playing step in both `ChordProgSequencer.vue` and `DeckChordProgSummary.vue`.
 
 - **Fix: MIDI feedback loop in MIDI Flow routing** — When a controller is wired to an instrument via MIDI Flow, app-generated messages were also being sent back to the controller's output port, causing echo/feedback loops in multi-device setups. Three guard additions:
   - `broadcast()` (app→device): skip output ports that are also used as inputs (controllers) unless explicitly matrix-routed

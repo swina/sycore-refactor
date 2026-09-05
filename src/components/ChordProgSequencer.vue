@@ -128,6 +128,8 @@ let _captureArmed = false         // set true on play, consumed by next schedule
 let _captureBarsRemaining = 0     // tick counter until auto-stop
 let _captureRecording = false     // set true after pre-roll fires, cleared on stop
 let _lastFollowedSlot = null      // last slot auto-loaded to follow chain playback; null forces a follow on the next tick
+let _lastMidiTriggerStep = -1     // last step index triggered by MIDI
+let _lastMidiTriggerTime = 0      // timestamp of last MIDI trigger
 
 const seqTranspose = ref(0)
 const loopEnabled = ref(true)
@@ -192,14 +194,32 @@ function stopAllNotes() {
   _stopPending = true
   _pendingTimeouts.forEach(id => clearTimeout(id))
   _pendingTimeouts.clear()
-  _activeNoteKeys.forEach(key => {
-    const [noteStr, chanStr] = key.split('-')
-    midiStore.sendNoteOff(parseInt(noteStr), 0, parseInt(chanStr), MidiSource.CHORD_PROG)
-  })
-  _activeNoteKeys.clear()
-  // Delayed panic: catches any note-ons that slipped through the timing gap
+
+  // Fade out: ramp CC7 (volume) down over panic delay, then cut notes
   if (_panicTimeout) clearTimeout(_panicTimeout)
-  _panicTimeout = window.setTimeout(() => { midiStore.panic(); _panicTimeout = null }, panicDelayMs.value)
+  const delay = panicDelayMs.value
+  const chan = midiStore.midiChannel
+  const steps = 4
+  for (let i = 1; i <= steps; i++) {
+    const vol = Math.round(127 * (1 - i / steps))
+    const tid = window.setTimeout(() => {
+      if (_stopPending) midiStore.sendCC(7, vol, chan, MidiSource.CHORD_PROG)
+      _pendingTimeouts.delete(tid)
+    }, delay * i / steps)
+    _pendingTimeouts.add(tid)
+  }
+
+  _panicTimeout = window.setTimeout(() => {
+    _activeNoteKeys.forEach(key => {
+      const [noteStr, chanStr] = key.split('-')
+      midiStore.sendNoteOff(parseInt(noteStr), 0, parseInt(chanStr), MidiSource.CHORD_PROG)
+    })
+    _activeNoteKeys.clear()
+    midiStore.panic()
+    // Restore volume
+    setTimeout(() => midiStore.sendCC(7, 127, chan, MidiSource.CHORD_PROG), 10)
+    _panicTimeout = null
+  }, delay)
 }
 
 watch(() => store.isPlaying, (playing) => {
@@ -556,7 +576,8 @@ function handleStepClick(idx) {
 // chain playback these diverge as playback advances through slots the user
 // isn't looking at.
 function isCurrentPlayingStep(idx) {
-  return idx === store.currentStep && store.isPlaying && store.activeSlotIndex === store.playingSlotIndex
+  if (store.isPlaying) return idx === store.currentStep && store.activeSlotIndex === store.playingSlotIndex
+  return idx === store.currentStep && idx === store.selectedStepIdx
 }
 
 function handleStepDoubleClick(idx) {
@@ -674,9 +695,18 @@ function stopHeldChord() {
   heldChordNotes.length = 0
 }
 
-function triggerChordStep(idx) {
+function triggerChordStep(idx, forcePlay = false) {
   const step = store.steps[idx]
   if (!step?.active || !step.notes?.length) return
+
+  // Toggle off only on manual click; MIDI controllers always play
+  if (!forcePlay && store.currentStep === idx && heldChordNotes.length > 0) {
+    stopAllNotes()
+    store.currentStep = -1
+    store.selectedStepIdx = idx
+    return
+  }
+
   // Stop any held chord + any preview notes
   stopHeldChord()
   previewTimeouts.forEach(id => clearTimeout(id))
@@ -685,6 +715,7 @@ function triggerChordStep(idx) {
     midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
   previewActiveNotes.length = 0
   store.selectedStepIdx = idx
+  store.currentStep = idx
   const channel = midiStore.midiChannel
   const shift = (seqTranspose.value || 0) + (step.transpose || 0)
   step.notes.forEach(note => {
@@ -811,6 +842,7 @@ let _unsubMidiNote = null
 let _unsubRawMidi = null
 function _onMidiNoteIn(type, note, velocity, chan, inputId) {
   if (type !== 'on' || velocity <= 0) return
+  if (!props.isOpen) return
   const inputDevice = midiService.getInputs().find(i => i.id === inputId)
   const sourceKey = inputDevice?.name
   // Starting playback is a much bigger deal than just sounding a note, so
@@ -828,6 +860,7 @@ function _onMidiNoteIn(type, note, velocity, chan, inputId) {
 let _unsubAppNote = null
 function _onAppNoteIn(type, note, velocity, chan, sourceApp) {
   if (type !== 'on' || velocity <= 0) return
+  if (!props.isOpen) return
   // Same reasoning as _onMidiNoteIn — an unwired app source must not
   // auto-start this sequencer's playback by default.
   if (!midiStore.hasExplicitInputRouting(sourceApp)) return
@@ -847,14 +880,15 @@ onMounted(() => {
 })
 
 function _onRawMidiIn(event) {
+  if (!props.isOpen) return
   if (!event.data || event.data.length < 3) return
   const status  = event.data[0]
   const type    = status & 0xF0
   const channel = status & 0x0F
   const byte1   = event.data[1]
   const byte2   = event.data[2]
-  const isCC    = type === 0xB0 && byte2 > 0
-  const isNote  = type === 0x90 && byte2 > 0
+  const isCC    = type === 0xB0 && byte2 > 1
+  const isNote  = type === 0x90 && byte2 > 1
   if (!isCC && !isNote) return
   const inputPort = midiService.getInputs().find(i => i.id === event.target?.id)
   const device    = inputPort?.name || null
@@ -866,10 +900,23 @@ function _onRawMidiIn(event) {
   const mapping = mappingStore.midiMappings[key]
   if (!mapping) return
   const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
-  if (!paramName.startsWith('cp_step_')) return
+  if (!paramName.startsWith('cp_step_') && paramName !== 'cp_panic') return
+  if (paramName === 'cp_panic') {
+    stopHeldChord()
+    store.currentStep = -1
+    sendChMappingFeedback('cp_panic', true)
+    setTimeout(() => sendChMappingFeedback('cp_panic', false), 100)
+    return
+  }
   const idx = parseInt(paramName.slice('cp_step_'.length))
   if (!isNaN(idx) && idx >= 0 && idx < 16 && idx < store.numSteps) {
-    triggerChordStep(idx)
+    // Guard against double-trigger from controllers that send duplicate
+    // messages on press (e.g. some momentary buttons send 127 twice).
+    const now = Date.now()
+    if (_lastMidiTriggerStep === idx && now - _lastMidiTriggerTime < 200) return
+    _lastMidiTriggerStep = idx
+    _lastMidiTriggerTime = now
+    triggerChordStep(idx, true)
   }
 }
 
@@ -1181,6 +1228,8 @@ function velBarColor(v) {
           {{ store.isPlaying ? 'Stop' : 'Play' }}
         </button>
 
+        
+
         <!-- Slot selector (A-H) -->
         <div class="flex items-center gap-1" title="Progression slot — each slot holds an independent chord progression">
           <button
@@ -1314,7 +1363,7 @@ function velBarColor(v) {
             'relative flex flex-col items-center justify-between rounded border transition-all overflow-hidden',
             mappingStore.mappedParams.has('cp_step_' + idx) ? 'ring-1 ring-amber-500/60' : '',
             idx >= store.numSteps ? 'opacity-25 pointer-events-none' : '',
-            isCurrentPlayingStep(idx) ? 'border-yellow-400 bg-yellow-400/10' : '',
+            isCurrentPlayingStep(idx) ? 'border-yellow-400 bg-yellow-500/25 shadow-[0_0_12px_rgba(250,204,21,0.4)]' : '',
             idx === store.selectedStepIdx && !isCurrentPlayingStep(idx) ? 'border-purple-500 bg-purple-900/20' : '',
             step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-purple-700/60 bg-purple-950/40' : '',
             !step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-neutral-800 bg-neutral-950/60' : '',
@@ -1399,6 +1448,11 @@ function velBarColor(v) {
             class="text-[9px] px-1.5 py-0.5 mt-2 rounded border border-neutral-700 hover:border-purple-500 hover:text-purple-400 bg-purple-600 text-neutral-300 transition-colors font-mono"
             title="Assign custom chord via MIDI IN or Virtual Keyboard"
             >Custom</button>
+            <button
+              @click="openMenu($event, { name: 'cp_step_' + store.selectedStepIdx, label: 'Chord Prog: Step ' + (store.selectedStepIdx + 1) })"
+              class="text-[9px] px-1.5 py-0.5 mt-2 rounded border border-neutral-700 hover:border-amber-500 hover:text-amber-400 text-neutral-500 transition-colors font-mono"
+              title="MIDI Learn — map a MIDI controller to trigger this step"
+            >MIDI Learn</button>
             <div class="flex flex-col items-start">
               <span class="text-purple-300 mt-2 text-[12px] font-bold">{{ selectedStep.chordName }} </span>
               <span class="text-purple-400 text-[9px] font-normal">{{ chordNotes(selectedStep).join(' ') }}</span>
@@ -1541,7 +1595,7 @@ function velBarColor(v) {
       </div>
 
       <!-- ── FILL ALL ──────────────────────────────────────────────────────── -->
-      <div class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-3 text-[12px] flex-wrap">
+      <div class="relative shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-3 text-[12px] flex-wrap">
         <span class="text-neutral-500 font-mono shrink-0 font-bold uppercase tracking-wider">Fill</span>
 
         <!-- Duration fill -->
@@ -1712,6 +1766,16 @@ function velBarColor(v) {
         >
           <RotateCcw class="w-3 h-3" />
           Clear
+        </button>
+        <!-- Panic (stop held step note-off only on chord prog channel) -->
+        <button
+          @click.stop="stopHeldChord(); store.currentStep = -1"
+          @contextmenu.prevent="openMenu($event, { name: 'cp_panic', label: 'Chord Prog: Panic' })"
+          class="absolute right-10 mt-8 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider bg-neutral-800 hover:bg-red-900 text-neutral-500 hover:text-red-300 border border-neutral-700 hover:border-red-700 transition-all"
+          title="Stop any manually-triggered step — sends note-offs on chord prog channel only"
+        >
+          <X class="w-3 h-3" />
+          STOP
         </button>
       </div>
 

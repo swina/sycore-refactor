@@ -37,7 +37,8 @@ const nextStepData = computed(() => {
 // step index matches while the user is looking at a slot that isn't the one
 // actually chained/playing.
 function isCurrentPlayingStep(idx) {
-  return idx === store.currentStep && store.isPlaying && store.activeSlotIndex === store.playingSlotIndex
+  if (store.isPlaying) return idx === store.currentStep && store.activeSlotIndex === store.playingSlotIndex
+  return idx === store.currentStep && idx === store.selectedStepIdx
 }
 
 const progressionSteps = computed(() => store.steps.slice(0, store.numSteps))
@@ -120,8 +121,14 @@ function openPanel() {
         <p class="text-neutral-600 uppercase tracking-widest text-center">Progression</p>
         <div class="flex gap-1 flex-wrap justify-center">
           <div v-for="(step, idx) in progressionSteps" :key="idx"
-            class="rounded w-16 px-1 py-1 text-center border"
-            :class="step.active ? 'border-purple-700/60 bg-purple-950/40' : 'border-neutral-800 bg-neutral-950/60'"
+            class="rounded w-16 px-1 py-1 text-center border transition-all"
+            :class="[
+              isCurrentPlayingStep(idx)
+                ? 'border-yellow-400 bg-yellow-500/25 shadow-[0_0_12px_rgba(250,204,21,0.4)]'
+                : step.active
+                  ? 'border-purple-700/60 bg-purple-950/40'
+                  : 'border-neutral-800 bg-neutral-950/60'
+            ]"
           >
             <span class="block text-[8px]" :class="step.active ? 'text-purple-400' : 'text-neutral-600'">{{ idx + 1 }}</span>
             <span class="block truncate text-[10px] font-bold"
