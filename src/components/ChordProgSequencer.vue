@@ -130,6 +130,7 @@ let _captureRecording = false     // set true after pre-roll fires, cleared on s
 let _lastFollowedSlot = null      // last slot auto-loaded to follow chain playback; null forces a follow on the next tick
 let _lastMidiTriggerStep = -1     // last step index triggered by MIDI
 let _lastMidiTriggerTime = 0      // timestamp of last MIDI trigger
+let _scheduledMidiEventId = null  // Tone.js schedule event ID for deferred trigger
 
 const seqTranspose = ref(0)
 const loopEnabled = ref(true)
@@ -503,6 +504,7 @@ watch(() => store.isPlaying, (playing) => {
 
 onUnmounted(() => {
   store.isPlaying = false
+  if (_scheduledMidiEventId !== null) { getTransport().cancel(_scheduledMidiEventId); _scheduledMidiEventId = null }
   if (repeatEventIdRef.value !== null) getTransport().clear(repeatEventIdRef.value)
   transportManager.releaseTransport()
   stopAllNotes()
@@ -916,7 +918,25 @@ function _onRawMidiIn(event) {
     if (_lastMidiTriggerStep === idx && now - _lastMidiTriggerTime < 200) return
     _lastMidiTriggerStep = idx
     _lastMidiTriggerTime = now
-    triggerChordStep(idx, true)
+
+    // Cancel any previously scheduled deferred trigger
+    if (_scheduledMidiEventId !== null) {
+      getTransport().cancel(_scheduledMidiEventId)
+      _scheduledMidiEventId = null
+    }
+
+    if (syncStore.syncChordProgManualTrigger && transportManager.isRunning.value) {
+      // Don't stop the current chord — let it play until the bar boundary,
+      // then the scheduled triggerChordStep will naturally stop it and play
+      // the new step at the transition point.
+      const barPos = transportManager.getNextBarPosition()
+      _scheduledMidiEventId = getTransport().schedule(() => {
+        _scheduledMidiEventId = null
+        triggerChordStep(idx, true)
+      }, barPos)
+    } else {
+      triggerChordStep(idx, true)
+    }
   }
 }
 
@@ -1227,6 +1247,8 @@ function velBarColor(v) {
           <Play v-else class="w-3 h-3" />
           {{ store.isPlaying ? 'Stop' : 'Play' }}
         </button>
+
+        
 
         
 
@@ -1766,6 +1788,20 @@ function velBarColor(v) {
         >
           <RotateCcw class="w-3 h-3" />
           Clear
+        </button>
+        <!-- Manual trigger sync: AUTO (align to next bar) or OFF (immediate) -->
+        <button
+          @click.stop="syncStore.syncChordProgManualTrigger = !syncStore.syncChordProgManualTrigger"
+          :title="syncStore.syncChordProgManualTrigger ? 'Manual triggers sync to next bar (AUTO)' : 'Manual triggers fire immediately (OFF)'"
+          :class="[
+            'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase border transition-colors',
+            syncStore.syncChordProgManualTrigger
+              ? 'border-cyan-600 text-cyan-400 bg-cyan-950/30'
+              : 'border-neutral-700 text-neutral-500 hover:text-neutral-300'
+          ]"
+        >
+          <span v-if="syncStore.syncChordProgManualTrigger">SYNC</span>
+          <span v-else>SYNC</span>
         </button>
         <!-- Panic (stop held step note-off only on chord prog channel) -->
         <button

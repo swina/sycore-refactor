@@ -41,8 +41,9 @@ const KEYS: Record<string, string> = {
   syncChordProgToTransport:      'S1_SYNC_CP_TRANSPORT',
   syncDrumMachineToTransport:    'S1_SYNC_DM_TRANSPORT',
   syncLoopMachineToTransport:    'S1_SYNC_LM_TRANSPORT',
-  syncBackingTrackToTransport:   'S1_SYNC_BT_TRANSPORT',
+syncBackingTrackToTransport:   'S1_SYNC_BT_TRANSPORT',
   syncRecordToTransport:         'S1_SYNC_REC_TRANSPORT',
+  syncChordProgManualTrigger:    'S1_SYNC_CP_MANUAL_TRIGGER',
 }
 
 function readBool(k: string): boolean {
@@ -89,6 +90,7 @@ export interface SyncFlags {
   syncLoopMachineToTransport: Ref<boolean>
   syncBackingTrackToTransport: Ref<boolean>
   syncRecordToTransport: Ref<boolean>
+  syncChordProgManualTrigger: Ref<boolean>
   /** Per-app start delay in beats (keyed by app name). 0 = no delay. */
   appDelays: Ref<Record<string, number>>
 }
@@ -145,6 +147,7 @@ export const useSyncStore = defineStore('sync', () => {
   const syncLoopMachineToTransport    = ref(readBool(KEYS.syncLoopMachineToTransport))
   const syncBackingTrackToTransport   = ref(readBool(KEYS.syncBackingTrackToTransport))
   const syncRecordToTransport         = ref(readBool(KEYS.syncRecordToTransport))
+  const syncChordProgManualTrigger    = ref(readBool(KEYS.syncChordProgManualTrigger))
 
   const appDelays = ref<Record<string, number>>(readDelays())
 
@@ -158,6 +161,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncDrumMachineToMidi, syncDrumMachineToSequencer, syncDrumMachineToBackingTrack, syncDrumMachineToLooper, syncDrumMachineToAudioCapture,
     syncSequencerToTransport, syncSequencer2ToTransport, syncChordProgToTransport, syncDrumMachineToTransport, syncLoopMachineToTransport, syncBackingTrackToTransport,
     syncRecordToTransport,
+    syncChordProgManualTrigger,
     appDelays,
   }
 

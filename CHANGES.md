@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-09-06
 
+- **Manual trigger sync toggle (AUTO/OFF)** — Added `syncChordProgManualTrigger` flag in the header (persisted to localStorage). In AUTO mode with global transport running, MIDI-triggered steps don't stop the currently playing chord — they schedule the new chord at the next bar boundary. The playing step continues until the transition point, then `triggerChordStep` swaps it cleanly on the beat. Any pending scheduled trigger is cancelled when a new one arrives before the bar.
 - **MIDI Learn on Panic button** — Right-click the header Panic button to MIDI Learn a controller for `cp_panic`. When triggered via MIDI, it calls `stopHeldChord()` and flashes feedback momentarily.
 - **MIDI Learn button opens standard modal in STEP DETAIL** — The MIDI Learn button now calls `openMenu` from `useMidiContextMenu` instead of calling `learnForParam` directly, so the standard MidiMapContextMenu modal (with pulse animation and "Move a controller…" UI) opens for the selected step.
 - **Fix: MIDI handlers guarded by `isOpen`** — `_onRawMidiIn`, `_onMidiNoteIn`, and `_onAppNoteIn` now check `props.isOpen` before processing, preventing saved MIDI mappings or MIDI Flow routings from auto-triggering steps or playback when the Chord Prog panel is closed or not yet focused.
