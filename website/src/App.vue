@@ -34,7 +34,7 @@ function openDocs() {
 }
 
 // URL of the PWA app deployment — set VITE_APP_URL at build time.
-const appUrl = 'https://sycore.vercel.app'
+const appUrl = 'https://sycoreapp.vercel.app'
 const patreonUrl = 'https://www.patreon.com/cw/moodgiver/membership'
 const githubUrl = 'https://github.com/swina/sycore-refactor'
 const youtubeChannelUrl = 'https://www.youtube.com/@SYCORE-app'
