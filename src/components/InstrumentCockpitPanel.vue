@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Star, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic, Save, X } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -45,6 +45,7 @@ const showSaveSetDialog = ref(false)
 const newSetName = ref('')
 const newSetNameInput = ref(null)
 const activeSetId = ref(null)
+const patchVersion = ref(0)
 
 function openSaveSetDialog() {
   newSetName.value = ''
@@ -62,6 +63,7 @@ async function saveCurrentSet() {
 async function recallSet(set) {
   activeSetId.value = set.id
   await recallStoredSet(set)
+  patchVersion.value++
 }
 
 const FLAG_FIELDS = [
@@ -286,6 +288,8 @@ const highlightedInstrumentNames = computed(() => {
 // filter a device removed from the MIDI Flow canvas would keep showing up
 // here forever. ──
 const instruments = computed(() => {
+  // Force re-evaluation after performance set / solo set recall
+  void patchVersion.value
   const uiOutputs = midiStore.routingMatrix[MidiSource.UI] ?? []
 
   return Object.values(midiStore.routingConfig?.registrations ?? {})
@@ -500,6 +504,11 @@ function _cockpitMidiListener(event) {
 let _unsubCockpitMidi = null
 onMounted(() => { _unsubCockpitMidi = midiService.addRawListener(_cockpitMidiListener); loadSets() })
 onUnmounted(() => _unsubCockpitMidi?.())
+
+// Deep-watch registrations to detect patch changes from performance sets
+// and solo set recalls initiated from any component — bump patchVersion to
+// force instruments computed to re-evaluate its patchName/channelPatchList.
+watch(() => midiStore.routingConfig?.registrations, () => { patchVersion.value++ }, { deep: true })
 
 // ── Transport position (bar:beat:sixteenth) — same rAF-driven readout as
 // TransportBar.vue (the footer's transport controls), just mirrored here. ──
