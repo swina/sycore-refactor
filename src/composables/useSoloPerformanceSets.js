@@ -8,8 +8,14 @@ const LS_SETS = 'SYCORE_SOLO_NAMED_SETS'
 function loadSlots() {
   try {
     const raw = localStorage.getItem(userKey(LS_SLOTS))
-    return raw ? JSON.parse(raw) : Array(8).fill(null)
-  } catch { return Array(8).fill(null) }
+    const parsed = raw ? JSON.parse(raw) : []
+    if (parsed.length < 16) {
+      const migrated = [...parsed, ...Array(16 - parsed.length).fill(null)]
+      saveSlots(migrated)
+      return migrated
+    }
+    return parsed
+  } catch { return Array(16).fill(null) }
 }
 
 function saveSlots(slots) {
@@ -29,7 +35,7 @@ function saveNamedSets(sets) {
   catch {}
 }
 
-export const SOLO_SLOT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+export const SOLO_SLOT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P']
 
 // Module-level shared state
 const soloSlots = ref(loadSlots())
@@ -40,7 +46,7 @@ export function useSoloPerformanceSets() {
   function persist() { saveSlots(soloSlots.value) }
 
   function assignSlot(idx, deviceName, pcData) {
-    if (idx < 0 || idx > 7) return
+    if (idx < 0 || idx > 15) return
     const slots = [...soloSlots.value]
     slots[idx] = { deviceName, ...pcData }
     soloSlots.value = slots
@@ -48,7 +54,7 @@ export function useSoloPerformanceSets() {
   }
 
   function clearSlot(idx) {
-    if (idx < 0 || idx > 7) return
+    if (idx < 0 || idx > 15) return
     const slots = [...soloSlots.value]
     slots[idx] = null
     soloSlots.value = slots

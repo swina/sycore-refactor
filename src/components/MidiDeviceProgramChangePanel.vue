@@ -1360,7 +1360,7 @@ function assignToPad(setId, padIdx) {
                   <!-- Pad picker (expands inline below the row) -->
                   <div v-if="assigningSetId === set.id" class="px-3 py-2 bg-black/50 border-t border-neutral-900/40">
                     <p class="text-[7px] font-mono text-violet-400/60 uppercase tracking-widest mb-1.5">Assign to pad</p>
-                    <div class="grid grid-cols-4 gap-1">
+<div class="grid grid-cols-4 gap-1">
                       <button
                         v-for="padIdx in 16"
                         :key="padIdx"
@@ -1435,6 +1435,7 @@ function assignToPad(setId, padIdx) {
                               ? 'bg-amber-900/20 border-amber-600/40 text-amber-300 hover:bg-amber-900/40 hover:border-amber-500'
                               : 'bg-neutral-900/40 border-neutral-800/60 text-neutral-500 hover:border-amber-500/30 hover:text-amber-400'
                       ]"
+                      :title="getSlotAssignment(idx)?.soundName || getSlotAssignment(idx)?.name || '—'"
                     >
                       <!-- MIDI learning indicator -->
                       <span
@@ -1456,7 +1457,7 @@ function assignToPad(setId, padIdx) {
                     <input
                       v-model="soloSetName"
                       type="text"
-                      placeholder="Save all 8 slots as…"
+                      placeholder="Save all 16 slots as…"
                       maxlength="40"
                       @keydown.enter="saveCurrentSoloSet"
                       class="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white font-mono outline-none focus:border-amber-500 placeholder:text-neutral-700"
@@ -1479,7 +1480,7 @@ function assignToPad(setId, padIdx) {
                         @click="recallNamedSoloSet(set.id)"
                       >
                         <div :class="['text-[9px] font-bold truncate leading-tight', soloSetRecallId === set.id ? 'text-amber-300' : 'text-neutral-200']">{{ set.name }}</div>
-                        <div class="text-[7px] font-mono text-neutral-600 truncate">{{ set.slots.filter(s => s).length }} of 8 slots assigned</div>
+                        <div class="text-[7px] font-mono text-neutral-600 truncate">{{ set.slots.filter(s => s).length }} of 16 slots assigned</div>
                       </div>
                       <button
                         @click="deleteNamedSoloSet(set.id)"

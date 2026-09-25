@@ -15,7 +15,6 @@ applyTheme(readStoredTheme())
 import App from './App.vue'
 import SynthApp from './views/SynthApp.vue'
 import HomeView from './views/HomeView.vue'
-import MainPage from './views/MainPage.vue'
 import MainPageOptimized from './views/MainPageOptimized.vue'
 
 // Bridge for internal service logs to reach the UI Logger Panel
@@ -26,7 +25,7 @@ window.SY_LOG = (msg) => {
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: MainPageOptimized },
+    { path: '/', redirect: '/workspace' },
     { path: '/new', component: MainPageOptimized },
     { path: '/workspace', component: SynthApp },
     { path: '/home', component: HomeView },
@@ -37,7 +36,7 @@ let initialNavDone = false
 router.beforeEach((to, _from, next) => {
   if (!initialNavDone) {
     initialNavDone = true
-    if (to.path !== '/') return next('/')
+    if (to.path !== '/' && to.path !== '/workspace') return next('/')
   }
   next()
 })
@@ -59,9 +58,11 @@ configStore.init().then(() => {
   console.log('[Main] ConfigStore ready.')
   authStore.init()
   uiStore.isAppInitializing = false
+  uiStore.isMidiFlowOpen = true
 }).catch(err => {
   console.error('[Main] Initialization failed', err)
-  uiStore.isAppInitializing = false // Still clear the screen
+  uiStore.isAppInitializing = false
+  uiStore.isMidiFlowOpen = true
 })
 
 console.log('[Main] Mounting app...')

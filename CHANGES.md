@@ -2,7 +2,11 @@
  
 A running log of new features added to SY.CORE, newest first.
 
-## 2026-09-06
+## 2026-09-25
+
+- **App opens directly to MidiWizardFlow** — Root route `/` redirects to `/workspace` (SynthApp.vue), which renders MidiWizardFlow. Also sets `uiStore.isMidiFlowOpen = true` on init so the component is visible (was hidden by `v-show`). Cleaned up unused import.
+- **Silent background activation of MIDI Flow app panels** — When MidiWizardFlow loads a canvas with configured app nodes (e.g. ChordProgSequencer), those panels are activated in a silent/background mode: their `isXOpen` flag is set so MIDI input handlers process incoming messages, but they remain visually hidden (auto-minimized) until the user explicitly opens them. New store API: `uiStore.silentPanels` / `openSilentPanel(id)`. Added `silentPanels` watcher to `useDraggableResizable`.
+- **Home button in bottom bar navigates to MainPage** — Changed from `router.push('/')` (now redirects to workspace) to `router.push('/new')` which renders MainPageOptimized.
 
 - **Instrument patches update after performance/solo set recall** — Added a deep watcher on `routingConfig?.registrations` that bumps `patchVersion`, forcing the `instruments` computed to re-evaluate after any registration mutation. This ensures the current instrument patches list (lines 696–717) reflects program changes from performance sets and solo set recalls, regardless of which component initiated them.
 - **Manual trigger sync toggle (AUTO/OFF)** — Added `syncChordProgManualTrigger` flag in the header (persisted to localStorage). In AUTO mode with global transport running, MIDI-triggered steps don't stop the currently playing chord — they schedule the new chord at the next bar boundary. The playing step continues until the transition point, then `triggerChordStep` swaps it cleanly on the beat. Any pending scheduled trigger is cancelled when a new one arrives before the bar.

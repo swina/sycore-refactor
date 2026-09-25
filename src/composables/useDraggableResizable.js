@@ -271,6 +271,12 @@ export function useDraggableResizable({
       bringToFront()
       if (isTabletSize.value && !isMaximized.value) maximize()
     }, { immediate: true })
+
+    // Silent/background activation — open the panel for MIDI processing but
+    // keep it visually hidden until the user explicitly opens it.
+    watch(() => uiStore.silentPanels[panelId], (isSilent) => {
+      if (isSilent) isMinimized.value = true
+    })
   }
 
   return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize, isMaximized }

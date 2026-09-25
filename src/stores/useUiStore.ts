@@ -177,6 +177,17 @@ export const useUiStore = defineStore('ui', () => {
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
 
+  // ── Background (silent) panels: open for MIDI processing but visually hidden ──
+  const silentPanels = ref<Record<string, boolean>>({})
+
+  function openSilentPanel(id: string): void {
+    const ref$ = PANEL_ID_REF_LOOKUP[id]
+    if (!ref$) return
+    if (!ref$.value && !configStore.isModuleEnabled(id)) return
+    silentPanels.value = { ...silentPanels.value, [id]: true }
+    ref$.value = true
+  }
+
   // ── UI state ─────────────────────────────────────────────────────────────
   const isPanelCollapsed   = ref(true)
   const showFavoritesOnly  = ref(false)
@@ -533,6 +544,7 @@ export const useUiStore = defineStore('ui', () => {
     _bumpFocus(id, ref)
   }
   function openPanel(id: string): void {
+    delete silentPanels.value[id]
     focusPanel(id)
   }
   function closePanel(id: string): void {
@@ -650,6 +662,7 @@ export const useUiStore = defineStore('ui', () => {
     closeAll, toggleMainMenu, toggleSideMenu,
     isNoteLatchInstanceOpen, setNoteLatchInstanceOpen, closeNoteLatchInstances,
     isPanelOpen, togglePanel, openPanel, closePanel,
+    silentPanels, openSilentPanel,
     focusRequest, focusPanel, openPanelIds,
     isOpenAppsDockOpen, openAppsDockAnchor, toggleOpenAppsDock,
   }

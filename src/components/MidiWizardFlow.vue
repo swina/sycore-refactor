@@ -734,6 +734,20 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('mouseup', onCanvasMouseup))
 
+// One-shot: silently activate (open hidden) any app panels that have canvas
+// nodes, so configured apps e.g. ChordProgSequencer process MIDI from the
+// moment the flow loads without showing their UI windows.
+const _silentActivated = ref(false)
+watch(canvasNodes, (nodes) => {
+  if (_silentActivated.value || !nodes?.length) return
+  _silentActivated.value = true
+  for (const node of nodes) {
+    if (!node.sourceId) continue
+    const panelId = APP_PANEL_ID[node.sourceId]
+    if (panelId) uiStore.openSilentPanel(panelId)
+  }
+}, { immediate: true })
+
 // ── SVG bezier path ──
 function bezier(x1, y1, x2, y2) {
   const cx = (x1 + x2) / 2

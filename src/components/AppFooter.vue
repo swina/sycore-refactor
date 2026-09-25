@@ -187,7 +187,7 @@ onUnmounted(() => {
     <div class="h-full px-4 md:px-2 flex flex-row justify-between items-center gap-2">
 
       <button
-        @click="uiStore.closeAll(); router.push('/')"
+        @click="uiStore.closeAll(); router.push('/new')"
         title="Home"
         class="-ml-1 w-10 h-10 text-neutral-400 hover:bg-synth-cyan hover:text-black flex items-center justify-center transition-all active:scale-95 shadow-lg"
       >
