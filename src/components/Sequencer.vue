@@ -555,15 +555,28 @@ watch(() => props.bpm, (bpm) => {
 })
 
 const TEMPO_MULTIPLIERS = [
-  { label: '1/32', interval: '32n', beatsPerStep: 0.125 },
-  { label: '1/16', interval: '16n', beatsPerStep: 0.25 },
-  { label: '1/8',  interval: '8n',  beatsPerStep: 0.5 },
-  { label: '1/4',  interval: '4n',  beatsPerStep: 1 },
-  { label: '1/2',  interval: '2n',  beatsPerStep: 2 },
-  { label: '1/1',  interval: '1m',  beatsPerStep: 4 },
-  { label: '2/1',  interval: '2m',  beatsPerStep: 8 },
-  { label: '3/1',  interval: '2m.', beatsPerStep: 12 },
-  { label: '4/1',  interval: '4m',  beatsPerStep: 16 },
+  { label: '1/128', interval: '128n', beatsPerStep: 0.03125 },
+  { label: '1/64T', interval: '64t',  beatsPerStep: 0.04167 },
+  { label: '1/64',  interval: '64n',  beatsPerStep: 0.0625 },
+  { label: '1/64.', interval: '64n.', beatsPerStep: 0.09375 },
+  { label: '1/32T', interval: '32t',  beatsPerStep: 0.0833 },
+  { label: '1/32',  interval: '32n',  beatsPerStep: 0.125 },
+  { label: '1/32.', interval: '32n.', beatsPerStep: 0.1875 },
+  { label: '1/16',  interval: '16n',  beatsPerStep: 0.25 },
+  { label: '1/16T', interval: '16t',  beatsPerStep: 0.1667 },
+  { label: '1/16.', interval: '16n.', beatsPerStep: 0.375 },
+  { label: '1/8',   interval: '8n',   beatsPerStep: 0.5 },
+  { label: '1/8T',  interval: '8t',   beatsPerStep: 0.3333 },
+  { label: '1/8.',  interval: '8n.',  beatsPerStep: 0.75 },
+  { label: '1/4',   interval: '4n',   beatsPerStep: 1 },
+  { label: '1/4T',  interval: '4t',   beatsPerStep: 0.6667 },
+  { label: '1/4.',  interval: '4n.',  beatsPerStep: 1.5 },
+  { label: '1/2',   interval: '2n',   beatsPerStep: 2 },
+  { label: '1/2.',  interval: '2n.',  beatsPerStep: 3 },
+  { label: '1/1',   interval: '1m',   beatsPerStep: 4 },
+  { label: '2/1',   interval: '2m',   beatsPerStep: 8 },
+  { label: '3/1',   interval: '2m.',  beatsPerStep: 12 },
+  { label: '4/1',   interval: '4m',   beatsPerStep: 16 },
 ]
 const tempoMultiplier = ref(TEMPO_MULTIPLIERS[2]) // default 1/1
 const sequenceDirection = ref('up')

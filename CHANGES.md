@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-09-26
+
+- **Triplet and dotted tempo multipliers added to Sequencer** — Expanded `TEMPO_MULTIPLIERS` array with `T` (triplet) and `.` (dotted) variants for 1/32 through 1/2 note values, sorted by `beatsPerStep`.
+
 ## 2026-09-25
 
 - **App opens directly to MidiWizardFlow** — Root route `/` redirects to `/workspace` (SynthApp.vue), which renders MidiWizardFlow. Also sets `uiStore.isMidiFlowOpen = true` on init so the component is visible (was hidden by `v-show`). Cleaned up unused import.
