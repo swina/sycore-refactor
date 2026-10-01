@@ -46,7 +46,7 @@ const { openMenu }   = useMidiContextMenu()
 // ── Performance Sets (shared, IndexedDB-backed) ───────────────────
 
 // ── Solo Performance Sets (shared) ──────────────────────────────
-const { soloSlots, activeSlotIdx, namedSets, assignSlot, clearSlot, triggerSlot, saveNamedSet, deleteNamedSet, recallNamedSet, refreshNamedSets } = useSoloPerformanceSets()
+const { soloSlots, activeSlotIdx, namedSets, assignSlot, clearSlot, triggerSlot, saveNamedSet, deleteNamedSet, recallNamedSet, updateNamedSet, refreshNamedSets } = useSoloPerformanceSets()
 const soloTab = ref(localStorage.getItem("SYCORE_SOLO_PERF_TAB") === "solo-sets" ? "solo-sets" : "perf-sets")
 watch(soloTab, v => localStorage.setItem("SYCORE_SOLO_PERF_TAB", v))
 const { pcSets, loadSets, saveSet, updateSet, deleteSet, recallSet: recallStoredSet } = usePerformanceSets()
@@ -970,6 +970,7 @@ const assignMode = ref(false)
 const soloSetName = ref('')
 const soloSetSaving = ref(false)
 const soloSetRecallId = ref(null)
+const soloPadsHide = ref(true)
 
 function toggleAssignMode() {
   assignMode.value = !assignMode.value
@@ -1059,9 +1060,18 @@ function saveCurrentSoloSet() {
   const name = soloSetName.value.trim()
   if (!name) return
   soloSetSaving.value = true
-  saveNamedSet(name)
+  const existing = namedSets.value.find(s => s.name === name)
+  if (existing) {
+    updateNamedSet(existing.id)
+  } else {
+    saveNamedSet(name)
+  }
   soloSetName.value = ''
   soloSetSaving.value = false
+}
+
+function updateNamedSoloSet(id) {
+  updateNamedSet(id)
 }
 
 function deleteNamedSoloSet(id) {
@@ -1242,7 +1252,7 @@ function assignToPad(setId, padIdx) {
             </div>
 
             <!-- ── Performance Sets / Solo Sets section ── -->
-            <div class="shrink-0 border-t border-neutral-900 flex flex-col max-h-[40%]">
+            <div class="shrink-0 border-t border-neutral-900 flex flex-col max-h-[45%]">
 
               <!-- Sub-tab bar -->
               <div class="flex shrink-0 border-b border-neutral-800">
@@ -1394,8 +1404,20 @@ function assignToPad(setId, padIdx) {
 
               <!-- ── Solo Sets tab ── -->
               <template v-else>
+                <button
+                    @click="soloPadsHide = !soloPadsHide"
+                    :class="[
+                      'w-20 m-1 mx-auto px-1 py-1 rounded text-[8px] font-bold uppercase tracking-wider border transition-all',
+                      assignMode
+                        ? 'bg-amber-600/30 border-amber-500 text-amber-300'
+                        : 'bg-emerald-600/20 border-emerald-600/40 text-emerald-400'
+                    ]"
+                  >
+                    Pads 
+                    <LayoutGrid class="w-3.5 h-3.5 inline-block ml-1" />
+                  </button>
                 <!-- Mode toggle + hint -->
-                <div class="px-3 py-2 border-b border-neutral-800 shrink-0 flex items-center gap-2">
+                <div v-if="!soloPadsHide" class="px-3 py-2 border-b border-neutral-800 shrink-0 flex items-center gap-2">
                   <button
                     @click="toggleAssignMode"
                     :class="[
@@ -1413,7 +1435,7 @@ function assignToPad(setId, padIdx) {
                 </div>
 
                 <!-- 8 Solo Slot pads -->
-                <div class="flex-1 flex flex-col justify-center px-3 py-2 shrink-0">
+                <div v-if="!soloPadsHide" class="flex-1 flex flex-col justify-center px-3 py-1 shrink-0">
                   <div class="flex items-center justify-between mb-1.5">
                     <span class="text-[7px] font-mono text-neutral-600 uppercase tracking-widest">Solo Slots</span>
                     <span v-if="assignMode && activeSlotIdx >= 0" class="text-[7px] font-mono text-amber-400">Target: {{ SOLO_SLOT_LETTERS[activeSlotIdx] }}</span>
@@ -1482,6 +1504,11 @@ function assignToPad(setId, padIdx) {
                         <div :class="['text-[9px] font-bold truncate leading-tight', soloSetRecallId === set.id ? 'text-amber-300' : 'text-neutral-200']">{{ set.name }}</div>
                         <div class="text-[7px] font-mono text-neutral-600 truncate">{{ set.slots.filter(s => s).length }} of 16 slots assigned</div>
                       </div>
+                      <button
+                        @click="updateNamedSoloSet(set.id)"
+                        title="Overwrite with current slots"
+                        class="shrink-0 p-1 rounded text-neutral-600 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all"
+                      ><Save class="w-2.5 h-2.5" /></button>
                       <button
                         @click="deleteNamedSoloSet(set.id)"
                         class="shrink-0 p-1 rounded text-neutral-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"

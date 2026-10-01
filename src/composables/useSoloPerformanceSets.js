@@ -5,16 +5,16 @@ import { userKey } from '@/lib/userKey'
 const LS_SLOTS = 'SYCORE_SOLO_SLOTS_V2'
 const LS_SETS = 'SYCORE_SOLO_NAMED_SETS'
 
+function to16(slots) {
+  const arr = Array.isArray(slots) ? slots : []
+  return arr.length === 16 ? arr : [...arr, ...Array(16 - arr.length).fill(null)].slice(0, 16)
+}
+
 function loadSlots() {
   try {
     const raw = localStorage.getItem(userKey(LS_SLOTS))
     const parsed = raw ? JSON.parse(raw) : []
-    if (parsed.length < 16) {
-      const migrated = [...parsed, ...Array(16 - parsed.length).fill(null)]
-      saveSlots(migrated)
-      return migrated
-    }
-    return parsed
+    return to16(parsed)
   } catch { return Array(16).fill(null) }
 }
 
@@ -98,9 +98,24 @@ export function useSoloPerformanceSets() {
   function recallNamedSet(id) {
     const set = namedSets.value.find(s => s.id === id)
     if (!set) return
-    soloSlots.value = JSON.parse(JSON.stringify(set.slots))
+    soloSlots.value = to16(set.slots)
     activeSlotIdx.value = -1
     persist()
+  }
+
+  function updateNamedSet(id) {
+    const idx = namedSets.value.findIndex(s => s.id === id)
+    if (idx < 0) return null
+    const set = {
+      ...namedSets.value[idx],
+      slots: JSON.parse(JSON.stringify(soloSlots.value)),
+      updatedAt: new Date().toISOString(),
+    }
+    const sets = [...namedSets.value]
+    sets[idx] = set
+    namedSets.value = sets
+    saveNamedSets(namedSets.value)
+    return set
   }
 
   function refreshNamedSets() {
@@ -110,6 +125,6 @@ export function useSoloPerformanceSets() {
   return {
     soloSlots, activeSlotIdx, namedSets,
     assignSlot, clearSlot, triggerSlot,
-    saveNamedSet, deleteNamedSet, recallNamedSet, refreshNamedSets,
+    saveNamedSet, deleteNamedSet, recallNamedSet, updateNamedSet, refreshNamedSets,
   }
 }
