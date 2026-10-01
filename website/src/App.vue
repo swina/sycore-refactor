@@ -10,6 +10,7 @@ import {
 } from 'lucide-vue-next'
 import GuidesPanel from './components/GuidesPanel.vue'
 
+
 const isMobileNavOpen = ref(false)
 const showGuides = ref(false)
 const fullscreenImage = ref(null)
@@ -358,6 +359,7 @@ const scenarios = [
 </script>
 
 <template>
+  
   <div class="h-screen overflow-y-auto overflow-x-hidden bg-neutral-950 text-white font-sans scroll-smooth" @click="onPageClick">
 
     <!-- ============ NAV ============ -->

@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-09-28
+
+- **Vercel Analytics added to marketing website** — Installed `@vercel/analytics` and initialized it via `inject()` in `main.ts` for the website project.
+
 ## 2026-09-26
 
 - **Triplet and dotted tempo multipliers added to Sequencer** — Expanded `TEMPO_MULTIPLIERS` array with `T` (triplet) and `.` (dotted) variants for 1/32 through 1/2 note values, sorted by `beatsPerStep`.
