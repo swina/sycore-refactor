@@ -695,6 +695,13 @@ function stopHeldChord() {
   heldChordNotes.forEach(({ note, channel }) =>
     midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
   heldChordNotes.length = 0
+  _pendingTimeouts.forEach(id => clearTimeout(id))
+  _pendingTimeouts.clear()
+  _activeNoteKeys.forEach(key => {
+    const [noteStr, chanStr] = key.split('-')
+    midiStore.sendNoteOff(parseInt(noteStr), 0, parseInt(chanStr), MidiSource.CHORD_PROG)
+  })
+  _activeNoteKeys.clear()
 }
 
 function triggerChordStep(idx, forcePlay = false) {
@@ -709,6 +716,10 @@ function triggerChordStep(idx, forcePlay = false) {
     return
   }
 
+  const channel = midiStore.midiChannel
+  const shift = (seqTranspose.value || 0) + (step.transpose || 0)
+  const effectiveMode = step.stepMode ?? store.playMode
+
   // Stop any held chord + any preview notes
   stopHeldChord()
   previewTimeouts.forEach(id => clearTimeout(id))
@@ -718,13 +729,47 @@ function triggerChordStep(idx, forcePlay = false) {
   previewActiveNotes.length = 0
   store.selectedStepIdx = idx
   store.currentStep = idx
-  const channel = midiStore.midiChannel
-  const shift = (seqTranspose.value || 0) + (step.transpose || 0)
-  step.notes.forEach(note => {
-    const n = Math.max(0, Math.min(127, note + shift))
-    midiStore.sendNoteOn(n, step.velocity || 90, channel, MidiSource.CHORD_PROG)
-    heldChordNotes.push({ note: n, channel })
-  })
+
+  if (effectiveMode === 'arp') {
+    const sortedNotes = [...step.notes].sort((a, b) => a - b)
+
+    const arpRate = step.arpRate ?? store.arpRate
+    const arpTicks = DURATION_TICKS[arpRate] ?? 8
+    const bpm = arpStore.arpBpm || 120
+    const tickMs = 60000 / (bpm * 96)
+    const arpMs = tickMs * arpTicks
+    const noteDurationMs = Math.max(10, arpMs * ((step.gate ?? 80) / 100))
+    const patternState = defaultArpPatternState()
+    const velocity = step.velocity || 90
+
+    _stopPending = false
+
+    function tickArp() {
+      if (_stopPending) return
+      const noteIdx = nextArpIndex(step.arpMode ?? 'up', patternState, sortedNotes.length)
+      if (noteIdx < 0) return
+      const clampedNote = Math.max(0, Math.min(127, sortedNotes[noteIdx] + shift))
+      const noteKey = `${clampedNote}-${channel}`
+      midiStore.sendNoteOn(clampedNote, velocity, channel, MidiSource.CHORD_PROG)
+      _activeNoteKeys.add(noteKey)
+      const offTid = window.setTimeout(() => {
+        _pendingTimeouts.delete(offTid)
+        midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
+        _activeNoteKeys.delete(noteKey)
+      }, noteDurationMs)
+      _pendingTimeouts.add(offTid)
+      const nextTid = window.setTimeout(tickArp, arpMs)
+      _pendingTimeouts.add(nextTid)
+    }
+
+    tickArp()
+  } else {
+    step.notes.forEach(note => {
+      const n = Math.max(0, Math.min(127, note + shift))
+      midiStore.sendNoteOn(n, step.velocity || 90, channel, MidiSource.CHORD_PROG)
+      heldChordNotes.push({ note: n, channel })
+    })
+  }
 }
 
 function previewChord(chord) {

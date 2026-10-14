@@ -311,8 +311,21 @@ function setRepeatForIdx(idx, n) {
 
 async function saveToSlot(name) {
   if (!name || props.playlist.length === 0 || !authStore.user) return
+
+  // Strip ephemeral/large URLs before saving — blob: URLs won't survive
+  // a page reload, and data: URLs can be multi-MB base64 strings that
+  // blow past JSON.stringify's max string length (~512 MB in V8).
+  const cleanedTracks = props.playlist.map(track => {
+    if (!track.url || typeof track.url !== 'string') return { ...track }
+    if (track.url.startsWith('blob:') || track.url.startsWith('data:')) {
+      const { url, ...rest } = track
+      return rest
+    }
+    return track
+  })
+
   const playlistData = {
-    tracks: props.playlist,
+    tracks: cleanedTracks,
     repeats: props.playlistRepeats,
     crossfadeSec: props.crossfadeSec,
     loopPlaylist: props.loopPlaylist,
@@ -320,6 +333,7 @@ async function saveToSlot(name) {
   }
   const playlistRef = doc(db, 'users', authStore.user.uid, 'playlists', name)
   await setDoc(playlistRef, playlistData)
+  uiStore.lastPlaylistName = name
 }
 
 async function savePlaylist() {

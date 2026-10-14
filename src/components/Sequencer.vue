@@ -20,6 +20,7 @@ import { dispatch } from '@/types/events'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import AiPromptModal from './AiPromptModal.vue'
+import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 
 defineOptions({ inheritAttrs: false })
 
@@ -87,9 +88,9 @@ const DEFAULT_STEP = {
   param1Value: 64,
   param2Value: 64,
   edited: false,
-  octave: 4,        // which octave the 12-note grid displays/edits for this step
-  accent: false,     // per-step velocity boost at playback
-  probability: 100,  // % chance this step actually fires each pass
+  octave: 4,
+  accent: false,
+  probability: 100,
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -115,6 +116,7 @@ const STYLES = {
   Pop: { steps: 16, density: 0.55, octaves: [3, 4], velMin: 80, velMax: 115, gateMin: 45, gateMax: 75, accentGrid: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
   Rock: { steps: 16, density: 0.60, octaves: [2, 4], velMin: 90, velMax: 127, gateMin: 35, gateMax: 65, accentGrid: [true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false] },
   Electronic: { steps: 16, density: 0.50, octaves: [3, 4], velMin: 85, velMax: 115, gateMin: 30, gateMax: 60, accentGrid: [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false] },
+  Arpeggio: { steps: 16, density: 1, octaves: [4, 5], velMin: 90, velMax: 110, gateMin: 60, gateMax: 80 },
 }
 
 const SCALES = {
@@ -214,6 +216,7 @@ const syncTrack = computed({
   set: (v) => { syncStore.syncTrack = v },
 })
 const genDensity = ref(seqStore.activeBank.genDensity)
+const arpModeForGen = ref('up')
 const swingAmount = ref(0)
 const basePatternLength = ref(seqStore.activeBank.basePatternLength || seqStore.activeBank.numSteps)
 const selectedOctave = ref(seqStore.activeBank.selectedOctave)
@@ -596,6 +599,38 @@ function generateSequence() {
   const octMax = octaveRange.value >= 0 ? selectedOctave.value + octaveRange.value : selectedOctave.value
   const finalOctMin = Math.max(0, Math.min(8, octMin))
   const finalOctMax = Math.max(0, Math.min(8, octMax))
+
+  if (selectedStyle.value === 'Arpeggio') {
+    const arpMode = arpModeForGen.value
+    const allNotes = []
+    for (let oct = finalOctMin; oct <= finalOctMax; oct++) {
+      const root = (oct + 1) * 12 + keyIdx
+      for (const interval of scaleIntervals) {
+        const note = root + interval
+        if (note >= 0 && note <= 127) allNotes.push(note)
+      }
+    }
+    if (allNotes.length === 0) return
+
+    const patternState = defaultArpPatternState()
+    const ordered = []
+    for (let i = 0; i < numSteps.value; i++) {
+      const noteIdx = nextArpIndex(arpMode, patternState, allNotes.length)
+      ordered.push(allNotes[noteIdx])
+    }
+
+    steps.value = Array(numSteps.value).fill(null).map((_, i) => ({
+      ...DEFAULT_STEP,
+      active: true,
+      notes: [ordered[i]],
+      octave: finalOctMin,
+      velocity: styleCfg.velMin + Math.floor(Math.random() * (styleCfg.velMax - styleCfg.velMin + 1)),
+      gate: 75,
+      edited: true,
+    }))
+    basePatternLength.value = numSteps.value
+    return
+  }
 
   if (chordsEnabled.value) {
     const progressions = STYLE_PROGRESSIONS[selectedStyle.value] ?? [[0, 3, 4, 0]]
@@ -1714,7 +1749,7 @@ let generateHidden = ref(false)
       </div>
 
       <!-- ── GENERATION SETTINGS ROW ── -->
-      <div class="shrink-0 flex items-center gap-4 px-4 py-2 border-b border-neutral-900 bg-black/20">
+      <div class="shrink-0 flex flex-wrap items-center gap-4 px-4 py-2 border-b border-neutral-900 bg-black/20">
         <div class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase w-[40px]">Scale</span>
           <!-- <div class="flex items-center gap-1 p-1 rounded-lg border border-neutral-800/50"> -->
@@ -1747,7 +1782,14 @@ let generateHidden = ref(false)
           </select>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div v-if="selectedStyle === 'Arpeggio'" class="flex items-center gap-2">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Arp</span>
+          <select v-model="arpModeForGen" class="bg-black/40 border border-cyan-700 text-cyan-400 rounded-lg px-2 py-1 text-[14px] font-mono uppercase outline-none cursor-pointer [color-scheme:dark]">
+            <option v-for="mode in ARP_MODES" :key="mode" :value="mode" class="bg-neutral-900">{{ mode }}</option>
+          </select>
+        </div>
+
+        <div v-if="selectedStyle !== 'Arpeggio'" class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Density</span>
           <div class="flex items-center gap-3 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7">
             <input v-model.number="genDensity" type="range" min="0" max="100" class="w-24 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />

@@ -2,6 +2,18 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-10-10
+
+- **Feature: Sequencer Arpeggio style** — `src/components/Sequencer.vue` adds **Arpeggio** as a global generation style in the Style dropdown. When selected, an **Arp** sub-dropdown appears (UP, DOWN, UP-DOWN, DOWN-UP, CONVERGE, DIVERGE, PINKY-UP, THUMB-UP, RANDOM, RANDOM-OTHER). Clicking Generate fills every step with a single distinct note from the current Key/Scale across the octave range, ordered by the arp pattern via `nextArpIndex()` from `@/lib/arp-patterns`.
+
+- **Fix: MIDI CC-triggered chords now arpeggiate (continuously latch) in ARP mode** — `triggerChordStep()` always fired all notes simultaneously. Now respects `step.stepMode`/`store.playMode`: in arp mode, a self-scheduling `tickArp()` cycles notes indefinitely via `nextArpIndex()` at the step/slot arp rate, mirroring transport-based arp behavior. Also fixed `stopHeldChord()` to clear `_pendingTimeouts`/`_activeNoteKeys` so panic/re-trigger stops arp notes. Two root bugs fixed: (1) no arp logic in manual trigger path, (2) `_stopPending` stayed `true` after stop, silently blocking all setTimeout-based arp callbacks.
+- Branch: `fix/10-10/midi-trigger-arp`
+
+## 2026-10-06
+
+- **Fix: PlayList save RangeError + auto-show "Update" after first save** — `saveToSlot()` now strips `blob:` and `data:` URLs from tracks before serializing (blob URLs are ephemeral, data URLs are multi-MB base64 that blow past JSON.stringify's ~512 MB limit in V8). Also sets `uiStore.lastPlaylistName` so the "Update" button appears immediately after the first save without requiring a reload. Added defensive fallback in `firestore-api.ts:idbPut` when `JSON.parse(JSON.stringify(...))` fails.
+- Branch: `fix/10-06/playlist-save-rangeerror`
+
 ## 2026-09-28
 
 - **Vercel Analytics added to marketing website** — Installed `@vercel/analytics` and initialized it via `inject()` in `main.ts` for the website project.

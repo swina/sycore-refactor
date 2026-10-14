@@ -100,7 +100,15 @@ async function idbGet(store: string, key: string): Promise<any | undefined> {
 
 async function idbPut(store: string, value: Record<string, any>): Promise<void> {
   const db = await openDb();
-  const plain = JSON.parse(JSON.stringify(value));
+  let plain;
+  try {
+    plain = JSON.parse(JSON.stringify(value));
+  } catch (e) {
+    // Fall back to structured clone (IndexedDB native) when JSON fails
+    // e.g. extremely long strings from data: URLs hitting V8's ~512 MB limit
+    console.warn(`[IDB] JSON serialization failed for ${store}, using raw value`, e);
+    plain = value;
+  }
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, 'readwrite');
     const req = tx.objectStore(store).put(plain);
