@@ -1,2 +1,5 @@
-.vercel\nnode_modules\ndist\n.docusaurus
+.vercel
+node_modules
+dist
+.docusaurus
 public/My Songs
