@@ -107,11 +107,6 @@ export class MidiService {
   // browsers whose event timing doesn't line up neatly with the in-flight
   // window alone.
   private _lastInputResetAt = new Map<string, number>();
-  // Counter for periodic full re-attach of all input listeners — some
-  // devices (e.g. Worlde) fail to deliver midimessage events after a
-  // page reload without a physical replug.  Re-attaching every ~30 s
-  // recovers the connection without user intervention.
-  private _reconnectCount = 0;
 
   // ── Periodic device polling ──────────────────────────────────────────────
   // Some Web MIDI implementations (especially on Windows) do not reliably
@@ -167,23 +162,13 @@ export class MidiService {
       currentInputs.size !== this._lastKnownInputNames.size ||
       ![...currentInputs].every(n => this._lastKnownInputNames.has(n));
 
-    if (!outputsChanged && !inputsChanged && this._reconnectCount % 15 !== 0) {
-      this._reconnectCount++;
-      return;
-    }
-    this._reconnectCount = (this._reconnectCount + 1) % 60;
+    if (!outputsChanged && !inputsChanged) return;
 
     console.log(`[MIDI] Device poll detected change — outputs ${outputsChanged ? 'changed' : 'same'}, inputs ${inputsChanged ? 'changed' : 'same'}`);
 
     // For any newly appeared input, run the close+open+reattach cycle to
     // clear the stale-port state that otherwise requires a physical replug.
     this._resetNewInputs(currentInputs);
-
-    // Periodic full re-attach: some devices (Worlde, etc.) show up in the
-    // port list but their midimessage listener goes stale after page reload.
-    // Every ~30 s (poll fires every 2 s, triggers every 15th tick) we
-    // re-attach ALL input listeners to recover without physical replug.
-    this._reconnectAllInputs();
 
     // Update cached snapshot.
     this._syncLastKnown();
@@ -211,27 +196,6 @@ export class MidiService {
       input.addEventListener('midimessage', this.handleIngressBound);
       this._resettingInputs.delete(key);
       this._lastInputResetAt.set(key, Date.now());
-    }
-  }
-
-  /** Periodically re-attach the midimessage listener on every input that
-   *  hasn't been reset recently.  Some controllers (Worlde, etc.) enumerate
-   *  correctly on page load but their midimessage handler goes stale without
-   *  a physical replug — this recovers the connection automatically. */
-  private _reconnectAllInputs(): void {
-    if (!this.midiAccess) return;
-    const now = Date.now();
-    for (const input of this.midiAccess.inputs.values()) {
-      const key = this.normPort(input.name ?? '');
-      if (!key) continue;
-      if (this._resettingInputs.has(key)) continue;
-      const lastReset = this._lastInputResetAt.get(key) ?? 0;
-      if (now - lastReset < 20000) continue; // max once per 20 s per port
-      this._resettingInputs.add(key);
-      input.removeEventListener('midimessage', this.handleIngressBound);
-      input.addEventListener('midimessage', this.handleIngressBound);
-      this._resettingInputs.delete(key);
-      this._lastInputResetAt.set(key, now);
     }
   }
 
