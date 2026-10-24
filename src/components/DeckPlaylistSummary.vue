@@ -2,10 +2,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ListMusic, X, ExternalLink, Play, Pause, SkipBack, SkipForward } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 
 const emit = defineEmits(['close'])
 
 const uiStore = useUiStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
 
 // Mirrors AppFooter.vue's existing player-state-sync/player-state-request
 // bridge — TracksPlayer.vue has no Pinia store, so this is the established
@@ -75,18 +79,30 @@ onUnmounted(() => {
           {{ playingTrackLabel || 'Nothing playing' }}
         </p>
         <div class="flex items-center justify-center gap-3">
-          <button @click="prev" title="Previous" class="text-neutral-500 hover:text-white transition-colors">
-            <SkipBack class="w-4 h-4" />
-          </button>
+          <div class="relative">
+            <button @click="prev" title="Previous" class="text-neutral-500 hover:text-white transition-colors"
+              @contextmenu.prevent="openMenu($event, { name: 'prev_track', label: 'Previous Track' })"
+            >
+              <SkipBack class="w-4 h-4" />
+            </button>
+            <span v-if="mappingStore.learningParamName === 'prev_track'"
+              class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
           <button @click="playStop" :title="isPlaying ? 'Pause' : 'Play'"
             class="w-8 h-8 flex items-center justify-center rounded-full bg-synth-neon/10 text-synth-neon hover:bg-synth-neon hover:text-black transition-all active:scale-90 shadow-lg shadow-synth-neon/20"
           >
             <Pause v-if="isPlaying" class="w-4 h-4 fill-current" />
             <Play v-else class="w-4 h-4 fill-current ml-0.5" />
           </button>
-          <button @click="next" title="Next" class="text-neutral-500 hover:text-white transition-colors">
-            <SkipForward class="w-4 h-4" />
-          </button>
+          <div class="relative">
+            <button @click="next" title="Next" class="text-neutral-500 hover:text-white transition-colors"
+              @contextmenu.prevent="openMenu($event, { name: 'next_track', label: 'Next Track' })"
+            >
+              <SkipForward class="w-4 h-4" />
+            </button>
+            <span v-if="mappingStore.learningParamName === 'next_track'"
+              class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
         </div>
       </div>
 

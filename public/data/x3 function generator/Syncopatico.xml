@@ -1,0 +1,271 @@
+<?xml version="1.0" ?>
+<template module="Function Generator" name="Syncopatico32FUN" >
+<bpm type="long" >
+1</bpm>
+<rate type="float" >
+4</rate>
+<sync type="long" >
+2</sync>
+<smooth type="long" >
+1</smooth>
+<direction type="long" >
+0</direction>
+<length type="long" >
+31</length>
+<value index="0" type="float" >
+1</value>
+<value index="1" type="float" >
+-1</value>
+<value index="2" type="float" >
+0</value>
+<value index="3" type="float" >
+1</value>
+<value index="4" type="float" >
+-1</value>
+<value index="5" type="float" >
+-0.015625</value>
+<value index="6" type="float" >
+1</value>
+<value index="7" type="float" >
+-1</value>
+<value index="8" type="float" >
+1</value>
+<value index="9" type="float" >
+-1</value>
+<value index="10" type="float" >
+1</value>
+<value index="11" type="float" >
+-1</value>
+<value index="12" type="float" >
+-0.015625</value>
+<value index="13" type="float" >
+1</value>
+<value index="14" type="float" >
+-1</value>
+<value index="15" type="float" >
+0</value>
+<value index="16" type="float" >
+1</value>
+<value index="17" type="float" >
+-0.78125</value>
+<value index="18" type="float" >
+0.828125</value>
+<value index="19" type="float" >
+-0.546875</value>
+<value index="20" type="float" >
+0.5</value>
+<value index="21" type="float" >
+-1</value>
+<value index="22" type="float" >
+1</value>
+<value index="23" type="float" >
+-0.90625</value>
+<value index="24" type="float" >
+0.875</value>
+<value index="25" type="float" >
+-0.65625</value>
+<value index="26" type="float" >
+0.703125</value>
+<value index="27" type="float" >
+-0.328125</value>
+<value index="28" type="float" >
+0.5</value>
+<value index="29" type="float" >
+0</value>
+<value index="30" type="float" >
+0.296875</value>
+<value index="31" type="float" >
+0.65625</value>
+<value index="32" type="float" >
+0</value>
+<value index="33" type="float" >
+0</value>
+<value index="34" type="float" >
+0</value>
+<value index="35" type="float" >
+0</value>
+<value index="36" type="float" >
+0</value>
+<value index="37" type="float" >
+0</value>
+<value index="38" type="float" >
+0</value>
+<value index="39" type="float" >
+0</value>
+<value index="40" type="float" >
+0</value>
+<value index="41" type="float" >
+0</value>
+<value index="42" type="float" >
+0</value>
+<value index="43" type="float" >
+0</value>
+<value index="44" type="float" >
+0</value>
+<value index="45" type="float" >
+0</value>
+<value index="46" type="float" >
+0</value>
+<value index="47" type="float" >
+0</value>
+<value index="48" type="float" >
+0</value>
+<value index="49" type="float" >
+0</value>
+<value index="50" type="float" >
+0</value>
+<value index="51" type="float" >
+0</value>
+<value index="52" type="float" >
+0</value>
+<value index="53" type="float" >
+0</value>
+<value index="54" type="float" >
+0</value>
+<value index="55" type="float" >
+0</value>
+<value index="56" type="float" >
+0</value>
+<value index="57" type="float" >
+0</value>
+<value index="58" type="float" >
+0</value>
+<value index="59" type="float" >
+0</value>
+<value index="60" type="float" >
+0</value>
+<value index="61" type="float" >
+0</value>
+<value index="62" type="float" >
+0</value>
+<value index="63" type="float" >
+0</value>
+<trigger index="0" type="long" >
+0</trigger>
+<trigger index="1" type="long" >
+0</trigger>
+<trigger index="2" type="long" >
+0</trigger>
+<trigger index="3" type="long" >
+0</trigger>
+<trigger index="4" type="long" >
+0</trigger>
+<trigger index="5" type="long" >
+0</trigger>
+<trigger index="6" type="long" >
+0</trigger>
+<trigger index="7" type="long" >
+0</trigger>
+<trigger index="8" type="long" >
+0</trigger>
+<trigger index="9" type="long" >
+0</trigger>
+<trigger index="10" type="long" >
+0</trigger>
+<trigger index="11" type="long" >
+0</trigger>
+<trigger index="12" type="long" >
+0</trigger>
+<trigger index="13" type="long" >
+0</trigger>
+<trigger index="14" type="long" >
+0</trigger>
+<trigger index="15" type="long" >
+0</trigger>
+<trigger index="16" type="long" >
+0</trigger>
+<trigger index="17" type="long" >
+0</trigger>
+<trigger index="18" type="long" >
+0</trigger>
+<trigger index="19" type="long" >
+0</trigger>
+<trigger index="20" type="long" >
+0</trigger>
+<trigger index="21" type="long" >
+0</trigger>
+<trigger index="22" type="long" >
+0</trigger>
+<trigger index="23" type="long" >
+0</trigger>
+<trigger index="24" type="long" >
+0</trigger>
+<trigger index="25" type="long" >
+0</trigger>
+<trigger index="26" type="long" >
+0</trigger>
+<trigger index="27" type="long" >
+0</trigger>
+<trigger index="28" type="long" >
+0</trigger>
+<trigger index="29" type="long" >
+0</trigger>
+<trigger index="30" type="long" >
+0</trigger>
+<trigger index="31" type="long" >
+0</trigger>
+<trigger index="32" type="long" >
+0</trigger>
+<trigger index="33" type="long" >
+0</trigger>
+<trigger index="34" type="long" >
+0</trigger>
+<trigger index="35" type="long" >
+0</trigger>
+<trigger index="36" type="long" >
+0</trigger>
+<trigger index="37" type="long" >
+0</trigger>
+<trigger index="38" type="long" >
+0</trigger>
+<trigger index="39" type="long" >
+0</trigger>
+<trigger index="40" type="long" >
+0</trigger>
+<trigger index="41" type="long" >
+0</trigger>
+<trigger index="42" type="long" >
+0</trigger>
+<trigger index="43" type="long" >
+0</trigger>
+<trigger index="44" type="long" >
+0</trigger>
+<trigger index="45" type="long" >
+0</trigger>
+<trigger index="46" type="long" >
+0</trigger>
+<trigger index="47" type="long" >
+0</trigger>
+<trigger index="48" type="long" >
+0</trigger>
+<trigger index="49" type="long" >
+0</trigger>
+<trigger index="50" type="long" >
+0</trigger>
+<trigger index="51" type="long" >
+0</trigger>
+<trigger index="52" type="long" >
+0</trigger>
+<trigger index="53" type="long" >
+0</trigger>
+<trigger index="54" type="long" >
+0</trigger>
+<trigger index="55" type="long" >
+0</trigger>
+<trigger index="56" type="long" >
+0</trigger>
+<trigger index="57" type="long" >
+0</trigger>
+<trigger index="58" type="long" >
+0</trigger>
+<trigger index="59" type="long" >
+0</trigger>
+<trigger index="60" type="long" >
+0</trigger>
+<trigger index="61" type="long" >
+0</trigger>
+<trigger index="62" type="long" >
+0</trigger>
+<trigger index="63" type="long" >
+0</trigger>
+</template>

@@ -122,6 +122,8 @@ const rafRef = ref(null)
 // Vue reactive refs cause stale reads and proxy overhead inside nested setTimeout callbacks.
 let _pendingTimeouts = new Set()  // all scheduled timeout IDs
 let _activeNoteKeys = new Set()   // "note-channel" keys currently sounding
+let _activeBassNote = null        // { note, channel, tid } — auto-timed bass note from scheduler
+let heldBassNote = null           // { note, channel } — held bass note from manual trigger
 let _stopPending = false          // set synchronously on stop; blocks any queued tid callbacks
 let _transportTicks = 0          // our own tick counter (384n resolution, resets on each play)
 let _captureArmed = false         // set true on play, consumed by next schedule tick
@@ -135,6 +137,15 @@ let _scheduledMidiEventId = null  // Tone.js schedule event ID for deferred trig
 const seqTranspose = ref(0)
 const loopEnabled = ref(true)
 
+const bassEnabled = ref(localStorage.getItem(userKey('S1_CP_BASS_ENABLED')) === 'true')
+const bassDevice = ref(localStorage.getItem(userKey('S1_CP_BASS_DEVICE')) || '')
+const bassChannel = ref(parseInt(localStorage.getItem(userKey('S1_CP_BASS_CHANNEL')) ?? '2', 10))
+const midiOutputs = computed(() => midiService.getOutputs())
+
+watch(bassEnabled, v => localStorage.setItem(userKey('S1_CP_BASS_ENABLED'), v ? 'true' : 'false'))
+watch(bassDevice, v => localStorage.setItem(userKey('S1_CP_BASS_DEVICE'), v))
+watch(bassChannel, v => localStorage.setItem(userKey('S1_CP_BASS_CHANNEL'), v.toString()))
+
 // ── Audio Capture Sync ────────────────────────────────────────────────────────
 const captureBarCount = ref(parseInt(localStorage.getItem(userKey('S1_CP_CAPTURE_BARS')) ?? '4', 10))
 const captureAutoStop = ref(localStorage.getItem(userKey('S1_CP_CAPTURE_AUTOSTOP')) !== 'false')
@@ -147,6 +158,34 @@ watch(captureAutoStop, v => localStorage.setItem(userKey('S1_CP_CAPTURE_AUTOSTOP
 function chordNotes (step) {
   if (!step?.active || !step.notes?.length) return []
   return step.notes.map(n => NOTES_NAME[(n + (seqTranspose.value || 0) + (step.transpose || 0)) % 12] + Math.floor((n + (seqTranspose.value || 0) + (step.transpose || 0)) / 12))
+}
+
+function getBassNote(notes, shift = 0) {
+  if (!notes?.length) return null
+  return Math.min(...notes) + shift
+}
+
+function sendBassNoteOn(note, velocity, durationMs) {
+  stopBassNote()
+  if (!bassEnabled.value || !bassDevice.value || note === null) return
+  const ch = Math.max(1, Math.min(16, bassChannel.value))
+  const n = Math.max(0, Math.min(127, note))
+  midiStore.sendNoteOn(n, velocity, ch, MidiSource.CHORD_PROG)
+  const tid = window.setTimeout(() => {
+    midiStore.sendNoteOff(n, 0, ch, MidiSource.CHORD_PROG)
+    _pendingTimeouts.delete(tid)
+    _activeBassNote = null
+  }, durationMs)
+  _pendingTimeouts.add(tid)
+  _activeBassNote = { note: n, channel: ch, tid }
+}
+
+function stopBassNote() {
+  if (!_activeBassNote) return
+  const { note, channel, tid } = _activeBassNote
+  if (tid) { clearTimeout(tid); _pendingTimeouts.delete(tid) }
+  midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
+  _activeBassNote = null
 }
 
 function buildPlayState() {
@@ -216,6 +255,11 @@ function stopAllNotes() {
       midiStore.sendNoteOff(parseInt(noteStr), 0, parseInt(chanStr), MidiSource.CHORD_PROG)
     })
     _activeNoteKeys.clear()
+    stopBassNote()
+    if (heldBassNote) {
+      midiStore.sendNoteOff(heldBassNote.note, 0, heldBassNote.channel, MidiSource.CHORD_PROG)
+      heldBassNote = null
+    }
     midiStore.panic()
     // Restore volume
     setTimeout(() => midiStore.sendCC(7, 127, chan, MidiSource.CHORD_PROG), 10)
@@ -380,8 +424,19 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
               _pendingTimeouts.add(onTid)
             })
           }
+        }  // closes if (effectiveMode !== 'arp')
+
+        // Bass note: send lowest note to dedicated bass device/channel on step start
+        if (bassEnabled.value && bassDevice.value && step?.active && step.velocity > 0 && step.notes?.length > 0) {
+          const bassNote = getBassNote(step.notes, (state.transpose || 0) + (step.transpose || 0))
+          if (bassNote !== null) {
+            const tickMs = 60000 / (state.bpm * 96)
+            const stepMs = tickMs * ticksNeeded
+            const bassDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
+            sendBassNoteOn(bassNote, step.velocity, bassDurationMs)
+          }
         }
-      }
+      }  // closes if (state.tickCounter === 0)
 
       if (effectiveMode === 'arp' && step?.active && step.velocity > 0 && step.notes?.length > 0) {
         const arpTicks = DURATION_TICKS[step.arpRate ?? state.arpRate] ?? 8
@@ -702,6 +757,10 @@ function stopHeldChord() {
     midiStore.sendNoteOff(parseInt(noteStr), 0, parseInt(chanStr), MidiSource.CHORD_PROG)
   })
   _activeNoteKeys.clear()
+  if (heldBassNote) {
+    midiStore.sendNoteOff(heldBassNote.note, 0, heldBassNote.channel, MidiSource.CHORD_PROG)
+    heldBassNote = null
+  }
 }
 
 function triggerChordStep(idx, forcePlay = false) {
@@ -763,12 +822,32 @@ function triggerChordStep(idx, forcePlay = false) {
     }
 
     tickArp()
+
+    // Bass note for arp mode: hold the lowest note for the step duration
+    if (bassEnabled.value && bassDevice.value) {
+      const bassNote = getBassNote(step.notes, shift)
+      if (bassNote !== null) {
+        const n = Math.max(0, Math.min(127, bassNote))
+        midiStore.sendNoteOn(n, velocity, bassChannel.value, MidiSource.CHORD_PROG)
+        heldBassNote = { note: n, channel: bassChannel.value }
+      }
+    }
   } else {
     step.notes.forEach(note => {
       const n = Math.max(0, Math.min(127, note + shift))
       midiStore.sendNoteOn(n, step.velocity || 90, channel, MidiSource.CHORD_PROG)
       heldChordNotes.push({ note: n, channel })
     })
+
+    // Bass note for chord mode
+    if (bassEnabled.value && bassDevice.value) {
+      const bassNote = getBassNote(step.notes, shift)
+      if (bassNote !== null) {
+        const n = Math.max(0, Math.min(127, bassNote))
+        midiStore.sendNoteOn(n, step.velocity || 90, bassChannel.value, MidiSource.CHORD_PROG)
+        heldBassNote = { note: n, channel: bassChannel.value }
+      }
+    }
   }
 }
 
@@ -1415,6 +1494,38 @@ function velBarColor(v) {
           <span :class="['font-bold font-mono w-6 text-center', seqTranspose !== 0 ? 'text-yellow-300' : 'text-neutral-400']">{{ seqTranspose > 0 ? '+' : '' }}{{ seqTranspose }}</span>
           <button @click.stop="seqTranspose = Math.min(24, seqTranspose + 1)" class="w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[12px]">+</button>
           <button v-if="seqTranspose !== 0" @click.stop="seqTranspose = 0" class="text-[8px] text-neutral-600 hover:text-neutral-300 ml-0.5">↺</button>
+        </div>
+
+        <!-- Bass note output -->
+        <div class="flex items-center gap-1" title="Send the lowest note of each chord to a separate device/channel">
+          <span class="text-[10px] text-neutral-600 font-mono">Bass</span>
+          <button
+            @click.stop="bassEnabled = !bassEnabled"
+            :class="[
+              'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors',
+              bassEnabled ? 'bg-emerald-700 text-white' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'
+            ]"
+            title="Toggle bass note output"
+          >{{ bassEnabled ? 'ON' : 'OFF' }}</button>
+          <select
+            v-if="bassEnabled"
+            v-model="bassDevice"
+            class="w-28 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-[10px] font-mono outline-none truncate"
+            :class="bassDevice ? 'text-emerald-300' : 'text-neutral-500'"
+            title="MIDI output device for bass note"
+          >
+            <option value="">—</option>
+            <option v-for="out in midiOutputs" :key="out.name" :value="out.name">{{ out.name }}</option>
+          </select>
+          <select
+            v-if="bassEnabled"
+            v-model.number="bassChannel"
+            class="w-12 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-[10px] font-mono outline-none"
+            :class="'text-emerald-300'"
+            title="MIDI channel for bass note"
+          >
+            <option v-for="ch in 16" :key="ch" :value="ch">CH{{ ch }}</option>
+          </select>
         </div>
       </div>
     </div>

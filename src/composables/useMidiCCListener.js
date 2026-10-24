@@ -271,6 +271,16 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     return
   }
 
+  // ── Playlist navigation (momentary-safe) ────────────────────────────────
+  if (fieldName === 'prev_track' && (fromNote || val > 0)) {
+    window.dispatchEvent(new CustomEvent('playlist-prev'))
+    return
+  }
+  if (fieldName === 'next_track' && (fromNote || val > 0)) {
+    window.dispatchEvent(new CustomEvent('playlist-next'))
+    return
+  }
+
   if (!presetStore.lastPreset) return
   presetStore.updateFieldValue(fieldName, val)
 

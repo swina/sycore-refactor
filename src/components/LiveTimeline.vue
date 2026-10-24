@@ -636,12 +636,10 @@ function _fireMarker(m) {
     case 'program-change': {
       const pc   = Math.max(0, Math.min(127, Number(m.value)))
       const ch   = Math.max(0, Math.min(15, Number(m.channel ?? 0)))
-      const port = midiStore.outputs.find(o => o.name === m.device)
-      if (port) {
-        if (m.msb !== null && m.msb !== undefined) port.send([0xB0 | ch, 0,  m.msb])
-        if (m.lsb !== null && m.lsb !== undefined) port.send([0xB0 | ch, 32, m.lsb])
-        port.send([0xC0 | ch, pc])
-      }
+      const deviceName = m.device
+      if (m.msb !== null && m.msb !== undefined) midiService.sendRawToDeviceByName(deviceName, [0xB0 | ch, 0,  m.msb])
+      if (m.lsb !== null && m.lsb !== undefined) midiService.sendRawToDeviceByName(deviceName, [0xB0 | ch, 32, m.lsb])
+      midiService.sendRawToDeviceByName(deviceName, [0xC0 | ch, pc])
       // Keep pcChannels in sync so the Patches panel reflects the fired state
       const reg = midiStore.routingConfig?.registrations?.[m.device]
       if (reg) {

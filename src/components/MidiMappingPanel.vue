@@ -62,6 +62,22 @@ const availableParams = computed(() => {
   return unique
 })
 
+const filteredMappings = computed(() => {
+  const all = mappingStore.midiMappings
+  const entries = []
+  for (const [key, mapping] of Object.entries(all)) {
+    const device = typeof mapping === 'object' ? mapping.device : null
+    if (learnDevice.value && device !== learnDevice.value) continue
+    entries.push({ key, mapping })
+  }
+  entries.sort((a, b) => {
+    const ccA = typeof a.mapping === 'object' ? (a.mapping.cc ?? 999) : 999
+    const ccB = typeof b.mapping === 'object' ? (b.mapping.cc ?? 999) : 999
+    return ccA - ccB
+  })
+  return entries
+})
+
 // Use centralized raw listener for learning
 let _unsubLearn = null
 
@@ -274,30 +290,30 @@ function confirmLearn() {
           <h3 class="text-[10px] font-black text-neutral-500 uppercase tracking-widest mb-3 border-b border-neutral-800 pb-2">
             Current Mappings
           </h3>
-          <p v-if="Object.keys(mappingStore.midiMappings).length === 0"
+          <p v-if="filteredMappings.length === 0"
             class="text-neutral-600 text-xs italic text-center py-4 rounded-lg bg-neutral-900 border border-neutral-800 border-dashed"
           >No parameters mapped yet.</p>
           <div v-else class="space-y-2">
-            <div v-for="(mapping, key) in mappingStore.midiMappings" :key="key"
+            <div v-for="entry in filteredMappings" :key="entry.key"
               class="flex items-center justify-between bg-neutral-900 border border-neutral-800 rounded-lg p-3"
             >
               <div class="flex flex-col gap-0.5">
                 <div class="flex items-center gap-2">
-                  <span class="bg-black border border-neutral-800 text-synth-neon font-mono text-[9px] px-2 py-0.5 rounded">CC {{ typeof mapping === 'object' ? mapping.cc : key }}</span>
+                  <span class="bg-black border border-neutral-800 text-synth-neon font-mono text-[9px] px-2 py-0.5 rounded">CC {{ typeof entry.mapping === 'object' ? entry.mapping.cc : entry.key }}</span>
                   <span class="text-neutral-300 font-bold uppercase tracking-wide text-[10px]">
-                    {{ typeof mapping === 'object' ? mapping.paramName : mapping }}
+                    {{ typeof entry.mapping === 'object' ? entry.mapping.paramName : entry.mapping }}
                   </span>
                 </div>
-                <div v-if="typeof mapping === 'object' && (mapping.device || mapping.channel !== undefined)" class="flex items-center gap-1.5 mt-1">
-                  <span v-if="mapping.device" class="text-[9px] text-neutral-400 font-mono bg-neutral-800/50 px-1.5 py-0.5 rounded border border-neutral-700/30">
-                    {{ mapping.device }}
+                <div v-if="typeof entry.mapping === 'object' && (entry.mapping.device || entry.mapping.channel !== undefined)" class="flex items-center gap-1.5 mt-1">
+                  <span v-if="entry.mapping.device" class="text-[9px] text-neutral-400 font-mono bg-neutral-800/50 px-1.5 py-0.5 rounded border border-neutral-700/30">
+                    {{ entry.mapping.device }}
                   </span>
-                  <span v-if="mapping.channel !== undefined" class="text-[9px] text-violet-400 font-mono bg-violet-400/5 px-1.5 py-0.5 rounded border border-violet-400/10">
-                    CH {{ mapping.channel + 1 }}
+                  <span v-if="entry.mapping.channel !== undefined" class="text-[9px] text-violet-400 font-mono bg-violet-400/5 px-1.5 py-0.5 rounded border border-violet-400/10">
+                    CH {{ entry.mapping.channel + 1 }}
                   </span>
                 </div>
               </div>
-              <button @click="mappingStore.removeMapping(key)" class="text-neutral-500 hover:text-rose-500 p-1">
+              <button @click="mappingStore.removeMapping(entry.key)" class="text-neutral-500 hover:text-rose-500 p-1">
                 <X class="w-4 h-4" />
               </button>
             </div>

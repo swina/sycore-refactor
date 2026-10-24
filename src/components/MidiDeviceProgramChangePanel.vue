@@ -122,7 +122,7 @@ const virtualActiveChannels = computed(() => {
 // show a row per active channel (with saved sound or empty); otherwise show
 // whatever pcChannels have been recorded.
 const multiChannelDisplayState = computed(() => {
-  const chList = virtualActiveChannels.value
+  const chList = [...virtualActiveChannels.value].sort((a, b) => a - b)
   if (chList.length === 0) return currentPcState.value
   const pcChannels = selectedReg.value?.pcChannels ?? {}
   return chList.map(ch => ({
@@ -509,7 +509,18 @@ watch([selectedBank, selectedDeviceName], async ([bank]) => {
 const searchQuery      = ref('')
 const selectedCategory = ref('')
 
-watch(selectedBank, () => { selectedCategory.value = ''; searchQuery.value = '' })
+// Category/search filters are scoped per (device, bank). Two devices can
+// legitimately share a bank *name* (e.g. both pointed at the same imported
+// user bank), so a category picked on one device must never carry over and
+// filter the other device's patch list. Store each selection and restore it
+// when returning to a device/bank that still has one saved.
+const filterMemory = {}
+watch([selectedDeviceName, selectedBank], ([dev, bank], [oldDev, oldBank]) => {
+  if (oldDev && oldBank) filterMemory[`${oldDev}::${oldBank}`] = { category: selectedCategory.value, search: searchQuery.value }
+  const mem = dev && bank ? filterMemory[`${dev}::${bank}`] : null
+  selectedCategory.value = mem?.category ?? ''
+  searchQuery.value = mem?.search ?? ''
+})
 
 const categories = computed(() => {
   const field = bankConfig.value?.category_field ?? 'category'
