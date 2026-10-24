@@ -25,7 +25,7 @@ import { MidiSource } from '@/types/midi';
 import { MidiMonitor } from './midi-monitor';
 import { MidiTransport } from './midi-transport';
 import { SmartLatch } from './midi-smart-latch';
-import { MidiRouter } from './midi-routing';
+import { MidiRouter, ThruNoteTracker } from './midi-routing';
 import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte } from './midi-broadcast';
 
 export type { DeviceRegistration, RoutingConfig, SplitConfig, MidiMessageType, MidiMonitorEntry };
@@ -80,6 +80,9 @@ export class MidiService {
   // ── Echo / ingress suppression ───────────────────────────────────────────
   private lastSentMessages = new Map<string, { data: string; time: number }>();
   private globalSentHashes = new Map<string, number>();
+  // Device→virtual-instrument Thru notes, so note-offs follow their note-on
+  // (see ThruNoteTracker).
+  private virtualThruNotes = new ThruNoteTracker();
   private ingressCount = 0;
   private lastIngressReset = Date.now();
   private isThruThrottled = false;
@@ -345,8 +348,20 @@ export class MidiService {
     const isNote = (status & 0xf0) === 0x90 || (status & 0xf0) === 0x80;
     const isCC = (status & 0xf0) === 0xb0;
     const targetsFromMatrix = inputName ? this.router.matrix.get(inputName) : null;
+    const isNoteOn = (status & 0xf0) === 0x90 && data[2] > 0;
+    const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
+    const inChannel = status & 0x0f;
+
+    // A note-off goes straight to every virtual output its note-on reached,
+    // on the same channel, bypassing all the gates below.
+    const tracked = isNoteOff ? this.virtualThruNotes.take(inputName, inChannel, data[1]) : undefined;
+    tracked?.forEach((chs, virtName) => {
+      if (!this.virtualOutputs.has(virtName)) return;
+      chs.forEach(ch => this.sendToVirtualOutput(virtName, [(status & 0xf0) | ch, data[1], data[2] ?? 0]));
+    });
 
     this.virtualOutputs.forEach((_, virtName) => {
+      if (tracked?.has(virtName)) return;
       const outConfig = this.routingConfig?.registrations[virtName];
       if (!outConfig || !outConfig.outEnabled) return;
       if (outConfig.midiThru === false) return;
@@ -380,9 +395,11 @@ export class MidiService {
       if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
 
       // Note-range filter — MIDI Flow's per-cable "keyboard split" for
-      // device→device connections (Controller → virtual Instrument).
-      const filter = isNote ? this.getOutputRouteFilter(inputName, virtName) : undefined;
-      if (isNote && filter) {
+      // device→device connections (Controller → virtual Instrument). Only
+      // gates note-ONS: note-offs must always pass through so a note that
+      // reached this output via another route can still be silenced.
+      const filter = isNoteOn ? this.getOutputRouteFilter(inputName, virtName) : undefined;
+      if (isNoteOn && filter) {
         const note = data[1];
         const lo = filter.lowNote ?? 0;
         const hi = filter.highNote ?? 127;
@@ -391,8 +408,8 @@ export class MidiService {
 
       // Channel filter — per-cable MIDI channel gate for multi-part
       // instruments. When set, only messages on the listed channels pass
-      // through this Thru connection.
-      if (filter?.channels && filter.channels.length > 0 && status < 0xF0) {
+      // through this Thru connection. (Note-offs exempt, same reason.)
+      if (isNote && !isNoteOff && filter?.channels && filter.channels.length > 0 && status < 0xF0) {
         const msgChannel = status & 0x0f;
         if (!filter.channels.includes(msgChannel)) return;
       }
@@ -410,8 +427,6 @@ export class MidiService {
         : [outConfig.outChannel !== -1 ? outConfig.outChannel : (status & 0x0f)];
 
       const virtDevice = { id: virtName, name: virtName };
-      const isNoteOn  = (status & 0xf0) === 0x90 && data[2] > 0;
-      const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
       const applyLatch = (isNoteOn || isNoteOff) &&
         (!!outConfig.latchEnabled || (this.latch.isActive && outConfig.smartLatch));
 
@@ -425,6 +440,7 @@ export class MidiService {
         const newStatus = (status & 0xf0) | (ch % 16);
         const bytes = data.length >= 2 ? [newStatus, ...Array.from(data.slice(1))] : [newStatus];
         this.sendToVirtualOutput(virtName, bytes);
+        if (isNoteOn && !applyLatch) this.virtualThruNotes.noteOn(inputName, inChannel, data[1], virtName, ch);
       });
     });
   }
@@ -841,6 +857,8 @@ export class MidiService {
 
   panic(): void {
     console.log('[MIDI] PANIC! Sending All Notes Off to all devices and channels.');
+    this.router.clearThruNotes();
+    this.virtualThruNotes.clear();
     const panicMsg = (ch: number) => [0xb0 + ch, 123, 0];
     const resetMsg = (ch: number) => [0xb0 + ch, 120, 0];
     const sustainMsg = (ch: number) => [0xb0 + ch, 64, 0];
@@ -1415,7 +1433,7 @@ export class MidiService {
     // Velocity gating and curve transform
     let processedData: number[] | Uint8Array = event.data;
     const isNoteOn = (status & 0xf0) === 0x90;
-    const isNoteOff = (status & 0xf0) === 0x80;
+    const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && event.data[2] === 0);
     if ((isNoteOn || isNoteOff) && event.data.length >= 3 && inConfig) {
       const rawVelocity = event.data[2];
       if (isNoteOn && rawVelocity > 0) {
@@ -1441,7 +1459,10 @@ export class MidiService {
     // latency while sitting below realistic repeated-note timing.
     const rawHash = event.data.join(',');
     const globalSentTime = this.globalSentHashes.get(rawHash);
-    if (globalSentTime && now - globalSentTime < 20) return;
+    // Never suppress incoming note-offs based on global sent hashes — the app
+    // may have generated a note-off for the same note+channel (panic, UI, etc.)
+    // and the controller's real note-off must not be mistaken for a loopback.
+    if (!isNoteOff && globalSentTime && now - globalSentTime < 20) return;
     const recent = this.lastSentMessages.get(inputId);
     if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
 

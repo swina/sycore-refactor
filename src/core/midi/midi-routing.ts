@@ -23,6 +23,40 @@ export interface RoutingContext {
   onSent: (bytes: string, now: number) => void;
 }
 
+/**
+ * Remembers where each Thru note-on was actually sent (destination +
+ * output channel) so its note-off can follow it there, regardless of what
+ * changed in between — a cable filter, the sequencer-playing block, a
+ * Multi-CH global channel switch, a re-wired MIDI Flow. Without this, any
+ * gate that drops the note-off but not the note-on leaves a stuck note.
+ * Latched notes are not tracked — SmartLatch owns their note-offs.
+ */
+export class ThruNoteTracker {
+  // `${source}|${inChannel}|${note}` → destination → output channels
+  private active = new Map<string, Map<string, Set<number>>>();
+
+  noteOn(source: string, inChannel: number, note: number, dest: string, outChannel: number): void {
+    const key = `${source}|${inChannel}|${note}`;
+    let dests = this.active.get(key);
+    if (!dests) { dests = new Map(); this.active.set(key, dests); }
+    let chs = dests.get(dest);
+    if (!chs) { chs = new Set(); dests.set(dest, chs); }
+    chs.add(outChannel & 0x0f);
+  }
+
+  /** Returns (and forgets) every destination/channel the note was sent to. */
+  take(source: string, inChannel: number, note: number): Map<string, Set<number>> | undefined {
+    const key = `${source}|${inChannel}|${note}`;
+    const dests = this.active.get(key);
+    this.active.delete(key);
+    return dests;
+  }
+
+  clear(): void {
+    this.active.clear();
+  }
+}
+
 export class MidiRouter {
   private routingMatrix = new Map<string, Set<string>>([
     ['SEQUENCER', new Set()],
@@ -35,6 +69,7 @@ export class MidiRouter {
 
   private broadcastMode = true;
   private ctx: RoutingContext;
+  private thruNotes = new ThruNoteTracker();
 
   constructor(ctx: RoutingContext) {
     this.ctx = ctx;
@@ -97,6 +132,11 @@ export class MidiRouter {
     this.broadcastMode = enabled;
   }
 
+  /** Forget all tracked Thru notes (after a panic / all-notes-off). */
+  clearThruNotes(): void {
+    this.thruNotes.clear();
+  }
+
   getBroadcastMode(): boolean {
     return this.broadcastMode;
   }
@@ -129,8 +169,27 @@ export class MidiRouter {
     const targetsFromMatrix = inputName ? this.routingMatrix.get(inputName) : null;
     const isNote = (status & 0xf0) === 0x90 || (status & 0xf0) === 0x80;
     const isCC = (status & 0xf0) === 0xb0;
+    const isNoteOn = (status & 0xf0) === 0x90 && data[2] > 0;
+    const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
+    const inChannel = status & 0x0f;
+
+    // A note-off goes straight to every output its note-on reached, on the
+    // same channel, bypassing all the gates below.
+    const tracked = isNoteOff ? this.thruNotes.take(inputId, inChannel, data[1]) : undefined;
+    tracked?.forEach((chs, outId) => {
+      const out = access.outputs.get(outId);
+      if (!out) return;
+      chs.forEach(ch => {
+        const bytes = new Uint8Array([(status & 0xf0) | ch, data[1], data[2] ?? 0]);
+        try {
+          this.ctx.onSent(bytes.join(','), now);
+          out.send(bytes);
+        } catch {}
+      });
+    });
 
     access.outputs.forEach((outDevice: any) => {
+      if (tracked?.has(outDevice.id)) return;
       const config = this.ctx.getRoutingConfig();
       const outConfig = config?.registrations[outDevice.name];
       const inConfig = inputDevice ? config?.registrations[inputDevice.name] : null;
@@ -168,9 +227,13 @@ export class MidiRouter {
       if ((status === 0xFA || status === 0xFC) && !outConfig.transport) return;
 
       // Note-range filter — MIDI Flow's per-cable "keyboard split" for
-      // device→device connections (Controller → Instrument).
-      const filter = isNote ? this.ctx.getOutputRouteFilter(inputName, outDevice.name) : undefined;
-      if (isNote && filter) {
+      // device→device connections (Controller → Instrument). Only gates
+      // note-ONS: a note-off can only silence a note, never start one, so it
+      // must always reach the output even when the note arrived there via
+      // another route (e.g. broadcast) and only the off lands on this cable —
+      // otherwise the receiving synth is left with a stuck note.
+      const filter = isNoteOn ? this.ctx.getOutputRouteFilter(inputName, outDevice.name) : undefined;
+      if (isNoteOn && filter) {
         const note = data[1];
         const lo = filter.lowNote ?? 0;
         const hi = filter.highNote ?? 127;
@@ -179,17 +242,15 @@ export class MidiRouter {
 
       // Channel filter — per-cable MIDI channel gate for multi-part
       // instruments. When set, only messages on the listed channels pass
-      // through this Thru connection.
-      if (filter?.channels && filter.channels.length > 0 && status < 0xF0) {
+      // through this Thru connection. (Note-offs exempt for the same reason
+      // as the range filter above.)
+      if (isNote && !isNoteOff && filter?.channels && filter.channels.length > 0 && status < 0xF0) {
         const msgChannel = status & 0x0f;
         if (!filter.channels.includes(msgChannel)) return;
       }
 
       let bytes = data;
       let shouldForward = true;
-
-      const isNoteOn = (status & 0xf0) === 0x90 && data[2] > 0;
-      const isNoteOff = (status & 0xf0) === 0x80 || ((status & 0xf0) === 0x90 && data[2] === 0);
 
       // Smart Latch — triggers for global latch (when device opts in) OR per-device latch
       const latch = this.ctx.getSmartLatch();
@@ -230,6 +291,9 @@ export class MidiRouter {
         }
         this.ctx.onSent(bytes.join(','), now);
         outDevice.send(bytes);
+        if (isNoteOn && !applyLatch) {
+          this.thruNotes.noteOn(inputId, inChannel, data[1], outDevice.id, bytes[0] & 0x0f);
+        }
       } catch {}
     });
   }

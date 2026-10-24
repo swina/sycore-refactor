@@ -212,6 +212,21 @@ export function useControllerManager() {
     const cc   = type === 0xB0 ? data[1] : null
     const note = (type === 0x90 || type === 0x80) ? data[1] : null
     const val  = data[2]
+    // 0x80 or running-status 0x90 vel=0 — 0x80 may carry a non-zero release
+    // velocity, so `val === 0` alone misreads it as a press.
+    const isRelease = note !== null && (type === 0x80 || val === 0)
+
+    // Same device/channel/note test for press and release — if they
+    // disagree, the note-on passes through but its note-off is consumed
+    // (or vice versa) and the synth is left with a stuck note.
+    const matchesNote = (m) => {
+      if (m.note === undefined || m.note !== note) return false
+      const mName = (m.device || '').toLowerCase()
+      if (!mName) return false
+      const dName = deviceName.toLowerCase()
+      if (mName !== dName && !dName.includes(mName)) return false
+      return m.channel === -1 || m.channel === chan
+    }
 
     // 1. Check Custom App Mappings FIRST (User Override)
     const mappings = mappingStore.appMidiMappings
@@ -251,8 +266,8 @@ export function useControllerManager() {
       if (m.note !== undefined && m.note !== note) return false
       if (m.cc !== undefined && m.cc !== cc) return false
       
-      // For Notes: Only trigger on Press (Velocity > 0)
-      if (m.note !== undefined && val === 0) return false
+      // For Notes: Only trigger on Press
+      if (m.note !== undefined && isRelease) return false
 
       // For CCs: Check trigger mode (Exact, Min threshold, or default > 63)
       if (m.cc !== undefined && !isContinuousAction(m.action)) {
@@ -314,12 +329,13 @@ export function useControllerManager() {
       return matchedMapping.consume !== false
     }
 
-    // Special case: if a mapping exists for this note but we are at val 0 (release),
-    // we MUST consume it to prevent fallthrough to native profiles or synth.
-    if (note !== null && val === 0) {
-       const mapped = mappings.find(m => m.device === deviceName && m.note === note)
+    // Special case: release of a mapped note — consume it exactly when its
+    // press was consumed, to prevent fallthrough to native profiles or synth.
+    if (isRelease) {
+       const mapped = mappings.find(matchesNote)
        if (mapped) {
          updateFeedback()
+         if (hasMidiLearnMapping(mappingStore.midiMappings, cc, note, deviceName, chan)) return false
          return mapped.consume !== false
        }
     }
