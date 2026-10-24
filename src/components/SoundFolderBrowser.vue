@@ -58,7 +58,6 @@ async function scanFolder() {
       next.push(entry)
     }
     files.value = next
-    window.dispatchEvent(new CustomEvent('sound-folder-files-updated', { detail: next }))
   } catch (e) {
     console.error('[SoundFolderBrowser] scan failed', e)
     error.value = 'Failed to read folder contents'
