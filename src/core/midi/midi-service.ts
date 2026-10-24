@@ -182,14 +182,11 @@ export class MidiService {
 
   private _resetNewInputs(currentInputs: Set<string>): void {
     if (!this.midiAccess) return;
-    const blockedPorts = new Set(
-      Array.from(this.virtualOutputPorts.values()).filter(Boolean).map(p => this.normPort(p))
-    );
     for (const input of this.midiAccess.inputs.values()) {
       const key = this.normPort(input.name ?? '');
       if (!currentInputs.has(key)) continue;
       if (this._lastKnownInputNames.has(key)) continue;
-      if (blockedPorts.has(key)) continue;
+      if (this.isBlockedLoopbackInput(input.name ?? '')) continue;
       const lastReset = this._lastInputResetAt.get(key) ?? 0;
       if (this._resettingInputs.has(key) || Date.now() - lastReset < 500) continue;
       this._resettingInputs.add(key);
@@ -205,6 +202,27 @@ export class MidiService {
   // that differ between platforms/drivers for the same physical port.
   private normPort(s: string): string {
     return s.toLowerCase().replace(/^(1-|2-|midi\s+|usb\s+)/i, '').trim();
+  }
+
+  // An input that must stay closed because it's the other end of a loopback
+  // cable (LoopBe1, loopMIDI…) a virtual instrument sends into — opening
+  // both sides trips the driver's "MIDI Feedback" mute. A matching name
+  // alone isn't proof: Windows MIDI Services gives a hardware device's
+  // input and output ports the same name, so a virtual instrument bound to
+  // e.g. the Worlde's output would otherwise block the Worlde's input from
+  // ever being opened at startup (only a replug, via the statechange
+  // handler, got it working). A port the user registered as an input in
+  // MIDI Flow is a real input, never treated as a loopback.
+  private isBlockedLoopbackInput(name: string): boolean {
+    const key = this.normPort(name ?? '');
+    if (!key) return false;
+    const boundToVirtual = Array.from(this.virtualOutputPorts.values())
+      .some(p => !!p && this.normPort(p) === key);
+    if (!boundToVirtual) return false;
+    const regs = this.routingConfig?.registrations ?? {};
+    const wiredAsInput = Object.values(regs)
+      .some(r => !!r?.inEnabled && this.normPort(r.name ?? '') === key);
+    return !wiredAsInput;
   }
 
   registerVirtualOutput(name: string, sendFn: (data: number[]) => void, portName?: string): void {
@@ -224,29 +242,28 @@ export class MidiService {
     if (!this.midiAccess) return;
     const target = this.normPort(portName);
     this.midiAccess.inputs.forEach(input => {
-      if (this.normPort(input.name) === target) {
+      if (this.normPort(input.name) === target && this.isBlockedLoopbackInput(input.name)) {
         input.removeEventListener('midimessage', this.handleIngressBound);
         input.close();
       }
     });
   }
 
-  // Force-closes and reopens a specific MIDI input by name, re-attaching the
+  // Reopens a specific MIDI input by name, re-attaching the
   // ingress listener. Fixes the stale-connection issue that appears after a
   // page reload where the port shows as "connected" but events stop arriving.
   async reconnectInput(portName: string): Promise<void> {
     if (!this.midiAccess) return;
     const target = this.normPort(portName);
-    const blockedPorts = new Set(
-      Array.from(this.virtualOutputPorts.values()).filter(Boolean).map(p => this.normPort(p))
-    );
     for (const input of Array.from(this.midiAccess.inputs.values())) {
       if (this.normPort(input.name) !== target) continue;
-      if (blockedPorts.has(target)) return; // never reopen a loopback output side
+      if (this.isBlockedLoopbackInput(input.name)) return; // never reopen a loopback output side
       input.removeEventListener('midimessage', this.handleIngressBound);
-      await input.close();
-      await input.open();
-      input.removeEventListener('midimessage', this.handleIngressBound);
+      // open() only — same as reScanInputs(): a close()+open() cycle
+      // corrupts some USB MIDI drivers (Worlde, etc.) until a replug.
+      try { await input.open(); } catch (e) {
+        console.warn(`[MIDI] Failed to open input "${input.name}":`, e);
+      }
       input.addEventListener('midimessage', this.handleIngressBound);
       console.log(`[MIDI] Reconnected input: ${input.name}`);
       break;
@@ -596,11 +613,8 @@ export class MidiService {
     // Ports used as virtual-instrument outputs must never be opened as inputs —
     // loopback drivers (LoopBe1, loopMIDI, etc.) detect the simultaneous
     // open and mute themselves with a "MIDI Feedback" error.
-    const blockedPorts = new Set(
-      Array.from(this.virtualOutputPorts.values()).filter(Boolean).map(p => this.normPort(p))
-    );
     const inputs = Array.from(this.midiAccess.inputs.values())
-      .filter(input => !blockedPorts.has(this.normPort(input.name)));
+      .filter(input => !this.isBlockedLoopbackInput(input.name));
     for (const input of inputs) {
       input.removeEventListener('midimessage', this.handleIngressBound);
       try {
