@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-10-24
 
+- **TracksPlayer: track Key field** — added a free-text musical **Key** column to the library table plus an optional Key input in the Add/Edit forms and the Library save confirmation dialog. Persisted as `key` on the backing track document. Branch: `draft`
 - **TracksPlayer: library as scrollable table** — `src/components/TracksPlayer.vue` replaces the card grid in the Library tab with a scrollable table (sticky header, dense columns) for easier reading. Branch: `draft`
 - **Feature: Bass Note Output** — `src/components/ChordProgSequencer.vue` adds **Bass** controls (toggle ON/OFF, device selector, channel selector) in the header. When enabled, the lowest note of each chord is sent as a sustained note to the chosen MIDI device/channel, independent of the main chord output. Works during transport-based playback and manual step triggering (including arp mode, where the bass note holds while individual notes arpeggiate). Settings persisted via localStorage. Branch: `feature/bass-note-output`
 - Added `Antonio_FourthStack.xml` and `Antonio_BluesRiff.xml` templates — quartal harmony arpeggio and 16-step blues riff.

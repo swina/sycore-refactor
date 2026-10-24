@@ -64,10 +64,11 @@ const deletingTrackId = ref(null)
 const tracks          = ref([])
 const detectedBpm     = ref(null)
 const newTrackBpm     = ref('')
+const newTrackKey     = ref('')
 const playingTrack    = ref(null)
 const pendingLocalFile = ref(null)
 const triggerSource    = ref(null)
-const confirmDialog    = ref(null) // { label, url, bpm, genre?, author? }
+const confirmDialog    = ref(null) // { label, url, bpm, key, genre?, author? }
 const pendingBrowser   = ref(null) // tracks which browser opened: 'freesound' | 'folder'
 const pendingFolderFile = ref(null) // raw File object for folder saves (read as dataUrl on confirm)
 
@@ -533,7 +534,8 @@ function cancelAdd() {
   newTrackLabel.value = '';
   newTrackGenre.value = '';
   newTrackAuthor.value = '';
-  newTrackBpm.value = ''
+  newTrackBpm.value = '';
+  newTrackKey.value = ''
 }
 function cancelEdit() {
   editingTrackId.value = null;
@@ -542,7 +544,8 @@ function cancelEdit() {
   newTrackLabel.value = '';
   newTrackGenre.value = '';
   newTrackAuthor.value = '';
-  newTrackBpm.value = ''
+  newTrackBpm.value = '';
+  newTrackKey.value = ''
 }
 
 async function addTrack(e) {
@@ -557,6 +560,7 @@ async function addTrack(e) {
       createdAt: serverTimestamp()
     }
     if (newTrackBpm.value !== '') data.bpm = Number(newTrackBpm.value)
+    if (newTrackKey.value !== '') data.key = newTrackKey.value
     await addDoc(collection(db, 'users', uid.value, 'backing_tracks'), data)
     cancelAdd()
   } catch (err) { console.error('Failed to add track:', err) }
@@ -576,6 +580,7 @@ async function saveEditTrack(e) {
     }
 
     data.bpm = newTrackBpm.value !== '' ? Number(newTrackBpm.value) : deleteField()
+    data.key = newTrackKey.value !== '' ? newTrackKey.value : deleteField()
     await updateDoc(doc(db, 'users', uid.value, 'backing_tracks', editingTrackId.value), data)
     cancelEdit()
   } catch (err) { console.error('Failed to edit track:', err) }
@@ -592,6 +597,7 @@ function startEditTrack(track, e) {
   newTrackGenre.value = track.genre
   newTrackAuthor.value = track.author || ''
   newTrackBpm.value = track.bpm || ''
+  newTrackKey.value = track.key || ''
 }
 
 async function deleteTrack(id, e) {
@@ -708,7 +714,7 @@ watch(() => uiStore.isSoundFolderBrowserOpen, (open) => {
 const handleFreesoundAdd = (e) => {
   const track = e.detail
   if (!track) return
-  showLibraryConfirm({ label: track.label, url: track.url, bpm: track.bpm, author: track.author, genre: track.genre || 'Freesound' }, 'freesound')
+  showLibraryConfirm({ label: track.label, url: track.url, bpm: track.bpm, key: track.key, author: track.author, genre: track.genre || 'Freesound' }, 'freesound')
 }
 
 async function showLibraryConfirm(track, source) {
@@ -740,6 +746,7 @@ async function confirmLibrarySave() {
     createdAt: serverTimestamp(),
   }
   if (d.bpm) data.bpm = Math.round(d.bpm)
+  if (d.key) data.key = d.key
   if (!data.bpm && trackUrl && (trackUrl.startsWith('http') || trackUrl.startsWith('blob'))) {
     try {
       const bpm = await Promise.race([
@@ -1100,7 +1107,10 @@ onUnmounted(() => {
                   <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
                   <input type="text" placeholder="Author" v-model="newTrackAuthor" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
                 </div>
-                <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                  <input type="text" placeholder="Key (optional)" v-model="newTrackKey" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                </div>
                 <div class="flex gap-2 mt-1">
                   <button type="submit" class="flex-1 bg-synth-neon text-black text-xs font-bold py-1.5 rounded hover:bg-white transition-colors">Save</button>
                   <button type="button" @click="cancelAdd" class="px-3 bg-neutral-800 text-white text-xs font-bold py-1.5 rounded hover:bg-neutral-700 transition-colors">Cancel</button>
@@ -1114,6 +1124,7 @@ onUnmounted(() => {
                     <tr class="text-[9px] uppercase tracking-widest text-neutral-500 bg-neutral-900 sticky top-0">
                       <th class="text-left px-2 py-1.5 border-b border-neutral-800">Label</th>
                       <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">BPM</th>
+                      <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">Key</th>
                       <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">Time</th>
                       <th class="text-left px-2 py-1.5 border-b border-neutral-800">Genre</th>
                       <th class="text-left px-2 py-1.5 border-b border-neutral-800">Author</th>
@@ -1124,7 +1135,7 @@ onUnmounted(() => {
                     <template v-for="track in tracks" :key="track.id">
                       <!-- Edit form for this track -->
                       <tr v-if="editingTrackId === track.id">
-                        <td colspan="6" class="p-0" @click.stop>
+                        <td colspan="7" class="p-0" @click.stop>
                           <div class="m-1">
                             <form @submit="saveEditTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
                               <div class="relative">
@@ -1136,7 +1147,10 @@ onUnmounted(() => {
                                 <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
                                 <input type="text" placeholder="Author" v-model="newTrackAuthor" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
                               </div>
-                              <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                              <div class="grid grid-cols-2 gap-2">
+                                <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                                <input type="text" placeholder="Key (optional)" v-model="newTrackKey" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                              </div>
                               <div class="flex gap-2 mt-1">
                                 <button type="submit" class="flex-1 bg-synth-neon text-black text-xs font-bold py-1.5 rounded hover:bg-white transition-colors">Save</button>
                                 <button type="button" @click="cancelEdit" class="px-3 bg-neutral-800 text-white text-xs font-bold py-1.5 rounded hover:bg-neutral-700 transition-colors">Cancel</button>
@@ -1153,6 +1167,10 @@ onUnmounted(() => {
                         <td class="px-2 py-1.5 text-xs font-bold">{{ track.label }}</td>
                         <td class="px-2 py-1.5 text-center">
                           <span v-if="track.bpm" class="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }}</span>
+                          <span v-else class="text-[9px] text-neutral-600">—</span>
+                        </td>
+                        <td class="px-2 py-1.5 text-center">
+                          <span v-if="track.key" class="text-[9px] font-mono text-amber-400 bg-amber-400/10 px-1 rounded">{{ track.key }}</span>
                           <span v-else class="text-[9px] text-neutral-600">—</span>
                         </td>
                         <td class="px-2 py-1.5 text-center">
@@ -1283,6 +1301,15 @@ onUnmounted(() => {
             <div class="flex items-center gap-2 mt-1">
               <input v-model.number="confirmDialog.bpm" type="number" min="20" max="300"
                 class="w-20 bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:border-synth-neon outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label class="text-[8px] uppercase tracking-widest text-neutral-500 font-bold">Key <span class="text-neutral-600">(optional)</span></label>
+            <div class="flex items-center gap-2 mt-1">
+              <input v-model="confirmDialog.key" type="text"
+                placeholder="e.g. C, Dm, G#m"
+                class="w-28 bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:border-synth-neon outline-none"
               />
             </div>
           </div>
