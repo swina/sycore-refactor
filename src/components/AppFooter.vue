@@ -105,6 +105,8 @@ const btDuration         = ref(0)
 const btVolume           = ref(0.5)
 const btIsLooping        = ref(true)
 const btPlayingTrackLabel = ref('')
+const btBpm              = ref(null)
+const btKey              = ref('')
 
 const btIsPlaylistMode = computed(() => btPlaylistIdx.value >= 0 && btPlaylist.value.length > 0)
 const btProgress       = computed(() => btDuration.value > 0 ? (btCurrentTime.value / btDuration.value) * 100 : 0)
@@ -125,6 +127,8 @@ function onPlayerSync(e) {
   if (d.volume             !== undefined) btVolume.value            = d.volume
   if (d.isLooping          !== undefined) btIsLooping.value         = d.isLooping
   if (d.playingTrackLabel  !== undefined) btPlayingTrackLabel.value = d.playingTrackLabel
+  if (d.bpm                !== undefined) btBpm.value               = d.bpm
+  if (d.key                !== undefined) btKey.value               = d.key
 }
 
 function btPlayStop()     { window.dispatchEvent(new CustomEvent('playlist-play-stop')) }
@@ -301,7 +305,13 @@ onUnmounted(() => {
 
           <div class="w-px h-4 bg-white/10 mx-1" />
 
-          
+          <!-- Key / BPM badges -->
+          <template v-if="btKey || btBpm">
+            <span v-if="btKey" class="text-xs font-mono text-amber-400 bg-amber-400/10 px-1.5 rounded font-bold normal-case">{{ btKey }}</span>
+            <span v-if="btBpm" class="text-xs font-mono text-emerald-400 bg-emerald-400/10 px-1.5 rounded font-bold">{{ btBpm }} BPM</span>
+            <div class="w-px h-4 bg-white/10" />
+          </template>
+
         </template>
         
         

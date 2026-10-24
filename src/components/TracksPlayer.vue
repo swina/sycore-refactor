@@ -61,6 +61,7 @@ const newTrackAuthor  = ref('')
 const editingTrackId  = ref(null)
 const editingTrackIsBase64 = ref(false)
 const deletingTrackId = ref(null)
+const selectedTrackIds = ref([])
 const tracks          = ref([])
 const detectedBpm     = ref(null)
 const newTrackBpm     = ref('')
@@ -71,6 +72,11 @@ const triggerSource    = ref(null)
 const confirmDialog    = ref(null) // { label, url, bpm, key, genre?, author? }
 const pendingBrowser   = ref(null) // tracks which browser opened: 'freesound' | 'folder'
 const pendingFolderFile = ref(null) // raw File object for folder saves (read as dataUrl on confirm)
+const folderBrowserFiles = ref([])
+const importingAll       = ref(false)
+const importProgress     = ref({ done: 0, total: 0 })
+const bulkGenre          = ref('')
+const bulkAuthor         = ref('')
 
 const playlist            = ref([])
 const playlistRepeats     = ref([])
@@ -511,6 +517,14 @@ function clearPlaylist() {
   playlistIdx.value = -1
   playlistCurrentRepeat.value = 1
   uiStore.lastPlaylistName = ""
+  audioRefA.value?.pause()
+  audioRefB.value?.pause()
+  src.value = null
+  playingTrack.value = null
+  fileName.value = ''
+  currentTime.value = 0
+  duration.value = 0
+  isPlaying.value = false
 }
 
 function playlistPrev() {
@@ -606,6 +620,29 @@ async function deleteTrack(id, e) {
   catch (err) { console.error('Failed to delete track:', err) }
 }
 
+function toggleSelectTrack(id) {
+  const idx = selectedTrackIds.value.indexOf(id)
+  if (idx >= 0) selectedTrackIds.value.splice(idx, 1)
+  else selectedTrackIds.value.push(id)
+}
+
+function toggleSelectAll() {
+  if (selectedTrackIds.value.length === tracks.value.length) {
+    selectedTrackIds.value = []
+  } else {
+    selectedTrackIds.value = tracks.value.map(t => t.id)
+  }
+}
+
+async function deleteSelectedTracks() {
+  const ids = [...selectedTrackIds.value]
+  if (!ids.length) return
+  selectedTrackIds.value = []
+  await Promise.allSettled(ids.map(id =>
+    deleteDoc(doc(db, 'users', uid.value, 'backing_tracks', id))
+  ))
+}
+
 function onLoadedMeta(slot, d) {
   if (activeSlot !== slot) return
   const resolvedDur = isFinite(d) && d > 0 ? d : (playingTrack.value?.duration || 0)
@@ -634,6 +671,8 @@ watch([isPlaying, playlistIdx, volume, isLooping, playingTrack, src], () => {
       isLooping: isLooping.value,
       hasSrc: !!src.value,
       playingTrackLabel: playingTrack.value?.label || fileName.value || '',
+      bpm: playingTrack.value?.bpm || detectedBpm.value || null,
+      key: playingTrack.value?.key || '',
     }
   }))
 })
@@ -683,10 +722,10 @@ watch(inputType, (tab) => {
   if (tab === 'folder') {
     uiStore.soundFolderAssignTarget = {
       label: 'Backing Tracks Library',
-      onAssign: async (file) => {
-        const actualFile = await file.handle.getFile()
+      onAssign: async (fileEntry) => {
+        const actualFile = await fileEntry.handle.getFile()
         pendingFolderFile.value = actualFile
-        const label = file.name.replace(/\.[^.]+$/, '')
+        const label = fileEntry.name.replace(/\.[^.]+$/, '')
         const url = URL.createObjectURL(actualFile)
         let bpm = null
         try {
@@ -707,6 +746,11 @@ watch(inputType, (tab) => {
 watch(() => uiStore.isSoundFolderBrowserOpen, (open) => {
   if (!open && uiStore.soundFolderAssignTarget?.label === 'Backing Tracks Library') {
     uiStore.soundFolderAssignTarget = null
+    folderBrowserFiles.value = []
+    importProgress.value = { done: 0, total: 0 }
+    importingAll.value = false
+    bulkGenre.value = ''
+    bulkAuthor.value = ''
   }
 })
 
@@ -788,6 +832,51 @@ function cancelLibraryConfirm() {
   pendingFolderFile.value = null
 }
 
+function parseKeyBpmFromName(name) {
+  const base = name.replace(/\.[^.]+$/, '')
+  const cleaned = base.replace(/_(\d+)bpm$/i, '_$1')
+  const m = cleaned.match(/^(.+?)_(.+)_(\d+)$/)
+  if (m) return { label: m[1], key: m[2], bpm: Number(m[3]) }
+  return { label: base, key: '', bpm: null }
+}
+
+async function saveFolderFileToLibrary(file, name) {
+  const { label, key, bpm } = parseKeyBpmFromName(name)
+  const url = await new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.readAsDataURL(file)
+  })
+  const data = {
+    label,
+    url,
+    genre: bulkGenre.value || 'Local',
+    author: bulkAuthor.value || '',
+    createdAt: serverTimestamp(),
+  }
+  if (bpm) data.bpm = bpm
+  if (key) data.key = key
+  await addDoc(collection(db, 'users', uid.value, 'backing_tracks'), data)
+}
+
+async function importAllFolderFiles() {
+  if (!uid.value || !folderBrowserFiles.value.length) return
+  importingAll.value = true
+  importProgress.value = { done: 0, total: folderBrowserFiles.value.length }
+  for (const entry of folderBrowserFiles.value) {
+    try {
+      const file = await entry.handle.getFile()
+      await saveFolderFileToLibrary(file, entry.name)
+    } catch (err) {
+      console.error('Failed to import:', entry.name, err)
+    }
+    importProgress.value = { ...importProgress.value, done: importProgress.value.done + 1 }
+  }
+  folderBrowserFiles.value = []
+  importingAll.value = false
+  importProgress.value = { done: 0, total: 0 }
+}
+
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -802,6 +891,7 @@ watch(uid, (newUid) => {
   playlistRepeats.value = []
   playlistIdx.value = -1
   playlistCurrentRepeat.value = 1
+  selectedTrackIds.value = []
   const q = query(collection(db, 'users', newUid, 'backing_tracks'), orderBy('createdAt', 'desc'))
   _unsubTracks = onSnapshot(q, (snapshot) => {
     const ts = []
@@ -939,11 +1029,14 @@ onMounted(() => {
         isLooping: isLooping.value,
         hasSrc: !!src.value,
         playingTrackLabel: playingTrack.value?.label || fileName.value || '',
+        bpm: playingTrack.value?.bpm || detectedBpm.value || null,
+        key: playingTrack.value?.key || '',
       }
     }))
   }
   const handleLoopToggle = () => { isLooping.value = !isLooping.value }
   const handleOpenFreesound = () => { uiStore.isFreesoundBrowserOpen = true }
+  const handleSoundFolderFiles = (e) => { if (e.detail) folderBrowserFiles.value = e.detail }
 
   window.addEventListener('toggle-backing-track', handleToggle)
   window.addEventListener('playlist-play-stop', handlePlayStop)
@@ -960,8 +1053,9 @@ onMounted(() => {
   window.addEventListener('tracks-player-open-freesound', handleOpenFreesound)
   window.addEventListener('freesound-add-to-playlist', handleFreesoundAdd)
   window.addEventListener('tracks-player-volume', handleVolume)
+  window.addEventListener('sound-folder-files-updated', handleSoundFolderFiles)
 
-  _handlers = { handleToggle, handlePlayStop, handleNext, handleAddFromCapture, handlePrev, handlePlaylistPlay, handleSeek, handleVolume, handlePlaylistMutate, handlePlaylistClear, handlePlayerStateRequest, handleLoopToggle, handleOpenFreesound, handleFreesoundAdd }
+  _handlers = { handleToggle, handlePlayStop, handleNext, handleAddFromCapture, handlePrev, handlePlaylistPlay, handleSeek, handleVolume, handlePlaylistMutate, handlePlaylistClear, handlePlayerStateRequest, handleLoopToggle, handleOpenFreesound, handleFreesoundAdd, handleSoundFolderFiles }
 })
 
 onUnmounted(() => {
@@ -982,6 +1076,7 @@ onUnmounted(() => {
   window.removeEventListener('tracks-player-open-freesound', _handlers.handleOpenFreesound)
   window.removeEventListener('freesound-add-to-playlist', _handlers.handleFreesoundAdd)
   window.removeEventListener('tracks-player-volume', _handlers.handleVolume)
+  window.removeEventListener('sound-folder-files-updated', _handlers.handleSoundFolderFiles)
 })
 </script>
 
@@ -1118,10 +1213,20 @@ onUnmounted(() => {
               </form>
 
               <div v-if="tracks.length === 0" class="text-center text-xs text-neutral-500 py-4 shrink-0">No tracks available.</div>
-              <div v-else class="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+              <div v-else>
+                <div v-if="selectedTrackIds.length > 0 && isAdmin" class="flex items-center justify-between px-2 py-1.5 bg-red-500/10 rounded-lg border border-red-500/30 shrink-0">
+                  <span class="text-[10px] text-red-400 uppercase tracking-widest">{{ selectedTrackIds.length }} selected</span>
+                  <button @click="deleteSelectedTracks"
+                    class="px-3 py-1 bg-red-500/20 border border-red-500/60 rounded text-red-400 hover:bg-red-500/40 text-[10px] uppercase font-bold transition-colors"
+                  >Delete Selected</button>
+                </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar min-h-0">
                 <table class="w-full border-collapse">
                   <thead>
                     <tr class="text-[9px] uppercase tracking-widest text-neutral-500 bg-neutral-900 sticky top-0">
+                      <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-8">
+                        <input v-if="isAdmin" type="checkbox" @click="toggleSelectAll" :checked="selectedTrackIds.length === tracks.length" class="accent-synth-neon w-3 h-3" />
+                      </th>
                       <th class="text-left px-2 py-1.5 border-b border-neutral-800">Label</th>
                       <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">BPM</th>
                       <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">Key</th>
@@ -1135,7 +1240,7 @@ onUnmounted(() => {
                     <template v-for="track in tracks" :key="track.id">
                       <!-- Edit form for this track -->
                       <tr v-if="editingTrackId === track.id">
-                        <td colspan="7" class="p-0" @click.stop>
+                        <td colspan="8" class="p-0" @click.stop>
                           <div class="m-1">
                             <form @submit="saveEditTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
                               <div class="relative">
@@ -1164,13 +1269,16 @@ onUnmounted(() => {
                         @click="playTrack(track)"
                         :class="['cursor-pointer transition-colors border-b border-neutral-800/50', src === track.url && !isPlaylistMode ? 'bg-synth-neon/10 text-synth-neon' : 'text-neutral-300 hover:bg-neutral-800']"
                       >
+                        <td class="px-2 py-1.5 text-center">
+                          <input v-if="isAdmin" type="checkbox" @click.stop="toggleSelectTrack(track.id)" :checked="selectedTrackIds.includes(track.id)" class="accent-synth-neon w-3 h-3" />
+                        </td>
                         <td class="px-2 py-1.5 text-xs font-bold">{{ track.label }}</td>
                         <td class="px-2 py-1.5 text-center">
                           <span v-if="track.bpm" class="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }}</span>
                           <span v-else class="text-[9px] text-neutral-600">—</span>
                         </td>
                         <td class="px-2 py-1.5 text-center">
-                          <span v-if="track.key" class="text-[9px] font-mono text-amber-400 bg-amber-400/10 px-1 rounded">{{ track.key }}</span>
+                          <span v-if="track.key" class="text-[9px] font-mono text-amber-400 bg-amber-400/10 px-1 rounded normal-case">{{ track.key }}</span>
                           <span v-else class="text-[9px] text-neutral-600">—</span>
                         </td>
                         <td class="px-2 py-1.5 text-center">
@@ -1205,8 +1313,7 @@ onUnmounted(() => {
                 </table>
               </div>
             </div>
-
-            <!-- ── PLAYLIST ── -->
+            </div>
             <PlayList
               v-if="inputType === 'playlist'"
               v-model:playlist="playlist"
@@ -1218,6 +1325,7 @@ onUnmounted(() => {
               :is-playlist-mode="isPlaylistMode"
               :current-time="currentTime"
               :duration="duration"
+              :total-playlist-duration="totalPlaylistDuration"
               :is-playing="isPlaying"
               :volume="volume"
               @play="playFromPlaylist"
@@ -1240,13 +1348,34 @@ onUnmounted(() => {
             </div>
 
             <!-- ── FOLDER (admin) ── -->
-            <div v-if="inputType === 'folder'" class="flex flex-col items-center justify-center gap-3 mt-4 text-neutral-500">
+            <div v-if="inputType === 'folder'" class="flex flex-col items-center gap-3 mt-4 text-neutral-500">
               <FolderOpen class="w-8 h-8 text-cyan-500/60" />
               <span class="text-[10px] font-bold uppercase tracking-widest">Local Folder Browser</span>
               <span class="text-[9px] text-neutral-600 text-center max-w-xs">Browse audio files on your local machine. Assign to your library with auto BPM detection.</span>
               <button @click="uiStore.isSoundFolderBrowserOpen = true"
                 class="px-4 py-2 bg-cyan-500/20 border border-cyan-500/60 rounded text-cyan-400 hover:bg-cyan-500/30 text-[10px] font-black uppercase tracking-wider transition-colors"
               >Open Folder Browser</button>
+              <template v-if="folderBrowserFiles.length > 0">
+                <div class="w-full border-t border-neutral-800 pt-3 mt-2 space-y-2">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-[9px] text-neutral-400 uppercase tracking-widest">{{ folderBrowserFiles.length }} files loaded</span>
+                    <button v-if="!importingAll" @click="folderBrowserFiles = []"
+                      class="text-[9px] text-neutral-600 hover:text-neutral-400 uppercase tracking-wider"
+                    >Clear</button>
+                    <span v-else class="text-[9px] text-cyan-400">{{ importProgress.done }} / {{ importProgress.total }}</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input v-model="bulkGenre" type="text" placeholder="Genre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                    <input v-model="bulkAuthor" type="text" placeholder="Author" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                  </div>
+                  <button v-if="!importingAll" @click="importAllFolderFiles"
+                    class="w-full py-2 bg-cyan-500/20 border border-cyan-500/60 rounded text-cyan-400 hover:bg-cyan-500/30 text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2"
+                  >Upload All ({{ folderBrowserFiles.length }})</button>
+                  <button v-else disabled
+                    class="w-full py-2 bg-cyan-500/10 border border-cyan-500/40 rounded text-cyan-500/60 text-[10px] font-black uppercase tracking-wider cursor-wait"
+                  >Uploading… {{ importProgress.done }}/{{ importProgress.total }}</button>
+                </div>
+              </template>
             </div>
 
           </div>

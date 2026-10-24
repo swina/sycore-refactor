@@ -80,6 +80,7 @@ export class MidiService {
   // ── Echo / ingress suppression ───────────────────────────────────────────
   private lastSentMessages = new Map<string, { data: string; time: number }>();
   private globalSentHashes = new Map<string, number>();
+  private recentNoteOnHashes = new Map<string, number>(); // note+channel → timestamp, cleared after 500ms
   private ingressCount = 0;
   private lastIngressReset = Date.now();
   private isThruThrottled = false;
@@ -1414,8 +1415,6 @@ export class MidiService {
 
     // Velocity gating and curve transform
     let processedData: number[] | Uint8Array = event.data;
-    const isNoteOn = (status & 0xf0) === 0x90;
-    const isNoteOff = (status & 0xf0) === 0x80;
     if ((isNoteOn || isNoteOff) && event.data.length >= 3 && inConfig) {
       const rawVelocity = event.data[2];
       if (isNoteOn && rawVelocity > 0) {
@@ -1439,11 +1438,41 @@ export class MidiService {
     // the dropped half of that on/off pair is exactly what leaves a stuck
     // note on the receiving synth. 20ms comfortably covers real echo
     // latency while sitting below realistic repeated-note timing.
+    const statusLo = status & 0xf0;
+    const isNoteOn  = statusLo === 0x90 && event.data[2] > 0;
+    const isNoteOff = statusLo === 0x80 || (statusLo === 0x90 && event.data[2] === 0);
+
+    // Track recent note-ons so their corresponding note-offs are never
+    // silenced by echo suppression (e.g. a controller that sends duplicate
+    // note-on then expects both note-offs to pass).
+    if (isNoteOn) {
+      const note = event.data[1];
+      const ch = status & 0x0f;
+      this.recentNoteOnHashes.set(`${note}:${ch}`, now);
+      // Cleanup stale entries
+      if (this.recentNoteOnHashes.size > 100) {
+        const threshold = now - 500;
+        for (const [k, t] of this.recentNoteOnHashes) {
+          if (t < threshold) this.recentNoteOnHashes.delete(k);
+        }
+      }
+    }
+
     const rawHash = event.data.join(',');
     const globalSentTime = this.globalSentHashes.get(rawHash);
-    if (globalSentTime && now - globalSentTime < 20) return;
+
+    // Always forward a note-off if we've seen a note-on for the same
+    // note+channel within the last 500ms, regardless of echo suppression.
+    const isMatchingNoteOff = isNoteOff && (() => {
+      const note = event.data[1];
+      const ch = status & 0x0f;
+      const lastOn = this.recentNoteOnHashes.get(`${note}:${ch}`);
+      return lastOn && now - lastOn < 500;
+    })();
+
+    if (!isMatchingNoteOff && globalSentTime && now - globalSentTime < 20) return;
     const recent = this.lastSentMessages.get(inputId);
-    if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
+    if (!isMatchingNoteOff && recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
 
     // Global Thru routing
     if (this.routingConfig && this.routingConfig.globalThruEnabled) {
