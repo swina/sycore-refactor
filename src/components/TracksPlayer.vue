@@ -1086,14 +1086,14 @@ onUnmounted(() => {
           <div class="flex-1 space-y-3 min-h-0 pr-2 overflow-y-auto custom-scrollbar">
 
             <!-- ── LIBRARY ── -->
-            <div v-if="inputType === 'list'" class="flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+            <div v-if="inputType === 'list'" class="flex flex-col gap-2 min-h-0 flex-1">
               <button v-if="isAdmin && !isAdding" @click="isAdding = true"
-                class="w-full py-2 border border-dashed border-synth-neon text-synth-neon hover:bg-synth-neon/10 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors">
+                class="w-full py-2 border border-dashed border-synth-neon text-synth-neon hover:bg-synth-neon/10 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors shrink-0">
                 <Plus class="w-3 h-3" /> Add Backing Track
               </button>
 
               <!-- Add form -->
-              <form v-if="isAdmin && isAdding" @submit="addTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
+              <form v-if="isAdmin && isAdding" @submit="addTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800 shrink-0">
                 <input type="url" placeholder="MP3 URL" v-model="newTrackUrl" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
                 <input type="text" placeholder="Label" v-model="newTrackLabel" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
                 <div class="grid grid-cols-2 gap-2">
@@ -1107,74 +1107,84 @@ onUnmounted(() => {
                 </div>
               </form>
 
-              <div v-if="tracks.length === 0" class="text-center text-xs text-neutral-500 py-4">No tracks available.</div>
-              <div v-else class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 overflow-y-auto custom-scrollbar gap-2">
-                <template v-for="track in tracks" :key="track.id">
-                  <!-- Edit form for this track -->
-                  <div v-if="editingTrackId === track.id" @click.stop>
-                    <form @submit="saveEditTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
-                      <div class="relative">
-                        <input
-                          type="text"
-                          placeholder="MP3 URL"
-                          v-model="newTrackUrl"
-                          :readonly="editingTrackIsBase64"
-                          :class="['w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs focus:border-synth-neon outline-none', editingTrackIsBase64 ? 'text-neutral-500 cursor-not-allowed italic' : 'text-white']"
-                          required
-                        />
-                        <span v-if="editingTrackIsBase64" class="absolute right-2 top-1.5 text-[8px] font-black uppercase text-synth-neon/50">Local Only</span>
-                      </div>
-                      <input type="text" placeholder="Label" v-model="newTrackLabel" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
-                      <div class="grid grid-cols-2 gap-2">
-                        <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
-                        <input type="text" placeholder="Author" v-model="newTrackAuthor" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
-                      </div>
-                      <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
-                      <div class="flex gap-2 mt-1">
-                        <button type="submit" class="flex-1 bg-synth-neon text-black text-xs font-bold py-1.5 rounded hover:bg-white transition-colors">Save</button>
-                        <button type="button" @click="cancelEdit" class="px-3 bg-neutral-800 text-white text-xs font-bold py-1.5 rounded hover:bg-neutral-700 transition-colors">Cancel</button>
-                      </div>
-                    </form>
-                  </div>
-                  <!-- Track card -->
-                  <div v-else
-                    @click="playTrack(track)"
-                    :class="['group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border', src === track.url && !isPlaylistMode ? 'bg-synth-neon/10 border-synth-neon text-synth-neon' : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:border-neutral-700']"
-                  >
-                    <div class="flex flex-col overflow-hidden min-w-0">
-                      <span class="text-xs font-bold flex items-center gap-2 min-w-0">
-                        <span class="truncate">{{ track.label }}</span>
-                        <span v-if="track.bpm" class="shrink-0 text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }} BPM</span>
-                        <span v-if="track.duration" class="shrink-0 text-[9px] font-mono text-neutral-400 bg-neutral-800 px-1 rounded">{{ formatTime(track.duration) }}</span>
-                      </span>
-                      <span class="text-[10px] text-neutral-500 uppercase tracking-wider flex items-center gap-2">
-                        {{ track.genre }}
-                        <span v-if="track.author" class="text-neutral-700">•</span>
-                        <span v-if="track.author" class="text-neutral-400 normal-case italic font-medium">{{ track.author }}</span>
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button @click.stop="addToPlaylist(track)" title="Add to playlist" class="p-1 text-neutral-500 hover:text-synth-neon transition-colors">
-                        <ListPlus class="w-3.5 h-3.5" />
-                      </button>
-                      <template v-if="isAdmin">
-                        <template v-if="deletingTrackId === track.id">
-                          <span class="text-[10px] text-neutral-400 font-bold uppercase tracking-wider pr-1">Sure?</span>
-                          <button @click.stop="deleteTrack(track.id, $event)" class="px-2 py-0.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/40 text-[10px] uppercase font-bold transition-colors">Yes</button>
-                          <button @click.stop="deletingTrackId = null" class="px-2 py-0.5 bg-neutral-800 text-neutral-300 rounded hover:bg-neutral-700 text-[10px] uppercase font-bold transition-colors">No</button>
-                        </template>
-                        <template v-else>
-                          <button @click="startEditTrack(track, $event)" class="p-1 text-neutral-500 hover:text-white transition-colors" title="Edit Track">
-                            <Edit2 class="w-3.5 h-3.5" />
+              <div v-if="tracks.length === 0" class="text-center text-xs text-neutral-500 py-4 shrink-0">No tracks available.</div>
+              <div v-else class="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+                <table class="w-full border-collapse">
+                  <thead>
+                    <tr class="text-[9px] uppercase tracking-widest text-neutral-500 bg-neutral-900 sticky top-0">
+                      <th class="text-left px-2 py-1.5 border-b border-neutral-800">Label</th>
+                      <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">BPM</th>
+                      <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">Time</th>
+                      <th class="text-left px-2 py-1.5 border-b border-neutral-800">Genre</th>
+                      <th class="text-left px-2 py-1.5 border-b border-neutral-800">Author</th>
+                      <th class="px-2 py-1.5 border-b border-neutral-800 w-24"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template v-for="track in tracks" :key="track.id">
+                      <!-- Edit form for this track -->
+                      <tr v-if="editingTrackId === track.id">
+                        <td colspan="6" class="p-0" @click.stop>
+                          <div class="m-1">
+                            <form @submit="saveEditTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
+                              <div class="relative">
+                                <input type="text" placeholder="MP3 URL" v-model="newTrackUrl" :readonly="editingTrackIsBase64" :class="['w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs focus:border-synth-neon outline-none', editingTrackIsBase64 ? 'text-neutral-500 cursor-not-allowed italic' : 'text-white']" required />
+                                <span v-if="editingTrackIsBase64" class="absolute right-2 top-1.5 text-[8px] font-black uppercase text-synth-neon/50">Local Only</span>
+                              </div>
+                              <input type="text" placeholder="Label" v-model="newTrackLabel" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
+                              <div class="grid grid-cols-2 gap-2">
+                                <input type="text" placeholder="Genre" v-model="newTrackGenre" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" required />
+                                <input type="text" placeholder="Author" v-model="newTrackAuthor" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                              </div>
+                              <input type="number" placeholder="BPM (optional)" v-model="newTrackBpm" min="1" max="500" class="w-full bg-black border border-neutral-800 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none" />
+                              <div class="flex gap-2 mt-1">
+                                <button type="submit" class="flex-1 bg-synth-neon text-black text-xs font-bold py-1.5 rounded hover:bg-white transition-colors">Save</button>
+                                <button type="button" @click="cancelEdit" class="px-3 bg-neutral-800 text-white text-xs font-bold py-1.5 rounded hover:bg-neutral-700 transition-colors">Cancel</button>
+                              </div>
+                            </form>
+                          </div>
+                        </td>
+                      </tr>
+                      <!-- Track row -->
+                      <tr v-else
+                        @click="playTrack(track)"
+                        :class="['cursor-pointer transition-colors border-b border-neutral-800/50', src === track.url && !isPlaylistMode ? 'bg-synth-neon/10 text-synth-neon' : 'text-neutral-300 hover:bg-neutral-800']"
+                      >
+                        <td class="px-2 py-1.5 text-xs font-bold">{{ track.label }}</td>
+                        <td class="px-2 py-1.5 text-center">
+                          <span v-if="track.bpm" class="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }}</span>
+                          <span v-else class="text-[9px] text-neutral-600">—</span>
+                        </td>
+                        <td class="px-2 py-1.5 text-center">
+                          <span v-if="track.duration" class="text-[9px] font-mono text-neutral-400 bg-neutral-800 px-1 rounded">{{ formatTime(track.duration) }}</span>
+                          <span v-else class="text-[9px] text-neutral-600">—</span>
+                        </td>
+                        <td class="px-2 py-1.5 text-[10px] text-neutral-500 uppercase tracking-wider">{{ track.genre }}</td>
+                        <td class="px-2 py-1.5 text-[10px] text-neutral-400 normal-case italic font-medium">{{ track.author || '—' }}</td>
+                        <td class="px-2 py-1.5 text-center whitespace-nowrap">
+                          <button @click.stop="addToPlaylist(track)" title="Add to playlist" class="inline-flex items-center p-1 text-neutral-500 hover:text-synth-neon transition-colors">
+                            <ListPlus class="w-3.5 h-3.5" />
                           </button>
-                          <button @click.stop="deletingTrackId = track.id" class="p-1 text-neutral-500 hover:text-red-400 transition-colors" title="Delete Track">
-                            <Trash2 class="w-3.5 h-3.5" />
-                          </button>
-                        </template>
-                      </template>
-                    </div>
-                  </div>
-                </template>
+                          <template v-if="isAdmin">
+                            <template v-if="deletingTrackId === track.id">
+                              <span class="text-[10px] text-neutral-400 font-bold uppercase tracking-wider pr-1">Sure?</span>
+                              <button @click.stop="deleteTrack(track.id, $event)" class="px-2 py-0.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/40 text-[10px] uppercase font-bold transition-colors">Yes</button>
+                              <button @click.stop="deletingTrackId = null" class="px-2 py-0.5 bg-neutral-800 text-neutral-300 rounded hover:bg-neutral-700 text-[10px] uppercase font-bold transition-colors">No</button>
+                            </template>
+                            <template v-else>
+                              <button @click="startEditTrack(track, $event)" class="inline-flex items-center p-1 text-neutral-500 hover:text-white transition-colors" title="Edit Track">
+                                <Edit2 class="w-3.5 h-3.5" />
+                              </button>
+                              <button @click.stop="deletingTrackId = track.id" class="inline-flex items-center p-1 text-neutral-500 hover:text-red-400 transition-colors" title="Delete Track">
+                                <Trash2 class="w-3.5 h-3.5" />
+                              </button>
+                            </template>
+                          </template>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
               </div>
             </div>
 

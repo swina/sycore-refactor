@@ -2,6 +2,25 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-10-24
+
+- **TracksPlayer: library as scrollable table** — `src/components/TracksPlayer.vue` replaces the card grid in the Library tab with a scrollable table (sticky header, dense columns) for easier reading. Branch: `draft`
+- **Feature: Bass Note Output** — `src/components/ChordProgSequencer.vue` adds **Bass** controls (toggle ON/OFF, device selector, channel selector) in the header. When enabled, the lowest note of each chord is sent as a sustained note to the chosen MIDI device/channel, independent of the main chord output. Works during transport-based playback and manual step triggering (including arp mode, where the bass note holds while individual notes arpeggiate). Settings persisted via localStorage. Branch: `feature/bass-note-output`
+- Added `Antonio_FourthStack.xml` and `Antonio_BluesRiff.xml` templates — quartal harmony arpeggio and 16-step blues riff.
+- Added `Antonio_BerlinSeq.xml` — 24-step C minor Berlin School sequencer with chord arpeggiation (i-iv-v) and syncopated trigger gating on the 24th step for phrasing.
+- Added `Antonio_TangerineSeq.xml` — 24-step Tangerine Dream style pattern with wider interval leaps, space between notes, and a dreamy C minor progression with octave climbs. Branch: `feature/bass-note-output`
+
+## 2026-10-23
+
+- Fixed Device PC panel category/search filter leaking between devices — the category selector only reset when the bank changed, so when two devices shared a bank *name* the last selected category carried over and filtered the other device's patch list. Filters are now scoped per (device, bank) with per-selection memory restored when switching back. Branch: `fix/10-23/device-pc-category-scoping`
+- Multi-channel devices now display the "Current Program Change" table ordered by MIDI channel — `from multiChannelDisplayState` sorts `outChannels` numerically so a virtual instrument's outChannels array order no longer drives the row order. Branch: `fix/10-23/device-pc-category-scoping`
+
+## 2026-10-18
+
+- Fixed program-change marker not sending MIDI PC in LiveTimeline.vue — was using `midiStore.outputs.find()` which compares physical port names to registration names (never matches). Now uses `midiService.sendRawToDeviceByName()` which correctly resolves registration names via the routing matrix.
+- Fixed MIDI Input Device filter not filtering the mapping list in MidiMappingPanel.vue
+- Added MIDI Learn (right-click) to Prev/Next buttons in DeckPlaylistSummary.vue
+
 ## 2026-10-10
 
 - **Feature: Sequencer Arpeggio style** — `src/components/Sequencer.vue` adds **Arpeggio** as a global generation style in the Style dropdown. When selected, an **Arp** sub-dropdown appears (UP, DOWN, UP-DOWN, DOWN-UP, CONVERGE, DIVERGE, PINKY-UP, THUMB-UP, RANDOM, RANDOM-OTHER). Clicking Generate fills every step with a single distinct note from the current Key/Scale across the octave range, ordered by the arp pattern via `nextArpIndex()` from `@/lib/arp-patterns`.
