@@ -59,7 +59,8 @@
           <div class="flex flex-col flex-1 overflow-hidden min-w-0">
             <span class="text-xs font-bold truncate flex items-center gap-1.5">
               {{ track.label }}
-              <span v-if="track.bpm" class="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded">{{ track.bpm }} BPM</span>
+              <span v-if="track.key" class="text-[12px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1.5 rounded shrink-0 normal-case">{{ track.key }}</span>
+              <span v-if="track.bpm" class="text-[12px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded shrink-0">{{ track.bpm }} BPM</span>
             </span>
             <span v-if="track.url?.startsWith('blob:')" class="text-[9px] font-mono text-sky-400 bg-sky-400/10 px-1 rounded w-fit">LOCAL</span>
             <span v-else class="text-[10px] text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">

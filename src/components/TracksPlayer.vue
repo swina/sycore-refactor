@@ -634,6 +634,8 @@ watch([isPlaying, playlistIdx, volume, isLooping, playingTrack, src], () => {
       isLooping: isLooping.value,
       hasSrc: !!src.value,
       playingTrackLabel: playingTrack.value?.label || fileName.value || '',
+      playingTrackBpm: playingTrack.value?.bpm ?? null,
+      playingTrackKey: playingTrack.value?.key || '',
     }
   }))
 })
@@ -939,6 +941,8 @@ onMounted(() => {
         isLooping: isLooping.value,
         hasSrc: !!src.value,
         playingTrackLabel: playingTrack.value?.label || fileName.value || '',
+      playingTrackBpm: playingTrack.value?.bpm ?? null,
+      playingTrackKey: playingTrack.value?.key || '',
       }
     }))
   }

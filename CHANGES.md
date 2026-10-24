@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-10-24
 
+- **Track Key + Tempo badges** — `PlayList.vue` and `DeckPlaylistSummary.vue` rows show the track's Key (amber) and BPM (emerald) at 12px; the toolbar player (`AppFooter.vue`) shows the playing track's Key/BPM right after the MIDI SYNC START/STOP button. `TracksPlayer.vue` now includes `playingTrackBpm`/`playingTrackKey` in `player-state-sync`. Branch: `master`
 - **Fix stuck notes (e.g. C2/C#2) with Launchkey controllers** — MIDI Thru routing:
   - Note-range and channel filters on device→device cables only gate **note-ons** now. A note-off can only silence a note, never start one, so it always reaches the output — even when the note-on arrived via broadcast and only the off hits the filtered cable. Previously a low-note keyboard-split filter (e.g. `lowNote: 38`) let the app's broadcast note-on through but dropped the controller's matching note-off, leaving the synth stuck.
   - `isNoteOff` now also recognizes running-status note-offs (status `0x90` with velocity `0`), which Launchkey uses instead of proper `0x80` status bytes; echo suppression never drops an incoming note-off based on sent-hash matching.

@@ -105,6 +105,8 @@ const btDuration         = ref(0)
 const btVolume           = ref(0.5)
 const btIsLooping        = ref(true)
 const btPlayingTrackLabel = ref('')
+const btPlayingTrackBpm  = ref(null)
+const btPlayingTrackKey  = ref('')
 
 const btIsPlaylistMode = computed(() => btPlaylistIdx.value >= 0 && btPlaylist.value.length > 0)
 const btProgress       = computed(() => btDuration.value > 0 ? (btCurrentTime.value / btDuration.value) * 100 : 0)
@@ -125,6 +127,8 @@ function onPlayerSync(e) {
   if (d.volume             !== undefined) btVolume.value            = d.volume
   if (d.isLooping          !== undefined) btIsLooping.value         = d.isLooping
   if (d.playingTrackLabel  !== undefined) btPlayingTrackLabel.value = d.playingTrackLabel
+  if (d.playingTrackBpm    !== undefined) btPlayingTrackBpm.value   = d.playingTrackBpm
+  if (d.playingTrackKey    !== undefined) btPlayingTrackKey.value   = d.playingTrackKey
 }
 
 function btPlayStop()     { window.dispatchEvent(new CustomEvent('playlist-play-stop')) }
@@ -314,6 +318,9 @@ onUnmounted(() => {
           >
             <Link class="w-3.5 h-3.5" />
         </button>
+        <!-- Track Key / Tempo -->
+        <span v-if="btSrc && btPlayingTrackKey" class="text-[12px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1.5 rounded shrink-0 normal-case">{{ btPlayingTrackKey }}</span>
+        <span v-if="btSrc && btPlayingTrackBpm" class="text-[12px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded shrink-0">{{ btPlayingTrackBpm }} BPM</span>
       </div>
 
       <!-- Right: controls -->

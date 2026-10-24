@@ -120,7 +120,8 @@ onUnmounted(() => {
           <div class="flex flex-col flex-1 min-w-0 gap-0.5">
             <span class="truncate flex items-center gap-1.5" :title="track.label">
               {{ track.label }}
-              <span v-if="track.bpm" class="text-[8px] font-mono text-emerald-400 bg-emerald-400/10 px-1 rounded shrink-0">{{ track.bpm }} BPM</span>
+              <span v-if="track.key" class="text-[12px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1.5 rounded shrink-0 normal-case">{{ track.key }}</span>
+              <span v-if="track.bpm" class="text-[12px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded shrink-0">{{ track.bpm }} BPM</span>
             </span>
             <span class="truncate text-[8px] text-neutral-500 uppercase tracking-wider flex items-center gap-1">
               <span v-if="track.genre">{{ track.genre }}</span>
