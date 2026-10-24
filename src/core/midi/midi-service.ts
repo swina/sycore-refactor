@@ -80,6 +80,11 @@ export class MidiService {
   // ── Echo / ingress suppression ───────────────────────────────────────────
   private lastSentMessages = new Map<string, { data: string; time: number }>();
   private globalSentHashes = new Map<string, number>();
+  // sendRawToDeviceByName() problems already reported, keyed by device name —
+  // it runs per message (every pitch-bend/CC step to a virtual instrument),
+  // so warning each time floods the console and stalls the main thread while
+  // the device stays missing. Cleared once a send to that device succeeds.
+  private _warnedSendIssues = new Set<string>();
   // Device→virtual-instrument Thru notes, so note-offs follow their note-on
   // (see ThruNoteTracker).
   private virtualThruNotes = new ThruNoteTracker();
@@ -930,6 +935,19 @@ export class MidiService {
     });
   }
 
+  private _warnSendIssueOnce(key: string, warn: () => void): void {
+    if (this._warnedSendIssues.has(key)) return;
+    this._warnedSendIssues.add(key);
+    warn();
+  }
+
+  private _clearSendIssues(deviceName: string): void {
+    if (this._warnedSendIssues.size === 0) return;
+    for (const key of this._warnedSendIssues) {
+      if (key === deviceName || key.startsWith(`${deviceName}→`)) this._warnedSendIssues.delete(key);
+    }
+  }
+
   sendRawToDeviceByName(deviceName: string, data: number[]): void {
     if (!this.midiAccess) {
       this.sendToVirtualOutput(deviceName, data);
@@ -951,11 +969,12 @@ export class MidiService {
             this.logOutbound(deviceName, data);
             sent = true;
           } catch (e) {
-            console.warn(`[MIDI] sendRawToDeviceByName routed "${deviceName}"→"${portName}": send failed.`, e);
+            this._warnSendIssueOnce(`${deviceName}→${portName}`,
+              () => console.warn(`[MIDI] sendRawToDeviceByName routed "${deviceName}"→"${portName}": send failed.`, e));
           }
         }
       }
-      if (sent) return;
+      if (sent) { this._clearSendIssues(deviceName); return; }
     }
 
     // 2. Fallback: try to find a physical output with the same name
@@ -964,15 +983,17 @@ export class MidiService {
       try {
         out.send(data);
         this.logOutbound(deviceName, data);
+        this._clearSendIssues(deviceName);
         return;
       } catch (e) {
-        console.warn(`[MIDI] sendRawToDeviceByName "${deviceName}": send failed, falling back to virtual.`, e);
+        this._warnSendIssueOnce(deviceName,
+          () => console.warn(`[MIDI] sendRawToDeviceByName "${deviceName}": send failed, falling back to virtual. (Not repeated until it recovers.)`, e));
       }
-    } else {
-      const available = Array.from(this.midiAccess.outputs.values()).map((p: any) => p.name).join(', ') || '(none)';
-      if (!this.virtualOutputs?.has(deviceName)) {
-        console.warn(`[MIDI] sendRawToDeviceByName: no route nor output named "${deviceName}". Available: ${available}`);
-      }
+    } else if (!this.virtualOutputs?.has(deviceName)) {
+      this._warnSendIssueOnce(deviceName, () => {
+        const available = Array.from(this.midiAccess!.outputs.values()).map((p: any) => p.name).join(', ') || '(none)';
+        console.warn(`[MIDI] sendRawToDeviceByName: no route nor output named "${deviceName}". Available: ${available} (Not repeated until it reconnects.)`);
+      });
     }
 
     // 3. Try virtual output

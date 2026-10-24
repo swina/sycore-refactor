@@ -1,6 +1,5 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useMidiStore } from '@/stores/useMidiStore'
-import { useUiStore }  from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -15,7 +14,6 @@ import { midiService } from '@/core/midi/midi-service'
  */
 export function useMidiInit() {
   const midiStore = useMidiStore()
-  const uiStore   = useUiStore()
   const authStore = useAuthStore()
   const arpStore  = useArpStore()
   const mappingStore = useMappingStore()
@@ -156,14 +154,6 @@ export function useMidiInit() {
     }, 1000)
     
     window.addEventListener('click', handleClickInit)
-  })
-
-  // Watch for connection status: if user is logged in and S-1 is NOT connected, open the modal
-  watch([() => authStore.user, () => midiStore.isDeviceConnected], ([user, isConnected]) => {
-    if (user && !isConnected && !uiStore.isMidiPortOpen) {
-      console.log('MIDI connection lost or missing — opening routing modal')
-      uiStore.isMidiPortOpen = true
-    }
   })
 
   // Keep MIDI clock in sync when BPM changes

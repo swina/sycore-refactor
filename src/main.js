@@ -52,17 +52,25 @@ const uiStore = useUiStore(pinia)
 // Run one-time DB migrations before store initialization
 runStartupMigrations().catch(err => console.error('[Main] Migration failed', err))
 
+// Panels open at startup: MIDI Flow (applies the routing), the Deck and the
+// Chord Progression sequencer.
+function openStartupPanels() {
+  uiStore.isMidiFlowOpen = true
+  uiStore.isInstrumentCockpitOpen = true
+  uiStore.isChordProgOpen = true
+}
+
 // Initialize critical stores asynchronously
 console.log('[Main] Starting store initialization...')
 configStore.init().then(() => {
   console.log('[Main] ConfigStore ready.')
   authStore.init()
   uiStore.isAppInitializing = false
-  uiStore.isMidiFlowOpen = true
+  openStartupPanels()
 }).catch(err => {
   console.error('[Main] Initialization failed', err)
   uiStore.isAppInitializing = false
-  uiStore.isMidiFlowOpen = true
+  openStartupPanels()
 })
 
 console.log('[Main] Mounting app...')

@@ -72,12 +72,18 @@ function activate(entry) {
             :key="entry.id"
             :style="fanStyle(index, entries.length)"
             @click="activate(entry)"
-            :class="['fan-icon absolute pointer-events-auto group flex items-center justify-center w-11 h-11 rounded-full border shadow-xl backdrop-blur-sm',
+            :class="['fan-icon absolute pointer-events-auto group flex items-center justify-center w-11 h-11 rounded-full border shadow-xl backdrop-blur-sm hover:z-10',
               entry.minimized
                 ? 'bg-neutral-900/95 border-neutral-700 hover:border-synth-neon/60'
                 : 'bg-neutral-900/95 border-synth-neon/50 hover:border-synth-neon/80']"
-            :title="entry.minimized ? `Restore: ${entry.label}` : `Focus: ${entry.label}`"
+            :aria-label="entry.minimized ? `Restore: ${entry.label}` : `Focus: ${entry.label}`"
           >
+            <!-- Own hover label instead of `title` — GlobalTooltip renders
+                 titles at z-[99999], underneath this z-[999999] dial, so
+                 the tooltip ended up hidden behind the neighbouring icons. -->
+            <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap px-2 py-0.5 rounded-md bg-black/95 border border-neutral-700 text-[11px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity">
+              {{ entry.minimized ? 'Restore' : 'Focus' }}: {{ entry.label }}
+            </span>
             <component
               :is="entry.icon"
               :class="['w-4 h-4', entry.minimized ? 'text-neutral-500 group-hover:text-synth-neon' : 'text-synth-neon']"
