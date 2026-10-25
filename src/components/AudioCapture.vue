@@ -1266,6 +1266,15 @@ async function calculateBpm() {
   }
 }
 
+// Manual BPM entry — commits on Enter/blur, invalid values revert to current BPM
+function applyManualBpm(e) {
+  const bpm = Math.round(Number(e.target.value))
+  if (bpm >= 40 && bpm <= 240) {
+    midiStore.setGlobalBpm(bpm)
+  }
+  e.target.value = activeBpm.value
+}
+
 function applyBpmConfirm() {
   const bpm = Number(bpmConfirm.value?.editable)
   if (bpm >= 40 && bpm <= 240) {
@@ -3600,6 +3609,20 @@ onUnmounted(() => {
               <Zap class="w-3 h-3" />
               {{ isCalculatingBpm ? 'Detecting…' : 'Calc BPM' }}
             </button>
+            <!-- Manual BPM -->
+            <div class="flex items-center gap-1 border border-neutral-800 rounded px-1.5 py-0.5" title="Set BPM manually (40–240, Enter to apply)">
+              <input
+                type="number"
+                min="40"
+                max="240"
+                step="1"
+                :value="activeBpm"
+                @change="applyManualBpm"
+                @keydown.enter="$event.target.blur()"
+                class="w-10 bg-transparent text-[10px] font-mono text-amber-300 text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span class="text-[8px] font-mono text-neutral-500 uppercase">BPM</span>
+            </div>
         </div>
         
       </div>
