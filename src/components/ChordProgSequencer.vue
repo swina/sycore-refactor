@@ -232,6 +232,7 @@ let _panicTimeout = null
 
 function stopAllNotes() {
   _stopPending = true
+  store.playingChordName = ''
   _pendingTimeouts.forEach(id => clearTimeout(id))
   _pendingTimeouts.clear()
 
@@ -276,6 +277,7 @@ watch(() => store.isPlaying, (playing) => {
     transportManager.releaseTransport()
     stopAllNotes()
     store.currentStep = 0
+    store.playingChordName = ''
     store.playingSlotIndex = null
     playStateRef.current = {}
     _captureArmed = false
@@ -357,6 +359,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
 
       if (state.tickCounter === 0) {
         getDraw().schedule(() => {
+          store.playingChordName = step?.active && step.notes?.length ? step.chordName : ''
           if (state.chainSlotIndices) {
             const slotIdx = state.chainSlotIndices[state.stepPointer]
             store.currentStep = state.chainLocalIndices[state.stepPointer]
@@ -747,6 +750,7 @@ const previewActiveNotes = [] // { note, channel } — track exactly what's soun
 const heldChordNotes = [] // { note, channel } — notes from MIDI Learn-triggered chords, held until next trigger
 
 function stopHeldChord() {
+  store.playingChordName = ''
   heldChordNotes.forEach(({ note, channel }) =>
     midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
   heldChordNotes.length = 0
@@ -788,6 +792,7 @@ function triggerChordStep(idx, forcePlay = false) {
   previewActiveNotes.length = 0
   store.selectedStepIdx = idx
   store.currentStep = idx
+  store.playingChordName = step.chordName
 
   if (effectiveMode === 'arp') {
     const sortedNotes = [...step.notes].sort((a, b) => a - b)

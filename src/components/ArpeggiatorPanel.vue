@@ -140,7 +140,7 @@ function startArpEngine() {
 
     if (notesArray.length === 0) {
       if (lastArpNote !== null) {
-        midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+        midiStore.sendNoteOff(lastArpNote, 0, arpChannel(), MidiSource.ARP)
         lastArpNote = null
       }
       patternState.currentIndex = 0
@@ -152,14 +152,14 @@ function startArpEngine() {
     const note = notesArray[nextIndex]
 
     // Riproduzione della nota MIDI
-    if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
-    midiStore.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
+    if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, arpChannel(), MidiSource.ARP)
+    midiStore.sendNoteOn(note, 100, arpChannel(), MidiSource.ARP)
     lastArpNote = note
 
     // Note-Off basata sulla durata del Gate (0.5 = 50% di stepMs)
     setTimeout(() => {
       if (lastArpNote === note) {
-        midiStore.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
+        midiStore.sendNoteOff(note, 0, arpChannel(), MidiSource.ARP)
         lastArpNote = null
       }
     }, stepMs * 0.5)
@@ -173,12 +173,26 @@ function stopArpEngine() {
     arpTimer = null
   }
   if (lastArpNote !== null) {
-    midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
+    midiStore.sendNoteOff(lastArpNote, 0, arpChannel(), MidiSource.ARP)
     lastArpNote = null
   }
 }
 
 let _unsubNote = null
+
+// props.channel is 0-based (midiStore.midiChannel - 1) but midiStore's
+// sendNoteOn/Off take a 1-based channel — passing props.channel straight
+// through sent MIDI channel 1 as channel -1 (status 0x8F: a note-OFF on ch 16).
+const arpChannel = () => props.channel + 1
+
+// Arp OFF = transparent: notes routed to the Arpeggiator in MIDI Flow pass
+// straight through to its outputs instead of dying here. Tracked so they
+// can be released if the arp is switched on while keys are still down.
+const _thruNotes = new Map() // note → 1-based channel
+function flushThruNotes() {
+  _thruNotes.forEach((ch, note) => midiStore.sendNoteOff(note, 0, ch, MidiSource.ARP))
+  _thruNotes.clear()
+}
 
 function onHeaderMouseDown(e) {
   if (e.target.closest('button, input, select, a, [role="button"]')) return
@@ -196,6 +210,17 @@ onMounted(() => {
     const sourceKey = inputDevice?.name
     if (!midiStore.hasExplicitInputRouting(sourceKey)) return
     if (!midiStore.isDeviceRoutedToApp(sourceKey, MidiSource.ARP, note)) return
+
+    if (type === 'on' && velocity > 0 && !arpStore.arpEnabled) {
+      _thruNotes.set(note, chan + 1)
+      midiStore.sendNoteOn(note, velocity, chan + 1, MidiSource.ARP)
+    } else if (type !== 'on' || velocity === 0) {
+      const ch = _thruNotes.get(note)
+      if (ch !== undefined) {
+        _thruNotes.delete(note)
+        midiStore.sendNoteOff(note, 0, ch, MidiSource.ARP)
+      }
+    }
 
     if (type === 'on' && velocity > 0) {
       if (arpStore.arpHold && physicalKeysHeld.value === 0) {
@@ -220,10 +245,11 @@ onMounted(() => {
 onUnmounted(() => {
   _unsubNote?.()
   stopArpEngine()
+  flushThruNotes()
 })
 
 watch(() => arpStore.arpEnabled, (enabled) => {
-  if (enabled) startArpEngine()
+  if (enabled) { flushThruNotes(); startArpEngine() }
   else {
     stopArpEngine()
     if (!arpStore.arpHold) {

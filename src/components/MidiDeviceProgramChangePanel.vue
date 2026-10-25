@@ -71,11 +71,12 @@ const devices = computed(() => {
     .sort((a, b) => b.isOnline - a.isOnline || a.name.localeCompare(b.name))
 })
 
-// Left-panel device list — only devices actually online right now. `devices`
-// itself stays the full set (online or not): it's also used for Performance
-// Set snapshots (which must keep covering a device even if it's temporarily
-// offline at save time).
-const visibleDevices = computed(() => devices.value.filter(d => d.isOnline))
+// Left-panel device list — only devices online right now and cabled in
+// MIDI Flow (same rule as the startup PC resend). `devices` itself stays the
+// full set: it's also used for Performance Set snapshots (which must keep
+// covering a device even if it's temporarily offline at save time).
+const visibleDevices = computed(() =>
+  devices.value.filter(d => d.isOnline && midiStore.isDeviceRoutedInFlow(d.name)))
 
 const selectedDeviceName = ref('')
 
@@ -366,7 +367,7 @@ async function onImportArturiaFile(event) {
     const banks = await parseArturiaSqlite(file)
     const names = Object.keys(banks)
     for (const [name, presets] of Object.entries(banks)) {
-      userBanksStore.addBank(selectedDeviceName.value, name, presets, 'arturia')
+      sameTemplateDevices().forEach(dev => userBanksStore.addBank(dev, name, presets, 'arturia'))
     }
     selectedBank.value = names[0] ?? ''
     importArturiaSummary.value = `Imported ${names.length} playlist${names.length === 1 ? '' : 's'}: ${names.join(', ')}`
@@ -409,7 +410,7 @@ function confirmImport() {
   if (pendingImportSource.value === 'access-virus' && pendingBankLsb.value > 0) {
     pendingPresets.value = pendingPresets.value.map(p => ({ ...p, lsb: pendingBankLsb.value }))
   }
-  userBanksStore.addBank(selectedDeviceName.value, name, pendingPresets.value, pendingImportSource.value)
+  sameTemplateDevices().forEach(dev => userBanksStore.addBank(dev, name, pendingPresets.value, pendingImportSource.value))
   selectedBank.value = name
   showImportRename.value = false
   pendingPresets.value   = []
@@ -426,21 +427,57 @@ function cancelImport() {
 
 function deleteUserBank(bankName) {
   if (selectedBank.value === bankName) { selectedBank.value = ''; sounds.value = [] }
-  userBanksStore.removeBank(selectedDeviceName.value, bankName)
+  sameTemplateDevices().forEach(dev => userBanksStore.removeBank(dev, bankName))
+}
+
+// The selected device plus every other registered device sharing its
+// pcTemplate — imported/removed user banks apply to all of them, since the
+// same template means the same bank format and patch set. A device with no
+// template keeps its banks to itself.
+function sameTemplateDevices() {
+  const self = selectedDeviceName.value
+  const tmpl = selectedReg.value?.pcTemplate
+  if (!tmpl) return [self]
+  const others = Object.values(midiStore.routingConfig?.registrations ?? {})
+    .filter(r => r.name !== self && r.pcTemplate === tmpl)
+    .map(r => r.name)
+  return [self, ...others]
 }
 
 const selectedBank = ref('')
+
+// Bank last picked per pcTemplate — devices sharing a template open on the
+// same bank (e.g. picking "Factory B" on one E-MU aligns every other device
+// with that template). Browsing only: no MIDI is sent and the other
+// devices' current patches are left untouched.
+const LS_TEMPLATE_BANK = 'SYCORE_PC_TEMPLATE_BANK'
+const templateBanks = (() => {
+  try { return JSON.parse(localStorage.getItem(userKey(LS_TEMPLATE_BANK))) ?? {} } catch { return {} }
+})()
+function selectBank(bank) {
+  selectedBank.value = bank
+  const tmpl = selectedReg.value?.pcTemplate
+  if (!tmpl) return
+  templateBanks[tmpl] = bank
+  try { localStorage.setItem(userKey(LS_TEMPLATE_BANK), JSON.stringify(templateBanks)) } catch {}
+}
+
 // Also re-runs on pcChannel changes — each channel can carry its own saved
 // bank (reg.pcChannels[ch].bank, written by recordChannelState), so picking
 // a different channel row in "Current Program Change" needs to restore
 // *that* channel's bank, not just whatever bank happened to be open. Falls
 // back to reg.pcBank (the device-level "last written" bank) for a
 // single-channel device or a channel that's never had a patch assigned yet.
-watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel], () => {
+watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel], (_, [, oldDev]) => {
   // restore last-used bank if available, else reset
   const reg = selectedReg.value
   const activeCh = reg?.pcChannel ?? 0
-  const bank = reg?.pcChannels?.[activeCh]?.bank || reg?.pcBank
+  // On a device switch, the bank picked on a device with the same template
+  // wins over this device's own last-used bank (see selectBank).
+  const shared = selectedDeviceName.value !== oldDev && reg?.pcTemplate ? templateBanks[reg.pcTemplate] : ''
+  const bank = (shared && availableBanks.value.includes(shared))
+    ? shared
+    : reg?.pcChannels?.[activeCh]?.bank || reg?.pcBank
   if (bank && availableBanks.value.includes(bank)) {
     selectedBank.value = bank
   } else {
@@ -1978,7 +2015,7 @@ function assignToPad(setId, padIdx) {
                       <button
                         v-for="bank in availableBanks"
                         :key="bank"
-                        @click="selectedBank = bank"
+                        @click="selectBank(bank)"
                         :class="[
                           'group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border',
                           selectedBank === bank

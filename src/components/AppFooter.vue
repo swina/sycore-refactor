@@ -5,6 +5,7 @@ import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useMappingStore } from '@/stores/useMappingStore'
+import { useChordProgStore } from '@/stores/useChordProgStore'
 import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SquareStack, Sparkles, BookOpen, Radio } from 'lucide-vue-next'
@@ -25,6 +26,7 @@ const arpStore     = useArpStore()
 const uiStore      = useUiStore()
 const configStore  = useConfigStore()
 const mappingStore = useMappingStore()
+const chordProgStore = useChordProgStore()
 const { openMenu } = useMidiContextMenu()
 const router = useRouter()
 
@@ -318,6 +320,8 @@ onUnmounted(() => {
           >
             <Link class="w-3.5 h-3.5" />
         </button>
+        <!-- Chord Progression: chord playing now -->
+        <span v-if="chordProgStore.playingChordName" class="text-[12px] font-mono font-bold text-violet-300 bg-violet-400/10 px-1.5 rounded shrink-0 normal-case" title="Chord Progression — playing chord">{{ chordProgStore.playingChordName }}</span>
         <!-- Track Key / Tempo -->
         <span v-if="btSrc && btPlayingTrackKey" class="text-[12px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1.5 rounded shrink-0 normal-case">{{ btPlayingTrackKey }}</span>
         <span v-if="btSrc && btPlayingTrackBpm" class="text-[12px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded shrink-0">{{ btPlayingTrackBpm }} BPM</span>

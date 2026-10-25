@@ -1013,6 +1013,9 @@ export class MidiService {
     if (!this.routingConfig) return;
     let sent = 0;
     Object.values(this.routingConfig.registrations).forEach(reg => {
+      // Only devices actually cabled in MIDI Flow — a leftover registration
+      // (device removed from the canvas, unplugged gear) shouldn't get PCs.
+      if (!this.isRoutedInFlow(reg.name)) return;
       const channels = { ...(reg.pcChannels ?? {}) };
       // Fall back to the registration's own active-channel fields when
       // pcChannels is empty (e.g. nothing clicked since the config loaded) —
@@ -1043,6 +1046,15 @@ export class MidiService {
       });
     });
     if ((window as any).SY_LOG) (window as any).SY_LOG(`[MIDI] Re-sent ${sent} Program Change message(s) to registered devices.`);
+  }
+
+  /** True when `deviceName` is the destination of at least one MIDI Flow
+   *  cable (any source → this device in the routing matrix). */
+  isRoutedInFlow(deviceName: string): boolean {
+    for (const targets of this.router.matrix.values()) {
+      if (targets.has(deviceName)) return true;
+    }
+    return false;
   }
 
   cleanupDevice(deviceId: string): void {

@@ -573,6 +573,12 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.sendProgramChange(programNumber, 15, source)
   }
 
+  // Reactive twin of midiService.isRoutedInFlow(): is this device the
+  // destination of at least one MIDI Flow cable?
+  function isDeviceRoutedInFlow(deviceName: string): boolean {
+    return Object.values(routingMatrix.value).some(targets => targets?.includes(deviceName))
+  }
+
   function setRouting(source: string, outputNames: string[]) {
     routingMatrix.value[source] = outputNames
     midiService.setRouting(source, outputNames)
@@ -932,7 +938,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiReady, outputs, inputs,
     midiChannel, midiInputChannel,
     isDeviceConnected, broadcastMode, routingMatrix,
-    inputRouting, setInputRouting, isDeviceRoutedToApp, hasExplicitInputRouting, addAppNoteListener,
+    inputRouting, setInputRouting, isDeviceRoutedToApp, isDeviceRoutedInFlow, hasExplicitInputRouting, addAppNoteListener,
     outputRouteFilters, setOutputRouteFilters,
     init, refreshDevices,
     setMidiChannel, setMidiInputChannel,

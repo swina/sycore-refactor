@@ -118,6 +118,9 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const numSteps = ref(saved?.numSteps ?? 8)
   const isPlaying = ref(false)
   const currentStep = ref(0)
+  // Name of the chord sounding right now (sequencer step or manual/MIDI
+  // trigger), '' when nothing is playing — shown in the toolbar.
+  const playingChordName = ref('')
   const selectedStepIdx = ref(0)
   const selectedKey = ref(saved?.selectedKey ?? 0)
   const playMode = ref<PlayMode>(saved?.playMode ?? 'chord')
@@ -625,7 +628,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   })
 
   return {
-    steps, numSteps, isPlaying, currentStep, selectedStepIdx,
+    steps, numSteps, isPlaying, currentStep, playingChordName, selectedStepIdx,
     selectedKey, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
