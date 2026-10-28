@@ -1,4 +1,5 @@
 import { getContext, Gain, Filter, Panner, AmplitudeEnvelope } from 'tone'
+import { recordScheduledHit } from './audio-diagnostics'
 import { EffectChain, blankFxChain } from '../core/audio/effects'
 import { resonanceToQ, resonanceToGainDb, safeCutoffHz } from '../core/audio/filterMath'
 import { DEFAULT_ADSR, safeAdsr } from '../core/audio/envelope'
@@ -224,6 +225,7 @@ export function triggerPad(padIdx, { velocity = 100, accent = false, time = 0, d
 
   src.connect(gain)
 
+  if (time > 0) recordScheduledHit(time, ctx.currentTime)
   const fireAt = Math.max(ctx.currentTime, time)
   _applyVelocityMod(padIdx, velocity, fireAt)
   const env = _triggerVoiceEnvelope(padIdx, gain, fireAt, duration)
@@ -261,6 +263,7 @@ export function triggerPadWithNote(padIdx, midiNote, { velocity = 100, accent = 
 
   src.connect(gain)
 
+  if (time > 0) recordScheduledHit(time, ctx.currentTime)
   const fireAt = Math.max(ctx.currentTime, time)
   _applyVelocityMod(padIdx, velocity, fireAt)
   const env = _triggerVoiceEnvelope(padIdx, gain, fireAt, duration)
@@ -296,6 +299,7 @@ export function triggerRatchet(padIdx, stepTimeSec, divisions, { velocity = 100,
 
     src.connect(gain)
 
+    if (fireTime > 0) recordScheduledHit(fireTime, ctx.currentTime)
     const fireAt = Math.max(ctx.currentTime, fireTime)
     _applyVelocityMod(padIdx, velocity, fireAt)
     const env = _triggerVoiceEnvelope(padIdx, gain, fireAt, duration)

@@ -803,6 +803,11 @@ export class MidiService {
 
   // ── Incoming clock BPM API (delegates to sub-module) ─────────────────────
 
+  /** Whether the outgoing MIDI clock is currently running (diagnostics). */
+  get isClockRunning(): boolean {
+    return this.transport.isPlayingClock;
+  }
+
   addClockBpmListener(cb: (bpm: number) => void): () => void {
     return this.transport.addClockBpmListener(cb);
   }

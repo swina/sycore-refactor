@@ -36,6 +36,7 @@ export const moduleRegistry: ModuleManifest[] = [
   // ── Sound Design ─────────────────────────────────────────────────────────
   { id: 'sound-engine', label: 'Sound Engine', icon: Cpu, category: 'sound-design', bg: '/bg-sound-design-2.png' },
   { id: 'sampler', label: 'Sampler', icon: Music2, category: 'sound-design', bg: '/sycore-lab.png', badge: 'Beta' },
+  { id: 'fm1-emulator', label: 'FM-1 Emulator', icon: Cpu, category: 'sound-design', bg: '/bg-sound-design.png', badge: 'Beta' },
 
   // ── MIDI Tools ───────────────────────────────────────────────────────────
   { id: 'sequencer', label: 'Step Sequencer', icon: Music, category: 'midi-tools', bg: '/step-sequencer-square.png' },
@@ -67,6 +68,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'visualizer', label: 'Audio Visualizer', icon: Activity, category: 'audio-tools', showOnLauncher: false },
   { id: 'live-input', label: 'Live Input', icon: Mic, category: 'audio-tools', badge: 'Beta', bg: '/audio-capture-mixer.jpg' },
   { id: 'audio-mixer', label: 'Audio Mixer', icon: SlidersHorizontal, category: 'audio-tools', showOnLauncher: false },
+  { id: 'audio-diagnostics', label: 'Audio Diagnostics', icon: Activity, category: 'audio-tools', bg: '/audio-capture-mixer.jpg', badge: 'Beta' },
   { id: 'midi-performance', label: 'MIDI Performance', icon: Network, category: 'midi-config', showOnLauncher: false, badge: 'Legacy' },
   { id: 'routing', label: 'MIDI Routing', icon: Cable, category: 'midi-config', showOnLauncher: false },
   { id: 'midilearn', label: 'MIDI Mapping', icon: Radio, category: 'midi-config', showOnLauncher: false },

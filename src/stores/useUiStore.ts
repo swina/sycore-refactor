@@ -77,6 +77,8 @@ export interface PanelVisibility {
   isMidiDevicesOpen: boolean
   isInstrumentCockpitOpen: boolean
   isAiAgentOpen: boolean
+  isFm1EmulatorOpen: boolean
+  isAudioDiagnosticsOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -173,6 +175,8 @@ export const useUiStore = defineStore('ui', () => {
   const isMidiDevicesOpen             = ref(false)
   const isInstrumentCockpitOpen       = ref(false)
   const isAiAgentOpen                 = ref(false)
+  const isFm1EmulatorOpen             = ref(false)
+  const isAudioDiagnosticsOpen        = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
@@ -273,6 +277,8 @@ export const useUiStore = defineStore('ui', () => {
     midiControllerDesigner: () => isMidiControllerDesignerOpen.value,
     midiDevices:           () => isMidiDevicesOpen.value,
     aiAgent:               () => isAiAgentOpen.value,
+    fm1Emulator:           () => isFm1EmulatorOpen.value,
+    audioDiagnostics:      () => isAudioDiagnosticsOpen.value,
   }
 
   const openModalKeys: ComputedRef<string[]> = computed(() =>
@@ -329,6 +335,8 @@ export const useUiStore = defineStore('ui', () => {
     midiControllerDesigner: isMidiControllerDesignerOpen,
     midiDevices:           isMidiDevicesOpen,
     aiAgent:               isAiAgentOpen,
+    fm1Emulator:           isFm1EmulatorOpen,
+    audioDiagnostics:      isAudioDiagnosticsOpen,
   }
 
   function cycleFocusedModal(reverse = false) {
@@ -416,6 +424,8 @@ export const useUiStore = defineStore('ui', () => {
     isMidiControllerDesignerOpen.value    = false
     isMidiDevicesOpen.value               = false
     isAiAgentOpen.value = false
+    isFm1EmulatorOpen.value = false
+    isAudioDiagnosticsOpen.value = false
     isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -487,6 +497,8 @@ export const useUiStore = defineStore('ui', () => {
     'midi-monitor': isMidiMonitorOpen,
     about: isAboutOpen,
     'ai-agent': isAiAgentOpen,
+    'fm1-emulator': isFm1EmulatorOpen,
+    'audio-diagnostics': isAudioDiagnosticsOpen,
   }
 
   function isPanelOpen(id: string): boolean {
@@ -649,7 +661,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isLiveInputOpen, isMidiControllerDesignerOpen,
-    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen,
+    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
