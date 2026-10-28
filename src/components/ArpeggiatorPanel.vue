@@ -7,6 +7,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
+import { createArpScheduler } from '@/lib/arp-scheduler'
 import { useDraggable } from '@/composables/useDraggable'
 
 const props = defineProps({
@@ -25,8 +26,6 @@ const { x, y, startDrag } = useDraggable(
   'SYCORE_POS_ARP'
 )
 
-let arpTimer = null
-let lastArpNote = null
 let patternState = defaultArpPatternState()
 const physicalKeysHeld = ref(0)
 const arpModes = ref(ARP_MODES)
@@ -47,135 +46,63 @@ function calculateStepMs(bpm, subdivision) {
   return beatMs * 4 * ratio
 }
 
-// function startArpEngine() {
-//   if (arpTimer) clearInterval(arpTimer)
+// Steps are scheduled ~100 ms ahead with exact times (lib/arp-scheduler.ts): MIDI
+// outputs get timestamped sends, so closing a panel or moving the mouse no longer
+// delays/jitters the arp. Each note carries its own note-off (50% gate).
+function arpStepNote() {
+  // Build expanded note array based on octave setting
+  const baseNotes = Array.from(arpStore.getHeldNotes())
+  const octave = arpStore.arpOctave
+  let expandedNotes = []
+  if (octave === 0) {
+    expandedNotes = [...baseNotes]
+  } else if (octave > 0) {
+    for (const note of baseNotes) {
+      for (let k = 0; k <= octave; k++) {
+        expandedNotes.push(note + k * 12)
+      }
+    }
+  } else { // octave < 0
+    for (const note of baseNotes) {
+      for (let k = octave; k <= 0; k++) {
+        expandedNotes.push(note + k * 12)
+      }
+    }
+  }
+  // Remove duplicates and sort
+  const notesArray = [...new Set(expandedNotes)].sort((a, b) => a - b)
 
-//   const stepMs = calculateStepMs(arpStore.arpBpm, arpStore.arpSubdivision)
-//   arpTimer = setInterval(() => {
-//     const notesArray = Array.from(arpStore.getHeldNotes()).sort((a, b) => a - b)
+  if (notesArray.length === 0) {
+    patternState.currentIndex = 0
+    patternState.subIndex = 0
+    return null
+  }
 
-//     if (notesArray.length === 0) {
-//       if (lastArpNote !== null) {
-//         midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
-//         lastArpNote = null
-//       }
-//       return
-//     }
+  const nextIndex = nextArpIndex(arpStore.arpMode, patternState, notesArray.length)
+  return notesArray[nextIndex]
+}
 
-//     if (notesArray.length === 1) {
-//       if (lastArpNote !== notesArray[0]) {
-//         if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
-//         midiStore.sendNoteOn(notesArray[0], 100, props.channel, MidiSource.ARP)
-//         lastArpNote = notesArray[0]
-//       }
-//       return
-//     }
-
-//     let nextIndex = 0
-//     if (arpStore.arpMode === 'up') {
-//       nextIndex = (currentArpIndex + 1) % notesArray.length
-//     } else if (arpStore.arpMode === 'down') {
-//       nextIndex = currentArpIndex - 1
-//       if (nextIndex < 0) nextIndex = notesArray.length - 1
-//     } else if (arpStore.arpMode === 'up-down') {
-//       nextIndex = currentArpIndex + arpDirection
-//       if (nextIndex >= notesArray.length) {
-//         nextIndex = Math.max(0, notesArray.length - 2)
-//         arpDirection = -1
-//       } else if (nextIndex < 0) {
-//         nextIndex = Math.min(1, notesArray.length - 1)
-//         arpDirection = 1
-//       }
-//     } else if (arpStore.arpMode === 'random') {
-//       nextIndex = Math.floor(Math.random() * notesArray.length)
-//     }
-
-//     currentArpIndex = nextIndex
-//     const note = notesArray[nextIndex]
-
-//     if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, props.channel, MidiSource.ARP)
-//     midiStore.sendNoteOn(note, 100, props.channel, MidiSource.ARP)
-//     lastArpNote = note
-
-//     setTimeout(() => {
-//       if (lastArpNote === note) {
-//         midiStore.sendNoteOff(note, 0, props.channel, MidiSource.ARP)
-//         lastArpNote = null
-//       }
-//     }, stepMs * 0.5)
-//   }, stepMs)
-// }
+const arpScheduler = createArpScheduler({
+  now: () => performance.now(),
+  stepMs: () => calculateStepMs(arpStore.arpBpm, arpStore.arpSubdivision),
+  nextNote: arpStepNote,
+  playNote: (note, at, offAt) => {
+    const ch = arpChannel()
+    midiStore.sendNoteOn(note, 100, ch, MidiSource.ARP, null, at)
+    midiStore.sendNoteOff(note, 0, ch, MidiSource.ARP, null, offAt)
+  },
+})
 
 function startArpEngine() {
-  if (arpTimer) clearInterval(arpTimer)
-
-  const stepMs = calculateStepMs(arpStore.arpBpm, arpStore.arpSubdivision)
-
   // currentIndex/direction persist across stop/start (matching the original
   // behavior); only subIndex resets on each new start.
   patternState.subIndex = 0
-
-  arpTimer = setInterval(() => {
-    // Build expanded note array based on octave setting
-    const baseNotes = Array.from(arpStore.getHeldNotes())
-    const octave = arpStore.arpOctave
-    let expandedNotes = []
-    if (octave === 0) {
-      expandedNotes = [...baseNotes]
-    } else if (octave > 0) {
-      for (const note of baseNotes) {
-        for (let k = 0; k <= octave; k++) {
-          expandedNotes.push(note + k * 12)
-        }
-      }
-    } else { // octave < 0
-      for (const note of baseNotes) {
-        for (let k = octave; k <= 0; k++) {
-          expandedNotes.push(note + k * 12)
-        }
-      }
-    }
-    // Remove duplicates and sort
-    const notesArray = [...new Set(expandedNotes)].sort((a, b) => a - b)
-
-    if (notesArray.length === 0) {
-      if (lastArpNote !== null) {
-        midiStore.sendNoteOff(lastArpNote, 0, arpChannel(), MidiSource.ARP)
-        lastArpNote = null
-      }
-      patternState.currentIndex = 0
-      patternState.subIndex = 0
-      return
-    }
-
-    const nextIndex = nextArpIndex(arpStore.arpMode, patternState, notesArray.length)
-    const note = notesArray[nextIndex]
-
-    // Riproduzione della nota MIDI
-    if (lastArpNote !== null) midiStore.sendNoteOff(lastArpNote, 0, arpChannel(), MidiSource.ARP)
-    midiStore.sendNoteOn(note, 100, arpChannel(), MidiSource.ARP)
-    lastArpNote = note
-
-    // Note-Off basata sulla durata del Gate (0.5 = 50% di stepMs)
-    setTimeout(() => {
-      if (lastArpNote === note) {
-        midiStore.sendNoteOff(note, 0, arpChannel(), MidiSource.ARP)
-        lastArpNote = null
-      }
-    }, stepMs * 0.5)
-  }, stepMs)
+  arpScheduler.start()
 }
 
-
+// Notes already scheduled end with their own note-off — nothing to release here.
 function stopArpEngine() {
-  if (arpTimer) {
-    clearInterval(arpTimer)
-    arpTimer = null
-  }
-  if (lastArpNote !== null) {
-    midiStore.sendNoteOff(lastArpNote, 0, arpChannel(), MidiSource.ARP)
-    lastArpNote = null
-  }
+  arpScheduler.stop()
 }
 
 let _unsubNote = null
@@ -290,9 +217,7 @@ watch(() => arpStore.arpHold, (held) => {
   }
 })
 
-watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
-  if (arpStore.arpEnabled) startArpEngine()
-})
+// BPM / subdivision changes need no restart: the scheduler reads the step length at every step.
 </script>
 
 <template>

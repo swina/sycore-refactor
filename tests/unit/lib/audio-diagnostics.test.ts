@@ -42,6 +42,14 @@ describe('audio-diagnostics', () => {
     expect(seriesAvg(s.hitMarginMs)).toBeNull()
   })
 
+  it('keeps stalls measured while the page was hidden apart', () => {
+    recordStall(40)
+    recordStall(950, true)
+    const s = getDiagnosticsSnapshot()
+    expect(s.stallMs.max).toBe(40)
+    expect(s.hiddenStallMs.max).toBe(950)
+  })
+
   it('returns snapshots that do not alias the live counters', () => {
     recordStall(10)
     const s = getDiagnosticsSnapshot()

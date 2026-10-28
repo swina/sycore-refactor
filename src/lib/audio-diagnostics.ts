@@ -35,6 +35,7 @@ let _lateHits = 0
 let _maxLateMs = 0
 let _midiIngressMs = emptySeries()
 let _stallMs = emptySeries()
+let _hiddenStallMs = emptySeries()
 
 /** A sound scheduled at `scheduledTime` (audio-clock seconds) reached the engine at `ctxNow`. */
 export function recordScheduledHit(scheduledTime: number, ctxNow: number): void {
@@ -51,9 +52,13 @@ export function recordMidiIngress(delayMs: number): void {
   if (delayMs >= 0 && Number.isFinite(delayMs)) push(_midiIngressMs, delayMs)
 }
 
-/** A periodic timer fired `lateMs` after it was due. */
-export function recordStall(lateMs: number): void {
-  if (lateMs >= 0) push(_stallMs, lateMs)
+/**
+ * A periodic timer fired `lateMs` after it was due. `hidden`: the page was hidden
+ * (minimized / covered window) at some point in that interval — the browser throttles
+ * timers then, so the lateness isn't main-thread work and is kept apart.
+ */
+export function recordStall(lateMs: number, hidden = false): void {
+  if (lateMs >= 0) push(hidden ? _hiddenStallMs : _stallMs, lateMs)
 }
 
 export interface DiagnosticsSnapshot {
@@ -62,6 +67,7 @@ export interface DiagnosticsSnapshot {
   maxLateMs: number
   midiIngressMs: SeriesStats
   stallMs: SeriesStats
+  hiddenStallMs: SeriesStats
 }
 
 export function getDiagnosticsSnapshot(): DiagnosticsSnapshot {
@@ -71,6 +77,7 @@ export function getDiagnosticsSnapshot(): DiagnosticsSnapshot {
     maxLateMs: _maxLateMs,
     midiIngressMs: { ..._midiIngressMs },
     stallMs: { ..._stallMs },
+    hiddenStallMs: { ..._hiddenStallMs },
   }
 }
 
@@ -80,6 +87,7 @@ export function resetDiagnostics(): void {
   _maxLateMs = 0
   _midiIngressMs = emptySeries()
   _stallMs = emptySeries()
+  _hiddenStallMs = emptySeries()
   resetHogs()
   resetDrawAttribution()
 }

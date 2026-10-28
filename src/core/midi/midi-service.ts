@@ -75,6 +75,20 @@ export class MidiService {
   private globalNoteOnListeners: ((note: number, velocity: number) => void)[] = [];
   private onTransportListeners: ((type: 'start' | 'stop' | 'clock') => void)[] = [];
   private onRawListeners: ((event: MIDIMessageEvent) => void)[] = [];
+
+  // Self-loop detection: an input that keeps receiving what this app just sent
+  // (Windows MIDI Services loopback pairs "X (A)"/"X (B)", loopMIDI…) is the
+  // far end of one of our own outputs. Its name differs from the output's, so
+  // isBlockedLoopbackInput() can't catch it; left open it feeds our own notes
+  // and clock back into the Arpeggiator/sequencers/Thru — a feedback storm.
+  // A flagged input keeps working for anything played on it: only echoes of our
+  // sends (note-offs included) and real-time clock/transport are dropped, since
+  // a keyboard with soft-thru can echo too. Inputs registered as an input in
+  // MIDI Flow are never flagged.
+  private static readonly ECHO_WINDOW_MS = 20;
+  private static readonly LOOPBACK_MIN_ECHOES = 8;
+  private _echoStats = new Map<string, { echo: number; other: number }>();
+  private _loopbackInputs = new Map<string, string>(); // input id → name (echoes our output)
   private ingressFilter: ((event: MIDIMessageEvent) => boolean) | null = null;
 
   // ── Echo / ingress suppression ───────────────────────────────────────────
@@ -752,6 +766,11 @@ export class MidiService {
 
   // ── Listener registration (kept in facade) ───────────────────────────────
 
+  /** Names of inputs detected as loopbacks of our own outputs (diagnostics). */
+  getLoopbackInputNames(): string[] {
+    return Array.from(this._loopbackInputs.values());
+  }
+
   addRawListener(callback: (event: MIDIMessageEvent) => void): () => void {
     this.onRawListeners.push(callback);
     return () => { this.onRawListeners = this.onRawListeners.filter(l => l !== callback); };
@@ -826,20 +845,26 @@ export class MidiService {
     this.broadcast('pc', { program }, channel, source);
   }
 
-  sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null): void {
+  /**
+   * `at` (optional): when the note should sound, in performance.now() ms. Real MIDI
+   * outputs get a timestamped send (scheduled by the browser, immune to main-thread
+   * stalls); virtual outputs and latched outputs, which can't take a timestamp, are
+   * delivered by a timer at that time.
+   */
+  sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number): void {
     if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
       this.sendNoteSplit('noteon', note, velocity, channel);
       return;
     }
-    this.broadcast('noteon', { note, velocity }, channel, source, skipDeviceId);
+    this.broadcast('noteon', { note, velocity }, channel, source, skipDeviceId, at);
   }
 
-  sendNoteOff(note: number, velocity = 0, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null): void {
+  sendNoteOff(note: number, velocity = 0, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number): void {
     if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
       this.sendNoteSplit('noteoff', note, velocity, channel);
       return;
     }
-    this.broadcast('noteoff', { note, velocity }, channel, source, skipDeviceId);
+    this.broadcast('noteoff', { note, velocity }, channel, source, skipDeviceId, at);
   }
 
   sendPitchBend(value: number, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null): void {
@@ -1157,12 +1182,17 @@ export class MidiService {
     channel = 0,
     source: MidiSource = MidiSource.UI,
     skipDeviceId: string | null = null,
+    at?: number,
   ): void {
     if (!this.midiAccess) return;
 
     if (this.isSequencerPlaying && (type === 'noteon' || type === 'noteoff') && source === MidiSource.KEYBOARD) {
       return;
     }
+
+    // Scheduled send (see sendNoteOn): ms until `at`, or 0 = send now.
+    const deferMs = at != null ? at - performance.now() : 0;
+    const scheduled = deferMs > 1;
 
     // Log to monitor (skip clock to avoid flooding)
     if (type !== 'clock') {
@@ -1300,15 +1330,26 @@ export class MidiService {
         }
 
         if (status > 0) {
-          if (applyLatch && (type === 'noteon' || type === 'noteoff')) {
-            const forward = type === 'noteon'
-              ? this.latch.handleNoteOn(out, config, data.note, data.velocity, targetChannel, '', Date.now())
-              : this.latch.handleNoteOff(out, data.note, targetChannel);
-            if (!forward) return;
-          }
           const fullMsg = [status, ...bytes];
-          this.globalSentHashes.set(fullMsg.join(','), Date.now());
-          out.send(fullMsg);
+          const latched = applyLatch && (type === 'noteon' || type === 'noteoff');
+          const deliver = () => {
+            if (latched) {
+              const forward = type === 'noteon'
+                ? this.latch.handleNoteOn(out, config, data.note, data.velocity, targetChannel, '', Date.now())
+                : this.latch.handleNoteOff(out, data.note, targetChannel);
+              if (!forward) return;
+            }
+            this.globalSentHashes.set(fullMsg.join(','), Date.now());
+            out.send(fullMsg);
+          };
+          if (!scheduled) deliver();
+          // the latch decides (and may send releases) at play time — keep it on a timer
+          else if (latched) setTimeout(deliver, deferMs);
+          else {
+            // echo matching uses the time it will actually leave
+            this.globalSentHashes.set(fullMsg.join(','), Date.now() + deferMs);
+            out.send(fullMsg, at);
+          }
         }
       });
     });
@@ -1369,13 +1410,18 @@ export class MidiService {
         }
 
         if (status > 0) {
-          if (virtApplyLatch && (type === 'noteon' || type === 'noteoff')) {
-            const forward = type === 'noteon'
-              ? this.latch.handleNoteOn(virtDevice, config, data.note, data.velocity, targetChannel, '', Date.now())
-              : this.latch.handleNoteOff(virtDevice, data.note, targetChannel);
-            if (!forward) return;
-          }
-          this.sendToVirtualOutput(virtName, [status, ...bytes]);
+          const deliver = () => {
+            if (virtApplyLatch && (type === 'noteon' || type === 'noteoff')) {
+              const forward = type === 'noteon'
+                ? this.latch.handleNoteOn(virtDevice, config, data.note, data.velocity, targetChannel, '', Date.now())
+                : this.latch.handleNoteOff(virtDevice, data.note, targetChannel);
+              if (!forward) return;
+            }
+            this.sendToVirtualOutput(virtName, [status, ...bytes]);
+          };
+          // virtual instruments are plain JS callbacks: no timestamp, so a timer
+          if (scheduled) setTimeout(deliver, deferMs);
+          else deliver();
         }
       });
     });
@@ -1448,6 +1494,15 @@ export class MidiService {
       });
     }
 
+    const inputDevice = this.midiAccess?.inputs.get(inputId);
+    const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
+    const wiredAsInput = !!inConfig?.inEnabled;
+
+    // Loopback of our own output (see _loopbackInputs): its clock/transport is
+    // our own coming back — drop it before BPM detection and transport listeners.
+    const isLoopback = !wiredAsInput && this._loopbackInputs.has(inputId);
+    if (isLoopback && status >= 0xF8) return;
+
     // Ingress filter
     if (this.ingressFilter && this.ingressFilter(event)) return;
 
@@ -1471,10 +1526,6 @@ export class MidiService {
 
     // Block SysEx unless explicitly enabled
     if (status === 0xF0 && !this.sysexEnabled) return;
-
-    // Input device routing config
-    const inputDevice = this.midiAccess?.inputs.get(inputId);
-    const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
 
     // Channel filter
     if (this.routingConfig && status < 0xF0) {
@@ -1509,12 +1560,20 @@ export class MidiService {
     // the dropped half of that on/off pair is exactly what leaves a stuck
     // note on the receiving synth. 20ms comfortably covers real echo
     // latency while sitting below realistic repeated-note timing.
+    //
+    // Compared against when the message *arrived* (event.timeStamp), not when
+    // this handler runs: under main-thread load an echo is processed well past
+    // the window, slipped through, and fed the loop it was meant to stop.
     const rawHash = event.data.join(',');
     const globalSentTime = this.globalSentHashes.get(rawHash);
+    const arrivedAt = this.arrivalTime(event, now);
+    const isEcho = !!globalSentTime && arrivedAt - globalSentTime >= -1 && arrivedAt - globalSentTime < MidiService.ECHO_WINDOW_MS;
+    if (!wiredAsInput && status < 0xF0 && !isNoteOff) this.trackEcho(inputId, inputDevice?.name ?? '', isEcho);
     // Never suppress incoming note-offs based on global sent hashes — the app
     // may have generated a note-off for the same note+channel (panic, UI, etc.)
     // and the controller's real note-off must not be mistaken for a loopback.
-    if (!isNoteOff && globalSentTime && now - globalSentTime < 20) return;
+    // On a detected loopback input it is our own note-off coming back, though.
+    if (isEcho && (!isNoteOff || isLoopback)) return;
     const recent = this.lastSentMessages.get(inputId);
     if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
 
@@ -1572,6 +1631,27 @@ export class MidiService {
   }
 
   private handleIngressBound = this.handleIngress.bind(this);
+
+  /** Epoch ms when the browser received the message; `fallback` if the timestamp is unusable. */
+  private arrivalTime(event: MIDIMessageEvent, fallback: number): number {
+    const ts = event.timeStamp;
+    if (!(ts > 0) || typeof performance === 'undefined') return fallback;
+    const t = performance.timeOrigin + ts;
+    // a timestamp from another clock base would land far off — ignore it
+    return t <= fallback + 5 && t > fallback - 5000 ? t : fallback;
+  }
+
+  /** Count echoes of our own sends per (non-wired) input; mute it once it's clearly a loopback. */
+  private trackEcho(inputId: string, name: string, isEcho: boolean): void {
+    if (this._loopbackInputs.has(inputId)) return;
+    let st = this._echoStats.get(inputId);
+    if (!st) { st = { echo: 0, other: 0 }; this._echoStats.set(inputId, st); }
+    if (isEcho) st.echo++; else st.other++;
+    if (st.echo >= MidiService.LOOPBACK_MIN_ECHOES && st.echo >= st.other * 4) {
+      this._loopbackInputs.set(inputId, name);
+      console.warn(`[MIDI] Input "${name}" receives this app's own output (loopback) — its echoes and clock are now ignored. Register it as an input in MIDI Flow to opt out.`);
+    }
+  }
 
   private sendDirectToOutputByName(
     deviceName: string,

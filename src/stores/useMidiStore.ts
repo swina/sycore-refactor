@@ -716,18 +716,28 @@ export const useMidiStore = defineStore('midi', () => {
     midiService.sendAllCCs(ccMap, midiChannel.value - 1, nrpnCCs, source)
   }
 
-  function sendNoteOn(note: number, velocity = 100, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null) {
-    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
-    midiService.sendNoteOn(note, velocity, targetChannel, source, skipDeviceId)
-    const mappingStore = useMappingStore()
-    mappingStore.handleVelocity(velocity, targetChannel)
-    notifyAppNoteListeners('on', note, velocity, targetChannel, source)
+  // `at`: optional play time (performance.now() ms) for notes scheduled ahead (Arpeggiator).
+  // MIDI outputs get it as a send timestamp; app listeners are notified at that time.
+  function runAt(at: number | undefined, fn: () => void) {
+    const delay = at != null ? at - performance.now() : 0
+    if (delay > 1) setTimeout(fn, delay)
+    else fn()
   }
 
-  function sendNoteOff(note: number, velocity = 0, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null) {
+  function sendNoteOn(note: number, velocity = 100, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null, at?: number) {
     const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
-    midiService.sendNoteOff(note, velocity, targetChannel, source, skipDeviceId)
-    notifyAppNoteListeners('off', note, velocity, targetChannel, source)
+    midiService.sendNoteOn(note, velocity, targetChannel, source, skipDeviceId, at)
+    runAt(at, () => {
+      const mappingStore = useMappingStore()
+      mappingStore.handleVelocity(velocity, targetChannel)
+      notifyAppNoteListeners('on', note, velocity, targetChannel, source)
+    })
+  }
+
+  function sendNoteOff(note: number, velocity = 0, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null, at?: number) {
+    const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
+    midiService.sendNoteOff(note, velocity, targetChannel, source, skipDeviceId, at)
+    runAt(at, () => notifyAppNoteListeners('off', note, velocity, targetChannel, source))
   }
 
   function sendPitchBend(value: number, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null) {

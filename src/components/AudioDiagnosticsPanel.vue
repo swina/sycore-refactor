@@ -40,6 +40,7 @@ const clock = ref({})
 const stats = ref(getDiagnosticsSnapshot())
 const hogs = ref([])
 const drawCallers = ref([])
+const loopbackInputs = ref([])
 const loafSupported = typeof PerformanceObserver !== 'undefined' &&
   (PerformanceObserver.supportedEntryTypes || []).includes('long-animation-frame')
 
@@ -64,6 +65,7 @@ function poll() {
   stats.value = getDiagnosticsSnapshot()
   hogs.value = getTopHogs()
   drawCallers.value = getDrawByCaller()
+  loopbackInputs.value = midiService.getLoopbackInputNames()
   updateMidiRate()
 }
 
@@ -92,9 +94,13 @@ function onLongFrames(list) {
 // the main thread was busy. Only runs while the panel is open.
 let _stallTimer = null
 let _lastTick = 0
+// set when the page was hidden at any point since the last tick (visibilitychange)
+let _hiddenSinceTick = false
+function onVisibility() { if (document.hidden) _hiddenSinceTick = true }
 function stallTick() {
   const now = performance.now()
-  recordStall(Math.max(0, now - _lastTick - STALL_TICK_MS))
+  recordStall(Math.max(0, now - _lastTick - STALL_TICK_MS), _hiddenSinceTick || document.hidden)
+  _hiddenSinceTick = false
   _lastTick = now
 }
 
@@ -121,8 +127,12 @@ function updateMidiRate() {
 
 // one clean clock = 24 pulses per quarter note
 const expectedClockRate = computed(() => (midiStore.incomingBpm > 0 ? midiStore.incomingBpm * 24 / 60 : null))
+// clock from detected loopback ports is already ignored by midiService
+const effectiveClockRate = computed(() => midiRate.value.clockByPort
+  .filter(p => !loopbackInputs.value.includes(p.name))
+  .reduce((sum, p) => sum + p.rate, 0))
 const clockDuplicated = computed(() =>
-  expectedClockRate.value != null && midiRate.value.clock > expectedClockRate.value * 1.5
+  expectedClockRate.value != null && effectiveClockRate.value > expectedClockRate.value * 1.5
 )
 
 function onRawMidi(e) {
@@ -164,6 +174,7 @@ onMounted(() => {
   _pollTimer = setInterval(poll, 500)
   _lastTick = performance.now()
   _stallTimer = setInterval(stallTick, STALL_TICK_MS)
+  document.addEventListener('visibilitychange', onVisibility)
   _offRaw = midiService.addRawListener(onRawMidi)
   wrapDraw()
   if (loafSupported) {
@@ -174,6 +185,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(_pollTimer)
   clearInterval(_stallTimer)
+  document.removeEventListener('visibilitychange', onVisibility)
   _offRaw?.()
   _loafObserver?.disconnect()
   unwrapDraw()
@@ -230,9 +242,12 @@ const checks = computed(() => [
     label: 'Main-thread stalls (max)',
     value: `${fmt(stats.value.stallMs.max === -Infinity ? null : stats.value.stallMs.max, 0)} ms`,
     state: level(stats.value.stallMs.max < 30, !stallsOverLookahead.value),
-    hint: stallsOverLookahead.value
+    hint: (stallsOverLookahead.value
       ? 'longer than the lookahead: scheduled sounds can arrive late'
-      : 'shorter than the lookahead: scheduling is safe',
+      : 'shorter than the lookahead: scheduling is safe')
+      + (stats.value.hiddenStallMs.count
+        ? ` · window hidden/covered: max ${fmt(stats.value.hiddenStallMs.max, 0)} ms (browser timer throttling, not counted)`
+        : ''),
   },
   {
     label: 'MIDI input wait (avg / max)',
@@ -289,13 +304,17 @@ const STATE_CLASS = {
         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
           <dt class="text-neutral-500">Incoming clock</dt><dd class="text-right text-white">{{ fmt(midiRate.clock, 0) }} msg/s<span v-if="midiStore.incomingBpm > 0" class="text-neutral-500"> · {{ fmt(midiStore.incomingBpm) }} BPM</span></dd>
           <template v-for="p in midiRate.clockByPort" :key="p.name">
-            <dt class="text-neutral-600 pl-3 truncate" :title="p.name">↳ {{ p.name }}</dt><dd class="text-right text-neutral-400">{{ fmt(p.rate, 0) }} msg/s</dd>
+            <dt class="text-neutral-600 pl-3 truncate" :title="p.name">↳ {{ p.name }}</dt>
+            <dd class="text-right text-neutral-400">{{ fmt(p.rate, 0) }} msg/s<span v-if="loopbackInputs.includes(p.name)" class="text-amber-400"> · loopback, ignored</span></dd>
           </template>
           <dt class="text-neutral-500">Incoming other</dt><dd class="text-right text-white">{{ fmt(midiRate.other, 0) }} msg/s</dd>
           <dt class="text-neutral-500">Outgoing clock</dt><dd class="text-right text-white">{{ midiService.isClockRunning ? 'running' : 'off' }} · send {{ midiStore.sendClock ? 'on' : 'off' }}</dd>
         </dl>
+        <p v-if="loopbackInputs.length" class="mt-1 text-[10px] text-amber-400">
+          Loopback of SY.CORE's own output detected on {{ loopbackInputs.join(', ') }}: echoed notes and clock from it are ignored (register it as an input in MIDI Flow to opt out).
+        </p>
         <p v-if="clockDuplicated" class="mt-1 text-[10px] text-rose-400">
-          Clock arrives ~{{ fmt(midiRate.clock / expectedClockRate, 1) }}× (expected {{ fmt(expectedClockRate, 0) }} msg/s): duplicated or looped back — check the ports above and disable clock out / sync in where it echoes.
+          Clock arrives ~{{ fmt(effectiveClockRate / expectedClockRate, 1) }}× (expected {{ fmt(expectedClockRate, 0) }} msg/s): duplicated or looped back — check the ports above and disable clock out / sync in where it echoes.
         </p>
         <p class="mt-1 text-[10px] text-neutral-600">
           A/B test: note the MIDI input wait, then stop the clock (here or on the device sending it), Reset, and compare.
