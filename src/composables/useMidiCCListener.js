@@ -6,7 +6,8 @@ import { useUiStore } from '@/stores/useUiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useLfoStore } from '@/stores/useLfoStore'
-import { useArpStore } from '@/stores/useArpStore'
+import { useArpStore, ARP_SUBDIVISIONS } from '@/stores/useArpStore'
+import { ARP_MODES } from '@/lib/arp-patterns'
 import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
@@ -88,6 +89,28 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     arpStore.arpHold = fromNote ? !arpStore.arpHold : on
     return
   }
+  if (fieldName === 'arp_ignore_off') {
+    arpStore.arpIgnoreWhenOff = fromNote ? !arpStore.arpIgnoreWhenOff : on
+    return
+  }
+  // Continuous arp controls — map 0–127 onto the panel's own ranges so the
+  // learned knob drives arpStore (and the panel's sliders follow).
+  if (fieldName === 'arp_rate') {
+    arpStore.arpSubdivision = ARP_SUBDIVISIONS[Math.round((val / 127) * (ARP_SUBDIVISIONS.length - 1))]
+    return
+  }
+  if (fieldName === 'arp_mode') {
+    arpStore.arpMode = ARP_MODES[Math.round((val / 127) * (ARP_MODES.length - 1))]
+    return
+  }
+  if (fieldName === 'arp_bpm') {
+    arpStore.arpBpm = Math.round(40 + (val / 127) * (250 - 40))
+    return
+  }
+  if (fieldName === 'arp_octave') {
+    arpStore.arpOctave = Math.round((val / 127) * 6) - 3
+    return
+  }
   if (fieldName === 'engine_ab') {
     const useB = fromNote ? !presetStore.useAlternativeEngine : on
     presetStore.selectEngine(useB ? 'B' : 'A')
@@ -151,6 +174,10 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
       if (on) window.dispatchEvent(new CustomEvent('cp-start'))
       else window.dispatchEvent(new CustomEvent('cp-stop'))
     }
+    return
+  }
+  if (fieldName === 'cp_capture') {
+    if (fromNote || val > 0) cpStore.captureChord()
     return
   }
   if (fieldName.startsWith('cp_slot_')) {
@@ -480,26 +507,30 @@ export function useMidiCCListener() {
 
     if (mappingStore.isMidiLearning) return // raw listener in MidiMapContextMenu handles this
 
-    if (type === 'on' && velocity > 0) {
-      const inputs = midiService.getInputs()
-      const inputDevice = inputs.find(i => i.id === inputId)
-      const deviceName = inputDevice?.name || null
+    const isOn = type === 'on' && velocity > 0
+    const inputs = midiService.getInputs()
+    const inputDevice = inputs.find(i => i.id === inputId)
+    const deviceName = inputDevice?.name || null
 
-      const noteFragment = `NOTE${note}`
-      const preciseKey = deviceName
-        ? `${deviceName}:CH${chan + 1}:${noteFragment}`
-        : `CH${chan + 1}:${noteFragment}`
-      const deviceKey = deviceName ? `${deviceName}:${noteFragment}` : null
+    const noteFragment = `NOTE${note}`
+    const preciseKey = deviceName
+      ? `${deviceName}:CH${chan + 1}:${noteFragment}`
+      : `CH${chan + 1}:${noteFragment}`
+    const deviceKey = deviceName ? `${deviceName}:${noteFragment}` : null
 
-      const mapping =
-        mappingStore.midiMappings[preciseKey] ||
-        (deviceKey ? mappingStore.midiMappings[deviceKey] : null) ||
-        mappingStore.midiMappings[noteFragment]
+    const mapping =
+      mappingStore.midiMappings[preciseKey] ||
+      (deviceKey ? mappingStore.midiMappings[deviceKey] : null) ||
+      mappingStore.midiMappings[noteFragment]
 
-      if (mapping) {
-        const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
-        applyParam(paramName, velocity, true)
-      }
+    if (!mapping) {
+      // Unmapped notes are played notes — feed the Chord Capture held-note set.
+      cpStore.trackCaptureNote(isOn, note)
+      return
+    }
+    if (isOn) {
+      const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
+      applyParam(paramName, velocity, true)
     }
   }
 

@@ -32,6 +32,10 @@
         <template v-if="playlistIdx === (i-1) && playlist[i-1].duration > 0">{{ formatTime(currentTime) }} / </template>
         {{ playlist[i-1].duration > 0 ? formatTime(playlist[i-1].duration) : '--:--' }}
       </span>
+
+      <span v-if="playlist[i - 1]?.key" class="text-[9px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1 rounded z-10" :title="`Key: ${playlist[i - 1].key}`">
+        {{ playlist[i - 1].key }}
+      </span>
     </button>
   </div>
 </template>

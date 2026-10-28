@@ -16,7 +16,8 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
+import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP, CAPTURE_MAX } from '@/stores/useChordProgStore'
+import { noteLabel } from '@/lib/chord-detector'
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
 import { parseMidiFile } from '@/lib/midi-file'
@@ -1979,7 +1980,7 @@ function velBarColor(v) {
       <!-- ── BOTTOM TABS ─────────────────────────────────────────────────── -->
       <div class="shrink-0 flex border-b border-neutral-800 px-3">
         <button
-          v-for="tab in ['generate', 'library', 'chain', 'performance', 'save-load']"
+          v-for="tab in ['generate', 'library', 'capture', 'chain', 'performance', 'save-load']"
           :key="tab"
           @click="activeTab = tab"
           :class="[
@@ -1988,6 +1989,7 @@ function velBarColor(v) {
           ]"
         >
           {{ tab === 'save-load' ? 'Save / Load' : tab === 'performance' ? 'Performance Set' : tab }}
+          <span v-if="tab === 'capture' && store.captureBuffer.length" class="ml-1 text-[8px] font-black px-1 rounded bg-amber-500/15 text-amber-400">{{ store.captureBuffer.length }}</span>
         </button>
       </div>
 
@@ -2335,6 +2337,68 @@ function velBarColor(v) {
               </div>
               <div v-if="!store.loadingLibrary && store.libraryPatterns.length === 0" class="px-3 py-6 text-[10px] text-neutral-600 text-center">
                 {{ authStore.user ? 'No saved progressions' : 'Sign in to use library' }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Capture Tab — chords snapshotted from the MIDI input by the cp_capture button -->
+        <div v-else-if="activeTab === 'capture'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div class="px-3 py-1.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
+            <button
+              @click="store.captureChord()"
+              @contextmenu.prevent="openMenu($event, { name: 'cp_capture', label: 'Chord Prog: Capture Chord' })"
+              title="Capture the chord held (or last played) on the MIDI input — right-click to MIDI Learn a controller button"
+              class="relative flex items-center gap-1 px-2 py-0.5 rounded bg-amber-700/80 hover:bg-amber-600 text-white text-[9px] font-bold uppercase tracking-wider transition-colors"
+            >
+              <span v-if="mappingStore.learningParamName === 'cp_capture'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none" />
+              <Music2 class="w-3 h-3" />
+              Capture
+            </button>
+            <span class="text-[9px] font-bold uppercase tracking-widest text-neutral-500 flex-1">Captured Chords</span>
+            <span class="text-[8px] text-neutral-600 font-mono">{{ store.captureBuffer.length }} / {{ CAPTURE_MAX }}</span>
+            <button
+              @click="store.importCaptureBuffer(0)"
+              :disabled="!store.captureBuffer.length"
+              :title="`Import into slot ${String.fromCharCode(65 + store.activeSlotIndex)} from step 1 (pattern length = captured count)`"
+              class="px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[9px] font-bold uppercase tracking-wider transition-colors"
+            >Import → {{ String.fromCharCode(65 + store.activeSlotIndex) }}</button>
+            <button
+              @click="store.importCaptureBuffer(store.selectedStepIdx)"
+              :disabled="!store.captureBuffer.length"
+              :title="`Import into slot ${String.fromCharCode(65 + store.activeSlotIndex)} starting at the selected step`"
+              class="px-2 py-0.5 rounded bg-neutral-800 hover:bg-purple-800 disabled:opacity-40 disabled:cursor-not-allowed text-neutral-300 text-[9px] font-bold uppercase tracking-wider transition-colors"
+            >At step {{ store.selectedStepIdx + 1 }}</button>
+            <button
+              @click="store.clearCaptureBuffer()"
+              :disabled="!store.captureBuffer.length"
+              class="px-2 py-0.5 rounded bg-neutral-800 hover:bg-red-900 disabled:opacity-40 text-neutral-400 hover:text-red-400 text-[9px] font-bold uppercase tracking-wider transition-colors"
+              title="Clear the capture buffer"
+            >Clear</button>
+          </div>
+          <div class="flex-1 overflow-y-auto custom-scrollbar p-3">
+            <div v-if="!store.captureBuffer.length" class="text-[10px] text-neutral-500 leading-relaxed max-w-[420px]">
+              Play a chord on your MIDI keyboard and press <b>Capture</b> — or right-click it to MIDI Learn a controller button,
+              then each press stores the chord you are holding (or the last one you played). Captures work even with this panel closed.
+            </div>
+            <div v-else class="grid grid-cols-8 gap-2">
+              <div
+                v-for="(chord, i) in store.captureBuffer"
+                :key="i"
+                @click="previewChord(chord)"
+                :title="chord.notes.map(noteLabel).join(' ')"
+                class="flex flex-col gap-0.5 p-2 rounded border border-amber-700/40 bg-amber-950/20 hover:border-amber-500/60 cursor-pointer transition-colors"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-mono text-neutral-500">#{{ i + 1 }}</span>
+                  <button
+                    @click.stop="store.removeCapturedChord(i)"
+                    class="text-[9px] text-neutral-600 hover:text-red-400 transition-colors"
+                    title="Remove"
+                  >✕</button>
+                </div>
+                <span class="text-[11px] font-bold text-amber-300 truncate">{{ chord.chordName }}</span>
+                <span class="text-[8px] font-mono text-neutral-500 truncate">{{ chord.notes.map(noteLabel).join(' ') }}</span>
               </div>
             </div>
           </div>

@@ -6,6 +6,7 @@ import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { sendAiPrompt } from '@/lib/ai-service'
 import { useAiAgentStore } from './useAiAgentStore'
 import type { ArpMode } from '@/lib/arp-patterns'
+import { detectChord, noteLabel } from '@/lib/chord-detector'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,18 @@ export interface ChordStep {
 }
 
 export type PlayMode = 'chord' | 'arp' | 'bass'
+
+export interface CapturedChord {
+  chordName: string
+  notes: number[]
+}
+
+export const CAPTURE_MAX = 64
+
+// detectChord's name, else the note labels (single notes / unknown voicings).
+export function nameCapturedChord(notes: number[]): string {
+  return detectChord(notes)?.name ?? notes.map(noteLabel).join(' ')
+}
 
 export interface ChordProgAllSlotsSnapshot {
   type: 'all'
@@ -286,6 +299,71 @@ export const useChordProgStore = defineStore('chordProg', () => {
       }
     }
     return { steps: all, numSteps: all.length, slotIndices, localIndices }
+  }
+
+  // ── Chord Capture ───────────────────────────────────────────────────────
+  // A MIDI-learned button (cp_capture) snapshots the chord played on the MIDI
+  // input into captureBuffer; the Capture tab imports the buffer into steps.
+  // Held-note tracking is a plain Set — fed on every MIDI note, so not reactive.
+  const CAPTURE_STORAGE_KEY = 'SYCORE_CHORD_PROG_CAPTURE'
+  const captureBuffer = ref<CapturedChord[]>(loadCaptureBuffer())
+  const _captureHeld = new Set<number>()
+  // Last chord struck (all notes pressed since the keyboard was last empty),
+  // so a capture still works after the chord has been released.
+  let _captureLast: number[] = []
+
+  function loadCaptureBuffer(): CapturedChord[] {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(userKey(CAPTURE_STORAGE_KEY)) || '[]')
+      return Array.isArray(parsed) ? parsed.filter((c: any) => Array.isArray(c?.notes)) : []
+    } catch {
+      return []
+    }
+  }
+
+  watch(captureBuffer, (buf) => {
+    try { localStorage.setItem(userKey(CAPTURE_STORAGE_KEY), JSON.stringify(buf)) } catch {}
+  }, { deep: true })
+
+  function trackCaptureNote(isOn: boolean, note: number) {
+    if (isOn) {
+      if (_captureHeld.size === 0) _captureLast = []
+      _captureHeld.add(note)
+      if (!_captureLast.includes(note)) _captureLast.push(note)
+    } else {
+      _captureHeld.delete(note)
+    }
+  }
+
+  function captureChord(): CapturedChord | null {
+    const src = _captureHeld.size ? [..._captureHeld] : _captureLast
+    if (!src.length) return null
+    const notes = [...src].sort((a, b) => a - b)
+    const chord = { chordName: nameCapturedChord(notes), notes }
+    captureBuffer.value = [...captureBuffer.value, chord].slice(-CAPTURE_MAX)
+    return chord
+  }
+
+  function removeCapturedChord(idx: number) {
+    captureBuffer.value = captureBuffer.value.filter((_, i) => i !== idx)
+  }
+
+  function clearCaptureBuffer() {
+    captureBuffer.value = []
+  }
+
+  // Writes the buffer into steps from startIdx (keeping each step's duration/
+  // velocity/gate), then grows numSteps to cover it. From step 0 the pattern
+  // length becomes exactly the captured count. Returns how many were written.
+  function importCaptureBuffer(startIdx = 0): number {
+    const count = Math.min(captureBuffer.value.length, 16 - startIdx)
+    if (startIdx < 0 || count <= 0) return 0
+    for (let i = 0; i < count; i++) {
+      const c = captureBuffer.value[i]
+      assignChordToStep(startIdx + i, c.chordName, c.notes)
+    }
+    numSteps.value = startIdx === 0 ? count : Math.max(numSteps.value, startIdx + count)
+    return count
   }
 
   const libraryPatterns = ref<any[]>([])
@@ -635,6 +713,8 @@ export const useChordProgStore = defineStore('chordProg', () => {
     loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,
     saveToLibrary, saveAllSlotsToLibrary, updateLibraryPattern, loadLibrary, deleteFromLibrary, loadFromDocument, loadAllSlotsFromDocument,
     loadFromMidiImport,
+    // Chord Capture
+    captureBuffer, trackCaptureNote, captureChord, removeCapturedChord, clearCaptureBuffer, importCaptureBuffer,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,
     slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled,

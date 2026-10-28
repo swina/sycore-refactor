@@ -956,6 +956,7 @@ onUnmounted(() => {
                   <div class="flex items-center gap-1 mt-0.5 flex-wrap justify-center">
                     <span v-if="pad.duration" class="text-[10px] font-mono text-neutral-400">{{ formatTime(pad.duration) }}</span>
                     <span v-if="pad.bpm" class="text-[10px] font-black text-violet-400/80 font-mono">{{ pad.bpm }}bpm</span>
+                    <span v-if="pad.key" class="text-[10px] font-black text-amber-400/90 font-mono" :title="`Key: ${pad.key}`">{{ pad.key }}</span>
                   </div>
                 </template>
 

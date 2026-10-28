@@ -8,6 +8,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useAudioMixerChannels } from '@/composables/useAudioMixerChannels'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
+import { ARP_MODES } from '@/lib/arp-patterns'
 import { CONTINUOUS_ACTIONS, parseViCcAction, parseViChannelAction } from '@/lib/app-midi-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { userKey } from '@/lib/userKey'
@@ -369,9 +370,8 @@ export function useAppActions() {
         if (ccVal > 63) window.dispatchEvent(new CustomEvent('capture-rec-toggle')); break
 
       case 'arp_mode_cc': {
-        const modes = ['up', 'down', 'up-down', 'random']
-        const idx = Math.floor((ccVal / 127.1) * modes.length)
-        arpStore.arpMode = modes[idx]
+        const idx = Math.floor((ccVal / 127.1) * ARP_MODES.length)
+        arpStore.arpMode = ARP_MODES[idx]
         break
       }
       case 'arp_subdivision_cc':

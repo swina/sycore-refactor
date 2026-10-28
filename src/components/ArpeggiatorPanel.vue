@@ -199,6 +199,44 @@ function onHeaderMouseDown(e) {
   startDrag(e)
 }
 
+// Shared by the hardware-input and app→app listeners below; the caller has
+// already applied the MIDI Flow routing gate.
+function handleArpNote(type, note, velocity, chan) {
+  // Note-offs still run so held-note bookkeeping can't drift.
+  if (!arpStore.arpEnabled && arpStore.arpIgnoreWhenOff && type === 'on' && velocity > 0) return
+
+  if (type === 'on' && velocity > 0 && !arpStore.arpEnabled) {
+    _thruNotes.set(note, chan + 1)
+    midiStore.sendNoteOn(note, velocity, chan + 1, MidiSource.ARP)
+  } else if (type !== 'on' || velocity === 0) {
+    const ch = _thruNotes.get(note)
+    if (ch !== undefined) {
+      _thruNotes.delete(note)
+      midiStore.sendNoteOff(note, 0, ch, MidiSource.ARP)
+    }
+  }
+
+  if (type === 'on' && velocity > 0) {
+    if (arpStore.arpHold && physicalKeysHeld.value === 0) {
+      arpStore.clearHeldNotes()
+    }
+    physicalKeysHeld.value++
+    arpStore.pressNote(note)
+  } else {
+    physicalKeysHeld.value = Math.max(0, physicalKeysHeld.value - 1)
+    if (!arpStore.arpHold || physicalKeysHeld.value === 0) {
+      if (!arpStore.arpHold) {
+        arpStore.releaseNote(note)
+        if (physicalKeysHeld.value === 0) {
+          arpStore.clearHeldNotes()
+        }
+      }
+    }
+  }
+}
+
+let _unsubAppNote = null
+
 onMounted(() => {
   _unsubNote = midiService.addNoteListener((type, note, velocity, chan, inputId) => {
     // MIDI Flow device→app input routing — same gate ChordProgSequencer.vue
@@ -210,40 +248,24 @@ onMounted(() => {
     const sourceKey = inputDevice?.name
     if (!midiStore.hasExplicitInputRouting(sourceKey)) return
     if (!midiStore.isDeviceRoutedToApp(sourceKey, MidiSource.ARP, note)) return
+    handleArpNote(type, note, velocity, chan)
+  })
 
-    if (type === 'on' && velocity > 0 && !arpStore.arpEnabled) {
-      _thruNotes.set(note, chan + 1)
-      midiStore.sendNoteOn(note, velocity, chan + 1, MidiSource.ARP)
-    } else if (type !== 'on' || velocity === 0) {
-      const ch = _thruNotes.get(note)
-      if (ch !== undefined) {
-        _thruNotes.delete(note)
-        midiStore.sendNoteOff(note, 0, ch, MidiSource.ARP)
-      }
-    }
-
-    if (type === 'on' && velocity > 0) {
-      if (arpStore.arpHold && physicalKeysHeld.value === 0) {
-        arpStore.clearHeldNotes()
-      }
-      physicalKeysHeld.value++
-      arpStore.pressNote(note)
-    } else {
-      physicalKeysHeld.value = Math.max(0, physicalKeysHeld.value - 1)
-      if (!arpStore.arpHold || physicalKeysHeld.value === 0) {
-        if (!arpStore.arpHold) {
-          arpStore.releaseNote(note)
-          if (physicalKeysHeld.value === 0) {
-            arpStore.clearHeldNotes()
-          }
-        }
-      }
-    }
+  // MIDI Flow app→app cables (e.g. Chord Sequencer OUT → Arpeggiator IN):
+  // app-generated notes never pass through a real MIDI input port, so the
+  // listener above never saw them. Skip our own notes — sendNoteOn/Off
+  // broadcast on this same channel and would feed straight back in.
+  _unsubAppNote = midiStore.addAppNoteListener((type, note, velocity, chan, sourceApp) => {
+    if (sourceApp === MidiSource.ARP) return
+    if (!midiStore.hasExplicitInputRouting(sourceApp)) return
+    if (!midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.ARP, note)) return
+    handleArpNote(type, note, velocity, chan)
   })
 })
 
 onUnmounted(() => {
   _unsubNote?.()
+  _unsubAppNote?.()
   stopArpEngine()
   flushThruNotes()
 })
@@ -256,6 +278,10 @@ watch(() => arpStore.arpEnabled, (enabled) => {
       arpStore.clearHeldNotes()
     }
   }
+})
+
+watch(() => arpStore.arpIgnoreWhenOff, (ignore) => {
+  if (ignore) flushThruNotes()
 })
 
 watch(() => arpStore.arpHold, (held) => {
@@ -300,6 +326,19 @@ watch([() => arpStore.arpBpm, () => arpStore.arpSubdivision], () => {
           >
             <span v-if="mappingStore.learningParamName === 'arp_active'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
             <div :class="['absolute top-1 w-4 h-4 rounded-full bg-white transition-all', arpStore.arpEnabled ? 'left-7' : 'left-1']" />
+          </button>
+        </div>
+
+        <!-- Arp OFF behaviour: pass notes through or ignore them -->
+        <div class="flex items-center justify-between p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
+          <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Ignore notes when OFF</span>
+          <button
+            @click="arpStore.arpIgnoreWhenOff = !arpStore.arpIgnoreWhenOff"
+            @contextmenu.prevent="openMenu($event, { name: 'arp_ignore_off', label: 'Arp Ignore When OFF' })"
+            :class="['relative w-12 h-6 rounded-full transition-all', arpStore.arpIgnoreWhenOff ? 'bg-synth-neon' : 'bg-neutral-800']"
+          >
+            <span v-if="mappingStore.learningParamName === 'arp_ignore_off'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse z-50 pointer-events-none" />
+            <div :class="['absolute top-1 w-4 h-4 rounded-full bg-white transition-all', arpStore.arpIgnoreWhenOff ? 'left-7' : 'left-1']" />
           </button>
         </div>
 

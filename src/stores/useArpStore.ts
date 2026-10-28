@@ -21,6 +21,9 @@ export const useArpStore = defineStore('arp', () => {
   const arpSubdivision = ref<ArpSubdivision>('1/8')
   const arpHold        = ref(false)
   const arpOctave      = ref(0)           // -3 to +3 octaves
+  // Arp OFF: false = notes pass straight through to the outputs,
+  // true = notes reaching the Arpeggiator are dropped.
+  const arpIgnoreWhenOff = ref(false)
 
   // Plain Set — not reactive to avoid thrashing during rapid MIDI note events
   const _heldNotes  = new Set<number>()
@@ -46,7 +49,7 @@ export const useArpStore = defineStore('arp', () => {
   }
 
   return {
-    arpEnabled, arpMode, arpBpm, arpSubdivision, arpHold, arpOctave,
+    arpEnabled, arpMode, arpBpm, arpSubdivision, arpHold, arpOctave, arpIgnoreWhenOff,
     heldNoteCount,
     pressNote, releaseNote, getHeldNotes, clearHeldNotes,
   }

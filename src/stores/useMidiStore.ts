@@ -666,8 +666,28 @@ export const useMidiStore = defineStore('midi', () => {
     }
   }
 
+  // A listener may re-send the note as its own source (Arpeggiator thru,
+  // Note Latch, Sequencer overdub), which notifies again synchronously. A
+  // MIDI Flow cable loop (e.g. Arp → Note Latch → Arp) would recurse without
+  // bound and flood the MIDI driver until the browser crashes — cap the chain.
+  const MAX_APP_NOTE_DEPTH = 8
+  let _appNoteDepth = 0
+  let _appNoteLoopWarned = false
+
   function notifyAppNoteListeners(type: 'on' | 'off', note: number, velocity: number, channel: number, sourceApp: string) {
-    _appNoteListeners.forEach(l => l(type, note, velocity, channel, sourceApp))
+    if (_appNoteDepth >= MAX_APP_NOTE_DEPTH) {
+      if (!_appNoteLoopWarned) {
+        _appNoteLoopWarned = true
+        console.warn(`[MIDI] App→app note loop detected (last source: ${sourceApp}) — check MIDI Flow for a cable cycle`)
+      }
+      return
+    }
+    _appNoteDepth++
+    try {
+      _appNoteListeners.forEach(l => l(type, note, velocity, channel, sourceApp))
+    } finally {
+      _appNoteDepth--
+    }
   }
 
   function toggleBroadcastMode() {

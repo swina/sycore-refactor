@@ -17,6 +17,7 @@ import { parseAccessVirusSyx } from '@/composables/useAccessVirusSyxParser'
 import { parseArturiaSqlite } from '@/composables/useArturiaSqliteParser'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import MidiButtonLearn from '@/components/ui/MidiButtonLearn.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useSoloPerformanceSets, SOLO_SLOT_LETTERS } from '@/composables/useSoloPerformanceSets'
 import { MidiSource, midiService } from '@/core/midi/midi-service'
@@ -545,6 +546,32 @@ watch([selectedBank, selectedDeviceName], async ([bank]) => {
 // ── Filters ─────────────────────────────────────────────────────
 const searchQuery      = ref('')
 const selectedCategory = ref('')
+const showFavoritesOnly = ref(false)
+
+// ── Favorites ───────────────────────────────────────────────────
+// Keyed by template (shared across same-template devices, like user banks)
+// or device name, plus bank and program/name.
+const LS_FAVORITES = 'SYCORE_PC_FAVORITES'
+function loadFavorites() {
+  try { return new Set(JSON.parse(localStorage.getItem(userKey(LS_FAVORITES))) ?? []) } catch { return new Set() }
+}
+const favorites = ref(loadFavorites())
+
+function favoriteKey(sound) {
+  const scope = selectedReg.value?.pcTemplate || selectedDeviceName.value
+  const prog = sound.no ?? sound[bankConfig.value?.program_field ?? 'program'] ?? ''
+  return `${scope}::${selectedBank.value}::${prog}::${sound.name}`
+}
+function isFavorite(sound) {
+  return favorites.value.has(favoriteKey(sound))
+}
+function toggleFavorite(sound) {
+  const next = new Set(favorites.value)
+  const key = favoriteKey(sound)
+  next.has(key) ? next.delete(key) : next.add(key)
+  favorites.value = next
+  try { localStorage.setItem(userKey(LS_FAVORITES), JSON.stringify([...next])) } catch {}
+}
 
 // Category/search filters are scoped per (device, bank). Two devices can
 // legitimately share a bank *name* (e.g. both pointed at the same imported
@@ -553,10 +580,11 @@ const selectedCategory = ref('')
 // when returning to a device/bank that still has one saved.
 const filterMemory = {}
 watch([selectedDeviceName, selectedBank], ([dev, bank], [oldDev, oldBank]) => {
-  if (oldDev && oldBank) filterMemory[`${oldDev}::${oldBank}`] = { category: selectedCategory.value, search: searchQuery.value }
+  if (oldDev && oldBank) filterMemory[`${oldDev}::${oldBank}`] = { category: selectedCategory.value, search: searchQuery.value, favorites: showFavoritesOnly.value }
   const mem = dev && bank ? filterMemory[`${dev}::${bank}`] : null
   selectedCategory.value = mem?.category ?? ''
   searchQuery.value = mem?.search ?? ''
+  showFavoritesOnly.value = mem?.favorites ?? false
 })
 
 const categories = computed(() => {
@@ -574,6 +602,7 @@ const filteredSounds = computed(() => {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(s => s.name?.toLowerCase().includes(q))
   }
+  if (showFavoritesOnly.value) list = list.filter(isFavorite)
   return list
 })
 
@@ -759,7 +788,8 @@ function setChannel(ch) {
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannel', ch - 1)
 }
 
-// ── Preset list scroll (wheel + MIDI CC) ────────────────────────
+// ── Preset list navigation (MIDI CC) ────────────────────────────
+// Mouse wheel only scrolls the list natively; selection requires a click.
 const LS_SCROLL_CC    = 'SYCORE_PC_SCROLL_CC'
 const presetListEl    = ref(null)
 const presetButtonsEl = ref(null)
@@ -784,12 +814,6 @@ function navigatePresetList(delta) {
   })
 }
 
-function onPresetListWheel(e) {
-  e.preventDefault()
-  e.stopPropagation()
-  navigatePresetList(e.deltaY > 0 ? 1 : -1)
-}
-
 let _unsubScrollCC = null
 
 function startScrollCCListener() {
@@ -802,27 +826,25 @@ function startScrollCCListener() {
     if (type !== 0xB0) return
     const cc  = event.data[1]
     const val = event.data[2]
+    if (isLearningAnyButton.value) return
 
-    // Always use CC#38 (NRPN Data Entry LSB) — handles lists > 127 items
-    if (cc !== 38) return
+    const inputId = event.target?.id
+    const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
 
+    // Any CC can be learned; navigation is relative (value delta), so an
+    // endless encoder works on lists longer than 128 presets.
     if (isLearningScrollCC.value) {
-      const inputId = event.target?.id
-      const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
-      scrollCCMap.value = { cc: 38, channel, device }
+      scrollCCMap.value = { cc, channel, device }
       localStorage.setItem(userKey(LS_SCROLL_CC),JSON.stringify(scrollCCMap.value))
       isLearningScrollCC.value = false
       lastScrollCCVal.value = val
+      buttonLearns.forEach(b => { if (b.matchesMap({ type: 'cc', number: cc, channel, device })) b.clear() })
       return
     }
 
     const m = scrollCCMap.value
-    if (!m) return
-    if (m.device) {
-      const inputId = event.target?.id
-      const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
-      if (device !== m.device) return
-    }
+    if (!m || m.cc !== cc || (m.channel != null && m.channel !== channel)) return
+    if (m.device && device !== m.device) return
     if (lastScrollCCVal.value !== null) {
       const delta = val - lastScrollCCVal.value
       if (delta !== 0) navigatePresetList(delta > 0 ? 1 : -1)
@@ -832,6 +854,7 @@ function startScrollCCListener() {
 }
 
 function startScrollLearn() {
+  buttonLearns.forEach(b => { b.isLearning.value = false })
   isLearningScrollCC.value = true
   lastScrollCCVal.value = null
 }
@@ -844,6 +867,134 @@ function clearScrollCC() {
   scrollCCMap.value = null
   lastScrollCCVal.value = null
   localStorage.removeItem(userKey(LS_SCROLL_CC))
+}
+
+// ── Button MIDI Learn (CC button or note) ───────────────────────
+// Used for "toggle favorite on the active preset" and "favorites-only filter".
+// Notes fire on Note On. CC buttons come in two kinds, detected while learning:
+//   momentary — sends 127 on press, 0 on release → fire on value > 0 only
+//   toggle    — sends 127 / 0 on alternate presses → fire on every message
+// Learning waits BTN_DETECT_MS after the first CC: a value change in that
+// window means a release (momentary), otherwise it's a toggle button.
+// A CC already learned for preset list navigation is ignored here.
+// Repeats within BTN_REPEAT_MS are dropped: some controllers deliver the same
+// press twice (e.g. on two ports), which would toggle on and off at once.
+const BTN_DETECT_MS = 700
+const BTN_REPEAT_MS = 250
+
+function createButtonLearn(lsKey, onTrigger) {
+  const load = () => { try { return JSON.parse(localStorage.getItem(userKey(lsKey))) ?? null } catch { return null } }
+  const map        = ref(load()) // { type: 'cc'|'note', number, channel, device, mode?: 'momentary'|'toggle' } | null
+  const isLearning = ref(false)
+  let detect      = null // { map, value, timer } while detecting the CC button kind
+  let lastTrigger = 0
+
+  function save(m) {
+    map.value = m
+    try { localStorage.setItem(userKey(lsKey), JSON.stringify(m)) } catch {}
+  }
+  function clear() {
+    map.value = null
+    try { localStorage.removeItem(userKey(lsKey)) } catch {}
+  }
+  function stopDetect() { clearTimeout(detect?.timer); detect = null }
+  function startLearn() {
+    stopDetect()
+    isLearningScrollCC.value = false
+    buttonLearns.forEach(b => { b.isLearning.value = false })
+    isLearning.value = true
+  }
+  function cancelLearn() { isLearning.value = false }
+  function toggleMode() {
+    if (map.value?.type !== 'cc') return
+    save({ ...map.value, mode: map.value.mode === 'toggle' ? 'momentary' : 'toggle' })
+  }
+  const matches = (m, msg) => m && m.type === msg.kind && m.number === msg.number && m.channel === msg.channel && (!m.device || msg.device === m.device)
+
+  // Returns true when the message was consumed by this control.
+  function handle(msg) {
+    if (isLearning.value) {
+      isLearning.value = false
+      const m = { type: msg.kind, number: msg.number, channel: msg.channel, device: msg.device }
+      // One physical control drives one function only.
+      const sc = scrollCCMap.value
+      if (msg.kind === 'cc' && sc && sc.cc === msg.number && sc.channel === msg.channel && sc.device === msg.device) clearScrollCC()
+      buttonLearns.forEach(b => { if (b.handle !== handle && b.matchesMap(m)) b.clear() })
+      if (msg.kind === 'note') { save(m); return true }
+      save({ ...m, mode: 'toggle' })
+      detect = { map: m, value: msg.val, timer: setTimeout(() => { detect = null }, BTN_DETECT_MS) }
+      return true
+    }
+    if (detect && matches(detect.map, msg)) {
+      if (msg.val !== detect.value) {
+        stopDetect()
+        save({ ...map.value, mode: 'momentary' })
+      }
+      return true
+    }
+    if (!matches(map.value, msg)) return false
+    if (msg.kind === 'cc' && map.value.mode !== 'toggle' && msg.val === 0) return true
+    const now = performance.now()
+    if (now - lastTrigger < BTN_REPEAT_MS) return true
+    lastTrigger = now
+    onTrigger()
+    return true
+  }
+  function matchesMap(m) {
+    const cur = map.value
+    return !!cur && cur.type === m.type && cur.number === m.number && cur.channel === m.channel && cur.device === m.device
+  }
+
+  return { map, isLearning, startLearn, cancelLearn, clear, toggleMode, handle, matchesMap, stopDetect }
+}
+
+function toggleActiveFavorite() {
+  const sound = activeSound.value
+  if (!sound) {
+    showPcNotification(selectedDeviceName.value, 'No active preset', 'Favorite')
+    return
+  }
+  toggleFavorite(sound)
+  showPcNotification(selectedDeviceName.value, sound.name, isFavorite(sound) ? '★ Added to favorites' : 'Removed from favorites')
+}
+
+function toggleFavoritesFilter() {
+  showFavoritesOnly.value = !showFavoritesOnly.value
+  showPcNotification(selectedDeviceName.value, showFavoritesOnly.value ? 'Favorites only' : 'All presets', 'Preset list')
+}
+
+const favToggleLearn = createButtonLearn('SYCORE_PC_FAVORITE_MIDI', toggleActiveFavorite)
+const favFilterLearn = createButtonLearn('SYCORE_PC_FAVORITE_FILTER_MIDI', toggleFavoritesFilter)
+const buttonLearns   = [favToggleLearn, favFilterLearn]
+const isLearningAnyButton = computed(() => buttonLearns.some(b => b.isLearning.value))
+
+let _unsubButtonMidi = null
+
+function startButtonMidiListener() {
+  _unsubButtonMidi?.()
+  _unsubButtonMidi = midiService.addRawListener((event) => {
+    if (!event.data || event.data.length < 3) return
+    const type = event.data[0] & 0xF0
+    const val  = event.data[2]
+    let kind = null
+    if (type === 0xB0) kind = 'cc'
+    else if (type === 0x90 && val > 0) kind = 'note'
+    if (!kind || isLearningScrollCC.value) return
+
+    const inputId = event.target?.id
+    const msg = {
+      kind, val,
+      channel: event.data[0] & 0x0F,
+      number:  event.data[1],
+      device:  midiService.getInputs().find(i => i.id === inputId)?.name ?? null,
+    }
+    const sc = scrollCCMap.value
+    if (kind === 'cc' && !isLearningAnyButton.value && sc && sc.cc === msg.number && (sc.channel == null || sc.channel === msg.channel) && (!sc.device || sc.device === msg.device)) return
+
+    const learning = buttonLearns.find(b => b.isLearning.value)
+    if (learning) { learning.handle(msg); return }
+    for (const b of buttonLearns) if (b.handle(msg)) return
+  })
 }
 
 let _pcNavHandler   = null
@@ -921,6 +1072,7 @@ function _startDevMidiListener() {
 
 onMounted(() => {
   startScrollCCListener()
+  startButtonMidiListener()
   _startDevMidiListener()
   _pcNavHandler = e => navigatePresetList(e.detail?.delta ?? 1)
   window.addEventListener('device-pc-preset-navigate', _pcNavHandler)
@@ -940,6 +1092,8 @@ onMounted(() => {
 })
 onUnmounted(() => {
   _unsubScrollCC?.()
+  _unsubButtonMidi?.()
+  buttonLearns.forEach(b => b.stopDetect())
   _unsubDevMidi?.()
   if (_pcNavHandler) window.removeEventListener('device-pc-preset-navigate', _pcNavHandler)
   _unsubDevicePcOpen?.()
@@ -2054,6 +2208,30 @@ function assignToPad(setId, padIdx) {
                         <X class="w-3 h-3" />
                       </button>
                     </div>
+                    <button
+                      @click="showFavoritesOnly = !showFavoritesOnly"
+                      :title="showFavoritesOnly ? 'Show all presets' : 'Show favorites only'"
+                      :class="[
+                        'p-1.5 rounded-xl border transition-all',
+                        showFavoritesOnly
+                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                          : 'bg-black/50 border-neutral-800 text-neutral-600 hover:text-amber-400 hover:border-amber-500/30'
+                      ]"
+                    >
+                      <Star class="w-3 h-3" :fill="showFavoritesOnly ? 'currentColor' : 'none'" />
+                    </button>
+                    <MidiButtonLearn
+                      compact
+                      :map="favFilterLearn.map.value"
+                      :learning="favFilterLearn.isLearning.value"
+                      :icon="Star"
+                      learn-hint="MIDI Learn: press a controller button (CC) or pad/key (note) to switch favorites-only on/off"
+                      mapped-hint="Switches favorites-only on/off"
+                      @learn="favFilterLearn.startLearn()"
+                      @cancel="favFilterLearn.cancelLearn()"
+                      @clear="favFilterLearn.clear()"
+                      @toggle-mode="favFilterLearn.toggleMode()"
+                    />
                     <div class="relative">
                       <select
                         v-model="selectedCategory"
@@ -2068,7 +2246,7 @@ function assignToPad(setId, padIdx) {
                 </template>
 
                 <!-- ── 6. Scrollable preset list ── -->
-                <div ref="presetListEl" class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4" @wheel="onPresetListWheel">
+                <div ref="presetListEl" class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
 
                   <!-- Catalog: loading -->
                   <div v-if="selectedBank && isLoading" class="flex items-center justify-center py-12 gap-2">
@@ -2081,7 +2259,6 @@ function assignToPad(setId, padIdx) {
                     <div class="flex items-center justify-between mb-2 px-1">
                       <div class="flex items-center gap-2">
                         <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{{ filteredSounds.length }} presets</span>
-                        <span class="text-[7px] font-mono text-neutral-700 uppercase tracking-widest">· scroll or NRPN/CC38</span>
                       </div>
                       <div class="flex items-center gap-1.5">
                         <span v-if="lastSent" class="flex items-center gap-1 text-[8px] font-mono text-violet-400 uppercase tracking-widest">
@@ -2090,7 +2267,7 @@ function assignToPad(setId, padIdx) {
                         <!-- MIDI Learn: learning state -->
                         <template v-if="isLearningScrollCC">
                           <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-400 text-[8px] font-black uppercase tracking-widest animate-pulse">
-                            <Radio class="w-2.5 h-2.5" />Move CC#38…
+                            <Radio class="w-2.5 h-2.5" />Move a knob…
                           </div>
                           <button @click="cancelScrollLearn" class="p-1 text-neutral-600 hover:text-neutral-400 transition-colors rounded">
                             <X class="w-3 h-3" />
@@ -2099,7 +2276,7 @@ function assignToPad(setId, padIdx) {
                         <!-- MIDI Learn: mapped state -->
                         <template v-else-if="scrollCCMap">
                           <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 text-[8px] font-black font-mono uppercase tracking-widest">
-                            <Radio class="w-2.5 h-2.5" />NRPN/CC38 CH{{ scrollCCMap.channel + 1 }}{{ scrollCCMap.device ? ' · ' + scrollCCMap.device : '' }}
+                            <Radio class="w-2.5 h-2.5" />CC{{ scrollCCMap.cc }} CH{{ scrollCCMap.channel + 1 }}{{ scrollCCMap.device ? ' · ' + scrollCCMap.device : '' }}
                           </div>
                           <button @click="clearScrollCC" title="Remove CC mapping" class="p-1 text-neutral-600 hover:text-red-400 transition-colors rounded">
                             <X class="w-3 h-3" />
@@ -2109,11 +2286,23 @@ function assignToPad(setId, padIdx) {
                         <button
                           v-else
                           @click="startScrollLearn"
-                          title="MIDI Learn: move a NRPN/CC#38 knob to bind device + channel"
+                          title="MIDI Learn: move a knob or encoder (any CC) to navigate the preset list"
                           class="flex items-center gap-1 px-2 py-1 rounded-lg bg-black/40 border border-neutral-800 text-neutral-600 hover:text-orange-400 hover:border-orange-500/30 hover:bg-orange-500/10 transition-all text-[8px] font-black uppercase tracking-widest"
                         >
                           <Radio class="w-2.5 h-2.5" />MIDI
                         </button>
+                        <!-- Favorite toggle MIDI Learn -->
+                        <MidiButtonLearn
+                          :map="favToggleLearn.map.value"
+                          :learning="favToggleLearn.isLearning.value"
+                          :icon="Star"
+                          learn-hint="MIDI Learn: press a controller button (CC) or pad/key (note) to toggle favorite on the active preset"
+                          mapped-hint="Toggles favorite on the active preset"
+                          @learn="favToggleLearn.startLearn()"
+                          @cancel="favToggleLearn.cancelLearn()"
+                          @clear="favToggleLearn.clear()"
+                          @toggle-mode="favToggleLearn.toggleMode()"
+                        />
                       </div>
                     </div>
                     <div ref="presetButtonsEl" class="space-y-0.5">
@@ -2148,6 +2337,16 @@ function assignToPad(setId, padIdx) {
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0 ml-2">
                           <span
+                            @click.stop="toggleFavorite(sound)"
+                            :title="isFavorite(sound) ? 'Remove from favorites' : 'Add to favorites'"
+                            :class="[
+                              'p-0.5 rounded transition-colors cursor-pointer',
+                              isFavorite(sound) ? 'text-amber-400' : 'text-neutral-700 opacity-0 group-hover:opacity-100 hover:text-amber-400'
+                            ]"
+                          >
+                            <Star class="w-2.5 h-2.5" :fill="isFavorite(sound) ? 'currentColor' : 'none'" />
+                          </span>
+                          <span
                             v-if="sound[bankConfig?.category_field ?? 'category']"
                             class="text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-neutral-800/50"
                           >
@@ -2162,7 +2361,7 @@ function assignToPad(setId, padIdx) {
                   <!-- Catalog: empty results -->
                   <div v-else-if="selectedBank && !isLoading" class="flex flex-col items-center justify-center py-12 gap-2">
                     <Music2 class="w-6 h-6 text-neutral-700" />
-                    <span class="text-[10px] font-mono text-neutral-600">No presets found</span>
+                    <span class="text-[10px] font-mono text-neutral-600">{{ showFavoritesOnly ? 'No favorite presets' : 'No presets found' }}</span>
                   </div>
 
                   <!-- Manual fallback (no catalog match, nothing selected) -->

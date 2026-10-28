@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   Play, Upload, Music, X, Minus,
   Plus, Trash2, Edit2, ListPlus,
-  Save, GripVertical, Link, FolderOpen,
+  Save, GripVertical, Link, FolderOpen, Star, LayoutGrid,
 } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -19,6 +19,10 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { detectBpmFromUrl } from '@/composables/useBpmDetector'
+import { useFreesoundCache } from '@/composables/useFreesoundCache'
+import { userKey } from '@/lib/userKey'
+import { trackFormat, formatFromName } from '@/lib/audio-format'
+import { CONVERT_OPTIONS, convertAudioFile, convertTargetFormat } from '@/lib/audio-convert'
 
 const uiStore = useUiStore()
 const midiStore = useMidiStore()
@@ -62,6 +66,51 @@ const editingTrackId  = ref(null)
 const editingTrackIsBase64 = ref(false)
 const deletingTrackId = ref(null)
 const tracks          = ref([])
+// Library column sort — click cycles asc → desc → off (default: newest first)
+const sortKey         = ref(null)
+const sortDir         = ref('asc')
+const SORT_NUMERIC    = new Set(['bpm', 'duration', 'rating'])
+const sortValue = (track, key) => {
+  if (key === 'format') return trackFormat(track)
+  if (key === 'rating') return track.rating || 0
+  return track[key]
+}
+const sortedTracks = computed(() => {
+  const key = sortKey.value
+  if (!key) return tracks.value
+  const dir = sortDir.value === 'asc' ? 1 : -1
+  const isEmpty = v => v == null || v === ''
+  return [...tracks.value].sort((a, b) => {
+    const va = sortValue(a, key), vb = sortValue(b, key)
+    // Empty values always go last, regardless of direction
+    if (isEmpty(va) || isEmpty(vb)) return isEmpty(va) - isEmpty(vb)
+    if (SORT_NUMERIC.has(key)) return (Number(va) - Number(vb)) * dir
+    return String(va).localeCompare(String(vb), undefined, { sensitivity: 'base', numeric: true }) * dir
+  })
+})
+// Star rating 0–5 — clicking the current rating clears it back to 0
+async function setTrackRating(track, stars) {
+  if (!uid.value) return
+  const rating = (track.rating || 0) === stars ? 0 : stars
+  try {
+    await updateDoc(doc(db, 'users', uid.value, 'backing_tracks', track.id), { rating: rating || deleteField() })
+  } catch (err) { console.error('Failed to set track rating:', err) }
+}
+function toggleSort(key) {
+  if (sortKey.value !== key) { sortKey.value = key; sortDir.value = 'asc' }
+  else if (sortDir.value === 'asc') sortDir.value = 'desc'
+  else sortKey.value = null
+}
+const libraryColumns = [
+  { key: 'label',    label: 'Label',  cls: 'text-left' },
+  { key: 'bpm',      label: 'BPM',    cls: 'text-center w-16' },
+  { key: 'key',      label: 'Key',    cls: 'text-center w-16' },
+  { key: 'duration', label: 'Time',   cls: 'text-center w-16' },
+  { key: 'format',   label: 'Format', cls: 'text-center w-16' },
+  { key: 'rating',   label: 'Rating', cls: 'text-center w-20' },
+  { key: 'genre',    label: 'Genre',  cls: 'text-left' },
+  { key: 'author',   label: 'Author', cls: 'text-left' },
+]
 const detectedBpm     = ref(null)
 const newTrackBpm     = ref('')
 const newTrackKey     = ref('')
@@ -433,6 +482,8 @@ async function saveLocalFileToLibrary() {
           createdAt: serverTimestamp(),
           duration: isFinite(duration) ? duration : 0
         }
+        const format = formatFromName(file.name)
+        if (format) data.format = format
         await addDoc(collection(db, 'users', uid.value, 'backing_tracks'), data)
         inputType.value = 'list'
         pendingLocalFile.value = null
@@ -503,6 +554,74 @@ function seekToPos(pos) {
 function addToPlaylist(track) {
   playlist.value = [...playlist.value, track]
   playlistRepeats.value = [...playlistRepeats.value, track.repeats || 1]
+}
+
+// ── Send library track to a LiveSet pad / Samples Machine Loop Pad ──────────
+const LIVESET_SLOTS = 16
+const LM_SLOTS      = 24
+const slotPicker    = ref(null) // { track, target: 'liveset' | 'loop', lmPads, busyIdx, error }
+const { cacheFileBlob } = useFreesoundCache()
+
+function readLoopPads() {
+  try {
+    const raw = localStorage.getItem(userKey('SYCORE_LOOP_MACHINE_PADS'))
+    const arr = raw ? JSON.parse(raw) : []
+    while (arr.length < LM_SLOTS) arr.push(null)
+    return arr.slice(0, LM_SLOTS)
+  } catch { return Array(LM_SLOTS).fill(null) }
+}
+
+function openSlotPicker(track) {
+  slotPicker.value = { track, target: slotPicker.value?.target || 'liveset', lmPads: readLoopPads(), busyIdx: -1, error: '' }
+}
+
+// LiveSet pads mirror the playlist: a filled pad is replaced, the first empty pad appends
+function assignToLiveSet(idx) {
+  const track = slotPicker.value?.track
+  if (!track || idx > playlist.value.length) return
+  if (idx < playlist.value.length) {
+    const next = [...playlist.value]
+    next[idx] = track
+    playlist.value = next
+  } else {
+    addToPlaylist(track)
+  }
+  slotPicker.value = null
+}
+
+async function assignToLoopPad(idx) {
+  const picker = slotPicker.value
+  if (!picker || picker.busyIdx >= 0) return
+  const track = picker.track
+  picker.busyIdx = idx
+  picker.error = ''
+  try {
+    const id = `library_${track.id}`
+    let url = track.url
+    // Cache the audio in IndexedDB like other pad sources (keeps big data: URLs out of localStorage)
+    try {
+      const res = await fetch(track.url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      url = await cacheFileBlob(id, track.label, await res.blob(), { author: track.author || 'Library', duration: track.duration || 0 })
+    } catch (err) {
+      // e.g. CORS on a remote URL — the pad streams the original URL instead
+      if (track.url?.startsWith('data:')) throw err
+      console.warn('[TracksPlayer] Could not cache track for Loop Pad, using URL', err)
+    }
+    const padTrack = {
+      id, label: track.label, url,
+      author: track.author || 'Library',
+      duration: track.duration || 0,
+      ...(track.bpm ? { bpm: track.bpm } : {}),
+      ...(track.key ? { key: track.key } : {}),
+    }
+    window.dispatchEvent(new CustomEvent('loop-machine-assign', { detail: { padIdx: idx, track: padTrack } }))
+    slotPicker.value = null
+  } catch (err) {
+    console.error('[TracksPlayer] Failed to assign Loop Pad', err)
+    picker.error = `Failed to load audio: ${err?.message || err}`
+    picker.busyIdx = -1
+  }
 }
 
 function clearPlaylist() {
@@ -658,11 +777,16 @@ function restorePlaylistUrls() {
   if (!playlist.value.length || !tracks.value.length) return
   let modified = false
   const updated = playlist.value.map(track => {
-    if (!track.url && track.id) {
+    if (track.id && (!track.url || !track.key)) {
       const match = tracks.value.find(t => t.id === track.id)
-      if (match && match.url) {
+      if (!match) return track
+      const restored = { ...track }
+      if (!track.url && match.url) restored.url = match.url
+      // Playlist entries added before the Key field existed pick it up from the library
+      if (!track.key && match.key) restored.key = match.key
+      if (restored.url !== track.url || restored.key !== track.key) {
         modified = true
-        return { ...track, url: match.url }
+        return restored
       }
     }
     return track
@@ -721,25 +845,53 @@ const handleFreesoundAdd = (e) => {
 
 async function showLibraryConfirm(track, source) {
   pendingBrowser.value = source
+  confirmError.value = ''
   confirmDialog.value = { ...track }
 }
 
 const confirmingLib     = ref(false)
+const confirmStatus     = ref('')   // button label while saving ('Converting…' / 'Analyzing…')
+const confirmError      = ref('')
+// "Convert to" choice for file imports — remembered per browser
+const CONVERT_KEY = 'SYCORE_LIBRARY_CONVERT_TO'
+const convertTo = ref((() => {
+  try { const v = localStorage.getItem(CONVERT_KEY); return CONVERT_OPTIONS.some(o => o.value === v) ? v : 'none' } catch { return 'none' }
+})())
+watch(convertTo, v => { try { localStorage.setItem(CONVERT_KEY, v) } catch {} })
+const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onerror = reject
+  reader.onload = () => resolve(reader.result)
+  reader.readAsDataURL(blob)
+})
 
 async function confirmLibrarySave() {
   if (!confirmDialog.value || !uid.value) return
   confirmingLib.value = true
+  confirmError.value = ''
   const d = confirmDialog.value
   let trackUrl = d.url
   const file = pendingFolderFile.value
+  let format = formatFromName(file?.name)
   if (file && !trackUrl) {
-    trackUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onerror = reject
-      reader.onload = () => resolve(reader.result)
-      reader.readAsDataURL(file)
-    })
+    let blob = file
+    const target = convertTargetFormat(convertTo.value)
+    if (target && target !== format) {
+      confirmStatus.value = 'Converting…'
+      try {
+        blob = await convertAudioFile(file, convertTo.value)
+        format = target
+      } catch (err) {
+        console.error('[TracksPlayer] Conversion failed', err)
+        confirmError.value = `Conversion to ${target.toUpperCase()} failed: ${err?.message || err}`
+        confirmStatus.value = ''
+        confirmingLib.value = false
+        return
+      }
+    }
+    trackUrl = await blobToDataUrl(blob)
   }
+  confirmStatus.value = 'Analyzing…'
   const data = {
     label: d.label || 'Untitled',
     url: trackUrl,
@@ -749,6 +901,7 @@ async function confirmLibrarySave() {
   }
   if (d.bpm) data.bpm = Math.round(d.bpm)
   if (d.key) data.key = d.key
+  if (format) data.format = format
   if (!data.bpm && trackUrl && (trackUrl.startsWith('http') || trackUrl.startsWith('blob'))) {
     try {
       const bpm = await Promise.race([
@@ -781,10 +934,13 @@ async function confirmLibrarySave() {
   pendingBrowser.value = null
   pendingFolderFile.value = null
   confirmingLib.value = false
+  confirmStatus.value = ''
   inputType.value = 'list'
 }
 
 function cancelLibraryConfirm() {
+  if (confirmingLib.value) return
+  confirmError.value = ''
   confirmDialog.value = null
   pendingBrowser.value = null
   pendingFolderFile.value = null
@@ -1126,20 +1282,21 @@ onUnmounted(() => {
                 <table class="w-full border-collapse">
                   <thead>
                     <tr class="text-[9px] uppercase tracking-widest text-neutral-500 bg-neutral-900 sticky top-0">
-                      <th class="text-left px-2 py-1.5 border-b border-neutral-800">Label</th>
-                      <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">BPM</th>
-                      <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">Key</th>
-                      <th class="px-2 py-1.5 border-b border-neutral-800 text-center w-16">Time</th>
-                      <th class="text-left px-2 py-1.5 border-b border-neutral-800">Genre</th>
-                      <th class="text-left px-2 py-1.5 border-b border-neutral-800">Author</th>
+                      <th
+                        v-for="col in libraryColumns"
+                        :key="col.key"
+                        @click="toggleSort(col.key)"
+                        :title="`Sort by ${col.label}`"
+                        :class="['px-2 py-1.5 border-b border-neutral-800 cursor-pointer select-none hover:text-neutral-300 transition-colors', col.cls, sortKey === col.key ? 'text-synth-neon' : '']"
+                      >{{ col.label }}<span v-if="sortKey === col.key" class="ml-0.5">{{ sortDir === 'asc' ? '▲' : '▼' }}</span></th>
                       <th class="px-2 py-1.5 border-b border-neutral-800 w-24"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <template v-for="track in tracks" :key="track.id">
+                    <template v-for="track in sortedTracks" :key="track.id">
                       <!-- Edit form for this track -->
                       <tr v-if="editingTrackId === track.id">
-                        <td colspan="7" class="p-0" @click.stop>
+                        <td colspan="9" class="p-0" @click.stop>
                           <div class="m-1">
                             <form @submit="saveEditTrack" class="flex flex-col gap-2 bg-neutral-900 p-3 rounded-lg border border-neutral-800">
                               <div class="relative">
@@ -1181,11 +1338,29 @@ onUnmounted(() => {
                           <span v-if="track.duration" class="text-[9px] font-mono text-neutral-400 bg-neutral-800 px-1 rounded">{{ formatTime(track.duration) }}</span>
                           <span v-else class="text-[9px] text-neutral-600">—</span>
                         </td>
+                        <td class="px-2 py-1.5 text-center">
+                          <span v-if="trackFormat(track)" class="text-[9px] font-mono uppercase text-sky-400 bg-sky-400/10 px-1 rounded">{{ trackFormat(track) }}</span>
+                          <span v-else class="text-[9px] text-neutral-600">—</span>
+                        </td>
+                        <td class="px-2 py-1.5 text-center whitespace-nowrap" @click.stop>
+                          <button
+                            v-for="n in 5"
+                            :key="n"
+                            @click="setTrackRating(track, n)"
+                            :title="(track.rating || 0) === n ? 'Clear rating' : `Rate ${n}/5`"
+                            class="inline-flex p-px text-neutral-600 hover:text-amber-300 transition-colors"
+                          >
+                            <Star :class="['w-3 h-3', n <= (track.rating || 0) ? 'text-amber-400 fill-amber-400' : '']" />
+                          </button>
+                        </td>
                         <td class="px-2 py-1.5 text-[10px] text-neutral-500 uppercase tracking-wider">{{ track.genre }}</td>
                         <td class="px-2 py-1.5 text-[10px] text-neutral-400 normal-case italic font-medium">{{ track.author || '—' }}</td>
                         <td class="px-2 py-1.5 text-center whitespace-nowrap">
                           <button @click.stop="addToPlaylist(track)" title="Add to playlist" class="inline-flex items-center p-1 text-neutral-500 hover:text-synth-neon transition-colors">
                             <ListPlus class="w-3.5 h-3.5" />
+                          </button>
+                          <button @click.stop="openSlotPicker(track)" title="Send to LiveSet pad / Loop Pad" class="inline-flex items-center p-1 text-neutral-500 hover:text-violet-300 transition-colors">
+                            <LayoutGrid class="w-3.5 h-3.5" />
                           </button>
                           <template v-if="isAdmin">
                             <template v-if="deletingTrackId === track.id">
@@ -1271,6 +1446,69 @@ onUnmounted(() => {
     </Transition>
   </Teleport>
 
+  <!-- ── Send to LiveSet / Loop Pad slot ── -->
+  <Teleport to="body">
+    <div
+      v-if="slotPicker"
+      class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      @click.self="slotPicker.busyIdx < 0 && (slotPicker = null)"
+    >
+      <div class="bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 bg-neutral-800 border-b border-neutral-700">
+          <span class="text-[10px] font-black uppercase tracking-widest text-white truncate">Send “{{ slotPicker.track.label }}” to slot</span>
+          <button @click="slotPicker.busyIdx < 0 && (slotPicker = null)" class="text-neutral-500 hover:text-white">
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div class="flex gap-1 px-4 pt-3">
+          <button
+            v-for="t in [{ id: 'liveset', label: 'LiveSet' }, { id: 'loop', label: 'Loop Pads' }]"
+            :key="t.id"
+            @click="slotPicker.target = t.id"
+            :class="['px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded transition-colors',
+              slotPicker.target === t.id ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40' : 'text-neutral-500 border border-neutral-800 hover:text-neutral-300']"
+          >{{ t.label }}</button>
+        </div>
+        <div class="p-4">
+          <!-- LiveSet: 16 playlist pads -->
+          <div v-if="slotPicker.target === 'liveset'" class="grid grid-cols-4 gap-2">
+            <button
+              v-for="i in LIVESET_SLOTS"
+              :key="i"
+              @click="assignToLiveSet(i - 1)"
+              :disabled="i - 1 > playlist.length"
+              :title="i - 1 < playlist.length ? `Replace “${playlist[i - 1].label}”` : i - 1 === playlist.length ? 'Add to this pad' : 'Fill the previous pads first'"
+              :class="['h-14 rounded-lg border p-1.5 flex flex-col items-start justify-between text-left transition-colors',
+                i - 1 < playlist.length ? 'border-neutral-700 bg-neutral-800/60 hover:border-violet-400'
+                : i - 1 === playlist.length ? 'border-dashed border-violet-500/50 hover:bg-violet-500/10'
+                : 'border-neutral-800 opacity-30 cursor-not-allowed']"
+            >
+              <span class="text-[8px] font-mono text-neutral-500">{{ i }}</span>
+              <span class="text-[10px] font-bold text-neutral-200 truncate w-full">{{ playlist[i - 1]?.label || (i - 1 === playlist.length ? '+ Empty' : '') }}</span>
+            </button>
+          </div>
+          <!-- Samples Machine: 24 Loop Pads -->
+          <div v-else class="grid grid-cols-6 gap-2">
+            <button
+              v-for="(pad, idx) in slotPicker.lmPads"
+              :key="idx"
+              @click="assignToLoopPad(idx)"
+              :disabled="slotPicker.busyIdx >= 0"
+              :title="pad ? `Replace “${pad.label}”` : 'Assign to this pad'"
+              :class="['h-14 rounded-lg border p-1.5 flex flex-col items-start justify-between text-left transition-colors disabled:cursor-wait',
+                pad ? 'border-neutral-700 bg-neutral-800/60 hover:border-violet-400' : 'border-dashed border-neutral-700 hover:bg-violet-500/10',
+                slotPicker.busyIdx === idx ? 'border-violet-400 animate-pulse' : '']"
+            >
+              <span class="text-[8px] font-mono text-neutral-500">{{ idx + 1 }}</span>
+              <span class="text-[10px] font-bold text-neutral-200 truncate w-full">{{ slotPicker.busyIdx === idx ? 'Loading…' : (pad?.label || '+ Empty') }}</span>
+            </button>
+          </div>
+          <p v-if="slotPicker.error" class="text-[10px] text-red-400 mt-2">{{ slotPicker.error }}</p>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
   <!-- ── Library Save Confirmation ── -->
   <Teleport to="body">
     <div
@@ -1317,6 +1555,15 @@ onUnmounted(() => {
               />
             </div>
           </div>
+          <div v-if="pendingFolderFile">
+            <label class="text-[8px] uppercase tracking-widest text-neutral-500 font-bold">Convert to <span class="text-neutral-600">(source: {{ (formatFromName(pendingFolderFile.name) || '?').toUpperCase() }})</span></label>
+            <select v-model="convertTo" :disabled="confirmingLib"
+              class="w-full bg-black border border-neutral-700 rounded px-2 py-1.5 text-xs text-white focus:border-synth-neon outline-none mt-1"
+            >
+              <option v-for="opt in CONVERT_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+          <p v-if="confirmError" class="text-[10px] text-red-400">{{ confirmError }}</p>
         </div>
         <div class="flex gap-2 px-4 py-3 bg-neutral-800/50 border-t border-neutral-700">
           <button @click="cancelLibraryConfirm"
@@ -1324,7 +1571,7 @@ onUnmounted(() => {
           >Cancel</button>
           <button @click="confirmLibrarySave" :disabled="confirmingLib"
             class="flex-1 py-2 text-[9px] font-black uppercase tracking-wider bg-synth-neon rounded text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-wait transition-colors"
-          >{{ confirmingLib ? 'Analyzing…' : 'Save to Library' }}</button>
+          >{{ confirmingLib ? (confirmStatus || 'Analyzing…') : 'Save to Library' }}</button>
         </div>
       </div>
     </div>
