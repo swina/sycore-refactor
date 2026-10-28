@@ -503,8 +503,15 @@ export const useMidiStore = defineStore('midi', () => {
 
     midiService.addStateChangeListener(() => refreshDevices())
 
+    // Fires on every incoming clock tick (24 PPQN, ~100/s at 240 BPM): a store write per
+    // tick queued work ahead of note messages. It's display-only — 4 updates/s is plenty.
+    let lastIncomingBpmAt = 0
     midiService.addClockBpmListener((bpm: number) => {
-      incomingBpm.value = Math.round(bpm * 10) / 10
+      const now = performance.now()
+      if (now - lastIncomingBpmAt < 250) return
+      lastIncomingBpmAt = now
+      const rounded = Math.round(bpm * 10) / 10
+      if (rounded !== incomingBpm.value) incomingBpm.value = rounded
     })
 
     midiService.addNoteListener((type, note, velocity, chan) => {

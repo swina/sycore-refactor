@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
+import { debounce } from '@/lib/debounce'
 import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
 import { IMPORTED_PATTERNS, patternToDrumSteps } from '@/data/imported-patterns'
 import { DEFAULT_ADSR } from '@/core/audio/envelope'
@@ -911,9 +912,9 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     return out
   }
 
-  function _save() {
+  function _save(key: string = userKey(LS_KEY)) {
     try {
-      localStorage.setItem(userKey(LS_KEY), JSON.stringify({
+      localStorage.setItem(key, JSON.stringify({
         sequences: _serializeSequences(),
         activeSequence: activeSequence.value,
         basslineEnabled: basslineEnabled.value,
@@ -924,10 +925,17 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     } catch {}
   }
 
-  watch(sequences, _save, { deep: true })
-  watch(activeSequence, _save)
-  watch(basslineSequences, _save, { deep: true })
-  watch([basslineEnabled, basslineSourceSlots, basslineActive], _save, { deep: true })
+  // Watcher-driven saves are debounced: serializing every sequence to localStorage is
+  // synchronous, and bursts of edits (loadAllSamples writing 11 track.soundUrl one per
+  // IndexedDB reply on a sequence switch, knob sweeps) blocked the main thread ~100 ms
+  // each, during playback. The key is captured when scheduled, so a pending save
+  // flushed on an account switch still lands under the previous user.
+  const _saveSoon = debounce(_save, 300)
+  const _scheduleSave = () => _saveSoon(userKey(LS_KEY))
+  watch(sequences, _scheduleSave, { deep: true })
+  watch(activeSequence, _scheduleSave)
+  watch(basslineSequences, _scheduleSave, { deep: true })
+  watch([basslineEnabled, basslineSourceSlots, basslineActive], _scheduleSave, { deep: true })
 
   function setStep(trackIdx: number, stepIdx: number, patch: Partial<DrumStep>) {
     const step = sequences.value[activeSequence.value]?.[trackIdx]?.steps[stepIdx]
@@ -1321,6 +1329,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
 
   // ── Auth watcher ─────────────────────────────────────────────────────────
   watch(uid, (newUid) => {
+    _saveSoon.flush()
     if (!newUid) {
       sequences.value = makeDefaultSequences()
       activeSequence.value = 'A'

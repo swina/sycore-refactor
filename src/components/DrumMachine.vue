@@ -200,7 +200,13 @@ const recSyncMultiplier = ref(1)
 
 // ── Sync BPM from arpStore (global BPM) ───────────────────────────────────────
 watch(() => arpStore.arpBpm, v => { drumStore.bpm = v }, { immediate: true })
-watch(() => drumStore.bpm, v => drumEngine.setDelayTime(v))
+watch(() => drumStore.bpm, v => {
+  drumEngine.setDelayTime(v)
+  // The '16n' grid runs on the Transport, while swing/ratchet/gate use
+  // state.bpm: retune the Transport too, or a tempo change while playing
+  // leaves the grid on the old BPM and those offsets drift off-beat.
+  if (drumStore.isPlaying) getTransport().bpm.value = v
+})
 
 // ── FX strip visibility per track ─────────────────────────────────────────────
 const showFx = ref(Array(drumStore.TRACK_LABELS.length).fill(false))
@@ -481,7 +487,9 @@ function _scheduleCallback(time) {
     }
   })
 
-  getDraw().schedule(() => { drumStore.currentStep = globalStep }, time)
+  // Not written to drumStore.currentStep: a store mutation per 16th costs (watchers,
+  // Pinia devtools) and nothing reads the step any more — see paintPlayhead().
+  getDraw().schedule(() => paintPlayhead(globalStep), time)
   stepCounter++ // no wrap — each track uses its own modulo
 
   // ── Bassline voices ──
@@ -519,6 +527,7 @@ watch(() => drumStore.isPlaying, (playing) => {
     stepCounter = 0
     _tieCountdown = Array(11).fill(0)
     drumStore.currentStep = -1
+    paintPlayhead(-1)
     chainSlotRef.value = -1
     _pendingStop = false
     pendingStop.value = false
@@ -1270,16 +1279,30 @@ function velOpacity(velocity) {
   return ''
 }
 
-function stepClass(step, stepIdx, isCurrentStep, trackLength) {
+function stepClass(step, stepIdx, trackLength) {
   if (stepIdx >= trackLength) {
     return 'bg-neutral-900/60 border-neutral-800/40 opacity-30 cursor-not-allowed'
   }
-  const isCurrent = isCurrentStep && drumStore.isPlaying
-  const baseRing = isCurrent ? 'ring-2 ring-white/70' : ''
-  if (!step.active) return `bg-zinc-800 border-zinc-700 hover:bg-zinc-700 ${baseRing}`
+  if (!step.active) return 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700'
   const op = velOpacity(step.velocity)
-  if (step.accent)  return `bg-yellow-400 border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.7)] ${op} ${baseRing}`
-  return `bg-purple-600 border-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.5)] ${op} ${baseRing}`
+  if (step.accent)  return `bg-yellow-400 border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.7)] ${op}`
+  return `bg-purple-600 border-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.5)] ${op}`
+}
+
+// ── Playhead ──────────────────────────────────────────────────────────────────
+// Painted outside Vue's reactivity: reading drumStore.currentStep in the template
+// re-rendered this whole (always-mounted) component on every 16th — ~100 ms of
+// patch + layout per step, which blocked the main thread and delayed MIDI input.
+// The root gets data-playhead=N and CSS highlights the cells with data-step=N.
+const rootEl = ref(null)
+const stepCounterEl = ref(null)
+function paintPlayhead(step) {
+  const el = rootEl.value
+  if (el) {
+    if (step >= 0) el.dataset.playhead = String(step)
+    else delete el.dataset.playhead
+  }
+  if (stepCounterEl.value) stepCounterEl.value.textContent = step >= 0 ? String(step + 1) : '--'
 }
 
 const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -1329,6 +1352,7 @@ function cycleChainSlot(i) {
 <template>
   <Teleport to="body">
     <div
+      ref="rootEl"
       v-show="uiStore.isDrumMachineOpen && !isMinimized"
       :style="panelStyle"
       class="fixed bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden select-none"
@@ -1858,11 +1882,10 @@ function cycleChainSlot(i) {
           <div v-for="g in 4" :key="g" class="flex-1 grid grid-cols-4 gap-1.5">
             <div
               v-for="l in 4" :key="l"
+              :data-step="(g-1)*4+(l-1)"
               :class="[
-                'text-center text-[8px] font-mono leading-none select-none',
-                drumStore.isPlaying && drumStore.currentStep === (g-1)*4+(l-1)
-                  ? 'text-white font-bold'
-                  : l === 1 ? 'text-neutral-400' : 'text-neutral-700'
+                'dm-ph-label text-center text-[8px] font-mono leading-none select-none',
+                l === 1 ? 'text-neutral-400' : 'text-neutral-700'
               ]"
             >{{ (g-1)*4+l }}</div>
           </div>
@@ -2026,9 +2049,10 @@ function cycleChainSlot(i) {
               <button
                 v-for="l in 4" :key="l"
                 :class="[
-                  'relative h-12 rounded-sm border text-[7px] font-bold transition-colors focus:outline-none',
-                  stepClass(track.steps[(g-1)*4+(l-1)], (g-1)*4+(l-1), drumStore.currentStep === (g-1)*4+(l-1), track.length),
+                  'dm-ph-cell relative h-12 rounded-sm border text-[7px] font-bold transition-colors focus:outline-none',
+                  stepClass(track.steps[(g-1)*4+(l-1)], (g-1)*4+(l-1), track.length),
                 ]"
+                :data-step="(g-1)*4+(l-1) < track.length ? (g-1)*4+(l-1) : undefined"
                 @click.stop="(g-1)*4+(l-1) < track.length && drumStore.toggleStep(trackIdx, (g-1)*4+(l-1))"
                 @contextmenu="(g-1)*4+(l-1) < track.length && openStepContext(trackIdx, (g-1)*4+(l-1), $event)"
               >
@@ -2379,15 +2403,13 @@ function cycleChainSlot(i) {
                   <button
                     v-for="l in 4" :key="l"
 :class="[
-                        'relative h-12 rounded-sm border text-[11px] font-mono transition-colors focus:outline-none',
+                        'dm-ph-cell relative h-12 rounded-sm border text-[11px] font-mono transition-colors focus:outline-none',
                         (g-1)*4+(l-1) < voice.length ? '' : 'bg-neutral-900/60 border-neutral-800/40 opacity-30 cursor-not-allowed',
                         (g-1)*4+(l-1) < voice.length && drumStore.currentBasslinePattern[vi]?.steps[(g-1)*4+(l-1)]?.active
                           ? 'bg-amber-600/40 border-amber-400 shadow-[0_0_6px_rgba(139,92,246,0.4)]'
                           : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700',
-                        drumStore.isPlaying && drumStore.currentStep === (g-1)*4+(l-1) && (g-1)*4+(l-1) < voice.length
-                          ? 'ring-2 ring-white/70'
-                          : ''
                       ]"
+                    :data-step="(g-1)*4+(l-1) < voice.length ? (g-1)*4+(l-1) : undefined"
                     @click.stop="(g-1)*4+(l-1) < voice.length && drumStore.toggleBasslineStep(vi, (g-1)*4+(l-1))"
                     @contextmenu="(g-1)*4+(l-1) < voice.length && openBasslineStepContext(vi, (g-1)*4+(l-1), $event)"
                     @wheel.prevent="(g-1)*4+(l-1) < voice.length && onBasslineStepWheel(vi, (g-1)*4+(l-1), $event)"
@@ -2808,7 +2830,7 @@ function cycleChainSlot(i) {
         <div class="w-px h-4 bg-neutral-800 shrink-0" />
 
         <span class="text-[9px] font-mono text-neutral-700 uppercase tracking-widest w-24 text-center">
-          {{ drumStore.activeSequence }} · {{ drumStore.currentStep >= 0 ? drumStore.currentStep + 1 : '--' }}/16
+          {{ drumStore.activeSequence }} · <span ref="stepCounterEl">--</span>/16
         </span>
       </div>
 
@@ -3206,4 +3228,44 @@ function cycleChainSlot(i) {
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to       { opacity: 0; }
+
+/* Playhead (see paintPlayhead): root data-playhead=N highlights cells with data-step=N */
+[data-playhead="0"] .dm-ph-cell[data-step="0"],
+[data-playhead="1"] .dm-ph-cell[data-step="1"],
+[data-playhead="2"] .dm-ph-cell[data-step="2"],
+[data-playhead="3"] .dm-ph-cell[data-step="3"],
+[data-playhead="4"] .dm-ph-cell[data-step="4"],
+[data-playhead="5"] .dm-ph-cell[data-step="5"],
+[data-playhead="6"] .dm-ph-cell[data-step="6"],
+[data-playhead="7"] .dm-ph-cell[data-step="7"],
+[data-playhead="8"] .dm-ph-cell[data-step="8"],
+[data-playhead="9"] .dm-ph-cell[data-step="9"],
+[data-playhead="10"] .dm-ph-cell[data-step="10"],
+[data-playhead="11"] .dm-ph-cell[data-step="11"],
+[data-playhead="12"] .dm-ph-cell[data-step="12"],
+[data-playhead="13"] .dm-ph-cell[data-step="13"],
+[data-playhead="14"] .dm-ph-cell[data-step="14"],
+[data-playhead="15"] .dm-ph-cell[data-step="15"] {
+  outline: 2px solid rgb(255 255 255 / 0.7);
+  outline-offset: -2px;
+}
+[data-playhead="0"] .dm-ph-label[data-step="0"],
+[data-playhead="1"] .dm-ph-label[data-step="1"],
+[data-playhead="2"] .dm-ph-label[data-step="2"],
+[data-playhead="3"] .dm-ph-label[data-step="3"],
+[data-playhead="4"] .dm-ph-label[data-step="4"],
+[data-playhead="5"] .dm-ph-label[data-step="5"],
+[data-playhead="6"] .dm-ph-label[data-step="6"],
+[data-playhead="7"] .dm-ph-label[data-step="7"],
+[data-playhead="8"] .dm-ph-label[data-step="8"],
+[data-playhead="9"] .dm-ph-label[data-step="9"],
+[data-playhead="10"] .dm-ph-label[data-step="10"],
+[data-playhead="11"] .dm-ph-label[data-step="11"],
+[data-playhead="12"] .dm-ph-label[data-step="12"],
+[data-playhead="13"] .dm-ph-label[data-step="13"],
+[data-playhead="14"] .dm-ph-label[data-step="14"],
+[data-playhead="15"] .dm-ph-label[data-step="15"] {
+  color: #fff;
+  font-weight: 700;
+}
 </style>
