@@ -581,9 +581,31 @@ const TEMPO_MULTIPLIERS = [
   { label: '3/1',   interval: '2m.',  beatsPerStep: 12 },
   { label: '4/1',   interval: '4m',   beatsPerStep: 16 },
 ]
-const tempoMultiplier = ref(TEMPO_MULTIPLIERS[2]) // default 1/1
+const tempoMultiplier = ref(TEMPO_MULTIPLIERS.find(o => o.label === '1/16')) // default 1/16
 const sequenceDirection = ref('up')
 const SEQ_DIRECTIONS = ['up', 'down', 'up-down', 'random']
+
+// The running step repeat's callback (it carries the playhead), so a Time change while playing
+// can reschedule it at the new interval — scheduleRepeat fixes its interval when created.
+let stepCallback = null
+
+// Time changed while playing: restart the repeat at the new interval from the next boundary of
+// the new grid, so the steps stay on the beat and the playhead keeps its position.
+watch(tempoMultiplier, (opt) => {
+  if (!stepCallback || repeatEventIdRef.value === null || !opt) return
+  const transport = getTransport()
+  const ticksPerStep = transport.toTicks(opt.interval)
+  const nextTick = Math.ceil((transport.ticks + 1) / ticksPerStep) * ticksPerStep
+  transport.clear(repeatEventIdRef.value)
+  repeatEventIdRef.value = transport.scheduleRepeat(stepCallback, opt.interval, `${nextTick}i`)
+})
+
+// MIDI Learn (useMidiCCListener.js: seq_time / seq_direction): a CC picks the value across the
+// list (a knob sweeps it), a note steps to the next one.
+function pickFromMidi(list, current, { value, fromNote }) {
+  if (fromNote) return list[(list.indexOf(current) + 1) % list.length]
+  return list[Math.round((value / 127) * (list.length - 1))]
+}
 
 watch(swingAmount, (val) => {
   getTransport().swing = val / 100
@@ -982,6 +1004,15 @@ onMounted(() => {
   }
   window.addEventListener('seq-bank-select', handleBankSelect)
 
+  const handleTimeSet = (e) => {
+    tempoMultiplier.value = pickFromMidi(TEMPO_MULTIPLIERS, tempoMultiplier.value, e.detail ?? {})
+  }
+  const handleDirectionSet = (e) => {
+    sequenceDirection.value = pickFromMidi(SEQ_DIRECTIONS, sequenceDirection.value, e.detail ?? {})
+  }
+  window.addEventListener('seq-time-set', handleTimeSet)
+  window.addEventListener('seq-direction-set', handleDirectionSet)
+
   const isMidiDeviceAllowed = (chan, inputId, note) => {
     if (!inputId) return true
 
@@ -1322,6 +1353,8 @@ onMounted(() => {
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('toggle-sequencer2', handleToggle2)
     window.removeEventListener('seq-bank-select', handleBankSelect)
+    window.removeEventListener('seq-time-set', handleTimeSet)
+    window.removeEventListener('seq-direction-set', handleDirectionSet)
     unsubNote?.()
     unsubAppNote?.()
     unsubCC?.()
@@ -1354,6 +1387,7 @@ watch(isPlaying, (playing) => {
       getTransport().clear(repeatEventIdRef.value)
       repeatEventIdRef.value = null
     }
+    stepCallback = null
 
     if (fadeOutIntervalRef.value !== null) {
       clearInterval(fadeOutIntervalRef.value)
@@ -1399,7 +1433,7 @@ watch(isPlaying, (playing) => {
       midiStore.setBpm(props.bpm)
       if (midiStore.syncSequencerTransport) midiStore.sendStart()
 
-      repeatEventIdRef.value = getTransport().scheduleRepeat((time) => {
+      stepCallback = (time) => {
         const state = playStateRef.current
         if (!state.isPlaying) return
         const len = state.steps.length
@@ -1470,7 +1504,8 @@ watch(isPlaying, (playing) => {
           playStateRef.current.currentStep = stepIdx
           followChainPlayback(stepIdx)
         }, time)
-      }, tempoMultiplier.value.interval, transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value ? transportManager.getNextBarPosition() : undefined)
+      }
+      repeatEventIdRef.value = getTransport().scheduleRepeat(stepCallback, tempoMultiplier.value.interval, transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value ? transportManager.getNextBarPosition() : undefined)
 
       transportManager.acquireTransport()
     })
@@ -1920,7 +1955,7 @@ let generateHidden = ref(false)
         </div>
 
         <!-- Tempo Multiplier -->
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1" @contextmenu.prevent="openMenu($event, { name: 'seq_time', label: 'Sequencer: Time' })">
             <span class="text-[12px] text-neutral-500 font-mono">Time</span>
             <select
               v-model="tempoMultiplier"
@@ -1937,7 +1972,7 @@ let generateHidden = ref(false)
 
           <!-- Direction -->
           <span class="text-[12px] text-neutral-500 font-mono">Direction</span>  
-          <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
+          <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5" @contextmenu.prevent="openMenu($event, { name: 'seq_direction', label: 'Sequencer: Direction' })">
             <button
               v-for="dir in SEQ_DIRECTIONS"
               :key="dir"

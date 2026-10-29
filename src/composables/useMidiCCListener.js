@@ -191,6 +191,11 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: shouldPlay } }))
     return
   }
+  if (fieldName === 'seq_time' || fieldName === 'seq_direction') {
+    const event = fieldName === 'seq_time' ? 'seq-time-set' : 'seq-direction-set'
+    window.dispatchEvent(new CustomEvent(event, { detail: { value: val, fromNote } }))
+    return
+  }
   if (fieldName.startsWith('seq_bank_')) {
     const idx = parseInt(fieldName.slice(9))
     if (!isNaN(idx) && (fromNote || val > 0)) window.dispatchEvent(new CustomEvent('seq-bank-select', { detail: { idx } }))
