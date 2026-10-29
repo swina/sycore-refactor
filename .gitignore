@@ -12,6 +12,7 @@ dist
 dist-ssr
 dist-site
 dist-website
+dist-demo
 .agent
 .agents
 .vercel

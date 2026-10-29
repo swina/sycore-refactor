@@ -7,6 +7,9 @@ import { useUiStore } from './stores/useUiStore'
 import { runStartupMigrations } from './lib/idb'
 import { dispatch } from '@/types/events'
 import { readStoredTheme, applyTheme } from '@/lib/theme'
+import { IS_DEMO, seedDemoRouting } from '@/lib/demo'
+import { useMidiStore } from './stores/useMidiStore'
+import { MidiSource } from '@/types/midi'
 import './assets/main.css'
 
 // Applied synchronously, before any Vue/Pinia work, so the correct theme is
@@ -58,6 +61,11 @@ function openStartupPanels() {
   uiStore.isMidiFlowOpen = true
   uiStore.isInstrumentCockpitOpen = true
   uiStore.isChordProgOpen = true
+  // demo build: Chord Progression → FM-1 Emulator (routing seeded on the first visit)
+  if (IS_DEMO) {
+    seedDemoRouting(useMidiStore(pinia), MidiSource.CHORD_PROG)
+    uiStore.isFm1EmulatorOpen = true
+  }
 }
 
 // Initialize critical stores asynchronously

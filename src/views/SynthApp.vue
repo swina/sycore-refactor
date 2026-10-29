@@ -90,6 +90,7 @@ import AiSettingsPanel    from '@/components/AiSettingsPanel.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 import OpenAppsDock from '@/components/ui/OpenAppsDock.vue'
+import { IS_DEMO } from '@/lib/demo'
 
 // Stores
 const midiStore = useMidiStore()
@@ -116,7 +117,7 @@ const { minimizedModals } = useMinimizedModals()
 // permission on first visit so they're added to the subscriber list; only
 // the superadmin can actually broadcast to it (see AdminPanel.vue / sendPush).
 onMounted(async () => {
-  if (authStore.user) {
+  if (authStore.user && !IS_DEMO) {
     await restoreSubscription()
     if (!isSubscribed.value) await subscribe()
   }

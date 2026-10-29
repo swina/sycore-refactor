@@ -6,6 +6,7 @@
  */
 
 import { db as idb, setDoc, getDoc, getDocs, doc, collection } from './idb';
+import { IS_DEMO, demoGuestUser } from './demo';
 
 // ---------------------------------------------------------------------------
 // Types (mirrors FirebaseUser shape)
@@ -56,6 +57,11 @@ function notify(user: LocalUser | null) {
       const u = JSON.parse(raw) as LocalUser;
       _currentUser = u;
       // Defer notification to next tick so listeners can be added first
+      setTimeout(() => notify(_currentUser), 0);
+    } else if (IS_DEMO) {
+      // demo build: no login — a guest session, kept like a real one
+      _currentUser = demoGuestUser();
+      localStorage.setItem(SESSION_KEY, JSON.stringify(_currentUser));
       setTimeout(() => notify(_currentUser), 0);
     } else {
       setTimeout(() => notify(null), 0);
