@@ -804,60 +804,16 @@ watch(mappedChannels, (chs) => {
   setChannel(chs[0] + 1)
 })
 
-// Step through the mapped channels (MIDI CC, see channelScroll below): clamped at both ends.
-function stepMappedChannel(dir) {
+// Next mapped channel, wrapping around (MIDI Learn button, see chNextLearn below). The toast
+// reads Device · CH n · Preset, like a preset change.
+function nextMappedChannel() {
   const chs = mappedChannels.value
   if (chs.length < 2) return
-  const i = Math.max(0, chs.indexOf(selectedReg.value?.pcChannel ?? 0))
-  const next = chs[Math.max(0, Math.min(chs.length - 1, i + dir))]
-  if (next === chs[i]) return
+  const i = chs.indexOf(selectedReg.value?.pcChannel ?? 0)
+  const next = chs[(i + 1) % chs.length]
   setChannel(next + 1)
-  const preset = selectedReg.value?.pcChannels?.[next]?.soundName ?? 'No preset'
-  showPcNotification(selectedDeviceName.value, `CH ${next + 1} · ${preset}`, 'Channel')
-}
-
-// ── Mapped-channel navigation (MIDI CC) ─────────────────────────
-// Like the preset-list CC below: any CC, read relatively (value delta), so an endless encoder or
-// a knob both step one channel per change.
-const LS_CH_SCROLL_CC = 'SYCORE_PC_CHANNEL_SCROLL_CC'
-const channelScroll = {
-  map: ref((() => { try { return JSON.parse(localStorage.getItem(userKey(LS_CH_SCROLL_CC))) ?? null } catch { return null } })()),
-  isLearning: ref(false),
-  last: null,
-  matches(cc, channel, device) {
-    const m = this.map.value
-    return !!m && m.cc === cc && m.channel === channel && (!m.device || m.device === device)
-  },
-  clear() {
-    this.map.value = null
-    this.last = null
-    try { localStorage.removeItem(userKey(LS_CH_SCROLL_CC)) } catch {}
-  },
-}
-
-function startChannelScrollLearn() {
-  isLearningScrollCC.value = false
-  buttonLearns.forEach(b => { b.isLearning.value = false })
-  channelScroll.isLearning.value = true
-}
-
-// Returns true when the CC belongs to channel navigation (learning or mapped).
-function handleChannelScrollCC(cc, channel, device, val) {
-  if (channelScroll.isLearning.value) {
-    channelScroll.isLearning.value = false
-    channelScroll.map.value = { cc, channel, device }
-    channelScroll.last = val
-    try { localStorage.setItem(userKey(LS_CH_SCROLL_CC), JSON.stringify(channelScroll.map.value)) } catch {}
-    // one physical control drives one function only
-    const sc = scrollCCMap.value
-    if (sc && sc.cc === cc && sc.channel === channel && sc.device === device) clearScrollCC()
-    buttonLearns.forEach(b => { if (b.matchesMap({ type: 'cc', number: cc, channel, device })) b.clear() })
-    return true
-  }
-  if (!channelScroll.matches(cc, channel, device)) return false
-  if (channelScroll.last !== null && val !== channelScroll.last) stepMappedChannel(val > channelScroll.last ? 1 : -1)
-  channelScroll.last = val
-  return true
+  const info = selectedReg.value?.pcChannels?.[next]
+  showPcNotification(selectedDeviceName.value, info?.soundName ?? 'No preset', info?.category ?? '', next)
 }
 
 // ── Preset list navigation (MIDI CC) ────────────────────────────
@@ -903,8 +859,6 @@ function startScrollCCListener() {
     const inputId = event.target?.id
     const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
 
-    if (handleChannelScrollCC(cc, channel, device, val)) return
-
     // Any CC can be learned; navigation is relative (value delta), so an
     // endless encoder works on lists longer than 128 presets.
     if (isLearningScrollCC.value) {
@@ -929,7 +883,6 @@ function startScrollCCListener() {
 
 function startScrollLearn() {
   buttonLearns.forEach(b => { b.isLearning.value = false })
-  channelScroll.isLearning.value = false
   isLearningScrollCC.value = true
   lastScrollCCVal.value = null
 }
@@ -976,7 +929,6 @@ function createButtonLearn(lsKey, onTrigger) {
   function startLearn() {
     stopDetect()
     isLearningScrollCC.value = false
-    channelScroll.isLearning.value = false
     buttonLearns.forEach(b => { b.isLearning.value = false })
     isLearning.value = true
   }
@@ -1041,7 +993,8 @@ function toggleFavoritesFilter() {
 
 const favToggleLearn = createButtonLearn('SYCORE_PC_FAVORITE_MIDI', toggleActiveFavorite)
 const favFilterLearn = createButtonLearn('SYCORE_PC_FAVORITE_FILTER_MIDI', toggleFavoritesFilter)
-const buttonLearns   = [favToggleLearn, favFilterLearn]
+const chNextLearn    = createButtonLearn('SYCORE_PC_CHANNEL_NEXT_MIDI', nextMappedChannel)
+const buttonLearns   = [favToggleLearn, favFilterLearn, chNextLearn]
 const isLearningAnyButton = computed(() => buttonLearns.some(b => b.isLearning.value))
 
 let _unsubButtonMidi = null
@@ -1064,7 +1017,6 @@ function startButtonMidiListener() {
       number:  event.data[1],
       device:  midiService.getInputs().find(i => i.id === inputId)?.name ?? null,
     }
-    if (kind === 'cc' && (channelScroll.isLearning.value || channelScroll.matches(msg.number, msg.channel, msg.device))) return
     const sc = scrollCCMap.value
     if (kind === 'cc' && !isLearningAnyButton.value && sc && sc.cc === msg.number && (sc.channel == null || sc.channel === msg.channel) && (!sc.device || sc.device === msg.device)) return
 
@@ -1229,12 +1181,13 @@ function copyChannelMapTo(targetName) {
   showPcNotification(targetName, `Map copied from ${selectedDeviceName.value} (${count} ch)`)
 }
 
-const pcNotification = ref({ visible: false, device: '', name: '', category: '' })
+const pcNotification = ref({ visible: false, device: '', name: '', category: '', channel: null })
 let _pcNotifTimer = null
 
-function showPcNotification(device, name, category = '') {
+// channel (0-based, optional): shown between device and preset — Device · CH n · Preset
+function showPcNotification(device, name, category = '', channel = null) {
   clearTimeout(_pcNotifTimer)
-  pcNotification.value = { visible: true, device, name, category }
+  pcNotification.value = { visible: true, device, name, category, channel }
   _pcNotifTimer = setTimeout(() => { pcNotification.value.visible = false }, 3000)
 }
 
@@ -1880,33 +1833,19 @@ function assignToPad(setId, padIdx) {
                         </span>
                       </button>
                     </div>
-                    <!-- MIDI Learn: a CC steps through the mapped channels -->
-                    <template v-if="mappedChannels.length > 1">
-                      <div v-if="channelScroll.isLearning.value" class="flex items-center gap-1">
-                        <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-400 text-[8px] font-black uppercase tracking-widest animate-pulse">
-                          <Radio class="w-2.5 h-2.5" />Move a knob…
-                        </div>
-                        <button @click="channelScroll.isLearning.value = false" class="p-1 text-neutral-600 hover:text-neutral-400 transition-colors rounded">
-                          <X class="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div v-else-if="channelScroll.map.value" class="flex items-center gap-1">
-                        <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[8px] font-black font-mono uppercase tracking-widest" title="This CC steps through the mapped channels">
-                          <Radio class="w-2.5 h-2.5" />CC{{ channelScroll.map.value.cc }} CH{{ channelScroll.map.value.channel + 1 }}{{ channelScroll.map.value.device ? ' · ' + channelScroll.map.value.device : '' }}
-                        </div>
-                        <button @click="channelScroll.clear()" title="Remove CC mapping" class="p-1 text-neutral-600 hover:text-red-400 transition-colors rounded">
-                          <X class="w-3 h-3" />
-                        </button>
-                      </div>
-                      <button
-                        v-else
-                        @click="startChannelScrollLearn"
-                        title="MIDI Learn: move a knob or encoder (any CC) to step through the mapped channels"
-                        class="flex items-center gap-1 px-2 py-1 rounded-lg bg-black/40 border border-neutral-800 text-neutral-600 hover:text-orange-400 hover:border-orange-500/30 hover:bg-orange-500/10 transition-all text-[8px] font-black uppercase tracking-widest"
-                      >
-                        <Radio class="w-2.5 h-2.5" />MIDI
-                      </button>
-                    </template>
+                    <!-- MIDI Learn: a button (momentary or toggle) or pad cycles through the mapped channels -->
+                    <MidiButtonLearn
+                      v-if="mappedChannels.length > 1"
+                      :map="chNextLearn.map.value"
+                      :learning="chNextLearn.isLearning.value"
+                      :icon="Radio"
+                      learn-hint="MIDI Learn: press a controller button (CC) or pad/key (note) to step to the next mapped channel"
+                      mapped-hint="Steps to the next mapped channel (wraps around)"
+                      @learn="chNextLearn.startLearn()"
+                      @cancel="chNextLearn.cancelLearn()"
+                      @clear="chNextLearn.clear()"
+                      @toggle-mode="chNextLearn.toggleMode()"
+                    />
                   </template>
                   <!-- Single channel: normal dropdown -->
                   <template v-else>
@@ -2548,6 +2487,10 @@ function assignToPad(setId, padIdx) {
           <div class="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.8)] animate-pulse shrink-0" />
           <span class="text-[10px] font-black uppercase tracking-widest text-violet-400">{{ pcNotification.device }}</span>
           <span class="text-[10px] font-mono text-neutral-500">·</span>
+          <template v-if="pcNotification.channel != null">
+            <span class="text-[10px] font-black font-mono text-amber-300">CH {{ pcNotification.channel + 1 }}</span>
+            <span class="text-[10px] font-mono text-neutral-500">·</span>
+          </template>
           <span class="text-[11px] font-bold text-white">{{ pcNotification.name }}</span>
           <span
             v-if="pcNotification.category"
