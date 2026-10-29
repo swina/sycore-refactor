@@ -102,8 +102,24 @@ export const FM1_FIRMWARES: { id: string; name: string }[] = [
   { id: 'zp12', name: 'zp12' },
 ]
 
+// Self-hosted copy of the emulator build (public/fm1, see SYCORE.md there): same origin as the
+// app, so the panel can feed it MIDI with postMessage and read its load figures.
+export const FM1_LOCAL_URL = '/fm1/index.html'
+
 /** Embed URL: only the device panel (`embed=1`), firmware preselected. */
 export function fm1EmbedUrl(firmwareId: string): string {
   const q = new URLSearchParams({ fw: firmwareId, embed: '1' })
-  return `${FM1_EMU_URL}?${q}`
+  return `${FM1_LOCAL_URL}?${q}`
+}
+
+// MIDI channels (0-based) a firmware's parts listen on, where known — from the emulator's own
+// notes (public/fm1/main.js, MIDI_NOTES). More than one: a multi-timbral firmware. Anything else
+// gets channel 1 shown; SY.CORE sends to it on the channel each app plays on.
+const FM1_FIRMWARE_PARTS: Record<string, number[]> = {
+  felucca: [0, 1, 2, 3],
+  mvave: [1],
+}
+
+export function fm1Parts(firmwareId: string): number[] {
+  return FM1_FIRMWARE_PARTS[firmwareId] ?? [0]
 }

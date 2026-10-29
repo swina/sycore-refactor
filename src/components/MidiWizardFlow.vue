@@ -43,6 +43,8 @@ function deviceType(name) {
 // here, often done in advance of actually launching it.
 function canAddToCanvas(name) {
   if (midiStore.virtualInstruments.some(v => v.name === name)) return true
+  // a panel's own output (FM-1 Emulator) — only while its panel is open
+  if (midiStore.panelOutputs.includes(name)) return true
   return registryDevices.value.some(d => d.name === name && d.online)
 }
 

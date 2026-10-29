@@ -24,6 +24,9 @@ import DeckDrumMachineSummary from '@/components/DeckDrumMachineSummary.vue'
 import DeckChordProgSummary from '@/components/DeckChordProgSummary.vue'
 import DeckPlaylistSummary from '@/components/DeckPlaylistSummary.vue'
 import DeckSoloPerformanceSummary from '@/components/DeckSoloPerformanceSummary.vue'
+import DeckFm1Summary from '@/components/DeckFm1Summary.vue'
+import { FM1_OUTPUT, fm1Firmware, fm1InChannels } from '@/lib/fm1-bridge'
+import { fm1Parts } from '@/lib/fm1-firmwares'
 
 const midiStore = useMidiStore()
 const uiStore   = useUiStore()
@@ -184,9 +187,15 @@ function closeAppSummary() {
   selectedApp.value = null
 }
 
+// The FM-1 view lives off the FM-1 Emulator panel: closing that panel closes it.
+watch(() => midiStore.panelOutputs.includes(FM1_OUTPUT), (open) => {
+  if (!open && selectedApp.value?.kind === 'fm1') closeAppSummary()
+})
+
 const selectedAppComponent = computed(() => {
   if (!selectedApp.value) return null
   if (selectedApp.value.kind === 'playlist') return DeckPlaylistSummary
+  if (selectedApp.value.kind === 'fm1') return DeckFm1Summary
   if (selectedApp.value.sourceId === MidiSource.DRUM_MACHINE) return DeckDrumMachineSummary
   if (selectedApp.value.sourceId === MidiSource.CHORD_PROG) return DeckChordProgSummary
   if (selectedApp.value.sourceId === "SOLO_PERFORMANCE") return DeckSoloPerformanceSummary
@@ -297,10 +306,12 @@ const instruments = computed(() => {
     .map(reg => {
       const virtualInstrument = midiStore.virtualInstruments.find(v => v.name === reg.name)
       const isVirtual = !!virtualInstrument
+      // A panel's own output (FM-1 Emulator) is online while its panel is open.
+      const isPanelOutput = midiStore.panelOutputs.includes(reg.name)
       const type = deviceType(reg.name)
       const online = isVirtual
         ? virtualInstrument.online !== false
-        : registryDevices.value.some(d => d.name === reg.name && d.online)
+        : isPanelOutput || registryDevices.value.some(d => d.name === reg.name && d.online)
 
       // Must match MidiDeviceProgramChangePanel.vue's own key exactly (reg.pcChannel ?? 0) —
       // this is the Program Change channel, unrelated to reg.inChannel (the note-input
@@ -312,10 +323,21 @@ const instruments = computed(() => {
       const patchName = chInfo?.soundName ?? (reg.pcProgram != null ? `PC ${reg.pcProgram + 1}` : null)
       const patchCategory = chInfo?.category || null
 
+      // FM-1 with no channel remap: its MIDI Ch In from the cable filters in MIDI Flow, else the
+      // channels its firmware's parts listen on.
+      const fm1In = reg.name === FM1_OUTPUT && isPanelOutput && reg.outChannel === -1
+        ? fm1InChannels(midiStore.outputRouteFilters)
+        : null
+      const outChannelList = reg.outChannels && reg.outChannels.length > 0
+        ? reg.outChannels
+        : fm1In
+          ? (fm1In.length ? fm1In : fm1Parts(fm1Firmware.value))
+          : [reg.outChannel]
+
       // One entry per active channel (multi-timbral virtual instruments fan
       // out over several) — the PC-number fallback only applies to the
       // single primary channel, since pcProgram/pcBank track just that one.
-      const channelPatchList = (reg.outChannels && reg.outChannels.length > 0 ? reg.outChannels : [reg.outChannel]).map(ch => {
+      const channelPatchList = outChannelList.map(ch => {
         const info = reg.pcChannels?.[ch]
         const name = info?.soundName ?? (ch === activeCh && reg.pcProgram != null ? `PC ${reg.pcProgram + 1}` : null)
         return { channel: ch + 1, patchName: name, patchCategory: info?.category || null }
@@ -329,9 +351,7 @@ const instruments = computed(() => {
       // Multi-timbral virtual instruments fan out to several channels at
       // once (reg.outChannels) — show all of them, not just the single
       // outChannel remap that applies when there's no fanout.
-      const activeChannels = (reg.outChannels && reg.outChannels.length > 0)
-        ? reg.outChannels.map(c => c + 1)
-        : [reg.outChannel + 1]
+      const activeChannels = outChannelList.map(c => c + 1)
 
       return {
         name: reg.name,
@@ -348,6 +368,7 @@ const instruments = computed(() => {
         vol,
         muted,
         hasSoundEngineLink: uiOutputs.includes(reg.name),
+        ownerPanelId: isPanelOutput ? midiStore.panelOutputPanels[reg.name] ?? null : null,
         setVol: v => useVirtualChannel ? mixer.setVirtualChannelVol(reg.name, volCh, v) : mixer.setInstrumentVol(reg.name, v),
         toggleMute: () => useVirtualChannel ? mixer.toggleVirtualChannelMute(reg.name, volCh) : mixer.toggleInstrumentMute(reg.name),
       }
@@ -800,8 +821,8 @@ function handleBpmChange(e) {
             <div
               v-for="row in instruments"
               :key="row.name"
-              @click="selectInstrument(row)"
-              title="Select in Program Change"
+              @click="row.name === FM1_OUTPUT && row.ownerPanelId ? selectApp({ kind: 'fm1' }) : selectInstrument(row)"
+              :title="row.name === FM1_OUTPUT && row.ownerPanelId ? 'Show FM-1 in the display' : 'Select in Program Change'"
               class="relative w-36 shrink-0 rounded-xl border-2 p-2.5 flex flex-col gap-1.5 transition-colors max-h-48 cursor-pointer"
               :class="[
                 row.meta.card,
@@ -858,6 +879,11 @@ function handleBpmChange(e) {
 
               <div class="flex items-center gap-1 mt-auto">
                 <button v-if="row.hasSoundEngineLink" @click.stop="openSoundEngine" title="Open Sound Engine"
+                  class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-synth-neon hover:border-synth-neon/50 transition-colors"
+                >
+                  <ExternalLink class="w-3 h-3" />
+                </button>
+                <button v-if="row.ownerPanelId" @click.stop="uiStore.openPanel(row.ownerPanelId)" :title="'Open ' + row.name"
                   class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-synth-neon hover:border-synth-neon/50 transition-colors"
                 >
                   <ExternalLink class="w-3 h-3" />

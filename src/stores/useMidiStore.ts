@@ -218,6 +218,30 @@ export const useMidiStore = defineStore('midi', () => {
     refreshDevices()
   }
 
+  // Virtual outputs owned by an open panel (FM-1 Emulator): unlike virtual
+  // instruments they aren't persisted and have no real port — they exist,
+  // and are routable in MIDI Flow, only while the panel that plays them is
+  // mounted. The registration (routing flags) is kept across reopenings.
+  // panelOutputPanels: output name → id of the panel that owns it (DECK opens it).
+  const panelOutputs = ref<string[]>([])
+  const panelOutputPanels = ref<Record<string, string>>({})
+
+  function registerPanelOutput(name: string, sendFn: (data: number[]) => void, panelId?: string) {
+    if (!routingConfig.value.registrations[name]) {
+      addRegistration(name)
+      // an instrument, not a controller: never treated as an input
+      updateRegistration(name, 'inEnabled', false)
+    }
+    midiService.registerVirtualOutput(name, sendFn)
+    if (!panelOutputs.value.includes(name)) panelOutputs.value.push(name)
+    if (panelId) panelOutputPanels.value = { ...panelOutputPanels.value, [name]: panelId }
+  }
+
+  function unregisterPanelOutput(name: string) {
+    midiService.unregisterVirtualOutput(name)
+    panelOutputs.value = panelOutputs.value.filter(n => n !== name)
+  }
+
   function removeVirtualInstrument(name: string) {
     virtualInstruments.value = virtualInstruments.value.filter(v => v.name !== name)
     persistVirtualInstruments()
@@ -1018,6 +1042,10 @@ export const useMidiStore = defineStore('midi', () => {
     updateVirtualInstrument,
     setVirtualInstrumentPort,
     setVirtualInstrumentCcTable,
+    panelOutputs,
+    panelOutputPanels,
+    registerPanelOutput,
+    unregisterPanelOutput,
     renameVirtualInstrument,
   }
 })
