@@ -19,6 +19,7 @@ import {
   type SmartLatchConfig,
 } from '@/lib/midi-config-presets'
 import type { DeviceRegistration, RoutingConfig, SplitConfig, VirtualRegistration, VirtualCcMapping, MidiSource as MidiSourceType, InputRouteEntry, InputRouteFilter } from '@/types/midi'
+import { cableOutChannels } from '@/types/midi'
 
 // ---------------------------------------------------------------------------
 // LocalStorage keys
@@ -637,6 +638,19 @@ export const useMidiStore = defineStore('midi', () => {
   // Wholesale-replaces the device→device Thru filter map — called once per
   // MidiWizardFlow.vue finish() with a freshly-rebuilt map, same pattern as
   // routingMatrix/inputRouting being fully rebuilt from the canvas each time.
+  // A device's parts: the channels it's driven on — its own Multi-CH (outChannels) plus the OUT
+  // channels of every cable into it (MIDI Flow; outputRouteFilters keys are `${source}→${name}`),
+  // sorted. [] = no explicit parts (one channel: the device's OUT ch). Read by the DECK, Audio
+  // Mixer, Program Change and Performance Sets.
+  function partChannels(name: string): number[] {
+    const set = new Set<number>(routingConfig.value.registrations[name]?.outChannels ?? [])
+    const suffix = `→${name}`
+    for (const [key, f] of Object.entries(outputRouteFilters.value)) {
+      if (key.endsWith(suffix)) for (const ch of cableOutChannels(f)) set.add(ch)
+    }
+    return [...set].sort((a, b) => a - b)
+  }
+
   function setOutputRouteFilters(filters: Record<string, InputRouteFilter>) {
     outputRouteFilters.value = filters
   }
@@ -1000,7 +1014,7 @@ export const useMidiStore = defineStore('midi', () => {
     midiChannel, midiInputChannel,
     isDeviceConnected, broadcastMode, routingMatrix,
     inputRouting, setInputRouting, isDeviceRoutedToApp, isDeviceRoutedInFlow, hasExplicitInputRouting, addAppNoteListener,
-    outputRouteFilters, setOutputRouteFilters,
+    outputRouteFilters, setOutputRouteFilters, partChannels,
     init, refreshDevices,
     setMidiChannel, setMidiInputChannel,
     setRouting, toggleRouting, toggleBroadcastMode,

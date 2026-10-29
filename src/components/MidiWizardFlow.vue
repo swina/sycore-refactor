@@ -366,20 +366,15 @@ function finish() {
       // Note-range filter for device→device cables (Controller → Instrument,
       // real or virtual) — app-sourced cables use inputRouting instead (see
       // appCables below), so this only applies when the source is hardware.
-      if (!src.sourceId && cable.filter) {
-        const { lowNote = 0, highNote = 127 } = cable.filter
-        if (lowNote > 0 || highNote < 127 || (cable.filter.channels && cable.filter.channels.length > 0)) {
-          newOutputFilters[`${src.name}→${canonicalName}`] = cable.filter
-        }
+      if (!src.sourceId && cableHasActiveFilter(cable)) {
+        newOutputFilters[`${src.name}→${canonicalName}`] = routedFilter(cable, dst)
       }
 
       // Note-range + channel filter for app→device cables (e.g. Sequencer →
       // Instrument In) — enforced in broadcast() the same way the Thru path
       // enforces device→device filters. Source key is the MidiSource enum.
-      if (src.sourceId && cable.filter) {
-        if (cable.filter.lowNote > 0 || cable.filter.highNote < 127 || (cable.filter.channels && cable.filter.channels.length > 0)) {
-          newOutputFilters[`${src.sourceId}→${canonicalName}`] = cable.filter
-        }
+      if (src.sourceId && cableHasActiveFilter(cable)) {
+        newOutputFilters[`${src.sourceId}→${canonicalName}`] = routedFilter(cable, dst)
       }
     }
 
@@ -784,8 +779,38 @@ function isHwToHwCable(cable) {
   return !isAppCable(cable) && !isDeviceToAppCable(cable)
 }
 
+// A note range, a channel filter or the cable's own OUT channels (filter.outChannels, into a device only)
 function cableHasActiveFilter(cable) {
-  return cable.filter && (cable.filter.lowNote > 0 || cable.filter.highNote < 127 || (cable.filter.channels && cable.filter.channels.length > 0))
+  const f = cable.filter
+  return !!f && (f.lowNote > 0 || f.highNote < 127 || (f.channels && f.channels.length > 0) || (f.outChannels && f.outChannels.length > 0))
+}
+
+// The cable is the routing unit: its OUT channels pick the parts of the device it lands on. A
+// multipart device (virtual instrument, registry type instrument-multi, Multi-timbral on) takes
+// several (layered); any other works as one part — one channel.
+function isMultipartNode(node) {
+  if (!node || node.sourceId) return false
+  if (node.type === 'virtual' || node.type === 'instrument-multi') return true
+  return !!midiStore.routingConfig?.registrations?.[node.name]?.isMulti
+}
+
+// The filter as routed: a single-part device keeps only the first OUT channel picked (e.g. one
+// chosen while the device was still multipart).
+function routedFilter(cable, dst) {
+  const f = cable.filter
+  if (!f?.outChannels || f.outChannels.length <= 1 || isMultipartNode(dst)) return f
+  return { ...f, outChannels: [Math.min(...f.outChannels)] }
+}
+
+const editingCableMultipart = computed(() =>
+  !!editingCable.value && isMultipartNode(canvasNodes.value.find(n => n.id === editingCable.value.toId)))
+
+function toggleCableOutChannel(ch) {
+  const f = editingCable.value?.filter
+  if (!f) return
+  const current = f.outChannels ?? []
+  if (current.includes(ch)) f.outChannels = current.filter(c => c !== ch)
+  else f.outChannels = editingCableMultipart.value ? [...current, ch].sort((a, b) => a - b) : [ch]
 }
 
 function isCableFilterable(cable) {
@@ -1170,6 +1195,33 @@ function pendingPath() {
                     class="w-8 h-7 rounded text-[10px] font-mono font-bold transition-colors"
                     :class="(editingCable.filter.channels || []).includes(ch - 1)
                       ? 'bg-blue-500/40 text-blue-200 border border-blue-400/50'
+                      : 'bg-black text-neutral-400 border border-neutral-800 hover:border-neutral-600'"
+                  >{{ ch }}</button>
+                </div>
+              </div>
+              <!-- The cable's own OUT channels: what this connection sends on, over the device's OUT ch /
+                   Multi-CH (e.g. Sequencer → FM-1 on CH 2 and a keyboard → FM-1 on CH 3). Several
+                   (layered parts) on a multipart device, one on any other. -->
+              <div v-if="!isDeviceToAppCable(editingCable)" class="border-t border-neutral-800 pt-2 flex flex-col gap-1.5">
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-[8px] font-mono text-neutral-500 uppercase tracking-widest"
+                    :title="editingCableMultipart ? 'Channels this connection sends on (several: layered parts). None: the device OUT ch' : 'Channel this connection sends on (single-part device). None: the device OUT ch'"
+                  >Out Ch.{{ editingCableMultipart ? ' · multipart' : '' }}</span>
+                  <button
+                    v-if="editingCable.filter.outChannels && editingCable.filter.outChannels.length > 0"
+                    @click="editingCable.filter.outChannels = []"
+                    class="text-[7px] font-black uppercase tracking-wider text-neutral-600 hover:text-white transition-colors"
+                    title="Back to the device's OUT ch"
+                  >Device</button>
+                  <span v-else class="text-[7px] font-mono uppercase tracking-wider text-neutral-600">Device</span>
+                </div>
+                <div class="flex gap-1 flex-wrap max-w-[300px]">
+                  <button
+                    v-for="ch in 16" :key="ch"
+                    @click="toggleCableOutChannel(ch - 1)"
+                    class="w-8 h-7 rounded text-[10px] font-mono font-bold transition-colors"
+                    :class="(editingCable.filter.outChannels || []).includes(ch - 1)
+                      ? 'bg-amber-500/40 text-amber-200 border border-amber-400/50'
                       : 'bg-black text-neutral-400 border border-neutral-800 hover:border-neutral-600'"
                   >{{ ch }}</button>
                 </div>

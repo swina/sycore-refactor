@@ -124,6 +124,16 @@ export interface InputRouteFilter {
   lowNote?: number;    // 0-127; omitted/undefined = 0 (no lower bound)
   highNote?: number;   // 0-127; omitted/undefined = 127 (no upper bound)
   channels?: number[]; // 0-15; omitted/undefined = no channel filter (pass all)
+  outChannels?: number[]; // 0-15: the cable is the routing unit — it sends on these (several = layered
+                          // parts of a multipart device), over the device's OUT ch / Multi-CH;
+                          // omitted/empty = the device's own channel settings
+}
+
+/** A cable's own OUT channels (InputRouteFilter.outChannels, valid and deduped), [] = the device's. */
+export function cableOutChannels(filter?: InputRouteFilter): number[] {
+  const chs = filter?.outChannels;
+  if (!chs || chs.length === 0) return [];
+  return [...new Set(chs.filter(ch => Number.isInteger(ch) && ch >= 0 && ch <= 15))];
 }
 
 /** One app fed by a given input device, in MIDI FLOW's device→app routing */

@@ -46,4 +46,19 @@ describe('useMidiStore panel outputs (FM-1 Emulator)', () => {
 
     expect(midiStore.panelOutputPanels['FM-1 Emulator']).toBe('fm1-emulator')
   })
+
+  it("derives a device's parts from its Multi-CH and the OUT channels of its cables", () => {
+    const midiStore = useMidiStore()
+    midiStore.addRegistration('Synth')
+    midiStore.updateRegistration('Synth', 'outChannels', [5])
+    midiStore.setOutputRouteFilters({
+      'SEQUENCER2→Synth': { outChannels: [1] },
+      'Keys→Synth': { outChannels: [2, 1] },
+      'Keys→Other': { outChannels: [9] },
+      'ARP→Synth': { channels: [7] },           // a channel filter is a gate, not a part
+    })
+
+    expect(midiStore.partChannels('Synth')).toEqual([1, 2, 5])
+    expect(midiStore.partChannels('Nope')).toEqual([])
+  })
 })

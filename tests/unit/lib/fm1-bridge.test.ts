@@ -51,6 +51,13 @@ describe('FM-1 MIDI Ch In', () => {
     expect(fm1InChannels({})).toEqual([])
   })
 
+  it("takes a cable's own OUT channels over its channel filter", () => {
+    expect(fm1InChannels({
+      'SEQUENCER2→FM-1 Emulator': { outChannels: [1], channels: [5] },
+      'Keys→FM-1 Emulator': { outChannels: [2, 3] },
+    })).toEqual([1, 2, 3])
+  })
+
   it('moves channel messages onto a single-part firmware channel', () => {
     expect(fm1RemapChannel([0x92, 60, 100], [1])).toEqual([0x91, 60, 100])
     expect(fm1RemapChannel([0xb2, 7, 90], [1])).toEqual([0xb1, 7, 90])

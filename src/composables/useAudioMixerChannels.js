@@ -143,15 +143,15 @@ export function useAudioMixerChannels() {
     })
   )
 
-  // Virtual instruments → one fader each, UNLESS configured as multi-timbral
-  // in MIDI Flow (registration.outChannels), in which case each channel gets
-  // its own independent fader.
+  // Virtual instruments → one fader each, UNLESS driven on several parts in
+  // MIDI Flow (Multi-CH or cable OUT channels: midiStore.partChannels), in
+  // which case each channel gets its own independent fader.
   const virtualInstrumentStrips = computed(() => {
     const strips = []
     for (const v of midiStore.virtualInstruments) {
       const reg = midiStore.routingConfig?.registrations?.[v.name]
-      const outChannels = reg?.outChannels
-      if (outChannels && outChannels.length > 0) {
+      const outChannels = midiStore.partChannels(v.name)
+      if (outChannels.length > 0) {
         for (const ch of outChannels) {
           strips.push({
             key:    `${v.name}:${ch}`,

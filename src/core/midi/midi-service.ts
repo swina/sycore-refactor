@@ -20,7 +20,8 @@ import type {
   MidiMessageType,
   MidiMonitorEntry,
   InputRouteFilter,
-} from '@/types/midi';
+} from '@/types/midi'
+import { cableOutChannels } from '@/types/midi';
 import { MidiSource } from '@/types/midi';
 import { MidiMonitor } from './midi-monitor';
 import { MidiTransport } from './midi-transport';
@@ -434,7 +435,8 @@ export class MidiService {
       // device→device connections (Controller → virtual Instrument). Only
       // gates note-ONS: note-offs must always pass through so a note that
       // reached this output via another route can still be silenced.
-      const filter = isNoteOn ? this.getOutputRouteFilter(inputName, virtName) : undefined;
+      // (looked up for every message: the cable's OUT ch remaps all of them, not only note-ons)
+      const filter = this.getOutputRouteFilter(inputName, virtName);
       if (isNoteOn && filter) {
         const note = data[1];
         const lo = filter.lowNote ?? 0;
@@ -456,11 +458,15 @@ export class MidiService {
         return;
       }
 
-      // outChannels (multi-timbral fanout) takes precedence over the single
-      // outChannel remap, exactly like broadcast()'s app-generated-note path.
-      const channels = (outConfig.outChannels && outConfig.outChannels.length > 0)
-        ? outConfig.outChannels
-        : [outConfig.outChannel !== -1 ? outConfig.outChannel : (status & 0x0f)];
+      // The cable's own OUT ch wins; then outChannels (multi-timbral fanout)
+      // over the single outChannel remap, exactly like broadcast()'s
+      // app-generated-note path.
+      const cableChs = cableOutChannels(filter);
+      const channels = cableChs.length > 0
+        ? cableChs
+        : (outConfig.outChannels && outConfig.outChannels.length > 0)
+          ? outConfig.outChannels
+          : [outConfig.outChannel !== -1 ? outConfig.outChannel : (status & 0x0f)];
 
       const virtDevice = { id: virtName, name: virtName };
       const applyLatch = (isNoteOn || isNoteOff) &&
@@ -1295,7 +1301,10 @@ export class MidiService {
       // outChannel remap when set — duplicates the message onto every
       // listed channel instead of picking just one.
       let channels: number[];
-      if (config?.outChannels && config.outChannels.length > 0) {
+      const cableChs = cableOutChannels(outputFilter);
+      if (cableChs.length > 0) {
+        channels = cableChs;   // the cable's own OUT channels win
+      } else if (config?.outChannels && config.outChannels.length > 0) {
         channels = config.outChannels;
       } else if (config?.isMulti) {
         channels = [channel];
@@ -1382,9 +1391,12 @@ export class MidiService {
       }
       if (!shouldAdd) return;
 
-      const channels = (config.outChannels && config.outChannels.length > 0)
-        ? config.outChannels
-        : [config.outChannel !== -1 ? config.outChannel : channel];
+      const cableChs = cableOutChannels(outputFilter);   // the cable's own OUT channels win
+      const channels = cableChs.length > 0
+        ? cableChs
+        : (config.outChannels && config.outChannels.length > 0)
+          ? config.outChannels
+          : [config.outChannel !== -1 ? config.outChannel : channel];
 
       const virtDevice = { id: virtName, name: virtName };
       const virtApplyLatch = config.latchEnabled || (this.latch.isActive && config.smartLatch);

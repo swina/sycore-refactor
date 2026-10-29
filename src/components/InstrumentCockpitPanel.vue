@@ -323,16 +323,16 @@ const instruments = computed(() => {
       const patchName = chInfo?.soundName ?? (reg.pcProgram != null ? `PC ${reg.pcProgram + 1}` : null)
       const patchCategory = chInfo?.category || null
 
-      // FM-1 with no channel remap: its MIDI Ch In from the cable filters in MIDI Flow, else the
+      // Parts: the device's Multi-CH plus its cables' OUT channels (midiStore.partChannels).
+      // FM-1 with no channel remap: also its cables' channel filters (its MIDI Ch In), else the
       // channels its firmware's parts listen on.
-      const fm1In = reg.name === FM1_OUTPUT && isPanelOutput && reg.outChannel === -1
+      const parts = midiStore.partChannels(reg.name)
+      const fm1In = reg.name === FM1_OUTPUT && isPanelOutput && reg.outChannel === -1 && !reg.outChannels?.length
         ? fm1InChannels(midiStore.outputRouteFilters)
         : null
-      const outChannelList = reg.outChannels && reg.outChannels.length > 0
-        ? reg.outChannels
-        : fm1In
-          ? (fm1In.length ? fm1In : fm1Parts(fm1Firmware.value))
-          : [reg.outChannel]
+      const outChannelList = fm1In
+        ? (fm1In.length ? fm1In : fm1Parts(fm1Firmware.value))
+        : parts.length > 0 ? parts : [reg.outChannel]
 
       // One entry per active channel (multi-timbral virtual instruments fan
       // out over several) — the PC-number fallback only applies to the
@@ -343,7 +343,7 @@ const instruments = computed(() => {
         return { channel: ch + 1, patchName: name, patchCategory: info?.category || null }
       })
 
-      const volCh = reg.outChannels?.[0]
+      const volCh = parts[0]
       const useVirtualChannel = isVirtual && volCh != null
       const vol    = useVirtualChannel ? mixer.getVirtualChannelVol(reg.name, volCh) : mixer.getInstrumentVol(reg.name)
       const muted  = useVirtualChannel ? mixer.isVirtualChannelMuted(reg.name, volCh) : mixer.isInstrumentMuted(reg.name)

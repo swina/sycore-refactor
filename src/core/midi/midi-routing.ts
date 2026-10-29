@@ -4,7 +4,8 @@
  */
 
 import { userKey } from '@/lib/userKey';
-import type { RoutingConfig, MidiSource, InputRouteFilter } from '@/types/midi';
+import type { RoutingConfig, MidiSource, InputRouteFilter } from '@/types/midi'
+import { cableOutChannels } from '@/types/midi';
 import type { SmartLatch } from './midi-smart-latch';
 
 const MIDI_ROUTING_KEY = 'S1_MIDI_ROUTING';
@@ -232,7 +233,8 @@ export class MidiRouter {
       // must always reach the output even when the note arrived there via
       // another route (e.g. broadcast) and only the off lands on this cable —
       // otherwise the receiving synth is left with a stuck note.
-      const filter = isNoteOn ? this.ctx.getOutputRouteFilter(inputName, outDevice.name) : undefined;
+      // (looked up for every message: the cable's OUT ch remaps all of them, not only note-ons)
+      const filter = this.ctx.getOutputRouteFilter(inputName, outDevice.name);
       if (isNoteOn && filter) {
         const note = data[1];
         const lo = filter.lowNote ?? 0;
@@ -272,12 +274,18 @@ export class MidiRouter {
 
       if (!shouldForward) return;
 
-      // Channel remapping
+      // Channel remapping — the cable's own OUT channels win (several: the
+      // message goes out once per channel); else Multi-timbral's part, else
+      // the device's OUT ch; -1 = as sent.
       try {
+        let targetChs: number[] = [-1];
         if (status < 0xF0) {
-          let targetCh = -1;
-          if (outConfig.isMulti) targetCh = this.ctx.getGlobalChannel();
-          else if (outConfig.outChannel !== -1) targetCh = outConfig.outChannel;
+          const cableChs = cableOutChannels(filter);
+          if (cableChs.length > 0) targetChs = cableChs;
+          else if (outConfig.isMulti) targetChs = [this.ctx.getGlobalChannel()];
+          else if (outConfig.outChannel !== -1) targetChs = [outConfig.outChannel];
+        }
+        for (const targetCh of targetChs) {
           if (targetCh !== -1) {
             const newStatus = (status & 0xf0) | (targetCh & 0x0f);
             if (data.length === 2) {
@@ -288,11 +296,11 @@ export class MidiRouter {
               bytes = new Uint8Array([newStatus, ...data.slice(1)]);
             }
           }
-        }
-        this.ctx.onSent(bytes.join(','), now);
-        outDevice.send(bytes);
-        if (isNoteOn && !applyLatch) {
-          this.thruNotes.noteOn(inputId, inChannel, data[1], outDevice.id, bytes[0] & 0x0f);
+          this.ctx.onSent(bytes.join(','), now);
+          outDevice.send(bytes);
+          if (isNoteOn && !applyLatch) {
+            this.thruNotes.noteOn(inputId, inChannel, data[1], outDevice.id, bytes[0] & 0x0f);
+          }
         }
       } catch {}
     });

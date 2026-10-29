@@ -55,7 +55,8 @@ export function usePerformanceSets() {
     return persistPerformanceSets(pcSets.value)
   }
 
-  // Only the channels this device is actually mapped to (reg.outChannels).
+  // Only the channels this device is actually mapped to (its parts: Multi-CH
+  // plus cable OUT channels, midiStore.partChannels).
   // Two app registrations pointing at the same standalone multipart synth
   // must not snapshot the full pcChannels map — otherwise each would save
   // every recorded channel and recalling one would re-send all of them,
@@ -63,9 +64,8 @@ export function usePerformanceSets() {
   // outChannels mapping keep every recorded channel.
   function _mappedPcChannels(reg) {
     const all = reg?.pcChannels ? JSON.parse(JSON.stringify(reg.pcChannels)) : {}
-    const mapped = reg?.outChannels?.length
-      ? new Set(reg.outChannels.map(c => String(c)))
-      : null
+    const parts = reg ? midiStore.partChannels(reg.name) : []
+    const mapped = parts.length ? new Set(parts.map(c => String(c))) : null
     if (!mapped) return all
     return Object.fromEntries(Object.entries(all).filter(([ch]) => mapped.has(ch)))
   }
@@ -177,9 +177,8 @@ export function usePerformanceSets() {
       .filter(reg => names.has(reg.name))
       .forEach(reg => {
         const isEmu = reg.pcTemplate === 'emulatorx3'
-        const mapped = reg.outChannels?.length
-          ? new Set(reg.outChannels.map(c => String(c)))
-          : null
+        const parts = midiStore.partChannels(reg.name)
+        const mapped = parts.length ? new Set(parts.map(c => String(c))) : null
         const channels = { ...(reg.pcChannels ?? {}) }
         const activeCh = Math.max(0, reg.pcChannel ?? 0)
         const active = channels[activeCh]

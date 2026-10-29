@@ -4,6 +4,7 @@
 // screen and drives its controls through the panel's bridge (public/fm1/main.js, "SY.CORE bridge").
 import { ref, shallowRef, watch } from 'vue'
 import { FM1_FIRMWARES, FM1_DEFAULT_FIRMWARE } from '@/lib/fm1-firmwares'
+import { cableOutChannels } from '@/types/midi'
 
 export const FM1_OUTPUT = 'FM-1 Emulator'
 export const FM1_PANEL_ID = 'fm1-emulator'
@@ -62,13 +63,15 @@ export function watchFm1Lcd(): () => void {
 }
 
 /**
- * FM-1's input channels as set in MIDI Flow: the union of the channel filters on the cables into
- * it (0-based, sorted; empty when none filters). Keys are `${source}→${output}`.
+ * FM-1's input channels as set in MIDI Flow, per cable into it: its own OUT channels, else its
+ * channel filter (0-based, sorted union; empty when no cable sets either). Keys are `${source}→${output}`.
  */
-export function fm1InChannels(filters: Record<string, { channels?: number[] }>): number[] {
+export function fm1InChannels(filters: Record<string, { channels?: number[]; outChannels?: number[] }>): number[] {
   const set = new Set<number>()
   for (const [key, f] of Object.entries(filters ?? {})) {
-    if (key.endsWith(`→${FM1_OUTPUT}`)) for (const ch of f?.channels ?? []) set.add(ch)
+    if (!key.endsWith(`→${FM1_OUTPUT}`)) continue
+    const out = cableOutChannels(f)
+    for (const ch of out.length ? out : f?.channels ?? []) set.add(ch)
   }
   return [...set].sort((a, b) => a - b)
 }
