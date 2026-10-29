@@ -99,18 +99,27 @@ const isDeviceOffline = computed(() => {
   return !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
 })
 
-// A virtual instrument's active channels mirror whatever MIDI Flow has
-// configured for it: outChannels (Multi) if any are set, otherwise just its
-// single outChannel (Single) — same pattern InstrumentCockpitPanel.vue uses
-// for its own per-channel patch list. Previously this always returned all 16
-// channels regardless of Single/Multi, so a Single-mode virtual instrument
-// wrongly exposed every channel here instead of just the one picked in Flow.
-const virtualActiveChannels = computed(() => {
-  if (!selectedDeviceName.value) return []
-  if (!midiStore.virtualInstruments.some(v => v.name === selectedDeviceName.value)) return []
+// A multipart device: a virtual instrument, registry type instrument-multi, or Multi-timbral on.
+const isMultipartDevice = computed(() => {
+  const name = selectedDeviceName.value
+  if (!name) return false
+  if (midiStore.virtualInstruments.some(v => v.name === name)) return true
+  if (selectedReg.value?.isMulti) return true
+  return registryDevices.value.some(d => d.name === name && d.type === 'instrument-multi')
+})
+
+// The channels mapped for the selected device in MIDI Flow — its parts: Multi-CH plus the OUT
+// channels of the cables into it (midiStore.partChannels), e.g. an Emulator X3 routed on CH 3, 4,
+// 5 and 8 lists those four, each with its own preset. Only for a multipart device; a virtual
+// instrument with no parts mapped shows its single outChannel. [] = the plain 16-channel select.
+// (Previously this was virtual instruments only, and always all 16 channels before that.)
+const mappedChannels = computed(() => {
+  if (!isMultipartDevice.value) return []
   const reg = selectedReg.value
   if (!reg) return []
-  if (reg.outChannels && reg.outChannels.length > 0) return reg.outChannels
+  const parts = midiStore.partChannels(reg.name)
+  if (parts.length > 0) return parts
+  if (!midiStore.virtualInstruments.some(v => v.name === reg.name)) return []
   // outChannel is -1 (OMNI) when Single mode hasn't had an explicit channel
   // picked in MIDI Flow yet — valid there since OMNI just means "don't remap,
   // pass the incoming channel through," but there is no incoming channel for
@@ -124,7 +133,7 @@ const virtualActiveChannels = computed(() => {
 // show a row per active channel (with saved sound or empty); otherwise show
 // whatever pcChannels have been recorded.
 const multiChannelDisplayState = computed(() => {
-  const chList = [...virtualActiveChannels.value].sort((a, b) => a - b)
+  const chList = [...mappedChannels.value].sort((a, b) => a - b)
   if (chList.length === 0) return currentPcState.value
   const pcChannels = selectedReg.value?.pcChannels ?? {}
   return chList.map(ch => ({
@@ -145,7 +154,7 @@ const isUiDevice = computed(() => {
   if (!selectedDeviceName.value) return false
   // Explicit template assignment always wins over auto-detection.
   if (selectedReg.value?.pcTemplate === 'roland-s1') return true
-  if (virtualActiveChannels.value.length > 0) return false
+  if (mappedChannels.value.length > 0) return false
   const uiRoutes = midiStore.routingMatrix?.[MidiSource.UI] ?? []
   return uiRoutes.includes(selectedDeviceName.value)
 })
@@ -788,6 +797,69 @@ function setChannel(ch) {
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannel', ch - 1)
 }
 
+// The active channel always one of the mapped ones: a re-routed device lands on its first part.
+watch(mappedChannels, (chs) => {
+  const reg = selectedReg.value
+  if (!reg || chs.length === 0 || chs.includes(reg.pcChannel ?? 0)) return
+  setChannel(chs[0] + 1)
+})
+
+// Step through the mapped channels (MIDI CC, see channelScroll below): clamped at both ends.
+function stepMappedChannel(dir) {
+  const chs = mappedChannels.value
+  if (chs.length < 2) return
+  const i = Math.max(0, chs.indexOf(selectedReg.value?.pcChannel ?? 0))
+  const next = chs[Math.max(0, Math.min(chs.length - 1, i + dir))]
+  if (next === chs[i]) return
+  setChannel(next + 1)
+  const preset = selectedReg.value?.pcChannels?.[next]?.soundName ?? 'No preset'
+  showPcNotification(selectedDeviceName.value, `CH ${next + 1} · ${preset}`, 'Channel')
+}
+
+// ── Mapped-channel navigation (MIDI CC) ─────────────────────────
+// Like the preset-list CC below: any CC, read relatively (value delta), so an endless encoder or
+// a knob both step one channel per change.
+const LS_CH_SCROLL_CC = 'SYCORE_PC_CHANNEL_SCROLL_CC'
+const channelScroll = {
+  map: ref((() => { try { return JSON.parse(localStorage.getItem(userKey(LS_CH_SCROLL_CC))) ?? null } catch { return null } })()),
+  isLearning: ref(false),
+  last: null,
+  matches(cc, channel, device) {
+    const m = this.map.value
+    return !!m && m.cc === cc && m.channel === channel && (!m.device || m.device === device)
+  },
+  clear() {
+    this.map.value = null
+    this.last = null
+    try { localStorage.removeItem(userKey(LS_CH_SCROLL_CC)) } catch {}
+  },
+}
+
+function startChannelScrollLearn() {
+  isLearningScrollCC.value = false
+  buttonLearns.forEach(b => { b.isLearning.value = false })
+  channelScroll.isLearning.value = true
+}
+
+// Returns true when the CC belongs to channel navigation (learning or mapped).
+function handleChannelScrollCC(cc, channel, device, val) {
+  if (channelScroll.isLearning.value) {
+    channelScroll.isLearning.value = false
+    channelScroll.map.value = { cc, channel, device }
+    channelScroll.last = val
+    try { localStorage.setItem(userKey(LS_CH_SCROLL_CC), JSON.stringify(channelScroll.map.value)) } catch {}
+    // one physical control drives one function only
+    const sc = scrollCCMap.value
+    if (sc && sc.cc === cc && sc.channel === channel && sc.device === device) clearScrollCC()
+    buttonLearns.forEach(b => { if (b.matchesMap({ type: 'cc', number: cc, channel, device })) b.clear() })
+    return true
+  }
+  if (!channelScroll.matches(cc, channel, device)) return false
+  if (channelScroll.last !== null && val !== channelScroll.last) stepMappedChannel(val > channelScroll.last ? 1 : -1)
+  channelScroll.last = val
+  return true
+}
+
 // ── Preset list navigation (MIDI CC) ────────────────────────────
 // Mouse wheel only scrolls the list natively; selection requires a click.
 const LS_SCROLL_CC    = 'SYCORE_PC_SCROLL_CC'
@@ -831,6 +903,8 @@ function startScrollCCListener() {
     const inputId = event.target?.id
     const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
 
+    if (handleChannelScrollCC(cc, channel, device, val)) return
+
     // Any CC can be learned; navigation is relative (value delta), so an
     // endless encoder works on lists longer than 128 presets.
     if (isLearningScrollCC.value) {
@@ -855,6 +929,7 @@ function startScrollCCListener() {
 
 function startScrollLearn() {
   buttonLearns.forEach(b => { b.isLearning.value = false })
+  channelScroll.isLearning.value = false
   isLearningScrollCC.value = true
   lastScrollCCVal.value = null
 }
@@ -901,6 +976,7 @@ function createButtonLearn(lsKey, onTrigger) {
   function startLearn() {
     stopDetect()
     isLearningScrollCC.value = false
+    channelScroll.isLearning.value = false
     buttonLearns.forEach(b => { b.isLearning.value = false })
     isLearning.value = true
   }
@@ -988,6 +1064,7 @@ function startButtonMidiListener() {
       number:  event.data[1],
       device:  midiService.getInputs().find(i => i.id === inputId)?.name ?? null,
     }
+    if (kind === 'cc' && (channelScroll.isLearning.value || channelScroll.matches(msg.number, msg.channel, msg.device))) return
     const sc = scrollCCMap.value
     if (kind === 'cc' && !isLearningAnyButton.value && sc && sc.cc === msg.number && (sc.channel == null || sc.channel === msg.channel) && (!sc.device || sc.device === msg.device)) return
 
@@ -1747,7 +1824,7 @@ function assignToPad(setId, padIdx) {
 
                   <!-- Copy this device's 16-channel patch map onto another virtual instrument
                        (e.g. two virtual instrument entries routed to the same standalone synth app) -->
-                  <div v-if="virtualActiveChannels.length > 0 && copyMapTargets.length > 0" class="relative">
+                  <div v-if="mappedChannels.length > 0 && copyMapTargets.length > 0" class="relative">
                     <button
                       @click="showCopyMapPicker = !showCopyMapPicker"
                       title="Copy this 16-channel patch map to another virtual instrument"
@@ -1781,11 +1858,11 @@ function assignToPad(setId, padIdx) {
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="text-[9px] font-mono text-neutral-500 uppercase">Channel</span>
-                  <!-- Virtual instrument: one button per MIDI channel, each independently assignable -->
-                  <template v-if="virtualActiveChannels.length > 0">
+                  <!-- Multipart device: one button per channel mapped in MIDI Flow, each with its own preset -->
+                  <template v-if="mappedChannels.length > 0">
                     <div class="flex gap-1 flex-wrap max-w-[420px]">
                       <button
-                        v-for="ch in virtualActiveChannels"
+                        v-for="ch in mappedChannels"
                         :key="ch"
                         @click="setChannel(ch + 1)"
                         :class="[
@@ -1803,6 +1880,33 @@ function assignToPad(setId, padIdx) {
                         </span>
                       </button>
                     </div>
+                    <!-- MIDI Learn: a CC steps through the mapped channels -->
+                    <template v-if="mappedChannels.length > 1">
+                      <div v-if="channelScroll.isLearning.value" class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-400 text-[8px] font-black uppercase tracking-widest animate-pulse">
+                          <Radio class="w-2.5 h-2.5" />Move a knob…
+                        </div>
+                        <button @click="channelScroll.isLearning.value = false" class="p-1 text-neutral-600 hover:text-neutral-400 transition-colors rounded">
+                          <X class="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div v-else-if="channelScroll.map.value" class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[8px] font-black font-mono uppercase tracking-widest" title="This CC steps through the mapped channels">
+                          <Radio class="w-2.5 h-2.5" />CC{{ channelScroll.map.value.cc }} CH{{ channelScroll.map.value.channel + 1 }}{{ channelScroll.map.value.device ? ' · ' + channelScroll.map.value.device : '' }}
+                        </div>
+                        <button @click="channelScroll.clear()" title="Remove CC mapping" class="p-1 text-neutral-600 hover:text-red-400 transition-colors rounded">
+                          <X class="w-3 h-3" />
+                        </button>
+                      </div>
+                      <button
+                        v-else
+                        @click="startChannelScrollLearn"
+                        title="MIDI Learn: move a knob or encoder (any CC) to step through the mapped channels"
+                        class="flex items-center gap-1 px-2 py-1 rounded-lg bg-black/40 border border-neutral-800 text-neutral-600 hover:text-orange-400 hover:border-orange-500/30 hover:bg-orange-500/10 transition-all text-[8px] font-black uppercase tracking-widest"
+                      >
+                        <Radio class="w-2.5 h-2.5" />MIDI
+                      </button>
+                    </template>
                   </template>
                   <!-- Single channel: normal dropdown -->
                   <template v-else>
@@ -1928,16 +2032,16 @@ function assignToPad(setId, padIdx) {
                 <div v-if="multiChannelDisplayState.length > 0" class="shrink-0 mx-6 mt-3 bg-black/30 border border-violet-500/20 rounded-2xl overflow-hidden">
                   <div class="px-4 py-2 border-b border-neutral-900 flex items-center justify-between">
                     <span class="text-[8px] font-mono text-violet-400/70 uppercase tracking-widest">Current Program Change</span>
-                    <span v-if="selectedReg?.isMulti || virtualActiveChannels.length > 1"
+                    <span v-if="selectedReg?.isMulti || mappedChannels.length > 1"
                       class="text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter"
-                      :class="virtualActiveChannels.length > 1
+                      :class="mappedChannels.length > 1
                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                         : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'">
-                      {{ virtualActiveChannels.length > 1 ? `${virtualActiveChannels.length}-Channel` : 'Multi-Timbral' }}
+                      {{ mappedChannels.length > 1 ? `${mappedChannels.length}-Channel` : 'Multi-Timbral' }}
                     </span>
                   </div>
                   <!-- Multi-channel / Multi-timbral: capped height with own scroll, rows clickable to switch active channel -->
-                  <div v-if="selectedReg?.isMulti || virtualActiveChannels.length > 0"
+                  <div v-if="selectedReg?.isMulti || mappedChannels.length > 0"
                     class="overflow-y-auto custom-scrollbar divide-y divide-neutral-900/60" style="max-height: 20vh">
                     <div
                       v-for="entry in multiChannelDisplayState"
@@ -1946,7 +2050,7 @@ function assignToPad(setId, padIdx) {
                       :class="[
                         'flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer',
                         entry.ch === (selectedReg?.pcChannel ?? 0)
-                          ? virtualActiveChannels.length > 0 ? 'bg-amber-500/10' : 'bg-violet-500/10'
+                          ? mappedChannels.length > 0 ? 'bg-amber-500/10' : 'bg-violet-500/10'
                           : 'hover:bg-white/[0.03]'
                       ]"
                       :title="`Click to send next preset to CH ${entry.ch + 1}`"
@@ -1954,7 +2058,7 @@ function assignToPad(setId, padIdx) {
                       <span :class="[
                         'shrink-0 w-10 text-center text-[8px] font-black rounded px-1.5 py-0.5 border',
                         entry.ch === (selectedReg?.pcChannel ?? 0)
-                          ? virtualActiveChannels.length > 0
+                          ? mappedChannels.length > 0
                             ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                             : 'bg-violet-500/20 text-violet-300 border-violet-500/40'
                           : 'bg-neutral-900 text-neutral-500 border-neutral-800'
