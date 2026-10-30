@@ -50,6 +50,7 @@ import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
 import Fm1EmulatorPanel from '@/components/Fm1EmulatorPanel.vue'
+import VirtualDevicePanel from '@/components/VirtualDevicePanel.vue'
 import AudioDiagnosticsPanel from '@/components/AudioDiagnosticsPanel.vue'
 import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
@@ -179,6 +180,7 @@ const simpleTogglePanels = [
   { openId: 'about', focusKey: 'about', component: AboutModal, transition: null },
   { openId: 'fm1-emulator', focusKey: 'fm1Emulator', component: Fm1EmulatorPanel, transition: null },
   { openId: 'audio-diagnostics', focusKey: 'audioDiagnostics', component: AudioDiagnosticsPanel, transition: null },
+  { openId: 'virtual-device', focusKey: 'virtualDevice', component: VirtualDevicePanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {

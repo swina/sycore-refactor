@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Star, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic, Save, X } from 'lucide-vue-next'
+import { AudioLines, Circle, Cable, ExternalLink, Volume2, VolumeX, Network, Star, Play, Square, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, CircleDot, Pin, ListMusic, Save, X, SlidersHorizontal } from 'lucide-vue-next'
+import { useVirtualDeviceStore } from '@/stores/useVirtualDeviceStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
@@ -25,6 +26,7 @@ import DeckChordProgSummary from '@/components/DeckChordProgSummary.vue'
 import DeckPlaylistSummary from '@/components/DeckPlaylistSummary.vue'
 import DeckSoloPerformanceSummary from '@/components/DeckSoloPerformanceSummary.vue'
 import DeckFm1Summary from '@/components/DeckFm1Summary.vue'
+import VirtualDeviceView from '@/components/VirtualDeviceView.vue'
 import { FM1_OUTPUT, fm1Firmware, fm1InChannels } from '@/lib/fm1-bridge'
 import { fm1Parts } from '@/lib/fm1-firmwares'
 
@@ -170,6 +172,8 @@ const selectedApp = ref(null)
 
 function selectApp(target) {
   selectedApp.value = target
+  // the summary shows in the display: leave the device view, which hides it
+  deviceView.value = false
 }
 
 // Only Drum Machine/Chord Prog (and Playlist, via its own separate button)
@@ -447,11 +451,19 @@ const displayItems = computed(() => [
   ...SYNC_APPS.value.map(s => ({ id: s.key, activate: () => { syncStore[s.key] = !syncStore[s.key] } })),
 ])
 
+// ── Device view: the Virtual Device UI in place of the display + instruments row, for the
+// virtual instrument picked on its card (switchable from the view's own device select). Kept
+// across reopenings of the DECK. ──
+const LS_DECK_DEVICE_VIEW = 'SYCORE_DECK_DEVICE_VIEW'
+const deviceView = ref((() => { try { return localStorage.getItem(LS_DECK_DEVICE_VIEW) === '1' } catch { return false } })())
+watch(deviceView, v => { try { localStorage.setItem(LS_DECK_DEVICE_VIEW, v ? '1' : '0') } catch {} })
+
+// (the device view hides the display and the instruments row: nothing to focus there)
 const zones = [
   { id: 'controllers', items: controllerItems },
-  { id: 'display', items: displayItems },
+  { id: 'display', items: computed(() => deviceView.value ? [] : displayItems.value) },
   { id: 'apps', items: appItems },
-  { id: 'instruments', items: instrumentItems },
+  { id: 'instruments', items: computed(() => deviceView.value ? [] : instrumentItems.value) },
 ]
 
 const nav = useCockpitNavigation(zones)
@@ -590,6 +602,18 @@ function openInProgramChange(row) {
   dispatch('device-pc-open', { deviceName: row.name })
 }
 
+function openVirtualDevice(row) {
+  useVirtualDeviceStore().selectedDevice = row.name
+  closeAppSummary()
+  deviceView.value = true
+}
+
+// the same view as a floating window, the DECK back to its display
+function popOutVirtualDevice() {
+  deviceView.value = false
+  uiStore.openPanel('virtual-device')
+}
+
 function openSoundEngine() {
   uiStore.openPanel('sound-engine')
 }
@@ -664,6 +688,24 @@ function handleBpmChange(e) {
       <!-- ── Center: Display + Instruments ── -->
       <div class="flex-1 min-w-0 flex flex-col gap-3">
         <!-- <p class="text-[8px] font-black uppercase tracking-widest text-neutral-600 text-center mb-0.5">Apps</p> -->
+        <!-- Device view: the Virtual Device UI replaces the display + instruments row -->
+        <!-- as tall as its content (scrolls inside only when the DECK is shorter) -->
+        <div v-if="deviceView" class="shrink min-h-0 max-h-full flex flex-col rounded-xl border-2 border-black bg-neutral-950/95 shadow-2xl overflow-hidden">
+          <VirtualDeviceView>
+            <template #actions>
+              <button @click="popOutVirtualDevice" title="Open as a floating panel"
+                class="p-1.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white">
+                <ExternalLink class="w-3.5 h-3.5" />
+              </button>
+              <button @click="deviceView = false" title="Back to the DECK display"
+                class="p-1.5 rounded hover:bg-white/10 text-neutral-400 hover:text-rose-400">
+                <X class="w-3.5 h-3.5" />
+              </button>
+            </template>
+          </VirtualDeviceView>
+        </div>
+
+        <template v-else>
         <!-- Main display (LCD screen) -->
         <div class="display-glass relative rounded-xl border-2 border-black bg-black overflow-hidden shadow-2xl p-3 flex flex-col shrink-0 h-3/5 h-min-1/2">
           <!-- Hardware screen effect overlays — decorative only, must not carry real content or backgrounds (they'd override the ones above) -->
@@ -888,6 +930,11 @@ function handleBpmChange(e) {
                 >
                   <ExternalLink class="w-3 h-3" />
                 </button>
+                <button v-if="row.type === 'virtual'" @click.stop="openVirtualDevice(row)" title="Open in Virtual Device"
+                  class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-teal-300 hover:border-teal-600 transition-colors"
+                >
+                  <SlidersHorizontal class="w-3 h-3" />
+                </button>
                 <button @click.stop="openInProgramChange(row)" title="Open in Program Change"
                   class="p-1 rounded border border-neutral-700 text-neutral-400 hover:text-violet-400 hover:border-violet-700 transition-colors"
                 >
@@ -898,6 +945,7 @@ function handleBpmChange(e) {
             
           </div>
         </div>
+        </template>
         <!-- Performance Sets -->
           <div class="flex items-center gap-1 w-full justify-center">
             <button

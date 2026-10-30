@@ -62,6 +62,11 @@ export interface SyCoreEventMap {
   // callers (e.g. Instrument Cockpit) that want the selection to be ready
   // without stealing focus.
   'device-pc-select': { deviceName: string; channel?: number };
+  // Virtual Device Panel's PRESET ▼▲: select that device + channel (0-based) and step its preset
+  // by `delta` in the open bank — the whole bank, or only the current preset's category (wraps).
+  'device-pc-preset-step': { deviceName: string; channel: number; delta: number; scope: 'all' | 'category' };
+  // Program Change panel's toast for a device + channel (0-based): Device · CH n · its current preset
+  'device-pc-toast': { deviceName: string; channel: number };
 
   // Timeline
   'timeline-lm-start': { padIdx: number; bpm: number };

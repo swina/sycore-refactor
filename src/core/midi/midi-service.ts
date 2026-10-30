@@ -722,6 +722,15 @@ export class MidiService {
     this.ingressFilter = fn;
   }
 
+  // Controls the app consumes (e.g. a Virtual Device dial learned with MIDI Learn): such a CC or
+  // note still reaches the CC/note listeners, but Thru doesn't forward it — otherwise it would also
+  // reach the device through the controller's MIDI Flow cable, on every channel of that cable.
+  private thruExclude: ((deviceName: string, channel: number, kind: 'cc' | 'note', number: number) => boolean) | null = null;
+
+  setThruExclude(fn: ((deviceName: string, channel: number, kind: 'cc' | 'note', number: number) => boolean) | null): void {
+    this.thruExclude = fn;
+  }
+
   // ── Smart Latch (delegates to sub-module) ────────────────────────────────
 
   setSmartLatchConfig(maxNotes: number, replace: boolean, fadeTime = 0): void {
@@ -1606,7 +1615,9 @@ export class MidiService {
         (isCC && thru.cc !== false) ||
         (isSystemThru) ||
         (!isNote && !isCC && !isSystem);
-      if (passGlobal) {
+      const consumed = (isCC || isNote) && !!this.thruExclude?.(
+        inputDevice?.name ?? '', status & 0x0f, isCC ? 'cc' : 'note', (processedData as Uint8Array)[1]);
+      if (passGlobal && !consumed) {
         this.router.routeMessageToOutputs(processedData as Uint8Array, inputId, now);
         this.routeMessageToVirtualOutputs(processedData as Uint8Array, inputDevice?.name || '', now);
       }

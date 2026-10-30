@@ -21,6 +21,7 @@ export interface PcChannelState {
   category: string | null;
   msb: number;
   lsb: number;
+  msgs?: number[][]; // the exact messages sent for it (bank select + PC, channel in the status), so it can be re-sent as is
 }
 
 /** Per-device registration stored in the routing config */

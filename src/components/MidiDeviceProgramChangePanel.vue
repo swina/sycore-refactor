@@ -23,6 +23,8 @@ import { useSoloPerformanceSets, SOLO_SLOT_LETTERS } from '@/composables/useSolo
 import { MidiSource, midiService } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 import { on } from '@/types/events'
+import { pcBrowse } from '@/lib/pc-browse'
+import { mappedParamFor, mappingKeysFor } from '@/composables/useMidiCCListener'
 
 const emit = defineEmits(['close'])
 
@@ -680,10 +682,12 @@ watch(filteredSounds, (list) => {
 })
 
 // ── pcChannels persistence helper ──────────────────────────────
-function recordChannelState(ch, program, bank, soundName, category, msb = 0, lsb = 0) {
+// msgs: the exact messages sent (bank select + PC), so the Virtual Device Panel can re-send this
+// preset in the device's own format when it recalls a saved sound.
+function recordChannelState(ch, program, bank, soundName, category, msb = 0, lsb = 0, msgs = undefined) {
   const reg = selectedReg.value
   if (!reg) return
-  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, category: category ?? '', msb, lsb } }
+  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, category: category ?? '', msb, lsb, ...(msgs ? { msgs } : {}) } }
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannels', updated)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', program)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcMsb', msb)
@@ -731,7 +735,7 @@ function sendCatalogSound(sound) {
   // then derive bank MSB and within-bank PC consistently from the same index.
   // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
   // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
-  let msb, lsb, progNum
+  let msb, lsb, progNum, msgs
 
   if (cfg?.bankSelect === 'emulatorx3') {
     // Emulator X3 wire format: CC64 = 0 (fixed), CC32 = bank, PC = program.
@@ -743,9 +747,7 @@ function sendCatalogSound(sound) {
     lsb = bank
     progNum = Math.max(0, Math.min(127, prog))
 
-    sendToDeviceMessage([0xB0 | ch, 64, 0])
-    sendToDeviceMessage([0xB0 | ch, 32, bank])
-    sendToDeviceMessage([0xC0 | ch, progNum])
+    msgs = [[0xB0 | ch, 64, 0], [0xB0 | ch, 32, bank], [0xC0 | ch, progNum]]
   } else {
     // Normalize to 0-indexed absolute MIDI program number using program_base,
     // then derive bank MSB and within-bank PC consistently from the same index.
@@ -755,14 +757,16 @@ function sendCatalogSound(sound) {
     msb = cfg.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
     lsb = cfg.lsb ? (sound.lsb ?? 0) : 0
     progNum = Math.max(0, Math.min(127, progIdx % 128))
-    sendToDeviceMessage([0xB0 | ch, 0,  sound.msb])
-    sendToDeviceMessage([0xB0 | ch, 32, sound.lsb])
-    sendToDeviceMessage([0xC0 | ch, progNum])
+    msgs = [[0xB0 | ch, 0, sound.msb], [0xB0 | ch, 32, sound.lsb], [0xC0 | ch, progNum]]
   }
+  msgs.forEach(m => sendToDeviceMessage(m))
 
   lastSent.value = sound
-  recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb)
-  showPcNotification(selectedDeviceName.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'] ?? '')
+  // (recorded with a missing catalog MSB/LSB as 0, the value the device ends up with)
+  recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb,
+    msgs.map(m => m.map(b => b ?? 0)))
+  // a multipart device: the toast names the channel too (Device · CH n · Preset)
+  showPcNotification(selectedDeviceName.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'] ?? '', ch)
 
   const msg = `[Device PC] → ${selectedDeviceName.value} ch${ch + 1}: MSB=${msb} LSB=${lsb} PC=${progNum} | ${sound.name}`
   if (window.SY_LOG) window.SY_LOG(msg); else console.log(msg)
@@ -783,18 +787,22 @@ function sendManual() {
   const reg = selectedReg.value
   if (!reg) return
   const ch = Math.max(0, reg.pcChannel ?? 0)
-  if (sendMsb.value) sendToDeviceMessage([0xB0 | ch, 0,  manualMsb.value])
-  if (sendLsb.value) sendToDeviceMessage([0xB0 | ch, 32, manualLsb.value])
   const prog = Math.max(0, Math.min(127, manualProg.value - 1))
-  sendToDeviceMessage([0xC0 | ch, prog])
-  recordChannelState(ch, prog, '', `PC ${manualProg.value}`)
+  const msgs = []
+  if (sendMsb.value) msgs.push([0xB0 | ch, 0,  manualMsb.value])
+  if (sendLsb.value) msgs.push([0xB0 | ch, 32, manualLsb.value])
+  msgs.push([0xC0 | ch, prog])
+  msgs.forEach(m => sendToDeviceMessage(m))
+  recordChannelState(ch, prog, '', `PC ${manualProg.value}`, '', sendMsb.value ? manualMsb.value : 0, sendLsb.value ? manualLsb.value : 0, msgs)
   lastSent.value = { name: `PC ${manualProg.value}` }
-  showPcNotification(selectedDeviceName.value, `PC ${manualProg.value}`)
+  showPcNotification(selectedDeviceName.value, `PC ${manualProg.value}`, '', ch)
 }
 
 // ── Channel helper ──────────────────────────────────────────────
 function setChannel(ch) {
+  const changed = (selectedReg.value?.pcChannel ?? 0) !== ch - 1
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannel', ch - 1)
+  if (changed) showChannelToast(selectedDeviceName.value, ch - 1)
 }
 
 // The active channel always one of the mapped ones: a re-routed device lands on its first part.
@@ -811,9 +819,7 @@ function nextMappedChannel() {
   if (chs.length < 2) return
   const i = chs.indexOf(selectedReg.value?.pcChannel ?? 0)
   const next = chs[(i + 1) % chs.length]
-  setChannel(next + 1)
-  const info = selectedReg.value?.pcChannels?.[next]
-  showPcNotification(selectedDeviceName.value, info?.soundName ?? 'No preset', info?.category ?? '', next)
+  setChannel(next + 1)   // (toasts Device · CH n · Preset)
 }
 
 // ── Preset list navigation (MIDI CC) ────────────────────────────
@@ -842,6 +848,45 @@ function navigatePresetList(delta) {
   })
 }
 
+// ── Virtual Device Panel: PRESET ▼▲ and the position shown on its display ──
+// The panel drives this one ('device-pc-preset-step'), so catalogs, banks and each device's bank
+// select format stay here. A device switch loads its bank first (watchers + fetch): wait for it.
+async function waitForSounds() {
+  await nextTick()
+  for (let i = 0; i < 100 && isLoading.value; i++) await new Promise(r => setTimeout(r, 20))
+}
+
+let _presetStepQueue = Promise.resolve()
+function stepPresetFor({ deviceName, channel, delta, scope }) {
+  // one step after the other: fast presses on a controller don't race the loading
+  _presetStepQueue = _presetStepQueue.then(async () => {
+    if (selectedDeviceName.value !== deviceName) selectDevice(deviceName)
+    if ((selectedReg.value?.pcChannel ?? 0) !== channel) setChannel(channel + 1)
+    await waitForSounds()
+    let list = sounds.value
+    if (!list.length) { showPcNotification(deviceName, 'No preset list: pick a bank in Program Change', '', channel); return }
+    const field = bankConfig.value?.category_field ?? 'category'
+    const current = selectedReg.value?.pcChannels?.[channel]?.soundName
+    let idx = list.findIndex(sd => sd.name === current)
+    if (scope === 'category' && idx >= 0) {
+      const cat = list[idx][field]
+      list = list.filter(sd => sd[field] === cat)
+      idx = list.findIndex(sd => sd.name === current)
+    }
+    const next = idx < 0 ? (delta > 0 ? 0 : list.length - 1) : (idx + delta + list.length) % list.length
+    selectSound(list[next])
+  }).catch(e => console.error('[DevicePCPanel] preset step failed', e))
+}
+
+watch([selectedDeviceName, () => selectedReg.value?.pcChannel, () => selectedReg.value?.pcChannels, sounds], () => {
+  const ch = Math.max(0, selectedReg.value?.pcChannel ?? 0)
+  const name = selectedReg.value?.pcChannels?.[ch]?.soundName
+  pcBrowse.value = {
+    device: selectedDeviceName.value, channel: ch, total: sounds.value.length,
+    index: name ? sounds.value.findIndex(sd => sd.name === name) : -1,
+  }
+}, { immediate: true })
+
 let _unsubScrollCC = null
 
 function startScrollCCListener() {
@@ -862,6 +907,7 @@ function startScrollCCListener() {
     // Any CC can be learned; navigation is relative (value delta), so an
     // endless encoder works on lists longer than 128 presets.
     if (isLearningScrollCC.value) {
+      dropGlobalMappings('cc', cc, channel, device)
       scrollCCMap.value = { cc, channel, device }
       localStorage.setItem(userKey(LS_SCROLL_CC),JSON.stringify(scrollCCMap.value))
       isLearningScrollCC.value = false
@@ -948,6 +994,7 @@ function createButtonLearn(lsKey, onTrigger) {
       const sc = scrollCCMap.value
       if (msg.kind === 'cc' && sc && sc.cc === msg.number && sc.channel === msg.channel && sc.device === msg.device) clearScrollCC()
       buttonLearns.forEach(b => { if (b.handle !== handle && b.matchesMap(m)) b.clear() })
+      dropGlobalMappings(msg.kind, msg.number, msg.channel, msg.device)
       if (msg.kind === 'note') { save(m); return true }
       save({ ...m, mode: 'toggle' })
       detect = { map: m, value: msg.val, timer: setTimeout(() => { detect = null }, BTN_DETECT_MS) }
@@ -997,6 +1044,26 @@ const chNextLearn    = createButtonLearn('SYCORE_PC_CHANNEL_NEXT_MIDI', nextMapp
 const buttonLearns   = [favToggleLearn, favFilterLearn, chNextLearn]
 const isLearningAnyButton = computed(() => buttonLearns.some(b => b.isLearning.value))
 
+// One control, one function — also across MIDI Learn systems: learning a control here drops a
+// right-click MIDI Learn mapping (mappingStore) on it, and a control learned there drops the
+// binding here (e.g. one knob on a Virtual Device dial and on "next mapped channel" stepped the
+// channel at every turn). Device-specific keys only: legacy device-less CC# mappings are left alone.
+function dropGlobalMappings(kind, number, channel, device) {
+  for (const key of mappingKeysFor(device, channel, kind, number, { withPlain: false })) {
+    if (mappingStore.midiMappings[key]) mappingStore.removeMapping(key)
+  }
+}
+watch(() => mappingStore.midiMappings, (maps) => {
+  const taken = (kind, number, channel, device) =>
+    !!device && !!mappedParamFor(maps, device, channel ?? 0, kind, number, { withPlain: false })
+  for (const b of buttonLearns) {
+    const m = b.map.value
+    if (m && taken(m.type, m.number, m.channel, m.device)) b.clear()
+  }
+  const sc = scrollCCMap.value
+  if (sc && taken('cc', sc.cc, sc.channel, sc.device)) clearScrollCC()
+}, { immediate: true, deep: true })
+
 let _unsubButtonMidi = null
 
 function startButtonMidiListener() {
@@ -1030,6 +1097,8 @@ let _pcNavHandler   = null
 let _unsubDevMidi   = null
 let _unsubDevicePcOpen = null
 let _unsubDevicePcSelect = null
+let _unsubPresetStep = null
+let _unsubPcToast = null
 
 function _startDevMidiListener() {
   _unsubDevMidi?.()
@@ -1041,20 +1110,18 @@ function _startDevMidiListener() {
     const byte1   = event.data[1]
     const byte2   = event.data[2]
 
-    // Incoming Program Change → show toast notification
+    // Incoming Program Change → toast, only when it comes from that device's own input port (the
+    // device reporting its patch change). Matching any registration by PC channel named stale
+    // devices no longer in MIDI Flow, and fired on our own PCs coming back through loopback ports.
     if (type === 0xC0) {
       const progNum = byte1
-      const matchedDev = devices.value.find(d => {
-        const reg = midiStore.routingConfig.registrations[d.name]
-        return reg?.pcEnabled && reg?.pcChannel === channel
-      })
+      const fromName = midiService.getInputs().find(i => i.id === event.target?.id)?.name
+      const matchedDev = fromName && devices.value.find(d => d.name === fromName)
       if (matchedDev) {
         const reg = midiStore.routingConfig.registrations[matchedDev.name]
         const storedInfo = reg?.pcChannels?.[channel]
         const matched = storedInfo?.program === progNum ? storedInfo : null
-        const name = matched?.soundName ?? `PC ${progNum + 1}`
-        const category = matched?.category ?? ''
-        showPcNotification(matchedDev.name, name, category)
+        showPcNotification(matchedDev.name, matched?.soundName ?? `PC ${progNum + 1}`, matched?.category ?? '', channel)
       }
       return
     }
@@ -1086,7 +1153,7 @@ function _startDevMidiListener() {
         activeSlotIdx.value = idx
         triggerSlot(idx)
         const slot = getSlotAssignment(idx)
-        if (slot) showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`)
+        if (slot) showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`, '', Math.max(0, slot.pcChannel ?? 0))
       }
       return
     }
@@ -1118,6 +1185,8 @@ onMounted(() => {
     selectDevice(deviceName)
     if (channel != null) setChannel(channel)
   })
+  _unsubPresetStep = on('device-pc-preset-step', stepPresetFor)
+  _unsubPcToast = on('device-pc-toast', ({ deviceName, channel }) => showChannelToast(deviceName, channel))
 })
 onUnmounted(() => {
   _unsubScrollCC?.()
@@ -1127,6 +1196,8 @@ onUnmounted(() => {
   if (_pcNavHandler) window.removeEventListener('device-pc-preset-navigate', _pcNavHandler)
   _unsubDevicePcOpen?.()
   _unsubDevicePcSelect?.()
+  _unsubPresetStep?.()
+  _unsubPcToast?.()
   clearTimeout(_pcNotifTimer)
 })
 
@@ -1135,13 +1206,15 @@ function selectDevice(name) {
   selectedDeviceName.value = name
   const reg = midiStore.routingConfig.registrations[name]
   if (!reg) return
-  const ch = reg.pcChannel ?? 0
-  const chInfo = reg.pcChannels?.[ch]
-  if (chInfo?.soundName) {
-    showPcNotification(name, chInfo.soundName, chInfo.category ?? '')
-  } else if (reg.pcProgram != null) {
-    showPcNotification(name, `PC ${reg.pcProgram + 1}`)
-  }
+  showChannelToast(name, Math.max(0, reg.pcChannel ?? 0))
+}
+
+// Device · CH n · Preset — the channel's current preset (its PC number when unnamed, else none)
+function showChannelToast(device, ch) {
+  const reg = midiStore.routingConfig.registrations[device]
+  const info = reg?.pcChannels?.[ch]
+  const name = info?.soundName ?? (info?.program != null ? `PC ${info.program + 1}` : 'No preset')
+  showPcNotification(device, name, info?.category ?? '', ch)
 }
 
 function promptAddVirtualInstrument() {
@@ -1217,7 +1290,7 @@ function selectTargetSlot(idx) {
     activeSlotIdx.value = activeSlotIdx.value === idx ? -1 : idx
     const slot = getSlotAssignment(idx)
     if (slot) {
-      showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`)
+      showPcNotification(slot.deviceName, slot.soundName || `PC ${slot.pcProgram}`, '', Math.max(0, slot.pcChannel ?? 0))
       followSoloSlotInBrowser(slot)
     }
   }

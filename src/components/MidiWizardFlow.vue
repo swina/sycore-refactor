@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
-import { RefreshCw, Cable, Network, Check, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, ExternalLink, Activity, Filter, Settings, Power } from 'lucide-vue-next'
+import { RefreshCw, Cable, Network, Check, Cpu, X , Gamepad2, Save, FolderOpen, ChevronDown, Trash2, ExternalLink, Activity, Filter, Settings, Power, SlidersHorizontal } from 'lucide-vue-next'
+import { useVirtualDeviceStore } from '@/stores/useVirtualDeviceStore'
 import { MIDI_APPS, APP_PANEL_ID, isNoteLatchSourceKey, nextLatchSourceKey, latchInstanceSuffix } from '@/lib/midi-apps'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
@@ -802,6 +803,11 @@ function routedFilter(cable, dst) {
   return { ...f, outChannels: [Math.min(...f.outChannels)] }
 }
 
+function openVirtualDevicePanel(name) {
+  useVirtualDeviceStore().selectedDevice = name
+  uiStore.openPanel('virtual-device')
+}
+
 const editingCableMultipart = computed(() =>
   !!editingCable.value && isMultipartNode(canvasNodes.value.find(n => n.id === editingCable.value.toId)))
 
@@ -1311,6 +1317,15 @@ function pendingPath() {
                     :title="isVirtualInstrumentOnline(node.name) ? 'Online — click to mark offline' : 'Offline — click to mark online'"
                   >
                     <Power class="w-3 h-3" />
+                  </button>
+                  <button
+                    v-if="node.type === 'virtual'"
+                    @click.stop="openVirtualDevicePanel(node.name)"
+                    class="transition-colors"
+                    :class="typeMeta(node.type).text + ' opacity-70 hover:opacity-100'"
+                    title="Open in Virtual Device (preset, controls, sounds)"
+                  >
+                    <SlidersHorizontal class="w-3 h-3" />
                   </button>
                   <button
                     v-if="!node.sourceId"

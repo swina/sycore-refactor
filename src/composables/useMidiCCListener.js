@@ -14,6 +14,11 @@ import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 import { dispatch } from '@/types/events'
+import { useVirtualDeviceStore } from '@/stores/useVirtualDeviceStore'
+import { parseVdpParam, ButtonEdge } from '@/lib/virtual-device'
+
+// CC buttons that step / switch something: momentary vs toggle detection (lib/virtual-device.ts)
+const buttonEdges = new ButtonEdge()
 
 
 function isS1Device(name) {
@@ -191,6 +196,19 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: shouldPlay } }))
     return
   }
+  // ── Virtual Device Panel controls (lib/virtual-device.ts: vdp_cc:<device>:<cc>, vdp_<action>:<device>)
+  if (fieldName.startsWith('vdp_')) {
+    const p = parseVdpParam(fieldName)
+    if (!p) return
+    const vd = stores.vdStore ?? useVirtualDeviceStore()
+    if (p.kind === 'cc') { vd.setCc(p.device, p.cc, val); return }
+    // a CC button: momentary fires on its press only, toggle on every press (auto-detected)
+    if (!buttonEdges.fires(fieldName, val, fromNote, performance.now())) return
+    if (p.kind === 'slot') vd.recallSlot(p.device, p.slot)
+    else if (p.kind === 'preset_next' || p.kind === 'preset_prev') vd.stepPreset(p.device, p.kind === 'preset_next' ? 1 : -1)
+    else vd.stepChannel(p.device, p.kind === 'ch_next' ? 1 : -1)
+    return
+  }
   if (fieldName === 'seq_time' || fieldName === 'seq_direction') {
     const event = fieldName === 'seq_time' ? 'seq-time-set' : 'seq-direction-set'
     window.dispatchEvent(new CustomEvent(event, { detail: { value: val, fromNote } }))
@@ -320,6 +338,28 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   if (cc !== undefined) {
     midiStore.sendCC(cc, val, null, MidiSource.UI)
   }
+}
+
+/**
+ * The MIDI Learn mapping (mappingStore.midiMappings) a CC or note from `deviceName` on `chan`
+ * (0-based) triggers, most specific key first: Device:CH#:CC# / CH#:CC#, Device:CC#, CC#
+ * (notes: …:NOTE#). Returns the param name, or null.
+ */
+export function mappedParamFor(mappings, deviceName, chan, kind, number, { withPlain = true } = {}) {
+  for (const key of mappingKeysFor(deviceName, chan, kind, number, { withPlain })) {
+    const m = mappings?.[key]
+    if (m) return typeof m === 'object' ? m.paramName ?? null : m
+  }
+  return null
+}
+
+/** The mapping keys a CC/note can be stored under, most specific first (withPlain: the legacy device-less CC#/NOTE# key too). */
+export function mappingKeysFor(deviceName, chan, kind, number, { withPlain = true } = {}) {
+  const frag = kind === 'note' ? `NOTE${number}` : `CC${number}`
+  const keys = [deviceName ? `${deviceName}:CH${chan + 1}:${frag}` : `CH${chan + 1}:${frag}`]
+  if (deviceName) keys.push(`${deviceName}:${kind === 'note' ? frag : number}`)
+  if (withPlain) keys.push(kind === 'note' ? frag : `${number}`)
+  return keys
 }
 
 export function useMidiCCListener() {
@@ -494,9 +534,13 @@ export function useMidiCCListener() {
     unsubCC = midiService.addCCListener(onCC)
     unsubNote = midiService.addNoteListener(onNote)
     unsubPitch = midiService.addPitchBendListener(onPitchBend)
+    // Virtual Device controls are consumed: kept out of Thru (see midiService.setThruExclude)
+    midiService.setThruExclude((deviceName, chan, kind, number) =>
+      !!mappedParamFor(mappingStore.midiMappings, deviceName || null, chan, kind, number)?.startsWith('vdp_'))
   })
 
   onUnmounted(() => {
+    midiService.setThruExclude(null)
     unsubCC?.()
     unsubNote?.()
     unsubPitch?.()
@@ -507,8 +551,6 @@ export function useMidiCCListener() {
     const inputCh = midiStore.midiInputChannel
     const isControl = chan === midiCh
     const isInput = inputCh === -1 || chan === inputCh
-
-    if (!isControl && !isInput) return
 
     if (mappingStore.isMidiLearning) return // raw listener in MidiMapContextMenu handles this
 
@@ -523,10 +565,16 @@ export function useMidiCCListener() {
       : `CH${chan + 1}:${noteFragment}`
     const deviceKey = deviceName ? `${deviceName}:${noteFragment}` : null
 
-    const mapping =
-      mappingStore.midiMappings[preciseKey] ||
-      (deviceKey ? mappingStore.midiMappings[deviceKey] : null) ||
-      mappingStore.midiMappings[noteFragment]
+    // A mapping learned on this device (+ channel) is explicit: it applies whatever the global
+    // control / input channel — pads usually send on their own channel (often 10), which the
+    // filter below dropped before the mapping was even looked up (CCs already worked this way).
+    // The legacy device-less NOTE# key stays behind the channel filter.
+    const explicit = mappingStore.midiMappings[preciseKey] ||
+      (deviceKey ? mappingStore.midiMappings[deviceKey] : null)
+
+    if (!explicit && !isControl && !isInput) return
+
+    const mapping = explicit || mappingStore.midiMappings[noteFragment]
 
     if (!mapping) {
       // Unmapped notes are played notes — feed the Chord Capture held-note set.

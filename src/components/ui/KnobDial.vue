@@ -11,6 +11,7 @@ const props = defineProps({
   label:      { type: String, default: '' },
   color:      { type: String, default: '#7c3aed' },
   format:     { type: Function, default: null },
+  showValue:  { type: Boolean, default: true },   // false: the host shows (or edits) the value itself
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 
@@ -74,6 +75,6 @@ function down(e) {
       <circle :cx="cx" :cy="cy" r="2.5" fill="#52525b"/>
     </svg>
     <span v-if="label" class="text-[9px] text-violet-500 font-mono leading-none">{{ label }}</span>
-    <span class="text-[9px] text-neutral-400 font-mono leading-none">{{ displayVal }}</span>
+    <span v-if="showValue" class="text-[9px] text-neutral-400 font-mono leading-none">{{ displayVal }}</span>
   </div>
 </template>

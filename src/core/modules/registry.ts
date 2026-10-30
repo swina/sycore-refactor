@@ -37,6 +37,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'sound-engine', label: 'Sound Engine', icon: Cpu, category: 'sound-design', bg: '/bg-sound-design-2.png' },
   { id: 'sampler', label: 'Sampler', icon: Music2, category: 'sound-design', bg: '/sycore-lab.png', badge: 'Beta' },
   { id: 'fm1-emulator', label: 'FM-1 Emulator', icon: Cpu, category: 'sound-design', bg: '/bg-sound-design.png', badge: 'Beta' },
+  { id: 'virtual-device', label: 'Virtual Device', icon: SlidersHorizontal, category: 'sound-design', bg: '/bg-sound-design-2.png', badge: 'Beta' },
 
   // ── MIDI Tools ───────────────────────────────────────────────────────────
   { id: 'sequencer', label: 'Step Sequencer', icon: Music, category: 'midi-tools', bg: '/step-sequencer-square.png' },
