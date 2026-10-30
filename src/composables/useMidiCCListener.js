@@ -335,6 +335,11 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     window.dispatchEvent(new CustomEvent('playlist-next'))
     return
   }
+  // play / pause: each press flips it (momentary and toggle buttons alike)
+  if (fieldName === 'playlist_play_stop') {
+    if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) window.dispatchEvent(new CustomEvent('playlist-play-stop'))
+    return
+  }
 
   if (!presetStore.lastPreset) return
   presetStore.updateFieldValue(fieldName, val)

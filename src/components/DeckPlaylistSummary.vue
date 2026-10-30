@@ -88,12 +88,17 @@ onUnmounted(() => {
             <span v-if="mappingStore.learningParamName === 'prev_track'"
               class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
           </div>
-          <button @click="playStop" :title="isPlaying ? 'Pause' : 'Play'"
-            class="w-8 h-8 flex items-center justify-center rounded-full bg-synth-neon/10 text-synth-neon hover:bg-synth-neon hover:text-black transition-all active:scale-90 shadow-lg shadow-synth-neon/20"
-          >
-            <Pause v-if="isPlaying" class="w-4 h-4 fill-current" />
-            <Play v-else class="w-4 h-4 fill-current ml-0.5" />
-          </button>
+          <div class="relative">
+            <button @click="playStop" :title="(isPlaying ? 'Pause' : 'Play') + ' (right-click: MIDI Learn)'"
+              @contextmenu.prevent="openMenu($event, { name: 'playlist_play_stop', label: 'Playlist Play / Pause' })"
+              class="w-8 h-8 flex items-center justify-center rounded-full bg-synth-neon/10 text-synth-neon hover:bg-synth-neon hover:text-black transition-all active:scale-90 shadow-lg shadow-synth-neon/20"
+            >
+              <Pause v-if="isPlaying" class="w-4 h-4 fill-current" />
+              <Play v-else class="w-4 h-4 fill-current ml-0.5" />
+            </button>
+            <span v-if="mappingStore.learningParamName === 'playlist_play_stop'"
+              class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
           <div class="relative">
             <button @click="next" title="Next" class="text-neutral-500 hover:text-white transition-colors"
               @contextmenu.prevent="openMenu($event, { name: 'next_track', label: 'Next Track' })"
