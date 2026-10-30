@@ -730,6 +730,13 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   const repeaterActive = ref(false)
   const repeaterDivision = ref(2)
 
+  // MIDI OUT ONLY: every track (and the bassline) plays as MIDI notes to the virtual instrument the
+  // Drum Machine is wired to in MIDI Flow, without the internal samples — applied by DrumMachine.vue
+  // only while it is wired to one. MIDI-learnable (dm_midi_out_only).
+  const LS_MIDI_OUT_ONLY = 'SYCORE_DM_MIDI_OUT_ONLY'
+  const midiOutOnly = ref((() => { try { return localStorage.getItem(userKey(LS_MIDI_OUT_ONLY)) === '1' } catch { return false } })())
+  watch(midiOutOnly, v => { try { localStorage.setItem(userKey(LS_MIDI_OUT_ONLY), v ? '1' : '0') } catch {} })
+
   // AutoFill/Chain — canonical state lives here (not in DrumMachine.vue) so
   // sibling components (e.g. DECK's per-app summary) can read it reactively.
   const autofillEnabled = ref(false)
@@ -1405,7 +1412,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   return {
-    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision,
+    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, midiOutOnly,
     autofillEnabled, chainEnabled,
     sequences, activeSequence, currentPattern,
     TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,

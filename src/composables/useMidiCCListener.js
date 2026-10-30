@@ -143,6 +143,11 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     drumStore.isPlaying = fromNote ? !drumStore.isPlaying : on
     return
   }
+  if (fieldName === 'dm_midi_out_only') {
+    // a switch: each press flips it (momentary and toggle buttons alike)
+    if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) drumStore.midiOutOnly = !drumStore.midiOutOnly
+    return
+  }
   if (fieldName === 'dm_repeat') {
     drumStore.repeaterActive = fromNote ? !drumStore.repeaterActive : on
     return

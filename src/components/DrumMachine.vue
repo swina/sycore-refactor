@@ -323,6 +323,23 @@ function _sendMidiNote(note, velocity, accent, fireTime, duration) {
   setTimeout(() => midiStore.sendNoteOff(note, 0, midiStore.midiChannel, MidiSource.DRUM_MACHINE), offDelayMs)
 }
 
+// ── MIDI OUT ONLY (drumStore.midiOutOnly) — the virtual instruments the Drum Machine is wired to
+// in MIDI Flow; while there's one and the switch is on, every track plays its MIDI note (the
+// channel set there) and no sample sounds: steps, ratchets, bassline voices, pads. ──
+const midiOutTargets = computed(() => (midiStore.routingMatrix[MidiSource.DRUM_MACHINE] ?? [])
+  .filter(name => midiStore.virtualInstruments.some(v => v.name === name)))
+const midiOutOnly = computed(() => drumStore.midiOutOnly && midiOutTargets.value.length > 0)
+
+// a pad hit (live pad, MIDI-triggered pad, preview): the track's MIDI note instead of its sample
+function _hitPad(trackIdx, velocity) {
+  if (midiOutOnly.value) {
+    const note = drumStore.currentPattern[trackIdx]?.midiNote ?? 36
+    _sendMidiNote(note, velocity, false, toneNow(), 0.1)
+    return
+  }
+  drumEngine.triggerPad(trackIdx, { velocity, accent: false, time: 0 })
+}
+
 function _sendMidiRatchet(note, stepTimeSec, divisions, { velocity, accent, baseTime, duration }) {
   // Each subdivision gets its own short gate (rather than the full step
   // duration) so an earlier retrigger's note-off can't race a later
@@ -454,9 +471,9 @@ function _scheduleCallback(time) {
       ? state.repeaterDivision
       : step.ratchet
 
-    if (track.midiOutEnabled) {
-      // MIDI Out: drive an external drum machine/synth's own sound instead
-      // of SY.CORE's internal sample for this track.
+    if (track.midiOutEnabled || midiOutOnly.value) {
+      // MIDI Out (this track, or MIDI OUT ONLY for all): drive an external drum
+      // machine/synth's own sound instead of SY.CORE's internal sample.
       if (divisions <= 1) {
         _sendMidiNote(track.midiNote, step.velocity, step.accent, fireTime, stepDur)
       } else {
@@ -504,6 +521,10 @@ function _scheduleCallback(time) {
       const step = voice.steps[trackStep]
       if (!step.active) return
       const bassDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
+      if (midiOutOnly.value) {
+        _sendMidiNote(step.note ?? 36, step.velocity, step.accent ?? false, fireTime, bassDur)
+        return
+      }
       drumEngine.setPadVolume(padIdx, (voice.volume ?? 0.85) * mixer.effectiveDrumsLevel)
       drumEngine.setPadPitch(padIdx, voice.pitch ?? 0)
       drumEngine.triggerPadWithNote(padIdx, step.note ?? 36, {
@@ -733,7 +754,7 @@ function _tlDmRecSyncHandler(e) {
 function _onPadTrigger(e) {
   const { trackIdx, velocity } = e.detail ?? {}
   if (typeof trackIdx === 'number' && trackIdx >= 0 && trackIdx < drumStore.TRACK_LABELS.length) {
-    drumEngine.triggerPad(trackIdx, { velocity: velocity ?? 100, accent: false, time: 0 })
+    _hitPad(trackIdx, velocity ?? 100)
   }
 }
 
@@ -878,7 +899,7 @@ async function copySoundsTo(targetSeq) {
 }
 
 function previewPad(trackIdx) {
-  drumEngine.triggerPad(trackIdx, { velocity: 100, accent: false, time: 0 })
+  _hitPad(trackIdx, 100)
 }
 
 // ── Preset save / load ────────────────────────────────────────────────────────
@@ -2737,6 +2758,33 @@ function cycleChainSlot(i) {
         </div>
 
         <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
+        <!-- MIDI OUT ONLY — only while the Drum Machine is wired to a virtual instrument in MIDI Flow -->
+        <template v-if="midiOutTargets.length">
+          <div class="relative -mt-1" :class="mappingStore.mappedParams.has('dm_midi_out_only') ? 'ring-1 ring-amber-500/60 rounded' : ''">
+            <button
+              @click.stop="drumStore.midiOutOnly = !drumStore.midiOutOnly"
+              @contextmenu.prevent="openMenu($event, { name: 'dm_midi_out_only', label: 'Drum Machine: MIDI Out Only' })"
+              :title="`MIDI OUT ONLY: every track sends its MIDI note to ${midiOutTargets.join(', ')} (the channel set in MIDI Flow), no samples play. Right-click: MIDI Learn`"
+              :class="[
+                'flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+                drumStore.midiOutOnly
+                  ? 'bg-sky-500/30 border-sky-400 text-sky-200'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
+              ]"
+            >
+              <span class="w-5 h-2.5 rounded-full relative transition-colors" :class="drumStore.midiOutOnly ? 'bg-sky-400/70' : 'bg-neutral-600'">
+                <span class="absolute top-0.5 w-1.5 h-1.5 rounded-full bg-white transition-all" :class="drumStore.midiOutOnly ? 'left-3' : 'left-0.5'" />
+              </span>
+              MIDI Out Only
+            </button>
+            <span
+              v-if="mappingStore.learningParamName === 'dm_midi_out_only'"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+            />
+          </div>
+          <div class="w-px h-4 bg-neutral-800 shrink-0" />
+        </template>
 
         <!-- Repeater -->
         <div class="flex items-center gap-2">
