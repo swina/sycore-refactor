@@ -15,6 +15,7 @@ import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 import { dispatch } from '@/types/events'
 import { useVirtualDeviceStore } from '@/stores/useVirtualDeviceStore'
+import { deviceRegistry } from '@/core/midi/DeviceRegistry'
 import { parseVdpParam, ButtonEdge } from '@/lib/virtual-device'
 
 // CC buttons that step / switch something: momentary vs toggle detection (lib/virtual-device.ts)
@@ -372,6 +373,22 @@ export function mappingKeysFor(deviceName, chan, kind, number, { withPlain = tru
   return keys
 }
 
+/**
+ * Whether notes from input `name` are played notes for Chord Capture: an input wired as one in
+ * MIDI Flow (registration inEnabled) or registered as a controller; never a port flagged as a
+ * loopback of our output, nor the input side of a port a virtual instrument sends to (its echo
+ * of Drum Machine / Arp / Chord Progression notes replaced the chord just played). With nothing
+ * wired as an input, any other input counts.
+ */
+export function isCaptureInput(name, { loopbacks = [], outputPorts = [], registrations = {}, controllers = [] } = {}) {
+  if (!name) return false
+  const norm = (n) => n.toLowerCase().replace(/^(\d+-|midi\s+|usb\s+)/i, '').replace(/\s*\((a|b)\)\s*$/i, '').trim()
+  if (loopbacks.includes(name)) return false
+  if (outputPorts.some(p => p === name || norm(p) === norm(name))) return false
+  if (registrations[name]?.inEnabled || controllers.includes(name)) return true
+  return !Object.values(registrations).some(r => r?.inEnabled)
+}
+
 export function useMidiCCListener() {
   const midiStore = useMidiStore()
   const mappingStore = useMappingStore()
@@ -587,8 +604,14 @@ export function useMidiCCListener() {
     const mapping = explicit || mappingStore.midiMappings[noteFragment]
 
     if (!mapping) {
-      // Unmapped notes are played notes — feed the Chord Capture held-note set.
-      cpStore.trackCaptureNote(isOn, note)
+      // Unmapped notes are played notes — feed the Chord Capture held-note set, from a real
+      // controller only (not SY.CORE's own MIDI coming back through a loopback port).
+      if (isCaptureInput(deviceName, {
+        loopbacks: midiService.getLoopbackInputNames(),
+        outputPorts: midiStore.virtualInstruments.map(v => v.midiOutputPort).filter(Boolean),
+        registrations: midiStore.routingConfig?.registrations ?? {},
+        controllers: deviceRegistry.getAll().filter(d => d.type === 'controller').map(d => d.name),
+      })) cpStore.trackCaptureNote(isOn, note)
       return
     }
     if (isOn) {

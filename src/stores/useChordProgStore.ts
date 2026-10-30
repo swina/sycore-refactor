@@ -304,10 +304,14 @@ export const useChordProgStore = defineStore('chordProg', () => {
   // ── Chord Capture ───────────────────────────────────────────────────────
   // A MIDI-learned button (cp_capture) snapshots the chord played on the MIDI
   // input into captureBuffer; the Capture tab imports the buffer into steps.
-  // Held-note tracking is a plain Set — fed on every MIDI note, so not reactive.
+  // Held-note tracking is a plain Map (note → when pressed) — fed on every MIDI note, so not
+  // reactive. A note held longer than CAPTURE_HELD_MAX_MS counts as stuck (its note-off was lost)
+  // and is dropped: otherwise it stayed "held" forever and every capture returned it (a long-held
+  // chord still captures, as the last chord struck).
   const CAPTURE_STORAGE_KEY = 'SYCORE_CHORD_PROG_CAPTURE'
+  const CAPTURE_HELD_MAX_MS = 20000
   const captureBuffer = ref<CapturedChord[]>(loadCaptureBuffer())
-  const _captureHeld = new Set<number>()
+  const _captureHeld = new Map<number, number>()
   // Last chord struck (all notes pressed since the keyboard was last empty),
   // so a capture still works after the chord has been released.
   let _captureLast: number[] = []
@@ -325,18 +329,24 @@ export const useChordProgStore = defineStore('chordProg', () => {
     try { localStorage.setItem(userKey(CAPTURE_STORAGE_KEY), JSON.stringify(buf)) } catch {}
   }, { deep: true })
 
-  function trackCaptureNote(isOn: boolean, note: number) {
+  function _dropStuckHeld(now: number) {
+    for (const [note, at] of _captureHeld) if (now - at > CAPTURE_HELD_MAX_MS) _captureHeld.delete(note)
+  }
+
+  function trackCaptureNote(isOn: boolean, note: number, now = performance.now()) {
     if (isOn) {
+      _dropStuckHeld(now)
       if (_captureHeld.size === 0) _captureLast = []
-      _captureHeld.add(note)
+      _captureHeld.set(note, now)
       if (!_captureLast.includes(note)) _captureLast.push(note)
     } else {
       _captureHeld.delete(note)
     }
   }
 
-  function captureChord(): CapturedChord | null {
-    const src = _captureHeld.size ? [..._captureHeld] : _captureLast
+  function captureChord(now = performance.now()): CapturedChord | null {
+    _dropStuckHeld(now)
+    const src = _captureHeld.size ? [..._captureHeld.keys()] : _captureLast
     if (!src.length) return null
     const notes = [...src].sort((a, b) => a - b)
     const chord = { chordName: nameCapturedChord(notes), notes }

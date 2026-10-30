@@ -16,6 +16,13 @@ describe('Chord Capture buffer (useChordProgStore)', () => {
     expect(store.captureBuffer).toHaveLength(1)
   })
 
+  it('drops a stuck note (its note-off lost) instead of capturing it forever', () => {
+    const store = useChordProgStore()
+    for (const n of [46, 50, 58]) store.trackCaptureNote(true, n, 0)     // never released
+    for (const n of [60, 64, 67]) store.trackCaptureNote(true, n, 30000)
+    expect(store.captureChord(30000)).toEqual({ chordName: 'C', notes: [60, 64, 67] })
+  })
+
   it('captures the last struck chord after it has been released', () => {
     const store = useChordProgStore()
     for (const n of [57, 60, 64]) store.trackCaptureNote(true, n)

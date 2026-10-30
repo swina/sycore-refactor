@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-10-30
 
+- **Fix Chord Capture stuck on one chord** — a note whose note-off was lost (e.g. one that came in through a loopback port before the previous fix, its note-off dropped as an echo) stayed in the held-note set forever, so every capture returned it (always "F#aug7"). Held notes now carry when they were pressed, and one held longer than 20 s is dropped as stuck; a chord held longer still captures as the last chord struck. Tests extended in `tests/unit/stores/chord-capture.test.ts`. Branch: `master`
+- **Fix Chord Capture catching notes that weren't played** — the capture's held-note / last-chord tracking took notes from every MIDI input, including SY.CORE's own output coming back through loopback ports (e.g. Drum Machine MIDI OUT ONLY or Arp notes sent to a virtual instrument), so a C–E–G played on the keyboard was replaced by drum notes (A2 A#2 D3 E3 A#3 F4). Notes now count only from a real controller: an input wired as one in MIDI Flow or registered as a controller; never a port flagged as a loopback, nor the input side of a port a virtual instrument sends to (`(A)`/`(B)` pairs matched). With nothing wired as an input, any non-loopback input still counts. `isCaptureInput()` in `useMidiCCListener.js`; tests: `tests/unit/composables/capture-input.test.ts`. Branch: `master`
 - **Toolbar: Chord Progression chord after the track key, with its icon** — the chord the Chord Progression is playing now sits after the playing track's key (when there is one) instead of before it, preceded by the Chord Sequencer's icon (`AppFooter.vue`). Branch: `master`
 
 ## 2026-10-29
