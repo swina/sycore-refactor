@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-10-30
+
+- **Toolbar: Chord Progression chord after the track key, with its icon** — the chord the Chord Progression is playing now sits after the playing track's key (when there is one) instead of before it, preceded by the Chord Sequencer's icon (`AppFooter.vue`). Branch: `master`
+
 ## 2026-10-29
 
 - **Virtual Device: themed Sounds panel, larger control names** — the Sounds panel (pads, name field, Save) now follows the LCD theme's colors (`--lcd-*`: pads, selected pad, empty pads, field and button) on a transparent background; White Smoke, whose LCD text is dark, uses its light tones there (`onDark`); control names under the dials are 11 px. Branch: `master`

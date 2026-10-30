@@ -8,7 +8,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SquareStack, Sparkles, BookOpen, Radio } from 'lucide-vue-next'
+import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Music2, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SquareStack, Sparkles, BookOpen, Radio } from 'lucide-vue-next'
 import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
 import AppLauncherModal from '@/components/ui/AppLauncherModal.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
@@ -320,10 +320,12 @@ onUnmounted(() => {
           >
             <Link class="w-3.5 h-3.5" />
         </button>
-        <!-- Chord Progression: chord playing now -->
-        <span v-if="chordProgStore.playingChordName" class="text-[12px] font-mono font-bold text-violet-300 bg-violet-400/10 px-1.5 rounded shrink-0 normal-case" title="Chord Progression — playing chord">{{ chordProgStore.playingChordName }}</span>
         <!-- Track Key / Tempo -->
         <span v-if="btSrc && btPlayingTrackKey" class="text-[12px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1.5 rounded shrink-0 normal-case">{{ btPlayingTrackKey }}</span>
+        <!-- Chord Progression: chord playing now, after the track key, with the Chord Sequencer's icon -->
+        <span v-if="chordProgStore.playingChordName" class="flex items-center gap-1 text-[12px] font-mono font-bold text-violet-300 bg-violet-400/10 px-1.5 rounded shrink-0 normal-case" title="Chord Progression — playing chord">
+          <Music2 class="w-3 h-3" />{{ chordProgStore.playingChordName }}
+        </span>
         <span v-if="btSrc && btPlayingTrackBpm" class="text-[12px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded shrink-0">{{ btPlayingTrackBpm }} BPM</span>
       </div>
 
