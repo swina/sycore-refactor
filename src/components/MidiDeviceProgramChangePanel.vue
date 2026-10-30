@@ -24,7 +24,7 @@ import { MidiSource, midiService } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 import { on } from '@/types/events'
 import { pcBrowse } from '@/lib/pc-browse'
-import { mappedParamFor, mappingKeysFor } from '@/composables/useMidiCCListener'
+import { mappedParamFor, mappingKeysFor, isVirtualDeviceControl } from '@/composables/useMidiCCListener'
 
 const emit = defineEmits(['close'])
 
@@ -903,6 +903,8 @@ function startScrollCCListener() {
 
     const inputId = event.target?.id
     const device  = midiService.getInputs().find(i => i.id === inputId)?.name ?? null
+    // a Virtual Device control's CC is its alone (see isVirtualDeviceControl)
+    if (!isLearningScrollCC.value && isVirtualDeviceControl(mappingStore.midiMappings, device, channel, 'cc', cc)) return
 
     // Any CC can be learned; navigation is relative (value delta), so an
     // endless encoder works on lists longer than 128 presets.
@@ -1089,6 +1091,8 @@ function startButtonMidiListener() {
 
     const learning = buttonLearns.find(b => b.isLearning.value)
     if (learning) { learning.handle(msg); return }
+    // a Virtual Device control's CC / note is its alone (see isVirtualDeviceControl)
+    if (isVirtualDeviceControl(mappingStore.midiMappings, msg.device, msg.channel, msg.kind, msg.number)) return
     for (const b of buttonLearns) if (b.handle(msg)) return
   })
 }

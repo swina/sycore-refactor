@@ -7,6 +7,7 @@ import { midiService }     from '@/core/midi/midi-service'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useAppActions }   from './useAppActions'
 import { isContinuousAction } from '@/lib/app-midi-actions'
+import { isVirtualDeviceControl } from './useMidiCCListener'
 import { loopMachineState } from '@/core/state/loopMachineState'
 
 // Profiles
@@ -215,6 +216,11 @@ export function useControllerManager() {
     // 0x80 or running-status 0x90 vel=0 — 0x80 may carry a non-zero release
     // velocity, so `val === 0` alone misreads it as a press.
     const isRelease = note !== null && (type === 0x80 || val === 0)
+
+    // A control learned on a Virtual Device control (vdp_*) belongs to it alone: no MIDI Action
+    // (e.g. channel_cc / channel_up changing the MIDI channel) — pass it on to useMidiCCListener.
+    if ((cc !== null || note !== null) &&
+      isVirtualDeviceControl(mappingStore.midiMappings, input?.name, chan, cc !== null ? 'cc' : 'note', cc ?? note)) return false
 
     // Same device/channel/note test for press and release — if they
     // disagree, the note-on passes through but its note-off is consumed

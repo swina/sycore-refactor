@@ -370,6 +370,16 @@ export function mappedParamFor(mappings, deviceName, chan, kind, number, { withP
   return null
 }
 
+/**
+ * Whether a CC / note is learned (right-click MIDI Learn) on a Virtual Device control (vdp_*).
+ * Such a control is consumed: kept out of Thru and ignored by the other learn systems (MIDI
+ * Actions, the Program Change panel's buttons) — one knob on a dial and on a channel step
+ * otherwise changed the channel at every turn.
+ */
+export function isVirtualDeviceControl(mappings, deviceName, chan, kind, number) {
+  return !!mappedParamFor(mappings, deviceName || null, chan, kind, number)?.startsWith('vdp_')
+}
+
 /** The mapping keys a CC/note can be stored under, most specific first (withPlain: the legacy device-less CC#/NOTE# key too). */
 export function mappingKeysFor(deviceName, chan, kind, number, { withPlain = true } = {}) {
   const frag = kind === 'note' ? `NOTE${number}` : `CC${number}`
@@ -569,7 +579,7 @@ export function useMidiCCListener() {
     unsubPitch = midiService.addPitchBendListener(onPitchBend)
     // Virtual Device controls are consumed: kept out of Thru (see midiService.setThruExclude)
     midiService.setThruExclude((deviceName, chan, kind, number) =>
-      !!mappedParamFor(mappingStore.midiMappings, deviceName || null, chan, kind, number)?.startsWith('vdp_'))
+      isVirtualDeviceControl(mappingStore.midiMappings, deviceName, chan, kind, number))
   })
 
   onUnmounted(() => {
