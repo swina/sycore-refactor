@@ -196,10 +196,13 @@ watch(() => midiStore.panelOutputs.includes(FM1_OUTPUT), (open) => {
   if (!open && selectedApp.value?.kind === 'fm1') closeAppSummary()
 })
 
+// FM-1 isn't a summary in the display: like the device view, it takes the display + instruments
+// row, at the Virtual Device's size
+const fm1View = computed(() => selectedApp.value?.kind === 'fm1')
+
 const selectedAppComponent = computed(() => {
   if (!selectedApp.value) return null
   if (selectedApp.value.kind === 'playlist') return DeckPlaylistSummary
-  if (selectedApp.value.kind === 'fm1') return DeckFm1Summary
   if (selectedApp.value.sourceId === MidiSource.DRUM_MACHINE) return DeckDrumMachineSummary
   if (selectedApp.value.sourceId === MidiSource.CHORD_PROG) return DeckChordProgSummary
   if (selectedApp.value.sourceId === "SOLO_PERFORMANCE") return DeckSoloPerformanceSummary
@@ -458,12 +461,13 @@ const LS_DECK_DEVICE_VIEW = 'SYCORE_DECK_DEVICE_VIEW'
 const deviceView = ref((() => { try { return localStorage.getItem(LS_DECK_DEVICE_VIEW) === '1' } catch { return false } })())
 watch(deviceView, v => { try { localStorage.setItem(LS_DECK_DEVICE_VIEW, v ? '1' : '0') } catch {} })
 
-// (the device view hides the display and the instruments row: nothing to focus there)
+// (the device and FM-1 views hide the display and the instruments row: nothing to focus there)
+const fullView = computed(() => deviceView.value || fm1View.value)
 const zones = [
   { id: 'controllers', items: controllerItems },
-  { id: 'display', items: computed(() => deviceView.value ? [] : displayItems.value) },
+  { id: 'display', items: computed(() => fullView.value ? [] : displayItems.value) },
   { id: 'apps', items: appItems },
-  { id: 'instruments', items: computed(() => deviceView.value ? [] : instrumentItems.value) },
+  { id: 'instruments', items: computed(() => fullView.value ? [] : instrumentItems.value) },
 ]
 
 const nav = useCockpitNavigation(zones)
@@ -703,6 +707,11 @@ function handleBpmChange(e) {
               </button>
             </template>
           </VirtualDeviceView>
+        </div>
+
+        <!-- FM-1 view: same place and size as the device view -->
+        <div v-else-if="fm1View" class="shrink min-h-0 max-h-full flex flex-col rounded-xl border-2 border-black bg-neutral-950/95 shadow-2xl overflow-hidden">
+          <DeckFm1Summary @close="closeAppSummary" />
         </div>
 
         <template v-else>
