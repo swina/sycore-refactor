@@ -682,7 +682,7 @@ function handleBpmChange(e) {
     >
 
       <!-- ── Controllers (left) ── -->
-      <div class="ml-4 w-28 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pr-3">
+      <div class="ml-2 w-22 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pr-3">
         <p class="text-[8px] font-black uppercase tracking-widest text-neutral-600 bg-black py-1 text-center mb-0.5">Controllers</p>
         <div v-if="controllers.length === 0" class="text-[9px] text-neutral-700 italic text-center">None</div>
         <div v-for="(c, idx) in controllers" :key="c.name"
@@ -1040,7 +1040,7 @@ function handleBpmChange(e) {
       </div>
 
       <!-- ── Apps (right) ── -->
-      <div class="mr-4 w-28 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pl-3">
+      <div class="mr-2 w-22 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pl-3">
         <p class="text-[8px] font-black uppercase bg-black py-1 tracking-widest text-neutral-600 text-center mb-0.5">Apps</p>
         <button
           v-for="(a, idx) in apps" :key="a.sourceId"

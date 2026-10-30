@@ -104,8 +104,17 @@ function openPanel() {
           </button>
         </div>
         <!-- Chain — same colors as the Chord Prog Sequencer's own chain toggle -->
-      <button @click="store.chainEnabled = !store.chainEnabled"
-        class="w-16 py-1 rounded font-bold uppercase tracking-widest border transition-colors"
+      
+        <button @click="store.playMode = store.playMode === 'chord' ? 'arp' : 'chord'"
+          class="w-16 py-1 rounded-xl font-bold uppercase tracking-widest border transition-colors"
+          :class="store.playMode === 'chord'
+            ? 'border-cyan-600 text-cyan-400 bg-cyan-950/40'
+            : 'border-amber-700 text-amber-500 bg-amber-950/40'"
+        >
+          {{ store.playMode === 'chord' ? 'CHORD' : 'ARP' }} 
+        </button>
+        <button @click="store.chainEnabled = !store.chainEnabled"
+        class="w-20 py-1 rounded-xl font-bold uppercase tracking-widest border transition-colors"
         :class="store.chainEnabled
           ? 'border-cyan-600 text-cyan-400 bg-cyan-950/40'
           : 'border-neutral-700 text-neutral-500 hover:text-neutral-300'"
@@ -134,7 +143,7 @@ function openPanel() {
             <span class="block truncate text-[10px] font-bold"
               :class="step.active ? (isCurrentPlayingStep(idx) ? 'text-yellow-300' : 'text-white') : 'text-neutral-600'"
             >{{ step.chordName }}</span>
-            <span class="block text-[8px]" :class="step.active ? 'text-purple-300' : 'text-neutral-700'">{{ DURATION_LABELS[step.duration] }}</span>
+            <span class="block text-[8px]" :class="step.active ? 'text-purple-300' : 'text-neutral-700'">{{ DURATION_LABELS[step.duration] }} {{ step.chordMode ? step.chordMode : 'A' }}</span>
           </div>
         </div>
       </div>
