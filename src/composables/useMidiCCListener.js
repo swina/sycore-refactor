@@ -336,6 +336,12 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     window.dispatchEvent(new CustomEvent('playlist-next'))
     return
   }
+  // DECK instrument pads: show that instrument's view (momentary and toggle buttons alike)
+  if (fieldName.startsWith('deck_view:')) {
+    if (buttonEdges.fires(fieldName, val, fromNote, performance.now()))
+      window.dispatchEvent(new CustomEvent('deck-view-select', { detail: { name: fieldName.slice('deck_view:'.length) } }))
+    return
+  }
   // play / pause: each press flips it (momentary and toggle buttons alike)
   if (fieldName === 'playlist_play_stop') {
     if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) window.dispatchEvent(new CustomEvent('playlist-play-stop'))

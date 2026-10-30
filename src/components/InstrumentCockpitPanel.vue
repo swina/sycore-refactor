@@ -612,6 +612,25 @@ function openVirtualDevice(row) {
   deviceView.value = true
 }
 
+// ── Instrument pads under the device / FM-1 view: one per virtual instrument configured in MIDI
+// Flow (on its canvas), plus FM-1 while its panel is open and it's on the canvas too; a click —
+// or the pad's MIDI Learn (deck_view:<name>) — shows that instrument's view. ──
+const vdStore = useVirtualDeviceStore()
+const viewPads = computed(() => [
+  ...midiStore.virtualInstruments.map(v => v.name),
+  ...(midiStore.panelOutputs.includes(FM1_OUTPUT) ? [FM1_OUTPUT] : []),
+].filter(name => canvasInstrumentNames.value.has(name)))
+function isViewPadActive(name) {
+  return name === FM1_OUTPUT ? fm1View.value : deviceView.value && vdStore.selectedDevice === name
+}
+function showInstrumentView(name) {
+  if (name === FM1_OUTPUT) selectApp({ kind: 'fm1' })
+  else if (midiStore.virtualInstruments.some(v => v.name === name)) openVirtualDevice({ name })
+}
+const onDeckViewSelect = (e) => showInstrumentView(e.detail?.name)
+onMounted(() => window.addEventListener('deck-view-select', onDeckViewSelect))
+onUnmounted(() => window.removeEventListener('deck-view-select', onDeckViewSelect))
+
 // the same view as a floating window, the DECK back to its display
 function popOutVirtualDevice() {
   deviceView.value = false
@@ -955,6 +974,22 @@ function handleBpmChange(e) {
           </div>
         </div>
         </template>
+
+        <!-- Instrument pads: switch the view between the virtual instruments and FM-1 -->
+        <div v-if="deviceView || fm1View" class="shrink-0 flex flex-wrap justify-center gap-2">
+          <div v-for="name in viewPads" :key="name" class="relative">
+            <button @click="showInstrumentView(name)"
+              @contextmenu.prevent="openMenu($event, { name: 'deck_view:' + name, label: 'DECK view: ' + name })"
+              :title="'Show ' + name + ' (right-click: MIDI Learn)'"
+              class="w-24 h-12 px-1.5 rounded-lg border-2 text-[10px] font-mono font-bold leading-tight break-words line-clamp-2 transition-all active:scale-95 shadow-lg"
+              :class="isViewPadActive(name)
+                ? (name === FM1_OUTPUT ? 'bg-cyan-500/25 border-cyan-400 text-cyan-100' : 'bg-teal-500/25 border-teal-400 text-teal-100')
+                : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white hover:border-neutral-500'"
+            >{{ name === FM1_OUTPUT ? 'FM-1' : name }}</button>
+            <span v-if="mappingStore.learningParamName === 'deck_view:' + name"
+              class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+          </div>
+        </div>
         <!-- Performance Sets -->
           <div class="flex items-center gap-1 w-full justify-center">
             <button

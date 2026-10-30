@@ -67,6 +67,8 @@ export interface SyCoreEventMap {
   'device-pc-preset-step': { deviceName: string; channel: number; delta: number; scope: 'all' | 'category' };
   // Program Change panel's toast for a device + channel (0-based): Device · CH n · its current preset
   'device-pc-toast': { deviceName: string; channel: number };
+  // DECK instrument pad (MIDI Learn deck_view:<name>): show that virtual instrument's / FM-1's view
+  'deck-view-select': { name: string };
 
   // Timeline
   'timeline-lm-start': { padIdx: number; bpm: number };
