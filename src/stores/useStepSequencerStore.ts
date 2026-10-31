@@ -317,7 +317,7 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     const systemPrompt = [
       'You are a step-sequencer music designer.',
       `The sequencer is set to ${keyLabel}, ${bank.numSteps} steps per bar, ${bank.maxPolyphony}-note polyphony.`,
-      `Output ONLY a valid JSON array (no markdown fences, no commentary) of exactly ${bank.numSteps} objects, each with:`,
+      `Output ONLY a valid JSON array (no markdown fences, no commentary) of ${bank.numSteps} objects (or the number of steps the request asks for, 2-64), one per step, each with:`,
       '"active": boolean, "notes": array of 1-2 MIDI note numbers (40-96), "velocity": 1-127, "gate": 25-100.',
       'Stay in the requested key and style. Use rests for musical phrasing.'
     ].join('\n')
@@ -338,8 +338,9 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
       const end = raw.lastIndexOf(']')
       if (start === -1 || end === -1) throw new Error('AI did not return valid JSON')
       const parsed = JSON.parse(raw.slice(start, end + 1))
+      if (!Array.isArray(parsed) || parsed.length < 2) throw new Error('AI returned too few steps')
 
-      bank.steps = parsed.map((s: any) => {
+      bank.steps = parsed.slice(0, 64).map((s: any) => {
         const notes = Array.isArray(s.notes) && s.notes.length ? s.notes.map(Number) : [60]
         const lowest = Math.min(...notes)
         const octave = Math.max(0, Math.min(8, Math.floor(lowest / 12) - 1))
@@ -355,6 +356,9 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
           edited: true,
         }
       })
+      // LENGTH follows what was generated (an 8-step answer is an 8-step sequence)
+      bank.numSteps = bank.steps.length
+      bank.basePatternLength = bank.steps.length
       banks.value = [...banks.value]
       return true
     } catch (err) {

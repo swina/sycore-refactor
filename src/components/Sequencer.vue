@@ -298,8 +298,12 @@ function syncLocalToBank() {
 function loadBankIntoLocal() {
   const bank = seqStore.activeBank
   if (!bank) return
-  numSteps.value = bank.numSteps
-  basePatternLength.value = bank.basePatternLength || bank.numSteps
+  // LENGTH is the bank's step count: a bank written from outside (AI, Song Composer, a preset)
+  // whose numSteps doesn't match its steps would play / show the wrong length
+  const len = Math.max(2, Math.min(64, bank.steps?.length || bank.numSteps || 16))
+  if (bank.numSteps !== len) bank.numSteps = len
+  numSteps.value = len
+  basePatternLength.value = Math.min(bank.basePatternLength || len, len)
   steps.value = bank.steps.map(s => {
     const step = { ...DEFAULT_STEP, ...s }
     step.edited = s.edited !== undefined ? s.edited : (s.active || (s.notes && s.notes.length > 0))
