@@ -65,6 +65,9 @@ export interface SyCoreEventMap {
   // Virtual Device Panel's PRESET ▼▲: select that device + channel (0-based) and step its preset
   // by `delta` in the open bank — the whole bank, or only the current preset's category (wraps).
   'device-pc-preset-step': { deviceName: string; channel: number; delta: number; scope: 'all' | 'category' };
+  // Virtual Device Panel's CATEGORY knob: select that device + channel (0-based) and send the
+  // first preset of `category` in the open bank (nothing when the preset is already in it).
+  'device-pc-category-select': { deviceName: string; channel: number; category: string };
   // Program Change panel's toast for a device + channel (0-based): Device · CH n · its current preset
   'device-pc-toast': { deviceName: string; channel: number };
   // DECK instrument pad (MIDI Learn deck_view:<name>): show that virtual instrument's / FM-1's view

@@ -31,14 +31,16 @@ export function stepIn<T>(list: T[], current: T, dir: number): T | undefined {
 
 // ── MIDI Learn params (right-click on a control → useMidiCCListener.js) ──
 //   vdp_cc:<device>:<cc>     a control: the CC value goes to the device's selected channel
-//   vdp_<action>:<device>    preset_next / preset_prev / ch_next / ch_prev (a press steps)
+//   vdp_<action>:<device>    preset_next / preset_prev / ch_next / ch_prev (a press steps),
+//                            type (a press switches TYPE All / Category)
+//   vdp_category:<device>    the CATEGORY knob: the CC value picks a category of the open bank
 //   vdp_slot_<n>:<device>    saved sound slot n (1-8) of the selected channel (a press recalls it)
 export type VdpParam =
   | { kind: 'cc'; device: string; cc: number }
-  | { kind: 'preset_next' | 'preset_prev' | 'ch_next' | 'ch_prev'; device: string }
+  | { kind: 'preset_next' | 'preset_prev' | 'ch_next' | 'ch_prev' | 'type' | 'category'; device: string }
   | { kind: 'slot'; device: string; slot: number }   // 0-based
 
-const VDP_ACTIONS = ['preset_next', 'preset_prev', 'ch_next', 'ch_prev'] as const
+const VDP_ACTIONS = ['preset_next', 'preset_prev', 'ch_next', 'ch_prev', 'type', 'category'] as const
 
 export const vdpCcParam = (device: string, cc: number) => `vdp_cc:${device}:${cc}`
 export const vdpActionParam = (action: (typeof VDP_ACTIONS)[number], device: string) => `vdp_${action}:${device}`
@@ -107,6 +109,39 @@ export class ButtonEdge {
     s.lastVal = value
     s.lastAt = now
     return true
+  }
+}
+
+// ── CATEGORY learned on a CC (vdp_category): knob or button? ─────────────
+// Decided from how the value moves, not once and for all: a knob / fader creeps (small steps
+// between values), a button jumps between 0 and its press value (127, or a pad's velocity).
+// A first value strictly between 0 and 127 is taken for a knob, 0 / 127 for a button; the
+// guess is corrected by the next move, so a stray value no longer turns a momentary into a knob
+// (which made 127 pick the last category and 0 the first).
+const KNOB_STEP = 16
+const BUTTON_JUMP = 48
+
+export class CategoryControlMode {
+  private state = new Map<string, { knob: boolean; lastVal: number }>()
+
+  /**
+   * How to treat this CC value: 'knob' (pick by value), 'button' (step on press) or 'skip' — the
+   * 0 that shows a control taken for a knob is a button (its release): neither a pick nor a press.
+   */
+  classify(key: string, value: number): 'knob' | 'button' | 'skip' {
+    const s = this.state.get(key)
+    if (!s) {
+      const knob = value !== 0 && value !== 127
+      this.state.set(key, { knob, lastVal: value })
+      return knob ? 'knob' : 'button'
+    }
+    const d = Math.abs(value - s.lastVal)
+    const was = s.knob
+    if (d > 0 && d <= KNOB_STEP && value !== 0 && s.lastVal !== 0) s.knob = true
+    else if (d >= BUTTON_JUMP && (value === 0 || s.lastVal === 0)) s.knob = false
+    s.lastVal = value
+    if (s.knob) return 'knob'
+    return was && value === 0 ? 'skip' : 'button'
   }
 }
 

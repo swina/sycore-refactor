@@ -40,6 +40,8 @@ describe('MIDI Learn params', () => {
   it('round-trips control and action params, device names with ":" included', () => {
     expect(parseVdpParam(vdpCcParam('Emu:X3', 74))).toEqual({ kind: 'cc', device: 'Emu:X3', cc: 74 })
     expect(parseVdpParam(vdpActionParam('preset_next', 'Emu X3'))).toEqual({ kind: 'preset_next', device: 'Emu X3' })
+    expect(parseVdpParam(vdpActionParam('type', 'X3'))).toEqual({ kind: 'type', device: 'X3' })
+    expect(parseVdpParam(vdpActionParam('category', 'X3'))).toEqual({ kind: 'category', device: 'X3' })
     expect(parseVdpParam(vdpActionParam('ch_prev', 'Emu X3'))).toEqual({ kind: 'ch_prev', device: 'Emu X3' })
     expect(parseVdpParam(vdpSlotParam(7, 'Emu:X3'))).toEqual({ kind: 'slot', device: 'Emu:X3', slot: 7 })
     expect(parseVdpParam('vdp_slot_9:Emu')).toBeNull()

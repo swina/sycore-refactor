@@ -16,10 +16,12 @@ import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 import { dispatch } from '@/types/events'
 import { useVirtualDeviceStore } from '@/stores/useVirtualDeviceStore'
 import { deviceRegistry } from '@/core/midi/DeviceRegistry'
-import { parseVdpParam, ButtonEdge } from '@/lib/virtual-device'
+import { parseVdpParam, ButtonEdge, CategoryControlMode } from '@/lib/virtual-device'
 
 // CC buttons that step / switch something: momentary vs toggle detection (lib/virtual-device.ts)
 const buttonEdges = new ButtonEdge()
+// CATEGORY (vdp_category) on a CC: knob (picks by value) or button (steps), from how the value moves
+const categoryMode = new CategoryControlMode()
 
 
 function isS1Device(name) {
@@ -208,10 +210,19 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     if (!p) return
     const vd = stores.vdStore ?? useVirtualDeviceStore()
     if (p.kind === 'cc') { vd.setCc(p.device, p.cc, val); return }
+    if (p.kind === 'category') {
+      const mode = fromNote ? 'button' : categoryMode.classify(fieldName, val)
+      if (mode === 'knob') { vd.setCategoryFromCc(p.device, val); return }
+      if (mode === 'skip') return
+      // a button or note: every press goes to the next category (wraps)
+      if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) vd.stepCategory(p.device, 1)
+      return
+    }
     // a CC button: momentary fires on its press only, toggle on every press (auto-detected)
     if (!buttonEdges.fires(fieldName, val, fromNote, performance.now())) return
     if (p.kind === 'slot') vd.recallSlot(p.device, p.slot)
     else if (p.kind === 'preset_next' || p.kind === 'preset_prev') vd.stepPreset(p.device, p.kind === 'preset_next' ? 1 : -1)
+    else if (p.kind === 'type') vd.toggleBrowseScope()
     else vd.stepChannel(p.device, p.kind === 'ch_next' ? 1 : -1)
     return
   }

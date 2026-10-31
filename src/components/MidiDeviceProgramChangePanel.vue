@@ -382,7 +382,7 @@ async function onImportArturiaFile(event) {
     for (const [name, presets] of Object.entries(banks)) {
       sameTemplateDevices().forEach(dev => userBanksStore.addBank(dev, name, presets, 'arturia'))
     }
-    selectedBank.value = names[0] ?? ''
+    selectBank(names[0] ?? '')
     importArturiaSummary.value = `Imported ${names.length} playlist${names.length === 1 ? '' : 's'}: ${names.join(', ')}`
   } catch (e) {
     importError.value = e.message ?? 'Failed to parse Arturia database.'
@@ -424,7 +424,7 @@ function confirmImport() {
     pendingPresets.value = pendingPresets.value.map(p => ({ ...p, lsb: pendingBankLsb.value }))
   }
   sameTemplateDevices().forEach(dev => userBanksStore.addBank(dev, name, pendingPresets.value, pendingImportSource.value))
-  selectedBank.value = name
+  selectBank(name)
   showImportRename.value = false
   pendingPresets.value   = []
   pendingBankLsb.value   = 0
@@ -467,20 +467,22 @@ const LS_TEMPLATE_BANK = 'SYCORE_PC_TEMPLATE_BANK'
 const templateBanks = (() => {
   try { return JSON.parse(localStorage.getItem(userKey(LS_TEMPLATE_BANK))) ?? {} } catch { return {} }
 })()
+//
+// The bank picked is the device's open bank for all of its channels (reg.pcBank): switching the
+// channel keeps it, and the Virtual Device's sound pads follow it on every channel.
 function selectBank(bank) {
   selectedBank.value = bank
+  if (bank && selectedReg.value && selectedReg.value.pcBank !== bank) midiStore.updateRegistration(selectedDeviceName.value, 'pcBank', bank)
   const tmpl = selectedReg.value?.pcTemplate
   if (!tmpl) return
   templateBanks[tmpl] = bank
   try { localStorage.setItem(userKey(LS_TEMPLATE_BANK), JSON.stringify(templateBanks)) } catch {}
 }
 
-// Also re-runs on pcChannel changes — each channel can carry its own saved
-// bank (reg.pcChannels[ch].bank, written by recordChannelState), so picking
-// a different channel row in "Current Program Change" needs to restore
-// *that* channel's bank, not just whatever bank happened to be open. Falls
-// back to reg.pcBank (the device-level "last written" bank) for a
-// single-channel device or a channel that's never had a patch assigned yet.
+// Also re-runs on pcChannel changes. The open bank is the device's, shared by all its channels
+// (reg.pcBank, written by selectBank and recordChannelState): picking a different channel row in
+// "Current Program Change" keeps it. A channel's own saved bank (reg.pcChannels[ch].bank) is only
+// the fallback for a device that has no bank yet.
 watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel], (_, [, oldDev]) => {
   // restore last-used bank if available, else reset
   const reg = selectedReg.value
@@ -490,9 +492,9 @@ watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel], (
   const shared = selectedDeviceName.value !== oldDev && reg?.pcTemplate ? templateBanks[reg.pcTemplate] : ''
   const bank = (shared && availableBanks.value.includes(shared))
     ? shared
-    : reg?.pcChannels?.[activeCh]?.bank || reg?.pcBank
+    : reg?.pcBank || reg?.pcChannels?.[activeCh]?.bank
   if (bank && availableBanks.value.includes(bank)) {
-    selectedBank.value = bank
+    selectBank(bank)
   } else {
     selectedBank.value = ''
     sounds.value = []
@@ -569,17 +571,17 @@ function loadFavorites() {
 }
 const favorites = ref(loadFavorites())
 
-function favoriteKey(sound) {
+function favoriteKey(sound, bank = selectedBank.value) {
   const scope = selectedReg.value?.pcTemplate || selectedDeviceName.value
   const prog = sound.no ?? sound[bankConfig.value?.program_field ?? 'program'] ?? ''
-  return `${scope}::${selectedBank.value}::${prog}::${sound.name}`
+  return `${scope}::${bank}::${prog}::${sound.name}`
 }
-function isFavorite(sound) {
-  return favorites.value.has(favoriteKey(sound))
+function isFavorite(sound, bank) {
+  return favorites.value.has(favoriteKey(sound, bank))
 }
-function toggleFavorite(sound) {
+function toggleFavorite(sound, bank) {
   const next = new Set(favorites.value)
-  const key = favoriteKey(sound)
+  const key = favoriteKey(sound, bank)
   next.has(key) ? next.delete(key) : next.add(key)
   favorites.value = next
   try { localStorage.setItem(userKey(LS_FAVORITES), JSON.stringify([...next])) } catch {}
@@ -614,13 +616,17 @@ const filteredSounds = computed(() => {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(s => s.name?.toLowerCase().includes(q))
   }
-  if (showFavoritesOnly.value) list = list.filter(isFavorite)
+  if (showFavoritesOnly.value) list = list.filter(s => isFavorite(s))
   return list
 })
 
 // ── Active sound tracking ───────────────────────────────────────
 const activeSound = ref(null)
 const lastSent    = ref(null)
+// the bank activeSound comes from: browsing another bank leaves it active, and its favorite
+// must still be keyed on its own bank
+const activeSoundBank = ref('')
+watch(activeSound, s => { activeSoundBank.value = s ? selectedBank.value : '' }, { flush: 'sync' })
 
 // Also clears on pcChannel change (switching which channel row is active in
 // "Current Program Change") — activeSound must reset so scrollToCurrentProgram
@@ -879,12 +885,31 @@ function stepPresetFor({ deviceName, channel, delta, scope }) {
   }).catch(e => console.error('[DevicePCPanel] preset step failed', e))
 }
 
-watch([selectedDeviceName, () => selectedReg.value?.pcChannel, () => selectedReg.value?.pcChannels, sounds], () => {
+// Virtual Device Panel: CATEGORY knob — the first preset of that category in the open bank
+function selectCategoryFor({ deviceName, channel, category }) {
+  _presetStepQueue = _presetStepQueue.then(async () => {
+    if (selectedDeviceName.value !== deviceName) selectDevice(deviceName)
+    if ((selectedReg.value?.pcChannel ?? 0) !== channel) setChannel(channel + 1)
+    await waitForSounds()
+    const field = bankConfig.value?.category_field ?? 'category'
+    if ((selectedReg.value?.pcChannels?.[channel]?.category ?? '') === category) return
+    const first = sounds.value.find(sd => (sd[field] ?? '') === category)
+    if (first) selectSound(first)
+  }).catch(e => console.error('[DevicePCPanel] category select failed', e))
+}
+
+watch([selectedDeviceName, () => selectedReg.value?.pcChannel, () => selectedReg.value?.pcChannels, sounds, selectedBank], () => {
   const ch = Math.max(0, selectedReg.value?.pcChannel ?? 0)
   const name = selectedReg.value?.pcChannels?.[ch]?.soundName
+  const field = bankConfig.value?.category_field ?? 'category'
+  const index = name ? sounds.value.findIndex(sd => sd.name === name) : -1
+  // the preset's category: as found in the list, else as recorded on the channel
+  const cat = index >= 0 ? (sounds.value[index][field] ?? '') : (selectedReg.value?.pcChannels?.[ch]?.category ?? '')
+  const inCat = cat ? sounds.value.filter(sd => (sd[field] ?? '') === cat) : []
   pcBrowse.value = {
-    device: selectedDeviceName.value, channel: ch, total: sounds.value.length,
-    index: name ? sounds.value.findIndex(sd => sd.name === name) : -1,
+    device: selectedDeviceName.value, channel: ch, bank: selectedBank.value, total: sounds.value.length, index,
+    categories: [...new Set(sounds.value.map(sd => sd[field]).filter(Boolean))],
+    catIndex: index >= 0 ? inCat.indexOf(sounds.value[index]) : -1, catTotal: inCat.length,
   }
 }, { immediate: true })
 
@@ -1037,8 +1062,8 @@ function toggleActiveFavorite() {
     showPcNotification(selectedDeviceName.value, 'No active preset', 'Favorite')
     return
   }
-  toggleFavorite(sound)
-  showPcNotification(selectedDeviceName.value, sound.name, isFavorite(sound) ? '★ Added to favorites' : 'Removed from favorites')
+  toggleFavorite(sound, activeSoundBank.value)
+  showPcNotification(selectedDeviceName.value, sound.name, isFavorite(sound, activeSoundBank.value) ? '★ Added to favorites' : 'Removed from favorites')
 }
 
 function toggleFavoritesFilter() {
@@ -1114,6 +1139,7 @@ let _unsubDevMidi   = null
 let _unsubDevicePcOpen = null
 let _unsubDevicePcSelect = null
 let _unsubPresetStep = null
+let _unsubCategorySelect = null
 let _unsubPcToast = null
 
 function _startDevMidiListener() {
@@ -1202,6 +1228,7 @@ onMounted(() => {
     if (channel != null) setChannel(channel)
   })
   _unsubPresetStep = on('device-pc-preset-step', stepPresetFor)
+  _unsubCategorySelect = on('device-pc-category-select', selectCategoryFor)
   _unsubPcToast = on('device-pc-toast', ({ deviceName, channel }) => showChannelToast(deviceName, channel))
 })
 onUnmounted(() => {
@@ -1214,6 +1241,7 @@ onUnmounted(() => {
   _unsubDevicePcOpen?.()
   _unsubDevicePcSelect?.()
   _unsubPresetStep?.()
+  _unsubCategorySelect?.()
   _unsubPcToast?.()
   clearTimeout(_pcNotifTimer)
 })

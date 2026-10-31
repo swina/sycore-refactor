@@ -3,7 +3,7 @@
 // UI per virtual instrument (multipart ones too) — an LCD-style display
 // (preset position, browse TYPE All/Category, channel, bank:program, preset name, category) with
 // PRESET ▼▲ and CHANNEL ▼▲ above it, the instrument's CC table as dials below, and saved sounds
-// (one channel's preset + control values, recalled onto the selected channel). State and MIDI in
+// (one channel's preset + mapped control values, recalled onto the selected channel). State and MIDI in
 // stores/useVirtualDeviceStore.ts; presets are stepped by the Program Change panel. Right-click a
 // dial or a ▼▲ button for MIDI Learn. The header is a drag handle for the panel ('header-mousedown');
 // slot `actions` takes the host's buttons (window controls, back to DECK…).
@@ -12,7 +12,7 @@ import { SlidersHorizontal, ChevronDown, ChevronUp, ChevronRight, Save, X, Music
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { useVirtualDeviceStore, VD_SOUNDS_PER_CHANNEL } from '@/stores/useVirtualDeviceStore'
+import { useVirtualDeviceStore, VD_SOUNDS_PER_CHANNEL, VD_CC_DEFAULT } from '@/stores/useVirtualDeviceStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { pcBrowse } from '@/lib/pc-browse'
 import { bankProgramLabel, vdpCcParam, vdpActionParam, vdpSlotParam, LCD_THEMES, lcdTheme } from '@/lib/virtual-device'
@@ -36,7 +36,9 @@ const channelList = computed(() => device.value ? vd.channels(device.value) : []
 const multipart = computed(() => device.value && midiStore.partChannels(device.value).length > 1)
 const preset = computed(() => device.value ? vd.presetState(device.value, channel.value) : null)
 const controls = computed(() => device.value ? vd.ccTable(device.value) : [])
-// the selected channel's sounds, laid out as VD_SOUNDS_PER_CHANNEL slots (null = empty)
+// the selected channel's sounds on its current bank (the one the Program Change panel has open),
+// laid out as VD_SOUNDS_PER_CHANNEL slots (null = empty)
+const soundsBank = computed(() => device.value ? vd.bankOf(device.value, channel.value) : '')
 const savedSounds = computed(() => device.value ? vd.soundsOf(device.value, channel.value) : [])
 const soundSlots = computed(() =>
   Array.from({ length: VD_SOUNDS_PER_CHANNEL }, (_, i) => savedSounds.value.find(s => s.slot === i) ?? null))
@@ -120,6 +122,23 @@ function slotMark(i) {
   return mappedParams.value.has(name) ? 'bg-teal-400' : ''
 }
 
+// a learnable control's MIDI Learn mark by param name: learning now (orange) / mapped (teal)
+function learnMark(name) {
+  if (mappingStore.learningParamName === name) return 'bg-orange-500 animate-pulse'
+  return mappedParams.value.has(name) ? 'bg-teal-400' : ''
+}
+
+// TYPE Category: the preset's position among its category's presets (3/12), '' when unknown
+const categoryCount = computed(() => {
+  const b = pcBrowse.value
+  if (b.device !== device.value || b.channel !== channel.value || !b.catTotal) return ''
+  return `${b.catIndex != null && b.catIndex >= 0 ? b.catIndex + 1 : '-'}/${b.catTotal}`
+})
+
+// ── TYPE Category: the CATEGORY knob steps through the open bank's categories ──
+const categoryList = computed(() => device.value ? vd.categories(device.value) : [])
+const categoryIdx = computed(() => device.value ? Math.max(0, vd.categoryIndex(device.value)) : 0)
+
 function openCcTable() {
   uiStore.openPanel('midi-devices')
 }
@@ -175,9 +194,11 @@ function openCcTable() {
             Type
             <button class="w-8 h-3.5 rounded-full border border-neutral-700 shadow-inner relative transition-colors"
               :class="vd.browseScope === 'category' ? 'bg-teal-600' : 'bg-teal-900'"
-              :title="vd.browseScope === 'category' ? 'PRESET ▼▲ within the current category' : 'PRESET ▼▲ through all presets'"
-              @click="vd.browseScope = vd.browseScope === 'all' ? 'category' : 'all'">
+              :title="(vd.browseScope === 'category' ? 'PRESET ▼▲ within the current category' : 'PRESET ▼▲ through all presets') + ' (right-click: MIDI Learn)'"
+              @click="vd.toggleBrowseScope()"
+              @contextmenu.prevent="learnMenu($event, vdpActionParam('type', device), 'Type All / Category')">
               <span class="absolute top-0.5 w-2.5 h-2.5 rounded-full bg-teal-200 transition-all" :class="vd.browseScope === 'category' ? 'left-[18px]' : 'left-0.5'" />
+              <span v-if="learnMark(vdpActionParam('type', device))" class="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full" :class="learnMark(vdpActionParam('type', device))" />
             </button>
           </div>
           <div class="flex items-center gap-1.5 justify-center">
@@ -208,8 +229,22 @@ function openCcTable() {
           </div>
           <div class="flex justify-between items-end text-[10px] min-h-[1em]">
             <span class="text-[8px] uppercase tracking-widest text-(--lcd-text)/40">Category</span>
-            <span>{{ preset?.category || '' }}</span>
+            <span>{{ preset?.category || '' }}<template v-if="vd.browseScope === 'category' && categoryCount"> · {{ categoryCount }}</template></span>
           </div>
+        </div>
+
+        <!-- TYPE Category: a knob through the open bank's categories (sends each one's first preset) -->
+        <div v-if="vd.browseScope === 'category'" class="flex items-center gap-2 mt-1.5 px-1 text-[9px] font-black uppercase tracking-widest text-neutral-800">
+          <div class="relative" :title="categoryList.length ? 'Category: turn to pick one — its first preset is sent (right-click: MIDI Learn)' : 'No categories in the open bank'"
+            @contextmenu.prevent="learnMenu($event, vdpActionParam('category', device), 'Category')">
+            <KnobDial :model-value="categoryIdx" :min="0" :max="Math.max(1, categoryList.length - 1)" :step="1" :size="30"
+              :show-value="false" :color="theme.accent" @change="v => v !== categoryIdx && vd.selectCategory(device, v)" />
+            <span v-if="learnMark(vdpActionParam('category', device))" class="absolute top-0 right-0 w-1.5 h-1.5 rounded-full" :class="learnMark(vdpActionParam('category', device))" />
+          </div>
+          Category
+          <span class="font-mono normal-case tracking-normal text-[10px] text-neutral-900 truncate">
+            {{ categoryList.length ? categoryList[categoryIdx] : 'none in the open bank' }}
+          </span>
         </div>
       </div>
 
@@ -228,7 +263,7 @@ function openCcTable() {
           <div v-for="row in controls" :key="row.cc" class="relative flex flex-col items-center min-w-0"
             :title="`${row.name || 'CC ' + row.cc} · CC ${row.cc} → CH ${channel + 1} (right-click: MIDI Learn)`"
             @contextmenu.prevent="learnMenu($event, vdpCcParam(device, row.cc), row.name || `CC ${row.cc}`)">
-            <KnobDial :model-value="vd.getCc(device, row.cc, channel)" :min="0" :max="127" :step="1" :default-val="64" :size="44"
+            <KnobDial :model-value="vd.getCc(device, row.cc, channel)" :min="0" :max="127" :step="1" :default-val="VD_CC_DEFAULT" :size="44"
               :show-value="false" :color="theme.accent" @change="v => onDial(row.cc, v)" />
             <!-- the value, typed in: Enter / leaving the field sends it -->
             <input type="number" min="0" max="127" step="1"
@@ -245,14 +280,14 @@ function openCcTable() {
         </div>
       </div>
 
-      <!-- Saved sounds: up to 8 per channel, the Save row collapsed until needed -->
+      <!-- Saved sounds: up to 8 per channel and bank, the Save row collapsed until needed -->
       <!-- the LCD theme's colors (--lcd-* variables) on a transparent background -->
       <div class="rounded-xl border border-(--lcd-text)/20 px-3 py-2 flex flex-col gap-1.5 font-mono text-(--lcd-text)" :style="soundsStyle">
         <div class="flex items-center gap-2">
           <button class="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-(--lcd-text)/70 hover:text-(--lcd-bright) shrink-0"
-            :title="saveOpen ? 'Hide Save' : 'Save this channel\'s preset and controls'" @click="saveOpen = !saveOpen">
+            :title="saveOpen ? 'Hide Save' : 'Save this channel\'s preset and mapped controls'" @click="saveOpen = !saveOpen">
             <ChevronRight class="w-3 h-3 transition-transform" :class="saveOpen ? 'rotate-90' : ''" />
-            Sounds · CH {{ channel + 1 }}
+            Sounds · CH {{ channel + 1 }}<template v-if="soundsBank"> · {{ soundsBank }}</template>
           </button>
           <span class="text-[9px] font-mono text-(--lcd-text)/50">{{ savedSounds.length }}/{{ VD_SOUNDS_PER_CHANNEL }}</span>
           <template v-if="saveOpen">
@@ -274,7 +309,7 @@ function openCcTable() {
               @contextmenu.prevent="learnMenu($event, vdpSlotParam(i, device), `Sound slot ${i + 1}`)"
               class="relative flex items-center rounded border pl-1.5 pr-4 py-1 text-[10px] font-mono cursor-pointer transition-colors truncate"
               :class="selectedSlot === i ? 'border-(--lcd-bright) bg-(--lcd-text)/20 text-(--lcd-bright) ring-1 ring-(--lcd-bright)/60' : 'border-(--lcd-text)/40 text-(--lcd-text) hover:border-(--lcd-text)/80'"
-              :title="`Pad ${i + 1}: ${s.name} — select & recall on CH ${channel + 1}: ${s.preset?.soundName ?? 'no preset'} + ${Object.keys(s.cc).length} controls (right-click: MIDI Learn)`"
+              :title="`Pad ${i + 1}: ${s.name} — select & recall on CH ${channel + 1}: ${s.preset?.soundName ?? 'no preset'} + ${Object.keys(s.cc).length} mapped controls (right-click: MIDI Learn)`"
               @click="onSlotClick(i, s)">
               <span class="truncate">{{ s.name }}</span>
               <span v-if="slotMark(i)" class="absolute top-0.5 left-0.5 w-1 h-1 rounded-full" :class="slotMark(i)" />
