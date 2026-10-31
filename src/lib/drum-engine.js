@@ -159,16 +159,43 @@ export function initDrumEngine() {
   _ensureGraph()
 }
 
-export async function loadSample(padIdx, url) {
-  if (padIdx < 0 || padIdx >= NUM_PADS) return
-  try {
-    _ensureGraph()
-    const ctx = _getCtx()
+// Decoded samples by URL (LRU, insertion order = age). A sequence switch calls loadSample() for
+// every pad; without this each switch re-fetched and re-decoded all 11 samples (with Drum Machine
+// chain / Chord Prog drum FOLLOW that's every bar or section: CPU + memory churn that grew until
+// the tab died). Blob URLs are stable per sound (useFreesoundCache memoizes them), so the URL is a
+// good key. In-flight loads are shared, so overlapping switches don't decode twice.
+const BUFFER_CACHE_MAX = 64
+const _bufferCache = new Map()            // url → Promise<AudioBuffer>
+const _padUrls     = Array(NUM_PADS).fill(null)
+
+function _getBuffer(url) {
+  let p = _bufferCache.get(url)
+  if (p) {
+    _bufferCache.delete(url)              // refresh LRU position
+    _bufferCache.set(url, p)
+    return p
+  }
+  p = (async () => {
     const resp = await fetch(url)
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const arrayBuf = await resp.arrayBuffer()
-    _buffers[padIdx] = await ctx.decodeAudioData(arrayBuf)
+    return _getCtx().decodeAudioData(await resp.arrayBuffer())
+  })()
+  p.catch(() => _bufferCache.delete(url)) // don't cache failures
+  _bufferCache.set(url, p)
+  while (_bufferCache.size > BUFFER_CACHE_MAX) _bufferCache.delete(_bufferCache.keys().next().value)
+  return p
+}
+
+export async function loadSample(padIdx, url) {
+  if (padIdx < 0 || padIdx >= NUM_PADS || !url) return
+  if (_padUrls[padIdx] === url && _buffers[padIdx]) return
+  _padUrls[padIdx] = url
+  try {
+    _ensureGraph()
+    const buf = await _getBuffer(url)
+    if (_padUrls[padIdx] === url) _buffers[padIdx] = buf   // a newer load for this pad wins
   } catch (e) {
+    if (_padUrls[padIdx] === url) _padUrls[padIdx] = null
     console.warn(`[DrumEngine] loadSample pad ${padIdx} failed:`, e)
   }
 }

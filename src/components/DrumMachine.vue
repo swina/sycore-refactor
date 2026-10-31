@@ -506,7 +506,8 @@ function _scheduleCallback(time) {
 
   // Not written to drumStore.currentStep: a store mutation per 16th costs (watchers,
   // Pinia devtools) and nothing reads the step any more — see paintPlayhead().
-  getDraw().schedule(() => paintPlayhead(globalStep), time)
+  // MIDI OUT ONLY: the Drum Machine is just a MIDI note source, no transport display.
+  if (!midiOutOnly.value) getDraw().schedule(() => paintPlayhead(globalStep), time)
   stepCounter++ // no wrap — each track uses its own modulo
 
   // ── Bassline voices ──
@@ -635,11 +636,20 @@ function sendMidiMappingFeedback(paramNamePrefix, isOn) {
 
 watch(() => drumStore.activeSequence, async (newSeq, oldSeq) => {
   await nextTick()
-  await loadAllSamples(drumStore.currentPattern)
-  pushAllFxToEngine(drumStore.currentPattern)
+  // MIDI OUT ONLY plays no samples: nothing to load or to push to the audio engine
+  if (!midiOutOnly.value) {
+    await loadAllSamples(drumStore.currentPattern)
+    pushAllFxToEngine(drumStore.currentPattern)
+  }
   // Send feedback: on for the active sequence, off for the previous one
   sendMidiMappingFeedback('dm_seq_', false)
   sendMidiMappingFeedback('dm_seq_' + newSeq.toLowerCase(), true)
+})
+
+watch(midiOutOnly, async (on) => {
+  if (on) { paintPlayhead(-1); return }
+  await loadAllSamples(drumStore.currentPattern)
+  pushAllFxToEngine(drumStore.currentPattern)
 })
 
 // ── Master volume (footer) — applied as a multiplier on all track volumes at trigger time ─
