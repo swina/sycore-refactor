@@ -1738,3 +1738,8 @@ export class MidiService {
 
 // ── Singleton ──────────────────────────────────────────────────────────────
 export const midiService = new MidiService();
+
+// Dev only: a hot update would create a second MidiService whose input
+// listeners run alongside the old instance's (every message handled twice —
+// doubled Thru, echoed notes). Force a full page reload instead.
+if (import.meta.hot) import.meta.hot.decline();

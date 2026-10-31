@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-10-31
 
+- **Dev: no doubled MIDI handling after a hot reload** — editing `midi-service.ts` (or a module it imports) in `npm run dev` hot-reloaded it into a second `MidiService` listening to the inputs next to the old one: every incoming message was handled twice (doubled Thru, notes echoed on release). The module now declines hot updates, so Vite does a full page reload. Dev only. `midi-service.ts`. Branch: `master`
+
 - **MIDI Flow: FADER SNAP per input device** — cheap faders (e.g. on Novation / AKAI controllers) often stop at 1–3 instead of 0, or below 127. The device card in MIDI Flow has a new **FADER SNAP** setting (OFF, ±1…±10): incoming CC values within that many steps of 0 / 127 become 0 / 127. It applies to MIDI Thru and to everything driven by CC (MIDI Learn mappings such as mixer volumes, Virtual Device controls, synth params); the MIDI Monitor still shows the value the controller really sent. Off by default — keep it off on devices with relative (endless) encoders. `faderDeadZone` on the device registration (`types/midi.ts`), `snapFaderValue()` in `midi-broadcast.ts`, `handleIngress()` in `midi-service.ts`, `MidiWizardFlow.vue`; tests: `tests/unit/midi/fader-dead-zone.test.ts`. Branch: `master`
 
 ## 2026-10-30
