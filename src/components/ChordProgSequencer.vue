@@ -276,7 +276,10 @@ function stopAllNotes() {
   _pendingTimeouts.forEach(id => clearTimeout(id))
   _pendingTimeouts.clear()
 
-  // Fade out: ramp CC7 (volume) down over panic delay, then cut notes
+  // Fade out: ramp CC11 (Expression) down over panic delay, then cut notes. Not CC7: Volume is the
+  // channel's level (the preset's / the mixer's), and resetting it to 127 after the stop overwrote
+  // it on every channel the Chord Prog plays on. Expression is the performance multiplier on top
+  // of it (the Sequencer fades the same way).
   if (_panicTimeout) clearTimeout(_panicTimeout)
   const delay = panicDelayMs.value
   const chan = midiStore.midiChannel
@@ -284,7 +287,7 @@ function stopAllNotes() {
   for (let i = 1; i <= steps; i++) {
     const vol = Math.round(127 * (1 - i / steps))
     const tid = window.setTimeout(() => {
-      if (_stopPending) midiStore.sendCC(7, vol, chan, MidiSource.CHORD_PROG)
+      if (_stopPending) midiStore.sendCC(11, vol, chan, MidiSource.CHORD_PROG)
       _pendingTimeouts.delete(tid)
     }, delay * i / steps)
     _pendingTimeouts.add(tid)
@@ -302,8 +305,8 @@ function stopAllNotes() {
       heldBassNote = null
     }
     midiStore.panic()
-    // Restore volume
-    setTimeout(() => midiStore.sendCC(7, 127, chan, MidiSource.CHORD_PROG), 10)
+    // Expression back to full (the channel's CC7 level was never touched)
+    setTimeout(() => midiStore.sendCC(11, 127, chan, MidiSource.CHORD_PROG), 10)
     _panicTimeout = null
   }, delay)
 }
