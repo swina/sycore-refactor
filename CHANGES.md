@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-10-30
 
+- **Toolbar: MIDI Learn on the DECK icon** — right-click the DECK icon (✨) in the toolbar → MIDI Learn (`deckToggle`); the learned CC or note opens the DECK modal (brings it to front if it's already open), exactly like a click. An orange dot shows while learning, as on Panic. `AppFooter.vue`. Branch: `master`
+
 - **Demo deploy on Vercel** — `npm run deploy:demo` builds the demo and deploys `dist-demo/` to production on its own Vercel project **`sycore-demo`** (https://sycore-demo.vercel.app), separate from the main app. The demo build now emits a static `vercel.json` into `dist-demo/` (no install/build, SPA fallback to `index.html`), like the website build. `vite.config.js`, `package.json`. Branch: `master`
 
 - **Fix Virtual Device controls changing the MIDI channel again** — the earlier fix resolved collisions only when learning, and only for device + channel bindings: a control learned on a Virtual Device dial still fired the Program Change panel's "next mapped channel" button (e.g. a binding saved without a device, never cleared) and **MIDI Actions** (`channel_cc` / `channel_up` / `channel_down` change the global MIDI channel; MIDI Actions and MIDI Learn both fire on a shared control). Now, at runtime, a CC or note learned on a Virtual Device control (`vdp_*`) belongs to it alone: MIDI Actions skip it (passed on to MIDI Learn), and so do the Program Change panel's button learns and preset-list CC — as Thru already did. `isVirtualDeviceControl()` in `useMidiCCListener.js` (also used by the Thru exclude), `useControllerManager.js`, `MidiDeviceProgramChangePanel.vue`; tests: `tests/unit/composables/vd-control-exclusive.test.ts`. Branch: `master`

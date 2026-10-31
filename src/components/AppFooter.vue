@@ -179,6 +179,7 @@ onMounted(() => {
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
     if (paramName === 'globalTransport') midiStore.toggleGlobalTransport()
     else if (paramName === 'panic') midiStore.panic()
+    else if (paramName === 'deckToggle') uiStore.openPanel('instrument-cockpit')
   })
 })
 
@@ -365,14 +366,20 @@ onUnmounted(() => {
         </div>
 
         <ThemeToggle size="sm" />
-        <button
-          v-if="authStore.user"
-          @click="uiStore.openPanel('instrument-cockpit')"
-          title="DECK"
-          class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
-        >
-          <Sparkles class="w-5 h-5 text-synth-neon" />
-        </button>
+        <div v-if="authStore.user" class="relative">
+          <button
+            @click="uiStore.openPanel('instrument-cockpit')"
+            @contextmenu.prevent="openMenu($event, { name: 'deckToggle', label: 'DECK (Open)' })"
+            title="DECK · Right-click to MIDI learn"
+            class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
+          >
+            <Sparkles class="w-5 h-5 text-synth-neon" />
+          </button>
+          <span
+            v-if="mappingStore.learningParamName === 'deckToggle'"
+            class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+          />
+        </div>
         <button
           v-if="authStore.user"
           @click="reloadMidiDevices()"
