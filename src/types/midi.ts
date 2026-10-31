@@ -51,6 +51,9 @@ export interface DeviceRegistration {
   velocityMax: number;
   velocityMap: 'linear' | 'log' | 'exp' | 'fixed';
   receiveSyncIn: boolean;
+  // Incoming CC values within this many steps of 0 / 127 snap to the end
+  // (cheap faders that never reach 0). 0/unset = off.
+  faderDeadZone?: number;
   // Which Program Change bank/patch template MidiDeviceProgramChangePanel
   // should show for this device — unset means "legacy/auto" (today's fuzzy
   // catalog-name-match + show-every-import-button behavior), so devices

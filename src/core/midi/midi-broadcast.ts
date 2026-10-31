@@ -71,6 +71,14 @@ export function decodeOut(
   }
 }
 
+/** Snap a CC value within `zone` steps of either end to 0 / 127 (fader end-of-travel dead zone). */
+export function snapFaderValue(value: number, zone: number): number {
+  if (!(zone > 0)) return value;
+  if (value <= zone) return 0;
+  if (value >= 127 - zone) return 127;
+  return value;
+}
+
 /** Apply velocity curve transformation */
 export function applyVelocityCurve(velocity: number, map: string): number {
   if (map === 'fixed') return 64;

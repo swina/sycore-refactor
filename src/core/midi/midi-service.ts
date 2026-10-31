@@ -27,7 +27,7 @@ import { MidiMonitor } from './midi-monitor';
 import { MidiTransport } from './midi-transport';
 import { SmartLatch } from './midi-smart-latch';
 import { MidiRouter, ThruNoteTracker } from './midi-routing';
-import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte } from './midi-broadcast';
+import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte, snapFaderValue } from './midi-broadcast';
 
 export type { DeviceRegistration, RoutingConfig, SplitConfig, MidiMessageType, MidiMonitorEntry };
 export { MidiSource };
@@ -1573,6 +1573,20 @@ export class MidiService {
       }
     }
 
+    // Fader end-of-travel snap: cheap sliders often bottom out at 1–3 (or top
+    // out at 124–126) instead of 0/127. Per input device, opt-in. Applied to
+    // Thru and the CC listeners only — the Monitor and raw listeners above
+    // still see the value the controller really sent.
+    const deadZone = inConfig?.faderDeadZone ?? 0;
+    if ((status & 0xf0) === 0xb0 && deadZone > 0 && event.data.length >= 3) {
+      const snapped = snapFaderValue(event.data[2], deadZone);
+      if (snapped !== event.data[2]) {
+        const copy = new Uint8Array(processedData);
+        copy[2] = snapped;
+        processedData = copy;
+      }
+    }
+
     // Echo suppression — guards against a virtual/hardware MIDI loopback cable
     // re-triggering itself, not against a musician genuinely repeating a
     // note. A real loopback echo arrives within single-digit ms; 300ms was
@@ -1645,7 +1659,7 @@ export class MidiService {
         this.onNoteListeners.forEach(l => l(isNoteOn ? 'on' : 'off', note, velocity, channel, inputId));
         if (isNoteOn) this.globalNoteOnListeners.forEach(l => l(note, velocity));
       } else if (type === 0xb0) {
-        this.onCCListeners.forEach(l => l(event.data[1], event.data[2], channel, inputId));
+        this.onCCListeners.forEach(l => l(processedData[1], processedData[2], channel, inputId));
       } else if (type === 0xe0) {
         const val = (event.data[2] << 7) | event.data[1];
         this.onPitchBendListeners.forEach(l => l(val, channel, inputId));

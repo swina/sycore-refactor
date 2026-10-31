@@ -138,6 +138,17 @@ function virtualInstrumentPort(name) {
   return midiStore.virtualInstruments.find(v => v.name === name)?.midiOutputPort ?? ''
 }
 
+const FADER_DEAD_ZONES = [1, 2, 3, 4, 5, 6, 8, 10]
+
+function faderDeadZone(name) {
+  return midiStore.routingConfig?.registrations?.[name]?.faderDeadZone ?? 0
+}
+
+function setFaderDeadZone(name, zone) {
+  midiStore.addRegistration(name)
+  midiStore.updateRegistration(name, 'faderDeadZone', zone || 0)
+}
+
 // Virtual instruments have no real WebMIDI connection to detect — undefined
 // (pre-existing instruments, never toggled) reads as online, matching the
 // old always-online behavior.
@@ -1418,6 +1429,20 @@ function pendingPath() {
                       <option v-for="ch in CHANNELS" :key="ch" :value="ch - 1" class="bg-neutral-950">{{ ch }}</option>
                     </select>
                   </div>
+                </div>
+                <!-- Fader end-of-travel snap for controllers whose sliders never reach 0/127.
+                     Stored straight on the registration (not part of the canvas apply). -->
+                <div v-if="node.hasIn" class="flex items-center gap-2 px-3 pb-2" @mousedown.stop
+                  title="Incoming CC values within this many steps of 0 / 127 snap to 0 / 127 — for faders that don't reach the end. Leave OFF on devices with relative (endless) encoders.">
+                  <span class="text-[7px] font-bold uppercase tracking-widest text-neutral-600 shrink-0">FADER SNAP</span>
+                  <select
+                    :value="faderDeadZone(node.name)"
+                    @change="e => setFaderDeadZone(node.name, parseInt(e.target.value))"
+                    class="bg-neutral-950 border border-neutral-700 rounded text-[9px] font-mono focus:outline-none cursor-pointer px-1 py-0.5 flex-1"
+                  >
+                    <option :value="0" class="bg-neutral-950">OFF</option>
+                    <option v-for="z in FADER_DEAD_ZONES" :key="z" :value="z" class="bg-neutral-950">±{{ z }}</option>
+                  </select>
                 </div>
                 <!-- Multi-timbral fanout — duplicate outgoing notes/CC/PC onto
                      every selected channel instead of just one (e.g. a 16-part
