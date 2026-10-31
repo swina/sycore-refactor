@@ -130,6 +130,28 @@ export default defineConfig(({ mode }) => {
           ],
         },
       }),
+      // Demo build (VITE_DEMO=1 → dist-demo/): emit a vercel.json marking the
+      // deploy as static with an SPA fallback, so the standalone demo project
+      // never runs a remote build or needs the repo's root vercel.json.
+      process.env.VITE_DEMO && {
+        name: 'demo-vercel-json',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'vercel.json',
+            source: JSON.stringify(
+              {
+                framework: null,
+                installCommand: '',
+                buildCommand: '',
+                rewrites: [{ source: '/((?!assets/|.*\\..*).*)', destination: '/index.html' }],
+              },
+              null,
+              2
+            ),
+          });
+        },
+      },
     ],
     resolve: resolveAlias,
     server: devServer,
