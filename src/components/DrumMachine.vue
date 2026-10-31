@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
+import { audioTimeToPerfMs } from '@/lib/audio-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info, Sparkles } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
@@ -310,17 +311,20 @@ const hasSolo = computed(() =>
 )
 
 // ── MIDI Out (per-track "play an external drum machine instead") ───────────
-// fireTime is a Tone.js AudioContext time; Web MIDI sends have no audio-clock
-// scheduling of their own, so it's converted to a real setTimeout delay via
-// toneNow() — the same conversion the REC SYNC pre-roll above already uses.
+// fireTime is a Tone.js AudioContext time, converted to performance.now() ms
+// (lib/audio-clock.ts) for a timestamped Web MIDI send.
 // Accent has no MIDI equivalent, so it's folded into velocity instead (same
 // ratio as drum-engine.js's own ACCENT_BOOST).
+// Timestamped sends (like the Arpeggiator): the browser puts the note out at `at`, so main-thread
+// stalls and timer jitter don't move it. Before, setTimeout from toneNow() (= currentTime +
+// lookAhead) fired ~a lookahead ahead of the audio and wobbled with the page's load. A time
+// already past (a live pad) goes out now.
 function _sendMidiNote(note, velocity, accent, fireTime, duration) {
   const vel = Math.max(1, Math.min(127, Math.round(velocity * (accent ? 1.35 : 1))))
-  const onDelayMs  = Math.max(0, (fireTime - toneNow()) * 1000)
-  const offDelayMs = onDelayMs + Math.max(10, duration * 1000)
-  setTimeout(() => midiStore.sendNoteOn(note, vel, midiStore.midiChannel, MidiSource.DRUM_MACHINE), onDelayMs)
-  setTimeout(() => midiStore.sendNoteOff(note, 0, midiStore.midiChannel, MidiSource.DRUM_MACHINE), offDelayMs)
+  const onAt  = fireTime == null ? performance.now() : Math.max(performance.now(), audioTimeToPerfMs(fireTime))
+  const offAt = onAt + Math.max(10, duration * 1000)
+  midiStore.sendNoteOn(note, vel, midiStore.midiChannel, MidiSource.DRUM_MACHINE, null, onAt)
+  midiStore.sendNoteOff(note, 0, midiStore.midiChannel, MidiSource.DRUM_MACHINE, null, offAt)
 }
 
 // ── MIDI OUT ONLY (drumStore.midiOutOnly) — the virtual instruments the Drum Machine is wired to
@@ -334,7 +338,7 @@ const midiOutOnly = computed(() => drumStore.midiOutOnly && midiOutTargets.value
 function _hitPad(trackIdx, velocity) {
   if (midiOutOnly.value) {
     const note = drumStore.currentPattern[trackIdx]?.midiNote ?? 36
-    _sendMidiNote(note, velocity, false, toneNow(), 0.1)
+    _sendMidiNote(note, velocity, false, null, 0.1)   // live: now
     return
   }
   drumEngine.triggerPad(trackIdx, { velocity, accent: false, time: 0 })
