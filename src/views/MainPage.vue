@@ -1,4 +1,5 @@
 <script setup>
+import { STEP_SEQUENCER_ENABLED } from '@/constants/features'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '@/stores/useConfigStore'
@@ -157,7 +158,7 @@ function goWorkspace() {
                 </div>
               </div>
               <!-- Step Sequencer -->
-              <div @click="uiStore.isSequencerOpen = true;goWorkspace()" class="flex w-1/2 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-step-sequencer">
+              <div v-if="STEP_SEQUENCER_ENABLED" @click="uiStore.isSequencerOpen = true;goWorkspace()" class="flex w-1/2 rounded-xl cursor-pointer items-center border-neutral-800 bg-neutral-900/40 backdrop-blur-sm flex flex-col overflow-hidden bg-step-sequencer">
                 <div class="flex-none px-2 py-1 border-b border-neutral-800 flex items-end h-full gap-1.5">
                   <Music class="w-5 h-5 text-synth-cyan" />
                   <span class="text-[12px] font-black uppercase tracking-[0.3em] text-neutral-400 font-mono">Step Sequencer</span>

@@ -1,4 +1,5 @@
 <script setup>
+import { STEP_SEQUENCER_ENABLED } from '@/constants/features'
 import { ref, computed, watch, onUnmounted, onMounted, nextTick } from 'vue'
 import { Edit3, BookOpen, Play, Square, Copy, Trash2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Zap, Layers, ListMusic, LayoutGrid, Grid3x3, Settings2, Plus, RefreshCw, Network, SlidersHorizontal, SlidersVertical, List, Undo2, Sparkles } from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/midi-service'
@@ -685,7 +686,7 @@ function getDialIndicator(cfg, r = 18) {
             </div> -->
 
             <!-- Sequencer -->
-            <button @click="uiStore.isSequencerOpen = !uiStore.isSequencerOpen"
+            <button v-if="STEP_SEQUENCER_ENABLED" @click="uiStore.isSequencerOpen = !uiStore.isSequencerOpen"
               @contextmenu.prevent="openMenu($event, { name: 'toggle_sequencer', label: 'Toggle Sequencer' })"
               :class="['relative w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 shadow-lg',
                 uiStore.isSequencerOpen

@@ -1,4 +1,5 @@
 <script setup>
+import { STEP_SEQUENCER_ENABLED } from '@/constants/features'
 import { useRouter } from 'vue-router'
 import {
   LayoutGrid, Layers, Heart, KeyboardMusic, ListMusic, Zap,
@@ -29,7 +30,7 @@ const sections = [
     title: 'Performance',
     cards: [
       { icon: KeyboardMusic, title: 'Virtual Keyboard', description: 'On-screen MIDI keyboard with mod & pitch', uiFlag: 'isKeyboardOpen' },
-      { icon: ListMusic,     title: 'Step Sequencer', description: 'Pattern programming with two slots', uiFlag: 'isSequencerOpen' },
+      ...(STEP_SEQUENCER_ENABLED ? [{ icon: ListMusic, title: 'Step Sequencer', description: 'Pattern programming with two slots', uiFlag: 'isSequencerOpen' }] : []),
       { icon: Zap,           title: 'Arpeggiator', description: 'Note patterns with BPM sync', uiFlag: 'isArpOpen' },
     ],
   },

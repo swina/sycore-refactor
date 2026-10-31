@@ -45,6 +45,7 @@ import MidiCapture from '@/components/MidiCapture.vue'
 import AudioCapture from '@/components/AudioCapture.vue'
 import AudioVisualizer from '@/components/AudioVisualizer.vue'
 import StepSequencer from '@/components/StepSequencer.vue'
+import { STEP_SEQUENCER_ENABLED } from '@/constants/features'
 import Sequencer from '@/components/Sequencer.vue'
 import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
@@ -483,7 +484,7 @@ onMounted(() => {
       </div>
 
       <!-- Step Sequencer -->
-      <div :style="focusStyle('sequencer')">
+      <div v-if="STEP_SEQUENCER_ENABLED" :style="focusStyle('sequencer')">
         <StepSequencer
           :isOpen="uiStore.isSequencerOpen || uiStore.isSequencerModalOpen"
           :bpm="midiStore.currentBpm || 120"
