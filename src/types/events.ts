@@ -31,6 +31,8 @@ export interface SyCoreEventMap {
   'dm-trigger-fill': void;
   'dm-generate': void;
   'dm-seq-switch': { seq: string };
+  'seq-bank-cue': { idx: number };
+  'seq-banks-reloaded': void;
   'dm-pad-trigger': { trackIdx: number; velocity: number };
 
   // Playlist / Tracks

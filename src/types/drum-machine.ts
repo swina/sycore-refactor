@@ -131,6 +131,16 @@ export type DrumStyleName =
   | 'House' | 'Techno' | 'HipHop' | 'Trap' | 'Funk'
   | 'Jungle/DnB' | 'Latin' | 'Rock' | 'EDM' | 'Pop' | 'Jazz';
 
+/** Drum style names, as a list (generateDrumPattern's styles) */
+export const DRUM_STYLE_LIST: readonly DrumStyleName[] = [
+  'House', 'Techno', 'HipHop', 'Trap', 'Funk', 'Jungle/DnB', 'Latin', 'Rock', 'EDM', 'Pop', 'Jazz',
+];
+
+/** The Drum Machine's tracks, in order (one per row of each sequence) */
+export const DRUM_TRACK_LABELS: readonly DrumTrackLabel[] = [
+  'Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal', 'Rim Shot', 'Cowbell', 'Tambourine',
+];
+
 /** A single pattern imported from the DrumMachinePatterns book collections */
 export interface ImportedPattern {
   title: string;

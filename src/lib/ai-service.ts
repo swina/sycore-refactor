@@ -37,6 +37,7 @@ export async function sendAiPrompt(
   systemPrompt: string,
   userPrompt: string,
   signal?: AbortSignal,
+  opts: { maxTokens?: number; temperature?: number } = {},
 ): Promise<AiServiceResult> {
   const provider = getProvider(providerId)
   const baseUrl = endpoint || provider?.baseUrl || ''
@@ -61,8 +62,8 @@ export async function sendAiPrompt(
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
-    temperature: 0.7,
-    max_tokens: 2048,
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 2048,
   }
 
   return fetchCompletion(baseUrl, headers, body, signal)

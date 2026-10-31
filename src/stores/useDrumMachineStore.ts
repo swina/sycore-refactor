@@ -4,6 +4,7 @@ import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { debounce } from '@/lib/debounce'
 import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
+import { DRUM_TRACK_LABELS } from '@/types/drum-machine'
 import { IMPORTED_PATTERNS, patternToDrumSteps } from '@/data/imported-patterns'
 import { DEFAULT_ADSR } from '@/core/audio/envelope'
 
@@ -13,7 +14,7 @@ const LS_KEY = 'SYCORE_DRUM_MACHINE_V1'
 const LS_PRESETS_KEY = 'SYCORE_DM_PRESETS'
 const LS_KITS_KEY = 'SYCORE_DM_KITS'
 const LS_CURRENT_KIT_KEY = 'SYCORE_DM_CURRENT_KIT'
-const TRACK_LABELS = ['Kick', 'Snare', 'Closed HH', 'Open HH', 'Clap', 'Tom 1', 'Tom 2', 'Cymbal', 'Rim Shot', 'Cowbell', 'Tambourine'] as const
+const TRACK_LABELS = DRUM_TRACK_LABELS
 
 // Default MIDI note per track label — standard GM percussion key map, so a
 // track wired to MIDI Out lands on the note an external drum machine/GM

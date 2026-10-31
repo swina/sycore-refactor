@@ -350,6 +350,22 @@ watch(() => seqStore.activeBankIndex, () => {
 
 let lastFollowedBank = -1
 
+// Chord Prog FOLLOW ('seq-bank-cue', one bar before a section ends): the bank of the next section
+// starts when the playing one wraps to its first step; stopped, it's selected now.
+let _pendingBank = null
+function handleBankCue(e) {
+  const idx = e.detail?.idx
+  if (idx == null || idx < 0 || idx >= BANK_COUNT) return
+  if (!isPlaying.value) { _pendingBank = null; selectBank(idx); return }
+  _pendingBank = idx === seqStore.activeBankIndex ? null : idx
+}
+// The banks were replaced from outside (AI Song Composer, undo): drop the working copy.
+function handleBanksReloaded() {
+  _pendingBank = null
+  loadBankIntoLocal()
+  selectedStepIdx.value = 0
+}
+
 function followChainPlayback(stepIdx) {
   if (!seqStore.chainEnabled || !isPlaying.value) {
     lastFollowedBank = -1
@@ -1007,6 +1023,8 @@ onMounted(() => {
     if (idx != null && idx >= 0 && idx < BANK_COUNT) selectBank(idx)
   }
   window.addEventListener('seq-bank-select', handleBankSelect)
+  window.addEventListener('seq-bank-cue', handleBankCue)
+  window.addEventListener('seq-banks-reloaded', handleBanksReloaded)
 
   const handleTimeSet = (e) => {
     tempoMultiplier.value = pickFromMidi(TEMPO_MULTIPLIERS, tempoMultiplier.value, e.detail ?? {})
@@ -1357,6 +1375,8 @@ onMounted(() => {
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('toggle-sequencer2', handleToggle2)
     window.removeEventListener('seq-bank-select', handleBankSelect)
+    window.removeEventListener('seq-bank-cue', handleBankCue)
+    window.removeEventListener('seq-banks-reloaded', handleBanksReloaded)
     window.removeEventListener('seq-time-set', handleTimeSet)
     window.removeEventListener('seq-direction-set', handleDirectionSet)
     unsubNote?.()
@@ -1422,6 +1442,7 @@ watch(isPlaying, (playing) => {
     seqStore.playingChainIndex = null
     seqStore.playingBankIndex = null
     lastFollowedBank = -1
+    _pendingBank = null
   } else {
     if (fadeOutIntervalRef.value !== null) {
       clearInterval(fadeOutIntervalRef.value)
@@ -1459,6 +1480,16 @@ watch(isPlaying, (playing) => {
               stepCounter += stepDirection * 2
             }
           }
+        }
+        if (_pendingBank !== null && stepIdx === 0 && !seqStore.chainEnabled) {
+          selectBank(_pendingBank)
+          _pendingBank = null
+          const pb = seqStore.playbackSteps
+          state.steps = pb.steps
+          state.numSteps = pb.numSteps
+          state.chainSlotIndices = pb.chainSlotIndices
+          state.bankIndices = pb.bankIndices
+          state.localIndices = pb.localIndices
         }
         const step = state.steps[stepIdx]
 

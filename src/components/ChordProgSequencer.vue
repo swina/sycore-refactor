@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles, Star } from 'lucide-vue-next'
+import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles, Star, ListMusic } from 'lucide-vue-next'
 import { getTransport, getDraw, start as toneStart } from 'tone'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
@@ -23,6 +23,8 @@ import { orderChordStrumNotes } from '@/lib/chord-strum'
 import { parseMidiFile } from '@/lib/midi-file'
 import ChordAssignModal from './ChordAssignModal.vue'
 import AiPromptModal from './AiPromptModal.vue'
+import SongComposerDialog from './SongComposerDialog.vue'
+import { sendPartPresets } from '@/lib/song-composer'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 
 const props = defineProps({
@@ -56,6 +58,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 const showAiPrompt = ref(false)
+const showSongComposer = ref(false)
 const aiLoading = ref(false)
 const midiFileInputRef = ref(null)
 const midiImportResult = ref(null)
@@ -229,6 +232,42 @@ function buildPlayState() {
   }
 }
 
+// Drums + Sequencer follow the chain (store.drumFollow): one bar (384 ticks) before the playing
+// slot ends, ask the Drum Machine for the sequence and the Sequencer for the bank of the next
+// slot's letter. Both switch at the slot boundary: the Drum Machine at its next bar start
+// ('dm-seq-switch' is quantized while it plays), the Sequencer when its bank wraps ('seq-bank-cue'). Once per slot instance
+// (a slot instance starts where the chain's local step index is back to 0).
+const SECTION_CUE_TICKS = 384
+// Preset changes per section (store.slotPresets, AI Song Composer): a 16th before the boundary, so
+// the device has switched when the next section's first notes arrive (the last 16th of the
+// section may be cut on synths that silence on a Program Change).
+const SECTION_PC_TICKS = 24
+function cueNextSection(state) {
+  const p = state.stepPointer
+  if (state.tickCounter === 0 && state.chainLocalIndices[p] === 0) { state.sectionCued = false; state.sectionPcCued = false }
+  if (state.sectionCued && state.sectionPcCued) return
+  let end = p
+  let ticks = 0
+  do {
+    ticks += DURATION_TICKS[state.steps[end]?.duration] ?? 32
+    end++
+  } while (end < state.numSteps && state.chainLocalIndices[end] !== 0)
+  const left = ticks - state.tickCounter
+  if (left > SECTION_CUE_TICKS) return
+  const next = end < state.numSteps ? state.chainSlotIndices[end] : (state.loop ? state.chainSlotIndices[0] : null)
+  if (next == null || next < 0) { state.sectionCued = state.sectionPcCued = true; return }
+  if (!state.sectionCued) {
+    state.sectionCued = true
+    window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq: 'ABCDEFGH'[next] } }))
+    window.dispatchEvent(new CustomEvent('seq-bank-cue', { detail: { idx: next } }))
+  }
+  if (!state.sectionPcCued && left <= SECTION_PC_TICKS) {
+    state.sectionPcCued = true
+    const presets = store.slotPresets?.[next]
+    if (presets && next !== state.chainSlotIndices[p]) sendPartPresets(presets)
+  }
+}
+
 let _panicTimeout = null
 
 function stopAllNotes() {
@@ -357,6 +396,8 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       const ticksNeeded = DURATION_TICKS[step?.duration] ?? 32
       // Per-step Chord/Arp override — unset means "inherit the slot's global playMode".
       const effectiveMode = step?.stepMode ?? state.playMode
+
+      if (state.chainSlotIndices && store.drumFollow) cueNextSection(state)
 
       if (state.tickCounter === 0) {
         getDraw().schedule(() => {
@@ -1350,6 +1391,13 @@ function velBarColor(v) {
           >
             <Sparkles class="w-4 h-4" />
           </button>
+          <button
+            @click.stop="showSongComposer = true"
+            title="Compose Song (AI): key + style + tempo → slots, chain and drums"
+            class="p-1.5 rounded-lg text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors"
+          >
+            <ListMusic class="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -1461,6 +1509,19 @@ function velBarColor(v) {
         >
           <span class="tracking-wider">Chain</span>
           <span :class="['text-[9px]', store.chainEnabled ? 'text-cyan-400' : 'text-neutral-600']">{{ store.chainEnabled ? 'ON' : 'OFF' }}</span>
+        </button>
+
+        <!-- Drums follow the chain: the Drum Machine switches to the sequence of the playing slot's letter -->
+        <button
+          @click.stop="store.drumFollow = !store.drumFollow"
+          :title="store.drumFollow ? 'Drums + Sequencer follow the chain: slot A plays Drum Machine sequence A and Sequencer bank A, B plays B… (switches at the slot boundary; their own chains off)' : 'Drums and Sequencer don\'t follow the chain'"
+          :class="[
+            'flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-bold uppercase border transition-colors',
+            store.drumFollow ? 'border-amber-600 text-amber-400 bg-amber-950/40' : 'border-neutral-700 text-neutral-500 hover:text-neutral-300'
+          ]"
+        >
+          <span class="tracking-wider">Follow</span>
+          <span :class="['text-[9px]', store.drumFollow ? 'text-amber-400' : 'text-neutral-600']">{{ store.drumFollow ? 'ON' : 'OFF' }}</span>
         </button>
 
         <!-- Panic delay -->
@@ -2542,5 +2603,6 @@ function velBarColor(v) {
       @result="handleAiResult"
       @close="showAiPrompt = false"
     />
+    <SongComposerDialog v-if="showSongComposer" @close="showSongComposer = false" />
   </div>
 </template>

@@ -163,6 +163,17 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const playingSlotIndex = ref<number | null>(null)
   const chain = ref<number[]>(Array(CHAIN_MAX).fill(-1))
   const chainEnabled = ref(false)
+  // Drums follow the chain: during chain playback, one bar before a slot ends the Drum Machine is
+  // told to switch to the sequence with the next slot's letter (A–H), so it changes at the boundary
+  // (AI Song Composer: Chord Prog conducts the song form). Remembered.
+  const LS_DRUM_FOLLOW = 'SYCORE_CHORD_PROG_DRUM_FOLLOW'
+  const drumFollow = ref((() => { try { return localStorage.getItem(userKey(LS_DRUM_FOLLOW)) === '1' } catch { return false } })())
+  watch(drumFollow, v => { try { localStorage.setItem(userKey(LS_DRUM_FOLLOW), v ? '1' : '0') } catch {} })
+  // Preset changes per slot (AI Song Composer, presets "per section"): the preset categories of the
+  // Chord Prog's and the Sequencer's devices, sent when the chain reaches that slot (Follow on).
+  const LS_SLOT_PRESETS = 'SYCORE_CHORD_PROG_SLOT_PRESETS'
+  const slotPresets = ref<Record<number, { chords?: string; seq?: string }>>((() => { try { return JSON.parse(localStorage.getItem(userKey(LS_SLOT_PRESETS)) || '{}') || {} } catch { return {} } })())
+  watch(slotPresets, v => { try { localStorage.setItem(userKey(LS_SLOT_PRESETS), JSON.stringify(v)) } catch {} }, { deep: true })
 
   const SLOT_STORAGE_KEY = 'SYCORE_CHORD_PROG_SLOTS'
   const CHAIN_STORAGE_KEY = 'SYCORE_CHORD_PROG_CHAIN'
@@ -733,7 +744,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     captureBuffer, trackCaptureNote, captureChord, removeCapturedChord, clearCaptureBuffer, importCaptureBuffer,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,
-    slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled,
+    slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled, drumFollow, slotPresets, persistSlots, persistChain,
     slotSave, slotLoad, copySlot, chainSet, chainInsert, chainRemove, chainClear, getChainSteps,
   }
 })

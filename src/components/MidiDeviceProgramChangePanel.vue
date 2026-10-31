@@ -23,7 +23,7 @@ import { useSoloPerformanceSets, SOLO_SLOT_LETTERS } from '@/composables/useSolo
 import { MidiSource, midiService } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 import { on } from '@/types/events'
-import { pcBrowse } from '@/lib/pc-browse'
+import { pcBrowse, recordDeviceCategories, matchCategory } from '@/lib/pc-browse'
 import { mappedParamFor, isVirtualDeviceControl } from '@/composables/useMidiCCListener'
 import { askLearnConflict, registerLearnOwnerProvider } from '@/lib/midi-learn-conflicts'
 
@@ -892,8 +892,12 @@ function selectCategoryFor({ deviceName, channel, category }) {
     if ((selectedReg.value?.pcChannel ?? 0) !== channel) setChannel(channel + 1)
     await waitForSounds()
     const field = bankConfig.value?.category_field ?? 'category'
-    if ((selectedReg.value?.pcChannels?.[channel]?.category ?? '') === category) return
-    const first = sounds.value.find(sd => (sd[field] ?? '') === category)
+    // an exact name (Virtual Device), else the closest one (AI Song Composer: "Pads" → "Pad")
+    const cats = [...new Set(sounds.value.map(sd => sd[field]).filter(Boolean))]
+    const cat = cats.includes(category) ? category : matchCategory(category, cats)
+    if (!cat) { showPcNotification(deviceName, `No "${category}" category in this bank`, '', channel); return }
+    if ((selectedReg.value?.pcChannels?.[channel]?.category ?? '') === cat) return
+    const first = sounds.value.find(sd => (sd[field] ?? '') === cat)
     if (first) selectSound(first)
   }).catch(e => console.error('[DevicePCPanel] category select failed', e))
 }
@@ -906,9 +910,11 @@ watch([selectedDeviceName, () => selectedReg.value?.pcChannel, () => selectedReg
   // the preset's category: as found in the list, else as recorded on the channel
   const cat = index >= 0 ? (sounds.value[index][field] ?? '') : (selectedReg.value?.pcChannels?.[ch]?.category ?? '')
   const inCat = cat ? sounds.value.filter(sd => (sd[field] ?? '') === cat) : []
+  const categories = [...new Set(sounds.value.map(sd => sd[field]).filter(Boolean))]
+  recordDeviceCategories(selectedDeviceName.value, selectedBank.value, categories)
   pcBrowse.value = {
     device: selectedDeviceName.value, channel: ch, bank: selectedBank.value, total: sounds.value.length, index,
-    categories: [...new Set(sounds.value.map(sd => sd[field]).filter(Boolean))],
+    categories,
     catIndex: index >= 0 ? inCat.indexOf(sounds.value[index]) : -1, catTotal: inCat.length,
   }
 }, { immediate: true })
