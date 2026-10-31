@@ -14,6 +14,14 @@ import {
   AUTOSAVE_ID,
   type MappingPreset,
 } from '@/lib/midi-mapping-presets'
+import {
+  registerLearnOwnerProvider,
+  findLearnConflicts,
+  askLearnConflict,
+  describeParam,
+  type LearnControl,
+  type LearnOwner,
+} from '@/lib/midi-learn-conflicts'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -84,6 +92,34 @@ function loadMidiMappingsFromStorage(): MidiMappings {
   } catch {
     return {}
   }
+}
+
+// ---------------------------------------------------------------------------
+// Learn conflicts (see lib/midi-learn-conflicts.ts)
+// ---------------------------------------------------------------------------
+
+/** The control a mapping entry is bound to (legacy string entries: from the key, CC only). */
+function entryControl(key: string, m: MappingEntry | string): LearnControl | null {
+  if (typeof m === 'object' && m) {
+    const device = m.device ?? null
+    const channel = m.channel ?? null
+    if ('nrpn' in m && m.nrpn) return { kind: 'nrpn', number: (m.nrpn.msb << 7) | m.nrpn.lsb, channel, device }
+    if ('note' in m && m.note != null) return { kind: 'note', number: m.note, channel, device }
+    if ('cc' in m && m.cc != null) return { kind: 'cc', number: m.cc, channel, device }
+    return null
+  }
+  const parts = key.split(':')
+  const num = Number(parts[parts.length - 1])
+  if (!Number.isInteger(num)) return null
+  return { kind: 'cc', number: num, channel: null, device: parts.length > 1 ? parts.slice(0, -1).join(':') : null }
+}
+
+/** Same physical control: same kind/number; an unset device or channel on either side matches any. */
+export function sameLearnControl(a: LearnControl, b: LearnControl): boolean {
+  if (a.kind !== b.kind || a.number !== b.number) return false
+  if (a.device && b.device && a.device !== b.device) return false
+  if (a.channel != null && a.channel >= 0 && b.channel != null && b.channel >= 0 && a.channel !== b.channel) return false
+  return true
 }
 
 // ---------------------------------------------------------------------------
@@ -223,10 +259,76 @@ export const useMappingStore = defineStore('mapping', () => {
   // ── MIDI Learn ───────────────────────────────────────────────────────────
   const lastMappedParam = ref<string | null>(null)
   const learningParamName = ref<string | null>(null)
+  let learningParamLabel: string | null = null
 
-  function learnForParam(name: string) {
+  function learnForParam(name: string, label: string | null = null) {
     learningParamName.value = name
+    learningParamLabel = label
     startLearn()
+  }
+
+  // ── Learn conflict owners: right-click MIDI Learn mappings and MIDI Actions ──
+  registerLearnOwnerProvider((control) => {
+    const owners: LearnOwner[] = []
+    for (const [key, m] of Object.entries(midiMappings.value)) {
+      const c = entryControl(key, m)
+      if (!c || !sameLearnControl(c, control)) continue
+      const name = typeof m === 'object' ? m.paramName : m
+      owners.push({ id: `map:${key}`, label: describeParam(name), release: () => removeMapping(key) })
+    }
+    for (const m of appMidiMappings.value) {
+      const kind = m.note !== undefined ? 'note' : m.cc !== undefined ? 'cc' : null
+      if (!kind || !m.device) continue
+      if (control.kind !== kind || control.number !== (kind === 'note' ? m.note : m.cc)) continue
+      const dev = String(m.device).toLowerCase()
+      const cDev = (control.device ?? '').toLowerCase()
+      if (cDev && dev !== cDev && !cDev.includes(dev)) continue
+      if (m.channel !== -1 && control.channel != null && control.channel >= 0 && m.channel !== control.channel) continue
+      owners.push({
+        id: `action:${m.id}`,
+        label: `MIDI Action · ${String(m.action).replace(/_/g, ' ')}`,
+        release: () => { saveAppMidiMappings(appMidiMappings.value.filter(x => x.id !== m.id)) },
+      })
+    }
+    return owners
+  }, 'mappingStore')
+
+  function learnedControl(): LearnControl | null {
+    const device = learnedDevice.value
+    const channel = learnedChannel.value
+    if (learnedNRPN.value) return { kind: 'nrpn', number: (learnedNRPN.value.msb << 7) | learnedNRPN.value.lsb, channel, device }
+    if (learnedCC.value !== null) return { kind: 'cc', number: learnedCC.value, channel, device }
+    if (learnedNote.value !== null) return { kind: 'note', number: learnedNote.value, channel, device }
+    return null
+  }
+
+  /**
+   * confirmLearn, but if the learned control already drives something else the user is asked
+   * first (keep the existing binding, or replace it). Stored at once when there's no conflict.
+   */
+  function confirmLearnChecked(paramName: string, label: string | null = learningParamLabel): Promise<boolean> {
+    learningParamLabel = null
+    const control = learnedControl()
+    if (!control) { confirmLearn(paramName); return Promise.resolve(true) }
+    // this param's own mappings on the control are not a conflict (re-learning the same thing)
+    const own = Object.entries(midiMappings.value)
+      .filter(([, m]) => (typeof m === 'object' ? m.paramName : m) === paramName)
+      .map(([key]) => `map:${key}`)
+    if (findLearnConflicts(control, own).length === 0) { confirmLearn(paramName); return Promise.resolve(true) }
+
+    const snap = { cc: learnedCC.value, note: learnedNote.value, nrpn: learnedNRPN.value, device: learnedDevice.value, channel: learnedChannel.value }
+    clearTimeout(_learnTimer!)
+    isMidiLearning.value = false
+    return askLearnConflict(control, label || describeParam(paramName), own).then(replace => {
+      if (!replace) { cancelLearn(); return false }
+      learnedCC.value = snap.cc
+      learnedNote.value = snap.note
+      learnedNRPN.value = snap.nrpn
+      learnedDevice.value = snap.device
+      learnedChannel.value = snap.channel
+      confirmLearn(paramName)
+      return true
+    })
   }
 
   function startLearn() {
@@ -319,7 +421,7 @@ export const useMappingStore = defineStore('mapping', () => {
     if (learningParamName.value) {
       const name = learningParamName.value
       learningParamName.value = null
-      confirmLearn(name)
+      confirmLearnChecked(name)
     }
   }
 
@@ -339,7 +441,7 @@ export const useMappingStore = defineStore('mapping', () => {
     if (learningParamName.value) {
       const name = learningParamName.value
       learningParamName.value = null
-      confirmLearn(name)
+      confirmLearnChecked(name)
     }
   }
 
@@ -353,7 +455,7 @@ export const useMappingStore = defineStore('mapping', () => {
     if (learningParamName.value) {
       const name = learningParamName.value
       learningParamName.value = null
-      confirmLearn(name)
+      confirmLearnChecked(name)
     }
   }
 
@@ -486,7 +588,7 @@ export const useMappingStore = defineStore('mapping', () => {
     midiMappings, appMidiMappings,
     isMidiLearning, learnedCC, learnedNote, learnedNRPN, learnedDevice, learnedChannel,
     mappingCount, mappedParams, lastMappedParam, learningParamName,
-    startLearn, cancelLearn, confirmLearn, learnForParam, removeMapping, incomingCC, incomingNote, incomingNRPN,
+    startLearn, cancelLearn, confirmLearn, confirmLearnChecked, learnForParam, removeMapping, incomingCC, incomingNote, incomingNRPN,
     loadAppMidiMappings, saveAppMidiMappings, clearAppMidiMappings, clearMidiMappings,
     velocityConfig, handleVelocity, restoreOriginalValues, toggleVelocityMapping,
     presets, activePresetId,

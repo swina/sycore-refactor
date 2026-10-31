@@ -137,7 +137,7 @@ function cancelLearn() {
 
 function confirmLearn() {
   if (mappingStore.learnedCC !== null && targetParam.value) {
-    mappingStore.confirmLearn(targetParam.value)
+    mappingStore.confirmLearnChecked(targetParam.value)
     targetParam.value = ''
   }
 }

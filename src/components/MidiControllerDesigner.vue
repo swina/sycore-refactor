@@ -1734,7 +1734,7 @@ function confirmAssignment() {
         mappingStore.learnedNote = ctrl.noteNumber
         mappingStore.learnedCC   = null
       }
-      mappingStore.confirmLearn(pa.paramName)
+      mappingStore.confirmLearnChecked(pa.paramName, pa.label)
     }
     ctrl.assignment = { type: 'app-param', paramName: pa.paramName, label: pa.label }
   }

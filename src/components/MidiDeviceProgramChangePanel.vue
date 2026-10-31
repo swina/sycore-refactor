@@ -24,7 +24,8 @@ import { MidiSource, midiService } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
 import { on } from '@/types/events'
 import { pcBrowse } from '@/lib/pc-browse'
-import { mappedParamFor, mappingKeysFor, isVirtualDeviceControl } from '@/composables/useMidiCCListener'
+import { mappedParamFor, isVirtualDeviceControl } from '@/composables/useMidiCCListener'
+import { askLearnConflict, registerLearnOwnerProvider } from '@/lib/midi-learn-conflicts'
 
 const emit = defineEmits(['close'])
 
@@ -909,12 +910,14 @@ function startScrollCCListener() {
     // Any CC can be learned; navigation is relative (value delta), so an
     // endless encoder works on lists longer than 128 presets.
     if (isLearningScrollCC.value) {
-      dropGlobalMappings('cc', cc, channel, device)
-      scrollCCMap.value = { cc, channel, device }
-      localStorage.setItem(userKey(LS_SCROLL_CC),JSON.stringify(scrollCCMap.value))
       isLearningScrollCC.value = false
-      lastScrollCCVal.value = val
-      buttonLearns.forEach(b => { if (b.matchesMap({ type: 'cc', number: cc, channel, device })) b.clear() })
+      // a control already used elsewhere: the user keeps it there or moves it here
+      askLearnConflict({ kind: 'cc', number: cc, channel, device }, SCROLL_LABEL, ['pc:scroll']).then(ok => {
+        if (!ok) return
+        scrollCCMap.value = { cc, channel, device }
+        localStorage.setItem(userKey(LS_SCROLL_CC),JSON.stringify(scrollCCMap.value))
+        lastScrollCCVal.value = val
+      })
       return
     }
 
@@ -958,7 +961,9 @@ function clearScrollCC() {
 const BTN_DETECT_MS = 700
 const BTN_REPEAT_MS = 250
 
-function createButtonLearn(lsKey, onTrigger) {
+const SCROLL_LABEL = 'Program Change · preset list CC'
+
+function createButtonLearn(lsKey, label, onTrigger) {
   const load = () => { try { return JSON.parse(localStorage.getItem(userKey(lsKey))) ?? null } catch { return null } }
   const map        = ref(load()) // { type: 'cc'|'note', number, channel, device, mode?: 'momentary'|'toggle' } | null
   const isLearning = ref(false)
@@ -992,14 +997,14 @@ function createButtonLearn(lsKey, onTrigger) {
     if (isLearning.value) {
       isLearning.value = false
       const m = { type: msg.kind, number: msg.number, channel: msg.channel, device: msg.device }
-      // One physical control drives one function only.
-      const sc = scrollCCMap.value
-      if (msg.kind === 'cc' && sc && sc.cc === msg.number && sc.channel === msg.channel && sc.device === msg.device) clearScrollCC()
-      buttonLearns.forEach(b => { if (b.handle !== handle && b.matchesMap(m)) b.clear() })
-      dropGlobalMappings(msg.kind, msg.number, msg.channel, msg.device)
-      if (msg.kind === 'note') { save(m); return true }
-      save({ ...m, mode: 'toggle' })
-      detect = { map: m, value: msg.val, timer: setTimeout(() => { detect = null }, BTN_DETECT_MS) }
+      // One physical control drives one function only: if it's used elsewhere, the user keeps
+      // it there or moves it here (askLearnConflict releases the other bindings).
+      askLearnConflict({ kind: msg.kind, number: msg.number, channel: msg.channel, device: msg.device }, label, [ownerId]).then(ok => {
+        if (!ok) return
+        if (msg.kind === 'note') { save(m); return }
+        save({ ...m, mode: 'toggle' })
+        detect = { map: m, value: msg.val, timer: setTimeout(() => { detect = null }, BTN_DETECT_MS) }
+      })
       return true
     }
     if (detect && matches(detect.map, msg)) {
@@ -1022,7 +1027,8 @@ function createButtonLearn(lsKey, onTrigger) {
     return !!cur && cur.type === m.type && cur.number === m.number && cur.channel === m.channel && cur.device === m.device
   }
 
-  return { map, isLearning, startLearn, cancelLearn, clear, toggleMode, handle, matchesMap, stopDetect }
+  const ownerId = `pc:${lsKey}`
+  return { map, label, ownerId, isLearning, startLearn, cancelLearn, clear, toggleMode, handle, matchesMap, stopDetect }
 }
 
 function toggleActiveFavorite() {
@@ -1040,21 +1046,27 @@ function toggleFavoritesFilter() {
   showPcNotification(selectedDeviceName.value, showFavoritesOnly.value ? 'Favorites only' : 'All presets', 'Preset list')
 }
 
-const favToggleLearn = createButtonLearn('SYCORE_PC_FAVORITE_MIDI', toggleActiveFavorite)
-const favFilterLearn = createButtonLearn('SYCORE_PC_FAVORITE_FILTER_MIDI', toggleFavoritesFilter)
-const chNextLearn    = createButtonLearn('SYCORE_PC_CHANNEL_NEXT_MIDI', nextMappedChannel)
+const favToggleLearn = createButtonLearn('SYCORE_PC_FAVORITE_MIDI', 'Program Change · toggle favorite', toggleActiveFavorite)
+const favFilterLearn = createButtonLearn('SYCORE_PC_FAVORITE_FILTER_MIDI', 'Program Change · favorites filter', toggleFavoritesFilter)
+const chNextLearn    = createButtonLearn('SYCORE_PC_CHANNEL_NEXT_MIDI', 'Program Change · next mapped channel', nextMappedChannel)
 const buttonLearns   = [favToggleLearn, favFilterLearn, chNextLearn]
 const isLearningAnyButton = computed(() => buttonLearns.some(b => b.isLearning.value))
 
-// One control, one function — also across MIDI Learn systems: learning a control here drops a
-// right-click MIDI Learn mapping (mappingStore) on it, and a control learned there drops the
-// binding here (e.g. one knob on a Virtual Device dial and on "next mapped channel" stepped the
-// channel at every turn). Device-specific keys only: legacy device-less CC# mappings are left alone.
-function dropGlobalMappings(kind, number, channel, device) {
-  for (const key of mappingKeysFor(device, channel, kind, number, { withPlain: false })) {
-    if (mappingStore.midiMappings[key]) mappingStore.removeMapping(key)
-  }
-}
+// One control, one function — also across MIDI Learn systems: this panel's bindings are owners
+// for the learn-conflict check (lib/midi-learn-conflicts.ts), so learning their control elsewhere
+// asks first and, on Replace, clears them here; learning here asks the same about the others.
+const sameCtl = (m, c) => !!m && m.type === c.kind && m.number === c.number &&
+  (m.channel == null || c.channel == null || m.channel === c.channel) && (!m.device || !c.device || m.device === c.device)
+const _unregLearnOwners = registerLearnOwnerProvider((c) => {
+  const owners = buttonLearns
+    .filter(b => sameCtl(b.map.value, c))
+    .map(b => ({ id: b.ownerId, label: b.label, release: () => b.clear() }))
+  const sc = scrollCCMap.value
+  if (sc && sameCtl({ type: 'cc', number: sc.cc, channel: sc.channel, device: sc.device }, c))
+    owners.push({ id: 'pc:scroll', label: SCROLL_LABEL, release: clearScrollCC })
+  return owners
+}, 'pcPanel')
+// A binding taken over without asking (e.g. a mapping preset loaded) still drops this panel's one.
 watch(() => mappingStore.midiMappings, (maps) => {
   const taken = (kind, number, channel, device) =>
     !!device && !!mappedParamFor(maps, device, channel ?? 0, kind, number, { withPlain: false })
@@ -1193,6 +1205,7 @@ onMounted(() => {
   _unsubPcToast = on('device-pc-toast', ({ deviceName, channel }) => showChannelToast(deviceName, channel))
 })
 onUnmounted(() => {
+  _unregLearnOwners()
   _unsubScrollCC?.()
   _unsubButtonMidi?.()
   buttonLearns.forEach(b => b.stopDetect())

@@ -5,6 +5,7 @@ import { APP_ACTION_LABELS, CONTINUOUS_ACTIONS, MIDI_ACTION_GROUPS } from '@/lib
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
+import { askLearnConflict } from '@/lib/midi-learn-conflicts'
 import { useMidiFeedback } from '@/composables/useMidiFeedback'
 import { useUiStore } from '@/stores/useUiStore'
 import ProgramChangeBrowser from '@/components/ProgramChangeBrowser.vue'
@@ -249,9 +250,17 @@ function startLearn() {
   input.addEventListener('midimessage', handler)
 }
 
-function handleConfirm() {
+async function handleConfirm() {
   if ((detectedCC.value === null && detectedNote.value === null) || !selectedAction.value || !learnDevice.value) return
   if (conflict.value) return
+
+  // Used by another learn system (Virtual Device, Program Change panel, FM-1…)? The user keeps it
+  // there or moves it here. Other MIDI Actions on it are checked by `conflict` above.
+  const control = detectedCC.value !== null
+    ? { kind: 'cc', number: detectedCC.value, channel: detectedChannel.value, device: learnDevice.value }
+    : { kind: 'note', number: detectedNote.value, channel: detectedChannel.value, device: learnDevice.value }
+  const actionIds = mappingStore.appMidiMappings.map(m => `action:${m.id}`)
+  if (!(await askLearnConflict(control, `MIDI Action · ${String(selectedAction.value).replace(/_/g, ' ')}`, actionIds))) return
 
   const isContinuous  = CONTINUOUS_ACTIONS.has(selectedAction.value)
   const mappingValue  = isContinuous ? -1 : (triggerMode.value === 'exact' ? exactValue.value : -1)

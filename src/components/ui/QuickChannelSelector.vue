@@ -5,6 +5,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { midiService } from '@/core/midi/midi-service'
 import { ChevronUp, ChevronDown, Layers, Radio, X, CheckCircle2 } from 'lucide-vue-next'
 import { APP_ACTION_LABELS } from '@/lib/app-midi-actions'
+import { askLearnConflict } from '@/lib/midi-learn-conflicts'
 
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
@@ -91,9 +92,16 @@ function startLearn(action) {
   })
 }
 
-function confirmLearn(action, device, midiChannel, cc, note) {
+async function confirmLearn(action, device, midiChannel, cc, note) {
   if (_unsubLearn) { _unsubLearn(); _unsubLearn = null }
   learningAction.value = null
+
+  // Used by another learn system (Virtual Device, Program Change panel, FM-1…)? Ask first.
+  const control = cc != null
+    ? { kind: 'cc', number: cc, channel: midiChannel, device }
+    : { kind: 'note', number: note, channel: midiChannel, device }
+  const actionIds = mappingStore.appMidiMappings.map(m => `action:${m.id}`)
+  if (!(await askLearnConflict(control, `MIDI Action · ${APP_ACTION_LABELS[action] ?? action}`, actionIds))) return
 
   const id = `${device}:${cc != null ? cc : 'NOTE' + note}:${midiChannel}:${Date.now()}`
   const newMapping = {

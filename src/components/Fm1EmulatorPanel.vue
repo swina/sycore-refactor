@@ -18,6 +18,7 @@ import { FM1_FIRMWARES, FM1_EMU_URL, fm1EmbedUrl, fm1Parts } from '@/lib/fm1-fir
 import { FM1_OUTPUT, FM1_PANEL_ID, fm1Firmware, fm1Stats, fm1Lcd, setFm1Poster, fm1LcdWanted, fm1RemapChannel } from '@/lib/fm1-bridge'
 import { FM1_CONTROLS, ENC_MODES, Fm1ControlMapper, findMapping, midiSource, describeMapping } from '@/lib/fm1-controls'
 import { midiService } from '@/core/midi/midi-service'
+import { askLearnConflict, registerLearnOwnerProvider } from '@/lib/midi-learn-conflicts'
 
 const STORAGE_MAP = 'SYCORE_FM1_MIDI_MAP'
 const FM1_VIRTUAL_OUTPUT = FM1_OUTPUT
@@ -109,6 +110,18 @@ function setMappingField(id, field, value) {
   mapper.reset()
 }
 
+const fm1ControlLabel = (id) => `FM-1 · ${FM1_CONTROLS.find(c => c.id === id)?.label ?? id}`
+
+// FM-1 bindings are owners for the learn-conflict check (lib/midi-learn-conflicts.ts). They listen
+// on any input, so they match a control of any device.
+const unregLearnOwners = registerLearnOwnerProvider((c) => mappings.value
+  .filter(m => m.type === c.kind && m.number === c.number && (c.channel == null || m.channel === c.channel))
+  .map(m => ({
+    id: `fm1:${m.control}`,
+    label: fm1ControlLabel(m.control),
+    release: () => { mappings.value = mappings.value.filter(x => x !== m); mapper.reset() },
+  })), 'fm1Panel')
+
 const unsubRaw = midiService.addRawListener((event) => {
   const data = event.data
   if (!data) return
@@ -116,14 +129,18 @@ const unsubRaw = midiService.addRawListener((event) => {
     const s = midiSource(data)
     if (!s || (s.type === 'note' && !s.on)) return
     const control = learning.value
-    // one source drives one control: drop the source's old use and this control's old source
-    const next = mappings.value.filter(m =>
-      m.control !== control && !(m.type === s.type && m.channel === s.channel && m.number === s.number))
-    const isEnc = control.startsWith('enc:')
-    next.push({ control, type: s.type, channel: s.channel, number: s.number, ...(isEnc && s.type === 'cc' ? { mode: 'auto', div: 2 } : {}) })
-    mappings.value = next
     learning.value = null
-    mapper.reset()
+    const device = midiService.getInputs().find(i => i.id === event.target?.id)?.name ?? null
+    // one source drives one control: if it's used elsewhere the user keeps it there or moves it
+    // here (the other bindings are released); this control's old source is replaced
+    askLearnConflict({ kind: s.type, number: s.number, channel: s.channel, device }, fm1ControlLabel(control), [`fm1:${control}`]).then(ok => {
+      if (!ok) return
+      const next = mappings.value.filter(m => m.control !== control)
+      const isEnc = control.startsWith('enc:')
+      next.push({ control, type: s.type, channel: s.channel, number: s.number, ...(isEnc && s.type === 'cc' ? { mode: 'auto', div: 2 } : {}) })
+      mappings.value = next
+      mapper.reset()
+    })
     return
   }
   const action = mapper.handle(data)
@@ -157,6 +174,7 @@ function loadClass(load) {
 }
 
 onUnmounted(() => {
+  unregLearnOwners()
   window.removeEventListener('mouseup', endInteract)
   window.removeEventListener('message', onFrameMessage)
   midiStore.unregisterPanelOutput(FM1_VIRTUAL_OUTPUT)

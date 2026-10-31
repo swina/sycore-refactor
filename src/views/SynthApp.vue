@@ -90,6 +90,7 @@ import SoundEngine        from '@/components/SoundEngine.vue'
 import AiSettingsPanel    from '@/components/AiSettingsPanel.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
+import MidiLearnConflictDialog from '@/components/ui/MidiLearnConflictDialog.vue'
 import OpenAppsDock from '@/components/ui/OpenAppsDock.vue'
 import { IS_DEMO } from '@/lib/demo'
 
@@ -620,6 +621,7 @@ onMounted(() => {
 
       <!-- Global MIDI Map context menu (always mounted, Teleports to body) -->
       <MidiMapContextMenu />
+      <MidiLearnConflictDialog />
 
       <!-- Open-apps dock (all open panels, not just minimized ones) -->
       <OpenAppsDock />

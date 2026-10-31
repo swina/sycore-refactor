@@ -34,7 +34,7 @@ const isLearningThis = computed(() =>
 // ── Actions ───────────────────────────────────────────────────────
 function triggerLearn() {
   if (!menu.control.value) return
-  mappingStore.learnForParam(menu.control.value.name)
+  mappingStore.learnForParam(menu.control.value.name, menu.control.value.label)
   // keep menu open — it now shows the waiting state
 }
 
