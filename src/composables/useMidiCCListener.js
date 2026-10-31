@@ -193,6 +193,13 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     if (fromNote || val > 0) cpStore.captureChord()
     return
   }
+  // CHORD / ARP and Chain ON/OFF (DECK Chord Prog): a CC button (momentary or toggle, auto-detected) or a note flips them
+  if (fieldName === 'cp_mode' || fieldName === 'cp_chain') {
+    if (!buttonEdges.fires(fieldName, val, fromNote, performance.now())) return
+    if (fieldName === 'cp_mode') cpStore.playMode = cpStore.playMode === 'chord' ? 'arp' : 'chord'
+    else cpStore.chainEnabled = !cpStore.chainEnabled
+    return
+  }
   if (fieldName.startsWith('cp_slot_')) {
     const idx = parseInt(fieldName.slice(8))
     if (!isNaN(idx) && (fromNote || val > 0)) window.dispatchEvent(new CustomEvent('cp-slot-select', { detail: { idx } }))

@@ -95,6 +95,10 @@ export function describeParam(name: string): string {
   }
   const vdp = name.match(/^vdp_([a-z_]+):(.+)$/)
   if (vdp) return `${vdp[2]} · Virtual Device ${vdp[1].replace(/_/g, ' ')}`
+  if (name === 'cp_mode') return 'Chord Prog · Chord / Arp'
+  if (name === 'cp_chain') return 'Chord Prog · Chain On / Off'
+  const slot = name.match(/^cp_slot_(\d+)$/)
+  if (slot) return `Chord Prog · Slot ${String.fromCharCode(65 + Number(slot[1]))}`
   if (name.startsWith('deck_view:')) return `DECK view ${name.slice('deck_view:'.length)}`
   return name.replace(/_/g, ' ')
 }

@@ -3,11 +3,26 @@ import { computed } from 'vue'
 import { Music2, X, ExternalLink, Play, Square } from 'lucide-vue-next'
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useMappingStore } from '@/stores/useMappingStore'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 
 const emit = defineEmits(['close'])
 
 const store = useChordProgStore()
 const uiStore = useUiStore()
+const mappingStore = useMappingStore()
+const { openMenu } = useMidiContextMenu()
+
+// MIDI Learn (right-click), same params as the Chord Prog Sequencer: cp_slot_<i> selects slot A-H,
+// cp_mode flips CHORD / ARP, cp_chain flips Chain ON / OFF (useMidiCCListener.js)
+function learnMenu(e, name, label) {
+  openMenu(e, { name, label: `Chord Prog: ${label}` })
+}
+// learning now (orange) / mapped (teal)
+function learnMark(name) {
+  if (mappingStore.learningParamName === name) return 'bg-orange-500 animate-pulse'
+  return mappingStore.mappedParams.has(name) ? 'bg-teal-400' : ''
+}
 
 // Same direct flip as ChordProgSequencer.vue's own togglePlay() — the
 // component is always mounted (v-show, not v-if) so its isPlaying watchers
@@ -94,32 +109,41 @@ function openPanel() {
         <div class="flex gap-1 p-1">
           <button v-for="(letter, idx) in SLOT_LETTERS" :key="letter"
             @click="selectSlot(idx)"
+            @contextmenu.prevent="learnMenu($event, 'cp_slot_' + idx, 'Slot ' + letter)"
+            :title="'Slot ' + letter + ' (right-click: MIDI Learn)'"
             class="w-10 relative py-1 rounded text-[10px] font-bold font-mono transition-colors"
             :class="store.activeSlotIndex === idx
               ? 'bg-purple-700 text-white ring-1 ring-purple-400'
               : 'bg-neutral-900 text-neutral-400 hover:text-white hover:bg-purple-400/40'"
           >
             {{ letter }}
+            <span v-if="learnMark('cp_slot_' + idx)" class="absolute -top-1 -left-1 w-1.5 h-1.5 rounded-full" :class="learnMark('cp_slot_' + idx)"></span>
             <span v-if="store.playingSlotIndex === idx" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 ring-1 ring-neutral-900 animate-pulse"></span>
           </button>
         </div>
         <!-- Chain — same colors as the Chord Prog Sequencer's own chain toggle -->
       
         <button @click="store.playMode = store.playMode === 'chord' ? 'arp' : 'chord'"
-          class="w-16 py-1 rounded-xl font-bold uppercase tracking-widest border transition-colors"
+          @contextmenu.prevent="learnMenu($event, 'cp_mode', 'Chord / Arp')"
+          title="Chord / Arp (right-click: MIDI Learn)"
+          class="relative w-16 py-1 rounded-xl font-bold uppercase tracking-widest border transition-colors"
           :class="store.playMode === 'chord'
             ? 'border-cyan-600 text-cyan-400 bg-cyan-950/40'
             : 'border-amber-700 text-amber-500 bg-amber-950/40'"
         >
-          {{ store.playMode === 'chord' ? 'CHORD' : 'ARP' }} 
+          {{ store.playMode === 'chord' ? 'CHORD' : 'ARP' }}
+          <span v-if="learnMark('cp_mode')" class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full" :class="learnMark('cp_mode')"></span>
         </button>
         <button @click="store.chainEnabled = !store.chainEnabled"
-        class="w-20 py-1 rounded-xl font-bold uppercase tracking-widest border transition-colors"
+        @contextmenu.prevent="learnMenu($event, 'cp_chain', 'Chain On / Off')"
+        title="Chain ON / OFF (right-click: MIDI Learn)"
+        class="relative w-20 py-1 rounded-xl font-bold uppercase tracking-widest border transition-colors"
         :class="store.chainEnabled
           ? 'border-cyan-600 text-cyan-400 bg-cyan-950/40'
           : 'border-neutral-700 text-neutral-500 hover:text-neutral-300'"
       >
         Chain {{ store.chainEnabled ? 'ON' : 'OFF' }}
+        <span v-if="learnMark('cp_chain')" class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full" :class="learnMark('cp_chain')"></span>
       </button>
       </div>
 
