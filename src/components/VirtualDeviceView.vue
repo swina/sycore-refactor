@@ -17,6 +17,9 @@ import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { pcBrowse } from '@/lib/pc-browse'
 import { bankProgramLabel, vdpCcParam, vdpActionParam, vdpSlotParam, LCD_THEMES, lcdTheme } from '@/lib/virtual-device'
 import { dispatch } from '@/types/events'
+import { useChordProgStore } from '@/stores/useChordProgStore'
+import { useArpStore } from '@/stores/useArpStore'
+import { usePlayerTrackInfo } from '@/composables/usePlayerTrackInfo'
 import KnobDial from '@/components/ui/KnobDial.vue'
 
 defineProps({ grab: { type: Boolean, default: false } })   // header shows a grab cursor (panel drag)
@@ -25,6 +28,18 @@ const uiStore = useUiStore()
 const midiStore = useMidiStore()
 const mappingStore = useMappingStore()
 const vd = useVirtualDeviceStore()
+const cpStore = useChordProgStore()
+const arpStore = useArpStore()
+
+// LCD bottom row, as the toolbar shows them: the playing track's key, the chord the Chord Prog plays
+// now, the tempo (the track's BPM when one is loaded, else the global BPM)
+const player = usePlayerTrackInfo()
+const lcdTrackKey = computed(() => player.hasSrc.value ? player.trackKey.value : '')
+const lcdBpm = computed(() => (player.hasSrc.value && player.trackBpm.value) || arpStore.arpBpm || null)
+
+// the Controls panel can be collapsed (remembered)
+const controlsOpen = ref((() => { try { return localStorage.getItem('SYCORE_VD_CONTROLS_OPEN') !== '0' } catch { return true } })())
+watch(controlsOpen, v => { try { localStorage.setItem('SYCORE_VD_CONTROLS_OPEN', v ? '1' : '0') } catch {} })
 const { openMenu } = useMidiContextMenu()
 
 // the selected device, falling back to the first virtual instrument
@@ -231,6 +246,18 @@ function openCcTable() {
             <span class="text-[8px] uppercase tracking-widest text-(--lcd-text)/40">Category</span>
             <span>{{ preset?.category || '' }}<template v-if="vd.browseScope === 'category' && categoryCount"> · {{ categoryCount }}</template></span>
           </div>
+          <!-- track key · Chord Prog chord · tempo (like the toolbar) -->
+          <div class="grid grid-cols-3 items-end text-base leading-tight mt-1 pt-0.5 border-t border-(--lcd-text)/20">
+            <span class="truncate" title="Key of the playing track (Tracks Player)">
+              <span class="text-[9px] uppercase tracking-widest text-(--lcd-text)/40">Key </span>{{ lcdTrackKey || '--' }}
+            </span>
+            <span class="truncate justify-self-center" title="Chord Prog — playing chord">
+              <span class="text-[9px] uppercase tracking-widest text-(--lcd-text)/40">Chord </span><span :class="cpStore.playingChordName ? 'text-(--lcd-bright)' : ''">{{ cpStore.playingChordName || '--' }}</span>
+            </span>
+            <span class="justify-self-end" :title="player.hasSrc.value && player.trackBpm.value ? 'Tempo of the playing track' : 'Global tempo'">
+              {{ lcdBpm ?? '--' }}<span class="text-[9px] uppercase tracking-widest text-(--lcd-text)/40"> BPM</span>
+            </span>
+          </div>
         </div>
 
         <!-- TYPE Category: a knob through the open bank's categories (sends each one's first preset) -->
@@ -250,12 +277,17 @@ function openCcTable() {
 
       <!-- Controls: the instrument's CC table -->
       <div class="rounded-xl border border-white/10 bg-neutral-900/60 px-3 py-2">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-[9px] font-black uppercase tracking-widest text-neutral-500">Controls · CH {{ channel + 1 }}</span>
+        <div class="flex items-center justify-between" :class="controlsOpen ? 'mb-1' : ''">
+          <button class="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-neutral-500 hover:text-white"
+            :title="controlsOpen ? 'Hide the controls' : 'Show the controls'" @click="controlsOpen = !controlsOpen">
+            <ChevronRight class="w-3 h-3 transition-transform" :class="controlsOpen ? 'rotate-90' : ''" />
+            Controls · CH {{ channel + 1 }}<template v-if="!controlsOpen && controls.length"> · {{ controls.length }}</template>
+          </button>
           <button class="flex items-center gap-1 text-[9px] font-mono text-neutral-500 hover:text-white" title="Edit the CC table in MIDI Devices" @click="openCcTable">
             <Table2 class="w-3 h-3" /> CC table
           </button>
         </div>
+        <template v-if="controlsOpen">
         <p v-if="!controls.length" class="text-[10px] text-neutral-600 italic">
           No CC table for {{ device }} — add named CCs in MIDI Devices → CC Table.
         </p>
@@ -278,6 +310,7 @@ function openCcTable() {
               :class="mappingStore.learningParamName === vdpCcParam(device, row.cc) ? 'bg-orange-500 animate-pulse' : 'bg-teal-400'" />
           </div>
         </div>
+        </template>
       </div>
 
       <!-- Saved sounds: up to 8 per channel and bank, the Save row collapsed until needed -->
