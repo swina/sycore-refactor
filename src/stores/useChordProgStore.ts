@@ -292,8 +292,14 @@ export const useChordProgStore = defineStore('chordProg', () => {
       if (slotIdx < 0 || slotIdx >= SLOT_COUNT) continue
       const slot = slots.value[slotIdx]
       const count = Math.min(slot.numSteps, slot.steps.length)
+      // Each slot plays in its own CHORD / ARP mode: the player has a single playMode (the active
+      // slot's), so a step without its own override gets its slot's here — otherwise one arp
+      // section made the whole chain arpeggiated.
+      const slotMode = slot.playMode === 'chord' || slot.playMode === 'arp' ? slot.playMode : undefined
       for (let i = 0; i < count; i++) {
-        all.push(slot.steps[i])
+        const st = slot.steps[i]
+        if (st.stepMode || !slotMode) all.push(st)
+        else all.push({ ...st, stepMode: slotMode, ...(slotMode === 'arp' && !st.arpRate ? { arpRate: slot.arpRate } : {}) })
         slotIndices.push(slotIdx)
         localIndices.push(i)
       }
