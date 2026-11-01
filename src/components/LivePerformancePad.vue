@@ -281,7 +281,6 @@ watch(loopActive, (v) => { livePadStore.loopActivePads = [...v] }, { deep: true 
 watch(() => midiStore.currentBpm, () => {
   loopActive.value.forEach((active, idx) => { if (active) _applyPlaybackRate(idx) })
 })
-
 // Per-pad Web Audio state: { a, b, gainA, gainB, active:'a'|'b', rafId, isCrossfading }
 let _padCtx = null
 const _padWA = Array(16).fill(null)
@@ -502,20 +501,18 @@ function openFreesoundBrowser() {
   uiStore.isFreesoundBrowserOpen = true
 }
 
-// ── Open local file for a loop pad ───────────────────────────────
-const loopFileInputRef  = ref(null)
-const loopFileTargetIdx = ref(null)
-
-function openFileForPad(idx) {
-  loopFileTargetIdx.value = idx
-  loopFileInputRef.value?.click()
+// ── Sound Folder Browser → loop pad (like Loop Machine / Drum Machine / Sampler) ──
+function openFolderBrowserForPad(idx) {
+  uiStore.soundFolderAssignTarget = {
+    label: `Loop Pad ${idx + 1}`,
+    onAssign: async (file) => {
+      await loadFileIntoPad(await file.handle.getFile(), idx)
+    },
+  }
+  uiStore.isSoundFolderBrowserOpen = true
 }
 
-async function handleLoopFileSelect(e) {
-  const file = e.target?.files?.[0]
-  const idx  = loopFileTargetIdx.value
-  loopFileTargetIdx.value = null
-  e.target.value = ''
+async function loadFileIntoPad(file, idx) {
   if (!file || idx == null) return
 
   // Stop whatever is playing on this pad
@@ -912,13 +909,6 @@ function formatTime(t) {
             <Repeat class="w-2.5 h-2.5" />
             Freesound
           </button>
-          <input
-            ref="loopFileInputRef"
-            type="file"
-            accept=".mp3,.wav,.ogg,audio/*"
-            class="hidden"
-            @change="handleLoopFileSelect"
-          />
         </div>
         <div class="grid grid-cols-8 gap-2">
           <div v-for="(pad, idx) in loopPads" :key="'lp-' + idx" class="relative group">
@@ -947,11 +937,11 @@ function formatTime(t) {
               </div>
               <span v-if="!pad" class="text-[7px] font-mono uppercase tracking-widest opacity-30 z-10">loop</span>
             </button>
-            <!-- Open local file -->
+            <!-- Sound Folder Browser -->
             <button
-              @click.stop="openFileForPad(idx)"
+              @click.stop="openFolderBrowserForPad(idx)"
               class="absolute bottom-0.5 left-0.5 w-4 h-4 rounded border border-neutral-700 bg-neutral-900 text-neutral-500 hover:text-emerald-400 hover:border-emerald-500/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
-              title="Load local file (MP3 / WAV / OGG)"
+              title="Load from the Sound Folder (MP3 / WAV / OGG)"
             >
               <FolderOpen class="w-2.5 h-2.5" />
             </button>
