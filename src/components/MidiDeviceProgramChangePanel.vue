@@ -730,49 +730,69 @@ function selectSound(sound) {
   if (assignMode.value && activeSlotIdx.value >= 0) assignCurrentToSlot()
 }
 
-function sendCatalogSound(sound) {
-  const reg = selectedReg.value
-  if (!reg) return
+// The bank select + program a sound is sent with on channel `ch` (and the messages).
+function soundAddress(sound, ch) {
   const cfg    = bankConfig.value
-  // Clamp a stale/OMNI (-1) pcChannel to 0 — there's no incoming channel to
-  // pass through for an outgoing Program Change, so -1 can't be embedded
-  // directly into the status byte (0xC0 | -1 is an invalid negative byte
-  // that MIDIOutput.send() silently rejects, i.e. no PC ever goes out).
-  const ch     = Math.max(0, reg.pcChannel ?? 0)
   const pField = cfg?.program_field ?? 'program'
   const prog   = sound[pField] ?? 0
-
-  // Normalize to 0-indexed absolute MIDI program number using program_base,
-  // then derive bank MSB and within-bank PC consistently from the same index.
-  // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
-  // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
-  let msb, lsb, progNum, msgs
-
   if (cfg?.bankSelect === 'emulatorx3') {
     // Emulator X3 wire format: CC64 = 0 (fixed), CC32 = bank, PC = program.
     // "msb"/"lsb" below are recorded purely as the raw bytes sent (for
     // currentPcState display / scrollToCurrentProgram matching); CC0 (bank
     // MSB) is intentionally never sent for this device.
     const bank = sound[cfg.bank_field ?? 'bank'] ?? 0
-    msb = 0
-    lsb = bank
-    progNum = Math.max(0, Math.min(127, prog))
-
-    msgs = [[0xB0 | ch, 64, 0], [0xB0 | ch, 32, bank], [0xC0 | ch, progNum]]
-  } else {
-    // Normalize to 0-indexed absolute MIDI program number using program_base,
-    // then derive bank MSB and within-bank PC consistently from the same index.
-    // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
-    // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
-    const progIdx = prog + (cfg.program_base ?? 0)           // 0-indexed absolute program
-    msb = cfg.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
-    lsb = cfg.lsb ? (sound.lsb ?? 0) : 0
-    progNum = Math.max(0, Math.min(127, progIdx % 128))
-    msgs = [[0xB0 | ch, 0, sound.msb], [0xB0 | ch, 32, sound.lsb], [0xC0 | ch, progNum]]
+    const progNum = Math.max(0, Math.min(127, prog))
+    return { msb: 0, lsb: bank, progNum, msgs: [[0xB0 | ch, 64, 0], [0xB0 | ch, 32, bank], [0xC0 | ch, progNum]] }
   }
+  // Normalize to 0-indexed absolute MIDI program number using program_base,
+  // then derive bank MSB and within-bank PC consistently from the same index.
+  // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
+  // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
+  const progIdx = prog + (cfg?.program_base ?? 0)           // 0-indexed absolute program
+  const msb = cfg?.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
+  const lsb = cfg?.lsb ? (sound.lsb ?? 0) : 0
+  const progNum = Math.max(0, Math.min(127, progIdx % 128))
+  return { msb, lsb, progNum, msgs: [[0xB0 | ch, 0, sound.msb], [0xB0 | ch, 32, sound.lsb], [0xC0 | ch, progNum]] }
+}
+
+// The sound last sent on each device:channel, so the current preset is found exactly in the list
+// even when several presets share a name (a name lookup found the first of them: stepping through
+// a category looped back over a few presets).
+const _sentSoundByChannel = new Map()
+
+// The position in `list` of the preset playing on channel `ch` of the selected device: the very
+// sound sent, else same name + bank select / program, else same name. -1 when not in the list.
+function channelSoundIndex(list, ch) {
+  const info = selectedReg.value?.pcChannels?.[ch]
+  if (!info?.soundName) return -1
+  const sent = _sentSoundByChannel.get(`${selectedDeviceName.value}:${ch}`)
+  if (sent && sent.name === info.soundName) {
+    const i = list.indexOf(sent)
+    if (i >= 0) return i
+  }
+  const sameName = []
+  list.forEach((sd, i) => { if (sd.name === info.soundName) sameName.push(i) })
+  if (sameName.length <= 1) return sameName[0] ?? -1
+  const exact = sameName.find(i => {
+    const a = soundAddress(list[i], ch)
+    return a.progNum === info.program && a.msb === (info.msb ?? 0) && a.lsb === (info.lsb ?? 0)
+  })
+  return exact ?? sameName[0]
+}
+
+function sendCatalogSound(sound) {
+  const reg = selectedReg.value
+  if (!reg) return
+  // Clamp a stale/OMNI (-1) pcChannel to 0 — there's no incoming channel to
+  // pass through for an outgoing Program Change, so -1 can't be embedded
+  // directly into the status byte (0xC0 | -1 is an invalid negative byte
+  // that MIDIOutput.send() silently rejects, i.e. no PC ever goes out).
+  const ch     = Math.max(0, reg.pcChannel ?? 0)
+  const { msb, lsb, progNum, msgs } = soundAddress(sound, ch)
   msgs.forEach(m => sendToDeviceMessage(m))
 
   lastSent.value = sound
+  _sentSoundByChannel.set(`${selectedDeviceName.value}:${ch}`, sound)
   // (recorded with a missing catalog MSB/LSB as 0, the value the device ends up with)
   recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb,
     msgs.map(m => m.map(b => b ?? 0)))
@@ -877,12 +897,12 @@ function stepPresetFor({ deviceName, channel, delta, scope }) {
     let list = sounds.value
     if (!list.length) { showPcNotification(deviceName, 'No preset list: pick a bank in Program Change', '', channel); return }
     const field = bankConfig.value?.category_field ?? 'category'
-    const current = selectedReg.value?.pcChannels?.[channel]?.soundName
-    let idx = list.findIndex(sd => sd.name === current)
+    let idx = channelSoundIndex(list, channel)
     if (scope === 'category' && idx >= 0) {
-      const cat = list[idx][field]
+      const curSound = list[idx]
+      const cat = curSound[field]
       list = list.filter(sd => sd[field] === cat)
-      idx = list.findIndex(sd => sd.name === current)
+      idx = list.indexOf(curSound)
     }
     const next = idx < 0 ? (delta > 0 ? 0 : list.length - 1) : (idx + delta + list.length) % list.length
     selectSound(list[next])
@@ -908,9 +928,8 @@ function selectCategoryFor({ deviceName, channel, category }) {
 
 watch([selectedDeviceName, () => selectedReg.value?.pcChannel, () => selectedReg.value?.pcChannels, sounds, selectedBank], () => {
   const ch = Math.max(0, selectedReg.value?.pcChannel ?? 0)
-  const name = selectedReg.value?.pcChannels?.[ch]?.soundName
   const field = bankConfig.value?.category_field ?? 'category'
-  const index = name ? sounds.value.findIndex(sd => sd.name === name) : -1
+  const index = channelSoundIndex(sounds.value, ch)
   // the preset's category: as found in the list, else as recorded on the channel
   const cat = index >= 0 ? (sounds.value[index][field] ?? '') : (selectedReg.value?.pcChannels?.[ch]?.category ?? '')
   const inCat = cat ? sounds.value.filter(sd => (sd[field] ?? '') === cat) : []
