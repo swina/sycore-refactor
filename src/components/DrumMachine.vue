@@ -24,6 +24,7 @@ import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { userKey } from '@/lib/userKey'
 import { defaultKitAssets, resolveDefaultKitAssetUrl } from '@/lib/default-kit-assets'
+import GeneratingModal from '@/components/ui/GeneratingModal.vue'
 import { beatPosition, setDrumPosition, resetDrumPosition } from '@/lib/drum-position'
 
 const uiStore        = useUiStore()
@@ -1182,6 +1183,16 @@ function generatePattern() {
   showStyleMenu.value = false
 }
 
+// Generate button: a short "Generating…" modal (GeneratingModal: its own state, so showing it
+// doesn't re-render the Drum Machine). The modal is painted first, then the pattern is written.
+// Not shown for MIDI-triggered Generate (no delay, nothing covering a live performance).
+const generatingModalRef = ref(null)
+function generatePatternWithModal() {
+  const m = generatingModalRef.value
+  if (!m) { generatePattern(); return }
+  m.run(generatePattern, { label: selectedStyle.value + (generateAsFill.value ? ' → Fill' : '') })
+}
+
 // ── Imported patterns ───────────────────────────────────────────────────────────
 const currentCatPatterns = computed(() => {
   return drumStore.IMPORTED_PATTERNS[selectedCategory.value] || []
@@ -1457,7 +1468,7 @@ function cycleChainSlot(i) {
           >→Fill</button> -->
           <div class="relative -mt-0.5" :class="mappingStore.mappedParams.has('dm_generate') ? 'ring-1 ring-amber-500/60 rounded-lg' : ''">
             <button
-              @click.stop="generatePattern"
+              @click.stop="generatePatternWithModal"
               @contextmenu.prevent="openMenu($event, { name: 'dm_generate', label: 'Drum Machine: Generate' })"
               :class="[
                 'px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors',
@@ -3281,6 +3292,9 @@ function cycleChainSlot(i) {
       </div>
     </Teleport>
   </Teleport>
+
+  <!-- Generate (style): short "Generating…" modal -->
+  <GeneratingModal ref="generatingModalRef" />
 
   <!-- AI Prompt -->
   <AiPromptModal
