@@ -9,7 +9,7 @@ import { useChordProgStore } from '@/stores/useChordProgStore'
 import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Music2, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SquareStack, Sparkles, BookOpen, Radio } from 'lucide-vue-next'
-import QuickChannelSelector from '@/components/ui/QuickChannelSelector.vue'
+import VirtualDeviceBadge from '@/components/ui/VirtualDeviceBadge.vue'
 import AppLauncherModal from '@/components/ui/AppLauncherModal.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
 import TransportBar from '@/components/TransportBar.vue'
@@ -31,7 +31,6 @@ const chordProgStore = useChordProgStore()
 const { openMenu } = useMidiContextMenu()
 const router = useRouter()
 
-const showPartSelector = computed(() => configStore.enablePartSelector)
 
 // Plain {x,y} only — never store the DOMRect itself in reactive state, its
 // native getters can throw "Illegal invocation" when accessed through a
@@ -349,7 +348,7 @@ onUnmounted(() => {
 
         <div v-if="authStore.user" class="flex items-center gap-2">
           <TransportBar />
-          <QuickChannelSelector v-if="showPartSelector" />
+          <VirtualDeviceBadge />
           <ActiveMidiControllers />
         </div>
 

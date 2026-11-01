@@ -43,8 +43,7 @@ watch(controlsOpen, v => { try { localStorage.setItem('SYCORE_VD_CONTROLS_OPEN',
 const { openMenu } = useMidiContextMenu()
 
 // the selected device, falling back to the first virtual instrument
-const device = computed(() =>
-  vd.devices.includes(vd.selectedDevice) ? vd.selectedDevice : (vd.devices[0] ?? ''))
+const device = computed(() => vd.activeDevice)
 
 const channel = computed(() => device.value ? vd.channel(device.value) : 0)
 const channelList = computed(() => device.value ? vd.channels(device.value) : [])

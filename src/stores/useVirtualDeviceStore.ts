@@ -93,6 +93,9 @@ export const useVirtualDeviceStore = defineStore('virtualDevice', () => {
   const persistCc = debounce(() => save(LS_CC, ccValues.value), 300)
 
   const devices = computed(() => midiStore.virtualInstruments.map(v => v.name))
+  // the device shown: the selected one, else the first virtual instrument ('' when none)
+  const activeDevice = computed(() =>
+    devices.value.includes(selectedDevice.value) ? selectedDevice.value : (devices.value[0] ?? ''))
 
   function ccTable(device: string) {
     return midiStore.virtualInstruments.find(v => v.name === device)?.ccTable ?? []
@@ -334,7 +337,7 @@ export const useVirtualDeviceStore = defineStore('virtualDevice', () => {
   }
 
   return {
-    selectedDevice, ccValues, sounds, browseScope, devices, lastRecalledId, recallSlot, soundAt,
+    selectedDevice, ccValues, sounds, browseScope, devices, activeDevice, lastRecalledId, recallSlot, soundAt,
     selectedSlot, selectedSlotOf, selectSlot, lcdThemeId,
     ccTable, isCcMapped, bankOf, channels, channel, setChannel, stepChannel, presetState, stepPreset,
     toggleBrowseScope, categories, categoryIndex, selectCategory, stepCategory, setCategoryFromCc,
