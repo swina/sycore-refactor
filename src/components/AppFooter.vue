@@ -14,6 +14,7 @@ import AppLauncherModal from '@/components/ui/AppLauncherModal.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
 import TransportBar from '@/components/TransportBar.vue'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import DrumPositionBadge from '@/components/ui/DrumPositionBadge.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { midiService } from '@/core/midi/midi-service'
 import { deviceRegistry } from '@/core/midi/DeviceRegistry'
@@ -327,6 +328,8 @@ onUnmounted(() => {
         <span v-if="chordProgStore.playingChordName" class="flex items-center gap-1 text-[12px] font-mono font-bold text-violet-300 bg-violet-400/10 px-1.5 rounded shrink-0 normal-case" title="Chord Progression — playing chord">
           <Music2 class="w-3 h-3" />{{ chordProgStore.playingChordName }}
         </span>
+        <!-- Drum Machine: bar.beat playing now, after the chord -->
+        <DrumPositionBadge />
         <span v-if="btSrc && btPlayingTrackBpm" class="text-[12px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded shrink-0">{{ btPlayingTrackBpm }} BPM</span>
       </div>
 

@@ -24,6 +24,7 @@ import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { userKey } from '@/lib/userKey'
 import { defaultKitAssets, resolveDefaultKitAssetUrl } from '@/lib/default-kit-assets'
+import { beatPosition, setDrumPosition, resetDrumPosition } from '@/lib/drum-position'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
@@ -513,6 +514,9 @@ function _scheduleCallback(time) {
   // Pinia devtools) and nothing reads the step any more — see paintPlayhead().
   // MIDI OUT ONLY: the Drum Machine is just a MIDI note source, no transport display.
   if (!midiOutOnly.value) getDraw().schedule(() => paintPlayhead(globalStep), time)
+  // Toolbar bar.beat badge — once per beat, never per 16th.
+  const beatPos = beatPosition(_measureCount, globalStep)
+  if (beatPos) getDraw().schedule(() => setDrumPosition(beatPos), time)
   stepCounter++ // no wrap — each track uses its own modulo
 
   // ── Bassline voices ──
@@ -555,6 +559,7 @@ watch(() => drumStore.isPlaying, (playing) => {
     _tieCountdown = Array(11).fill(0)
     drumStore.currentStep = -1
     paintPlayhead(-1)
+    resetDrumPosition()
     chainSlotRef.value = -1
     _pendingStop = false
     pendingStop.value = false
@@ -575,6 +580,7 @@ watch(() => drumStore.isPlaying, (playing) => {
   _chainSlotIdx = -1
   _measureCount = 0
   chainSlotRef.value = -1
+  resetDrumPosition()
 
   toneStart().then(() => {
     getTransport().bpm.value = drumStore.bpm
