@@ -21,6 +21,8 @@ import { looperEngine }          from '@/lib/looper-engine'
 import { userKey }               from '@/lib/userKey'
 import PlaylistPadGrid from '@/components/PlaylistPadGrid.vue'
 import PlayList        from '@/components/PlayList.vue'
+import { loopBpm, loopPlaybackRate } from '@/lib/loop-tempo'
+import { detectBpmFromUrl } from '@/composables/useBpmDetector'
 
 const props = defineProps({ isOpen: Boolean })
 const emit  = defineEmits(['close'])
@@ -60,6 +62,7 @@ const recSyncActive = computed(() =>
 const LS_LPP_SETS       = 'SYCORE_LPP_SETS'
 const LS_LPP_SNAPSHOTS  = 'SYCORE_LPP_SNAPSHOTS'
 const LS_LPP_LOOP_PADS  = 'SYCORE_LPP_LOOP_PADS'
+const LS_LPP_LOOP_TEMPO = 'SYCORE_LPP_LOOP_TEMPO'
 
 function getLS(key, def) {
   try { const v = localStorage.getItem(userKey(key)); return v ? JSON.parse(v) : def } catch { return def }
@@ -278,9 +281,55 @@ const loopActive = ref(Array(16).fill(false))
 
 watch(loopActive, (v) => { livePadStore.loopActivePads = [...v] }, { deep: true })
 
+// TEMPO: the loops play at the song's tempo (playback rate = song BPM / loop BPM, pitch kept by
+// the browser); off = their own tempo. A loop without a BPM gets one from its name / length /
+// detection (lib/loop-tempo.ts) when it's loaded or first played.
+const loopTempoSync = ref(getLS(LS_LPP_LOOP_TEMPO, true))
+watch(loopTempoSync, v => {
+  setLS(LS_LPP_LOOP_TEMPO, v)
+  loopActive.value.forEach((active, idx) => { if (active) _applyPlaybackRate(idx) })
+  if (v) loopPads.value.forEach((p, idx) => { if (p && !p.bpm) _ensurePadBpm(idx) })
+})
+const loopRate = (idx) => loopTempoSync.value ? loopPlaybackRate(midiStore.currentBpm, loopPads.value[idx]?.bpm) : 1
+
 watch(() => midiStore.currentBpm, () => {
   loopActive.value.forEach((active, idx) => { if (active) _applyPlaybackRate(idx) })
 })
+
+const _bpmPending = new Set()
+async function _ensurePadBpm(idx) {
+  const pad = loopPads.value[idx]
+  if (!pad || pad.bpm || _bpmPending.has(pad.id)) return
+  _bpmPending.add(pad.id)
+  try {
+    let detected = null
+    const url = await resolveFreesoundUrl(pad.id, pad.url)
+    if (url) { try { detected = await detectBpmFromUrl(url) } catch {} }
+    const bpm = loopBpm({ name: pad.label, duration: pad.duration, detected })
+    if (!bpm || loopPads.value[idx]?.id !== pad.id) return
+    _setPadBpm(idx, bpm)
+  } finally {
+    _bpmPending.delete(pad.id)
+  }
+}
+
+function _setPadBpm(idx, bpm) {
+  loopPads.value = loopPads.value.map((p, i) => (i === idx && p ? { ...p, bpm: bpm || undefined } : p))
+  setLS(LS_LPP_LOOP_PADS, loopPads.value)
+  if (loopActive.value[idx]) _applyPlaybackRate(idx)
+}
+
+// Click on a pad's BPM: correct it (detection can be off); empty = detect again
+function editPadBpm(idx) {
+  const pad = loopPads.value[idx]
+  if (!pad) return
+  const v = window.prompt(`BPM of "${pad.label}" (empty = detect again)`, pad.bpm ? String(pad.bpm) : '')
+  if (v === null) return
+  const n = Number(v.replace(',', '.'))
+  if (!v.trim()) { _setPadBpm(idx, null); _ensurePadBpm(idx); return }
+  if (Number.isFinite(n) && n >= 20 && n <= 400) _setPadBpm(idx, Math.round(n * 10) / 10)
+}
+
 // Per-pad Web Audio state: { a, b, gainA, gainB, active:'a'|'b', rafId, isCrossfading }
 let _padCtx = null
 const _padWA = Array(16).fill(null)
@@ -407,8 +456,7 @@ function _stopPadInstant(idx) {
 
 function _applyPlaybackRate(idx) {
   const wa  = _padWA[idx]; if (!wa) return
-  const pad = loopPads.value[idx]
-  const rate = (pad?.bpm && midiStore.currentBpm) ? midiStore.currentBpm / pad.bpm : 1
+  const rate = loopRate(idx)
   wa.a.playbackRate = rate
   wa.b.playbackRate = rate
 }
@@ -472,6 +520,7 @@ async function toggleLoopPad(idx) {
 
   loopActive.value[idx] = true
   _applyPlaybackRate(idx)
+  if (loopTempoSync.value && !pad.bpm) _ensurePadBpm(idx)
   if (instant) {
     wa.gainA.gain.setValueAtTime(LOOP_PAD_VOL, _getAudioCtx().currentTime)
   } else {
@@ -547,6 +596,7 @@ async function loadFileIntoPad(file, idx) {
       i === idx ? { id, label: name, url, author: '', duration } : p
     )
     setLS(LS_LPP_LOOP_PADS, loopPads.value)
+    _ensurePadBpm(idx)
   } catch (err) {
     console.error('[LivePerformancePad] File load failed', err)
   }
@@ -902,6 +952,14 @@ function formatTime(t) {
           <span class="text-[10px] font-black text-neutral-500 uppercase tracking-[0.25em] font-mono whitespace-nowrap">Loop Pads</span>
           <div class="h-px flex-1 bg-neutral-900" />
           <button
+            @click="loopTempoSync = !loopTempoSync"
+            :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all shrink-0',
+              loopTempoSync ? 'border-violet-500/50 bg-violet-500/10 text-violet-300' : 'border-neutral-700 text-neutral-500 hover:text-neutral-300']"
+            :title="loopTempoSync ? `Loops play at the song tempo (${midiStore.currentBpm} BPM): playback rate = song BPM / loop BPM` : 'Loops play at their own tempo'"
+          >
+            Tempo {{ loopTempoSync ? midiStore.currentBpm : 'off' }}
+          </button>
+          <button
             @click="openFreesoundBrowser"
             class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/30 bg-cyan-500/5 text-cyan-400 text-[9px] font-black uppercase tracking-widest hover:bg-cyan-500/15 hover:border-cyan-400/50 transition-all shrink-0"
             title="Open Freesound browser"
@@ -933,9 +991,10 @@ function formatTime(t) {
               <div v-if="pad?.duration || pad?.bpm" class="flex items-center justify-center gap-1 z-10">
                 <span v-if="pad.duration" class="text-[7px] font-mono text-cyan-500/50">{{ formatTime(pad.duration) }}</span>
                 <span v-if="pad.duration && pad.bpm" class="text-[6px] text-neutral-700">·</span>
-                <span v-if="pad.bpm" class="text-[7px] font-mono text-violet-400/70">{{ pad.bpm }}bpm</span>
+                <span v-if="pad.bpm" @click.stop="editPadBpm(idx)" class="text-[7px] font-mono text-violet-400/70 hover:text-violet-200 cursor-text" title="Loop BPM — click to correct">{{ pad.bpm }}bpm<template v-if="loopTempoSync && loopRate(idx) !== 1"> ×{{ loopRate(idx).toFixed(2) }}</template></span>
               </div>
               <span v-if="!pad" class="text-[7px] font-mono uppercase tracking-widest opacity-30 z-10">loop</span>
+              <span v-else-if="!pad.bpm" @click.stop="editPadBpm(idx)" class="text-[7px] font-mono text-neutral-600 hover:text-violet-300 cursor-text z-10" title="No BPM yet — click to set it">? bpm</span>
             </button>
             <!-- Sound Folder Browser -->
             <button

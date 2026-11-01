@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-11-01
+
+- **Live Set > Loop Pads: play at the song tempo (option)** — a **Tempo** switch in the Loop Pads header (on by default, remembered): the loops play at the song's BPM (playback rate = song BPM / loop BPM, pitch kept), folded by octaves so the rate stays near ×1 (a 70 BPM loop on a 140 BPM song plays in half time at ×1, not at ×2); off, each loop plays at its own tempo. A loop without a BPM (e.g. loaded from the Sound Folder) gets one when loaded or first played: from its name ("96bpm"), else from its length (a whole number of 4/4 bars) agreeing with the detected tempo, else the detected tempo. Each pad shows its BPM and the rate applied; click the BPM (or "? bpm") to correct it, empty = detect again. `lib/loop-tempo.ts` (`bpmFromName()`, `loopBpm()`, `loopPlaybackRate()`), `LivePerformancePad.vue`; tests: `tests/unit/lib/loop-tempo.test.ts`. Branch: `master`
+
 ## 2026-10-31
 
 - **Live Set > Loop Pads: load from the Sound Folder** — the folder button on a Loop Pad opened the operating system's file picker; it now opens the **Sound Folder Browser** (like Loop Machine, Drum Machine and Sampler), and the sound picked is loaded into that pad (stored in the browser's cache as before, duration read). `LivePerformancePad.vue` (`openFolderBrowserForPad()`, `loadFileIntoPad()`). Branch: `master`
