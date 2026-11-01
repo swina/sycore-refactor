@@ -49,6 +49,12 @@ function _parseSysExString(input: string): number[] | null {
   return b.some(isNaN) ? null : b;
 }
 
+/** Options for a single app send (see broadcast) */
+export interface BroadcastOptions {
+  /** send on exactly `channel`, bypassing the cable / device OUT channel remap and channel filter */
+  exactChannel?: boolean
+}
+
 export class MidiService {
   // ── Core references ──────────────────────────────────────────────────────
   private midiAccess: MIDIAccess | null = null;
@@ -866,20 +872,20 @@ export class MidiService {
    * stalls); virtual outputs and latched outputs, which can't take a timestamp, are
    * delivered by a timer at that time.
    */
-  sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number): void {
+  sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions): void {
     if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
       this.sendNoteSplit('noteon', note, velocity, channel);
       return;
     }
-    this.broadcast('noteon', { note, velocity }, channel, source, skipDeviceId, at);
+    this.broadcast('noteon', { note, velocity }, channel, source, skipDeviceId, at, opts);
   }
 
-  sendNoteOff(note: number, velocity = 0, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number): void {
+  sendNoteOff(note: number, velocity = 0, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions): void {
     if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
       this.sendNoteSplit('noteoff', note, velocity, channel);
       return;
     }
-    this.broadcast('noteoff', { note, velocity }, channel, source, skipDeviceId, at);
+    this.broadcast('noteoff', { note, velocity }, channel, source, skipDeviceId, at, opts);
   }
 
   sendPitchBend(value: number, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null): void {
@@ -1198,8 +1204,12 @@ export class MidiService {
     source: MidiSource = MidiSource.UI,
     skipDeviceId: string | null = null,
     at?: number,
+    opts?: BroadcastOptions,
   ): void {
     if (!this.midiAccess) return;
+    // exactChannel: the app picked this channel itself (e.g. the Drum Machine's bassline channel) —
+    // it goes out on it as is, ignoring the cable / device OUT channel remap and channel filter.
+    const exactChannel = !!opts?.exactChannel;
 
     if (this.isSequencerPlaying && (type === 'noteon' || type === 'noteoff') && source === MidiSource.KEYBOARD) {
       return;
@@ -1311,7 +1321,9 @@ export class MidiService {
       // listed channel instead of picking just one.
       let channels: number[];
       const cableChs = cableOutChannels(outputFilter);
-      if (cableChs.length > 0) {
+      if (exactChannel) {
+        channels = [channel];
+      } else if (cableChs.length > 0) {
         channels = cableChs;   // the cable's own OUT channels win
       } else if (config?.outChannels && config.outChannels.length > 0) {
         channels = config.outChannels;
@@ -1328,7 +1340,7 @@ export class MidiService {
         // Channel filter gates on the output channel (after remapping), not
         // the source channel — so selecting CH 2 on the cable means "send to
         // this device on CH 2" regardless of what channel the app emits on.
-        if (outputFilter?.channels && outputFilter.channels.length > 0) {
+        if (!exactChannel && outputFilter?.channels && outputFilter.channels.length > 0) {
           if (!outputFilter.channels.includes(targetChannel & 0x0f)) return;
         }
         const statusCh = targetChannel % 16;
@@ -1401,7 +1413,9 @@ export class MidiService {
       if (!shouldAdd) return;
 
       const cableChs = cableOutChannels(outputFilter);   // the cable's own OUT channels win
-      const channels = cableChs.length > 0
+      const channels = exactChannel
+        ? [channel]
+        : cableChs.length > 0
         ? cableChs
         : (config.outChannels && config.outChannels.length > 0)
           ? config.outChannels
@@ -1411,7 +1425,7 @@ export class MidiService {
       const virtApplyLatch = config.latchEnabled || (this.latch.isActive && config.smartLatch);
       channels.forEach(targetChannel => {
         // Channel filter gates on the output channel (after remapping)
-        if (outputFilter?.channels && outputFilter.channels.length > 0) {
+        if (!exactChannel && outputFilter?.channels && outputFilter.channels.length > 0) {
           if (!outputFilter.channels.includes(targetChannel & 0x0f)) return;
         }
         const statusCh = targetChannel % 16;

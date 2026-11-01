@@ -822,6 +822,13 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   const LS_MIDI_OUT_ONLY = 'SYCORE_DM_MIDI_OUT_ONLY'
   const midiOutOnly = ref((() => { try { return localStorage.getItem(userKey(LS_MIDI_OUT_ONLY)) === '1' } catch { return false } })())
   watch(midiOutOnly, v => { try { localStorage.setItem(userKey(LS_MIDI_OUT_ONLY), v ? '1' : '0') } catch {} })
+  // Bassline MIDI channel while MIDI OUT ONLY: 0 = same as the drums (the MIDI Flow routing),
+  // 1–16 = a dedicated channel the bassline notes go out on as is (no cable / device remap).
+  const LS_BASSLINE_MIDI_CH = 'SYCORE_DM_BASSLINE_MIDI_CH'
+  const basslineMidiChannel = ref<number>((() => {
+    try { const v = Number(localStorage.getItem(userKey(LS_BASSLINE_MIDI_CH))); return Number.isInteger(v) && v >= 0 && v <= 16 ? v : 0 } catch { return 0 }
+  })())
+  watch(basslineMidiChannel, v => { try { localStorage.setItem(userKey(LS_BASSLINE_MIDI_CH), String(v)) } catch {} })
 
   // AutoFill/Chain — canonical state lives here (not in DrumMachine.vue) so
   // sibling components (e.g. DECK's per-app summary) can read it reactively.
@@ -1483,7 +1490,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   return {
-    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, midiOutOnly,
+    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, midiOutOnly, basslineMidiChannel,
     autofillEnabled, chainEnabled,
     sequences, activeSequence, currentPattern,
     TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,

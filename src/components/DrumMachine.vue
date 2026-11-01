@@ -322,12 +322,16 @@ const hasSolo = computed(() =>
 // stalls and timer jitter don't move it. Before, setTimeout from toneNow() (= currentTime +
 // lookAhead) fired ~a lookahead ahead of the audio and wobbled with the page's load. A time
 // already past (a live pad) goes out now.
-function _sendMidiNote(note, velocity, accent, fireTime, duration) {
+// channel (1–16, optional): a dedicated channel sent as is (the bassline's, bypassing the
+// MIDI Flow OUT channel remap); without it the global channel + routing, as before.
+function _sendMidiNote(note, velocity, accent, fireTime, duration, channel = 0) {
   const vel = Math.max(1, Math.min(127, Math.round(velocity * (accent ? 1.35 : 1))))
   const onAt  = fireTime == null ? performance.now() : Math.max(performance.now(), audioTimeToPerfMs(fireTime))
   const offAt = onAt + Math.max(10, duration * 1000)
-  midiStore.sendNoteOn(note, vel, midiStore.midiChannel, MidiSource.DRUM_MACHINE, null, onAt)
-  midiStore.sendNoteOff(note, 0, midiStore.midiChannel, MidiSource.DRUM_MACHINE, null, offAt)
+  const ch   = channel >= 1 && channel <= 16 ? channel : midiStore.midiChannel
+  const opts = channel >= 1 && channel <= 16 ? { exactChannel: true } : undefined
+  midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, opts)
+  midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, offAt, opts)
 }
 
 // ── MIDI OUT ONLY (drumStore.midiOutOnly) — the virtual instruments the Drum Machine is wired to
@@ -533,7 +537,7 @@ function _scheduleCallback(time) {
       if (!step.active) return
       const bassDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
       if (midiOutOnly.value) {
-        _sendMidiNote(step.note ?? 36, step.velocity, step.accent ?? false, fireTime, bassDur)
+        _sendMidiNote(step.note ?? 36, step.velocity, step.accent ?? false, fireTime, bassDur, drumStore.basslineMidiChannel)
         return
       }
       drumEngine.setPadVolume(padIdx, (voice.volume ?? 0.85) * mixer.effectiveDrumsLevel)
@@ -2350,6 +2354,18 @@ function cycleChainSlot(i) {
                 class="w-8 text-center text-[9px] font-bold bg-neutral-800 border border-neutral-700 rounded px-0.5 py-0.5 text-violet-300 focus:outline-none focus:border-violet-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                 title="Root MIDI note (12 = C1, 24 = C2, 36 = C3, 48 = C4, 60 = C5)"
               />
+            </div>
+            <!-- MIDI OUT ONLY: the bassline's own MIDI channel (or the drums') -->
+            <div v-if="midiOutOnly" class="flex items-center gap-1" title="Bassline MIDI channel while MIDI OUT ONLY — Drums: same as the drum tracks (MIDI Flow routing); 1–16: a dedicated channel, sent as is">
+              <span class="text-[8px] font-mono text-violet-600">MIDI CH</span>
+              <select
+                v-model.number="drumStore.basslineMidiChannel"
+                @click.stop
+                class="text-[9px] font-bold bg-neutral-800 border border-neutral-700 rounded px-0.5 py-0.5 text-violet-300 focus:outline-none focus:border-violet-500"
+              >
+                <option :value="0">Drums</option>
+                <option v-for="c in 16" :key="c" :value="c">{{ c }}</option>
+              </select>
             </div>
             <button
               @click.stop="drumStore.generateBassline(basslineRootNote)"

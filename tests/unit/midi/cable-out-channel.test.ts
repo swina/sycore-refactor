@@ -84,3 +84,21 @@ describe('app → virtual output (FM-1)', () => {
     expect(virt).toEqual([[0x91, 60, 100], [0x90, 64, 100]])
   })
 })
+
+describe('app → virtual output with exactChannel (Drum Machine bassline channel)', () => {
+  it('sends on the app channel as is, over the cable OUT ch and channel filter', () => {
+    const svc = new MidiService() as any
+    svc.midiAccess = { inputs: new Map(), outputs: new Map() }
+    svc.setRoutingConfig({
+      registrations: { 'FM-1 Emulator': { name: 'FM-1 Emulator', outEnabled: true, notes: true, cc: true, outChannel: 9 } },
+    })
+    const virt: number[][] = []
+    svc.registerVirtualOutput('FM-1 Emulator', (data: number[]) => virt.push(data))
+    svc.router.matrix.set(MidiSource.DRUM_MACHINE, new Set(['FM-1 Emulator']))
+    svc.setOutputRouteFilters({ [`${MidiSource.DRUM_MACHINE}→FM-1 Emulator`]: { outChannels: [9], channels: [9] } })
+    svc.sendNoteOn(36, 100, 0, MidiSource.DRUM_MACHINE)                              // drums: cable CH 10
+    svc.sendNoteOn(40, 100, 2, MidiSource.DRUM_MACHINE, null, undefined, { exactChannel: true })  // bass: CH 3
+    svc.sendNoteOff(40, 0, 2, MidiSource.DRUM_MACHINE, null, undefined, { exactChannel: true })
+    expect(virt).toEqual([[0x99, 36, 100], [0x92, 40, 100], [0x82, 40, 0]])
+  })
+})

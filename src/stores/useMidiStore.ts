@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { midiService, MidiSource, type BroadcastOptions } from '@/core/midi/midi-service'
 import { deviceRegistry } from '@/core/midi/DeviceRegistry'
 import { FIELD_TO_CC } from '@/constants/s1-config'
 import { useAuthStore } from './useAuthStore'
@@ -762,9 +762,9 @@ export const useMidiStore = defineStore('midi', () => {
     else fn()
   }
 
-  function sendNoteOn(note: number, velocity = 100, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null, at?: number) {
+  function sendNoteOn(note: number, velocity = 100, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions) {
     const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
-    midiService.sendNoteOn(note, velocity, targetChannel, source, skipDeviceId, at)
+    midiService.sendNoteOn(note, velocity, targetChannel, source, skipDeviceId, at, opts)
     runAt(at, () => {
       const mappingStore = useMappingStore()
       mappingStore.handleVelocity(velocity, targetChannel)
@@ -772,9 +772,9 @@ export const useMidiStore = defineStore('midi', () => {
     })
   }
 
-  function sendNoteOff(note: number, velocity = 0, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null, at?: number) {
+  function sendNoteOff(note: number, velocity = 0, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions) {
     const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
-    midiService.sendNoteOff(note, velocity, targetChannel, source, skipDeviceId, at)
+    midiService.sendNoteOff(note, velocity, targetChannel, source, skipDeviceId, at, opts)
     runAt(at, () => notifyAppNoteListeners('off', note, velocity, targetChannel, source))
   }
 
