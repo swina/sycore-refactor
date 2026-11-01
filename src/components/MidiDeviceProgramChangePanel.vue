@@ -531,7 +531,10 @@ const isLoading = ref(false)
 // same imported user bank), in which case selectedBank's own value never
 // changes on switch, and this watcher wouldn't otherwise re-fire at all,
 // leaving the previous device's patch list on screen.
-watch([selectedBank, selectedDeviceName], async ([bank]) => {
+// Also keyed on the user bank's preset list itself: re-importing a bank under the same name
+// replaces its entry in the store while selectedBank stays the same — without this the panel kept
+// the old list (and the Virtual Device, which browses through it, the old categories / counts).
+watch([selectedBank, selectedDeviceName, () => (selectedBank.value && isUserBank(selectedBank.value) ? userBanksStore.getPresets(selectedDeviceName.value, selectedBank.value) : null)], async ([bank]) => {
   if (!bank) { sounds.value = []; return }
 
   // User-imported bank: load directly from store
@@ -546,7 +549,8 @@ watch([selectedBank, selectedDeviceName], async ([bank]) => {
     const match = bankConfig.value.data.match(/^\.\/([^/]+)\/(.+)$/)
     if (!match) throw new Error('Bad data path')
     const [, folder, filename] = match
-    const res = await fetch(`/data/program_change/${folder}/${filename}`)
+    // no-cache: revalidated each time, so an updated catalog file isn't served from the browser cache
+    const res = await fetch(`/data/program_change/${folder}/${filename}`, { cache: 'no-cache' })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     sounds.value = await res.json()
   } catch (e) {
