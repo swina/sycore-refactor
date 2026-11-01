@@ -204,37 +204,9 @@ const CHORD_CENTER = 60
 
 function emptyDrumStep(): DrumStep { return { active: false, velocity: 100, accent: false, ratchet: 1, tie: 0 } }
 
-/**
- * A drum grid (song-plan DRUM_GRID_CHARS) as Drum Machine steps. The velocity comes from the cell
- * (accent / hit / soft / ghost) and the section's energy, shaped by where the hit falls (on the
- * beat a little louder, on the 16th in between softer) and varied a little, the same way every
- * time (`seed`), so plain 'x' grids don't play like a machine gun.
- */
-export function drumGridToSteps(grid: string | undefined, energy: number, seed = 0): DrumStep[] {
-  const base = 80 + energy * 8                            // 88..120
-  const steps = Array.from({ length: SONG_GRID_STEPS }, () => emptyDrumStep())
-  if (!grid) return steps
-  let last = -1
-  for (let i = 0; i < SONG_GRID_STEPS; i++) {
-    const c = grid[i] ?? '.'
-    if (c === '.') { last = -1; continue }
-    if (c === '-') { if (last >= 0) steps[last].tie++; continue }
-    const metric = i % 4 === 0 ? 6 : i % 2 === 0 ? 0 : -8
-    const jitter = ((((seed + 1) * 7919 + i * 104729) % 9) - 4)   // -4..4, fixed per track / step
-    let vel: number
-    if (c === 'X') vel = base + 15
-    else if (c === 'o') vel = base * 0.65 + metric / 2
-    else if (c === 'g') vel = base * 0.38
-    else vel = base + metric
-    steps[i] = {
-      ...emptyDrumStep(), active: true, accent: c === 'X',
-      velocity: Math.round(Math.max(20, Math.min(127, vel + jitter))),
-      ratchet: c === '2' || c === '3' || c === '4' ? Number(c) : 1,
-    }
-    last = i
-  }
-  return steps
-}
+// drumGridToSteps lives in lib/drum-grid.ts (the Drum Machine's AI prompt uses it too)
+export { drumGridToSteps } from './drum-grid'
+import { drumGridToSteps } from './drum-grid'
 
 const BASS_LOW = 36   // C2: the bass tones are placed in C2..B2
 

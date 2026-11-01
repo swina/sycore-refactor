@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { audioTimeToPerfMs } from '@/lib/audio-clock'
+import { DRUM_AI_SYSTEM_PROMPT } from '@/lib/drum-grid'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info, Sparkles } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
@@ -3279,7 +3280,7 @@ function cycleChainSlot(i) {
   <AiPromptModal
     v-if="showAiPrompt"
     app-key="drum-machine"
-    system-prompt="You are a drum pattern designer. Generate a drum pattern as a JSON object mapping track names (Kick, Snare, Closed HH, Open HH, Clap, Tom 1, Tom 2, Cymbal, Rim Shot, Cowbell, Tambourine) to arrays of exactly 16 integers (0 or 1). Also include a Bassline array of 16 MIDI note numbers (36-60) or 0. Output ONLY valid JSON."
+    :system-prompt="DRUM_AI_SYSTEM_PROMPT"
     placeholder="e.g. deep house groove with a driving bassline"
     button-label="Generate Pattern"
     @result="handleAiResult"

@@ -5,6 +5,7 @@ import { userKey } from '@/lib/userKey'
 import { debounce } from '@/lib/debounce'
 import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
 import { DRUM_TRACK_LABELS } from '@/types/drum-machine'
+import { parseAiDrumPattern } from '@/lib/drum-grid'
 import { IMPORTED_PATTERNS, patternToDrumSteps } from '@/data/imported-patterns'
 import { DEFAULT_ADSR } from '@/core/audio/envelope'
 
@@ -1354,52 +1355,37 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
    * If a "Bassline" key with non-zero MIDI notes is present, applies it too.
    * @param {string} json — raw JSON string from the AI
    */
+  /**
+   * Applies the Drum Machine AI prompt's answer to the active sequence (lib/drum-grid.ts): grids with
+   * accents / soft and ghost hits / ratchets / ties (or the older 0 / 1 arrays), swing, bassline.
+   * Tracks the answer leaves out are cleared; their sounds are kept.
+   */
   async function applyAiPattern(json: string): Promise<boolean> {
     try {
-      const raw = json.replace(/```json|```/g, '').trim()
-      const start = raw.indexOf('{')
-      const end = raw.lastIndexOf('}')
-      if (start === -1 || end === -1) throw new Error('AI did not return valid JSON')
-      const parsed = JSON.parse(raw.slice(start, end + 1))
+      const parsed = parseAiDrumPattern(json)
+      if (!parsed) throw new Error('AI did not return a usable drum pattern')
 
       const seq = [...(sequences.value[activeSequence.value] || [])]
       if (!seq.length) return false
-
-      TRACK_LABELS.forEach((label, trackIdx) => {
-        if (trackIdx >= seq.length) return
-        const grid = parsed[label]
-        if (!Array.isArray(grid)) {
-          seq[trackIdx] = {
-            ...seq[trackIdx],
-            steps: Array.from({ length: 16 }, () => ({ ...DEFAULT_DRUM_STEP() })),
-          }
-          return
-        }
+      seq.forEach((track, trackIdx) => {
+        const row = parsed.rows[trackIdx]
         seq[trackIdx] = {
-          ...seq[trackIdx],
-          steps: Array.from({ length: 16 }, (_, s) => {
-            const hit = Number(grid[s])
-            return hit > 0
-              ? { active: true, velocity: 100, accent: false, ratchet: 1, tie: 0 }
-              : { ...DEFAULT_DRUM_STEP() }
-          }),
+          ...track,
+          length: 16,
+          steps: row ? row.map(st => ({ ...st })) : Array.from({ length: 16 }, () => ({ ...DEFAULT_DRUM_STEP() })),
         }
       })
-
       sequences.value[activeSequence.value] = seq
+      if (parsed.swing != null) swing.value = parsed.swing
 
-      if (Array.isArray(parsed.Bassline) && parsed.Bassline.some((n: any) => Number(n) > 0)) {
+      if (parsed.bassline) {
         const bassSeq = [...(basslineSequences.value[activeSequence.value] || [])]
         if (bassSeq.length) {
           bassSeq[0] = {
             ...bassSeq[0],
-            steps: parsed.Bassline.map((n: any) => {
-              const note = Number(n)
-              if (note > 0 && Number.isFinite(note)) {
-                return { active: true, velocity: 90, accent: false, ratchet: 1, tie: 0, note }
-              }
-              return { ...DEFAULT_DRUM_STEP(), note: undefined }
-            }),
+            steps: parsed.bassline.map((note: number) => (note > 0
+              ? { active: true, velocity: 90, accent: false, ratchet: 1, tie: 0, note }
+              : { ...DEFAULT_DRUM_STEP(), note: undefined })),
           }
           basslineSequences.value[activeSequence.value] = bassSeq
         }
