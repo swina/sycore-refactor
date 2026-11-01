@@ -537,9 +537,91 @@ const DRUM_STYLES: Record<string, any> = {
     ],
     velMin: 55, velMax: 100, ghostVelMax: 38,
   },
+  // Ambient — sparse, soft, probabilistic: a pulse more than a beat, lots of space,
+  // toms and cymbal swells for texture. Low velocities.
+  Ambient: {
+    variants: [
+      // V1 — heartbeat kick, soft rim-like snare on 3, airy hats
+      [
+        [1,   0,   0,   0,   0,   0,   0,   0,  0.5,  0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,  0.6,  0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,  0.4,  0,   0,   0,  0.3,  0,   0,   0,  0.4,  0,   0,   0,  0.3,  0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.4,  0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,  0.3,  0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.3,  0,   0,   0  ],
+        [1,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+      ],
+      // V2 — slow tom pulse, cymbal wash, no backbeat
+      [
+        [1,   0,   0,   0,   0,   0,  0.3,  0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.3,  0,   0,   0  ],
+        [0,   0,   0,   0,  0.3,  0,   0,   0,   0,   0,   0,   0,  0.3,  0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,  0.5,  0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,  0.6,  0,   0,   0,   0,   0,   0,   0,  0.5,  0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,  0.6,  0,   0,   0,   0,   0,   0,  0.3],
+        [0.7, 0,   0,   0,   0,   0,   0,   0,  0.4,  0,   0,   0,   0,   0,   0,   0  ],
+      ],
+      // V3 — downtempo half-time, gentle 8th hats
+      [
+        [1,   0,   0,   0,   0,   0,   0,  0.3,  0,   0,  0.4,  0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,   0,   0,   0  ],
+        [0.6, 0,  0.5,  0,  0.6,  0,  0.5,  0,  0.6,  0,  0.5,  0,  0.6,  0,  0.5,  0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.3],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.3,  0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.3,  0  ],
+        [0.5, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+      ],
+    ],
+    velMin: 40, velMax: 78, ghostVelMax: 32,
+  },
+
+  // Urban — contemporary R&B / urban pop: syncopated kick, hard clap+snare on 2 & 4,
+  // 16th hats with rolls (ratchets), occasional open hat lifts.
+  Urban: {
+    variants: [
+      // V1 — R&B bounce, kick on 1 and the "and" of 2, hat rolls into beat 4
+      [
+        [1,   0,   0,   0,   0,   0,   1,   0,   0,  0.4,  1,   0,   0,   0,   0,  0.3],
+        [0,   0,   0,   0,  'A',  0,   0,   0,   0,   0,   0,   0,  'A',  0,   0,  0.3],
+        [1,   0,   1,   0,   1,   0,   1,  0.5,  1,   0,   1,  [0.7, 2], 1,  0,   1,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.5,  0  ],
+        [0,   0,   0,   0,   1,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+      ],
+      // V2 — half-time urban, clap on 3, rolling 16th hats
+      [
+        [1,   0,   0,   1,   0,   0,   0,   0,   0,   0,   1,   0,   0,  0.5,  0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,  0.3,  'A',  0,   0,   0,   0,   0,   0,   0  ],
+        [1,  0.6,  1,  0.6,  1,  [0.6, 3], 1, 0.6, 1,  0.6,  1,  0.6,  1,  [0.8, 2], 1, 0.6],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.4],
+        [0,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.3,  0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0.3],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+      ],
+      // V3 — urban pop groove, four-ish kick with pickups, open hat on the offbeats
+      [
+        [1,   0,   0,   0,   0,   0,  0.6,  0,   1,   0,   0,  0.5,  0,   0,   0,   0  ],
+        [0,   0,   0,   0,  'A',  0,   0,   0,   0,   0,   0,   0,  'A',  0,  0.3,  0  ],
+        [1,   0,   1,   1,   1,   0,   1,   0,   1,   0,   1,   1,   1,   0,  [0.6, 2], 0],
+        [0,   0,   0,   0,   0,   0,   0,  0.5,  0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   1,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+        [0.4, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0  ],
+      ],
+    ],
+    velMin: 82, velMax: 118, ghostVelMax: 50,
+  },
 }
 
-export const DRUM_STYLE_NAMES = Object.keys(DRUM_STYLES)
+// Sorted alphabetically for the style combo.
+export const DRUM_STYLE_NAMES = Object.keys(DRUM_STYLES).sort((a, b) => a.localeCompare(b))
 
 // ── Per-style variation config ─────────────────────────────────────────────
 // Controls how much extra randomness is applied AFTER the variant is resolved.
@@ -563,6 +645,8 @@ const DRUM_STYLE_VARIATION: Record<string, StyleVariation> = {
   EDM:          { ghostSeedChance: 0.04, accentShiftChance: 0.08, ratchetChance: 0.03, maxRatchet: 2, velJitter: 4  },
   Pop:          { ghostSeedChance: 0.06, accentShiftChance: 0.06, ratchetChance: 0.03, maxRatchet: 2, velJitter: 6  },
   Jazz:         { ghostSeedChance: 0.22, accentShiftChance: 0.05, ratchetChance: 0.04, maxRatchet: 3, velJitter: 15 },
+  Ambient:      { ghostSeedChance: 0.04, accentShiftChance: 0.00, ratchetChance: 0.00, maxRatchet: 2, velJitter: 10 },
+  Urban:        { ghostSeedChance: 0.08, accentShiftChance: 0.06, ratchetChance: 0.10, maxRatchet: 3, velJitter: 8  },
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
