@@ -21,6 +21,7 @@ import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { usePlayerTrackInfo } from '@/composables/usePlayerTrackInfo'
 import KnobDial from '@/components/ui/KnobDial.vue'
+import { useDeviceImages } from '@/composables/useDeviceImages'
 
 defineProps({ grab: { type: Boolean, default: false } })   // header shows a grab cursor (panel drag)
 const emit = defineEmits(['header-mousedown'])
@@ -44,6 +45,9 @@ const { openMenu } = useMidiContextMenu()
 
 // the selected device, falling back to the first virtual instrument
 const device = computed(() => vd.activeDevice)
+// its image (uploaded in the Devices list), shown in the header in place of the icon
+const { images: deviceImages } = useDeviceImages()
+const deviceImage = computed(() => (device.value && deviceImages.value[device.value]) || '')
 
 const channel = computed(() => device.value ? vd.channel(device.value) : 0)
 const channelList = computed(() => device.value ? vd.channels(device.value) : [])
@@ -73,12 +77,16 @@ watch(device, (d) => {
 const mappedParams = computed(() => new Set(Object.values(mappingStore.midiMappings ?? {})
   .map(m => (typeof m === 'object' ? m?.paramName : m)).filter(Boolean)))
 
-function learnMenu(e, name, label) {
-  openMenu(e, { name, label: `${device.value}: ${label}` })
+// Controls and sound slots are learned per virtual instrument; PRESET / TYPE / CHANNEL / CATEGORY
+// once for the Virtual Device instance (they act on the active instrument: `instance`)
+function learnMenu(e, name, label, instance = false) {
+  openMenu(e, { name, label: instance ? `Virtual Device: ${label}` : `${device.value}: ${label}` })
 }
 
-// LCD theme: CSS variables for the LCD (its classes read --lcd-*), the dials take its accent
-const theme = computed(() => lcdTheme(vd.lcdThemeId))
+// LCD theme, per virtual instrument: CSS variables for the LCD (its classes read --lcd-*), the
+// dials take its accent
+const themeId = computed(() => vd.lcdThemeOf(device.value))
+const theme = computed(() => lcdTheme(themeId.value))
 const lcdStyle = computed(() => ({
   background: `linear-gradient(to bottom, ${theme.value.bg[0]}, ${theme.value.bg[1]})`,
   '--lcd-text': theme.value.text,
@@ -163,18 +171,19 @@ function openCcTable() {
     <!-- Header -->
     <div class="flex items-center justify-between gap-3 px-4 py-2 bg-gradient-to-b from-white/5 to-transparent shrink-0 select-none" :class="grab ? 'cursor-grab active:cursor-grabbing' : ''" @mousedown="emit('header-mousedown', $event)">
       <div class="flex items-center gap-3 min-w-0">
-        <div class="p-1.5 bg-teal-500/20 rounded-lg border border-teal-500/20">
+        <img v-if="deviceImage" :src="deviceImage" :alt="device" class="w-8 h-8 rounded-lg object-cover border border-teal-500/30 shrink-0" />
+        <div v-else class="p-1.5 bg-teal-500/20 rounded-lg border border-teal-500/20">
           <SlidersHorizontal class="w-4 h-4 text-teal-300" />
         </div>
-        <h2 class="text-sm font-black text-white tracking-[0.1em] uppercase whitespace-nowrap">Virtual Device</h2>
+        <h2 class="text-sm font-black text-white tracking-[0.1em] uppercase whitespace-nowrap truncate max-w-[260px]" :title="device ? 'Virtual Device: ' + device : 'Virtual Device'">{{ device || 'Virtual Device' }}</h2>
         <span class="bg-amber-400/70 text-[8px] rounded font-mono px-2 text-black">BETA</span>
       </div>
       <div class="flex items-center gap-2" @mousedown.stop>
         <!-- LCD theme -->
-        <div class="flex items-center gap-1" title="LCD color">
-          <button v-for="t in LCD_THEMES" :key="t.id" @click="vd.lcdThemeId = t.id" :title="t.label"
+        <div class="flex items-center gap-1" :title="'LCD color of ' + (device || 'the Virtual Device')">
+          <button v-for="t in LCD_THEMES" :key="t.id" @click="vd.setLcdTheme(device, t.id)" :title="t.label + (device ? ' — ' + device : '')"
             class="w-3 h-3 rounded-full border transition-transform hover:scale-125"
-            :class="vd.lcdThemeId === t.id ? 'border-white ring-1 ring-white/60' : 'border-neutral-600'"
+            :class="themeId === t.id ? 'border-white ring-1 ring-white/60' : 'border-neutral-600'"
             :style="{ background: `linear-gradient(135deg, ${t.bg[0]} 50%, ${t.text} 50%)` }" />
         </div>
         <select v-if="vd.devices.length" :value="device" @change="e => vd.selectedDevice = e.target.value"
@@ -200,9 +209,9 @@ function openCcTable() {
           <div class="flex items-center gap-1.5">
             Preset
             <button class="w-5 h-4 flex items-center justify-center rounded-full bg-gradient-to-b from-neutral-500 to-neutral-700 text-neutral-100 border border-neutral-700 shadow hover:from-neutral-400" title="Previous preset (right-click: MIDI Learn)" @click="vd.stepPreset(device, -1)"
-              @contextmenu.prevent="learnMenu($event, vdpActionParam('preset_prev', device), 'Preset ▼')"><ChevronDown class="w-3 h-3" /></button>
+              @contextmenu.prevent="learnMenu($event, vdpActionParam('preset_prev'), 'Preset ▼', true)"><ChevronDown class="w-3 h-3" /></button>
             <button class="w-5 h-4 flex items-center justify-center rounded-full bg-gradient-to-b from-neutral-500 to-neutral-700 text-neutral-100 border border-neutral-700 shadow hover:from-neutral-400" title="Next preset (right-click: MIDI Learn)" @click="vd.stepPreset(device, 1)"
-              @contextmenu.prevent="learnMenu($event, vdpActionParam('preset_next', device), 'Preset ▲')"><ChevronUp class="w-3 h-3" /></button>
+              @contextmenu.prevent="learnMenu($event, vdpActionParam('preset_next'), 'Preset ▲', true)"><ChevronUp class="w-3 h-3" /></button>
           </div>
           <div class="flex items-center gap-1.5 justify-center">
             Type
@@ -210,17 +219,17 @@ function openCcTable() {
               :class="vd.browseScope === 'category' ? 'bg-teal-600' : 'bg-teal-900'"
               :title="(vd.browseScope === 'category' ? 'PRESET ▼▲ within the current category' : 'PRESET ▼▲ through all presets') + ' (right-click: MIDI Learn)'"
               @click="vd.toggleBrowseScope()"
-              @contextmenu.prevent="learnMenu($event, vdpActionParam('type', device), 'Type All / Category')">
+              @contextmenu.prevent="learnMenu($event, vdpActionParam('type'), 'Type All / Category', true)">
               <span class="absolute top-0.5 w-2.5 h-2.5 rounded-full bg-teal-200 transition-all" :class="vd.browseScope === 'category' ? 'left-[18px]' : 'left-0.5'" />
-              <span v-if="learnMark(vdpActionParam('type', device))" class="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full" :class="learnMark(vdpActionParam('type', device))" />
+              <span v-if="learnMark(vdpActionParam('type'))" class="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full" :class="learnMark(vdpActionParam('type'))" />
             </button>
           </div>
           <div class="flex items-center gap-1.5 justify-center">
             Channel
             <button class="w-5 h-4 flex items-center justify-center rounded-full bg-gradient-to-b from-neutral-500 to-neutral-700 text-neutral-100 border border-neutral-700 shadow hover:from-neutral-400" title="Previous channel (right-click: MIDI Learn)" @click="vd.stepChannel(device, -1)"
-              @contextmenu.prevent="learnMenu($event, vdpActionParam('ch_prev', device), 'Channel ▼')"><ChevronDown class="w-3 h-3" /></button>
+              @contextmenu.prevent="learnMenu($event, vdpActionParam('ch_prev'), 'Channel ▼', true)"><ChevronDown class="w-3 h-3" /></button>
             <button class="w-5 h-4 flex items-center justify-center rounded-full bg-gradient-to-b from-neutral-500 to-neutral-700 text-neutral-100 border border-neutral-700 shadow hover:from-neutral-400" title="Next channel (right-click: MIDI Learn)" @click="vd.stepChannel(device, 1)"
-              @contextmenu.prevent="learnMenu($event, vdpActionParam('ch_next', device), 'Channel ▲')"><ChevronUp class="w-3 h-3" /></button>
+              @contextmenu.prevent="learnMenu($event, vdpActionParam('ch_next'), 'Channel ▲', true)"><ChevronUp class="w-3 h-3" /></button>
           </div>
           <div class="text-right">Bank : Program</div>
         </div>
@@ -262,10 +271,10 @@ function openCcTable() {
         <!-- TYPE Category: a knob through the open bank's categories (sends each one's first preset) -->
         <div v-if="vd.browseScope === 'category'" class="flex items-center gap-2 mt-1.5 px-1 text-[9px] font-black uppercase tracking-widest text-neutral-800">
           <div class="relative" :title="categoryList.length ? 'Category: turn to pick one — its first preset is sent (right-click: MIDI Learn)' : 'No categories in the open bank'"
-            @contextmenu.prevent="learnMenu($event, vdpActionParam('category', device), 'Category')">
+            @contextmenu.prevent="learnMenu($event, vdpActionParam('category'), 'Category', true)">
             <KnobDial :model-value="categoryIdx" :min="0" :max="Math.max(1, categoryList.length - 1)" :step="1" :size="30"
               :show-value="false" :color="theme.accent" @change="v => v !== categoryIdx && vd.selectCategory(device, v)" />
-            <span v-if="learnMark(vdpActionParam('category', device))" class="absolute top-0 right-0 w-1.5 h-1.5 rounded-full" :class="learnMark(vdpActionParam('category', device))" />
+            <span v-if="learnMark(vdpActionParam('category'))" class="absolute top-0 right-0 w-1.5 h-1.5 rounded-full" :class="learnMark(vdpActionParam('category'))" />
           </div>
           Category
           <span class="font-mono normal-case tracking-normal text-[10px] text-neutral-900 truncate">

@@ -11,6 +11,8 @@ Local patch in `main.js` (search "SY.CORE bridge" / "fm1-stats"):
 - `{type:"sycore-lcd", on}` from the parent: while on, posts each LCD change (240×240 RGB565,
   at most one per 50 ms) as `{type:"fm1-lcd", lcd}` — the DECK's FM-1 view mirrors it
 - posts `{type:"fm1-ready"}` once that listener is up
+- `start()` (the Start button's handler) also runs on `{type:"sycore-start"}` from the parent
+  (sent once SY.CORE has had a click/key: auto start without the Start click)
 - embedded with a parent (`?embed=1` in an iframe): the page's own MIDI input and channel
   selector are off and hidden (not stored) — MIDI comes only through the bridge
 

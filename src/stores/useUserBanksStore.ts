@@ -11,7 +11,7 @@ export interface PresetBankEntry {
   presets: any[]
   // undefined = legacy (.mfprojz or Standard JSON, saved before these were
   // distinguishable) — treated permissively as belonging to either template.
-  source?: 'emulatorx3' | 'mfprojz' | 'json' | 'kawai-k1' | 'arturia'
+  source?: 'emulatorx3' | 'mfprojz' | 'json' | 'kawai-k1' | 'arturia' | 'access-virus' | 'roland-s1'
 }
 
 export interface PresetBanks {

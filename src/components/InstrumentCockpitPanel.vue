@@ -27,7 +27,7 @@ import DeckPlaylistSummary from '@/components/DeckPlaylistSummary.vue'
 import DeckSoloPerformanceSummary from '@/components/DeckSoloPerformanceSummary.vue'
 import DeckFm1Summary from '@/components/DeckFm1Summary.vue'
 import VirtualDeviceView from '@/components/VirtualDeviceView.vue'
-import { FM1_OUTPUT, fm1Firmware, fm1InChannels } from '@/lib/fm1-bridge'
+import { FM1_OUTPUT, FM1_PANEL_ID, fm1Firmware, fm1InChannels } from '@/lib/fm1-bridge'
 import { fm1Parts } from '@/lib/fm1-firmwares'
 
 const midiStore = useMidiStore()
@@ -192,9 +192,15 @@ function closeAppSummary() {
 }
 
 // The FM-1 view lives off the FM-1 Emulator panel: closing that panel closes it.
+// Loaded in the background because MIDI Flow routes to it: show it straight in the DECK.
+function showBackgroundFm1() {
+  if (midiStore.panelOutputs.includes(FM1_OUTPUT) && uiStore.silentPanels[FM1_PANEL_ID] && !selectedApp.value) selectApp({ kind: 'fm1' })
+}
 watch(() => midiStore.panelOutputs.includes(FM1_OUTPUT), (open) => {
   if (!open && selectedApp.value?.kind === 'fm1') closeAppSummary()
+  showBackgroundFm1()
 })
+onMounted(showBackgroundFm1)
 
 // FM-1 isn't a summary in the display: like the device view, it takes the display + instruments
 // row, at the Virtual Device's size
@@ -463,8 +469,10 @@ watch(deviceView, v => { try { localStorage.setItem(LS_DECK_DEVICE_VIEW, v ? '1'
 
 // (the device and FM-1 views hide the display and the instruments row: nothing to focus there)
 const fullView = computed(() => deviceView.value || fm1View.value)
+// The Controllers column is hidden (kept in the code, not removed): flip to show it again.
+const SHOW_CONTROLLERS_COLUMN = false
 const zones = [
-  { id: 'controllers', items: controllerItems },
+  { id: 'controllers', items: computed(() => SHOW_CONTROLLERS_COLUMN ? controllerItems.value : []) },
   { id: 'display', items: computed(() => fullView.value ? [] : displayItems.value) },
   { id: 'apps', items: appItems },
   { id: 'instruments', items: computed(() => fullView.value ? [] : instrumentItems.value) },
@@ -613,8 +621,9 @@ function openVirtualDevice(row) {
 }
 
 // ── Instrument pads under the device / FM-1 view: one per virtual instrument configured in MIDI
-// Flow (on its canvas), plus FM-1 while its panel is open and it's on the canvas too; a click —
-// or the pad's MIDI Learn (deck_view:<name>) — shows that instrument's view. ──
+// Flow (on its canvas), plus FM-1 while its panel is open and it's on the canvas too; a click shows
+// that instrument's view. One MIDI Learn for the row (deck_view_next, right-click any pad): each
+// press shows the next pad, the first after the last (or when none is shown). ──
 const vdStore = useVirtualDeviceStore()
 const viewPads = computed(() => [
   ...midiStore.virtualInstruments.map(v => v.name),
@@ -627,9 +636,25 @@ function showInstrumentView(name) {
   if (name === FM1_OUTPUT) selectApp({ kind: 'fm1' })
   else if (midiStore.virtualInstruments.some(v => v.name === name)) openVirtualDevice({ name })
 }
+function stepInstrumentView(dir = 1) {
+  const pads = viewPads.value
+  if (!pads.length) return
+  const i = pads.findIndex(isViewPadActive)
+  showInstrumentView(i < 0 ? pads[0] : pads[(i + dir + pads.length) % pads.length])
+}
+const DECK_VIEW_NEXT = 'deck_view_next'
+const deckViewNextMapped = computed(() => Object.values(mappingStore.midiMappings ?? {})
+  .some(m => (typeof m === 'object' ? m?.paramName : m) === DECK_VIEW_NEXT))
 const onDeckViewSelect = (e) => showInstrumentView(e.detail?.name)
-onMounted(() => window.addEventListener('deck-view-select', onDeckViewSelect))
-onUnmounted(() => window.removeEventListener('deck-view-select', onDeckViewSelect))
+const onDeckViewStep = (e) => stepInstrumentView(e.detail?.dir ?? 1)
+onMounted(() => {
+  window.addEventListener('deck-view-select', onDeckViewSelect)
+  window.addEventListener('deck-view-step', onDeckViewStep)
+})
+onUnmounted(() => {
+  window.removeEventListener('deck-view-select', onDeckViewSelect)
+  window.removeEventListener('deck-view-step', onDeckViewStep)
+})
 
 // the same view as a floating window, the DECK back to its display
 function popOutVirtualDevice() {
@@ -682,7 +707,7 @@ function handleBpmChange(e) {
     >
 
       <!-- ── Controllers (left) ── -->
-      <div class="ml-2 w-22 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pr-3">
+      <div v-if="SHOW_CONTROLLERS_COLUMN" class="ml-2 w-22 shrink-0 flex flex-col gap-2 justify-start overflow-y-auto custom-scrollbar border-neutral-800 pr-3">
         <p class="text-[8px] font-black uppercase tracking-widest text-neutral-600 bg-black py-1 text-center mb-0.5">Controllers</p>
         <div v-if="controllers.length === 0" class="text-[9px] text-neutral-700 italic text-center">None</div>
         <div v-for="(c, idx) in controllers" :key="c.name"
@@ -746,7 +771,7 @@ function handleBpmChange(e) {
           </div> -->
 
           <div class="flex-1 min-h-0 flex items-start gap-3">
-            <div class="shrink-0 w-42 flex flex-col items-center gap-1.5 rounded-lg p-1" :class="focusRing('display', DISPLAY_SCOPE_IDX)">
+            <div class="hidden shrink-0 w-42 flex flex-col items-center gap-1.5 rounded-lg p-1" :class="focusRing('display', DISPLAY_SCOPE_IDX)">
               <span class="text-sm font-mono uppercase tracking-[0.35em] text-synth-neon/80">SY.CORE</span>
               <!-- Audio Scope -->
               <MiniAudioScope ref="miniScopeRef" class="h-24 w-full" />
@@ -977,17 +1002,23 @@ function handleBpmChange(e) {
 
         <!-- Instrument pads: switch the view between the virtual instruments and FM-1 -->
         <div v-if="deviceView || fm1View" class="shrink-0 flex flex-wrap justify-center gap-2">
-          <div v-for="name in viewPads" :key="name" class="relative">
+          <div v-for="(name, i) in viewPads" :key="name" class="relative">
             <button @click="showInstrumentView(name)"
-              @contextmenu.prevent="openMenu($event, { name: 'deck_view:' + name, label: 'DECK view: ' + name })"
-              :title="'Show ' + name + ' (right-click: MIDI Learn)'"
-              class="w-24 h-12 px-1.5 rounded-lg border-2 text-[10px] font-mono font-bold leading-tight break-words line-clamp-2 transition-all active:scale-95 shadow-lg"
+              @contextmenu.prevent="openMenu($event, { name: DECK_VIEW_NEXT, label: 'DECK view: next instrument' })"
+              :title="'Show ' + name + ' (right-click: MIDI Learn — each press shows the next instrument)'"
+              class="h-12 px-1.5 rounded-lg border-2 text-[10px] font-mono font-bold leading-tight break-words transition-all active:scale-95 shadow-lg"
+              :style="{ width: deviceImages[name] ? '8.5rem' : '6rem' }"
               :class="isViewPadActive(name)
                 ? (name === FM1_OUTPUT ? 'bg-cyan-500/25 border-cyan-400 text-cyan-100' : 'bg-teal-500/25 border-teal-400 text-teal-100')
                 : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white hover:border-neutral-500'"
-            >{{ name === FM1_OUTPUT ? 'FM-1' : name }}</button>
-            <span v-if="mappingStore.learningParamName === 'deck_view:' + name"
+            ><span class="flex items-center gap-1.5 h-full">
+                <img v-if="deviceImages[name]" :src="deviceImages[name]" :alt="name" class="w-8 h-8 rounded object-cover shrink-0" />
+                <span class="flex-1 min-w-0 line-clamp-2" :class="deviceImages[name] ? 'text-left' : 'text-center'">{{ name === FM1_OUTPUT ? 'FM-1' : name }}</span>
+              </span></button>
+            <span v-if="mappingStore.learningParamName === DECK_VIEW_NEXT"
               class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50" />
+            <span v-else-if="deckViewNextMapped && i === 0" title="MIDI learned: each press shows the next instrument"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-teal-400 pointer-events-none z-50" />
           </div>
         </div>
         <!-- Performance Sets -->

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, FolderOpen, LayoutGrid, FileText, Copy, Braces, Database, CheckCircle2 } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, Download, FolderOpen, LayoutGrid, FileText, Copy, Braces, Database, CheckCircle2 } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { userKey } from '@/lib/userKey'
@@ -15,6 +15,7 @@ import { parseStandardJson } from '@/composables/useStandardJsonParser'
 import { parseKawaiK1 } from '@/composables/useKawaiK1Parser'
 import { parseAccessVirusSyx } from '@/composables/useAccessVirusSyxParser'
 import { parseArturiaSqlite } from '@/composables/useArturiaSqliteParser'
+import { S1_BANK_SOURCE, S1_DEFAULT_BANK, presetsToS1Sounds, s1BankFile, parseS1BankFile, s1PresetToRecall, s1PresetCcMessages } from '@/lib/s1-bank'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import MidiButtonLearn from '@/components/ui/MidiButtonLearn.vue'
@@ -155,8 +156,9 @@ const multiChannelDisplayState = computed(() => {
 // internal (non-MIDI) preset browser used for SY.CORE's own preview output.
 const isUiDevice = computed(() => {
   if (!selectedDeviceName.value) return false
-  // Explicit template assignment always wins over auto-detection.
-  if (selectedReg.value?.pcTemplate === 'roland-s1') return true
+  // Explicit template assignment always wins over auto-detection. Roland S-1: banks of its Sound
+  // Library presets (lib/s1-bank.ts), browsed like any other bank — so the Virtual Device can too.
+  if (selectedReg.value?.pcTemplate === 'roland-s1') return false
   if (mappedChannels.value.length > 0) return false
   const uiRoutes = midiStore.routingMatrix?.[MidiSource.UI] ?? []
   return uiRoutes.includes(selectedDeviceName.value)
@@ -226,13 +228,14 @@ const TEMPLATE_BANK_SOURCES = {
   'kawai-k1': ['kawai-k1'],
   'access-virus': ['access-virus'],
   arturia:    ['arturia'],
+  'roland-s1': [S1_BANK_SOURCE],
 }
 const userBanks = computed(() => {
   const all = userBanksStore.getBanksForDevice(selectedDeviceName.value)
   const tmpl = selectedReg.value?.pcTemplate
   if (!tmpl) return all.map(b => b.name)
   const allowedSources = TEMPLATE_BANK_SOURCES[tmpl]
-  if (!allowedSources) return [] // seqtrak / roland-s1 have no user-imported banks
+  if (!allowedSources) return [] // seqtrak has no user-imported banks
   return all.filter(b => allowedSources.includes(b.source)).map(b => b.name)
 })
 
@@ -261,7 +264,7 @@ const showImportRename   = ref(false)
 const pendingPresets     = ref([])
 const pendingBankName    = ref('')
 const pendingBankLsb     = ref(0)
-const pendingImportSource = ref(undefined)   // 'mfprojz' | 'json' | 'emulatorx3' | 'kawai-k1' | 'access-virus' | 'arturia'
+const pendingImportSource = ref(undefined)   // 'mfprojz' | 'json' | 'emulatorx3' | 'kawai-k1' | 'access-virus' | 'arturia' | 'roland-s1'
 
 function triggerImport() {
   importError.value = ''
@@ -272,6 +275,55 @@ function triggerImportX3() {
   importError.value = ''
   importInputX3.value?.click()
 }
+
+// ── Roland S-1: banks of Sound Library presets (lib/s1-bank.ts) ──
+const importInputS1 = ref(null)   // hidden <input type="file"> (S-1 bank .json)
+const isS1Device = computed(() => selectedReg.value?.pcTemplate === 'roland-s1')
+
+// A bank from the Sound Library's presets as they are now: name it (an existing name is replaced)
+function createS1BankFromLibrary() {
+  importError.value = ''
+  const sounds = presetsToS1Sounds(presetStore.history)
+  if (!sounds.length) { importError.value = 'The Sound Library has no presets yet.'; return }
+  pendingBankName.value = userBanks.value.includes(S1_DEFAULT_BANK) ? `${S1_DEFAULT_BANK} ${new Date().toISOString().slice(0, 10)}` : S1_DEFAULT_BANK
+  pendingPresets.value = sounds
+  pendingImportSource.value = S1_BANK_SOURCE
+  showImportRename.value = true
+}
+
+function triggerImportS1() {
+  importError.value = ''
+  importInputS1.value?.click()
+}
+
+async function onImportS1File(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  importError.value = ''
+  try {
+    const { name, sounds } = parseS1BankFile(JSON.parse(await file.text()), file.name.replace(/\.json$/i, ''))
+    pendingBankName.value = name
+    pendingPresets.value = sounds
+    pendingImportSource.value = S1_BANK_SOURCE
+    showImportRename.value = true
+  } catch (e) {
+    importError.value = e.message ?? 'Failed to read the S-1 bank file.'
+  } finally {
+    event.target.value = ''
+  }
+}
+
+// The selected S-1 bank as a .json file (import it on another device / browser)
+function exportS1Bank() {
+  const bank = selectedBank.value
+  if (!bank || !isUserBank(bank)) return
+  const data = s1BankFile(bank, userBanksStore.getPresets(selectedDeviceName.value, bank))
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+  const a = Object.assign(document.createElement('a'), { href: url, download: `${bank.replace(/[\\/:*?"<>|]+/g, '_')}.s1bank.json` })
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 
 function triggerImportStandard() {
   importError.value = ''
@@ -501,6 +553,15 @@ watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel], (
   }
 })
 
+// An S-1 device with no bank yet gets one from the Sound Library as soon as it has presets, so
+// the Virtual Device can step through them right away.
+watch([selectedDeviceName, isS1Device, () => presetStore.history.length], () => {
+  if (!isS1Device.value || userBanks.value.length || !presetStore.history.length) return
+  const sounds = presetsToS1Sounds(presetStore.history)
+  sameTemplateDevices().forEach(dev => userBanksStore.addBank(dev, S1_DEFAULT_BANK, sounds, S1_BANK_SOURCE))
+  if (!selectedBank.value) selectBank(S1_DEFAULT_BANK)
+}, { immediate: true })
+
 const bankConfig = computed(() => {
   if (!selectedBank.value) return null
   const userEntry = userBanksStore.getBanksForDevice(selectedDeviceName.value)
@@ -509,6 +570,11 @@ const bankConfig = computed(() => {
     msb: false, lsb: false, category_field: 'category',
     program_field: 'program', program_base: 0,
     bankSelect: 'emulatorx3', bank_field: 'bank',
+  }
+  // Roland S-1: program = position (1..N); the sound is its preset, recalled on the sound engine
+  if (userEntry?.source === S1_BANK_SOURCE) return {
+    msb: false, lsb: false, category_field: 'category',
+    program_field: 'program', program_base: -1, bankSelect: 's1',
   }
   if (userEntry?.source === 'arturia') return {
     msb: true, lsb: false, category_field: 'category',
@@ -695,10 +761,10 @@ watch(filteredSounds, (list) => {
 // ── pcChannels persistence helper ──────────────────────────────
 // msgs: the exact messages sent (bank select + PC), so the Virtual Device Panel can re-send this
 // preset in the device's own format when it recalls a saved sound.
-function recordChannelState(ch, program, bank, soundName, category, msb = 0, lsb = 0, msgs = undefined) {
+function recordChannelState(ch, program, bank, soundName, category, msb = 0, lsb = 0, msgs = undefined, engine = undefined) {
   const reg = selectedReg.value
   if (!reg) return
-  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, category: category ?? '', msb, lsb, ...(msgs ? { msgs } : {}) } }
+  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, category: category ?? '', msb, lsb, ...(msgs?.length ? { msgs } : {}), ...(engine ? { engine } : {}) } }
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannels', updated)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', program)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcMsb', msb)
@@ -748,6 +814,10 @@ function soundAddress(sound, ch) {
   // then derive bank MSB and within-bank PC consistently from the same index.
   // This avoids the old formula's bug at multiples of 128 (e.g. prog=128 gave
   // MSB=1,PC=0 instead of MSB=0,PC=127 for 1-indexed catalogs with base=-1).
+  if (cfg?.bankSelect === 's1') {
+    // Roland S-1: nothing to send as MIDI program — the position only identifies the sound
+    return { msb: 0, lsb: 0, progNum: Math.max(0, prog - 1), msgs: [] }
+  }
   const progIdx = prog + (cfg?.program_base ?? 0)           // 0-indexed absolute program
   const msb = cfg?.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
   const lsb = cfg?.lsb ? (sound.lsb ?? 0) : 0
@@ -790,12 +860,22 @@ function sendCatalogSound(sound) {
   const ch     = Math.max(0, reg.pcChannel ?? 0)
   const { msb, lsb, progNum, msgs } = soundAddress(sound, ch)
   msgs.forEach(m => sendToDeviceMessage(m))
+  // Roland S-1 bank: the sound is a Sound Library preset, recalled on the sound engine (CCs)
+  const s1 = bankConfig.value?.bankSelect === 's1'
+  if (s1) {
+    const preset = s1PresetToRecall(sound)
+    if (preset) {
+      // the sound engine's controllers straight to the S-1, on its channel
+      s1PresetCcMessages(preset, ch).forEach(m => sendToDeviceMessage(m))
+      presetStore.recallPreset(preset, false)
+    }
+  }
 
   lastSent.value = sound
   _sentSoundByChannel.set(`${selectedDeviceName.value}:${ch}`, sound)
   // (recorded with a missing catalog MSB/LSB as 0, the value the device ends up with)
   recordChannelState(ch, progNum, selectedBank.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'], msb, lsb,
-    msgs.map(m => m.map(b => b ?? 0)))
+    msgs.map(m => m.map(b => b ?? 0)), s1 ? S1_BANK_SOURCE : undefined)
   // a multipart device: the toast names the channel too (Device · CH n · Preset)
   showPcNotification(selectedDeviceName.value, sound.name, sound[bankConfig.value?.category_field ?? 'category'] ?? '', ch)
 
@@ -2224,6 +2304,14 @@ function assignToPad(setId, padIdx) {
                     class="hidden"
                     @change="onImportVirusSyxFile"
                   />
+                  <!-- Hidden file input for Roland S-1 bank import -->
+                  <input
+                    ref="importInputS1"
+                    type="file"
+                    accept=".json,application/json"
+                    class="hidden"
+                    @change="onImportS1File"
+                  />
                   <!-- Hidden file input for Arturia db.db3 import -->
                   <input
                     ref="importInputArturia"
@@ -2237,6 +2325,27 @@ function assignToPad(setId, padIdx) {
                     <div class="flex items-center justify-between mb-2">
                       <label class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Bank</label>
                       <div class="flex items-center gap-1.5">
+                        <!-- Roland S-1: a bank from the Sound Library, import / export a bank file -->
+                        <template v-if="isS1Device">
+                          <button @click="createS1BankFromLibrary"
+                            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 hover:bg-sky-500/20 hover:border-sky-500/40 transition-all text-[8px] font-black uppercase tracking-wider"
+                            :title="'Create a bank from the Sound Library presets (' + presetStore.history.length + ')'">
+                            <Layers class="w-2.5 h-2.5" />
+                            From Sound Library
+                          </button>
+                          <button @click="triggerImportS1"
+                            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider"
+                            title="Import an S-1 bank (.json exported from SY.CORE)">
+                            <Upload class="w-2.5 h-2.5" />
+                            Import
+                          </button>
+                          <button @click="exportS1Bank" :disabled="!selectedBank || !isUserBank(selectedBank)"
+                            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/25 text-violet-400 hover:bg-violet-500/20 hover:border-violet-500/40 transition-all text-[8px] font-black uppercase tracking-wider disabled:opacity-40"
+                            :title="selectedBank ? 'Export the bank ' + selectedBank + ' (.json)' : 'Select a bank to export'">
+                            <Download class="w-2.5 h-2.5" />
+                            Export
+                          </button>
+                        </template>
                         <!-- Emulator X3 import button — explicit template, or (legacy) any virtual instrument -->
                         <button
                           v-if="selectedReg?.pcTemplate === 'emulatorx3' || (!selectedReg?.pcTemplate && midiStore.virtualInstruments.some(v => v.name === selectedDeviceName))"

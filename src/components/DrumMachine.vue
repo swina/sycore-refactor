@@ -26,6 +26,10 @@ import { userKey } from '@/lib/userKey'
 import { defaultKitAssets, resolveDefaultKitAssetUrl } from '@/lib/default-kit-assets'
 import GeneratingModal from '@/components/ui/GeneratingModal.vue'
 import { beatPosition, setDrumPosition, resetDrumPosition } from '@/lib/drum-position'
+import { buildDrumExportEvents, splitBars, drumEventsToMidi, renderDrumEvents, audioBufferToWav, hasActiveSteps, fillHasHits, stepSeconds, STEPS_PER_BAR } from '@/lib/drum-export'
+import { captureInputDeviceId, isLoopbackAudioInput } from '@/lib/capture-input'
+import DrumExportModal from '@/components/DrumExportModal.vue'
+import { openCaptureInput, recordPart } from '@/lib/drum-export-capture'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
@@ -1197,6 +1201,154 @@ function generatePatternWithModal() {
   m.run(generatePattern, { label: selectedStyle.value + (generateAsFill.value ? ' → Fill' : '') })
 }
 
+// ── Export A–H: per pattern, 1 bar and its Fill bar, MIDI + WAV each, in one zip ──
+// Files: <name>_<X>.mid/.wav (the pattern's bar) and <name>_<X>_Fill.mid/.wav (the next bar with
+// the Fill on top, as the live Fill). <name>: the loaded preset's, else "Drums".
+// The Fill is the current one (Fill panel); none set: one is generated first (and kept).
+// Empty patterns are skipped. WAV: rendered offline, dry (lib/drum-export.ts).
+// MIDI OUT ONLY: the sound is the external instruments', so each WAV is recorded in real time
+// from Audio Capture's input (the Loopback, else the picked one) while the bar is sent as MIDI
+// (lib/drum-export-capture.ts).
+// Flow (DrumExportModal.vue): Export → dialog (patterns; MIDI OUT ONLY: the input the WAVs are
+// recorded from, Loopback or not) → Export → progress → Download.
+const exportingPatterns = ref('')   // progress label while exporting, '' = idle
+const exportDlg = ref(null)         // DrumExportModal state, null = closed
+let exportBlob = null
+const SEQ_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const fileSafe = (s) => String(s).replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Drums'
+const exportWithBass = () => drumStore.basslineEnabled && showBassline.value
+const exportKeys = () => SEQ_KEYS.filter(k => hasActiveSteps(drumStore.sequences[k]) || (exportWithBass() && hasActiveSteps(drumStore.basslineSequences[k])))
+
+async function audioInputs() {
+  try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput') } catch { return [] }
+}
+const pickedCaptureInput = () => localStorage.getItem(userKey('S1_CAPTURE_DEVICE')) || 'default'
+
+/** Export button: opens the dialog with what will be exported and, in MIDI OUT ONLY, from which input. */
+async function openExportDialog() {
+  if (exportingPatterns.value) return
+  let input = null
+  if (midiOutOnly.value) {
+    const devices = await audioInputs()
+    const id = captureInputDeviceId(devices, pickedCaptureInput(), true)
+    const d = devices.find(x => x.deviceId === id)
+    input = { label: d?.label || (id === 'default' ? 'Default input' : ''), loopback: isLoopbackAudioInput(d) }
+  }
+  exportDlg.value = { phase: 'confirm', midiOutOnly: midiOutOnly.value, input, playing: drumStore.isPlaying,
+    patterns: exportKeys(), bpm: drumStore.bpm, step: '', done: 0, total: 0, fileName: '', silent: [], error: '' }
+}
+watch(() => drumStore.isPlaying, (p) => { if (exportDlg.value?.phase === 'confirm') exportDlg.value.playing = p })
+
+function closeExportDialog() {
+  if (exportDlg.value?.phase === 'running') return
+  exportDlg.value = null
+  exportBlob = null
+}
+
+function downloadExport() {
+  if (!exportBlob || !exportDlg.value) return
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(exportBlob)
+  a.download = exportDlg.value.fileName
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  closeExportDialog()
+}
+
+async function exportPatterns() {
+  if (exportingPatterns.value || !exportDlg.value) return
+  const dlg = exportDlg.value
+  dlg.phase = 'running'
+  exportingPatterns.value = 'A'
+  try {
+    if (!fillHasHits(fillPattern.value)) generateFill()
+    const fill = fillPattern.value.map(t => t.map(st => ({ ...st })))
+    const bpm = drumStore.bpm, swing = drumStore.swing
+    const withBass = exportWithBass()
+    const base = fileSafe(drumStore.currentPresetName || 'Drums')
+    const keys = exportKeys()
+    if (!keys.length) throw new Error('A–H are empty.')
+    dlg.total = keys.length * 2
+    // A pad's sample: the sequence's sound (its own or inherited, from the local cache), else the
+    // track's URL, else the sample the live engine has on that pad. Decoded through the engine's cache.
+    const urls = new Map()   // soundId → Promise<url|null>
+    const soundUrl = (soundId) => {
+      if (!urls.has(soundId)) urls.set(soundId, resolveUrl(soundId, null).catch(() => null))
+      return urls.get(soundId)
+    }
+    async function padBuffer(key, i, track) {
+      const r = drumStore.resolveTrackSoundIn(key, i)
+      const url = (r?.soundId ? await soundUrl(r.soundId) : null) || r?.soundUrl || track?.soundUrl
+      if (url) {
+        try { return await drumEngine.loadBuffer(url) } catch (e) { console.warn('[DrumMachine] export: sound not loaded', url, e) }
+      }
+      return drumEngine.getPadBuffer(i)
+    }
+    const { default: JSZip } = await import('jszip')
+    const zip = new JSZip()
+    const silent = []
+    // MIDI OUT ONLY: record from Audio Capture's input on a context of our own
+    let rec = null
+    if (midiOutOnly.value) {
+      if (drumStore.isPlaying) throw new Error('stop the Drum Machine first: in MIDI OUT ONLY the WAVs are recorded live.')
+      const ctx = new AudioContext({ latencyHint: 'interactive' })
+      try {
+        await ctx.resume()
+        const input = await openCaptureInput(ctx, captureInputDeviceId(await audioInputs(), pickedCaptureInput(), true))
+        rec = { ctx, input }
+      } catch (e) {
+        ctx.close()
+        throw new Error(`Audio Capture input not available (${e?.message ?? e})`)
+      }
+    }
+    const recordWav = (evs) => recordPart(evs, {
+      ctx: rec.ctx, input: rec.input.source, inputLatency: rec.input.latency, bpm,
+      barSeconds: STEPS_PER_BAR * stepSeconds(bpm), tailSeconds: 1,
+      sendNote: (e, time) => {
+        const at = audioTimeToPerfMs(time, rec.ctx)
+        const vel = Math.max(1, Math.min(127, Math.round(e.velocity * (e.taper ?? 1) * (e.accent ? 1.35 : 1))))
+        const ch = e.kind === 'bass' && drumStore.basslineMidiChannel >= 1 ? drumStore.basslineMidiChannel : midiStore.midiChannel
+        const opts = e.kind === 'bass' && drumStore.basslineMidiChannel >= 1 ? { exactChannel: true } : undefined
+        midiStore.sendNoteOn(e.note, vel, ch, MidiSource.DRUM_MACHINE, null, at, opts)
+        midiStore.sendNoteOff(e.note, 0, ch, MidiSource.DRUM_MACHINE, null, at + Math.max(10, e.duration * 1000), opts)
+      },
+    })
+    try {
+      for (const key of keys) {
+        const tracks = drumStore.sequences[key]
+        const bassTracks = withBass ? drumStore.basslineSequences[key] : null
+        const events = buildDrumExportEvents({ tracks, fillSteps: fill, bpm, swing, basslineTracks: bassTracks, basslineSourceSlots: drumStore.basslineSourceSlots })
+        const [patternBar, fillBar] = splitBars(events, bpm)
+        const buffers = rec ? null : await Promise.all(tracks.map((t, i) => padBuffer(key, i, t)))
+        if (buffers && !events.some(e => buffers[e.pad])) silent.push(key)
+        for (const [suffix, evs] of [['', patternBar], ['_Fill', fillBar]]) {
+          const name = `${base}_${key}${suffix}`
+          exportingPatterns.value = rec ? `${key}${suffix} ●` : `${key}${suffix}`
+          dlg.step = rec ? `${key}${suffix} ● rec` : `${key}${suffix}`
+          zip.file(`${name}.mid`, drumEventsToMidi(evs, bpm, { name, bassChannel: drumStore.basslineMidiChannel || 2 }))
+          const audio = rec ? await recordWav(evs) : await renderDrumEvents(evs, tracks, buffers, bpm, { basslineTracks: bassTracks })
+          zip.file(`${name}.wav`, audioBufferToWav(audio))
+          dlg.done++
+        }
+      }
+    } finally {
+      if (rec) { rec.input.close(); rec.ctx.close() }
+    }
+    exportingPatterns.value = 'zip'
+    dlg.step = 'zip'
+    exportBlob = await zip.generateAsync({ type: 'blob' })
+    dlg.fileName = `${base}_${bpm}bpm.zip`
+    dlg.silent = silent
+    dlg.phase = 'done'
+  } catch (e) {
+    console.error('[DrumMachine] export failed', e)
+    dlg.error = e?.message ?? String(e)
+    dlg.phase = 'error'
+  } finally {
+    exportingPatterns.value = ''
+  }
+}
+
 // ── Imported patterns ───────────────────────────────────────────────────────────
 const currentCatPatterns = computed(() => {
   return drumStore.IMPORTED_PATTERNS[selectedCategory.value] || []
@@ -1487,6 +1639,18 @@ function cycleChainSlot(i) {
             />
           </div>
         </div>
+
+        <!-- Export A–H (1 bar + 1 Fill each) to MIDI + WAV -->
+        <button
+          @click.stop="openExportDialog"
+          @mousedown.stop
+          :disabled="!!exportingPatterns"
+          title="Export patterns A–H: each pattern bar and its Fill bar as separate MIDI and WAV files (dry mix; MIDI OUT ONLY: recorded live from Audio Capture's input), in one zip"
+          class="ml-1 flex items-center gap-1 px-2 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-300 text-[10px] font-bold hover:border-neutral-500 transition-colors disabled:opacity-60"
+        >
+          <Download class="w-3.5 h-3.5 text-emerald-400" />
+          {{ exportingPatterns ? `Export ${exportingPatterns}…` : 'Export A–H' }}
+        </button>
 
         <!-- Imported patterns -->
         <div class="relative ml-1" title="Import patterns from book collections">
@@ -3311,6 +3475,7 @@ function cycleChainSlot(i) {
 
   <!-- Generate (style): short "Generating…" modal -->
   <GeneratingModal ref="generatingModalRef" />
+  <DrumExportModal :state="exportDlg" @confirm="exportPatterns" @cancel="closeExportDialog" @close="closeExportDialog" @download="downloadExport" />
 
   <!-- AI Prompt -->
   <AiPromptModal

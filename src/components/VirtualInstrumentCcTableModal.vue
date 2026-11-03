@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { X, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, ArrowDownWideNarrow } from 'lucide-vue-next'
+import { X, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, ArrowDownWideNarrow, Wand2 } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { ccTemplateFor, mergeCcTemplate } from '@/constants/cc-templates'
+import { PC_TEMPLATES } from '@/constants/pc-templates'
 
 const props = defineProps({
   instrumentName: { type: String, required: true },
@@ -14,6 +16,19 @@ const instrument = computed(() =>
   midiStore.virtualInstruments.find(v => v.name === props.instrumentName)
 )
 const table = computed(() => instrument.value?.ccTable ?? [])
+
+// The model's factory CC table (the instrument's PC Template in MIDI Devices), if it has one
+const modelId = computed(() => midiStore.routingConfig?.registrations?.[props.instrumentName]?.pcTemplate)
+const modelLabel = computed(() => PC_TEMPLATES.find(t => t.id === modelId.value)?.label ?? '')
+const modelTable = computed(() => ccTemplateFor(modelId.value))
+const modelMissing = computed(() => {
+  if (!modelTable.value) return 0
+  const used = new Set(table.value.map(r => r.cc))
+  return modelTable.value.filter(r => !used.has(r.cc)).length
+})
+function fillFromModel() {
+  if (modelTable.value) commit(mergeCcTemplate(table.value, modelTable.value))
+}
 
 function commit(nextTable) {
   midiStore.setVirtualInstrumentCcTable(props.instrumentName, nextTable)
@@ -159,6 +174,15 @@ function updateName(idx, value) {
 
       <!-- Footer -->
       <div class="shrink-0 border-t border-neutral-800 bg-black/40 p-3 flex gap-2">
+        <button
+          v-if="modelMissing"
+          @click="fillFromModel"
+          :title="`Add the ${modelLabel} CCs this table doesn't have yet (${modelMissing}); existing rows are kept`"
+          class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-amber-900/50 text-amber-500/80 hover:text-amber-400 hover:border-amber-700 hover:bg-amber-900/20 transition-all text-[10px] font-bold uppercase tracking-wider shrink-0"
+        >
+          <Wand2 class="w-3.5 h-3.5" />
+          From model ({{ modelMissing }})
+        </button>
         <button
           v-if="table.length > 1"
           @click="sortByCc"

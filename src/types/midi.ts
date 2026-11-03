@@ -22,6 +22,7 @@ export interface PcChannelState {
   msb: number;
   lsb: number;
   msgs?: number[][]; // the exact messages sent for it (bank select + PC, channel in the status), so it can be re-sent as is
+  engine?: 'roland-s1'; // a Roland S-1 bank sound (lib/s1-bank.ts): recalled on the sound engine, no PC to send
 }
 
 /** Per-device registration stored in the routing config */

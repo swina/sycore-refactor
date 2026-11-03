@@ -8,12 +8,32 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Cpu, X, ExternalLink } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
+import { useDeviceImages } from '@/composables/useDeviceImages'
 import { FM1_FIRMWARES, fm1Parts } from '@/lib/fm1-firmwares'
 import { FM1_CONTROLS } from '@/lib/fm1-controls'
-import { FM1_PANEL_ID, FM1_LCD_SIZE, fm1Firmware, fm1Stats, fm1Lcd, fm1Post, watchFm1Lcd, rgb565ToRgba } from '@/lib/fm1-bridge'
+import { FM1_THEMES, fm1Theme } from '@/lib/fm1-themes'
+import { FM1_OUTPUT, FM1_PANEL_ID, FM1_LCD_SIZE, fm1Firmware, fm1Stats, fm1Lcd, fm1Post, watchFm1Lcd, rgb565ToRgba } from '@/lib/fm1-bridge'
 
 const emit = defineEmits(['close'])
 const uiStore = useUiStore()
+
+// FM-1 isn't in the Devices list (it's SY.CORE's own): its image is set here, under its output's
+// name (FM1_OUTPUT), so the DECK's FM-1 pad shows it like any other device's. Click: upload,
+// right-click: remove.
+const { images: deviceImages, setImage, removeImage } = useDeviceImages()
+const fm1Image = computed(() => deviceImages.value[FM1_OUTPUT] || '')
+const imageInput = ref(null)
+function onImageFile(e) {
+  const file = e.target.files?.[0]
+  if (file) setImage(FM1_OUTPUT, file)
+  e.target.value = ''
+}
+
+// Front panel color: one of the real FM-1's colors, remembered.
+const LS_FM1_THEME = 'SYCORE_FM1_THEME'
+const themeId = ref((() => { try { return localStorage.getItem(LS_FM1_THEME) } catch { return null } })() || '')
+watch(themeId, v => { try { localStorage.setItem(LS_FM1_THEME, v) } catch {} })
+const theme = computed(() => fm1Theme(themeId.value))
 
 const enc = (label) => FM1_CONTROLS.find(c => c.target.kind === 'enc' && c.label === label)
 const key = (label) => FM1_CONTROLS.find(c => c.target.kind === 'key' && c.label === label)
@@ -130,9 +150,14 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between gap-3 px-4 py-2 bg-gradient-to-b from-white/5 to-transparent shrink-0 select-none">
       <div class="flex items-center gap-3 min-w-0">
-        <div class="p-1.5 bg-cyan-500/20 rounded-lg border border-cyan-500/20">
-          <Cpu class="w-4 h-4 text-cyan-300" />
-        </div>
+        <input ref="imageInput" type="file" accept="image/*" class="hidden" @change="onImageFile" />
+        <button class="shrink-0 rounded-lg" :title="fm1Image ? 'Change the FM-1 image (right-click: remove)' : 'Set an image for FM-1'"
+          @click="imageInput?.click()" @contextmenu.prevent="fm1Image && removeImage(FM1_OUTPUT)">
+          <img v-if="fm1Image" :src="fm1Image" alt="FM-1" class="w-8 h-8 rounded-lg object-cover border border-cyan-500/30" />
+          <div v-else class="p-1.5 bg-cyan-500/20 rounded-lg border border-cyan-500/20 hover:bg-cyan-500/30">
+            <Cpu class="w-4 h-4 text-cyan-300" />
+          </div>
+        </button>
         <h2 class="text-sm font-black text-white tracking-[0.1em] uppercase whitespace-nowrap">FM-1</h2>
         <span class="text-[10px] text-neutral-500 whitespace-nowrap">
           load <span :class="loadClass(fm1Stats?.load)">{{ pct(fm1Stats?.load) }}</span>
@@ -141,6 +166,13 @@ onUnmounted(() => {
         </span>
       </div>
       <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1 mr-1" title="Panel color">
+          <button v-for="t in FM1_THEMES" :key="t.id" @click="themeId = t.id" :title="'FM-1 ' + t.label"
+            class="w-3 h-3 rounded-full border transition-transform hover:scale-125"
+            :class="t.id === theme.id ? 'border-white ring-1 ring-white/60' : 'border-black/60'"
+            :style="{ background: t.swatch }"
+          />
+        </div>
         <select v-model="fm1Firmware" title="Firmware (reboots the emulator)"
           class="bg-neutral-900 border border-white/10 rounded px-2 py-1 text-[11px] text-white font-mono max-w-[200px]"
         >
@@ -161,7 +193,7 @@ onUnmounted(() => {
 
     <div class="flex-1 min-h-0 overflow-auto custom-scrollbar px-3 pb-3">
       <!-- Front panel, keyboard left out -->
-      <div class="fm1-face mx-auto w-fit flex items-start gap-4 rounded-2xl px-5 py-4 select-none">
+      <div :style="theme.vars" class="fm1-face mx-auto w-fit flex items-start gap-4 rounded-2xl px-5 py-4 select-none">
         <!-- Left: MASTER, SELECT / PRESETS, ALGORITHM, OCT −/+ -->
         <div class="flex flex-col gap-4 pt-1">
           <div class="grid grid-cols-2 gap-x-5 gap-y-3">
@@ -200,7 +232,7 @@ onUnmounted(() => {
               </span>
             </div>
           </div>
-          <span class="text-[8px] tracking-widest text-neutral-400/80 uppercase">FM-1 · {{ firmwareName }}</span>
+          <span class="text-[8px] tracking-widest uppercase opacity-70" style="color: var(--fm1-label)">FM-1 · {{ firmwareName }}</span>
         </div>
 
         <!-- Right: KNOB1–4, then the 12 buttons -->
@@ -230,13 +262,13 @@ onUnmounted(() => {
 
 <style scoped>
 .fm1-face {
-  background: linear-gradient(#5d6066, #50535a);
+  background: linear-gradient(var(--fm1-face-a), var(--fm1-face-b));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 .fm1-label {
   font-size: 11px;
   letter-spacing: 0.05em;
-  color: #e5e7eb;
+  color: var(--fm1-label);
   line-height: 1;
 }
 .fm1-knob {
@@ -244,14 +276,14 @@ onUnmounted(() => {
   padding: 5px;
   cursor: ns-resize;
   touch-action: none;
-  background: repeating-conic-gradient(#2a2b2f 0deg 6deg, #3b3d42 6deg 12deg);
+  background: repeating-conic-gradient(var(--fm1-knob-a) 0deg 6deg, var(--fm1-knob-b) 6deg 12deg);
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
 }
 .fm1-cap {
   width: 100%;
   height: 100%;
   border-radius: 9999px;
-  background: radial-gradient(circle at 35% 30%, #5b5e66, #2f3136 75%);
+  background: radial-gradient(circle at 35% 30%, var(--fm1-cap-a), var(--fm1-cap-b) 75%);
   position: relative;
 }
 .fm1-pointer {
@@ -266,26 +298,26 @@ onUnmounted(() => {
   width: 2px;
   height: 34%;
   border-radius: 1px;
-  background: #f4f4f5;
+  background: var(--fm1-pointer);
 }
 .fm1-well {
   border-radius: 8px;
-  background: #2b2c30;
+  background: var(--fm1-well);
 }
 .fm1-btn {
   border-radius: 4px;
-  background: linear-gradient(#5f6269, #50535a);
-  color: #d4d4d8;
+  background: linear-gradient(var(--fm1-btn-a), var(--fm1-btn-b));
+  color: var(--fm1-btn-text);
   font-size: 11px;
   touch-action: none;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
   transition: background 80ms;
 }
 .fm1-btn:hover {
-  color: #fff;
+  filter: brightness(1.08);
 }
 .fm1-btn-on {
-  background: linear-gradient(#0e7490, #155e75);
+  background: linear-gradient(var(--fm1-on-a), var(--fm1-on-b));
   color: #fff;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }

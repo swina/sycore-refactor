@@ -8,7 +8,7 @@ import type { PcChannelState } from '@/types/midi'
  * moved onto `ch`; for a state recorded before that, bank select MSB/LSB + Program Change.
  */
 export function presetMessages(state: PcChannelState | null | undefined, ch: number): number[][] {
-  if (!state || state.program == null) return []
+  if (!state || state.program == null || state.engine) return []   // an S-1 sound: no PC (lib/s1-bank.ts)
   const c = ch & 0x0f
   if (state.msgs?.length) return state.msgs.map(m => [(m[0] & 0xf0) | c, ...m.slice(1)])
   return [[0xb0 | c, 0, state.msb ?? 0], [0xb0 | c, 32, state.lsb ?? 0], [0xc0 | c, state.program & 0x7f]]
@@ -30,20 +30,26 @@ export function stepIn<T>(list: T[], current: T, dir: number): T | undefined {
 }
 
 // ── MIDI Learn params (right-click on a control → useMidiCCListener.js) ──
+// The Virtual Device is one instance (the DECK's / the panel's), applied to the virtual instrument
+// selected in its combo or the DECK: its browsing controls are learned once, for the instance, and
+// act on whichever instrument is active. Controls and sound slots stay per instrument.
 //   vdp_cc:<device>:<cc>     a control: the CC value goes to the device's selected channel
-//   vdp_<action>:<device>    preset_next / preset_prev / ch_next / ch_prev (a press steps),
-//                            type (a press switches TYPE All / Category)
-//   vdp_category:<device>    the CATEGORY knob: the CC value picks a category of the open bank
+//   vdp_<action>             preset_next / preset_prev / ch_next / ch_prev (a press steps),
+//                            type (a press switches TYPE All / Category), category (the CATEGORY
+//                            knob: the CC value picks a category of the open bank) — on the
+//                            active instrument
 //   vdp_slot_<n>:<device>    saved sound slot n (1-8) of the selected channel (a press recalls it)
+// Actions learned before they were per instance (vdp_<action>:<device>) read as vdp_<action>.
+export type VdpAction = 'preset_next' | 'preset_prev' | 'ch_next' | 'ch_prev' | 'type' | 'category'
 export type VdpParam =
   | { kind: 'cc'; device: string; cc: number }
-  | { kind: 'preset_next' | 'preset_prev' | 'ch_next' | 'ch_prev' | 'type' | 'category'; device: string }
+  | { kind: VdpAction }
   | { kind: 'slot'; device: string; slot: number }   // 0-based
 
-const VDP_ACTIONS = ['preset_next', 'preset_prev', 'ch_next', 'ch_prev', 'type', 'category'] as const
+const VDP_ACTIONS: readonly VdpAction[] = ['preset_next', 'preset_prev', 'ch_next', 'ch_prev', 'type', 'category']
 
 export const vdpCcParam = (device: string, cc: number) => `vdp_cc:${device}:${cc}`
-export const vdpActionParam = (action: (typeof VDP_ACTIONS)[number], device: string) => `vdp_${action}:${device}`
+export const vdpActionParam = (action: VdpAction) => `vdp_${action}`
 export const vdpSlotParam = (slot: number, device: string) => `vdp_slot_${slot + 1}:${device}`
 
 export function parseVdpParam(name: string): VdpParam | null {
@@ -57,10 +63,31 @@ export function parseVdpParam(name: string): VdpParam | null {
   const slot = /^vdp_slot_([1-8]):(.+)$/.exec(name)
   if (slot) return { kind: 'slot', device: slot[2], slot: Number(slot[1]) - 1 }
   for (const kind of VDP_ACTIONS) {
-    const prefix = `vdp_${kind}:`
-    if (name.startsWith(prefix) && name.length > prefix.length) return { kind, device: name.slice(prefix.length) }
+    const p = `vdp_${kind}`
+    if (name === p || (name.startsWith(p + ':') && name.length > p.length + 1)) return { kind }
   }
   return null
+}
+
+/** A param name as stored now: a per-instrument action (vdp_<action>:<device>) → vdp_<action>. */
+export function normalizeVdpParam(name: string): string {
+  if (!name?.startsWith('vdp_') || name.startsWith('vdp_cc:') || name.startsWith('vdp_slot_')) return name
+  const p = parseVdpParam(name)
+  return p && p.kind !== 'cc' && p.kind !== 'slot' ? vdpActionParam(p.kind) : name
+}
+
+/** The mappings with their Virtual Device action params normalized (same object when nothing changes). */
+export function normalizeVdpMappings<T extends Record<string, any>>(mappings: T): T {
+  let out: Record<string, any> | null = null
+  for (const [k, m] of Object.entries(mappings ?? {})) {
+    const name = typeof m === 'object' ? m?.paramName : m
+    if (typeof name !== 'string') continue
+    const n = normalizeVdpParam(name)
+    if (n === name) continue
+    out ??= { ...mappings }
+    out[k] = typeof m === 'object' ? { ...m, paramName: n } : n
+  }
+  return (out ?? mappings) as T
 }
 
 // ── Buttons learned on PRESET / CHANNEL ▼▲ (vdp_<action>) ─────────────────

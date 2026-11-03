@@ -155,8 +155,9 @@ function onFrameMessage(e) {
   if (type === 'fm1-lcd') {
     if (fm1LcdWanted()) fm1Lcd.value = e.data.lcd
   } else if (type === 'fm1-ready') {
-    // a (re)loaded page: ask again for the LCD if the DECK shows it
+    // a (re)loaded page: ask again for the LCD if the DECK shows it, and start it
     if (fm1LcdWanted()) post({ type: 'sycore-lcd', on: true })
+    autoStart()
   } else if (type === 'fm1-stats') {
     stats.value = e.data
     sent.value = sentCount
@@ -164,6 +165,18 @@ function onFrameMessage(e) {
   }
 }
 window.addEventListener('message', onFrameMessage)
+
+// Auto start (no Start click): the browser lets audio start only after a click or a key on the
+// page, so the emulator is started at once if SY.CORE already had one, else at the first one.
+const GESTURES = ['pointerdown', 'keydown']
+function postStart() {
+  GESTURES.forEach(t => window.removeEventListener(t, postStart, true))
+  post({ type: 'sycore-start' })
+}
+function autoStart() {
+  if (navigator.userActivation?.hasBeenActive) return postStart()
+  GESTURES.forEach(t => window.addEventListener(t, postStart, true))
+}
 watch([firmware, reloadKey], () => { stats.value = null; fm1Lcd.value = null })
 
 const pct = (v) => (Number.isFinite(v) ? `${Math.round(v * 100)}%` : '…')
@@ -177,6 +190,7 @@ onUnmounted(() => {
   unregLearnOwners()
   window.removeEventListener('mouseup', endInteract)
   window.removeEventListener('message', onFrameMessage)
+  GESTURES.forEach(t => window.removeEventListener(t, postStart, true))
   midiStore.unregisterPanelOutput(FM1_VIRTUAL_OUTPUT)
   setFm1Poster(null)
   stats.value = null

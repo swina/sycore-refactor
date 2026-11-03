@@ -11,8 +11,11 @@ function fakeVd() {
   const calls: string[] = []
   return {
     calls,
-    stepCategory: (_d: string, dir: number) => calls.push(`step${dir}`),
-    setCategoryFromCc: (_d: string, v: number) => calls.push(`cc${v}`),
+    activeDevice: 'X3',
+    stepCategory: (d: string, dir: number) => calls.push(`${d === 'X3' ? '' : d}step${dir}`),
+    setCategoryFromCc: (d: string, v: number) => calls.push(`${d === 'X3' ? '' : d}cc${v}`),
+    stepPreset: (d: string, dir: number) => calls.push(`${d}:preset${dir}`),
+    stepChannel: (d: string, dir: number) => calls.push(`${d}:ch${dir}`),
   }
 }
 
@@ -51,5 +54,14 @@ describe('MIDI Learn → Virtual Device CATEGORY (vdp_category)', () => {
     const vd = fakeVd()
     applyParamValue('vdp_category:Note', 100, true, stubs(vd))
     expect(vd.calls).toEqual(['step1'])
+  })
+
+  it('the instance actions go to the active virtual instrument (also when learned per instrument before)', () => {
+    const vd = fakeVd()
+    applyParamValue('vdp_preset_next', 127, false, stubs(vd))
+    applyParamValue('vdp_ch_prev:Other', 0, true, stubs(vd))
+    vd.activeDevice = 'Y'
+    applyParamValue('vdp_preset_prev', 0, true, stubs(vd))
+    expect(vd.calls).toEqual(['X3:preset1', 'X3:ch-1', 'Y:preset-1'])
   })
 })

@@ -13,6 +13,7 @@ import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { dispatch } from '@/types/events'
+import { FM1_OUTPUT, FM1_PANEL_ID } from '@/lib/fm1-bridge'
 import { DEVICE_TYPE_META, typeMeta } from '@/lib/device-type-meta'
 import { loadControllerPresets } from '@/lib/midi-controller-presets'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
@@ -743,7 +744,7 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('mouseup', onCanvasMouseup))
 
-// One-shot: silently activate (open hidden) any app panels that have canvas
+// One-shot: silently activate (open hidden) any app panels — and the FM-1 Emulator — that have canvas
 // nodes, so configured apps e.g. ChordProgSequencer process MIDI from the
 // moment the flow loads without showing their UI windows.
 const _silentActivated = ref(false)
@@ -751,6 +752,9 @@ watch(canvasNodes, (nodes) => {
   if (_silentActivated.value || !nodes?.length) return
   _silentActivated.value = true
   for (const node of nodes) {
+    // FM-1 Emulator on the canvas: load its panel hidden (its output only exists while it's mounted);
+    // the DECK shows it (InstrumentCockpitPanel)
+    if (node.name === FM1_OUTPUT && !node.sourceId) { if (!uiStore.isFm1EmulatorOpen) uiStore.openSilentPanel(FM1_PANEL_ID); continue }
     if (!node.sourceId) continue
     const panelId = APP_PANEL_ID[node.sourceId]
     if (panelId) uiStore.openSilentPanel(panelId)

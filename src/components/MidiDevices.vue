@@ -9,6 +9,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useDeviceImages } from '@/composables/useDeviceImages'
 import { PC_TEMPLATES } from '@/constants/pc-templates'
+import { ccTemplateFor } from '@/constants/cc-templates'
 
 const { devices, setDeviceType, removeDevice, clearOffline } = useDeviceRegistry()
 const midiStore = useMidiStore()
@@ -80,6 +81,23 @@ function addDevice(name) {
 function updateReg(name, field, value) {
   if (!isRegistered(name)) midiStore.addRegistration(name)
   midiStore.updateRegistration(name, field, value)
+  // a virtual instrument given a model while its CC table is still empty gets the model's table
+  if (field === 'pcTemplate') fillCcTableFromModel(midiStore.virtualInstruments.find(v => v.name === name))
+}
+
+// ── CC tables from the model (PC template): constants/cc-templates.ts ──
+function fillCcTableFromModel(v) {
+  if (!v || v.ccTable?.length) return false
+  const t = ccTemplateFor(registration(v.name)?.pcTemplate)
+  if (!t) return false
+  midiStore.setVirtualInstrumentCcTable(v.name, t)
+  return true
+}
+// virtual instruments with no CC table yet whose model has one
+const ccTableCandidates = computed(() => midiStore.virtualInstruments.filter(v =>
+  !v.ccTable?.length && ccTemplateFor(registration(v.name)?.pcTemplate)))
+function buildCcTablesFromModels() {
+  for (const v of ccTableCandidates.value) fillCcTableFromModel(v)
 }
 
 // Full removal, unlike "Unregister" (clears routing settings but leaves the
@@ -471,6 +489,15 @@ const sortedDevices = computed(() =>
             </div>
           </div>
 
+          <button
+            v-if="ccTableCandidates.length"
+            @click="buildCcTablesFromModels"
+            :title="'Build a CC table from the model (PC Template) for: ' + ccTableCandidates.map(v => v.name).join(', ')"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-900/40 text-amber-500/80 hover:text-amber-400 hover:border-amber-700 hover:bg-amber-900/20 transition-all text-[10px] font-bold uppercase tracking-wider"
+          >
+            <SlidersHorizontal class="w-3.5 h-3.5" />
+            Build CC tables from model ({{ ccTableCandidates.length }})
+          </button>
           <button
             @click="promptAddVirtualInstrument"
             class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-neutral-700 text-neutral-500 hover:text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all text-[10px] font-bold uppercase tracking-wider"

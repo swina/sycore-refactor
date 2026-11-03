@@ -211,26 +211,29 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: shouldPlay } }))
     return
   }
-  // ── Virtual Device Panel controls (lib/virtual-device.ts: vdp_cc:<device>:<cc>, vdp_<action>:<device>)
+  // ── Virtual Device Panel controls (lib/virtual-device.ts: vdp_cc:<device>:<cc>, vdp_slot_<n>:<device>;
+  //    vdp_<action>: the instance's browsing controls, on the active virtual instrument)
   if (fieldName.startsWith('vdp_')) {
     const p = parseVdpParam(fieldName)
     if (!p) return
     const vd = stores.vdStore ?? useVirtualDeviceStore()
     if (p.kind === 'cc') { vd.setCc(p.device, p.cc, val); return }
+    const device = p.kind === 'slot' ? p.device : vd.activeDevice
+    if (!device && p.kind !== 'type') return
     if (p.kind === 'category') {
       const mode = fromNote ? 'button' : categoryMode.classify(fieldName, val)
-      if (mode === 'knob') { vd.setCategoryFromCc(p.device, val); return }
+      if (mode === 'knob') { vd.setCategoryFromCc(device, val); return }
       if (mode === 'skip') return
       // a button or note: every press goes to the next category (wraps)
-      if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) vd.stepCategory(p.device, 1)
+      if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) vd.stepCategory(device, 1)
       return
     }
     // a CC button: momentary fires on its press only, toggle on every press (auto-detected)
     if (!buttonEdges.fires(fieldName, val, fromNote, performance.now())) return
-    if (p.kind === 'slot') vd.recallSlot(p.device, p.slot)
-    else if (p.kind === 'preset_next' || p.kind === 'preset_prev') vd.stepPreset(p.device, p.kind === 'preset_next' ? 1 : -1)
+    if (p.kind === 'slot') vd.recallSlot(device, p.slot)
+    else if (p.kind === 'preset_next' || p.kind === 'preset_prev') vd.stepPreset(device, p.kind === 'preset_next' ? 1 : -1)
     else if (p.kind === 'type') vd.toggleBrowseScope()
-    else vd.stepChannel(p.device, p.kind === 'ch_next' ? 1 : -1)
+    else vd.stepChannel(device, p.kind === 'ch_next' ? 1 : -1)
     return
   }
   if (fieldName === 'seq_time' || fieldName === 'seq_direction') {
@@ -354,7 +357,18 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     window.dispatchEvent(new CustomEvent('playlist-next'))
     return
   }
-  // DECK instrument pads: show that instrument's view (momentary and toggle buttons alike)
+  // DECK instrument pads, one learn for the row: each press (a CC's 127 / any value > 0, a Note On)
+  // shows the next pad's view, the first one after the last. The 0 never steps: with momentary /
+  // toggle auto-detection a release held past RELEASE_MS made the button a toggle, so its 0 stepped
+  // again (with two pads: straight back to the current one). Duplicates within REPEAT_MS dropped.
+  if (fieldName === 'deck_view_next') {
+    // (the 0 still goes through the edge detector: it ends the repeat window of the press)
+    const fires = buttonEdges.fires(fieldName, val, fromNote, performance.now())
+    if (fires && (fromNote || val > 0))
+      window.dispatchEvent(new CustomEvent('deck-view-step', { detail: { dir: 1 } }))
+    return
+  }
+  // DECK instrument pads learned one by one before: show that instrument's view
   if (fieldName.startsWith('deck_view:')) {
     if (buttonEdges.fires(fieldName, val, fromNote, performance.now()))
       window.dispatchEvent(new CustomEvent('deck-view-select', { detail: { name: fieldName.slice('deck_view:'.length) } }))

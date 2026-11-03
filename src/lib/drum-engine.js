@@ -186,6 +186,14 @@ function _getBuffer(url) {
   return p
 }
 
+// Export (lib/drum-export.ts): the pad's loaded sample, and any sample decoded through the same cache.
+export function getPadBuffer(padIdx) {
+  return _buffers[padIdx] ?? null
+}
+export function loadBuffer(url) {
+  return _getBuffer(url)
+}
+
 export async function loadSample(padIdx, url) {
   if (padIdx < 0 || padIdx >= NUM_PADS || !url) return
   if (_padUrls[padIdx] === url && _buffers[padIdx]) return

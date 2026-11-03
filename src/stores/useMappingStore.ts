@@ -7,6 +7,7 @@ import { useAuthStore } from './useAuthStore'
 import { useMidiStore } from './useMidiStore'
 import { usePresetStore } from './usePresetStore'
 import { FIELD_TO_CC } from '@/constants/s1-config'
+import { normalizeVdpMappings } from '@/lib/virtual-device'
 import {
   loadMappingPresets,
   persistMappingPresets,
@@ -88,7 +89,7 @@ function userAppMidiDoc() {
 function loadMidiMappingsFromStorage(): MidiMappings {
   try {
     const raw = localStorage.getItem(userKey(LS_MIDI_MAPPINGS))
-    return raw ? JSON.parse(raw) : {}
+    return raw ? normalizeVdpMappings(JSON.parse(raw)) : {}
   } catch {
     return {}
   }
@@ -210,7 +211,7 @@ export const useMappingStore = defineStore('mapping', () => {
     const preset = presets.value.find(p => p.id === id)
     if (!preset) return
     _isLoadingPreset = true
-    midiMappings.value = { ...(preset.mappings || {}) } as MidiMappings
+    midiMappings.value = normalizeVdpMappings({ ...(preset.mappings || {}) }) as MidiMappings
     saveMidiMappings()
     if (preset.velocityConfig) velocityConfig.value = { ...preset.velocityConfig } as VelocityConfig
     activePresetId.value = id

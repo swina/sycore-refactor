@@ -74,6 +74,8 @@ export interface SyCoreEventMap {
   'device-pc-toast': { deviceName: string; channel: number };
   // DECK instrument pad (MIDI Learn deck_view:<name>): show that virtual instrument's / FM-1's view
   'deck-view-select': { name: string };
+  // DECK instrument pads (MIDI Learn deck_view_next): show the next pad's view (wraps to the first)
+  'deck-view-step': { dir: number };
 
   // Timeline
   'timeline-lm-start': { padIdx: number; bpm: number };

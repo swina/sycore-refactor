@@ -1093,15 +1093,20 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   function resolveTrackSound(trackIdx: number) {
+    return resolveTrackSoundIn(activeSequence.value, trackIdx)
+  }
+
+  /** A sequence's track sound: its own, or the nearest previous sequence's (as on playback). */
+  function resolveTrackSoundIn(key: string, trackIdx: number) {
     const order = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-    let idx = order.indexOf(activeSequence.value)
+    let idx = order.indexOf(key)
     while (idx >= 0) {
       const t = sequences.value[order[idx]]?.[trackIdx]
       if (t?.soundId) return {
         soundId: t.soundId,
         soundLabel: t.soundLabel,
         soundUrl: t.soundUrl ?? '',
-        own: order[idx] === activeSequence.value,
+        own: order[idx] === key,
       }
       idx--
     }
@@ -1496,7 +1501,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,
     setStep, toggleStep, clearPattern, initDrumMachine,
     copyPattern, copySounds, swapSequence,
-    setTrackSound, resolveTrackSound, setTrackVolume, setTrackLength, setTrackFx,
+    setTrackSound, resolveTrackSound, resolveTrackSoundIn, setTrackVolume, setTrackLength, setTrackFx,
     pasteTrackFx, toggleTrackMute, toggleTrackSolo,
     presets, currentPresetName,
     savePreset, overwritePreset, loadPreset, deletePreset,

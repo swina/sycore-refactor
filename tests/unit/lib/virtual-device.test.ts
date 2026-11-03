@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { presetMessages, bankProgramLabel, stepIn, parseVdpParam, vdpCcParam, vdpActionParam, vdpSlotParam, ButtonEdge } from '@/lib/virtual-device'
+import { normalizeVdpParam, normalizeVdpMappings, presetMessages, bankProgramLabel, stepIn, parseVdpParam, vdpCcParam, vdpActionParam, vdpSlotParam, ButtonEdge } from '@/lib/virtual-device'
 
 const x3 = { program: 29, bank: 'Factory', soundName: 'syn:Loner', category: 'Synthesizer', msb: 0, lsb: 2,
   msgs: [[0xb0, 64, 0], [0xb0, 32, 2], [0xc0, 29]] }
@@ -39,10 +39,13 @@ describe('stepIn', () => {
 describe('MIDI Learn params', () => {
   it('round-trips control and action params, device names with ":" included', () => {
     expect(parseVdpParam(vdpCcParam('Emu:X3', 74))).toEqual({ kind: 'cc', device: 'Emu:X3', cc: 74 })
-    expect(parseVdpParam(vdpActionParam('preset_next', 'Emu X3'))).toEqual({ kind: 'preset_next', device: 'Emu X3' })
-    expect(parseVdpParam(vdpActionParam('type', 'X3'))).toEqual({ kind: 'type', device: 'X3' })
-    expect(parseVdpParam(vdpActionParam('category', 'X3'))).toEqual({ kind: 'category', device: 'X3' })
-    expect(parseVdpParam(vdpActionParam('ch_prev', 'Emu X3'))).toEqual({ kind: 'ch_prev', device: 'Emu X3' })
+    expect(vdpActionParam('preset_next')).toBe('vdp_preset_next')
+    expect(parseVdpParam(vdpActionParam('preset_next'))).toEqual({ kind: 'preset_next' })
+    expect(parseVdpParam(vdpActionParam('type'))).toEqual({ kind: 'type' })
+    expect(parseVdpParam(vdpActionParam('category'))).toEqual({ kind: 'category' })
+    expect(parseVdpParam(vdpActionParam('ch_prev'))).toEqual({ kind: 'ch_prev' })
+    // learned per instrument before: same action, on the active instrument
+    expect(parseVdpParam('vdp_ch_prev:Emu X3')).toEqual({ kind: 'ch_prev' })
     expect(parseVdpParam(vdpSlotParam(7, 'Emu:X3'))).toEqual({ kind: 'slot', device: 'Emu:X3', slot: 7 })
     expect(parseVdpParam('vdp_slot_9:Emu')).toBeNull()
   })
@@ -76,5 +79,23 @@ describe('ButtonEdge (CHANNEL / PRESET ▼▲ buttons)', () => {
     const b = new ButtonEdge()
     expect([b.fires('a', 127, false, 0), b.fires('a', 127, false, 30)]).toEqual([true, false])
     expect([b.fires('n', 100, true, 0), b.fires('n', 100, true, 400)]).toEqual([true, true])
+  })
+})
+
+describe('Virtual Device instance params (normalize)', () => {
+  it('turns per-instrument actions into instance ones, leaves controls and slots per instrument', () => {
+    expect(normalizeVdpParam('vdp_preset_next:Emu X3')).toBe('vdp_preset_next')
+    expect(normalizeVdpParam('vdp_category:X3')).toBe('vdp_category')
+    expect(normalizeVdpParam('vdp_type')).toBe('vdp_type')
+    expect(normalizeVdpParam('vdp_cc:X3:74')).toBe('vdp_cc:X3:74')
+    expect(normalizeVdpParam('vdp_slot_2:X3')).toBe('vdp_slot_2:X3')
+    expect(normalizeVdpParam('seq_time')).toBe('seq_time')
+  })
+
+  it('rewrites mappings (object and string entries), same object when nothing changes', () => {
+    const m = { 'K:CH1:CC20': { paramName: 'vdp_ch_next:X3', cc: 20 }, 'K:21': 'vdp_type:Y', 'K:22': 'vdp_cc:X3:74' }
+    const out = normalizeVdpMappings(m)
+    expect(out).toEqual({ 'K:CH1:CC20': { paramName: 'vdp_ch_next', cc: 20 }, 'K:21': 'vdp_type', 'K:22': 'vdp_cc:X3:74' })
+    expect(normalizeVdpMappings(out)).toBe(out)
   })
 })

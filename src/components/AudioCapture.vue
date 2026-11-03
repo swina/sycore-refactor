@@ -10,7 +10,9 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import { Mp3Encoder } from '@breezystack/lamejs'
 import { userKey } from '@/lib/userKey'
-import { midiService } from '@/core/midi/midi-service'
+import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { isLoopbackAudioInput, dmMidiOutOnlyActive } from '@/lib/capture-input'
 import { looperEngine } from '@/lib/looper-engine'
 import { useLooperStore } from '@/stores/useLooperStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -48,6 +50,15 @@ watch(() => uiStore.isAudioCaptureOpen, (v) => { if (v) bringToFront() })
 // ── Reactive state ────────────────────────────────────────────────────────────
 const devices          = ref([])
 const selectedDeviceId = ref(localStorage.getItem(userKey('S1_CAPTURE_DEVICE')) || 'default')
+// Drum Machine in MIDI OUT ONLY: its sound comes from the instruments it plays, back through the
+// "Loopback" audio input — capture records that one instead of the input picked here (which is
+// kept, and used again once MIDI OUT ONLY is off). No Loopback input: the picked one, as before.
+const _dmStore = useDrumMachineStore()
+const loopbackWanted = computed(() => dmMidiOutOnlyActive(_dmStore.midiOutOnly,
+  midiStore.routingMatrix?.[MidiSource.DRUM_MACHINE], midiStore.virtualInstruments))
+const loopbackDevice = computed(() => devices.value.find(isLoopbackAudioInput) ?? null)
+const usingLoopback  = computed(() => loopbackWanted.value && !!loopbackDevice.value)
+const activeDeviceId = ref('')   // the input the monitor actually opened
 const isMonitoring     = ref(false)
 const isRecording      = ref(false)
 const recSecs          = ref(0)
@@ -572,8 +583,14 @@ function stopAll(keepBlob = false, keepMonitor = false) {
 }
 
 // ── Start monitoring ──────────────────────────────────────────────────────────
-async function startMonitor(deviceId) {
+async function startMonitor(requestedId) {
   error.value = null
+  let deviceId = requestedId
+  let triedLoopback = false
+  if (loopbackWanted.value) {
+    if (!loopbackDevice.value) await refreshDevices()
+    if (loopbackDevice.value) { deviceId = loopbackDevice.value.deviceId; triedLoopback = true }
+  }
   let stream = null
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -597,8 +614,11 @@ async function startMonitor(deviceId) {
           },
           video: false,
         })
-        selectedDeviceId.value = 'default'
-        localStorage.setItem(userKey('S1_CAPTURE_DEVICE'),'default')
+        if (deviceId === requestedId) {   // (a Loopback that failed doesn't replace the picked input)
+          selectedDeviceId.value = 'default'
+          localStorage.setItem(userKey('S1_CAPTURE_DEVICE'),'default')
+        }
+        deviceId = 'default'
       } catch (fallbackErr) {
         handleMonitorError(fallbackErr)
         return
@@ -649,11 +669,38 @@ async function startMonitor(deviceId) {
     }
 
     await refreshDevices()
+    activeDeviceId.value = deviceId
     isMonitoring.value = true
+    // input names are known only once access is granted: the Loopback may show up just now
+    if (!triedLoopback && loopbackWanted.value && loopbackDevice.value) {
+      await restartMonitor(requestedId)
+    }
   } catch (e) {
     handleMonitorError(e)
   }
 }
+
+// Reopen the monitor (the input changed): tear the current one down, start again.
+async function restartMonitor(id) {
+  if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
+  if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
+  if (ctxRef) { ctxRef.close().catch(() => {}); ctxRef = null }
+  analyserRef = null
+  micGainNodeRef = null
+  dmGainNodeRef  = null
+  recDestRef     = null
+  hasDmStream.value = false
+  isMonitoring.value = false
+  await startMonitor(id)
+}
+
+// MIDI OUT ONLY switched on/off (or the Drum Machine re-wired) while monitoring: change input,
+// not in the middle of a recording (then on its end).
+watch(() => [loopbackWanted.value, isRecording.value], ([want, rec]) => {
+  if (!isMonitoring.value || rec) return
+  const target = want && loopbackDevice.value ? loopbackDevice.value.deviceId : selectedDeviceId.value
+  if (target !== activeDeviceId.value) restartMonitor(selectedDeviceId.value)
+})
 
 function handleMonitorError(e) {
   const msg = e?.message ?? ''
@@ -674,16 +721,7 @@ async function handleDeviceChange(id) {
   selectedDeviceId.value = id
   localStorage.setItem(userKey('S1_CAPTURE_DEVICE'),id)
   if (!isMonitoring.value) return
-  if (rafRef) { cancelAnimationFrame(rafRef); rafRef = null }
-  if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null }
-  if (ctxRef) { ctxRef.close().catch(() => {}); ctxRef = null }
-  analyserRef = null
-  micGainNodeRef = null
-  dmGainNodeRef  = null
-  recDestRef     = null
-  hasDmStream.value = false
-  isMonitoring.value = false
-  await startMonitor(id)
+  await restartMonitor(id)
 }
 
 function onAudioSettingsSelectInput(id) {
@@ -2789,9 +2827,10 @@ onUnmounted(() => {
       <div class="flex items-center gap-2 px-4 py-1.5 bg-neutral-900/40 border-b border-neutral-800/60 shrink-0">
         <Mic class="w-3 h-3 text-neutral-500 shrink-0" />
         <select
-          :value="selectedDeviceId"
+          :value="usingLoopback ? loopbackDevice.deviceId : selectedDeviceId"
           @change="handleDeviceChange($event.target.value)"
-          :disabled="isRecording"
+          :disabled="isRecording || usingLoopback"
+          :title="usingLoopback ? 'Drum Machine is MIDI OUT ONLY: capturing the Loopback input (the picked input is used again when it is off)' : ''"
           class="flex-1 bg-black border border-neutral-800 text-neutral-300 text-[10px] font-mono rounded px-2 py-1 outline-none focus:border-synth-neon/50 disabled:opacity-50"
         >
           <option value="default">Default audio input</option>
@@ -2799,6 +2838,10 @@ onUnmounted(() => {
             {{ d.label || `Input ${d.deviceId.slice(0, 8)}` }}
           </option>
         </select>
+        <span v-if="usingLoopback" class="shrink-0 px-1.5 py-0.5 rounded border border-cyan-500/50 bg-cyan-500/10 text-cyan-300 text-[8px] font-black uppercase tracking-wider"
+          title="Drum Machine is MIDI OUT ONLY: its instruments' audio is captured from the Loopback input">DM → Loopback</span>
+        <span v-else-if="loopbackWanted && devices.some(d => d.label)" class="shrink-0 text-[8px] font-mono text-amber-400"
+          title="Drum Machine is MIDI OUT ONLY but no audio input named “Loopback” was found">no Loopback input</span>
         <!-- <button
           @click="showAudioSettings = true"
           title="Audio Device Settings"

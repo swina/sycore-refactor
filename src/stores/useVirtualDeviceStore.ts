@@ -13,6 +13,9 @@ import { userKey } from '@/lib/userKey'
 import { debounce } from '@/lib/debounce'
 import { dispatch } from '@/types/events'
 import { presetMessages, stepIn, vdpCcParam } from '@/lib/virtual-device'
+import { s1PresetToRecall, s1PresetCcMessages } from '@/lib/s1-bank'
+import { useUserBanksStore } from './useUserBanksStore'
+import { usePresetStore } from './usePresetStore'
 import { pcBrowse } from '@/lib/pc-browse'
 import type { PcChannelState } from '@/types/midi'
 
@@ -40,6 +43,7 @@ const LS_CC       = 'SYCORE_VD_CC_VALUES'
 const LS_SOUNDS   = 'SYCORE_VD_SOUNDS'
 const LS_SCOPE    = 'SYCORE_VD_BROWSE_SCOPE'
 const LS_THEME    = 'SYCORE_VD_LCD_THEME'
+const LS_THEMES   = 'SYCORE_VD_LCD_THEMES'
 
 function load<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(userKey(key)) ?? 'null') ?? fallback } catch { return fallback }
@@ -86,9 +90,20 @@ export const useVirtualDeviceStore = defineStore('virtualDevice', () => {
 
   watch(selectedDevice, v => save(LS_SELECTED, v))
   watch(browseScope, v => save(LS_SCOPE, v))
-  /** The LCD's color theme (lib/virtual-device.ts LCD_THEMES id). */
+  /** The LCD's color theme (lib/virtual-device.ts LCD_THEMES id): the default for every virtual instrument. */
   const lcdThemeId = ref<string>(load(LS_THEME, 'teal'))
   watch(lcdThemeId, v => save(LS_THEME, v))
+  /** Per virtual instrument: its own LCD theme (device → theme id); without one, lcdThemeId. */
+  const lcdThemes = ref<Record<string, string>>(load(LS_THEMES, {}))
+  watch(lcdThemes, v => save(LS_THEMES, v), { deep: true })
+  function lcdThemeOf(device: string): string {
+    return (device && lcdThemes.value[device]) || lcdThemeId.value
+  }
+  /** The LCD theme of one virtual instrument (the others keep theirs). */
+  function setLcdTheme(device: string, id: string) {
+    if (!device) { lcdThemeId.value = id; return }
+    lcdThemes.value = { ...lcdThemes.value, [device]: id }
+  }
   // a knob drag (or a learned CC) writes many values: persist the latest once it settles
   const persistCc = debounce(() => save(LS_CC, ccValues.value), 300)
 
@@ -288,9 +303,11 @@ export const useVirtualDeviceStore = defineStore('virtualDevice', () => {
     const ch = channel(device)
     const msgs = presetMessages(sound.preset, ch)
     for (const m of msgs) midiService.sendRawToDeviceByName(device, m)
-    if (sound.preset && msgs.length) {
+    // a Roland S-1 sound: its preset recalled on the sound engine, from the bank it was saved on
+    const s1 = sound.preset?.engine === 'roland-s1' ? recallS1(device, sound.preset) : false
+    if (sound.preset && (msgs.length || s1)) {
       const reg = midiStore.routingConfig.registrations[device]
-      midiStore.updateRegistration(device, 'pcChannels', { ...(reg?.pcChannels ?? {}), [ch]: { ...sound.preset, msgs } })
+      midiStore.updateRegistration(device, 'pcChannels', { ...(reg?.pcChannels ?? {}), [ch]: msgs.length ? { ...sound.preset, msgs } : { ...sound.preset } })
       dispatch('device-pc-toast', { deviceName: device, channel: ch })
     }
     cancelCcRecall(device)
@@ -309,7 +326,20 @@ export const useVirtualDeviceStore = defineStore('virtualDevice', () => {
       for (const row of ccTable(device)) if (!isCcMapped(device, row.cc)) chVals[row.cc] = VD_CC_DEFAULT
       persistCc()
       resolve()
-    }, msgs.length ? RECALL_CC_DELAY_MS : 0) }))
+    }, msgs.length || s1 ? RECALL_CC_DELAY_MS : 0) }))
+  }
+
+  /** Recalls an S-1 bank sound (its bank + program, else its name) on the sound engine. */
+  function recallS1(device: string, state: PcChannelState): boolean {
+    const list = useUserBanksStore().getPresets(device, state.bank ?? '')
+    const sound = list.find(s => state.program != null && s.program === state.program + 1 && s.name === state.soundName)
+      ?? list.find(s => s.name === state.soundName)
+    const preset = s1PresetToRecall(sound)
+    if (!preset) return false
+    // the sound engine's controllers straight to this device, on its selected channel
+    for (const m of s1PresetCcMessages(preset, channel(device))) midiService.sendRawToDeviceByName(device, m)
+    usePresetStore().recallPreset(preset, false)
+    return true
   }
 
   // The selected pad (where Save writes): per device + channel + bank, null = none.
@@ -338,7 +368,7 @@ export const useVirtualDeviceStore = defineStore('virtualDevice', () => {
 
   return {
     selectedDevice, ccValues, sounds, browseScope, devices, activeDevice, lastRecalledId, recallSlot, soundAt,
-    selectedSlot, selectedSlotOf, selectSlot, lcdThemeId,
+    selectedSlot, selectedSlotOf, selectSlot, lcdThemeId, lcdThemes, lcdThemeOf, setLcdTheme,
     ccTable, isCcMapped, bankOf, channels, channel, setChannel, stepChannel, presetState, stepPreset,
     toggleBrowseScope, categories, categoryIndex, selectCategory, stepCategory, setCategoryFromCc,
     getCc, setCc, soundsOf, saveSound, deleteSound, recallSound,

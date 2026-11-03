@@ -259,3 +259,20 @@ describe('useVirtualDeviceStore', () => {
     } finally { off() }
   })
 })
+
+describe('Virtual Device: LCD theme per virtual instrument', () => {
+  beforeEach(() => { localStorage.clear(); setActivePinia(createPinia()) })
+
+  it('each instrument keeps its own theme; without one it uses the default', () => {
+    const vd = useVirtualDeviceStore()
+    expect(vd.lcdThemeOf('X3')).toBe('teal')
+    vd.setLcdTheme('X3', 'amber')
+    vd.setLcdTheme('Moog', 'green')
+    expect(vd.lcdThemeOf('X3')).toBe('amber')
+    expect(vd.lcdThemeOf('Moog')).toBe('green')
+    expect(vd.lcdThemeOf('Other')).toBe('teal')
+    vd.lcdThemeId = 'smoke'
+    expect(vd.lcdThemeOf('Other')).toBe('smoke')
+    expect(vd.lcdThemeOf('X3')).toBe('amber')
+  })
+})

@@ -1007,7 +1007,8 @@ function onWorklet(e) {
   }
 }
 
-startBtn.addEventListener("click", async () => {
+async function start() {
+  if (startBtn.disabled || startBtn.hidden) return;   // (starting or started already)
   startBtn.disabled = true;
   status.textContent = "starting audio…";
   if (!node) await startAudio();
@@ -1018,6 +1019,12 @@ startBtn.addEventListener("click", async () => {
   startBtn.hidden = true;
   // a phone on its side: the synth fills the screen, so bring all of it into view
   if (matchMedia("(orientation: landscape) and (max-height: 560px)").matches) canvas.scrollIntoView({ block: "center" });
+}
+startBtn.addEventListener("click", start);
+// SY.CORE bridge: {type:"sycore-start"} = Start, sent by the parent once it has had a click or
+// a key (the iframe's allow="autoplay" lets its audio start on the parent's activation).
+addEventListener("message", (e) => {
+  if (e.origin === location.origin && e.data?.type === "sycore-start") start();
 });
 
 // Persistence controls use the running machine's identity, even while another firmware is selected.
