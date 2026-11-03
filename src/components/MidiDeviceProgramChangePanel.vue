@@ -201,6 +201,7 @@ function selectHistoryPreset(preset) {
 const TEMPLATE_CATALOG_KEY = {
   mfprojz: 'Arturia MicroFreak',
   seqtrak: 'SEQTRAK-1',
+  'sycore-fmos': 'SY.CORE FMOS',
 }
 const catalogDevice = computed(() => {
   const dn = selectedDeviceName.value?.toLowerCase() ?? ''

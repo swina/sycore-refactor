@@ -1,7 +1,10 @@
 {
   "note": "Community firmwares for the M-VAVE FM-1: the FM-1 Firmware Hub's list (thefirmwarehub.com, tools/hub_catalog.mjs; its packages fetched from the Hub), then our own list (web/firmwares-own.json: this repository's FM-1 SID, M-VAVE's own, a few from fm1-editor.com/firmware). Generated: edit web/firmwares-own.json (the default too), not this file. The web page fetches each package when started and unpacks it with web/fwsc.js; tools/fetch_firmwares.mjs does the same into reference/firmwares for fm1-live. \"hub\": the firmware's id on the Hub (its card: thefirmwarehub.com/#fw-<hub>).",
-  "default": "felucca",
+  "default": "sycore",
   "firmwares": [
+    { "id": "sycore", "name": "SY.CORE FMOS", "version": "0.1.0", "author": "SY.CORE (fork of Felucca by hugelton)", "license": "GPL-3.0",
+      "about": "SY.CORE's own firmware, a fork of Felucca 1.9.0: Felucca's thirteen engines, sequencer and effects, with a fixed CC map for every sound parameter, Bank Select = engine then Program Change = preset, and the SY.CORE look. Served by SY.CORE itself (SY.CORE patch).",
+      "repo": "https://github.com/hugelton/Felucca", "package": "fw/sycore-fmos-0.1.0.fwsc", "sycore": true },
     { "id": "mvave", "name": "M-VAVE stock firmware", "version": "", "author": "M-VAVE", "license": "M-VAVE's own",
       "about": "The firmware the FM-1 ships with: a DX7-style FM synth, both cores running. This page does not host it and cannot download it (M-VAVE's server does not allow other pages to): download FM-1.fwsc from M-VAVE, then open it here; this browser keeps it for next time. Its patches live in flash an update does not carry, so it starts with a small bank of the emulator's own; \"DX7 bank…\" loads a 32-voice .syx.",
       "repo": "https://github.com/joakimeriksson/fm1-emu/blob/master/docs/stock-firmware.md",

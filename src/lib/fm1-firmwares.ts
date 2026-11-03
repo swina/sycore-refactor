@@ -1,9 +1,12 @@
 // Firmware catalog of the FM-1 emulator (github.com/joakimeriksson/fm1-emu, web/firmwares.json).
 // Only ids + names: the emulator page fetches each firmware from its author's site itself.
 export const FM1_EMU_URL = 'https://joakimeriksson.github.io/fm1-emu/'
-export const FM1_DEFAULT_FIRMWARE = 'felucca'
+// SY.CORE FMOS: SY.CORE's own firmware (a Felucca fork, ../sycore-fmos), served from public/fm1/fw
+export const FM1_SYCORE_FIRMWARE = 'sycore'
+export const FM1_DEFAULT_FIRMWARE = FM1_SYCORE_FIRMWARE
 
 export const FM1_FIRMWARES: { id: string; name: string }[] = [
+  { id: 'sycore', name: 'SY.CORE FMOS' },
   { id: 'mvave', name: 'M-VAVE stock firmware' },
   { id: 'felucca', name: 'Felucca' },
   { id: 'felucca-salt', name: 'Felucca [Salt]' },
@@ -116,10 +119,27 @@ export function fm1EmbedUrl(firmwareId: string): string {
 // notes (public/fm1/main.js, MIDI_NOTES). More than one: a multi-timbral firmware. Anything else
 // gets channel 1 shown; SY.CORE sends to it on the channel each app plays on.
 const FM1_FIRMWARE_PARTS: Record<string, number[]> = {
+  sycore: [0, 1, 2, 3],
   felucca: [0, 1, 2, 3],
   mvave: [1],
 }
 
 export function fm1Parts(firmwareId: string): number[] {
   return FM1_FIRMWARE_PARTS[firmwareId] ?? [0]
+}
+
+/** The device model (PC template) a firmware implies on the FM-1 Emulator output, or null. */
+export function fm1PcTemplate(firmwareId: string): 'sycore-fmos' | null {
+  return firmwareId === FM1_SYCORE_FIRMWARE ? 'sycore-fmos' : null
+}
+
+/**
+ * The FM-1 Emulator output's model after a firmware change: SY.CORE FMOS sets its own model
+ * (Program Change catalog, CC table) unless the user picked another one; leaving FMOS takes back
+ * only the model it set. `change: false` = leave the registration as it is.
+ */
+export function fm1NextPcTemplate(current: string | undefined, firmwareId: string): { change: boolean; value?: 'sycore-fmos' } {
+  const want = fm1PcTemplate(firmwareId)
+  if (want) return current && current !== want ? { change: false } : { change: current !== want, value: want }
+  return current === 'sycore-fmos' ? { change: true, value: undefined } : { change: false }
 }

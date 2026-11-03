@@ -170,7 +170,9 @@ async function packageOf(f) {
   if (f.id === "local") return { bytes: f.bytes, url: null };
   if (packages.has(f.id)) return packages.get(f.id);
   const kept = await keptEntry(f.id);
-  if (kept) {
+  // SY.CORE patch: a firmware SY.CORE serves itself ("sycore": true) is kept by its package URL,
+  // which names its version: a new build in the catalog is fetched again instead of the old copy
+  if (kept && !(f.sycore && kept.url !== f.package)) {
     const got = { bytes: kept.package, url: kept.url };
     packages.set(f.id, got);
     return got;

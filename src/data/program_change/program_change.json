@@ -62,5 +62,17 @@
             "offset": false,
             "bank_size": false
         }
+    },
+    "SY.CORE FMOS": {
+        "Factory": {
+            "data": "./fmos/presets.json",
+            "msb": true,
+            "lsb": true,
+            "category_field": "category",
+            "program_field": "program",
+            "program_base": 0,
+            "offset": false,
+            "bank_size": false
+        }
     }
 }

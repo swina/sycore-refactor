@@ -17,3 +17,12 @@ Local patch in `main.js` (search "SY.CORE bridge" / "fm1-stats"):
   selector are off and hidden (not stored) — MIDI comes only through the bridge
 
 To update: re-download the files, then re-apply the patch.
+
+SY.CORE FMOS (our own firmware, a Felucca fork developed in `../sycore-fmos`, GPL-3.0):
+- `fw/sycore-fmos-<version>.fwsc`: its package, copied from `sycore-fmos/felucca/build/felucca.fwsc`
+- `firmwares.json`: the entry `sycore` (first, `"sycore": true`, `package` relative to this folder) and
+  `"default": "sycore"`. The file is generated upstream: re-add the entry after an update.
+- `main.js` `packageOf()`: a `sycore` entry's kept copy is used only while its URL is the catalog's
+  `package`, so a new version (a new file name) is fetched instead of the old cached copy
+- its Program Change catalog: `public/data/program_change/fmos/presets.json`, written by
+  `sycore-fmos/tools/gen_sycore_catalog.sh` from the firmware's tables

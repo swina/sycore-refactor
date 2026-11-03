@@ -14,7 +14,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
-import { FM1_FIRMWARES, FM1_EMU_URL, fm1EmbedUrl, fm1Parts } from '@/lib/fm1-firmwares'
+import { FM1_FIRMWARES, FM1_EMU_URL, fm1EmbedUrl, fm1Parts, fm1NextPcTemplate } from '@/lib/fm1-firmwares'
 import { FM1_OUTPUT, FM1_PANEL_ID, fm1Firmware, fm1Stats, fm1Lcd, setFm1Poster, fm1LcdWanted, fm1RemapChannel } from '@/lib/fm1-bridge'
 import { FM1_CONTROLS, ENC_MODES, Fm1ControlMapper, findMapping, midiSource, describeMapping } from '@/lib/fm1-controls'
 import { midiService } from '@/core/midi/midi-service'
@@ -75,6 +75,9 @@ setFm1Poster(post)
 // part, set it to pick one.
 watch(firmware, (id) => {
   midiStore.updateRegistration(FM1_VIRTUAL_OUTPUT, 'isMulti', fm1Parts(id).length > 1)
+  // SY.CORE FMOS: its model, so Program Change shows its presets and the CC table is known
+  const next = fm1NextPcTemplate(midiStore.routingConfig.registrations[FM1_VIRTUAL_OUTPUT]?.pcTemplate, id)
+  if (next.change) midiStore.updateRegistration(FM1_VIRTUAL_OUTPUT, 'pcTemplate', next.value)
 }, { immediate: true })
 
 // ── MIDI learn → panel controls ──────────────────────────────────────────

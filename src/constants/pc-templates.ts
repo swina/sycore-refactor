@@ -23,5 +23,6 @@ export const PC_TEMPLATES: PcTemplateMeta[] = [
   { id: 'json',       label: 'Standard JSON',             description: 'Import a generic bank from a { pc, name } JSON array.' },
   { id: 'kawai-k1',   label: "Kawai K1 (NILS' KAWAY)",    description: 'Import a Kawai K1 SysEx bank dump (.syx).' },
   { id: 'access-virus', label: 'Access Virus',              description: 'Import an Access Virus SysEx bank dump (.syx) — 128 programs, extracts names from the @-prefixed field.' },
+  { id: 'sycore-fmos', label: 'SY.CORE FMOS (FM-1)',     description: "SY.CORE's own FM-1 firmware: every engine's factory presets (Bank Select = engine, then Program Change)." },
   { id: 'arturia',    label: 'Arturia Analog Lab',        description: 'Import Analog Lab playlists from an Arturia db.db3 database — every playlist becomes its own bank.' },
 ]
