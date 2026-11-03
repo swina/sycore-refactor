@@ -22,6 +22,8 @@ import MidiButtonLearn from '@/components/ui/MidiButtonLearn.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useSoloPerformanceSets, SOLO_SLOT_LETTERS } from '@/composables/useSoloPerformanceSets'
 import { MidiSource, midiService } from '@/core/midi/midi-service'
+import { FM1_OUTPUT, fm1Firmware } from '@/lib/fm1-bridge'
+import { fm1PartChannels } from '@/lib/fm1-firmwares'
 import catalogIndex from '@/data/program_change/program_change.json'
 import { on } from '@/types/events'
 import { pcBrowse, recordDeviceCategories, matchCategory } from '@/lib/pc-browse'
@@ -66,12 +68,13 @@ const devices = computed(() => {
   )
   // Add virtual instrument names to the set so they pass the filter
   midiStore.virtualInstruments.forEach(v => instrumentNames.add(v.name))
+  midiStore.panelOutputs.forEach(n => instrumentNames.add(n))
 
   return Object.values(midiStore.routingConfig.registrations)
     .filter(r => r.outEnabled && (r.pcEnabled || r.pc) && instrumentNames.has(r.name))
     .map(r => ({
       ...r,
-      isOnline: midiStore.outputs.some(o => o.name === r.name) || midiStore.virtualInstruments.some(v => v.name === r.name && v.online !== false),
+      isOnline: midiStore.isOutputOnline(r.name),
     }))
     .sort((a, b) => b.isOnline - a.isOnline || a.name.localeCompare(b.name))
 })
@@ -98,9 +101,7 @@ const selectedReg = computed(() =>
 
 const isDeviceOffline = computed(() => {
   if (!selectedDeviceName.value) return false
-  const virtual = midiStore.virtualInstruments.find(v => v.name === selectedDeviceName.value)
-  if (virtual) return virtual.online === false
-  return !midiStore.outputs.some(o => o.name === selectedDeviceName.value)
+  return !midiStore.isOutputOnline(selectedDeviceName.value)
 })
 
 // A multipart device: a virtual instrument, registry type instrument-multi, or Multi-timbral on.
@@ -122,6 +123,8 @@ const mappedChannels = computed(() => {
   const reg = selectedReg.value
   if (!reg) return []
   const parts = midiStore.partChannels(reg.name)
+  // FM-1 Emulator: its firmware's parts (FMOS: CH 1-4), whatever channels the cables carry
+  if (reg.name === FM1_OUTPUT) return fm1PartChannels(fm1Firmware.value, parts)
   if (parts.length > 0) return parts
   if (!midiStore.virtualInstruments.some(v => v.name === reg.name)) return []
   // outChannel is -1 (OMNI) when Single mode hasn't had an explicit channel

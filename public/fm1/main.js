@@ -681,7 +681,9 @@ const perf = {
       this.stamp = ts;
     }
     this.drift = drift;
-    if (++this.secs <= 3 || m.halted) return;      // (the first seconds: booting, compiling)
+    // (the first seconds: booting, compiling; SY.CORE patch: 10, not 3 — the JIT's warm-up ran a
+    // heavy firmware (FMOS, Felucca) over 100% for up to ~8 s, a false "can't run" warning)
+    if (++this.secs <= 10 || m.halted) return;
     const over = this.load() > 0.95, late = drift > 0.02;
     if (late) this.drops++;
     this.bad = over || late ? this.bad + 1 : 0;

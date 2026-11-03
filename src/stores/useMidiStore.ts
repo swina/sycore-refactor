@@ -238,6 +238,14 @@ export const useMidiStore = defineStore('midi', () => {
     if (panelId) panelOutputPanels.value = { ...panelOutputPanels.value, [name]: panelId }
   }
 
+  // Can a message to this output go out right now? A real port, an online
+  // virtual instrument, or a panel output whose panel is open (FM-1 Emulator).
+  function isOutputOnline(name: string): boolean {
+    return outputs.value.some(o => o.name === name)
+      || virtualInstruments.value.some(v => v.name === name && v.online !== false)
+      || panelOutputs.value.includes(name)
+  }
+
   function unregisterPanelOutput(name: string) {
     midiService.unregisterVirtualOutput(name)
     panelOutputs.value = panelOutputs.value.filter(n => n !== name)
@@ -1059,6 +1067,7 @@ export const useMidiStore = defineStore('midi', () => {
     panelOutputs,
     panelOutputPanels,
     registerPanelOutput,
+    isOutputOnline,
     unregisterPanelOutput,
     renameVirtualInstrument,
   }

@@ -16,6 +16,9 @@ Local patch in `main.js` (search "SY.CORE bridge" / "fm1-stats"):
 - embedded with a parent (`?embed=1` in an iframe): the page's own MIDI input and channel
   selector are off and hidden (not stored) — MIDI comes only through the bridge
 
+- `main.js` `perf.second()`: the load is judged after the first 10 s, not 3 (the JIT's warm-up
+  ran FMOS and Felucca over 100% for several seconds: a false "can't run in real time" warning)
+
 To update: re-download the files, then re-apply the patch.
 
 SY.CORE FMOS (our own firmware, a Felucca fork developed in `../sycore-fmos`, GPL-3.0):

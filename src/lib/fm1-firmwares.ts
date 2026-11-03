@@ -128,6 +128,13 @@ export function fm1Parts(firmwareId: string): number[] {
   return FM1_FIRMWARE_PARTS[firmwareId] ?? [0]
 }
 
+/** The FM-1's parts for the Program Change panel: the firmware's own parts, plus any other
+ *  channel the MIDI Flow cables into it carry. A multi-timbral firmware (FMOS: CH 1-4) lists all
+ *  its parts even when the cables carry only one channel. */
+export function fm1PartChannels(firmwareId: string, cableParts: number[]): number[] {
+  return [...new Set([...fm1Parts(firmwareId), ...cableParts])].sort((a, b) => a - b)
+}
+
 /** The device model (PC template) a firmware implies on the FM-1 Emulator output, or null. */
 export function fm1PcTemplate(firmwareId: string): 'sycore-fmos' | null {
   return firmwareId === FM1_SYCORE_FIRMWARE ? 'sycore-fmos' : null

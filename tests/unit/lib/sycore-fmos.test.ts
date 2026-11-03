@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  FM1_FIRMWARES, FM1_DEFAULT_FIRMWARE, FM1_SYCORE_FIRMWARE, fm1Parts, fm1PcTemplate, fm1NextPcTemplate,
+  FM1_FIRMWARES, FM1_DEFAULT_FIRMWARE, FM1_SYCORE_FIRMWARE, fm1Parts, fm1PcTemplate, fm1NextPcTemplate, fm1PartChannels,
 } from '@/lib/fm1-firmwares'
 import { ccTemplateFor } from '@/constants/cc-templates'
 import { PC_TEMPLATES } from '@/constants/pc-templates'
@@ -56,6 +56,17 @@ describe('FM-1 output model (PC template) from the firmware', () => {
   })
   it('the model is offered in MIDI Devices', () => {
     expect(PC_TEMPLATES.some(t => t.id === 'sycore-fmos')).toBe(true)
+  })
+})
+
+describe('FM-1 parts in MULTI SOUND', () => {
+  it('lists all four FMOS parts though the cable carries only CH 1', () => {
+    expect(fm1PartChannels('sycore', [0])).toEqual([0, 1, 2, 3])
+    expect(fm1PartChannels('sycore', [])).toEqual([0, 1, 2, 3])
+  })
+  it('adds a cable channel outside the parts', () => {
+    expect(fm1PartChannels('sycore', [5, 1])).toEqual([0, 1, 2, 3, 5])
+    expect(fm1PartChannels('unknown-fw', [])).toEqual([0])
   })
 })
 
