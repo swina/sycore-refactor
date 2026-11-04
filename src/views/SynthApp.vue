@@ -53,6 +53,7 @@ import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
 import Fm1EmulatorPanel from '@/components/Fm1EmulatorPanel.vue'
 import VirtualDevicePanel from '@/components/VirtualDevicePanel.vue'
 import AudioDiagnosticsPanel from '@/components/AudioDiagnosticsPanel.vue'
+import RigControllerPanel from '@/components/RigControllerPanel.vue'
 import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import Welcome from '@/components/Welcome.vue'
@@ -182,6 +183,7 @@ const simpleTogglePanels = [
   { openId: 'fm1-emulator', focusKey: 'fm1Emulator', component: Fm1EmulatorPanel, transition: null },
   { openId: 'audio-diagnostics', focusKey: 'audioDiagnostics', component: AudioDiagnosticsPanel, transition: null },
   { openId: 'virtual-device', focusKey: 'virtualDevice', component: VirtualDevicePanel, transition: null },
+  { openId: 'rig-controller', focusKey: 'rigController', component: RigControllerPanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {

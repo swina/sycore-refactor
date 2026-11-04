@@ -59,6 +59,7 @@ const ID_TO_REF: [string, string][] = [
   ['midi-monitor', 'isMidiMonitorOpen'],
   ['about', 'isAboutOpen'],
   ['module-manager', 'isModuleManagerOpen'],
+  ['rig-controller', 'isRigControllerOpen'],
 ]
 
 describe('useUiStore generic panel API', () => {

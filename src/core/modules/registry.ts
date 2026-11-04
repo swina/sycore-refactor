@@ -3,7 +3,7 @@ import {
   Mic, FolderOpen, Clock, Drum, ListMusic,
   Cpu, Headphones, Play, LayoutGrid, KeyboardMusic, Activity, Network,
   Gamepad2, Heart, User, HelpCircle, Mail, BookOpen, RotateCw,
-  Settings, Repeat, SlidersHorizontal, History, Settings2, Sparkles, Bot,
+  Settings, Repeat, SlidersHorizontal, History, Settings2, Sparkles, Bot, Grid3X3,
 } from 'lucide-vue-next'
 import type { ModuleManifest, ModuleCategory } from './types'
 
@@ -58,6 +58,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'loop-machine', label: 'Samples Machine', icon: Layers, category: 'performance', bg: '/loop-machine.png' },
   { id: 'tracks-player', label: 'Tracks Player', icon: Music, category: 'performance', bg: '/backing-tracks.jpg' },
   { id: 'instrument-cockpit', label: 'DECK', icon: Sparkles, category: 'performance', bg: '/bg-performance.png' },
+  { id: 'rig-controller', label: 'Rig Controller', icon: Grid3X3, category: 'performance', bg: '/live-performance-2.png', badge: 'Prototype' },
 
   // ── Toolbar/footer-only utilities (no launcher tile) ────────────────────
   { id: 'types', label: 'Sound Types', icon: Layers, category: 'sound-design', showOnLauncher: false },
