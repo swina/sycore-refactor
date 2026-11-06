@@ -140,3 +140,16 @@ describe('StepScheduler — step lengths other than a 16th (Sequencer Time)', ()
     expect(s.timeOf(6)).toBe(1003)
   })
 })
+
+describe('StepScheduler — the Chord Seq 384n tick (1/96 beat)', () => {
+  it('96 ticks per beat, on the grid, and Live beats map song sixteenths to ticks (×24)', () => {
+    const ticks: number[] = []
+    const s = new StepScheduler((_step, t) => ticks.push(t), { lookaheadMs: 0 })
+    s.start(0, 120, 1 / 96)          // a tick = 500/96 ms
+    for (let now = 1; now <= 501; now += 2) s.tick(now)
+    expect(ticks).toHaveLength(97)   // ticks 0..96 (one beat + the next downbeat)
+    expect(ticks[96]).toBeCloseTo(500)
+    s.anchorTo(8, 1012, 120)         // Live's beat at sixteenth 8 (= tick 192) lands at 1012 ms
+    expect(s.timeOf(192)).toBeCloseTo(1012)
+  })
+})
