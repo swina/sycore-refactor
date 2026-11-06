@@ -820,8 +820,14 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   // Drum Machine is wired to in MIDI Flow, without the internal samples — applied by DrumMachine.vue
   // only while it is wired to one. MIDI-learnable (dm_midi_out_only).
   const LS_MIDI_OUT_ONLY = 'SYCORE_DM_MIDI_OUT_ONLY'
+  const LS_SYSTEM_CLOCK = 'SYCORE_DM_SYSTEM_CLOCK'
   const midiOutOnly = ref((() => { try { return localStorage.getItem(userKey(LS_MIDI_OUT_ONLY)) === '1' } catch { return false } })())
   watch(midiOutOnly, v => { try { localStorage.setItem(userKey(LS_MIDI_OUT_ONLY), v ? '1' : '0') } catch {} })
+  // Step timing on the system clock (a Worker timer + timestamped MIDI sends) instead of the
+  // Tone.js transport, which runs on the audio clock and slows down when the audio is
+  // overloaded. Off by default: the audio-clock path, as before.
+  const systemClock = ref((() => { try { return localStorage.getItem(userKey(LS_SYSTEM_CLOCK)) === '1' } catch { return false } })())
+  watch(systemClock, v => { try { localStorage.setItem(userKey(LS_SYSTEM_CLOCK), v ? '1' : '0') } catch {} })
   // Bassline MIDI channel while MIDI OUT ONLY: 0 = same as the drums (the MIDI Flow routing),
   // 1–16 = a dedicated channel the bassline notes go out on as is (no cable / device remap).
   const LS_BASSLINE_MIDI_CH = 'SYCORE_DM_BASSLINE_MIDI_CH'
@@ -1495,7 +1501,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   return {
-    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, midiOutOnly, basslineMidiChannel,
+    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, midiOutOnly, systemClock, basslineMidiChannel,
     autofillEnabled, chainEnabled,
     sequences, activeSequence, currentPattern,
     TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,

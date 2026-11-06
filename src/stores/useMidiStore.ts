@@ -206,10 +206,10 @@ export const useMidiStore = defineStore('midi', () => {
     })
     persistVirtualInstruments()
     // Register with the MIDI service — forward data to the real MIDI output port
-    midiService.registerVirtualOutput(name, (data) => {
+    midiService.registerVirtualOutput(name, (data, at) => {
       const v = virtualInstruments.value.find(x => x.name === name)
       if (v && v.midiOutputPort) {
-        midiService.sendRawToDeviceByName(v.midiOutputPort, data)
+        midiService.sendRawToDeviceByName(v.midiOutputPort, data, at)
       }
     }, midiOutputPort)
     // Add a registration in the routing config so it behaves like a real device
