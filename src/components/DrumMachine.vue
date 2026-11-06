@@ -2,7 +2,9 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
-import { audioTimeToPerfMs } from '@/lib/audio-clock'
+import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
+import { StepScheduler, createWorkerTicker } from '@/core/midi/step-scheduler'
+import { externalGrid } from '@/core/midi/external-grid'
 import { DRUM_AI_SYSTEM_PROMPT } from '@/lib/drum-grid'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info, Sparkles } from 'lucide-vue-next'
@@ -214,6 +216,8 @@ watch(() => drumStore.bpm, v => {
   // state.bpm: retune the Transport too, or a tempo change while playing
   // leaves the grid on the old BPM and those offsets drift off-beat.
   if (drumStore.isPlaying) getTransport().bpm.value = v
+  // System clock on the internal tempo (with an external master the grid follows Live's beats).
+  if (_sysSched && !externalGrid.active) _sysSched.setTempo(v)
 })
 
 // ── FX strip visibility per track ─────────────────────────────────────────────
@@ -329,11 +333,15 @@ const hasSolo = computed(() =>
 // channel (1–16, optional): a dedicated channel sent as is (the bassline's, bypassing the
 // MIDI Flow OUT channel remap); without it the global channel + routing, as before.
 function _sendMidiNote(note, velocity, accent, fireTime, duration, channel = 0) {
+  if (_silentStep) return
   const vel = Math.max(1, Math.min(127, Math.round(velocity * (accent ? 1.35 : 1))))
   const onAt  = fireTime == null ? performance.now() : Math.max(performance.now(), audioTimeToPerfMs(fireTime))
   const offAt = onAt + Math.max(10, duration * 1000)
   const ch   = channel >= 1 && channel <= 16 ? channel : midiStore.midiChannel
-  const opts = channel >= 1 && channel <= 16 ? { exactChannel: true } : undefined
+  const opts = channel >= 1 && channel <= 16 ? { exactChannel: true } : {}
+  // System clock: notes leave from a Worker-timed queue — not a timestamped send (ignored on
+  // Windows MIDI Services loopbacks: on+off together, no sound) nor a page timer.
+  if (drumStore.systemClock) opts.workerTimed = true
   midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, opts)
   midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, offAt, opts)
 }
@@ -364,6 +372,51 @@ function _sendMidiRatchet(note, stepTimeSec, divisions, { velocity, accent, base
     const fireTime = baseTime + (i / divisions) * stepTimeSec
     _sendMidiNote(note, velocity, accent, fireTime, divDur)
   }
+}
+
+// ── System clock (drumStore.systemClock) — steps from a StepScheduler on performance.now(),
+// ticked by a Worker timer, instead of the Tone.js transport (audio clock). With an external
+// master (Ableton Live, P1) the grid re-anchors on every beat of it. _scheduleCallback is the
+// same in both modes: it gets the step's time converted to AudioContext time, as before. ──
+let _silentStep = false      // a step found too late (stalled page): advance, don't sound
+let _sysSched = null
+let _stopTicker = null
+let _offExtGrid = null
+let _sysStartSixteenth = 0   // Live's song sixteenth of the Drum Machine's step 0
+
+function _startSystemClock() {
+  _stopSystemClock()
+  const now = performance.now()
+  let startMs = now + 20
+  let bpm = drumStore.bpm || 120
+  _sysStartSixteenth = 0
+  if (externalGrid.active && externalGrid.anchor) {
+    // The bar Live is playing now, even when this start comes late (a busy page after Live's
+    // Play): its steps already gone are handed out as late — the pattern advances silently and
+    // comes in on the first step still in time, instead of waiting for the next bar.
+    const bar = externalGrid.barAtOrBefore(now)
+    const t = bar != null ? externalGrid.timeOf(bar) : null
+    if (t != null) { startMs = t; bpm = externalGrid.bpm; _sysStartSixteenth = bar }
+  } else if (transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value) {
+    // INT, with other apps on the Tone.js transport: their next bar line.
+    startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+  }
+  _sysSched = new StepScheduler((_step, t, late) => {
+    _silentStep = late
+    try { _scheduleCallback(perfMsToAudioTime(t)) } finally { _silentStep = false }
+  })
+  _sysSched.start(startMs, bpm)
+  _offExtGrid = externalGrid.on(e => {
+    if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)
+  })
+  _stopTicker = createWorkerTicker(() => _sysSched?.tick(performance.now()))
+  _sysSched.tick(performance.now())
+}
+
+function _stopSystemClock() {
+  _stopTicker?.(); _stopTicker = null
+  _offExtGrid?.(); _offExtGrid = null
+  _sysSched?.stop(); _sysSched = null
 }
 
 function _scheduleCallback(time) {
@@ -499,7 +552,7 @@ function _scheduleCallback(time) {
           duration: stepDur,
         })
       }
-    } else {
+    } else if (!_silentStep) {
       drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
       if (divisions <= 1) {
         drumEngine.triggerPad(trackIdx, { velocity: step.velocity, accent: step.accent, time: fireTime, duration: stepDur })
@@ -544,6 +597,7 @@ function _scheduleCallback(time) {
         _sendMidiNote(step.note ?? 36, step.velocity, step.accent ?? false, fireTime, bassDur, drumStore.basslineMidiChannel)
         return
       }
+      if (_silentStep) return
       drumEngine.setPadVolume(padIdx, (voice.volume ?? 0.85) * mixer.effectiveDrumsLevel)
       drumEngine.setPadPitch(padIdx, voice.pitch ?? 0)
       drumEngine.triggerPadWithNote(padIdx, step.note ?? 36, {
@@ -559,6 +613,7 @@ function _scheduleCallback(time) {
 
 watch(() => drumStore.isPlaying, (playing) => {
   if (!playing) {
+    _stopSystemClock()
     if (repeatEventIdRef !== null) {
       getTransport().clear(repeatEventIdRef)
       repeatEventIdRef = null
@@ -592,6 +647,13 @@ watch(() => drumStore.isPlaying, (playing) => {
   resetDrumPosition()
 
   toneStart().then(() => {
+    if (drumStore.systemClock) {
+      if (!drumStore.isPlaying) return
+      playStateRef.current = buildPlayState()
+      _startSystemClock()
+      transportManager.acquireTransport()
+      return
+    }
     getTransport().bpm.value = drumStore.bpm
     playStateRef.current = buildPlayState()
 
@@ -840,7 +902,15 @@ const _onBassMidiNote = (e) => {
   basslineMidiCapture.value = -1
 }
 
+// Switching the clock while playing: restart on the other one.
+watch(() => drumStore.systemClock, () => {
+  if (!drumStore.isPlaying) return
+  drumStore.isPlaying = false
+  nextTick(() => { drumStore.isPlaying = true })
+})
+
 onUnmounted(() => {
+  _stopSystemClock()
   if (drumStore.isPlaying) drumStore.isPlaying = false
   if (repeatEventIdRef !== null) {
     getTransport().clear(repeatEventIdRef)
@@ -2997,6 +3067,23 @@ function cycleChainSlot(i) {
           </div>
           <div class="w-px h-4 bg-neutral-800 shrink-0" />
         </template>
+
+        <!-- Step clock: Audio (Tone.js transport, default) / System (Worker timer + timestamped MIDI) -->
+        <button
+          @click.stop="drumStore.systemClock = !drumStore.systemClock"
+          :title="drumStore.systemClock
+            ? 'Clock: SYSTEM — steps on the system clock (a Worker timer, timestamped MIDI): MIDI stays in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
+            : 'Clock: AUDIO — steps on the Tone.js transport (audio clock), as before. Click for SYSTEM (Worker timer, timestamped MIDI): best with MIDI OUT ONLY.'"
+          :class="[
+            'flex items-center gap-1 px-2 py-0.5 -mt-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+            drumStore.systemClock
+              ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
+          ]"
+        >
+          CLK {{ drumStore.systemClock ? 'SYS' : 'AUDIO' }}
+        </button>
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
 
         <!-- Repeater -->
         <div class="flex items-center gap-2">

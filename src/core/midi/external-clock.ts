@@ -33,6 +33,10 @@ export type ExternalClockEvent =
   | { type: 'stop' }
   /** Smoothed tempo update (evaluated on every beat). */
   | { type: 'tempo'; bpm: number }
+  /** Beat reached while running. `t` is the beat clock's time from the
+   *  least-squares fit (less jitter than its own arrival time); `sixteenth`
+   *  is the song position of that beat. A system-clock step grid re-anchors on it. */
+  | { type: 'beat'; sixteenth: number; t: number; bpm: number }
   /** Bar line reached while running — the moment to apply the phase lock. */
   | { type: 'bar'; bar: number; clocksSinceStart: number; bpm: number; t: number }
   /** Song position changed (SPP or Start). */
@@ -60,6 +64,8 @@ export class ExternalClockFollower {
   private ring: number[] = [];
   private lastClockAt = -Infinity;
   private lastCheckAt = -Infinity;
+  /** Time of the newest clock from the last tempo fit. */
+  private fittedLastClockAt = -Infinity;
   private _bpm = 0;
   private listeners: ((e: ExternalClockEvent) => void)[] = [];
   lossBehavior: ClockLossBehavior;
@@ -208,6 +214,12 @@ export class ExternalClockFollower {
     } else {
       this.updateTempoOnBeat(landing);
     }
+    if (landing % PPQN === 0 && this._bpm > 0) {
+      const fitted = this.fittedLastClockAt;
+      // Trust the fit only when it agrees with the arrival (no gap/reset in the window).
+      const beatT = Math.abs(fitted - t) < 60000 / (this._bpm * PPQN) ? fitted : t;
+      this.emit({ type: 'beat', sixteenth: landing / CLOCKS_PER_SIXTEENTH, t: beatT, bpm: this._bpm });
+    }
     this.clocksSinceStart++;
   }
 
@@ -234,6 +246,7 @@ export class ExternalClockFollower {
     }
     const avg = num / den;
     if (!(avg > 0)) return;
+    this.fittedLastClockAt = t0 + meanY + avg * (n - 1 - meanX);
     const bpm = 60000 / (avg * PPQN);
     if (bpm < 20 || bpm > 400) return;
     this._bpm = bpm;

@@ -25,6 +25,7 @@ import { cableOutChannels } from '@/types/midi';
 import { MidiSource } from '@/types/midi';
 import { MidiMonitor } from './midi-monitor';
 import { MidiTransport } from './midi-transport';
+import { createWorkerTicker } from './step-scheduler';
 import { SmartLatch } from './midi-smart-latch';
 import { MidiRouter, ThruNoteTracker } from './midi-routing';
 import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte, snapFaderValue } from './midi-broadcast';
@@ -53,6 +54,16 @@ function _parseSysExString(input: string): number[] | null {
 export interface BroadcastOptions {
   /** send on exactly `channel`, bypassing the cable / device OUT channel remap and channel filter */
   exactChannel?: boolean
+  /** a scheduled send (real port or virtual output) is delivered by a
+   *  Worker-timed queue, instead of a timestamped send (real ports) or a page
+   *  setTimeout (virtual outputs, which stutters with the page and is throttled
+   *  in the background). Measured on a Windows MIDI Services loopback
+   *  (MIDIWIN): the timestamp is ignored — note-on and note-off left together
+   *  and the note didn't sound. */
+  workerTimed?: boolean
+  /** tag of a workerTimed send, so it can be cancelled before it leaves
+   *  (cancelWorkerTimed: an app stopping drops its queued note-ons) */
+  workerTag?: string
 }
 
 export class MidiService {
@@ -119,7 +130,7 @@ export class MidiService {
   private sysexEnabled = false;
 
   // ── Virtual output registry ──────────────────────────────────────────────
-  private virtualOutputs = new Map<string, (data: number[]) => void>();
+  private virtualOutputs = new Map<string, (data: number[], at?: number) => void>();
   // Real hardware port each virtual instrument is bound to (its Output port
   // setting) — tracked separately since the registered sendFn closure is
   // opaque. Used to detect the physical-loop case: an instrument's own bound
@@ -253,7 +264,7 @@ export class MidiService {
     return !wiredAsInput;
   }
 
-  registerVirtualOutput(name: string, sendFn: (data: number[]) => void, portName?: string): void {
+  registerVirtualOutput(name: string, sendFn: (data: number[], at?: number) => void, portName?: string): void {
     this.virtualOutputs.set(name, sendFn);
     if (portName) {
       this.virtualOutputPorts.set(name, portName);
@@ -366,7 +377,7 @@ export class MidiService {
   }
 
   /** Send raw bytes to a virtual output by name */
-  private sendToVirtualOutput(name: string, data: number[]): void {
+  private sendToVirtualOutput(name: string, data: number[], at?: number): void {
     const fn = this.virtualOutputs.get(name);
     if (!fn) return;
 
@@ -376,8 +387,10 @@ export class MidiService {
     // everything else.
     this.logOutbound(name, data);
 
-    fn(data);
-    this.globalSentHashes.set(data.join(','), Date.now());
+    fn(data, at);
+    // echo matching uses the time it will actually leave
+    const deferMs = at != null ? Math.max(0, at - performance.now()) : 0;
+    this.globalSentHashes.set(data.join(','), Date.now() + deferMs);
   }
 
   /**
@@ -798,6 +811,42 @@ export class MidiService {
     return Array.from(this._loopbackInputs.values());
   }
 
+  // ── Worker-timed delivery (BroadcastOptions.workerTimedVirtual) ───────────
+  private timedQueue: { at: number; fn: () => void; tag?: string }[] = [];
+  private stopTimedTicker: (() => void) | null = null;
+  private timedIdleSince = 0;
+
+  /** Run `fn` at `at` (performance.now() ms), on a Worker timer (~2–4 ms resolution). */
+  scheduleOnWorker(at: number, fn: () => void, tag?: string): void {
+    const q = this.timedQueue;
+    let i = q.length;
+    while (i > 0 && q[i - 1].at > at) i--;   // keep sorted; messages mostly arrive in order
+    q.splice(i, 0, { at, fn, tag });
+    if (!this.stopTimedTicker) this.stopTimedTicker = createWorkerTicker(() => this.flushTimed(), 2);
+  }
+
+  /** Drop the queued workerTimed sends with this tag (not yet sent). */
+  cancelWorkerTimed(tag: string): void {
+    this.timedQueue = this.timedQueue.filter(item => item.tag !== tag);
+  }
+
+  private flushTimed(): void {
+    const now = performance.now();
+    const q = this.timedQueue;
+    while (q.length > 0 && q[0].at <= now + 1) {
+      const item = q.shift()!;
+      try { item.fn(); } catch (e) { console.warn('[MIDI] timed send failed', e); }
+    }
+    if (q.length > 0) { this.timedIdleSince = 0; return; }
+    // Stop the Worker after 2 s with nothing queued.
+    if (!this.timedIdleSince) this.timedIdleSince = now;
+    else if (now - this.timedIdleSince > 2000) {
+      this.stopTimedTicker?.();
+      this.stopTimedTicker = null;
+      this.timedIdleSince = 0;
+    }
+  }
+
   setSyncOutputBlock(fn: ((outputName: string) => boolean) | null): void {
     this.syncOutputBlock = fn;
   }
@@ -1018,9 +1067,10 @@ export class MidiService {
     }
   }
 
-  sendRawToDeviceByName(deviceName: string, data: number[]): void {
+  /** `at` (performance.now() ms, optional): a timestamped send — the browser puts it out then. */
+  sendRawToDeviceByName(deviceName: string, data: number[], at?: number): void {
     if (!this.midiAccess) {
-      this.sendToVirtualOutput(deviceName, data);
+      this.sendToVirtualOutput(deviceName, data, at);
       return;
     }
 
@@ -1035,7 +1085,7 @@ export class MidiService {
         const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === portName);
         if (out) {
           try {
-            out.send(data);
+            if (at != null) out.send(data, at); else out.send(data);
             this.logOutbound(deviceName, data);
             sent = true;
           } catch (e) {
@@ -1051,7 +1101,7 @@ export class MidiService {
     const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === deviceName);
     if (out) {
       try {
-        out.send(data);
+        if (at != null) out.send(data, at); else out.send(data);
         this.logOutbound(deviceName, data);
         this._clearSendIssues(deviceName);
         return;
@@ -1067,7 +1117,7 @@ export class MidiService {
     }
 
     // 3. Try virtual output
-    this.sendToVirtualOutput(deviceName, data);
+    this.sendToVirtualOutput(deviceName, data, at);
   }
 
   /**
@@ -1392,6 +1442,7 @@ export class MidiService {
             out.send(fullMsg);
           };
           if (!scheduled) deliver();
+          else if (opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag);
           // the latch decides (and may send releases) at play time — keep it on a timer
           else if (latched) setTimeout(deliver, deferMs);
           else {
@@ -1473,8 +1524,9 @@ export class MidiService {
             }
             this.sendToVirtualOutput(virtName, [status, ...bytes]);
           };
+          if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag);
           // virtual instruments are plain JS callbacks: no timestamp, so a timer
-          if (scheduled) setTimeout(deliver, deferMs);
+          else if (scheduled) setTimeout(deliver, deferMs);
           else deliver();
         }
       });

@@ -18,6 +18,7 @@ import { getTransport, getContext } from 'tone'
 import { midiService } from '@/core/midi/midi-service'
 import { ExternalClockFollower, PhaseLock, TONE_PPQ, isClockSourceEcho } from '@/core/midi/external-clock'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
+import { externalGrid } from '@/core/midi/external-grid'
 import { useMidiStore } from '@/stores/useMidiStore'
 
 const REALTIME = new Set([0xF8, 0xFA, 0xFB, 0xFC, 0xF2])
@@ -73,6 +74,8 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
         lock.reset()
         store.resyncs = 0
         if (e.bpm > 0) applyFineBpm(e.bpm)
+        // System-clock apps (StepScheduler) align on this downbeat.
+        externalGrid.emit({ type: 'start', sixteenth: e.sixteenth, t: e.t, bpm: e.bpm || follower.bpm })
         playAll()
         // Starting the apps can block the main thread for a few hundred ms
         // (samples, presets): the transport started that late after Live's
@@ -84,6 +87,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
       }
       case 'stop':
         fineBpm = 0
+        externalGrid.emit({ type: 'stop' })
         stopAll()
         break
       case 'tempo': {
@@ -119,12 +123,17 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
           timeoutMs: Math.round(follower.lossTimeoutMs()),
           lastBpm: e.lastBpm, diag: store.diag,
         })
+        // No master grid any more: system-clock apps keep their own tempo.
+        externalGrid.emit({ type: 'stop' })
         if (e.behavior === 'continue') {
           store.fallbackToInternal = true
           if (e.lastBpm > 0) applyFineBpm(e.lastBpm)
           // Devices synced to SY.CORE keep a clock: our own, at the last BPM.
           setFollowing(false)
         }
+        break
+      case 'beat':
+        externalGrid.emit({ type: 'beat', sixteenth: e.sixteenth, t: e.t, bpm: e.bpm })
         break
       case 'position':
         break
