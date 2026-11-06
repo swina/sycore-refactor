@@ -499,11 +499,11 @@ export function stopClock(s: RigState): void {
 // ── Launchpad Mini MK1 ─────────────────────────────────────────────────────
 // XY layout (same as LaunchpadMiniMK1 profile's init): grid note = 16·row + col,
 // right-side round buttons = 16·row + 8, top round buttons = CC 104–111.
-// Colors as velocity = 16·green + red + flags. Green 60 and amber 51 are the
-// values the existing profile uses; red 15 and amber flashing 59 are to be
-// checked against Novation's Launchpad Mini Programmer's Reference.
+// Colors as velocity = 16·green + red + flags (Launchpad MK1 Programmer's
+// Reference): flags 12 (Copy + Clear) = steady, 8 (Clear) = flashing with
+// automatic flashing on (B0 00 28, sent by Rig mode, rig-launchpad.ts).
 
-export const LP_COLOR = { off: 0, amber: 51, amberFlash: 59, green: 60, red: 15 } as const
+export const LP_COLOR = { off: 12, amber: 63, amberFlash: 59, green: 60, red: 15 } as const
 export type LpColor = keyof typeof LP_COLOR
 
 export const lpGridNote = (row: number, col: number) => 16 * row + col

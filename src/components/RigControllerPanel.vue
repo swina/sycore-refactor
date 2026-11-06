@@ -2,7 +2,9 @@
 // Rig Controller — UI prototype (branch feat/rig-controller-ui).
 // Three views of the same simulated rig state (src/lib/rig-controller.ts):
 // the reference layout, the Launchpad Mini MK1 mapping and the AKAI MIDImix mapping.
-// No MIDI is sent; a simulated clock stands in for Ableton Live as clock master.
+// SIM: a simulated clock stands in for Ableton Live, nothing is driven.
+// LIVE (rig-live.ts): the Chord, Drum and Seq rows mirror the real apps and the
+// clock is the real one (EXT from Live, or INT); pads send the Control Map's commands.
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
@@ -16,6 +18,18 @@ import {
   toggleMute, toggleSolo, toggleLaneMute, selectSplit, shiftKey, panic,
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
+import {
+  isLiveApp, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig,
+} from '@/lib/rig-live'
+import { getTransport } from 'tone'
+import { midiService } from '@/core/midi/midi-service'
+import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVelocity, RIG_INIT_MESSAGES, muteOtherSenders, unmuteOtherSenders, rigSend } from '@/lib/rig-launchpad'
+import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { useChordProgStore } from '@/stores/useChordProgStore'
+import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
+import { useExternalClockStore } from '@/stores/useExternalClockStore'
+import { useMidiStore } from '@/stores/useMidiStore'
+import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
 
 const emit = defineEmits(['close'])
 
@@ -37,19 +51,62 @@ const focusApp = ref('drum')
 const flowConfig = ref('Live — Techno Set')
 const FLOW_CONFIGS = ['Live — Techno Set', 'Live — Ambient Set', 'Studio jam']
 
-// ── Simulated clock (stands in for Live's MIDI clock) ─────────────────────
+// ── Mode: LIVE (the real apps) or SIM (simulated) ─────────────────────────
+const LS_MODE = 'SYCORE_RIG_MODE'
+const mode = ref(localStorage.getItem(LS_MODE) === 'sim' ? 'sim' : 'live')
+const live = computed(() => mode.value === 'live')
+const drumStore = useDrumMachineStore()
+const chordStore = useChordProgStore()
+const seqStore = useStepSequencerStore()
+const clockStore = useExternalClockStore()
+const midiStore = useMidiStore()
+const { transportManager, playAll, stopAll } = useGlobalTransportControls()
+
+/** Mirror the real apps and clock into the rig state (LIVE). */
+function syncLive() {
+  const t = transportManager.isRunning.value ? transportManager.getBarPosition() : { bar: 1, beat: 1, sixteenth: 1 }
+  let intBpm = 0
+  try { intBpm = getTransport().bpm.value } catch {}
+  applyClock(s,
+    { following: clockStore.source !== 'internal' && !clockStore.fallbackToInternal, playing: clockStore.state === 'playing', bpm: clockStore.bpm, position: clockStore.position },
+    { running: transportManager.isRunning.value, bpm: intBpm, ...t })
+  for (const a of s.apps) {
+    if (a.id === 'drum') applySnapshot(a, drumSnapshot(drumStore.sequences, drumStore.basslineSequences, drumStore.activeSequence, drumStore.isPlaying, rigReports.queued.drum))
+    else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord))
+    else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq))
+  }
+}
+let liveRaf = null
+function liveLoop() { syncLive(); liveRaf = requestAnimationFrame(liveLoop) }
+
+// ── Simulated clock (SIM: stands in for Live's MIDI clock) ────────────────
 let timer = null
 function restartTimer() {
   clearInterval(timer)
   timer = null
-  if (s.clock.running) timer = setInterval(() => tick(s), 60000 / s.clock.bpm / 4) // 16ths
+  if (!live.value && s.clock.running) timer = setInterval(() => tick(s), 60000 / s.clock.bpm / 4) // 16ths
 }
 function togglePlay() {
+  if (live.value) {
+    if (s.clock.source === 'EXT') { s.display = 'Live is the clock master: Play / Stop from Live'; return }
+    if (s.clock.running) stopAll(); else playAll()
+    return
+  }
   if (s.clock.running) stopClock(s); else startClock(s)
   restartTimer()
 }
-watch(() => s.clock.bpm, restartTimer)
-onUnmounted(() => clearInterval(timer))
+watch(() => s.clock.bpm, () => { if (!live.value) restartTimer() })
+watch(mode, m => {
+  localStorage.setItem(LS_MODE, m)
+  cancelAnimationFrame(liveRaf)
+  Object.assign(s, createRigState())
+  restartTimer()
+  if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq connected'; liveLoop() }
+}, { immediate: true })
+onUnmounted(() => { clearInterval(timer); cancelAnimationFrame(liveRaf) })
+
+/** LIVE: an action not connected to the apps yet. */
+const notConnected = what => { s.display = `${what}: not connected yet (SIM only)` }
 
 let taps = []
 function tap() {
@@ -75,14 +132,40 @@ function holdEnd(key) {
   if (holding[key]) s.display = 'Hold to confirm'
   holding[key] = false
 }
-const doPanic = () => panic(s)
-const doInt = () => toggleClockSource(s)
+const doPanic = () => { panic(s); if (live.value) midiStore.panic() }
+const doInt = () => { if (live.value) return notConnected('EXT/INT (use Clock › Source in the transport)'); toggleClockSource(s) }
 
 // ── Actions shared by the three views ─────────────────────────────────────
-function onSlotDown(appId, slot) { focusApp.value = appId; pressSlot(s, appId, slot) }
-function onSlotUp(appId, slot) { releaseSlot(s, appId, slot) }
-function onGenerate(appId, mutate = false) { focusApp.value = appId; generate(s, appId, mutate || s.shift) }
-function onFill() { s.fill = true; s.display = `Fill ${s.clock.running ? 'on the next bar' : 'armed'}` }
+const liveWhen = (id) => (!s.clock.running ? 'now' : id === 'seq' ? 'at the end of its pattern' : 'on the next bar')
+function onSlotDown(appId, slot) {
+  focusApp.value = appId
+  if (!live.value) return pressSlot(s, appId, slot)
+  const a = s.apps.find(x => x.id === appId)
+  if (!isLiveApp(appId)) return notConnected(a.label)
+  if (!a.filled[slot]) { s.display = `${a.label} ${SLOT_LABELS[slot]}: empty slot`; return }
+  dispatchRig(slotEvent(appId, slot))
+  s.display = `${a.label} → ${SLOT_LABELS[slot]} ${liveWhen(appId)}`
+}
+function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
+function onGenerate(appId, mutate = false) {
+  focusApp.value = appId
+  if (!live.value) return generate(s, appId, mutate || s.shift)
+  if (appId !== 'drum' || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
+  dispatchRig({ name: 'dm-generate' })
+  s.display = 'Drum: Generate (current style)'
+}
+function onFill() {
+  if (live.value) { dispatchRig({ name: 'dm-trigger-fill' }); s.display = 'Drum: Fill'; return }
+  s.fill = true; s.display = `Fill ${s.clock.running ? 'on the next bar' : 'armed'}`
+}
+/** A section: every connected app with that slot filled switches to it (LIVE), as the Song Composer does. */
+function onSection(i) {
+  if (!live.value) return selectSection(s, i)
+  const apps = s.apps.filter(a => isLiveApp(a.id) && a.filled[i])
+  if (!apps.length) { s.display = `Section ${i + 1}: no app has slot ${SLOT_LABELS[i]}`; return }
+  for (const a of apps) dispatchRig(slotEvent(a.id, i))
+  s.display = `Section ${i + 1} → ${apps.map(a => a.label).join(', ')} ${SLOT_LABELS[i]} ${s.clock.running ? 'on the next bar' : 'now'}`
+}
 function repeaterOn() { s.repeater = true; s.display = 'Repeater (hold)' }
 function repeaterOff() { if (s.repeater) { s.repeater = false; s.display = 'Repeater off' } }
 function toggleLatch() { s.latch = !s.latch; s.display = `Latch ${s.latch ? 'on' : 'off'}` }
@@ -148,9 +231,12 @@ const lpTop = computed(() => LP_TOP_LABELS.map((label, i) => {
 function lpPad(row, col) {
   if (row < 5) {
     const a = s.apps[row]
+    // The row's first pad names its app (Chord A, Drum A…).
+    const short = col === 0 ? `${a.label} ${SLOT_LABELS[col]}` : SLOT_LABELS[col]
+    if (live.value && !isLiveApp(a.id)) return { label: `${a.label} ${SLOT_LABELS[col]} (not connected)`, short, color: 'off' }
     const st = slotState(a, col)
     const color = a.muted && st === 'playing' ? 'red' : slotColor(st)
-    return { label: `${a.label} ${SLOT_LABELS[col]}`, short: SLOT_LABELS[col], color }
+    return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
   }
   if (row === 5) {
     const color = s.section === col ? 'green' : s.queuedSection === col ? 'amberFlash' : sectionHasContent(col) ? 'amber' : 'off'
@@ -169,7 +255,11 @@ function lpPad(row, col) {
 }
 
 function lpSide(row) {
-  if (row < 5) return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: s.shift ? 'green' : 'amber' }
+  if (row < 5) {
+    // LIVE: only the Drum Machine's Generate is connected so far.
+    const off = live.value && (s.apps[row].id !== 'drum' || s.shift)
+    return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: off ? 'off' : s.shift ? 'green' : 'amber' }
+  }
   if (row === 5) return { label: LP_SIDE_LOW_LABELS[0], short: 'UNDO', color: s.undo ? 'amber' : 'off' }
   return { label: LP_SIDE_LOW_LABELS[row - 5], short: row === 6 ? 'K−' : 'K+', color: 'amber' }
 }
@@ -189,7 +279,7 @@ function lpTopUp(i) {
 }
 function lpPadDown(row, col) {
   if (row < 5) return onSlotDown(s.apps[row].id, col)
-  if (row === 5) return selectSection(s, col)
+  if (row === 5) return onSection(col)
   if (row === 6) {
     if (col < 4) return selectSplit(s, col)
     if (col === 4) return onFill()
@@ -205,9 +295,86 @@ function lpPadUp(row, col) {
 }
 function lpSideDown(row) {
   if (row < 5) return onGenerate(s.apps[row].id)
-  if (row === 5) return undo(s)
+  if (row === 5) return live.value ? notConnected('Undo') : undo(s)
   shiftKey(s, row === 6 ? -1 : 1)
 }
+
+// ── Physical Launchpad Mini MK1 in Rig mode (rig-launchpad.ts) ────────────
+// On: the Launchpad's buttons are the rig's (no usual mappings) and its LEDs
+// show the state above. Off, or the panel closed: its usual mappings come back.
+const LS_LP_RIG = 'SYCORE_RIG_LAUNCHPAD'
+const lpRig = ref(localStorage.getItem(LS_LP_RIG) === '1')
+const lpOutput = computed(() => midiStore.outputs.find(o => isLaunchpadName(o.name)) ?? null)
+let lpSent = null
+
+const lpLeds = computed(() => {
+  const out = []
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) out.push(colorVelocity(lpPad(r, c).color))
+  for (let r = 0; r < 8; r++) out.push(colorVelocity(lpSide(r).color))
+  for (const t of lpTop.value) out.push(colorVelocity(t.color))
+  return out
+})
+
+// The raw port (midiStore.outputs holds reactive copies).
+const lpPort = () => midiService.getOutputs().find(o => isLaunchpadName(o.name)) ?? null
+function lpSend(msgs) {
+  const o = lpPort()
+  if (!o) return false
+  // Other feedback (MIDI Learn LEDs, e.g. the Chord Prog's slot mappings) is muted
+  // meanwhile: a 0 from it (no flags) made pads blink with flashing on.
+  muteOtherSenders(o)
+  for (const m of msgs) rigSend(o, m)
+  return true
+}
+function pushLeds() {
+  if (rigLaunchpad.handler !== onLaunchpadMidi) return
+  const next = lpLeds.value
+  const msgs = ledDiff(lpSent, next)
+  if (msgs.length && lpSend(msgs)) lpSent = next.slice()
+}
+function onLaunchpadMidi(data) {
+  const ev = parseLaunchpadInput(data)
+  if (!ev) return
+  if (ev.kind === 'pad') { if (ev.down) lpPadDown(ev.row, ev.col); else lpPadUp(ev.row, ev.col) }
+  else if (ev.kind === 'side') { if (ev.down) lpSideDown(ev.row) }
+  else if (ev.down) lpTopDown(ev.index)
+  else lpTopUp(ev.index)
+}
+// Rig mode takes the Launchpad's input over before anything else (MIDI Learn, MIDI Actions,
+// the Loop Machine's and Chord Prog's own listeners, Thru): its mappings stay as they are and
+// work again when Rig mode is off.
+function lpExclusive(e) {
+  if (!isLaunchpadName(e.target?.name)) return false
+  onLaunchpadMidi(e.data)
+  return true
+}
+function lpRigOn() {
+  rigLaunchpad.handler = onLaunchpadMidi
+  midiService.setExclusiveInput(lpExclusive)
+  lpSent = null
+  if (lpSend(RIG_INIT_MESSAGES)) pushLeds()
+}
+function lpRigOff() {
+  if (rigLaunchpad.handler !== onLaunchpadMidi) return
+  rigLaunchpad.handler = null
+  midiService.setExclusiveInput(null)
+  lpSent = null
+  unmuteOtherSenders()
+  rigLaunchpad.restore?.()
+}
+watch(lpLeds, pushLeds)
+watch(lpRig, on => {
+  localStorage.setItem(LS_LP_RIG, on ? '1' : '0')
+  if (on) lpRigOn(); else lpRigOff()
+}, { immediate: true })
+// Plugged in (again) while Rig mode is on: its LEDs were reset — after the
+// controller manager's own init of the new port, set it up again.
+let lpReinit = null
+watch(() => lpOutput.value?.id, id => {
+  clearTimeout(lpReinit)
+  if (id && lpRig.value) lpReinit = setTimeout(lpRigOn, 400)
+})
+onUnmounted(() => { clearTimeout(lpReinit); lpRigOff() })
 
 // ── AKAI MIDImix view model ───────────────────────────────────────────────
 const mixPage = ref('app') // 'app' | 'lane'
@@ -283,7 +450,8 @@ const arcPath = v => {
           <Grid3X3 class="w-4 h-4 text-amber-400" />
         </div>
         <h2 class="text-sm font-black text-white tracking-[0.1em] uppercase">Rig Controller</h2>
-        <span class="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold uppercase tracking-wider text-amber-300">Prototype · simulated, no MIDI</span>
+        <span v-if="live" class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-wider text-emerald-300" title="Chord, Drum and Seq rows drive the real apps; the other controls are still simulated">Live · Chord, Drum, Seq connected</span>
+        <span v-else class="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold uppercase tracking-wider text-amber-300">Simulation · no MIDI</span>
       </div>
       <div class="flex items-center gap-2" @mousedown.stop>
         <div class="flex rounded-md border border-white/10 overflow-hidden">
@@ -296,19 +464,31 @@ const arcPath = v => {
       </div>
     </div>
 
-    <!-- Simulation bar: stands in for Live -->
+    <!-- Mode bar: LIVE (real apps and clock) or SIM (simulated Live) -->
     <div class="flex items-center gap-3 px-4 py-1.5 border-y border-white/5 bg-white/[0.02] text-[10px] text-neutral-400 shrink-0">
-      <span class="uppercase tracking-widest text-neutral-500">Simulated Live</span>
+      <div class="flex rounded border border-white/10 overflow-hidden">
+        <button v-for="m in [['live', 'Live'], ['sim', 'Sim']]" :key="m[0]" class="px-2 py-0.5 font-bold uppercase"
+                :class="mode === m[0] ? (m[0] === 'live' ? 'bg-emerald-500/80 text-black' : 'bg-amber-500/70 text-black') : 'text-neutral-400 hover:text-white'"
+                :title="m[0] === 'live' ? 'Drive the real Chord Prog, Drum Machine and Sequencer, on the real clock' : 'A simulated rig and clock: try the track options'"
+                @click="mode = m[0]">{{ m[1] }}</button>
+      </div>
+      <button class="px-2 py-0.5 rounded border font-bold uppercase"
+              :class="lpRig ? (lpOutput ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-amber-500/40 border-amber-300 text-amber-50') : 'border-white/15 text-neutral-300 hover:bg-white/10'"
+              :title="lpRig ? (lpOutput ? `Rig mode on ${lpOutput.name}: its buttons drive the rig, its LEDs show it. Off: its usual mappings come back` : 'Rig mode on, no Launchpad found') : 'Use the Launchpad Mini MK1 as the rig controller (its usual mappings are paused meanwhile)'"
+              @click="lpRig = !lpRig">Launchpad {{ lpRig ? (lpOutput ? 'Rig ●' : 'Rig · not found') : 'Rig off' }}</button>
+      <span class="uppercase tracking-widest text-neutral-500">{{ live ? s.clock.source : 'Simulated Live' }}</span>
       <button class="flex items-center gap-1 px-2 py-0.5 rounded border font-bold uppercase"
               :class="s.clock.running ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'border-white/15 text-neutral-200 hover:bg-white/10'"
               @click="togglePlay">
         <component :is="s.clock.running ? Square : Play" class="w-3 h-3" /> {{ s.clock.running ? 'Stop' : 'Play' }}
       </button>
-      <label class="flex items-center gap-1">BPM
+      <label v-if="!live" class="flex items-center gap-1">BPM
         <input v-model.number="s.clock.bpm" type="number" min="40" max="240" step="0.5" class="w-16 bg-black/40 border border-white/10 rounded px-1 py-0.5 text-white font-mono" />
       </label>
+      <span v-else class="font-mono text-white">{{ s.clock.bpm.toFixed(1) }} BPM</span>
       <span class="font-mono text-white">{{ s.clock.bar }}.{{ s.clock.beat }}.{{ (s.clock.step % 4) + 1 }}</span>
-      <span class="ml-auto truncate">The controller only shows SY.CORE's state; each track's options decide how and when its slots start.</span>
+      <span v-if="live" class="ml-auto truncate">Pads send the Control Map's commands: slots start on the next bar (Seq: at the end of its pattern). Track options, Bass and Arp: SIM only for now.</span>
+      <span v-else class="ml-auto truncate">The controller only shows SY.CORE's state; each track's options decide how and when its slots start.</span>
     </div>
 
     <div class="flex-1 overflow-auto p-4 text-xs">
@@ -340,7 +520,7 @@ const arcPath = v => {
             <div class="grid grid-cols-4 gap-1.5">
               <button v-for="i in SECTION_COUNT" :key="i"
                       :class="[btn, s.section === i - 1 ? btnOn : s.queuedSection === i - 1 ? 'bg-amber-400/50 border-amber-300 text-white animate-pulse' : btnIdle]"
-                      @click="selectSection(s, i - 1)">{{ i }}</button>
+                      @click="onSection(i - 1)">{{ i }}</button>
             </div>
           </section>
 
@@ -368,7 +548,8 @@ const arcPath = v => {
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">Slot grid (A–H)</h3>
             <div class="space-y-1.5">
-              <div v-for="a in s.apps" :key="a.id" class="flex items-center gap-1.5" :class="a.muted ? 'opacity-50' : ''">
+              <div v-for="a in s.apps" :key="a.id" class="flex items-center gap-1.5" :class="a.muted || (live && !isLiveApp(a.id)) ? 'opacity-40' : ''"
+                   :title="live && !isLiveApp(a.id) ? `${a.label}: not connected yet (SIM only)` : ''">
                 <button class="w-16 text-left leading-tight" :title="'Track options: ' + rowBadge(a)" @click="focusApp = a.id">
                   <span class="block text-[11px] font-bold" :class="focusApp === a.id ? 'text-amber-300' : 'text-neutral-300'">{{ a.label }}</span>
                   <span class="block text-[8px] font-mono text-neutral-500 truncate">{{ rowBadge(a) }}</span>

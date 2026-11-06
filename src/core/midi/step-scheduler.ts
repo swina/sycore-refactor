@@ -144,6 +144,49 @@ export function chaseNote(onMs: number, durMs: number, now: number, late: boolea
   return left > minLeftMs ? { onMs: now, durMs: left } : null;
 }
 
+// ── Voices ──────────────────────────────────────────────────────────────────
+
+/**
+ * Who owns a sounding pitch, for notes whose note-off is queued ahead (CLK SYS).
+ * A slot switch while a long note (a tie, a chord lasting a bar) still sounds:
+ * the old note must end at the switch (else it rings on, like a tie), and its
+ * queued note-off must not end the new slot's note of the same pitch (else the
+ * new note is cut, or seems lost). The app sends a note-off only when `end()`
+ * says the voice is still its own; `cutAt()` returns the voices to end at once.
+ */
+export class VoiceLedger<T = unknown> {
+  private voices = new Map<string, { id: number; offAt: number; data: T }>();
+  private seq = 0;
+
+  /** A note starts (ends at `offAt`): its id, for `end()`. A newer note of the same key takes it over. */
+  start(key: string, offAt: number, data: T): number {
+    const id = ++this.seq;
+    this.voices.set(key, { id, offAt, data });
+    return id;
+  }
+
+  /** The note's own note-off: true when it still owns its key (send the note-off). */
+  end(key: string, id: number): boolean {
+    const v = this.voices.get(key);
+    if (!v || v.id !== id) return false;
+    this.voices.delete(key);
+    return true;
+  }
+
+  /** A switch at `t`: the voices still sounding after `t` are released (their queued
+   *  note-offs will be skipped); their data, to send their note-offs at `t`. */
+  cutAt(t: number): T[] {
+    const out: T[] = [];
+    for (const [k, v] of this.voices) {
+      if (v.offAt > t) { out.push(v.data); this.voices.delete(k); }
+    }
+    return out;
+  }
+
+  clear(): void { this.voices.clear(); }
+  get size(): number { return this.voices.size; }
+}
+
 // ── Worker ticker ───────────────────────────────────────────────────────────
 
 /**

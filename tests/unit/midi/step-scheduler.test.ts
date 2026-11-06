@@ -177,3 +177,25 @@ describe('externalGrid — the first Start after a reload (no tempo yet)', () =>
     externalGrid.emit({ type: 'stop' })
   })
 })
+
+import { VoiceLedger } from '@/core/midi/step-scheduler'
+
+describe('VoiceLedger', () => {
+  it("a newer note of the same pitch takes the key over: the old note-off is skipped", () => {
+    const v = new VoiceLedger<{ n: number }>()
+    const a = v.start('60-1', 1000, { n: 60 })
+    const b = v.start('60-1', 1500, { n: 60 })
+    expect(v.end('60-1', a)).toBe(false)
+    expect(v.end('60-1', b)).toBe(true)
+    expect(v.size).toBe(0)
+  })
+
+  it('cutAt releases only the notes still sounding after the switch', () => {
+    const v = new VoiceLedger<{ n: number }>()
+    const tied = v.start('62-1', 2000, { n: 62 })
+    const ending = v.start('64-1', 900, { n: 64 })
+    expect(v.cutAt(1000)).toEqual([{ n: 62 }])
+    expect(v.end('62-1', tied)).toBe(false) // its own note-off: skipped, already ended
+    expect(v.end('64-1', ending)).toBe(true) // ends before the switch: its note-off goes out
+  })
+})

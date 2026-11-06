@@ -21,10 +21,11 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import AiPromptModal from './AiPromptModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
-import { StepScheduler, createWorkerTicker, chaseNote } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
+import { rigReports } from '@/lib/rig-live'
 
 defineOptions({ inheritAttrs: false })
 
@@ -211,6 +212,7 @@ const chordsEnabled = ref(seqStore.activeBank.chordsEnabled)
 const maxPolyphony = ref(seqStore.activeBank.maxPolyphony)
 const chordDensity = ref(seqStore.activeBank.chordDensity)
 const isPlaying = ref(false)
+watch(isPlaying, v => { rigReports.seqPlaying = v })
 const isRecording = ref(false)
 const currentStep = ref(0)
 const transportPosition = ref('1:1:1')
@@ -357,15 +359,17 @@ let lastFollowedBank = -1
 // Chord Prog FOLLOW ('seq-bank-cue', one bar before a section ends): the bank of the next section
 // starts when the playing one wraps to its first step; stopped, it's selected now.
 let _pendingBank = null
+// Rig Controller (rig-live.ts): the queued bank, mirrored for the pads.
+function setPendingBank(v) { _pendingBank = v; rigReports.queued.seq = v }
 function handleBankCue(e) {
   const idx = e.detail?.idx
   if (idx == null || idx < 0 || idx >= BANK_COUNT) return
-  if (!isPlaying.value) { _pendingBank = null; selectBank(idx); return }
-  _pendingBank = idx === seqStore.activeBankIndex ? null : idx
+  if (!isPlaying.value) { setPendingBank(null); selectBank(idx); return }
+  setPendingBank(idx === seqStore.activeBankIndex ? null : idx)
 }
 // The banks were replaced from outside (AI Song Composer, undo): drop the working copy.
 function handleBanksReloaded() {
-  _pendingBank = null
+  setPendingBank(null)
   loadBankIntoLocal()
   selectedStepIdx.value = 0
 }
@@ -590,6 +594,9 @@ const LS_SEQ_SYSTEM_CLOCK = 'SYCORE_SEQ2_SYSTEM_CLOCK'
 const systemClock = ref((() => { try { return localStorage.getItem(userKey(LS_SEQ_SYSTEM_CLOCK)) === '1' } catch { return false } })())
 watch(systemClock, v => { try { localStorage.setItem(userKey(LS_SEQ_SYSTEM_CLOCK), v ? '1' : '0') } catch {} })
 const SEQ_WORKER_TAG = 'sequencer2'
+/** CLK SYS: who owns each sounding pitch, so a bank switch ends a tied note of the old bank
+ *  and its queued note-off doesn't cut the new bank's note of the same pitch. */
+const _seqVoices = new VoiceLedger()
 let _sysSched = null
 let _stopTicker = null
 let _offExtGrid = null
@@ -1488,6 +1495,7 @@ watch(isPlaying, (playing) => {
       midiStore.sendNoteOff(note, 0, chan, MidiSource.SEQUENCER2)
     })
     activeMidiNotes.value.clear()
+    _seqVoices.clear()
 
     if (midiStore.syncSequencerTransport) midiStore.sendStop()
     midiStore.allNotesOff(props.channel)
@@ -1500,7 +1508,7 @@ watch(isPlaying, (playing) => {
     seqStore.playingChainIndex = null
     seqStore.playingBankIndex = null
     lastFollowedBank = -1
-    _pendingBank = null
+    setPendingBank(null)
   } else {
     if (fadeOutIntervalRef.value !== null) {
       clearInterval(fadeOutIntervalRef.value)
@@ -1541,8 +1549,15 @@ watch(isPlaying, (playing) => {
           }
         }
         if (_pendingBank !== null && stepIdx === 0 && !seqStore.chainEnabled) {
+          // The old bank's notes still sounding (ties) end where the new bank starts.
+          if (tMs != null) {
+            for (const v of _seqVoices.cutAt(tMs)) {
+              midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.SEQUENCER2, null, tMs - 1, { workerTimed: true })
+              activeMidiNotes.value.delete(v.key)
+            }
+          }
           selectBank(_pendingBank)
-          _pendingBank = null
+          setPendingBank(null)
           const pb = seqStore.playbackSteps
           state.steps = pb.steps
           state.numSteps = pb.numSteps
@@ -1593,10 +1608,16 @@ watch(isPlaying, (playing) => {
             if (tMs != null) {
               // CLK SYS: on and off at their times, from the Worker-timed queue.
               const noteKey = `${clampedNote}-${state.channel}`
-              midiStore.sendNoteOn(clampedNote, velocity, state.channel, MidiSource.SEQUENCER2, null, tMs, { workerTimed: true, workerTag: SEQ_WORKER_TAG })
-              midiStore.sendNoteOff(clampedNote, 0, state.channel, MidiSource.SEQUENCER2, null, tMs + noteDurationMs, { workerTimed: true })
+              const ch = state.channel
+              const id = _seqVoices.start(noteKey, tMs + noteDurationMs, { note: clampedNote, channel: ch, key: noteKey })
+              midiStore.sendNoteOn(clampedNote, velocity, ch, MidiSource.SEQUENCER2, null, tMs, { workerTimed: true, workerTag: SEQ_WORKER_TAG })
               activeMidiNotes.value.add(noteKey)
-              midiService.scheduleOnWorker(tMs + noteDurationMs, () => activeMidiNotes.value.delete(noteKey))
+              midiService.scheduleOnWorker(tMs + noteDurationMs, () => {
+                // A newer note of the same pitch owns it now: this note-off would cut it.
+                if (!_seqVoices.end(noteKey, id)) return
+                midiStore.sendNoteOff(clampedNote, 0, ch, MidiSource.SEQUENCER2)
+                activeMidiNotes.value.delete(noteKey)
+              })
               return
             }
             midiStore.sendNoteOn(clampedNote, velocity, state.channel, MidiSource.SEQUENCER2)
@@ -1679,6 +1700,8 @@ watch(() => midiStore.isTransportPlaying, (isPlayingMIDI) => {
 })
 
 onUnmounted(() => {
+  rigReports.seqPlaying = false
+  rigReports.queued.seq = null
   _stopSystemClock()
   transportManager.releaseTransport()
   if (repeatEventIdRef.value !== null) {

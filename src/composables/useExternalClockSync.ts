@@ -65,6 +65,30 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     return getTransport().ticks - startTicks - lateMs * ticksPerMs
   }
 
+  /** The apps start this long after Live's Start downbeat: a Control Map note
+   *  Live sends on the same downbeat (a clip at 1.1.1) arrives right after the
+   *  clock and must find the apps still stopped, so its slot plays from the
+   *  first bar (else it queues for bar 2). The start is still counted from the
+   *  downbeat: the steps of these few ms go out at once (CLK SYS) or the
+   *  transport is placed where it should be (CLK AUDIO). */
+  const START_CONTROL_WINDOW_MS = 25
+  let pendingStart: ReturnType<typeof setTimeout> | null = null
+  let startDownbeatT = 0
+
+  function startApps(t: number) {
+    pendingStart = null
+    playAll()
+    // Starting the apps can block the main thread for a few hundred ms
+    // (samples, presets): the transport started that late after Live's
+    // downbeat. Count the start from the downbeat itself.
+    startTicks = getTransport().ticks - Math.max(0, performance.now() - t) * (getTransport().bpm.value * TONE_PPQ) / 60000
+    // Apps that set the transport BPM from the global (integer) BPM on start.
+    setTimeout(() => { if (fineBpm) getTransport().bpm.value = fineBpm }, 0)
+  }
+  function cancelPendingStart() {
+    if (pendingStart !== null) { clearTimeout(pendingStart); pendingStart = null }
+  }
+
   follower.on(e => {
     switch (e.type) {
       case 'start': {
@@ -77,16 +101,14 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
         if (e.bpm > 0) applyFineBpm(e.bpm)
         // System-clock apps (StepScheduler) align on this downbeat.
         externalGrid.emit({ type: 'start', sixteenth: e.sixteenth, t: e.t, bpm: e.bpm || follower.bpm })
-        playAll()
-        // Starting the apps can block the main thread for a few hundred ms
-        // (samples, presets): the transport started that late after Live's
-        // downbeat. Count the start from the downbeat itself.
-        startTicks = getTransport().ticks - Math.max(0, performance.now() - e.t) * (getTransport().bpm.value * TONE_PPQ) / 60000
-        // Apps that set the transport BPM from the global (integer) BPM on start.
-        setTimeout(() => { if (fineBpm) getTransport().bpm.value = fineBpm }, 0)
+        cancelPendingStart()
+        startDownbeatT = e.t
+        const t = e.t
+        pendingStart = setTimeout(() => startApps(t), Math.max(0, START_CONTROL_WINDOW_MS - (performance.now() - t)))
         break
       }
       case 'stop':
+        cancelPendingStart()
         fineBpm = 0
         externalGrid.emit({ type: 'stop' })
         stopAll()
@@ -125,6 +147,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
           lastBpm: e.lastBpm, diag: store.diag,
         })
         // No master grid any more: system-clock apps keep their own tempo.
+        cancelPendingStart()
         externalGrid.emit({ type: 'stop' })
         if (e.behavior === 'continue') {
           store.fallbackToInternal = true
@@ -149,7 +172,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
 
   /** Diagnostics over the last second: what the follower really receives. */
   const diag = { clocks: 0, nearDup: 0, dropped: 0, maxGap: 0, lastT: -1, windowStart: performance.now(), audioStart: -1,
-    controlNotes: [] as number[], otherNotes: [] as string[] }
+    controlNotes: [] as number[], otherNotes: [] as string[], ctrlAfterStart: -1 }
   function flushDiag(now: number) {
     if (now - diag.windowStart < 1000) return
     const secs = (now - diag.windowStart) / 1000
@@ -163,6 +186,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     store.diag = `${Math.round(diag.clocks / secs)} clk/s · near-dup ${diag.nearDup} · dropped copies ${diag.dropped} · max gap ${Math.round(diag.maxGap)} ms`
       + ` · audio clock ${audioPct}% · resyncs ${store.resyncs} · own clock out: ${own || 'none'}`
       + ` · ctrl notes [${diag.controlNotes.join(',')}] other notes [${diag.otherNotes.join(',')}] last action: ${store.lastControlAction || '—'}`
+      + (diag.ctrlAfterStart >= 0 ? ` · ctrl after Start ${diag.ctrlAfterStart} ms` : '')
     const clockTime = new Date().toLocaleTimeString()
     const focus = typeof document !== 'undefined' && document.hasFocus() ? 'focus' : 'NO focus'
     store.pushDiag(`${clockTime} [${focus}] ${store.mode} ${store.bpm.toFixed(1)} BPM · ${store.position} · phase ${store.lastPhaseErrorMs} ms · ${store.diag} · ${store.state}`)
@@ -170,7 +194,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     // A control track plays a few notes per bar; a steady stream means notes are looping back
     // into the source (in Live: the control track's MIDI From on All Ins, monitoring).
     store.controlMapFlood = diag.controlNotes.length / secs > 6
-    diag.controlNotes = []; diag.otherNotes = []
+    diag.controlNotes = []; diag.otherNotes = []; diag.ctrlAfterStart = -1
     ownClockSends.clear()
   }
 
@@ -254,7 +278,12 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
       if (isNoteOn) diag.otherNotes.push(`ch${(status & 0x0f) + 1}:${data[1]}`)
       return false
     }
-    if (isNoteOn) diag.controlNotes.push(data[1])
+    if (isNoteOn) {
+      diag.controlNotes.push(data[1])
+      // How long after Live's Start downbeat a control note arrived (tunes START_CONTROL_WINDOW_MS).
+      const since = performance.now() - startDownbeatT
+      if (startDownbeatT && since < 1000) diag.ctrlAfterStart = Math.round(since)
+    }
     if (isNoteOn) {
       const action = controlActionForNote(data[1])
       if (action) {

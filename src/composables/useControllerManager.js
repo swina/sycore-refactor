@@ -9,6 +9,7 @@ import { useAppActions }   from './useAppActions'
 import { isContinuousAction } from '@/lib/app-midi-actions'
 import { isVirtualDeviceControl } from './useMidiCCListener'
 import { loopMachineState } from '@/core/state/loopMachineState'
+import { rigLaunchpad, isLaunchpadName } from '@/lib/rig-launchpad'
 
 // Profiles
 import { LaunchpadMiniMK1 } from '../core/controllers/profiles/LaunchpadMiniMK1'
@@ -365,6 +366,8 @@ export function useControllerManager() {
 
   function updateFeedback() {
     activeControllers.value.forEach(ctrl => {
+      // Rig mode: the Rig Controller drives the Launchpad's LEDs.
+      if (rigLaunchpad.handler && isLaunchpadName(ctrl.input?.name)) return
       if (ctrl.sendFn) {
         ctrl.profile.updateFeedback(ctrl.sendFn, getAppState())
       }
@@ -372,6 +375,14 @@ export function useControllerManager() {
   }
 
   const _onLmStateChanged = () => updateFeedback()
+
+  // Rig mode off: the Launchpad gets its usual layout and LEDs back.
+  rigLaunchpad.restore = () => {
+    activeControllers.value.forEach(ctrl => {
+      if (isLaunchpadName(ctrl.input?.name) && ctrl.output) ctrl.profile.onInit(ctrl.sendFn)
+    })
+    updateFeedback()
+  }
 
   onMounted(() => {
     log('Mounted')

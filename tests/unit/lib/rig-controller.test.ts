@@ -276,6 +276,6 @@ describe('rig-controller Launchpad Mini MK1 mapping', () => {
     expect(slotColor('queued')).toBe('amberFlash')
     expect(slotColor('playing')).toBe('green')
     expect(LP_COLOR.green).toBe(60)
-    expect(LP_COLOR.amber).toBe(51)
+    expect(LP_COLOR.amber).toBe(63)
   })
 })

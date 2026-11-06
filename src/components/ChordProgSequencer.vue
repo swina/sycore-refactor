@@ -26,8 +26,9 @@ import AiPromptModal from './AiPromptModal.vue'
 import SongComposerDialog from './SongComposerDialog.vue'
 import { sendPartPresets } from '@/lib/song-composer'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
-import { StepScheduler, createWorkerTicker, chaseNote } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
+import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 
 const props = defineProps({
@@ -178,15 +179,22 @@ function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
     if (_activeBassNote) {
       const prev = _activeBassNote
       if (prev.tid) { clearTimeout(prev.tid); _pendingTimeouts.delete(prev.tid) }
-      midiStore.sendNoteOff(prev.note, 0, prev.channel, MidiSource.CHORD_PROG, null, atMs, { workerTimed: true })
+      // Its own queued note-off is skipped from now on (it could cut this note, same pitch).
+      if (prev.id == null || _cpVoices.end(prev.key, prev.id)) {
+        midiStore.sendNoteOff(prev.note, 0, prev.channel, MidiSource.CHORD_PROG, null, atMs - 1, { workerTimed: true })
+      }
       _activeBassNote = null
     }
     if (!bassEnabled.value || !bassDevice.value || note === null) return
     const ch = Math.max(1, Math.min(16, bassChannel.value))
     const n = Math.max(0, Math.min(127, note))
+    const key = `bass-${n}-${ch}`
+    const id = _cpVoices.start(key, atMs + durationMs, { note: n, channel: ch, key })
     midiStore.sendNoteOn(n, velocity, ch, MidiSource.CHORD_PROG, null, atMs, { workerTimed: true, workerTag: CP_WORKER_TAG })
-    midiStore.sendNoteOff(n, 0, ch, MidiSource.CHORD_PROG, null, atMs + durationMs, { workerTimed: true })
-    _activeBassNote = { note: n, channel: ch, tid: null }
+    midiService.scheduleOnWorker(atMs + durationMs, () => {
+      if (_cpVoices.end(key, id)) midiStore.sendNoteOff(n, 0, ch, MidiSource.CHORD_PROG)
+    })
+    _activeBassNote = { note: n, channel: ch, tid: null, key, id }
     return
   }
   stopBassNote()
@@ -313,13 +321,30 @@ function _chase(onMs, durMs) {
   return chaseNote(onMs, durMs, performance.now(), _sysSilent)
 }
 
+/** CLK SYS: who owns each sounding pitch (chords, arp, bass), so a slot switch ends the old
+ *  notes and their queued note-offs don't cut the new slot's notes of the same pitch. */
+const _cpVoices = new VoiceLedger()
+
 /** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue. */
 function _cpNoteAt(note, velocity, channel, onMs, durMs) {
   const noteKey = `${note}-${channel}`
+  const id = _cpVoices.start(noteKey, onMs + durMs, { note, channel, key: noteKey })
   midiStore.sendNoteOn(note, velocity, channel, MidiSource.CHORD_PROG, null, onMs, { workerTimed: true, workerTag: CP_WORKER_TAG })
-  midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG, null, onMs + durMs, { workerTimed: true })
   _activeNoteKeys.add(noteKey)
-  midiService.scheduleOnWorker(onMs + durMs, () => _activeNoteKeys.delete(noteKey))
+  midiService.scheduleOnWorker(onMs + durMs, () => {
+    if (!_cpVoices.end(noteKey, id)) return
+    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
+    _activeNoteKeys.delete(noteKey)
+  })
+}
+
+/** CLK SYS, a slot switch at atMs: the notes still sounding then end there. */
+function _cpCutVoicesAt(atMs) {
+  for (const v of _cpVoices.cutAt(atMs)) {
+    midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.CHORD_PROG, null, atMs - 1, { workerTimed: true })
+    _activeNoteKeys.delete(v.key)
+  }
+  _activeBassNote = null
 }
 
 function _startSystemClock(tickCb, alignToBar) {
@@ -430,6 +455,7 @@ watch(() => store.isPlaying, (playing) => {
   _lastFollowedSlot = null
   _pendingTimeouts.clear()
   _activeNoteKeys.clear()
+  _cpVoices.clear()
   playStateRef.current = buildPlayState()
 
   toneStart().then(() => {
@@ -446,6 +472,8 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       if (_cpCueSlot !== null && (_transportTicks - 1) % 384 === 0 && !state.chainSlotIndices) {
         const idx = _cpCueSlot
         _cpCueSlot = null
+        // The old slot's notes end on the bar line, not where their own note-offs were.
+        if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
         handleSlotSelect(idx)
         state.steps = store.steps
         state.numSteps = store.numSteps
@@ -747,6 +775,7 @@ watch(() => store.isPlaying, (playing) => {
 })
 
 onUnmounted(() => {
+  rigReports.queued.chord = null
   _stopSystemClock()
   store.isPlaying = false
   if (_scheduledMidiEventId !== null) { getTransport().cancel(_scheduledMidiEventId); _scheduledMidiEventId = null }
@@ -1132,6 +1161,8 @@ const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
 // first chord (as a clip launched in Live's Session View); stopped — or during chain playback,
 // where the chain decides — it's selected at once.
 const cuedSlotIdx = ref(null)
+// Rig Controller (rig-live.ts): the queued slot, mirrored for the pads.
+watch(cuedSlotIdx, v => { rigReports.queued.chord = v })
 let _cpCueSlot = null
 const _onCpSlotCue = (e) => {
   const idx = e.detail?.idx

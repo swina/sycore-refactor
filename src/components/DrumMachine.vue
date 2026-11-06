@@ -32,6 +32,7 @@ import { buildDrumExportEvents, splitBars, drumEventsToMidi, renderDrumEvents, a
 import { captureInputDeviceId, isLoopbackAudioInput } from '@/lib/capture-input'
 import DrumExportModal from '@/components/DrumExportModal.vue'
 import { openCaptureInput, recordPart } from '@/lib/drum-export-capture'
+import { rigReports } from '@/lib/rig-live'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
@@ -190,6 +191,8 @@ function overwritePresetWithToast(id) {
 // Quantized sequence switching — set by tab click, applied at next bar start
 let _pendingSequence = null
 const pendingSequence = ref(null) // UI display only (drives pulsing tab border)
+// Rig Controller (rig-live.ts): the queued sequence, mirrored for the pads.
+watch(pendingSequence, v => { rigReports.queued.drum = v ? 'ABCDEFGH'.indexOf(v) : null })
 
 // Fill
 const fillActive    = ref(false)
@@ -911,6 +914,7 @@ watch(() => drumStore.systemClock, () => {
 })
 
 onUnmounted(() => {
+  rigReports.queued.drum = null
   _stopSystemClock()
   if (drumStore.isPlaying) drumStore.isPlaying = false
   if (repeatEventIdRef !== null) {

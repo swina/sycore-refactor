@@ -110,6 +110,9 @@ export class MidiService {
   private syncOutputBlock: ((outputName: string) => boolean) | null = null;
   private _loopbackInputs = new Map<string, string>(); // input id → name (echoes our output)
   private ingressFilter: ((event: MIDIMessageEvent) => boolean) | null = null;
+  /** Takes an input over entirely (Rig Controller's Launchpad Rig mode): a message it
+   *  returns true for reaches nothing else — raw listeners, MIDI Learn, mappings, Thru. */
+  private exclusiveInput: ((event: MIDIMessageEvent) => boolean) | null = null;
 
   // ── Echo / ingress suppression ───────────────────────────────────────────
   private lastSentMessages = new Map<string, { data: string; time: number }>();
@@ -755,6 +758,10 @@ export class MidiService {
 
   setControlConsumer(fn: ((data: ArrayLike<number>, inputName: string) => boolean) | null): void {
     this.controlConsumer = fn;
+  }
+
+  setExclusiveInput(fn: ((event: MIDIMessageEvent) => boolean) | null): void {
+    this.exclusiveInput = fn;
   }
 
   setIngressFilter(fn: ((event: MIDIMessageEvent) => boolean) | null): void {
@@ -1594,6 +1601,9 @@ export class MidiService {
     const inputId = input?.id;
     const status = event.data[0];
     const now = Date.now();
+
+    // An input taken over (setExclusiveInput): nobody else sees its messages.
+    if (this.exclusiveInput && this.exclusiveInput(event)) return;
 
     // Fire raw listeners
     this.onRawListeners.forEach(l => l(event));
