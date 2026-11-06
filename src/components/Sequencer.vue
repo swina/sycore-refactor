@@ -21,7 +21,7 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import AiPromptModal from './AiPromptModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
-import { StepScheduler, createWorkerTicker } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, chaseNote } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
@@ -1564,7 +1564,17 @@ watch(isPlaying, (playing) => {
         // below (standard Elektron/Ableton-style step probability).
         const probabilityHit = step.probability == null || Math.random() * 100 < step.probability
 
-        if (step.active && probabilityHit && !late) {
+        // CLK SYS, a late step (late start after Live's Play, stalled page): a long note
+        // (ties, slow Time) whose end is still ahead sounds now for what is left ("chase").
+        let chase = null
+        if (step.active && probabilityHit && late && tMs != null) {
+          const stepMs = 60000 / (state.bpm * 4) * (tempoMultiplier.value.beatsPerStep * 4)
+          let durMs = stepMs * (step.gate / 100)
+          if (step.tieSteps > 0) durMs += stepMs * Math.min(step.tieSteps, state.steps.length - 1)
+          chase = chaseNote(tMs, Math.max(durMs, 10), performance.now(), true)
+        }
+
+        if (step.active && probabilityHit && (!late || chase)) {
           if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel, MidiSource.SEQUENCER2)
           if (state.param2CC !== null) midiStore.sendCC(state.param2CC, step.param2Value, state.channel, MidiSource.SEQUENCER2)
 
@@ -1572,6 +1582,7 @@ watch(isPlaying, (playing) => {
           let noteDurationMs = stepDurationMs * (step.gate / 100)
           if (step.tieSteps > 0) noteDurationMs += stepDurationMs * Math.min(step.tieSteps, state.steps.length - 1)
           noteDurationMs = Math.max(noteDurationMs, 10)
+          if (chase) { tMs = chase.onMs; noteDurationMs = chase.durMs }
 
           // Accent boosts velocity the same way the style generator's own
           // accentGrid already does (see generateSequence() below).
