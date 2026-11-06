@@ -6,12 +6,27 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
+import { useExternalClockSync } from '@/composables/useExternalClockSync'
+import { useExternalClockStore } from '@/stores/useExternalClockStore'
 
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
 const syncStore = useSyncStore()   // still needed here for the sync-checkbox template bindings below
 const arpStore = useArpStore()
 const midiStore = useMidiStore()
 const { openMenu } = useMidiContextMenu()
+const clockStore = useExternalClockStore()
+// Follow an external MIDI clock (e.g. Ableton Live on "SYC CTRL") when the
+// clock source is a MIDI input: Start/Stop/SPP drive Play All / Stop All.
+useExternalClockSync({ playAll: () => playAll(), stopAll: () => stopAll() })
+const inputNames = computed(() => midiStore.inputs.map(i => i.name).filter(Boolean))
+const diagCopied = ref(false)
+async function copyClockDiag() {
+  const text = [`Clock source: ${clockStore.source} · on loss: ${clockStore.lossBehavior} · forward: ${clockStore.forwardClock}`,
+    ...clockStore.diagHistory].join('\n')
+  try { await navigator.clipboard.writeText(text) } catch { console.log(text) }
+  diagCopied.value = true
+  setTimeout(() => { diagCopied.value = false }, 1500)
+}
 
 const showSyncPanel = ref(false)
 const position = ref('001:1:1')
@@ -159,9 +174,84 @@ const _onTransportStopAll = () => { stopAll() }
           <p class="text-[7px] text-neutral-600 mt-3 leading-relaxed">
             Synced apps start at the next bar boundary when the transport is already running.
           </p>
+
+          <!-- Clock source (P1: follow an external master such as Ableton Live) -->
+          <div class="mt-4 pt-3 border-t border-neutral-800 space-y-2">
+            <p class="text-[8px] font-bold uppercase tracking-widest text-neutral-500">Clock</p>
+            <label class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-mono text-neutral-300">Source</span>
+              <select
+                :value="clockStore.source"
+                @change="clockStore.setSource($event.target.value)"
+                class="max-w-[10rem] bg-black border border-neutral-800 rounded px-1 py-0.5 text-[11px] font-mono text-neutral-300 outline-none"
+                title="INT: SY.CORE is the master. A MIDI input: follow its clock, Start/Stop and Song Position"
+              >
+                <option value="internal">Internal (INT)</option>
+                <option v-for="name in inputNames" :key="name" :value="`midi:${name}`">EXT · {{ name }}</option>
+                <option v-if="clockStore.port && !inputNames.includes(clockStore.port)" :value="clockStore.source">
+                  EXT · {{ clockStore.port }} (offline)
+                </option>
+              </select>
+            </label>
+            <label v-if="clockStore.isExternal" class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-mono text-neutral-300">On clock loss</span>
+              <select
+                v-model="clockStore.lossBehavior"
+                class="bg-black border border-neutral-800 rounded px-1 py-0.5 text-[11px] font-mono text-neutral-300 outline-none"
+              >
+                <option value="stop">Stop the apps</option>
+                <option value="continue">Continue on INT</option>
+              </select>
+            </label>
+            <label v-if="clockStore.isExternal" class="flex items-center justify-between gap-2 cursor-pointer"
+              title="Send the source's clock, Start/Stop and Song Position to the outputs with Clock / Transport on. Leave off if an output loops back into the source.">
+              <span class="text-[11px] font-mono text-neutral-300">Forward clock to devices</span>
+              <input type="checkbox" v-model="clockStore.forwardClock" class="accent-synth-neon" />
+            </label>
+            <p v-if="clockStore.isExternal && clockStore.samePortInputs > 1" class="text-[8px] text-amber-400 leading-relaxed">
+              {{ clockStore.samePortInputs }} inputs are named "{{ clockStore.port }}": the clock is taken from the first one only.
+            </p>
+            <p v-if="clockStore.isExternal" class="text-[7px] text-neutral-600 leading-relaxed">
+              Start, Stop and Song Position from the source drive the apps above; they start on the bar line.
+              In Live set MIDI Clock Type to "Song". Last phase error: {{ clockStore.lastPhaseErrorMs }} ms.
+            </p>
+            <p v-if="clockStore.isExternal && clockStore.diag" class="text-[8px] font-mono text-neutral-400">
+              {{ clockStore.diag }} · state {{ clockStore.state }}
+            </p>
+            <button v-if="clockStore.isExternal && clockStore.diagHistory.length"
+              @click="copyClockDiag"
+              class="text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500">
+              {{ diagCopied ? 'Copied ✓' : `Copy diagnostics (${clockStore.diagHistory.length} s)` }}
+            </button>
+          </div>
         </div>
       </Transition>
     </div>
+
+    <!-- Clock: EXT (following a MIDI master) / INT -->
+    <button
+      v-if="clockStore.isExternal"
+      @click="showSyncPanel = !showSyncPanel"
+      class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black tracking-widest border"
+      :class="clockStore.fallbackToInternal
+        ? 'text-amber-400 border-amber-500/50 bg-amber-500/10 animate-pulse'
+        : clockStore.state === 'playing' || clockStore.state === 'waiting-bar'
+          ? 'text-cyan-300 border-cyan-500/50 bg-cyan-500/10'
+          : 'text-neutral-400 border-neutral-700'"
+      :title="clockStore.fallbackToInternal
+        ? `Clock lost on ${clockStore.port}: continuing on the internal clock`
+        : `Following the clock on ${clockStore.port}`"
+    >
+      <AlertTriangle v-if="clockStore.fallbackToInternal" class="w-3 h-3" />
+      <span>{{ clockStore.mode }}</span>
+      <span v-if="clockStore.bpm > 0" class="font-mono tabular-nums">{{ clockStore.bpm.toFixed(1) }}</span>
+      <span class="font-mono tabular-nums text-neutral-400">{{ clockStore.position }}</span>
+      <span v-if="clockStore.audioOverloaded && (clockStore.state === 'playing' || clockStore.fallbackToInternal)"
+        class="ml-1 px-1 rounded bg-amber-500/20 text-amber-400"
+        :title="`Audio overloaded: the audio clock runs at ${clockStore.audioClockPct}% of real time, so the apps can't keep Live's time. Close heavy panels (e.g. FM-1 Emulator).`">
+        AUDIO
+      </span>
+    </button>
 
     <!-- Position -->
     <span class="text-[10px] font-mono text-neutral-400 tabular-nums w-16 text-center">

@@ -17,6 +17,10 @@ export interface TransportContext {
   getVirtualClockTargets: () => string[];
   getVirtualTransportTargets: () => string[];
   sendToVirtualOutput: (name: string, data: number[]) => void;
+  /** Outputs that must not get our clock / Start / Stop: while following an
+   *  external clock, the source port's loopback peer would echo them back into
+   *  the source and double the clock it measures. */
+  isSyncOutputBlocked?: (outputName: string) => boolean;
 }
 
 export class MidiTransport {
@@ -55,8 +59,44 @@ export class MidiTransport {
     if (this.clockInterval) this.startClock();
   }
 
+  /** Following an external clock: no clock of our own; the source's clock is
+   *  forwarded instead (forwardRealTime). */
+  private following = false;
+
+  get isFollowingExternal(): boolean { return this.following; }
+
+  setFollowingExternal(on: boolean): void {
+    this.following = on;
+    if (on) this.stopClock();
+  }
+
+  /**
+   * Forward a real-time message of the external clock source (Clock, Start,
+   * Continue, Stop, Song Position) to the outputs that take clock / transport,
+   * so devices synced to SY.CORE follow the master's exact tempo instead of a
+   * clock generated here at the rounded BPM.
+   */
+  forwardRealTime(data: ArrayLike<number>): void {
+    const status = data[0];
+    const isClock = status === 0xF8;
+    const field: 'clock' | 'transport' = isClock ? 'clock' : 'transport';
+    const msg = Array.from(data as ArrayLike<number>);
+    const access = this.ctx.getMidiAccess();
+    if (access) {
+      access.outputs.forEach((outPort: any) => {
+        const config = this.ctx.getRoutingConfig()?.registrations[outPort.name];
+        if (!config?.outEnabled || !config?.[field]) return;
+        if (this.ctx.isSyncOutputBlocked?.(outPort.name)) return;
+        try { outPort.send(msg); } catch {}
+      });
+    }
+    const targets = isClock ? this.ctx.getVirtualClockTargets() : this.ctx.getVirtualTransportTargets();
+    targets.forEach(name => this.ctx.sendToVirtualOutput(name, msg));
+  }
+
   startClock(): void {
     this.stopClock();
+    if (this.following) return;
     if (!this.currentBpm || this.currentBpm < 1) return;
     this.isPlaying = true;
     this._nextClockScheduleTime = performance.now();
@@ -73,7 +113,7 @@ export class MidiTransport {
         if (access) {
           access.outputs.forEach((outPort: any) => {
             const config = this.ctx.getRoutingConfig()?.registrations[outPort.name];
-            if (config?.outEnabled && config?.clock) {
+            if (config?.outEnabled && config?.clock && !this.ctx.isSyncOutputBlocked?.(outPort.name)) {
               try { outPort.send([0xF8], t); } catch {}
             }
           });
@@ -136,6 +176,7 @@ export class MidiTransport {
       access.outputs.forEach((outPort: any) => {
         const config = this.ctx.getRoutingConfig()?.registrations[outPort.name];
         if (!config?.outEnabled || !config?.transport) return;
+        if (this.ctx.isSyncOutputBlocked?.(outPort.name)) return;
         outPort.send([status]);
       });
     }

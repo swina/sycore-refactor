@@ -95,6 +95,8 @@ export class MidiService {
   private static readonly ECHO_WINDOW_MS = 20;
   private static readonly LOOPBACK_MIN_ECHOES = 8;
   private _echoStats = new Map<string, { echo: number; other: number }>();
+  /** Set while following an external clock: outputs that get no clock / transport (see MidiTransport). */
+  private syncOutputBlock: ((outputName: string) => boolean) | null = null;
   private _loopbackInputs = new Map<string, string>(); // input id → name (echoes our output)
   private ingressFilter: ((event: MIDIMessageEvent) => boolean) | null = null;
 
@@ -217,8 +219,8 @@ export class MidiService {
       if (this._resettingInputs.has(key) || Date.now() - lastReset < 500) continue;
       this._resettingInputs.add(key);
       console.log(`[MIDI] Poll-resetting new input: ${input.name}`);
-      input.removeEventListener('midimessage', this.handleIngressBound);
-      input.addEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
+      this.attachIngress(input);
       this._resettingInputs.delete(key);
       this._lastInputResetAt.set(key, Date.now());
     }
@@ -269,7 +271,7 @@ export class MidiService {
     const target = this.normPort(portName);
     this.midiAccess.inputs.forEach(input => {
       if (this.normPort(input.name) === target && this.isBlockedLoopbackInput(input.name)) {
-        input.removeEventListener('midimessage', this.handleIngressBound);
+        this.detachIngress(input);
         input.close();
       }
     });
@@ -284,13 +286,13 @@ export class MidiService {
     for (const input of Array.from(this.midiAccess.inputs.values())) {
       if (this.normPort(input.name) !== target) continue;
       if (this.isBlockedLoopbackInput(input.name)) return; // never reopen a loopback output side
-      input.removeEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
       // open() only — same as reScanInputs(): a close()+open() cycle
       // corrupts some USB MIDI drivers (Worlde, etc.) until a replug.
       try { await input.open(); } catch (e) {
         console.warn(`[MIDI] Failed to open input "${input.name}":`, e);
       }
-      input.addEventListener('midimessage', this.handleIngressBound);
+      this.attachIngress(input);
       console.log(`[MIDI] Reconnected input: ${input.name}`);
       break;
     }
@@ -329,6 +331,9 @@ export class MidiService {
     groups.forEach(names => {
       const anyEnabled = names.some(n => {
         const c = this.routingConfig?.registrations[n];
+        // A virtual instrument on the external clock source's loopback peer
+        // would echo our clock back into the source.
+        if (this.syncOutputBlock?.(this.virtualOutputPorts.get(n) ?? n)) return false;
         return c?.outEnabled && c?.[configField];
       });
       if (anyEnabled) targets.push(names[0]);
@@ -516,7 +521,8 @@ export class MidiService {
     const sendToVirtualOutput = (name: string, data: number[]) => this.sendToVirtualOutput(name, data);
 
     this.monitor = new MidiMonitor();
-    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualClockTargets, getVirtualTransportTargets, sendToVirtualOutput });
+    const isSyncOutputBlocked = (name: string) => !!this.syncOutputBlock?.(name);
+    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualClockTargets, getVirtualTransportTargets, sendToVirtualOutput, isSyncOutputBlocked });
     this.latch = new SmartLatch({ getMidiAccess, getRoutingConfig, getGlobalChannel });
     this.router = new MidiRouter({
       getMidiAccess,
@@ -647,7 +653,7 @@ export class MidiService {
     const inputs = Array.from(this.midiAccess.inputs.values())
       .filter(input => !this.isBlockedLoopbackInput(input.name));
     for (const input of inputs) {
-      input.removeEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
       try {
         // open() alone on an already-open port is a spec no-op, but on
         // Chromium it actually re-establishes the internal stream that
@@ -658,8 +664,8 @@ export class MidiService {
       } catch (e) {
         console.warn(`[MIDI] Failed to open input "${input.name}" on startup:`, e);
       }
-      input.removeEventListener('midimessage', this.handleIngressBound);
-      input.addEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
+      this.attachIngress(input);
     }
     console.log(`[MIDI] Attached to ${inputs.length} inputs: ${inputs.map(i => i.name).join(', ')}`);
   }
@@ -790,6 +796,19 @@ export class MidiService {
   /** Names of inputs detected as loopbacks of our own outputs (diagnostics). */
   getLoopbackInputNames(): string[] {
     return Array.from(this._loopbackInputs.values());
+  }
+
+  setSyncOutputBlock(fn: ((outputName: string) => boolean) | null): void {
+    this.syncOutputBlock = fn;
+  }
+
+  /** Following an external clock: stop our own clock and forward the source's (see MidiTransport). */
+  setFollowingExternalClock(on: boolean): void {
+    this.transport.setFollowingExternal(on);
+  }
+
+  forwardExternalRealTime(data: ArrayLike<number>): void {
+    this.transport.forwardRealTime(data);
   }
 
   addRawListener(callback: (event: MIDIMessageEvent) => void): () => void {
@@ -1492,8 +1511,8 @@ export class MidiService {
           if (!this._resettingInputs.has(key) && Date.now() - lastReset > 500) {
             this._resettingInputs.add(key);
             console.log(`[MIDI] Device (re)connected: ${name}`);
-            input.removeEventListener('midimessage', this.handleIngressBound);
-            input.addEventListener('midimessage', this.handleIngressBound);
+            this.detachIngress(input);
+            this.attachIngress(input);
             this._resettingInputs.delete(key);
             this._lastInputResetAt.set(key, Date.now());
           }
@@ -1682,6 +1701,32 @@ export class MidiService {
   }
 
   private handleIngressBound = this.handleIngress.bind(this);
+
+  /** The input object the ingress listener is attached to, per port id. */
+  private ingressAttached = new Map<string, MIDIInput>();
+
+  /**
+   * Attach the ingress listener to an input — exactly once per port id. The
+   * listener is (re)attached from several places (startup scan, reconnect,
+   * statechange, device poll); when one of them got a different object for the
+   * same port, the listener ended up on both and every message was handled
+   * twice: notes were saved by echo suppression, but an incoming MIDI clock
+   * read at double tempo (Live at 75 BPM → 150).
+   */
+  private attachIngress(input: MIDIInput): void {
+    const prev = this.ingressAttached.get(input.id);
+    if (prev && prev !== input) prev.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    input.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    input.addEventListener('midimessage', this.handleIngressBound as EventListener);
+    this.ingressAttached.set(input.id, input);
+  }
+
+  private detachIngress(input: MIDIInput): void {
+    input.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    const prev = this.ingressAttached.get(input.id);
+    if (prev && prev !== input) prev.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    this.ingressAttached.delete(input.id);
+  }
 
   /** Epoch ms when the browser received the message; `fallback` if the timestamp is unusable. */
   private arrivalTime(event: MIDIMessageEvent, fallback: number): number {
