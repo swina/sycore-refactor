@@ -26,7 +26,7 @@ import AiPromptModal from './AiPromptModal.vue'
 import SongComposerDialog from './SongComposerDialog.vue'
 import { sendPartPresets } from '@/lib/song-composer'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
-import { StepScheduler, createWorkerTicker } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, chaseNote } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 
@@ -306,6 +306,13 @@ let _stopTicker = null
 let _offExtGrid = null
 let _sysStartSixteenth = 0
 
+/** CLK SYS "chase": a note whose start is already gone (a late start after Live's Play, a
+ *  stalled page) but whose end is still ahead sounds now, for what is left of it — a chord
+ *  lasting the whole first bar was skipped, leaving the bar silent. Null: nothing left to play. */
+function _chase(onMs, durMs) {
+  return chaseNote(onMs, durMs, performance.now(), _sysSilent)
+}
+
 /** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue. */
 function _cpNoteAt(note, velocity, channel, onMs, durMs) {
   const noteKey = `${note}-${channel}`
@@ -508,19 +515,21 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
           }
         }, time)
 
-        if (step?.active && step.velocity > 0 && step.notes?.length > 0 && effectiveMode !== 'arp' && !_sysSilent) {
+        if (step?.active && step.velocity > 0 && step.notes?.length > 0 && effectiveMode !== 'arp') {
           const tickMs = 60000 / (state.bpm * 96)
           const stepMs = tickMs * ticksNeeded
           const noteDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
           const channel = state.channel
 
           if (_sysTickMs != null) {
-            // CLK SYS: every note at its time — together, or strummed at its own offset.
+            // CLK SYS: every note at its time — together, or strummed at its own offset;
+            // late (chase): now, for what is left of the chord.
+            const play = _chase(_sysTickMs, noteDurationMs)
             const ordered = step.chordMode ? orderChordStrumNotes(step.notes, step.chordMode) : step.notes
             const strumStepMs = step.chordMode ? Math.min(25, stepMs / (ordered.length + 1)) : 0
-            ordered.forEach((note, i) => {
+            if (play) ordered.forEach((note, i) => {
               const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
-              _cpNoteAt(clampedNote, step.velocity, channel, _sysTickMs + strumStepMs * i, noteDurationMs)
+              _cpNoteAt(clampedNote, step.velocity, channel, play.onMs + strumStepMs * i, play.durMs)
             })
           } else if (!step.chordMode) {
             // Simultaneous — today's only behavior, unchanged.
@@ -571,7 +580,11 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
             const tickMs = 60000 / (state.bpm * 96)
             const stepMs = tickMs * ticksNeeded
             const bassDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
-            if (!_sysSilent) sendBassNoteOn(bassNote, step.velocity, bassDurationMs, _sysTickMs)
+            if (_sysTickMs == null) sendBassNoteOn(bassNote, step.velocity, bassDurationMs)
+            else {
+              const play = _chase(_sysTickMs, bassDurationMs)
+              if (play) sendBassNoteOn(bassNote, step.velocity, play.durMs, play.onMs)
+            }
           }
         }
       }  // closes if (state.tickCounter === 0)

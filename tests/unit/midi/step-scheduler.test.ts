@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { StepScheduler } from '@/core/midi/step-scheduler'
+import { StepScheduler, chaseNote } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { ExternalClockFollower, type ExternalClockEvent } from '@/core/midi/external-clock'
 
@@ -151,5 +151,17 @@ describe('StepScheduler — the Chord Seq 384n tick (1/96 beat)', () => {
     expect(ticks[96]).toBeCloseTo(500)
     s.anchorTo(8, 1012, 120)         // Live's beat at sixteenth 8 (= tick 192) lands at 1012 ms
     expect(s.timeOf(192)).toBeCloseTo(1012)
+  })
+})
+
+describe('chaseNote — a late long note still sounds', () => {
+  it('on time: unchanged', () => {
+    expect(chaseNote(1000, 3200, 950, false)).toEqual({ onMs: 1000, durMs: 3200 })
+  })
+  it('a 1/1 chord whose downbeat is 300 ms gone: now, for the 2.9 s left', () => {
+    expect(chaseNote(1000, 3200, 1300, true)).toEqual({ onMs: 1300, durMs: 2900 })
+  })
+  it('a short note that is late: skipped', () => {
+    expect(chaseNote(1000, 150, 1100, true)).toBeNull()
   })
 })

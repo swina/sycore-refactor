@@ -131,6 +131,19 @@ function stepMsOf(bpm: number, beatsPerStep = 0.25): number {
   return bpm > 0 ? (60000 / bpm) * beatsPerStep : 0;
 }
 
+// ── Chase ───────────────────────────────────────────────────────────────────
+
+/**
+ * A note handed out late (see StepScheduler's `late`): skipped when it's short,
+ * but a long one (a chord lasting a bar) whose end is still ahead sounds now
+ * for what is left of it, like a DAW's "chase". On time: as is. Null: skip.
+ */
+export function chaseNote(onMs: number, durMs: number, now: number, late: boolean, minLeftMs = 80): { onMs: number; durMs: number } | null {
+  if (!late) return { onMs, durMs };
+  const left = onMs + durMs - now;
+  return left > minLeftMs ? { onMs: now, durMs: left } : null;
+}
+
 // ── Worker ticker ───────────────────────────────────────────────────────────
 
 /**
