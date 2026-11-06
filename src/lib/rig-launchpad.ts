@@ -82,7 +82,7 @@ export const rigLaunchpad: {
 // flags) makes a pad blink with automatic flashing on. The port's own `send`
 // is shadowed by a no-op meanwhile; the Rig Controller writes with the original.
 
-interface SendPort { send: (data: number[], timestamp?: number) => void }
+interface SendPort { send: (data: number[], timestamp?: number) => void; name?: string | null }
 const muted = new Map<SendPort, SendPort['send']>()
 
 export function muteOtherSenders(port: SendPort): void {
@@ -91,9 +91,13 @@ export function muteOtherSenders(port: SendPort): void {
   port.send = () => {}
 }
 
-export function unmuteOtherSenders(): void {
-  for (const port of muted.keys()) delete (port as Partial<SendPort>).send
-  muted.clear()
+/** Give the muted ports (those `match` accepts, by default all) their own `send` back. */
+export function unmuteOtherSenders(match?: (port: SendPort) => boolean): void {
+  for (const p of [...muted.keys()]) {
+    if (match && !match(p)) continue
+    delete (p as Partial<SendPort>).send
+    muted.delete(p)
+  }
 }
 
 /** Send from the Rig Controller, past the mute. */

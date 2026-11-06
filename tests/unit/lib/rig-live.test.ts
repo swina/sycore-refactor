@@ -81,3 +81,63 @@ describe('rig-live commands', () => {
     expect(isLiveApp('drum')).toBe(true)
   })
 })
+
+import { mutedLiveSources, rigMutes } from '@/lib/rig-live'
+describe('rig-live mute / solo', () => {
+  const apps = (over: Record<string, { muted?: boolean; solo?: boolean }>) =>
+    ['chord', 'drum', 'bass', 'seq', 'arp'].map(id => ({ id, muted: false, solo: false, ...over[id] }))
+  it('muted apps', () => {
+    expect(mutedLiveSources(apps({}))).toEqual([])
+    expect(mutedLiveSources(apps({ seq: { muted: true } }))).toEqual(['SEQUENCER2'])
+  })
+  it('solo: all the other real apps; a simulated row does not count', () => {
+    expect(mutedLiveSources(apps({ drum: { solo: true } }))).toEqual(['CHORD_PROG', 'SEQUENCER2'])
+    expect(mutedLiveSources(apps({ bass: { solo: true }, chord: { muted: true } }))).toEqual(['CHORD_PROG'])
+  })
+  it('scopes: an app with devices in its scope mutes only those cables', () => {
+    const a = apps({ chord: { muted: true }, drum: { muted: true } })
+    expect(rigMutes(a, { chord: ['Live · Chords'] })).toEqual({ sources: ['DRUM_MACHINE'], cables: [['CHORD_PROG', 'Live · Chords']] })
+    expect(rigMutes(apps({ seq: { solo: true } }), { drum: ['A', 'B'] })).toEqual({ sources: ['CHORD_PROG'], cables: [['DRUM_MACHINE', 'A'], ['DRUM_MACHINE', 'B']] })
+    expect(rigMutes(apps({}), { chord: ['X'] })).toEqual({ sources: [], cables: [] })
+  })
+})
+
+
+import { rigVelocityScales } from '@/lib/rig-live'
+describe('rig-live intensity', () => {
+  const apps = (over: Record<string, number>) => ['chord', 'drum', 'bass', 'seq', 'arp'].map(id => ({ id, intensity: over[id] ?? 127 }))
+  it('127 everywhere: nothing scaled', () => {
+    expect(rigVelocityScales(apps({}), 127)).toEqual({ sources: {}, cables: [] })
+  })
+  it('Intensity × Global per real app; simulated rows ignored', () => {
+    const v = rigVelocityScales(apps({ seq: 63.5, bass: 0 }), 127)
+    expect(v.sources).toEqual({ SEQUENCER2: 0.5 })
+    const g = rigVelocityScales(apps({ seq: 63.5 }), 63.5)
+    expect(g.sources).toEqual({ CHORD_PROG: 0.5, DRUM_MACHINE: 0.5, SEQUENCER2: 0.25 })
+  })
+  it('scoped apps scale only their cables', () => {
+    const v = rigVelocityScales(apps({ chord: 63.5 }), 127, { chord: ['Live · Chords'] })
+    expect(v).toEqual({ sources: {}, cables: [['CHORD_PROG', 'Live · Chords', 0.5]] })
+  })
+})
+
+import { rigCc7, intensityCc7, intensityMode } from '@/lib/rig-live'
+describe('rig-live intensity modes', () => {
+  const apps = (over: Record<string, number>) => ['chord', 'drum', 'bass', 'seq', 'arp'].map(id => ({ id, intensity: over[id] ?? 127 }))
+  it('CC 7 by default; Intensity × Global', () => {
+    expect(intensityMode({}, 'drum')).toBe('cc7')
+    expect(intensityCc7(127, 127)).toBe(127)
+    expect(intensityCc7(64, 127)).toBe(64)
+    expect(intensityCc7(127, 0)).toBe(0)
+    expect(rigCc7(apps({ drum: 0 }), 127, {}, { drum: ['Live Drums'] })).toEqual([
+      { id: 'chord', source: 'CHORD_PROG', value: 127, targets: [] },
+      { id: 'drum', source: 'DRUM_MACHINE', value: 0, targets: ['Live Drums'] },
+      { id: 'seq', source: 'SEQUENCER2', value: 127, targets: [] },
+    ])
+  })
+  it('velocity mode: no CC 7; cc7 mode: no velocity scale', () => {
+    expect(rigCc7(apps({}), 127, { chord: 'velocity', drum: 'velocity', seq: 'velocity' })).toEqual([])
+    expect(rigVelocityScales(apps({ drum: 0, seq: 0 }), 127, {}, { seq: 'both' }).sources).toEqual({ SEQUENCER2: 0 })
+    expect(rigVelocityScales(apps({ drum: 0 }), 127, {}, { drum: 'velocity' }).sources).toEqual({ DRUM_MACHINE: 0 })
+  })
+})

@@ -117,3 +117,104 @@ export function slotEvent(id: LiveAppId, slot: number) {
 export function dispatchRig(ev: { name: string; detail?: Record<string, unknown> }): void {
   window.dispatchEvent(new CustomEvent(ev.name, ev.detail ? { detail: ev.detail } : undefined))
 }
+
+/** The MidiSource each real app sends its notes with. */
+export const LIVE_APP_SOURCE = { chord: 'CHORD_PROG', drum: 'DRUM_MACHINE', seq: 'SEQUENCER2' } as const
+
+/** Which cables a real app's Mute/Solo acts on: [] = the whole app, else these devices only. */
+export type MuteScopes = Partial<Record<LiveAppId, string[]>>
+
+/** The apps the rig's Mute/Solo silences: with a Solo on among the real apps, all but the soloed ones; otherwise the muted ones. */
+function silencedApps(apps: readonly { id: string; muted: boolean; solo: boolean }[]): LiveAppId[] {
+  const live = apps.filter(a => isLiveApp(a.id))
+  const solo = live.some(a => a.solo)
+  return live.filter(a => (solo ? !a.solo : a.muted)).map(a => a.id as LiveAppId)
+}
+
+/** The sources to mute (whole apps) for the rig's Mute/Solo. */
+export function mutedLiveSources(apps: readonly { id: string; muted: boolean; solo: boolean }[]): string[] {
+  return silencedApps(apps).map(id => LIVE_APP_SOURCE[id])
+}
+
+/**
+ * Mute/Solo with scopes: an app whose scope lists devices mutes only its cables
+ * to them (`cables`, as [source, device] pairs); one with no scope, the whole app (`sources`).
+ */
+export function rigMutes(apps: readonly { id: string; muted: boolean; solo: boolean }[], scopes: MuteScopes = {}): { sources: string[]; cables: [string, string][] } {
+  const sources: string[] = []
+  const cables: [string, string][] = []
+  for (const id of silencedApps(apps)) {
+    const scope = scopes[id] ?? []
+    if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[id], dev])
+    else sources.push(LIVE_APP_SOURCE[id])
+  }
+  return { sources, cables }
+}
+
+/**
+ * Intensity: each real app's note-on velocity scale = its Intensity × Global (both 0–127,
+ * 127 = as played). Same scopes as Mute/Solo: the whole app (`sources`) or its cables
+ * (`cables`, [source, device, factor]). Factors of 1 are left out.
+ */
+export function rigVelocityScales(
+  apps: readonly { id: string; intensity: number }[], global: number, scopes: MuteScopes = {}, modes?: IntensityModes,
+): { sources: Record<string, number>; cables: [string, string, number][] } {
+  const sources: Record<string, number> = {}
+  const cables: [string, string, number][] = []
+  const g = Math.max(0, Math.min(127, global)) / 127
+  for (const a of apps) {
+    if (!isLiveApp(a.id)) continue
+    // `modes` given: only the apps whose Intensity scales velocity (without it: all, as before)
+    if (modes && intensityMode(modes, a.id) === 'cc7') continue
+    const f = (Math.max(0, Math.min(127, a.intensity)) / 127) * g
+    if (f >= 1) continue
+    const scope = scopes[a.id] ?? []
+    if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[a.id], dev, f])
+    else sources[LIVE_APP_SOURCE[a.id]] = f
+  }
+  return { sources, cables }
+}
+
+/** What a real app's Intensity sends: CC 7 (volume, any instrument), Velocity (note-on scale), or both. */
+export type IntensityMode = 'cc7' | 'velocity' | 'both'
+export type IntensityModes = Partial<Record<LiveAppId, IntensityMode>>
+export const DEFAULT_INTENSITY_MODE: IntensityMode = 'cc7'
+export const intensityMode = (modes: IntensityModes, id: string): IntensityMode =>
+  (modes[id as LiveAppId] ?? DEFAULT_INTENSITY_MODE)
+
+/** The CC 7 value for an app: Intensity × Global, 0–127. */
+export const intensityCc7 = (intensity: number, global: number): number =>
+  Math.max(0, Math.min(127, Math.round((Math.max(0, Math.min(127, intensity)) * Math.max(0, Math.min(127, global))) / 127)))
+
+/**
+ * The CC 7 sends: per real app in a CC mode, its value and where (`targets`: [] = all its cables).
+ */
+export function rigCc7(
+  apps: readonly { id: string; intensity: number }[], global: number, modes: IntensityModes = {}, scopes: MuteScopes = {},
+): { id: LiveAppId; source: string; value: number; targets: string[] }[] {
+  return apps
+    .filter(a => isLiveApp(a.id) && intensityMode(modes, a.id) !== 'velocity')
+    .map(a => ({ id: a.id as LiveAppId, source: LIVE_APP_SOURCE[a.id as LiveAppId], value: intensityCc7(a.intensity, global), targets: scopes[a.id as LiveAppId] ?? [] }))
+}
+
+const LS_MODES = 'SYCORE_RIG_INTENSITY_MODES'
+export function loadIntensityModes(): IntensityModes {
+  try {
+    const v = JSON.parse(localStorage.getItem(LS_MODES) ?? '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch { return {} }
+}
+export function saveIntensityModes(v: IntensityModes): void {
+  localStorage.setItem(LS_MODES, JSON.stringify(v))
+}
+
+const LS_SCOPES = 'SYCORE_RIG_MUTE_SCOPES'
+export function loadMuteScopes(): MuteScopes {
+  try {
+    const v = JSON.parse(localStorage.getItem(LS_SCOPES) ?? '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch { return {} }
+}
+export function saveMuteScopes(v: MuteScopes): void {
+  localStorage.setItem(LS_SCOPES, JSON.stringify(v))
+}

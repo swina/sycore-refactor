@@ -19,10 +19,12 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig,
+  isLiveApp, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
-import { midiService } from '@/core/midi/midi-service'
+import { midiService, cableMuteKey } from '@/core/midi/midi-service'
+import { isMidimixName, parseMidimixInput, mixLedDiff, mixLedsOff, Pickup, roleId, learnMixMsg, assignMix, mixMsgLabel, loadMixMap, saveMixMap } from '@/lib/rig-midimix'
+import { learnToggle, matchToggle, toggleLabel, toggleShortLabel, sameToggle, loadToggle, saveToggle, RIG_TOGGLE_SLOTS } from '@/lib/rig-toggle'
 import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVelocity, RIG_INIT_MESSAGES, muteOtherSenders, unmuteOtherSenders, rigSend } from '@/lib/rig-launchpad'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
@@ -75,6 +77,92 @@ function syncLive() {
     else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord))
     else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq))
   }
+}
+// Mute / Solo on the real apps (LIVE): their note-ons are dropped at the MIDI service —
+// the whole app, or only the cables picked in its scope (e.g. Chord → Live ch 2 only).
+// SIM, or the panel closed: nothing is muted.
+const muteScopes = reactive(loadMuteScopes())
+/** The devices a real app is cabled to (MIDI Flow), plus the ones in its scope no longer cabled. */
+function appCables(id) {
+  const cabled = midiService.getCableTargets(LIVE_APP_SOURCE[id])
+  return [...new Set([...cabled, ...(muteScopes[id] ?? [])])]
+}
+function toggleScope(id, dev) {
+  const cur = muteScopes[id] ?? []
+  muteScopes[id] = cur.includes(dev) ? cur.filter(d => d !== dev) : [...cur, dev]
+  saveMuteScopes({ ...muteScopes })
+}
+function clearScope(id) {
+  muteScopes[id] = []
+  saveMuteScopes({ ...muteScopes })
+}
+watch(() => {
+  if (!live.value) return '{"sources":[],"cables":[]}'
+  return JSON.stringify(rigMutes(s.apps, muteScopes))
+}, json => {
+  const m = JSON.parse(json)
+  midiService.setMutedSources(m.sources)
+  midiService.setMutedCables(m.cables.map(([src, dev]) => cableMuteKey(src, dev)))
+}, { immediate: true })
+// Intensity × Global → each real app's CC 7 (volume) and/or note-on velocity, on the same scopes.
+const intensityModes = reactive(loadIntensityModes())
+function setIntensityMode(id, mode) {
+  intensityModes[id] = mode
+  saveIntensityModes({ ...intensityModes })
+}
+watch(() => {
+  if (!live.value) return '{"sources":{},"cables":[]}'
+  return JSON.stringify(rigVelocityScales(s.apps, s.globalIntensity, muteScopes, intensityModes))
+}, json => {
+  const v = JSON.parse(json)
+  midiService.setVelocityScales(v.sources, Object.fromEntries(v.cables.map(([src, dev, f]) => [cableMuteKey(src, dev), f])))
+}, { immediate: true })
+onUnmounted(() => { midiService.setMutedSources([]); midiService.setMutedCables([]); midiService.setVelocityScales({}) })
+
+// CC 7: sent through the app's own routing (its cables' OUT channels, like its notes),
+// only when the value changes — opening the panel sends nothing. A CC 7 sent below 127
+// is put back to 127 when it stops applying (mode or scope changed, SIM, panel closed),
+// so a track is never left silent.
+const cc7Sent = new Map() // `${source}|${targets}` → { value, source, targets }
+let cc7Timer = null
+let cc7Pending = []
+const appChannel = id => (id === 'chord' ? chordStore.midiChannel : midiStore.midiChannel) - 1
+function sendCc7(source, targets, value, id) {
+  midiService.sendCC(7, value, Math.max(0, appChannel(id) ?? 0), source, null, targets.length ? { onlyTargets: targets } : undefined)
+}
+function flushCc7() {
+  cc7Timer = null
+  const now = new Set()
+  for (const c of cc7Pending) {
+    const key = `${c.source}|${c.targets.join(',')}`
+    now.add(key)
+    const prev = cc7Sent.get(key)
+    if (prev?.value === c.value) continue
+    if (!prev && c.value === 127) continue // never sent and at full: nothing to do
+    cc7Sent.set(key, { value: c.value, source: c.source, targets: c.targets, id: c.id })
+    sendCc7(c.source, c.targets, c.value, c.id)
+  }
+  for (const [key, prev] of cc7Sent) {
+    if (now.has(key)) continue
+    if (prev.value < 127) sendCc7(prev.source, prev.targets, 127, prev.id)
+    cc7Sent.delete(key)
+  }
+}
+watch(() => (live.value ? JSON.stringify(rigCc7(s.apps, s.globalIntensity, intensityModes, muteScopes)) : '[]'), json => {
+  cc7Pending = JSON.parse(json)
+  if (!cc7Timer) cc7Timer = setTimeout(flushCc7, 20)
+})
+onUnmounted(() => { clearTimeout(cc7Timer); cc7Pending = []; flushCc7() })
+/** Readout for the Track options: the velocity scale now applied to a real app, and where. */
+function velocityReadout(a) {
+  const f = (a.intensity / 127) * (s.globalIntensity / 127)
+  const scope = muteScopes[a.id] ?? []
+  const where = scope.length ? scope.map(d => `→ ${d}`).join(', ') : 'whole app'
+  const mode = intensityMode(intensityModes, a.id)
+  const parts = []
+  if (mode !== 'velocity') parts.push(`CC 7 = ${Math.round(a.intensity * s.globalIntensity / 127)}`)
+  if (mode !== 'cc7') parts.push(`Velocity ×${f.toFixed(2)}`)
+  return `${parts.join(' · ')} (Intensity ${a.intensity} · Global ${s.globalIntensity}) · ${where}`
 }
 let liveRaf = null
 function liveLoop() { syncLive(); liveRaf = requestAnimationFrame(liveLoop) }
@@ -340,26 +428,20 @@ function onLaunchpadMidi(data) {
   else if (ev.down) lpTopDown(ev.index)
   else lpTopUp(ev.index)
 }
-// Rig mode takes the Launchpad's input over before anything else (MIDI Learn, MIDI Actions,
-// the Loop Machine's and Chord Prog's own listeners, Thru): its mappings stay as they are and
-// work again when Rig mode is off.
-function lpExclusive(e) {
-  if (!isLaunchpadName(e.target?.name)) return false
-  onLaunchpadMidi(e.data)
-  return true
-}
+// Rig mode takes the Launchpad's input over before anything else (rigIngress below: MIDI
+// Learn, MIDI Actions, the Loop Machine's and Chord Prog's own listeners, Thru): its mappings
+// stay as they are and work again when Rig mode is off.
+const lpActive = () => rigLaunchpad.handler === onLaunchpadMidi
 function lpRigOn() {
   rigLaunchpad.handler = onLaunchpadMidi
-  midiService.setExclusiveInput(lpExclusive)
   lpSent = null
   if (lpSend(RIG_INIT_MESSAGES)) pushLeds()
 }
 function lpRigOff() {
-  if (rigLaunchpad.handler !== onLaunchpadMidi) return
+  if (!lpActive()) return
   rigLaunchpad.handler = null
-  midiService.setExclusiveInput(null)
   lpSent = null
-  unmuteOtherSenders()
+  unmuteOtherSenders(p => isLaunchpadName(p.name))
   rigLaunchpad.restore?.()
 }
 watch(lpLeds, pushLeds)
@@ -422,6 +504,217 @@ const mixStrips = computed(() => Array.from({ length: 8 }, (_, i) => {
   }
 }))
 
+// ── Physical AKAI MIDImix in Rig mode (rig-midimix.ts) ─────────────────────
+// On: its pots, faders and buttons are the strips above (no usual mappings),
+// absolute pots with pickup; Mute/Rec Arm/Bank LEDs show the state.
+const LS_MIX_RIG = 'SYCORE_RIG_MIDIMIX'
+const mixRig = ref(localStorage.getItem(LS_MIX_RIG) === '1')
+const mixOutput = computed(() => midiStore.outputs.find(o => isMidimixName(o.name)) ?? null)
+const mixPickup = new Pickup()
+const mixMap = ref(loadMixMap()) // learned controls (a MIDImix reprogrammed with the Akai editor)
+let mixActive = false
+let mixSent = null
+
+const mixLeds = computed(() => {
+  const st = mixStrips.value
+  return [
+    ...st.map(x => !!x.mute?.on),
+    ...st.map(x => !!x.rec?.on),
+    mixPage.value === 'app', mixPage.value === 'lane',
+  ]
+})
+const mixPort = () => midiService.getOutputs().find(o => isMidimixName(o.name)) ?? null
+const mixLastOut = ref('')
+function mixSend(msgs) {
+  const o = mixPort()
+  if (!o) { mixLastOut.value = 'no MIDImix output port'; return false }
+  mixLastOut.value = `${o.name}: ${msgs.slice(-2).map(m => hex(m)).join(' · ')}`
+  muteOtherSenders(o) // MIDI Learn feedback would overwrite the rig's LEDs
+  for (const m of msgs) rigSend(o, m)
+  return true
+}
+function pushMixLeds() {
+  if (!mixActive) return
+  const next = mixLeds.value
+  const msgs = mixLedDiff(mixSent, next, mixMap.value)
+  if (msgs.length && mixSend(msgs)) mixSent = next.slice()
+}
+/** Apply an absolute pot/fader through pickup; while it hasn't reached the value, show where to move it. */
+function mixTake(key, label, hw, get, set) {
+  const cur = get()
+  const v = mixPickup.take(`${mixPage.value}:${lanePageOffset.value}:${key}`, hw, cur)
+  if (v !== null) { set(v); s.display = `${label} ${v}`; return }
+  s.display = `${label} ${cur} · pickup: move ${hw < cur ? 'up ▲' : 'down ▼'} (${hw})`
+}
+// Diagnostics: the last message from a MIDImix-named input (Rig mode on or off) and how it was read.
+const mixLastIn = ref('')
+const hex = d => Array.from(d, b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+function onMidimixMidi(data) {
+  const ev = parseMidimixInput(data, mixMap.value)
+  mixLastIn.value = `${hex(data)} → ${ev ? ev.kind + ('strip' in ev ? ` ${ev.strip + 1}` : '') + ('down' in ev ? (ev.down ? ' down' : ' up') : ` ${ev.value}`) : 'not a MIDImix control'}`
+  if (!ev) return
+  const st = mixStrips.value
+  switch (ev.kind) {
+    case 'knob': {
+      const k = st[ev.strip]?.knobs[ev.row]
+      if (k) mixTake(`${ev.strip}k${ev.row}`, `${st[ev.strip].title} ${k.label}`, ev.value, k.get, k.set)
+      return
+    }
+    case 'fader': {
+      const f = st[ev.strip]?.fader
+      if (f) mixTake(`${ev.strip}f`, `${st[ev.strip].title} ${f.label}`, ev.value, f.get, f.set)
+      return
+    }
+    case 'master':
+      mixTake('master', 'Global', ev.value, () => s.globalIntensity, v => { s.globalIntensity = v })
+      return
+    case 'mute': if (ev.down) st[ev.strip]?.mute?.press(); return
+    case 'rec': if (ev.down) st[ev.strip]?.rec?.press(); return
+    case 'solo': // a Mute button with SOLO held: Solo on the App page, lanes 9–16 on the Lane page
+      if (!ev.down) return
+      if (mixPage.value === 'app') st[ev.strip]?.rec?.press()
+      else { const was = s.shift; s.shift = true; mixStrips.value[ev.strip]?.mute?.press(); s.shift = was }
+      return
+    case 'soloButton': s.shift = ev.down; return
+    case 'bankLeft': if (ev.down) mixPage.value = 'app'; return
+    case 'bankRight': if (ev.down) mixPage.value = 'lane'; return
+  }
+}
+function mixRigOn() {
+  mixActive = true
+  mixSent = null
+  mixPickup.reset()
+  pushMixLeds()
+}
+function mixRigOff() {
+  if (!mixActive) return
+  mixActive = false
+  const o = mixPort()
+  if (o) for (const m of mixLedsOff(mixMap.value)) rigSend(o, m)
+  mixSent = null
+  unmuteOtherSenders(p => isMidimixName(p.name))
+}
+watch(mixLeds, pushMixLeds)
+
+// ── MIDImix map Learn: pick a control on screen, then move/press it on the MIDImix ──
+// Roles in learning order (strip by strip, then the master section); after each
+// one the next is picked. Roles not learned keep the factory message.
+const MIX_LEARN_ROWS = [
+  ['knob', 0, 'K1'], ['knob', 1, 'K2'], ['knob', 2, 'K3'],
+  ['mute', null, 'Mute'], ['solo', null, 'Solo+Mute'], ['rec', null, 'Rec Arm'], ['fader', null, 'Fader'],
+]
+const MIX_MASTER_ROLES = [['bankLeft', 'Bank ◀'], ['bankRight', 'Bank ▶'], ['soloButton', 'SOLO'], ['master', 'Master']]
+const MIX_ROLE_ORDER = [
+  ...Array.from({ length: 8 }, (_, strip) => MIX_LEARN_ROWS.map(([kind, row]) => roleId({ kind, strip, row: row ?? undefined }))).flat(),
+  ...MIX_MASTER_ROLES.map(([r]) => r),
+]
+const mixLearn = ref(false)
+const mixLearnRole = ref(null)
+let mixLearnLastKey = null // the message just learned: its release / further values don't learn the next role
+watch(mixLearn, on => { mixLearnRole.value = on ? MIX_ROLE_ORDER[0] : null; mixLearnLastKey = null })
+const mixRoleLabel = role => mixMsgLabel(mixMap.value, role)
+const mixRoleLearned = role => !!mixMap.value[role]
+function mixLearnMessage(d) {
+  const key = `${d[0] & 0xEF}:${d[1]}`
+  if (key === mixLearnLastKey) return
+  const m = learnMixMsg(d)
+  if (!m || !mixLearnRole.value) return
+  const role = mixLearnRole.value
+  mixMap.value = assignMix(mixMap.value, role, m)
+  saveMixMap(mixMap.value)
+  mixLearnLastKey = key
+  s.display = `MIDImix ${role} = ${mixRoleLabel(role)}`
+  const next = MIX_ROLE_ORDER[MIX_ROLE_ORDER.indexOf(role) + 1]
+  mixLearnRole.value = next ?? null
+  if (!next) mixLearn.value = false
+}
+function mixMapReset() {
+  mixMap.value = {}
+  saveMixMap({})
+  s.display = 'MIDImix map: factory'
+}
+watch(mixMap, () => { mixSent = null; pushMixLeds() })
+watch(mixRig, on => {
+  localStorage.setItem(LS_MIX_RIG, on ? '1' : '0')
+  if (on) mixRigOn(); else mixRigOff()
+}, { immediate: true })
+let mixReinit = null
+watch(() => mixOutput.value?.id, id => {
+  clearTimeout(mixReinit)
+  if (id && mixRig.value) mixReinit = setTimeout(mixRigOn, 400)
+})
+onUnmounted(() => { clearTimeout(mixReinit); mixRigOff() })
+
+// ── Rig keys: hardware buttons ("Ableton Live mode"), learned ─────────────
+// All: both controllers — off remembers which were on, on puts them back (both by default).
+// LP / Mix: that controller only.
+const toggleBindings = reactive(Object.fromEntries(RIG_TOGGLE_SLOTS.map(k => [k, loadToggle(k)])))
+const learningToggle = ref(null) // the slot being learned, or null
+const TOGGLE_SLOT_LABEL = { all: 'All', lp: 'LP', mix: 'Mix' }
+const LS_TOGGLE_SET = 'SYCORE_RIG_TOGGLE_SET'
+function toggleRigMode() {
+  if (lpRig.value || mixRig.value) {
+    localStorage.setItem(LS_TOGGLE_SET, JSON.stringify({ lp: lpRig.value, mix: mixRig.value }))
+    lpRig.value = false
+    mixRig.value = false
+    s.display = 'Rig mode off · usual mappings back'
+    return
+  }
+  let set = { lp: true, mix: true }
+  try { set = { ...set, ...JSON.parse(localStorage.getItem(LS_TOGGLE_SET) ?? '{}') } } catch {}
+  if (!set.lp && !set.mix) set = { lp: true, mix: true }
+  lpRig.value = set.lp
+  mixRig.value = set.mix
+  s.display = 'Rig mode on'
+}
+function toggleSlot(slot) {
+  if (slot === 'all') return toggleRigMode()
+  if (slot === 'lp') { lpRig.value = !lpRig.value; s.display = `Launchpad Rig ${lpRig.value ? 'on' : 'off'}` }
+  else { mixRig.value = !mixRig.value; s.display = `MIDImix Rig ${mixRig.value ? 'on' : 'off'}` }
+}
+function setToggle(slot, b) {
+  // One button, one slot: learning it here takes it away from another slot.
+  if (b) for (const k of RIG_TOGGLE_SLOTS) if (k !== slot && sameToggle(toggleBindings[k], b)) setToggle(k, null)
+  toggleBindings[slot] = b
+  saveToggle(b, slot)
+}
+function clearToggle(slot) {
+  setToggle(slot, null)
+  learningToggle.value = null
+}
+
+// One exclusive input for the rig: the toggle button, then the controllers in Rig mode.
+function rigIngress(e) {
+  const d = e.data
+  if (!d || d.length < 2 || d[0] >= 0xF0) return false
+  const name = e.target?.name
+  if (learningToggle.value) {
+    const b = learnToggle(name, d)
+    if (b) {
+      const slot = learningToggle.value
+      setToggle(slot, b)
+      learningToggle.value = null
+      s.display = `Rig key ${TOGGLE_SLOT_LABEL[slot]}: ${toggleLabel(b)}`
+      return true
+    }
+  }
+  if (mixLearn.value && isMidimixName(name)) {
+    mixLearnMessage(d)
+    mixLastIn.value = `${hex(d)} → learn`
+    return true
+  }
+  for (const slot of RIG_TOGGLE_SLOTS) {
+    const t = matchToggle(toggleBindings[slot], name, d)
+    if (t) { if (t === 'press') toggleSlot(slot); return true }
+  }
+  if (lpActive() && isLaunchpadName(name)) { onLaunchpadMidi(d); return true }
+  if (mixActive && isMidimixName(name)) { onMidimixMidi(d); return true }
+  if (isMidimixName(name)) mixLastIn.value = `${hex(d)} → Rig off (${name})`
+  return false
+}
+midiService.setExclusiveInput(rigIngress)
+onUnmounted(() => midiService.setExclusiveInput(null))
+
 // Knob drag: vertical mouse movement changes the value (0–127)
 function knobDrag(e, knob) {
   const startY = e.clientY
@@ -476,6 +769,20 @@ const arcPath = v => {
               :class="lpRig ? (lpOutput ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-amber-500/40 border-amber-300 text-amber-50') : 'border-white/15 text-neutral-300 hover:bg-white/10'"
               :title="lpRig ? (lpOutput ? `Rig mode on ${lpOutput.name}: its buttons drive the rig, its LEDs show it. Off: its usual mappings come back` : 'Rig mode on, no Launchpad found') : 'Use the Launchpad Mini MK1 as the rig controller (its usual mappings are paused meanwhile)'"
               @click="lpRig = !lpRig">Launchpad {{ lpRig ? (lpOutput ? 'Rig ●' : 'Rig · not found') : 'Rig off' }}</button>
+      <button class="px-2 py-0.5 rounded border font-bold uppercase"
+              :class="mixRig ? (mixOutput ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-amber-500/40 border-amber-300 text-amber-50') : 'border-white/15 text-neutral-300 hover:bg-white/10'"
+              :title="mixRig ? (mixOutput ? `Rig mode on ${mixOutput.name}: its pots, faders and buttons drive the rig (pickup), its LEDs show it. Off: its usual mappings come back` : 'Rig mode on, no MIDImix found') : 'Use the AKAI MIDImix as the rig mixer (its usual mappings are paused meanwhile)'"
+              @click="mixRig = !mixRig">MIDImix {{ mixRig ? (mixOutput ? 'Rig ●' : 'Rig · not found') : 'Rig off' }}</button>
+      <span class="flex items-center gap-1">
+        <span class="uppercase tracking-widest text-neutral-500" title="Hardware buttons that switch Rig mode: All = both controllers (the ones that were on), LP = the Launchpad only, Mix = the MIDImix only">Rig keys</span>
+        <template v-for="slot in RIG_TOGGLE_SLOTS" :key="slot">
+          <button class="px-1.5 py-0.5 rounded border font-bold"
+                  :class="learningToggle === slot ? 'bg-amber-500 border-amber-300 text-black animate-pulse' : toggleBindings[slot] ? 'border-emerald-400/50 text-emerald-300 hover:bg-white/10' : 'border-white/15 text-neutral-400 hover:bg-white/10'"
+                  :title="`${{ all: 'Both controllers', lp: 'Launchpad only', mix: 'MIDImix only' }[slot]} · ${toggleBindings[slot] ? toggleLabel(toggleBindings[slot]) + ' · click to learn again' : 'click, then press a button'}`"
+                  @click="learningToggle = learningToggle === slot ? null : slot">{{ TOGGLE_SLOT_LABEL[slot] }} {{ learningToggle === slot ? '…' : toggleShortLabel(toggleBindings[slot]) }}</button>
+          <button v-if="toggleBindings[slot] && learningToggle !== slot" class="px-0.5 text-neutral-500 hover:text-white" :title="`Forget the ${TOGGLE_SLOT_LABEL[slot]} Rig key`" @click="clearToggle(slot)">✕</button>
+        </template>
+      </span>
       <span class="uppercase tracking-widest text-neutral-500">{{ live ? s.clock.source : 'Simulated Live' }}</span>
       <button class="flex items-center gap-1 px-2 py-0.5 rounded border font-bold uppercase"
               :class="s.clock.running ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'border-white/15 text-neutral-200 hover:bg-white/10'"
@@ -599,6 +906,28 @@ const arcPath = v => {
                 <span class="block mt-0.5 text-[9px] text-neutral-500 leading-snug">{{ optHint(g.key, focused.opts[g.key]) }}</span>
               </label>
             </div>
+            <!-- Mute / Solo scope (LIVE, real apps): the whole app or some of its MIDI Flow cables -->
+            <div v-if="live && isLiveApp(focused.id)" class="mt-3 pt-2 border-t border-white/5">
+              <span class="text-[10px] text-neutral-400">Mute / Solo / Intensity act on</span>
+              <div class="flex flex-wrap gap-1 mt-1">
+                <button class="px-1.5 py-0.5 rounded border text-[9px] font-bold"
+                        :class="!(muteScopes[focused.id] ?? []).length ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
+                        title="Mute/Solo and Intensity act on the whole app, on every device it's cabled to" @click="clearScope(focused.id)">Whole app</button>
+                <button v-for="dev in appCables(focused.id)" :key="dev" class="px-1.5 py-0.5 rounded border text-[9px]"
+                        :class="(muteScopes[focused.id] ?? []).includes(dev) ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
+                        :title="`Mute/Solo and Intensity act only on the cable ${focused.label} → ${dev}${midiService.getCableTargets(LIVE_APP_SOURCE[focused.id]).includes(dev) ? '' : ' (not cabled in MIDI Flow now)'}`"
+                        @click="toggleScope(focused.id, dev)">→ {{ dev }}</button>
+                <span v-if="!appCables(focused.id).length" class="text-[9px] text-neutral-600">no cables in MIDI Flow</span>
+              </div>
+              <div class="flex items-center gap-1 mt-2">
+                <span class="text-[10px] text-neutral-400">Intensity sends</span>
+                <button v-for="m in [['cc7', 'CC 7 (volume)'], ['velocity', 'Velocity'], ['both', 'Both']]" :key="m[0]" class="px-1.5 py-0.5 rounded border text-[9px]"
+                        :class="intensityMode(intensityModes, focused.id) === m[0] ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
+                        :title="{ cc7: 'CC 7 = Intensity × Global, on the app\'s channel: MIDI-map it in Live to the track volume (any instrument)', velocity: 'Note-on velocity scaled by Intensity × Global (the instrument must respond to velocity)', both: 'CC 7 and velocity' }[m[0]]"
+                        @click="setIntensityMode(focused.id, m[0])">{{ m[1] }}</button>
+              </div>
+              <div class="mt-1 font-mono text-[9px]" :class="focused.intensity * s.globalIntensity < 127 * 127 ? 'text-amber-300' : 'text-neutral-500'">{{ velocityReadout(focused) }}</div>
+            </div>
           </section>
 
           <section class="p-3 rounded-lg bg-black border border-emerald-500/20 font-mono">
@@ -701,8 +1030,41 @@ const arcPath = v => {
           <span class="uppercase tracking-widest text-[10px] text-neutral-500">Page</span>
           <span class="px-2 py-0.5 rounded bg-white/10 text-white font-bold">{{ mixPage === 'app' ? 'App' : `Lane ${lanePageOffset + 1}–${lanePageOffset + 8}` }}</span>
           <span class="text-[10px]">Pots and faders are absolute: SY.CORE applies pickup (the value changes once the control reaches it).</span>
+          <button class="ml-auto px-2 py-0.5 rounded border text-[10px] font-bold"
+                  :class="mixLearn ? 'bg-amber-500 border-amber-300 text-black' : 'border-white/15 text-neutral-300 hover:bg-white/10'"
+                  title="Learn the MIDImix's map (a MIDImix reprogrammed with the Akai editor, e.g. buttons sending CCs): pick a control, then move or press it"
+                  @click="mixLearn = !mixLearn">{{ mixLearn ? 'Learning… done' : 'Learn map' }}</button>
+          <button v-if="Object.keys(mixMap).length" class="px-2 py-0.5 rounded border border-white/15 text-[10px] text-neutral-300 hover:bg-white/10"
+                  title="Forget the learned controls: back to the factory map" @click="mixMapReset">Factory map</button>
+          <span class="font-mono text-[10px] text-amber-200/80" title="The last LED messages the rig sent to the MIDImix">LED out: {{ mixLastOut || '—' }}</span>
+          <span class="font-mono text-[10px]" :class="mixLastIn ? 'text-sky-300' : 'text-neutral-600'" title="The last message from the MIDImix and how the rig read it">MIDImix in: {{ mixLastIn || '—' }}</span>
         </div>
-        <div class="flex gap-3 p-4 rounded-2xl bg-neutral-900 border border-white/10 select-none w-fit">
+        <!-- Learn map: every control of the MIDImix, with the message it sends -->
+        <div v-if="mixLearn" class="p-3 rounded-2xl bg-neutral-900 border border-amber-500/30 select-none w-fit space-y-2">
+          <div class="text-[10px] text-amber-200">Pick a control (the next one is picked after each), then move or press it on the MIDImix. Set the buttons to <b>momentary</b> in the Akai editor. Highlighted: learned; grey: factory.</div>
+          <div class="flex gap-2">
+            <div v-for="strip in 8" :key="strip" class="flex flex-col gap-1 w-20">
+              <div class="text-[9px] text-center text-neutral-400 font-bold">Strip {{ strip }}</div>
+              <button v-for="r in MIX_LEARN_ROWS" :key="r[0] + r[1]"
+                      class="px-1 py-0.5 rounded border text-[8px] leading-tight text-left"
+                      :class="mixLearnRole === roleId({ kind: r[0], strip: strip - 1, row: r[1] ?? undefined }) ? 'bg-amber-500 border-amber-300 text-black animate-pulse'
+                        : mixRoleLearned(roleId({ kind: r[0], strip: strip - 1, row: r[1] ?? undefined })) ? 'border-emerald-400/50 text-emerald-200' : 'border-white/10 text-neutral-500'"
+                      @click="mixLearnRole = roleId({ kind: r[0], strip: strip - 1, row: r[1] ?? undefined })">
+                <b>{{ r[2] }}</b><br>{{ mixRoleLabel(roleId({ kind: r[0], strip: strip - 1, row: r[1] ?? undefined })) }}
+              </button>
+            </div>
+            <div class="flex flex-col gap-1 w-20">
+              <div class="text-[9px] text-center text-neutral-400 font-bold">Master</div>
+              <button v-for="r in MIX_MASTER_ROLES" :key="r[0]"
+                      class="px-1 py-0.5 rounded border text-[8px] leading-tight text-left"
+                      :class="mixLearnRole === r[0] ? 'bg-amber-500 border-amber-300 text-black animate-pulse' : mixRoleLearned(r[0]) ? 'border-emerald-400/50 text-emerald-200' : 'border-white/10 text-neutral-500'"
+                      @click="mixLearnRole = r[0]">
+                <b>{{ r[1] }}</b><br>{{ mixRoleLabel(r[0]) }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div v-else class="flex gap-3 p-4 rounded-2xl bg-neutral-900 border border-white/10 select-none w-fit">
           <div v-for="(st, i) in mixStrips" :key="i" class="w-20 flex flex-col items-center gap-2 p-2 rounded-lg bg-black/30 border border-white/5">
             <div class="text-[10px] font-bold text-neutral-200 truncate w-full text-center">{{ st.title }}</div>
             <div v-for="k in st.knobs" :key="k.label" class="flex flex-col items-center cursor-ns-resize" @pointerdown.prevent="knobDrag($event, k)">

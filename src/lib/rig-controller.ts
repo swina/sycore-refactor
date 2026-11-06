@@ -166,7 +166,7 @@ export function createRigState(): RigState {
       density: 64,
       swing: 0,
       gate: 80,
-      intensity: 100,
+      intensity: 127, // 127 = notes as the app plays them (LIVE: velocity scale)
     })),
     section: null,
     queuedSection: null,
@@ -181,7 +181,7 @@ export function createRigState(): RigState {
     generateMode: 'builtin',
     shift: false,
     lanePage: 0,
-    globalIntensity: 100,
+    globalIntensity: 127,
     display: 'Ready · waiting for Live',
     warnings: [],
     undo: null,

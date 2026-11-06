@@ -64,7 +64,16 @@ export interface BroadcastOptions {
   /** tag of a workerTimed send, so it can be cancelled before it leaves
    *  (cancelWorkerTimed: an app stopping drops its queued note-ons) */
   workerTag?: string
+  /** only to these cables' devices (names, case/space tolerant) — e.g. the Rig Controller's
+   *  CC 7 to the cables picked in an app's scope */
+  onlyTargets?: string[]
 }
+
+/** A note-on velocity scaled by `f` (0–1); never below 1, as velocity 0 would be a note-off. */
+export const scaleVelocity = (v: number, f: number): number => (f >= 1 ? v : Math.max(1, Math.min(127, Math.round(v * Math.max(0, f)))))
+
+/** Key of one app → device cable for setMutedCables(). */
+export const cableMuteKey = (source: string, deviceName: string): string => `${source}→${deviceName.toLowerCase().trim()}`
 
 export class MidiService {
   // ── Core references ──────────────────────────────────────────────────────
@@ -113,6 +122,15 @@ export class MidiService {
   /** Takes an input over entirely (Rig Controller's Launchpad Rig mode): a message it
    *  returns true for reaches nothing else — raw listeners, MIDI Learn, mappings, Thru. */
   private exclusiveInput: ((event: MIDIMessageEvent) => boolean) | null = null;
+  // Sources whose note-ons are dropped (the Rig Controller's Mute/Solo on the real apps).
+  // Note-offs still go out, so notes already playing end.
+  private mutedSources = new Set<MidiSource>();
+  // Single cables (app → device, as in MIDI Flow) whose note-ons are dropped: cableMuteKey().
+  private mutedCables = new Set<string>();
+  // Note-on velocity scales (the Rig Controller's Intensity): per source (whole app)
+  // and per cable (cableMuteKey()); 1 = as played.
+  private sourceVelocityScale = new Map<string, number>();
+  private cableVelocityScale = new Map<string, number>();
 
   // ── Echo / ingress suppression ───────────────────────────────────────────
   private lastSentMessages = new Map<string, { data: string; time: number }>();
@@ -764,6 +782,42 @@ export class MidiService {
     this.exclusiveInput = fn;
   }
 
+  /** Drop the note-ons of these sources (empty: none). */
+  setMutedSources(sources: Iterable<MidiSource>): void {
+    this.mutedSources = new Set(sources);
+  }
+
+  isSourceMuted(source: MidiSource): boolean {
+    return this.mutedSources.has(source);
+  }
+
+  /** Drop the note-ons of these cables only (keys from cableMuteKey(); empty: none). */
+  setMutedCables(keys: Iterable<string>): void {
+    this.mutedCables = new Set(keys);
+  }
+
+  isCableMuted(source: MidiSource | string, deviceName: string): boolean {
+    return this.mutedCables.size > 0 && this.mutedCables.has(cableMuteKey(source, deviceName));
+  }
+
+  /** Note-on velocity scales: per source and per cable key (cableMuteKey()); factors 0–1, missing = 1. */
+  setVelocityScales(sources: Record<string, number>, cables: Record<string, number> = {}): void {
+    this.sourceVelocityScale = new Map(Object.entries(sources).filter(([, f]) => f < 1));
+    this.cableVelocityScale = new Map(Object.entries(cables).filter(([, f]) => f < 1));
+  }
+
+  /** The velocity a note-on of `source` goes out with to `deviceName`. */
+  private cableVelocity(source: string, deviceName: string, v: number): number {
+    if (!this.cableVelocityScale.size) return v;
+    const f = this.cableVelocityScale.get(cableMuteKey(source, deviceName));
+    return f === undefined ? v : scaleVelocity(v, f);
+  }
+
+  /** The devices an app is cabled to in MIDI Flow (routing matrix targets). */
+  getCableTargets(source: MidiSource | string): string[] {
+    return Array.from(this.router.matrix.get(source as string) ?? []);
+  }
+
   setIngressFilter(fn: ((event: MIDIMessageEvent) => boolean) | null): void {
     this.ingressFilter = fn;
   }
@@ -947,8 +1001,8 @@ export class MidiService {
 
   // ── High-level message send ──────────────────────────────────────────────
 
-  sendCC(cc: number, value: number, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null): void {
-    this.broadcast('cc', { cc, value }, channel, source, skipDeviceId);
+  sendCC(cc: number, value: number, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, opts?: BroadcastOptions): void {
+    this.broadcast('cc', { cc, value }, channel, source, skipDeviceId, undefined, opts);
   }
 
   sendProgramChange(program: number, channel = 0, source: MidiSource = MidiSource.UI): void {
@@ -962,6 +1016,9 @@ export class MidiService {
    * delivered by a timer at that time.
    */
   sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions): void {
+    if (this.mutedSources.size && this.mutedSources.has(source)) return;
+    const vf = this.sourceVelocityScale.get(source);
+    if (vf !== undefined) velocity = scaleVelocity(velocity, vf);
     if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
       this.sendNoteSplit('noteon', note, velocity, channel);
       return;
@@ -1300,6 +1357,8 @@ export class MidiService {
     // exactChannel: the app picked this channel itself (e.g. the Drum Machine's bassline channel) —
     // it goes out on it as is, ignoring the cable / device OUT channel remap and channel filter.
     const exactChannel = !!opts?.exactChannel;
+    const onlyTargets = opts?.onlyTargets ? new Set(opts.onlyTargets.map(n => n.toLowerCase().trim())) : null;
+    const allowed = (name: string) => !onlyTargets || onlyTargets.has(name.toLowerCase().trim());
 
     if (this.isSequencerPlaying && (type === 'noteon' || type === 'noteoff') && source === MidiSource.KEYBOARD) {
       return;
@@ -1389,6 +1448,9 @@ export class MidiService {
     targetDeviceIds.forEach(id => {
       const out = this.midiAccess?.outputs.get(id);
       if (!out) return;
+      if (!allowed(out.name)) return;
+      if (type === 'noteon' && this.isCableMuted(source, out.name)) return;
+      const vel = type === 'noteon' ? this.cableVelocity(source, out.name, data.velocity) : data?.velocity;
 
       const config = this.routingConfig?.registrations[out.name];
 
@@ -1438,7 +1500,7 @@ export class MidiService {
         let bytes: number[] = [];
 
         switch (type) {
-          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, vel]; break;
           case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
           case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
           case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
@@ -1455,7 +1517,7 @@ export class MidiService {
           const deliver = () => {
             if (latched) {
               const forward = type === 'noteon'
-                ? this.latch.handleNoteOn(out, config, data.note, data.velocity, targetChannel, '', Date.now())
+                ? this.latch.handleNoteOn(out, config, data.note, vel, targetChannel, '', Date.now())
                 : this.latch.handleNoteOff(out, data.note, targetChannel);
               if (!forward) return;
             }
@@ -1480,6 +1542,9 @@ export class MidiService {
     virtualTargets.forEach(virtName => {
       const config = this.routingConfig?.registrations[virtName];
       if (!config || !config.outEnabled) return;
+      if (!allowed(virtName)) return;
+      if (type === 'noteon' && this.isCableMuted(source, virtName)) return;
+      const vel = type === 'noteon' ? this.cableVelocity(source, virtName, data.velocity) : data?.velocity;
 
           // Note-range + channel filter for app→virtual-instrument cables (MIDI Flow)
           const outputFilter = this.getOutputRouteFilter(source as string, virtName);
@@ -1524,7 +1589,7 @@ export class MidiService {
         let bytes: number[] = [];
 
         switch (type) {
-          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, vel]; break;
           case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
           case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
           case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
@@ -1539,7 +1604,7 @@ export class MidiService {
           const deliver = () => {
             if (virtApplyLatch && (type === 'noteon' || type === 'noteoff')) {
               const forward = type === 'noteon'
-                ? this.latch.handleNoteOn(virtDevice, config, data.note, data.velocity, targetChannel, '', Date.now())
+                ? this.latch.handleNoteOn(virtDevice, config, data.note, vel, targetChannel, '', Date.now())
                 : this.latch.handleNoteOff(virtDevice, data.note, targetChannel);
               if (!forward) return;
             }
