@@ -19,6 +19,7 @@ import { midiService } from '@/core/midi/midi-service'
 import { ExternalClockFollower, PhaseLock, TONE_PPQ, isClockSourceEcho } from '@/core/midi/external-clock'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { externalGrid } from '@/core/midi/external-grid'
+import { controlActionForNote, controlActionEvent, describeControlAction } from '@/lib/control-map'
 import { useMidiStore } from '@/stores/useMidiStore'
 
 const REALTIME = new Set([0xF8, 0xFA, 0xFB, 0xFC, 0xF2])
@@ -147,7 +148,8 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   let pinnedInputId: string | null = null
 
   /** Diagnostics over the last second: what the follower really receives. */
-  const diag = { clocks: 0, nearDup: 0, dropped: 0, maxGap: 0, lastT: -1, windowStart: performance.now(), audioStart: -1 }
+  const diag = { clocks: 0, nearDup: 0, dropped: 0, maxGap: 0, lastT: -1, windowStart: performance.now(), audioStart: -1,
+    controlNotes: [] as number[], otherNotes: [] as string[] }
   function flushDiag(now: number) {
     if (now - diag.windowStart < 1000) return
     const secs = (now - diag.windowStart) / 1000
@@ -160,10 +162,15 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     store.audioClockPct = audioPct
     store.diag = `${Math.round(diag.clocks / secs)} clk/s · near-dup ${diag.nearDup} · dropped copies ${diag.dropped} · max gap ${Math.round(diag.maxGap)} ms`
       + ` · audio clock ${audioPct}% · resyncs ${store.resyncs} · own clock out: ${own || 'none'}`
+      + ` · ctrl notes [${diag.controlNotes.join(',')}] other notes [${diag.otherNotes.join(',')}] last action: ${store.lastControlAction || '—'}`
     const clockTime = new Date().toLocaleTimeString()
     const focus = typeof document !== 'undefined' && document.hasFocus() ? 'focus' : 'NO focus'
     store.pushDiag(`${clockTime} [${focus}] ${store.mode} ${store.bpm.toFixed(1)} BPM · ${store.position} · phase ${store.lastPhaseErrorMs} ms · ${store.diag} · ${store.state}`)
     diag.clocks = 0; diag.nearDup = 0; diag.dropped = 0; diag.maxGap = 0; diag.windowStart = now; diag.audioStart = audioNow
+    // A control track plays a few notes per bar; a steady stream means notes are looping back
+    // into the source (in Live: the control track's MIDI From on All Ins, monitoring).
+    store.controlMapFlood = diag.controlNotes.length / secs > 6
+    diag.controlNotes = []; diag.otherNotes = []
     ownClockSends.clear()
   }
 
@@ -230,7 +237,33 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   function applySyncOutputBlock() {
     const port = store.port
     midiService.setSyncOutputBlock(port ? (name: string) => isClockSourceEcho(port, name) : null)
+    // The source port is a control port: nothing from it is forwarded to devices (Thru).
+    midiService.setThruBlockedInput(port ? (name: string) => name === port : null)
+    midiService.setControlConsumer(port ? onControl : null)
     setFollowing(!!port)
+  }
+
+  /** Control Map (P3): a note-on on the map's channel of the source port → the app's action.
+   *  Every message on that channel is consumed (reaches no app as a note). */
+  function onControl(data: ArrayLike<number>, inputName: string): boolean {
+    if (inputName !== store.port) return false
+    const status = data[0]
+    const type = status & 0xf0
+    const isNoteOn = type === 0x90 && (data[2] ?? 0) > 0
+    if (!store.controlMapEnabled || (status & 0x0f) !== store.controlMapChannel) {
+      if (isNoteOn) diag.otherNotes.push(`ch${(status & 0x0f) + 1}:${data[1]}`)
+      return false
+    }
+    if (isNoteOn) diag.controlNotes.push(data[1])
+    if (isNoteOn) {
+      const action = controlActionForNote(data[1])
+      if (action) {
+        const ev = controlActionEvent(action)
+        window.dispatchEvent(new CustomEvent(ev.name, ev.detail ? { detail: ev.detail } : undefined))
+        store.lastControlAction = describeControlAction(action)
+      }
+    }
+    return true
   }
 
   /** EXT: no clock of our own (it echoed back into the source through
@@ -270,6 +303,8 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   onUnmounted(() => {
     removeRaw?.()
     midiService.setSyncOutputBlock(null)
+    midiService.setThruBlockedInput(null)
+    midiService.setControlConsumer(null)
     midiService.setFollowingExternalClock(false)
     removeState?.()
     restoreSend?.()

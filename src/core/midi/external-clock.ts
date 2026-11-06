@@ -64,6 +64,7 @@ export class ExternalClockFollower {
   private ring: number[] = [];
   private lastClockAt = -Infinity;
   private lastCheckAt = -Infinity;
+  private stallGraceUntil = -Infinity;
   /** Time of the newest clock from the last tempo fit. */
   private fittedLastClockAt = -Infinity;
   private _bpm = 0;
@@ -72,6 +73,8 @@ export class ExternalClockFollower {
   minLossTimeoutMs: number;
   /** A timeout check later than this after the previous one is a main-thread stall. */
   maxCheckGapMs: number;
+  /** After a stalled check, no clock loss is declared for this long, in ms. */
+  stallGraceMs = 300;
 
   constructor(opts: ExternalClockOptions = {}) {
     this.lossBehavior = opts.lossBehavior ?? 'stop';
@@ -122,7 +125,12 @@ export class ExternalClockFollower {
     const sinceLastCheck = now - this.lastCheckAt;
     this.lastCheckAt = now;
     if (this._state !== 'playing' && this._state !== 'waiting-bar') return;
-    if (sinceLastCheck > this.maxCheckGapMs) return;
+    // After a stall the timer's own queued checks run back to back, ahead of
+    // the MIDI messages still queued behind them: the second one looked "on
+    // time" and saw a silence that wasn't there (first Play after a reload,
+    // with the apps loading their samples). Wait out a grace period first.
+    if (sinceLastCheck > this.maxCheckGapMs) { this.stallGraceUntil = now + this.stallGraceMs; return; }
+    if (now < this.stallGraceUntil) return;
     if (now - this.lastClockAt <= this.lossTimeoutMs()) return;
     const lastBpm = this._bpm;
     this._state = this.lossBehavior === 'continue' ? 'lost' : 'stopped';

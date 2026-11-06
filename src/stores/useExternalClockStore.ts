@@ -11,10 +11,13 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import type { ClockLossBehavior, ExternalClockState } from '@/core/midi/external-clock'
+import { CONTROL_MAP_DEFAULT_CHANNEL } from '@/lib/control-map'
 
 const LS_SOURCE = 'S1_CLOCK_SOURCE'
 const LS_LOSS = 'S1_CLOCK_LOSS_BEHAVIOR'
 const LS_FORWARD = 'S1_CLOCK_FORWARD'
+const LS_CONTROL_MAP = 'S1_CONTROL_MAP'
+const LS_CONTROL_CH = 'S1_CONTROL_MAP_CH'
 
 /** 'internal', or `midi:<input port name>`. */
 export type ClockSource = 'internal' | `midi:${string}`
@@ -38,6 +41,17 @@ export const useExternalClockStore = defineStore('externalClock', () => {
   /** EXT: forward the source's clock / transport to the outputs with Clock on.
    *  Off by default — an output that loops back into the source doubles the clock. */
   const forwardClock = ref(localStorage.getItem(userKey(LS_FORWARD)) === 'true')
+  /** Control Map (P3): notes on `controlMapChannel` of the clock source port drive the apps. On by default. */
+  const controlMapEnabled = ref(localStorage.getItem(userKey(LS_CONTROL_MAP)) !== 'false')
+  /** 0-based; 15 = channel 16. */
+  const controlMapChannel = ref((() => {
+    const v = parseInt(localStorage.getItem(userKey(LS_CONTROL_CH)) ?? '', 10)
+    return v >= 0 && v <= 15 ? v : CONTROL_MAP_DEFAULT_CHANNEL
+  })())
+  /** Last action received from the Control Map, e.g. "Drum Machine → C" (display). */
+  const lastControlAction = ref('')
+  /** Many control notes per second: something loops notes back into the source port. */
+  const controlMapFlood = ref(false)
 
   // Live status (not persisted)
   const state = ref<ExternalClockState>('stopped')
@@ -81,9 +95,11 @@ export const useExternalClockStore = defineStore('externalClock', () => {
   watch(source, v => localStorage.setItem(userKey(LS_SOURCE), v))
   watch(lossBehavior, v => localStorage.setItem(userKey(LS_LOSS), v))
   watch(forwardClock, v => localStorage.setItem(userKey(LS_FORWARD), String(v)))
+  watch(controlMapEnabled, v => localStorage.setItem(userKey(LS_CONTROL_MAP), String(v)))
+  watch(controlMapChannel, v => localStorage.setItem(userKey(LS_CONTROL_CH), String(v)))
 
   return {
-    source, lossBehavior, forwardClock, state, bpm, position, fallbackToInternal, lastPhaseErrorMs, samePortInputs, diag, resyncs, audioClockPct, audioOverloaded, diagHistory, pushDiag,
+    source, lossBehavior, forwardClock, controlMapEnabled, controlMapChannel, lastControlAction, controlMapFlood, state, bpm, position, fallbackToInternal, lastPhaseErrorMs, samePortInputs, diag, resyncs, audioClockPct, audioOverloaded, diagHistory, pushDiag,
     port, isExternal, mode, setSource, switchToInternal,
   }
 })

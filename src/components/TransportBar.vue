@@ -8,6 +8,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useExternalClockSync } from '@/composables/useExternalClockSync'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
+import { controlMapRows as getControlMapRows } from '@/lib/control-map'
 
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
 const syncStore = useSyncStore()   // still needed here for the sync-checkbox template bindings below
@@ -19,9 +20,11 @@ const clockStore = useExternalClockStore()
 // clock source is a MIDI input: Start/Stop/SPP drive Play All / Stop All.
 useExternalClockSync({ playAll: () => playAll(), stopAll: () => stopAll() })
 const inputNames = computed(() => midiStore.inputs.map(i => i.name).filter(Boolean))
+const controlMapRows = getControlMapRows()
 const diagCopied = ref(false)
 async function copyClockDiag() {
-  const text = [`Clock source: ${clockStore.source} · on loss: ${clockStore.lossBehavior} · forward: ${clockStore.forwardClock}`,
+  const text = [`Clock source: ${clockStore.source} · on loss: ${clockStore.lossBehavior} · forward: ${clockStore.forwardClock}`
+    + ` · control map: ${clockStore.controlMapEnabled ? `ch ${clockStore.controlMapChannel + 1}` : 'off'}`,
     ...clockStore.diagHistory].join('\n')
   try { await navigator.clipboard.writeText(text) } catch { console.log(text) }
   diagCopied.value = true
@@ -208,6 +211,29 @@ const _onTransportStopAll = () => { stopAll() }
               <span class="text-[11px] font-mono text-neutral-300">Forward clock to devices</span>
               <input type="checkbox" v-model="clockStore.forwardClock" class="accent-synth-neon" />
             </label>
+            <!-- Control Map (P3): Live's clips drive the apps through notes on one channel of the source port -->
+            <div v-if="clockStore.isExternal" class="pt-2 border-t border-neutral-800/60 space-y-1">
+              <label class="flex items-center justify-between gap-2 cursor-pointer"
+                title="Notes on this channel of the clock source port select slots in the apps (Live's clips as the control sheet). The port is never forwarded to devices.">
+                <span class="text-[11px] font-mono text-neutral-300">Control Map</span>
+                <span class="flex items-center gap-2">
+                  <select v-model.number="clockStore.controlMapChannel" :disabled="!clockStore.controlMapEnabled"
+                    class="bg-black border border-neutral-800 rounded px-1 py-0.5 text-[11px] font-mono text-neutral-300 outline-none disabled:opacity-40">
+                    <option v-for="c in 16" :key="c" :value="c - 1">ch {{ c }}</option>
+                  </select>
+                  <input type="checkbox" v-model="clockStore.controlMapEnabled" class="accent-synth-neon" />
+                </span>
+              </label>
+              <table v-if="clockStore.controlMapEnabled" class="w-full text-[8px] font-mono text-neutral-500">
+                <tr v-for="row in controlMapRows" :key="row.notes"><td class="pr-2 text-neutral-400 whitespace-nowrap">{{ row.notes }}</td><td>{{ row.action }}</td></tr>
+              </table>
+              <p v-if="clockStore.controlMapEnabled && clockStore.controlMapFlood" class="text-[9px] text-red-400 leading-snug">
+                ⚠ Too many control notes: notes are looping back into {{ clockStore.port }}. In Live, set the control track's MIDI From to "No Input" and Monitor to Off.
+              </p>
+              <p v-if="clockStore.controlMapEnabled && clockStore.lastControlAction" class="text-[9px] font-mono text-amber-300">
+                Last: {{ clockStore.lastControlAction }}
+              </p>
+            </div>
             <p v-if="clockStore.isExternal && clockStore.samePortInputs > 1" class="text-[8px] text-amber-400 leading-relaxed">
               {{ clockStore.samePortInputs }} inputs are named "{{ clockStore.port }}": the clock is taken from the first one only.
             </p>

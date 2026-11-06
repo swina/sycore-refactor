@@ -396,7 +396,7 @@ function _startSystemClock() {
     // comes in on the first step still in time, instead of waiting for the next bar.
     const bar = externalGrid.barAtOrBefore(now)
     const t = bar != null ? externalGrid.timeOf(bar) : null
-    if (t != null) { startMs = t; bpm = externalGrid.bpm; _sysStartSixteenth = bar }
+    if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
   } else if (transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value) {
     // INT, with other apps on the Tone.js transport: their next bar line.
     startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
@@ -746,7 +746,8 @@ function _onMasterVolume(e) {
 
 function _onMidiFill()         { triggerFill() }
 function _onMidiGenerate()     { generatePattern() }
-function _onMidiSeqSwitch(e)   { clickSequenceTab(e.detail?.seq) }
+// quantize (Control Map, P3): on the next bar even with Sync Retrig off.
+function _onMidiSeqSwitch(e)   { clickSequenceTab(e.detail?.seq, !!e.detail?.quantize) }
 
 // ── REC SYNC ───────────────────────────────────────────────────────────────────
 function toggleRecSync() {
@@ -1112,8 +1113,8 @@ async function saveDefaultKitDraft() {
 // Sync Retrig: TRUE = switch pattern on next first beat (quantized), FALSE = switch immediately on click
 const syncRetrig = ref(true)
 
-function clickSequenceTab(seq) {
-  if (syncRetrig.value && drumStore.isPlaying && seq !== drumStore.activeSequence) {
+function clickSequenceTab(seq, quantize = false) {
+  if ((syncRetrig.value || quantize) && drumStore.isPlaying && seq !== drumStore.activeSequence) {
     _pendingSequence = seq
     pendingSequence.value = seq
   } else {

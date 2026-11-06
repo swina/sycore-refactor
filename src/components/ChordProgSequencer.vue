@@ -332,7 +332,7 @@ function _startSystemClock(tickCb, alignToBar) {
     // The bar Live is playing now; ticks already gone pass silently.
     const bar = externalGrid.barAtOrBefore(now)
     const t = bar != null ? externalGrid.timeOf(bar) : null
-    if (t != null) { startMs = t; bpm = externalGrid.bpm; _sysStartSixteenth = bar }
+    if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
   } else if (alignToBar) {
     startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
   }
@@ -402,6 +402,8 @@ function stopAllNotes() {
 watch(() => store.isPlaying, (playing) => {
   if (!playing) {
     _stopSystemClock()
+    _cpCueSlot = null
+    cuedSlotIdx.value = null
     if (repeatEventIdRef.value !== null) {
       getTransport().clear(repeatEventIdRef.value)
       repeatEventIdRef.value = null
@@ -439,6 +441,21 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       if (!state.isPlaying || _stopPending) return
 
       _transportTicks++
+
+      // A cued slot (Control Map) starts on the bar line, from its first chord.
+      if (_cpCueSlot !== null && (_transportTicks - 1) % 384 === 0 && !state.chainSlotIndices) {
+        const idx = _cpCueSlot
+        _cpCueSlot = null
+        handleSlotSelect(idx)
+        state.steps = store.steps
+        state.numSteps = store.numSteps
+        state.playMode = store.playMode
+        state.arpRate = store.arpRate
+        state.stepPointer = 0
+        state.tickCounter = 0
+        state.arpPatternStates = new Map()
+        getDraw().schedule(() => { cuedSlotIdx.value = null }, time)
+      }
 
       // ── Audio capture sync with pre-roll & auto-stop ─────────────────
       if (syncStore.syncChordProgToAudioCapture) {
@@ -748,6 +765,7 @@ onUnmounted(() => {
   window.removeEventListener('cp-start', _onCpStart)
   window.removeEventListener('cp-stop', _onCpStop)
   window.removeEventListener('cp-slot-select', _onCpSlotSelect)
+  window.removeEventListener('cp-slot-cue', _onCpSlotCue)
   _unsubMidiNote?.()
   _unsubAppNote?.()
   _unsubRawMidi?.()
@@ -1110,6 +1128,19 @@ const _onCpStart = () => { store.isPlaying = true }
 const _onCpStop = () => { store.isPlaying = false }
 const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
 
+// Control Map (P3, 'cp-slot-cue'): while playing, the slot starts on the next bar line, from its
+// first chord (as a clip launched in Live's Session View); stopped — or during chain playback,
+// where the chain decides — it's selected at once.
+const cuedSlotIdx = ref(null)
+let _cpCueSlot = null
+const _onCpSlotCue = (e) => {
+  const idx = e.detail?.idx
+  if (idx == null || idx < 0 || idx >= (store.SLOT_COUNT ?? 8)) return
+  if (!store.isPlaying || playStateRef.current?.chainSlotIndices) { handleSlotSelect(idx); return }
+  _cpCueSlot = idx === store.activeSlotIndex ? null : idx
+  cuedSlotIdx.value = _cpCueSlot
+}
+
 // ── MIDI feedback for Learn-mapped params ──────────────────────────────────
 function sendChMappingFeedback(paramNamePrefix, isOn) {
   const val = isOn ? 127 : 0
@@ -1175,6 +1206,7 @@ onMounted(() => {
   window.addEventListener('cp-start', _onCpStart)
   window.addEventListener('cp-stop', _onCpStop)
   window.addEventListener('cp-slot-select', _onCpSlotSelect)
+  window.addEventListener('cp-slot-cue', _onCpSlotCue)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
   _unsubAppNote = midiStore.addAppNoteListener(_onAppNoteIn)
   _unsubRawMidi = midiService.addRawListener(_onRawMidiIn)
@@ -1584,7 +1616,8 @@ function velBarColor(v) {
               'relative w-8 h-8 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
               store.activeSlotIndex === i - 1
                 ? 'bg-purple-700 text-white ring-1 ring-purple-400'
-                : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700'
+                : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700',
+              cuedSlotIdx === i - 1 ? 'ring-2 ring-amber-400 animate-pulse' : ''
             ]"
           >
             {{ String.fromCharCode(64 + i) }}

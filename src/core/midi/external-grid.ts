@@ -36,15 +36,20 @@ class ExternalGrid {
     this.listeners.forEach(l => l(e))
   }
 
-  /** Time of song sixteenth `s` from the latest anchor, or null. */
+  /** Time of song sixteenth `s` from the latest anchor, or null. With no tempo
+   *  yet (the first Start after a reload: Live sends no clock while stopped)
+   *  only the anchor itself — the Start's downbeat — has a time. */
   timeOf(s: number): number | null {
-    if (!this.anchor || !(this.bpm > 0)) return null
+    if (!this.anchor) return null
+    if (!(this.bpm > 0)) return s === this.anchor.sixteenth ? this.anchor.t : null
     return this.anchor.t + (s - this.anchor.sixteenth) * (60000 / (this.bpm * 4))
   }
 
   /** The bar line (song sixteenth, multiple of 16) of the bar playing at time `t`. */
   barAtOrBefore(t: number): number | null {
-    if (!this.anchor || !(this.bpm > 0)) return null
+    if (!this.anchor) return null
+    // No tempo yet: the Start's downbeat (a bar line) is the bar playing.
+    if (!(this.bpm > 0)) return Math.floor(this.anchor.sixteenth / 16) * 16
     const stepMs = 60000 / (this.bpm * 4)
     const s = this.anchor.sixteenth + Math.floor((t - this.anchor.t) / stepMs + 1e-6)
     return Math.max(0, Math.floor(s / 16) * 16)

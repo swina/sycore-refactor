@@ -605,7 +605,7 @@ function _startSystemClock(callback) {
     // The bar Live is playing now; steps already gone pass silently (see DrumMachine.vue).
     const bar = externalGrid.barAtOrBefore(now)
     const t = bar != null ? externalGrid.timeOf(bar) : null
-    if (t != null) { startMs = t; bpm = externalGrid.bpm; _sysStartSixteenth = bar }
+    if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
   } else if (transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value) {
     startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
   }

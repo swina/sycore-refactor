@@ -165,3 +165,15 @@ describe('chaseNote — a late long note still sounds', () => {
     expect(chaseNote(1000, 150, 1100, true)).toBeNull()
   })
 })
+
+describe('externalGrid — the first Start after a reload (no tempo yet)', () => {
+  it('only the Start downbeat has a time, and it is the bar playing', () => {
+    externalGrid.emit({ type: 'stop' })
+    ;(externalGrid as any).bpm = 0
+    externalGrid.emit({ type: 'start', sixteenth: 0, t: 5000, bpm: 0 })
+    expect(externalGrid.barAtOrBefore(5400)).toBe(0)
+    expect(externalGrid.timeOf(0)).toBe(5000)
+    expect(externalGrid.timeOf(4)).toBeNull()
+    externalGrid.emit({ type: 'stop' })
+  })
+})

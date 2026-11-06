@@ -189,6 +189,32 @@ describe('ExternalClockFollower — clock loss', () => {
     expect(types(events)).not.toContain('clockLost')
   })
 
+  it('queued checks right after a stall (first Play after a reload) declare no loss', () => {
+    const { f, events } = setup()
+    f.handleMessage([0xFA], 0)
+    const t = clocks(f, 48, 75, 1)
+    f.checkTimeout(t)
+    // 900 ms stall: the timer's queued checks run back to back, ahead of the queued clocks.
+    f.checkTimeout(t + 900)
+    f.checkTimeout(t + 901)
+    f.checkTimeout(t + 905)
+    expect(types(events)).not.toContain('clockLost')
+    // Then the queued clocks arrive and checks resume normally.
+    const t2 = clocks(f, 20, 75, t + 910)
+    checksUntil(f, t2, t2 + 200)
+    expect(types(events)).not.toContain('clockLost')
+  })
+
+  it('a real loss after a stall is still declared once the grace has passed', () => {
+    const { f, events } = setup()
+    f.handleMessage([0xFA], 0)
+    const t = clocks(f, 48, 75, 1)
+    f.checkTimeout(t)
+    f.checkTimeout(t + 900)          // stall → grace
+    checksUntil(f, t + 1000, t + 1400)
+    expect(events.find(e => e.type === 'clockLost')).toBeTruthy()
+  })
+
   it('never fires while stopped', () => {
     const { f, events } = setup()
     f.checkTimeout(1e6)

@@ -743,6 +743,20 @@ export class MidiService {
     this.globalChannel = channel;
   }
 
+  // ── External clock source port (P1/P3) ──────────────────────────────────
+  /** Inputs whose messages never go through Thru (the clock source port, e.g. "SYC CTRL B"). */
+  private thruBlockedInput: ((inputName: string) => boolean) | null = null;
+  /** Consumes control messages (the Control Map): true = handled, no Thru, no app listener. */
+  private controlConsumer: ((data: ArrayLike<number>, inputName: string) => boolean) | null = null;
+
+  setThruBlockedInput(fn: ((inputName: string) => boolean) | null): void {
+    this.thruBlockedInput = fn;
+  }
+
+  setControlConsumer(fn: ((data: ArrayLike<number>, inputName: string) => boolean) | null): void {
+    this.controlConsumer = fn;
+  }
+
   setIngressFilter(fn: ((event: MIDIMessageEvent) => boolean) | null): void {
     this.ingressFilter = fn;
   }
@@ -1697,8 +1711,12 @@ export class MidiService {
     const recent = this.lastSentMessages.get(inputId);
     if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
 
-    // Global Thru routing
-    if (this.routingConfig && this.routingConfig.globalThruEnabled) {
+    // Control Map (P3): consumed here — no Thru, no app sees it as a note.
+    if (status < 0xF0 && this.controlConsumer?.(processedData, inputDevice?.name ?? '')) return;
+
+    // Global Thru routing (never from the external clock source port)
+    const thruBlocked = !!this.thruBlockedInput?.(inputDevice?.name ?? '');
+    if (this.routingConfig && this.routingConfig.globalThruEnabled && !thruBlocked) {
       const type = status & 0xf0;
       const isNote = type === 0x90 || type === 0x80;
       const isCC = type === 0xb0;
