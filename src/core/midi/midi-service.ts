@@ -61,6 +61,9 @@ export interface BroadcastOptions {
    *  (MIDIWIN): the timestamp is ignored — note-on and note-off left together
    *  and the note didn't sound. */
   workerTimed?: boolean
+  /** tag of a workerTimed send, so it can be cancelled before it leaves
+   *  (cancelWorkerTimed: an app stopping drops its queued note-ons) */
+  workerTag?: string
 }
 
 export class MidiService {
@@ -809,17 +812,22 @@ export class MidiService {
   }
 
   // ── Worker-timed delivery (BroadcastOptions.workerTimedVirtual) ───────────
-  private timedQueue: { at: number; fn: () => void }[] = [];
+  private timedQueue: { at: number; fn: () => void; tag?: string }[] = [];
   private stopTimedTicker: (() => void) | null = null;
   private timedIdleSince = 0;
 
   /** Run `fn` at `at` (performance.now() ms), on a Worker timer (~2–4 ms resolution). */
-  scheduleOnWorker(at: number, fn: () => void): void {
+  scheduleOnWorker(at: number, fn: () => void, tag?: string): void {
     const q = this.timedQueue;
     let i = q.length;
     while (i > 0 && q[i - 1].at > at) i--;   // keep sorted; messages mostly arrive in order
-    q.splice(i, 0, { at, fn });
+    q.splice(i, 0, { at, fn, tag });
     if (!this.stopTimedTicker) this.stopTimedTicker = createWorkerTicker(() => this.flushTimed(), 2);
+  }
+
+  /** Drop the queued workerTimed sends with this tag (not yet sent). */
+  cancelWorkerTimed(tag: string): void {
+    this.timedQueue = this.timedQueue.filter(item => item.tag !== tag);
   }
 
   private flushTimed(): void {
@@ -1434,7 +1442,7 @@ export class MidiService {
             out.send(fullMsg);
           };
           if (!scheduled) deliver();
-          else if (opts?.workerTimed) this.scheduleOnWorker(at!, deliver);
+          else if (opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag);
           // the latch decides (and may send releases) at play time — keep it on a timer
           else if (latched) setTimeout(deliver, deferMs);
           else {
@@ -1516,7 +1524,7 @@ export class MidiService {
             }
             this.sendToVirtualOutput(virtName, [status, ...bytes]);
           };
-          if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver);
+          if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag);
           // virtual instruments are plain JS callbacks: no timestamp, so a timer
           else if (scheduled) setTimeout(deliver, deferMs);
           else deliver();

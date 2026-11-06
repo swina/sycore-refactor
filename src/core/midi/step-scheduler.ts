@@ -35,7 +35,9 @@ export class StepScheduler {
   /** Grid: step `anchorStep` is at `anchorMs`, one step lasts `stepMs`. */
   private anchorStep = 0;
   private anchorMs = 0;
-  private stepMs = 125; // 120 BPM
+  private stepMs = 125; // a 16th at 120 BPM
+  /** Step length in beats (quarter notes): 0.25 = a 16th. */
+  private beatsPerStep = 0.25;
   private readonly lookaheadMs: number;
   private readonly lateToleranceMs: number;
 
@@ -45,16 +47,19 @@ export class StepScheduler {
   }
 
   get isRunning(): boolean { return this.running; }
-  get bpm(): number { return 60000 / (this.stepMs * 4); }
+  get bpm(): number { return (60000 * this.beatsPerStep) / this.stepMs; }
+  get stepBeats(): number { return this.beatsPerStep; }
   get upcomingStep(): number { return this.nextStep; }
 
-  /** Start with step 0 at `startMs`. */
-  start(startMs: number, bpm: number): void {
+  /** Start with step 0 at `startMs`; a step lasts `beatsPerStep` beats (0.25 = a 16th). */
+  start(startMs: number, bpm: number, beatsPerStep = 0.25): void {
     this.running = true;
     this.nextStep = 0;
     this.anchorStep = 0;
     this.anchorMs = startMs;
-    this.stepMs = stepMsOf(bpm);
+    this.beatsPerStep = beatsPerStep > 0 ? beatsPerStep : 0.25;
+    this.stepMs = stepMsOf(bpm, this.beatsPerStep);
+    this.stepBase = { step: 0, sixteenth: 0 };
   }
 
   stop(): void { this.running = false; }
@@ -65,20 +70,46 @@ export class StepScheduler {
 
   /** New tempo from the next step on (INT): the grid bends at that step, no jump. */
   setTempo(bpm: number): void {
-    const ms = stepMsOf(bpm);
+    const ms = stepMsOf(bpm, this.beatsPerStep);
     if (!(ms > 0) || ms === this.stepMs) return;
-    this.anchorMs = this.timeOf(this.nextStep);
-    this.anchorStep = this.nextStep;
+    this.bendAtNextStep();
     this.stepMs = ms;
   }
 
-  /** Re-anchor on the master (EXT): step `step` is at `timeMs`, tempo `bpm`.
-   *  Steps already handed out stay as they are; the following ones move. */
-  anchorTo(step: number, timeMs: number, bpm: number): void {
-    const ms = stepMsOf(bpm);
+  /** New step length from the next step on (e.g. the Sequencer's Time 1/16 → 1/8). */
+  setStepBeats(beatsPerStep: number): void {
+    if (!(beatsPerStep > 0) || beatsPerStep === this.beatsPerStep) return;
+    const bpm = this.bpm;
+    this.bendAtNextStep();
+    // From here on, sixteenths map to steps of the new length.
+    this.stepBase = {
+      step: this.nextStep,
+      sixteenth: this.stepBase.sixteenth + (this.nextStep - this.stepBase.step) * this.beatsPerStep * 4,
+    };
+    this.beatsPerStep = beatsPerStep;
+    this.stepMs = stepMsOf(bpm, beatsPerStep);
+  }
+
+  private bendAtNextStep(): void {
+    this.anchorMs = this.timeOf(this.nextStep);
+    this.anchorStep = this.nextStep;
+  }
+
+  /** Re-anchor on the master (EXT): song sixteenth `sixteenth` (counted from
+   *  the app's step 0) is at `timeMs`, tempo `bpm`. Steps already handed out
+   *  stay as they are; the following ones move. */
+  anchorTo(sixteenth: number, timeMs: number, bpm: number): void {
+    const ms = stepMsOf(bpm, this.beatsPerStep);
     if (ms > 0) this.stepMs = ms;
-    this.anchorStep = step;
+    // Steps are counted from the last bend (setStepBeats), in step lengths.
+    this.anchorStep = this.stepOfSixteenth(sixteenth);
     this.anchorMs = timeMs;
+  }
+
+  /** Step index of a song sixteenth since start, with the step lengths used so far. */
+  private stepBase = { step: 0, sixteenth: 0 };
+  private stepOfSixteenth(sixteenth: number): number {
+    return this.stepBase.step + (sixteenth - this.stepBase.sixteenth) / (this.beatsPerStep * 4);
   }
 
   /** Hand out every step due before now + lookahead. */
@@ -96,8 +127,8 @@ export class StepScheduler {
   }
 }
 
-function stepMsOf(bpm: number): number {
-  return bpm > 0 ? 60000 / (bpm * 4) : 0;
+function stepMsOf(bpm: number, beatsPerStep = 0.25): number {
+  return bpm > 0 ? (60000 / bpm) * beatsPerStep : 0;
 }
 
 // ── Worker ticker ───────────────────────────────────────────────────────────

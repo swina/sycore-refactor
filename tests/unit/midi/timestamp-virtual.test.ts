@@ -52,4 +52,15 @@ describe('Worker-timed scheduled sends', () => {
     vi.advanceTimersByTime(90)
     expect(virt).toHaveLength(1)
   })
+
+  it('cancelWorkerTimed drops the queued note-ons of a stopping app; untagged note-offs still leave', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'performance'] })
+    const { svc, sent } = setup()
+    const t0 = performance.now()
+    svc.sendNoteOn(60, 100, 0, MidiSource.DRUM_MACHINE, null, t0 + 50, { workerTimed: true, workerTag: 'seq' })
+    svc.sendNoteOff(60, 0, 0, MidiSource.DRUM_MACHINE, null, t0 + 150, { workerTimed: true })
+    svc.cancelWorkerTimed('seq')
+    vi.advanceTimersByTime(200)
+    expect(sent.map(x => x.msg)).toEqual([[0x80, 60, 0]])
+  })
 })

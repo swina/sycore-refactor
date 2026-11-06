@@ -113,3 +113,30 @@ describe('StepScheduler — a late start joins the bar in phase', () => {
     expect(steps.filter(x => !x.late).map(x => [x.step, x.t])).toEqual([[2, 400]])   // 50 ms late: still sounds
   })
 })
+
+describe('StepScheduler — step lengths other than a 16th (Sequencer Time)', () => {
+  it('1/8 steps at 120 BPM are 250 ms; Live beats re-anchor them by song sixteenth', () => {
+    const steps: { step: number; t: number }[] = []
+    const s = new StepScheduler((step, t) => steps.push({ step, t }), { lookaheadMs: 0 })
+    s.start(0, 120, 0.5)
+    for (let now = 1; now <= 760; now += 5) s.tick(now)
+    expect(steps.map(x => x.t)).toEqual([0, 250, 500, 750])
+    // Live's beat at song sixteenth 16 (= step 8 in 1/8) lands at 2010 ms.
+    s.anchorTo(16, 2010, 120)
+    expect(s.timeOf(8)).toBe(2010)
+    expect(s.timeOf(9)).toBe(2260)
+  })
+
+  it('changing the step length mid-play bends at the next step and keeps the sixteenth mapping', () => {
+    const steps: { step: number; t: number }[] = []
+    const s = new StepScheduler((step, t) => steps.push({ step, t }), { lookaheadMs: 0 })
+    s.start(0, 120, 0.25)                 // 16ths: 125 ms
+    for (let now = 1; now <= 380; now += 5) s.tick(now)   // steps 0..3 (0..375)
+    s.setStepBeats(0.5)                   // 1/8 from step 4 (at 500 ms = sixteenth 4)
+    for (let now = 381; now <= 1001; now += 5) s.tick(now)
+    expect(steps.map(x => x.t)).toEqual([0, 125, 250, 375, 500, 750, 1000])
+    // Sixteenth 8 is two 1/8 steps after sixteenth 4: step 6.
+    s.anchorTo(8, 1003, 120)
+    expect(s.timeOf(6)).toBe(1003)
+  })
+})
