@@ -406,6 +406,7 @@ let _sysSched = null
 let _stopTicker = null
 let _offExtGrid = null
 let _sysStartSixteenth = 0   // Live's song sixteenth of the Drum Machine's step 0
+let _startOnNextBar = false  // this start is a user's press with Start@bar on (see requestPlay)
 
 function _startSystemClock() {
   _stopSystemClock()
@@ -417,7 +418,15 @@ function _startSystemClock() {
     // The bar Live is playing now, even when this start comes late (a busy page after Live's
     // Play): its steps already gone are handed out as late — the pattern advances silently and
     // comes in on the first step still in time, instead of waiting for the next bar.
-    const bar = externalGrid.barAtOrBefore(now)
+    let bar = externalGrid.barAtOrBefore(now)
+    // Start@bar (a press of PLAY / its MIDI Learn): from the next bar line, not mid-bar —
+    // unless the press came just after a bar line (a few ms late on the downbeat).
+    if (_startOnNextBar && bar != null) {
+      const tBar = externalGrid.timeOf(bar)
+      const graceMs = Math.min(80, 15000 / (externalGrid.bpm || bpm) * 0.5)
+      if (tBar == null || now - tBar > graceMs) bar = externalGrid.barAtOrAfter(now) ?? bar
+    }
+    _startOnNextBar = false
     const t = bar != null ? externalGrid.timeOf(bar) : null
     if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
   } else if (transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value) {
@@ -636,6 +645,7 @@ function _scheduleCallback(time) {
 
 watch(() => drumStore.isPlaying, (playing) => {
   if (!playing) {
+    _startOnNextBar = false
     _stopSystemClock()
     if (repeatEventIdRef !== null) {
       getTransport().clear(repeatEventIdRef)
@@ -903,6 +913,7 @@ onMounted(async () => {
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
   window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
+  window.addEventListener('dm-play-stop',      _onPlayStopRequest)
   window.addEventListener('timeline-dm-start', _tlDmStartHandler)
   window.addEventListener('timeline-dm-stop',  _tlDmStopHandler)
   window.addEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
@@ -947,6 +958,7 @@ onUnmounted(() => {
   window.removeEventListener('dm-trigger-fill',   _onMidiFill)
   window.removeEventListener('dm-generate',       _onMidiGenerate)
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
+  window.removeEventListener('dm-play-stop',      _onPlayStopRequest)
   window.removeEventListener('timeline-dm-start', _tlDmStartHandler)
   window.removeEventListener('timeline-dm-stop',  _tlDmStopHandler)
   window.removeEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
@@ -1630,13 +1642,39 @@ function resizeChain(len) {
 const autofillEvery   = ref(4)
 let _measureCount     = 0
 
-const stopAtEnd    = ref(false)
+// Start@bar / Stop@end: for a press of PLAY/STOP (panel, DECK card, MIDI Learn dm_play_stop).
+// With Live playing (CLK SYS) the start waits for the next bar line; the stop lets the bar end.
+// Starts from Live's own Start, the Timeline or the Control Map are not affected. Remembered.
+function _loadFlag(key, def) {
+  try { const v = localStorage.getItem(key); return v == null ? def : v === '1' } catch { return def }
+}
+const startAtBar   = ref(_loadFlag('S1_DM_START_AT_BAR', false))
+const stopAtEnd    = ref(_loadFlag('S1_DM_STOP_AT_END', false))
+watch(startAtBar, v => { try { localStorage.setItem('S1_DM_START_AT_BAR', v ? '1' : '0') } catch {} })
+watch(stopAtEnd,  v => { try { localStorage.setItem('S1_DM_STOP_AT_END',  v ? '1' : '0') } catch {} })
 const endWithFill  = ref(false)
 const pendingStop  = ref(false)
 let   _pendingStop = false
 
+/** A press asking to play (true) or stop (false), with Start@bar / Stop@end. */
+function requestPlay(play) {
+  if (play) {
+    if (_pendingStop) { _pendingStop = false; pendingStop.value = false; return } // un-queue the stop
+    if (drumStore.isPlaying) return
+    _startOnNextBar = startAtBar.value
+    drumStore.isPlaying = true
+    return
+  }
+  if (drumStore.isPlaying) handlePlayStop()
+}
+// 'dm-play-stop' (MIDI Learn, DECK card): { play: true/false }, or a toggle like the PLAY button.
+function _onPlayStopRequest(e) {
+  const play = e.detail?.play
+  if (typeof play === 'boolean') requestPlay(play); else handlePlayStop()
+}
+
 function handlePlayStop() {
-  if (!drumStore.isPlaying) { drumStore.isPlaying = true; return }
+  if (!drumStore.isPlaying) { requestPlay(true); return }
   if (_pendingStop) { _pendingStop = false; pendingStop.value = false; drumStore.isPlaying = false; return }
   if (stopAtEnd.value) {
     _pendingStop = true
@@ -2869,8 +2907,12 @@ function cycleChainSlot(i) {
           />
         </div>
 
-        <!-- Stop at end options -->
+        <!-- Start at bar / stop at end options -->
         <div class="flex flex-col gap-0.5 mb-2">
+          <label class="flex items-center gap-1 cursor-pointer select-none" title="With Live playing: PLAY (and its MIDI Learn) starts on the next bar line">
+            <input type="checkbox" v-model="startAtBar" class="w-3 h-3 accent-emerald-500 cursor-pointer" />
+            <span class="text-[8px] font-mono uppercase tracking-widest" :class="startAtBar ? 'text-emerald-400' : 'text-neutral-500'">Start@bar</span>
+          </label>
           <label class="flex items-center gap-1 cursor-pointer select-none" title="Let the current pattern finish before stopping">
             <input type="checkbox" v-model="stopAtEnd" class="w-3 h-3 accent-red-500 cursor-pointer" />
             <span class="text-[8px] font-mono uppercase tracking-widest" :class="stopAtEnd ? 'text-red-400' : 'text-neutral-500'">Stop@end</span>

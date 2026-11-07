@@ -12,6 +12,7 @@ import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
+import { applyMixerChannelParam } from '@/composables/useAudioMixerChannels'
 import { FIELD_TO_CC, S1_CC_MAP } from '@/constants/s1-config'
 import { dispatch } from '@/types/events'
 import { useVirtualDeviceStore } from '@/stores/useVirtualDeviceStore'
@@ -143,7 +144,9 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   }
   // ── Drum Machine ─────────────────────────────────────────────────────────────
   if (fieldName === 'dm_play_stop') {
-    drumStore.isPlaying = fromNote ? !drumStore.isPlaying : on
+    // A switch (momentary and toggle buttons alike: each press flips it, a pad's release
+    // doesn't stop it), through the panel: Start@bar / Stop@end apply.
+    if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) window.dispatchEvent(new CustomEvent('dm-play-stop'))
     return
   }
   if (fieldName === 'dm_midi_out_only') {
@@ -256,6 +259,11 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   }
   // ── Audio Mixer channel volumes ───────────────────────────────────────────────
   if (fieldName === 'mix_master_vol')       { mixerStore.setMasterVol(val / 127); return }
+  {
+    // Mixer channel N (any assignment: an instrument, one of its MIDI channels, an app source)
+    const m = /^mix_ch(\d+)_(vol|mute)$/.exec(fieldName)
+    if (m) { applyMixerChannelParam(Number(m[1]) - 1, m[2], val, fromNote, mixerStore); return }
+  }
   if (fieldName === 'mix_backing_vol')      { mixerStore.setBackingVol(val / 127); return }
   if (fieldName === 'mix_tracks_vol')       { mixerStore.setTracksVol(val / 127); return }
   if (fieldName === 'mix_looper_vol')       { mixerStore.setLooperVol(val / 127); return }

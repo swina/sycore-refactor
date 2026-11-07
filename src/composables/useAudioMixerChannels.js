@@ -143,51 +143,77 @@ export function useAudioMixerChannels() {
     })
   )
 
-  // Virtual instruments → one fader each, UNLESS driven on several parts in
-  // MIDI Flow (Multi-CH or cable OUT channels: midiStore.partChannels), in
-  // which case each channel gets its own independent fader.
-  const virtualInstrumentStrips = computed(() => {
+  // One fader per MIDI channel of a device — CC#7 on just that channel.
+  function channelStrip(name, ch) {
+    return {
+      key:    `${name}:${ch}`,
+      name,
+      label:  `CH ${ch + 1}`,
+      vol:    () => mixer.getVirtualChannelVol(name, ch),
+      muted:  () => mixer.isVirtualChannelMuted(name, ch),
+      soloed: () => mixer.isVirtualChannelSoloed(name, ch),
+      setVol: val => mixer.setVirtualChannelVol(name, ch, val),
+      mute:   () => mixer.toggleVirtualChannelMute(name, ch),
+      solo:   () => mixer.toggleVirtualChannelSolo(name, ch),
+    }
+  }
+
+  // Any MIDI channel 1–16 of a device can be put on a mixer channel: how the channels
+  // are used is the user's choice (a multi-timbral X3 on ch 1–8, a layer sent to Live…).
+  // The channels the device is driven on in MIDI Flow (midiStore.partChannels) are marked.
+  const ALL_CHANNELS = Array.from({ length: 16 }, (_, ch) => ch)
+  function deviceChannelSources(name, type, group) {
+    const used = new Set(midiStore.partChannels(name))
+    return ALL_CHANNELS.map(ch => ({
+      type, id: `${name}:${ch}`, group,
+      label: `${name} (CH ${ch + 1})${used.has(ch) ? ' · MIDI Flow' : ''}`,
+    }))
+  }
+  /** 'name:ch' → the channel strip, when the device still exists (else null). */
+  function channelStripOf(id, devices) {
+    const sep = id.lastIndexOf(':')
+    const ch = sep > 0 ? Number(id.slice(sep + 1)) : NaN
+    const name = sep > 0 ? id.slice(0, sep) : id
+    if (!Number.isInteger(ch) || ch < 0 || ch > 15 || !devices.some(d => d.name === name)) return null
+    return channelStrip(name, ch)
+  }
+
+  // MIDI instruments: per-channel strips for the channels driven in MIDI Flow
+  // (multi-timbral sampler on ch 2–6), as a quick view; any channel is assignable.
+  const instrumentPartStrips = computed(() => {
     const strips = []
-    for (const v of midiStore.virtualInstruments) {
-      const reg = midiStore.routingConfig?.registrations?.[v.name]
-      const outChannels = midiStore.partChannels(v.name)
-      if (outChannels.length > 0) {
-        for (const ch of outChannels) {
-          strips.push({
-            key:    `${v.name}:${ch}`,
-            name:   v.name,
-            label:  `CH ${ch + 1}`,
-            vol:    () => mixer.getVirtualChannelVol(v.name, ch),
-            muted:  () => mixer.isVirtualChannelMuted(v.name, ch),
-            soloed: () => mixer.isVirtualChannelSoloed(v.name, ch),
-            setVol: val => mixer.setVirtualChannelVol(v.name, ch, val),
-            mute:   () => mixer.toggleVirtualChannelMute(v.name, ch),
-            solo:   () => mixer.toggleVirtualChannelSolo(v.name, ch),
-          })
-        }
-      } else {
-        strips.push({
-          key:    v.name,
-          name:   v.name,
-          label:  'CH ' + ((reg?.outChannel ?? 0) + 1),
-          vol:    () => mixer.getInstrumentVol(v.name),
-          muted:  () => mixer.isInstrumentMuted(v.name),
-          soloed: () => mixer.isSoloed('inst:' + v.name),
-          setVol: val => mixer.setInstrumentVol(v.name, val),
-          mute:   () => mixer.toggleInstrumentMute(v.name),
-          solo:   () => mixer.toggleInstrumentSolo(v.name),
-        })
-      }
+    for (const inst of instrumentChannels.value) {
+      for (const ch of midiStore.partChannels(inst.name)) strips.push(channelStrip(inst.name, ch))
     }
     return strips
   })
+
+  // Virtual instruments → one fader for the whole device (CC#7 on its OUT channel).
+  const virtualInstrumentStrips = computed(() => midiStore.virtualInstruments.map(v => {
+    const reg = midiStore.routingConfig?.registrations?.[v.name]
+    return {
+      key:    v.name,
+      name:   v.name,
+      label:  'CH ' + ((reg?.outChannel ?? 0) + 1),
+      vol:    () => mixer.getInstrumentVol(v.name),
+      muted:  () => mixer.isInstrumentMuted(v.name),
+      soloed: () => mixer.isSoloed('inst:' + v.name),
+      setVol: val => mixer.setInstrumentVol(v.name, val),
+      mute:   () => mixer.toggleInstrumentMute(v.name),
+      solo:   () => mixer.toggleInstrumentSolo(v.name),
+    }
+  }))
 
   // Every source a channel slot can be assigned to — grouped for the
   // assignment dropdown UI.
   const availableSources = computed(() => [
     ...MIXER_CATALOG.map(c => ({ type: 'catalog', id: c.id, label: c.label, group: 'App Sources' })),
     ...instrumentChannels.value.map(inst => ({ type: 'instrument', id: inst.name, label: inst.name, group: 'MIDI Instruments' })),
-    ...virtualInstrumentStrips.value.map(s => ({ type: 'virtual', id: s.key, label: `${s.name} (${s.label})`, group: 'Virtual Instruments' })),
+    ...instrumentChannels.value.flatMap(inst => deviceChannelSources(inst.name, 'instrumentCh', 'MIDI Instruments')),
+    ...virtualInstrumentStrips.value.flatMap(s => [
+      { type: 'virtual', id: s.key, label: `${s.name} (OUT ${s.label})`, group: 'Virtual Instruments' },
+      ...deviceChannelSources(s.name, 'virtual', 'Virtual Instruments'),
+    ]),
   ])
 
   // Resolves one channelSlots[i] assignment ({type,id}|null) to a live
@@ -222,8 +248,19 @@ export function useAudioMixerChannels() {
         toggleNoCC7: () => mixer.toggleInstrumentNoCC7(name),
       }
     }
+    if (assignment.type === 'instrumentCh') {
+      const strip = channelStripOf(assignment.id, instrumentChannels.value)
+      if (!strip) return null
+      return {
+        kind: 'virtual', id: 'virt:' + strip.key, label: strip.name, sub: strip.label,
+        icon: Piano,
+        vol: strip.vol, muted: strip.muted, soloed: strip.soloed,
+        setVol: strip.setVol, toggleMute: strip.mute, toggleSolo: strip.solo,
+      }
+    }
     if (assignment.type === 'virtual') {
       const strip = virtualInstrumentStrips.value.find(s => s.key === assignment.id)
+        ?? channelStripOf(assignment.id, midiStore.virtualInstruments)
       if (!strip) return null
       return {
         kind: 'virtual', id: 'virt:' + strip.key, label: strip.name, sub: strip.label,
@@ -237,7 +274,45 @@ export function useAudioMixerChannels() {
 
   // Fixed 16-length list — index N is "Channel N+1", user-assigned via
   // mixer.assignChannelSlot(). null = unassigned (or since-removed source).
-  const flatChannels = computed(() => mixer.channelSlots.map(resolveAssignment))
+  // Instruments and channels get the positional MIDI Learn params of their mixer channel
+  // (mix_ch<N>_vol / _mute); app sources keep their own (mix_drums_vol, …).
+  const flatChannels = computed(() => mixer.channelSlots.map((a, i) => {
+    const c = resolveAssignment(a)
+    if (c && !c.volParam) { c.volParam = `mix_ch${i + 1}_vol`; c.muteParam = `mix_ch${i + 1}_mute` }
+    return c
+  }))
 
-  return { CATALOG: MIXER_CATALOG, instrumentChannels, virtualInstrumentStrips, availableSources, flatChannels }
+  return { CATALOG: MIXER_CATALOG, instrumentChannels, instrumentPartStrips, virtualInstrumentStrips, availableSources, flatChannels }
+}
+
+/**
+ * MIDI Learn on mixer channel N (mix_ch<N>_vol / _mute): applied from the channel's
+ * assignment alone (store calls, no component), so it works with the mixer panel closed.
+ * `kind` 'vol' takes 0–127; 'mute' toggles on a press. False: nothing assigned there.
+ */
+export function applyMixerChannelParam(slot, kind, val, fromNote = false, mixer = useAudioMixerStore()) {
+  const a = mixer.channelSlots[slot]
+  if (!a) return false
+  const v = val / 127
+  const press = fromNote || val > 63
+  if (a.type === 'catalog') {
+    const c = MIXER_CATALOG.find(x => x.id === a.id)
+    if (!c) return false
+    if (kind === 'vol') c.setVol(v); else if (press) c.mute()
+    return true
+  }
+  if (a.type === 'instrument') {
+    if (kind === 'vol') mixer.setInstrumentVol(a.id, v); else if (press) mixer.toggleInstrumentMute(a.id)
+    return true
+  }
+  // 'virtual' (name, or name:ch on several parts) and 'instrumentCh' (name:ch)
+  const sep = a.id.lastIndexOf(':')
+  const ch = sep > 0 ? Number(a.id.slice(sep + 1)) : NaN
+  if (Number.isInteger(ch)) {
+    const name = a.id.slice(0, sep)
+    if (kind === 'vol') mixer.setVirtualChannelVol(name, ch, v); else if (press) mixer.toggleVirtualChannelMute(name, ch)
+  } else {
+    if (kind === 'vol') mixer.setInstrumentVol(a.id, v); else if (press) mixer.toggleInstrumentMute(a.id)
+  }
+  return true
 }

@@ -18,7 +18,7 @@ export type MixerChannelId =
 // of: a catalog app-source (id = MixerChannelId), a registered MIDI
 // instrument (id = device name), or a virtual-instrument channel (id =
 // "name:ch", matching _virtKey below). null = unassigned slot.
-export type ChannelSlotAssignment = { type: 'catalog' | 'instrument' | 'virtual'; id: string } | null
+export type ChannelSlotAssignment = { type: 'catalog' | 'instrument' | 'instrumentCh' | 'virtual'; id: string } | null
 
 const NUM_CHANNEL_SLOTS = 16
 
