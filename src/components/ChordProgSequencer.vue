@@ -131,7 +131,7 @@ const rafRef = ref(null)
 let _pendingTimeouts = new Set()  // all scheduled timeout IDs
 let _activeNoteKeys = new Set()   // "note-channel" keys currently sounding
 let _activeBassNote = null        // { note, channel, tid } — auto-timed bass note from scheduler
-let heldBassNote = null           // { note, channel } — held bass note from manual trigger
+let heldBassNote = null           // { dev, note, channel } — held bass note from manual trigger
 let _stopPending = false          // set synchronously on stop; blocks any queued tid callbacks
 let _transportTicks = 0          // our own tick counter (384n resolution, resets on each play)
 let _captureArmed = false         // set true on play, consumed by next schedule tick
@@ -148,7 +148,15 @@ const loopEnabled = ref(true)
 const bassEnabled = ref(localStorage.getItem(userKey('S1_CP_BASS_ENABLED')) === 'true')
 const bassDevice = ref(localStorage.getItem(userKey('S1_CP_BASS_DEVICE')) || '')
 const bassChannel = ref(parseInt(localStorage.getItem(userKey('S1_CP_BASS_CHANNEL')) ?? '2', 10))
-const midiOutputs = computed(() => midiService.getOutputs())
+// Reactive (midiStore.outputs, refreshed on connect / hot-plug): midiService.getOutputs() read
+// once at mount — before Web MIDI was ready — left the list empty. Plus the virtual instruments.
+const midiOutputs = computed(() => {
+  const names = new Set()
+  const list = []
+  for (const o of midiStore.outputs) if (o?.name && !names.has(o.name)) { names.add(o.name); list.push({ name: o.name }) }
+  for (const v of midiStore.virtualInstruments) if (v?.name && !names.has(v.name)) { names.add(v.name); list.push({ name: v.name }) }
+  return list
+})
 
 watch(bassEnabled, v => localStorage.setItem(userKey('S1_CP_BASS_ENABLED'), v ? 'true' : 'false'))
 watch(bassDevice, v => localStorage.setItem(userKey('S1_CP_BASS_DEVICE'), v))
@@ -173,6 +181,19 @@ function getBassNote(notes, shift = 0) {
   return Math.min(...notes) + shift
 }
 
+// Bass: straight to its own device and channel (midiService.sendNoteTo), not through the
+// Chord Prog's MIDI Flow cables — else it went to the chords' devices, on their channel
+// (remapped by the cable / OUT CH), and never reached e.g. SYC OUT ch 2 for a Live track.
+// `dev` is kept with each note so its note-off reaches the same device after a change.
+function _bassOn(dev, n, velocity, ch, atMs = null) {
+  const opts = atMs != null ? { workerTimed: true, workerTag: CP_WORKER_TAG } : undefined
+  midiService.sendNoteTo(dev, 'noteon', n, velocity, ch - 1, MidiSource.CHORD_PROG, atMs ?? undefined, opts)
+}
+function _bassOff(b, atMs = null) {
+  if (!b) return
+  midiService.sendNoteTo(b.dev, 'noteoff', b.note, 0, b.channel - 1, MidiSource.CHORD_PROG, atMs ?? undefined, atMs != null ? { workerTimed: true } : undefined)
+}
+
 function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
   if (atMs != null) {
     // CLK SYS: the previous bass note ends when this one starts, both at their times.
@@ -181,41 +202,44 @@ function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
       if (prev.tid) { clearTimeout(prev.tid); _pendingTimeouts.delete(prev.tid) }
       // Its own queued note-off is skipped from now on (it could cut this note, same pitch).
       if (prev.id == null || _cpVoices.end(prev.key, prev.id)) {
-        midiStore.sendNoteOff(prev.note, 0, prev.channel, MidiSource.CHORD_PROG, null, atMs - 1, { workerTimed: true })
+        _bassOff(prev, atMs - 1)
       }
       _activeBassNote = null
     }
     if (!bassEnabled.value || !bassDevice.value || note === null) return
     const ch = Math.max(1, Math.min(16, bassChannel.value))
     const n = Math.max(0, Math.min(127, note))
+    const dev = bassDevice.value
     const key = `bass-${n}-${ch}`
-    const id = _cpVoices.start(key, atMs + durationMs, { note: n, channel: ch, key })
-    midiStore.sendNoteOn(n, velocity, ch, MidiSource.CHORD_PROG, null, atMs, { workerTimed: true, workerTag: CP_WORKER_TAG })
+    const bass = { dev, note: n, channel: ch, key, bass: true }
+    const id = _cpVoices.start(key, atMs + durationMs, bass)
+    _bassOn(dev, n, velocity, ch, atMs)
     midiService.scheduleOnWorker(atMs + durationMs, () => {
-      if (_cpVoices.end(key, id)) midiStore.sendNoteOff(n, 0, ch, MidiSource.CHORD_PROG)
+      if (_cpVoices.end(key, id)) _bassOff(bass)
     }, undefined, 'CHORDS note-off')
-    _activeBassNote = { note: n, channel: ch, tid: null, key, id }
+    _activeBassNote = { ...bass, tid: null, id }
     return
   }
   stopBassNote()
   if (!bassEnabled.value || !bassDevice.value || note === null) return
   const ch = Math.max(1, Math.min(16, bassChannel.value))
   const n = Math.max(0, Math.min(127, note))
-  midiStore.sendNoteOn(n, velocity, ch, MidiSource.CHORD_PROG)
+  const bass = { dev: bassDevice.value, note: n, channel: ch }
+  _bassOn(bass.dev, n, velocity, ch)
   const tid = window.setTimeout(() => {
-    midiStore.sendNoteOff(n, 0, ch, MidiSource.CHORD_PROG)
+    _bassOff(bass)
     _pendingTimeouts.delete(tid)
     _activeBassNote = null
   }, durationMs)
   _pendingTimeouts.add(tid)
-  _activeBassNote = { note: n, channel: ch, tid }
+  _activeBassNote = { ...bass, tid }
 }
 
 function stopBassNote() {
   if (!_activeBassNote) return
-  const { note, channel, tid } = _activeBassNote
+  const { tid } = _activeBassNote
   if (tid) { clearTimeout(tid); _pendingTimeouts.delete(tid) }
-  midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
+  _bassOff(_activeBassNote)
   _activeBassNote = null
 }
 
@@ -341,7 +365,8 @@ function _cpNoteAt(note, velocity, channel, onMs, durMs) {
 /** CLK SYS, a slot switch at atMs: the notes still sounding then end there. */
 function _cpCutVoicesAt(atMs) {
   for (const v of _cpVoices.cutAt(atMs)) {
-    midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.CHORD_PROG, null, atMs - 1, { workerTimed: true })
+    if (v.bass) _bassOff(v, atMs - 1)
+    else midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.CHORD_PROG, null, atMs - 1, { workerTimed: true })
     _activeNoteKeys.delete(v.key)
   }
   _activeBassNote = null
@@ -414,7 +439,7 @@ function stopAllNotes() {
     _activeNoteKeys.clear()
     stopBassNote()
     if (heldBassNote) {
-      midiStore.sendNoteOff(heldBassNote.note, 0, heldBassNote.channel, MidiSource.CHORD_PROG)
+      _bassOff(heldBassNote)
       heldBassNote = null
     }
     midiStore.panic()
@@ -979,7 +1004,7 @@ function stopHeldChord() {
   })
   _activeNoteKeys.clear()
   if (heldBassNote) {
-    midiStore.sendNoteOff(heldBassNote.note, 0, heldBassNote.channel, MidiSource.CHORD_PROG)
+    _bassOff(heldBassNote)
     heldBassNote = null
   }
 }
@@ -1050,8 +1075,8 @@ function triggerChordStep(idx, forcePlay = false) {
       const bassNote = getBassNote(step.notes, shift)
       if (bassNote !== null) {
         const n = Math.max(0, Math.min(127, bassNote))
-        midiStore.sendNoteOn(n, velocity, bassChannel.value, MidiSource.CHORD_PROG)
-        heldBassNote = { note: n, channel: bassChannel.value }
+        heldBassNote = { dev: bassDevice.value, note: n, channel: Math.max(1, Math.min(16, bassChannel.value)) }
+        _bassOn(heldBassNote.dev, n, velocity, heldBassNote.channel)
       }
     }
   } else {
@@ -1066,8 +1091,8 @@ function triggerChordStep(idx, forcePlay = false) {
       const bassNote = getBassNote(step.notes, shift)
       if (bassNote !== null) {
         const n = Math.max(0, Math.min(127, bassNote))
-        midiStore.sendNoteOn(n, step.velocity || 90, bassChannel.value, MidiSource.CHORD_PROG)
-        heldBassNote = { note: n, channel: bassChannel.value }
+        heldBassNote = { dev: bassDevice.value, note: n, channel: Math.max(1, Math.min(16, bassChannel.value)) }
+        _bassOn(heldBassNote.dev, n, step.velocity || 90, heldBassNote.channel)
       }
     }
   }
@@ -1788,6 +1813,7 @@ function velBarColor(v) {
             title="MIDI output device for bass note"
           >
             <option value="">—</option>
+            <option v-if="bassDevice && !midiOutputs.some(o => o.name === bassDevice)" :value="bassDevice">{{ bassDevice }} (offline)</option>
             <option v-for="out in midiOutputs" :key="out.name" :value="out.name">{{ out.name }}</option>
           </select>
           <select

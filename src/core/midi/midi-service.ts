@@ -1048,6 +1048,42 @@ export class MidiService {
     this.broadcast('pitchbend', { lsb, msb }, channel, source, skipDeviceId);
   }
 
+  /**
+   * A note to ONE device by name (a real port or a virtual instrument), on exactly `channel`
+   * (0–15), outside the MIDI Flow cables: an app's own dedicated output, e.g. the Chord Prog's
+   * Bass (lowest note of each chord → its device/channel). Muted sources and velocity scale
+   * apply as in broadcast; `at` / workerTimed schedule it the same way. False: no such device.
+   */
+  sendNoteTo(deviceName: string, type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number,
+    source: MidiSource = MidiSource.UI, at?: number, opts?: BroadcastOptions): boolean {
+    if (!deviceName) return false;
+    if (type === 'noteon' && this.mutedSources.has(source)) return true;
+    const vf = this.sourceVelocityScale.get(source);
+    if (type === 'noteon' && vf !== undefined) velocity = scaleVelocity(velocity, vf);
+    const msg = [noteStatusByte(type, channel & 0x0f), note & 0x7f, velocity & 0x7f];
+    const want = deviceName.toLowerCase().trim();
+    const outs = this.midiAccess
+      ? Array.from(this.midiAccess.outputs.values()).filter(o => (o.name ?? '').toLowerCase().trim() === want)
+      : [];
+    const virt = this.virtualOutputs.has(deviceName) ? deviceName : null;
+    if (!outs.length && !virt) return false;
+    const deferMs = at != null ? at - performance.now() : 0;
+    const scheduled = deferMs > 1;
+    for (const out of outs) {
+      const deliver = () => { this.globalSentHashes.set(msg.join(','), Date.now()); out.send(msg); };
+      if (!scheduled) { this.logOutbound(out.name ?? deviceName, msg); deliver(); }
+      else if (opts?.workerTimed) this.scheduleOnWorker(at!, () => { this.logOutbound(out.name ?? deviceName, msg); deliver(); }, opts.workerTag, out.name ?? deviceName);
+      else { this.logOutbound(out.name ?? deviceName, msg); this.globalSentHashes.set(msg.join(','), Date.now() + deferMs); out.send(msg, at); }
+    }
+    if (virt) {
+      const deliver = () => this.sendToVirtualOutput(virt, msg);
+      if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virt);
+      else if (scheduled) setTimeout(deliver, deferMs);
+      else deliver();
+    }
+    return true;
+  }
+
   sendRawNote(outputId: string | null, type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number): void {
     if (!this.midiAccess) return;
     const status = noteStatusByte(type, channel);
