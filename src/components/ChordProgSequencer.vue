@@ -193,7 +193,7 @@ function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
     midiStore.sendNoteOn(n, velocity, ch, MidiSource.CHORD_PROG, null, atMs, { workerTimed: true, workerTag: CP_WORKER_TAG })
     midiService.scheduleOnWorker(atMs + durationMs, () => {
       if (_cpVoices.end(key, id)) midiStore.sendNoteOff(n, 0, ch, MidiSource.CHORD_PROG)
-    })
+    }, undefined, 'CHORDS note-off')
     _activeBassNote = { note: n, channel: ch, tid: null, key, id }
     return
   }
@@ -335,7 +335,7 @@ function _cpNoteAt(note, velocity, channel, onMs, durMs) {
     if (!_cpVoices.end(noteKey, id)) return
     midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
     _activeNoteKeys.delete(noteKey)
-  })
+  }, undefined, 'CHORDS note-off')
 }
 
 /** CLK SYS, a slot switch at atMs: the notes still sounding then end there. */
@@ -365,7 +365,7 @@ function _startSystemClock(tickCb, alignToBar) {
     _sysTickMs = t
     _sysSilent = late
     try { tickCb(perfMsToAudioTime(t)) } finally { _sysTickMs = null; _sysSilent = false }
-  })
+  }, { name: 'CHORDS' })
   _sysSched.start(startMs, bpm, CP_TICK_BEATS)
   _offExtGrid = externalGrid.on(e => {
     if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)

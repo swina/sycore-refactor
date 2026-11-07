@@ -18,12 +18,20 @@
  * (createWorkerTicker below), and gets onStep(step, timeMs, late) calls.
  */
 
+import { countLateStep, countStartLate } from './sys-clock-stats';
+
 export interface StepSchedulerOptions {
   /** How far ahead steps are handed out, in ms. */
   lookaheadMs?: number;
   /** A step found later than this (a stalled page) is passed as `late`:
    *  the app advances without sounding it, instead of a burst of old notes. */
   lateToleranceMs?: number;
+  /** App name for the CLK SYS diagnostics (late steps counted per app). */
+  name?: string;
+  /** At start only (before the first step on time): a step up to this late still sounds,
+   *  now, instead of being skipped — an app starts a few tens of ms after Live's Start,
+   *  and short notes (drums) have no chase: without it the downbeat is lost. 0 = off. */
+  startToleranceMs?: number;
 }
 
 export type StepCallback = (step: number, timeMs: number, late: boolean) => void;
@@ -40,10 +48,18 @@ export class StepScheduler {
   private beatsPerStep = 0.25;
   private readonly lookaheadMs: number;
   private readonly lateToleranceMs: number;
+  private readonly name: string | undefined;
+  private readonly startToleranceMs: number;
+  private firstTick = false;
+  /** A step was on time since start: later late steps are stalls (counted), not the
+   *  steps of a late start, skipped on purpose. */
+  private sawOnTime = false;
 
   constructor(private onStep: StepCallback, opts: StepSchedulerOptions = {}) {
     this.lookaheadMs = opts.lookaheadMs ?? 100;
     this.lateToleranceMs = opts.lateToleranceMs ?? 60;
+    this.name = opts.name;
+    this.startToleranceMs = opts.startToleranceMs ?? 0;
   }
 
   get isRunning(): boolean { return this.running; }
@@ -54,6 +70,8 @@ export class StepScheduler {
   /** Start with step 0 at `startMs`; a step lasts `beatsPerStep` beats (0.25 = a 16th). */
   start(startMs: number, bpm: number, beatsPerStep = 0.25): void {
     this.running = true;
+    this.sawOnTime = false;
+    this.firstTick = true;
     this.nextStep = 0;
     this.anchorStep = 0;
     this.anchorMs = startMs;
@@ -116,11 +134,20 @@ export class StepScheduler {
   tick(now: number): void {
     if (!this.running) return;
     const until = now + this.lookaheadMs;
+    if (this.firstTick) {
+      this.firstTick = false;
+      // How late the app really started against its step 0 (diagnostics).
+      if (this.name) countStartLate(this.name, now - this.timeOf(0));
+    }
     // Bounded: a long stall never loops for ever.
     for (let guard = 0; guard < 256 && this.running; guard++) {
       const t = this.timeOf(this.nextStep);
       if (t >= until) break;
-      const late = t < now - this.lateToleranceMs;
+      let late = t < now - this.lateToleranceMs;
+      // Capped under a step: at most one step of the start sounds late (no burst of several).
+      if (late && !this.sawOnTime && t >= now - Math.min(this.startToleranceMs, this.stepMs * 0.9)) late = false;
+      if (!late) this.sawOnTime = true;
+      else if (this.sawOnTime && this.name) countLateStep(this.name);
       const step = this.nextStep++;
       this.onStep(step, t, late);
     }
@@ -171,6 +198,15 @@ export class VoiceLedger<T = unknown> {
     if (!v || v.id !== id) return false;
     this.voices.delete(key);
     return true;
+  }
+
+  /** A new note of `key` at `t`: the old note of that key still sounding after `t` is
+   *  released (its queued note-off will be skipped); its data, to end it just before `t`. */
+  cutKeyAt(key: string, t: number): T | null {
+    const v = this.voices.get(key);
+    if (!v || v.offAt <= t) return null;
+    this.voices.delete(key);
+    return v.data;
   }
 
   /** A switch at `t`: the voices still sounding after `t` are released (their queued

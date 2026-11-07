@@ -616,7 +616,7 @@ function _startSystemClock(callback) {
   } else if (transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value) {
     startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
   }
-  _sysSched = new StepScheduler((_step, t, late) => callback(perfMsToAudioTime(t), t, late))
+  _sysSched = new StepScheduler((_step, t, late) => callback(perfMsToAudioTime(t), t, late), { name: 'SEQ', startToleranceMs: 150 })
   _sysSched.start(startMs, bpm, tempoMultiplier.value?.beatsPerStep ?? 0.25)
   _offExtGrid = externalGrid.on(e => {
     if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)
@@ -1617,7 +1617,7 @@ watch(isPlaying, (playing) => {
                 if (!_seqVoices.end(noteKey, id)) return
                 midiStore.sendNoteOff(clampedNote, 0, ch, MidiSource.SEQUENCER2)
                 activeMidiNotes.value.delete(noteKey)
-              })
+              }, undefined, 'SEQ note-off')
               return
             }
             midiStore.sendNoteOn(clampedNote, velocity, state.channel, MidiSource.SEQUENCER2)

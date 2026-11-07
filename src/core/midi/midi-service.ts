@@ -26,6 +26,7 @@ import { MidiSource } from '@/types/midi';
 import { MidiMonitor } from './midi-monitor';
 import { MidiTransport } from './midi-transport';
 import { createWorkerTicker } from './step-scheduler';
+import { countSendDelay, countFlushGap, countSendCost } from './sys-clock-stats';
 import { SmartLatch } from './midi-smart-latch';
 import { MidiRouter, ThruNoteTracker } from './midi-routing';
 import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte, snapFaderValue } from './midi-broadcast';
@@ -887,16 +888,18 @@ export class MidiService {
   }
 
   // ── Worker-timed delivery (BroadcastOptions.workerTimedVirtual) ───────────
-  private timedQueue: { at: number; fn: () => void; tag?: string }[] = [];
+  private timedQueue: { at: number; fn: () => void; tag?: string; dest?: string }[] = [];
+  /** Last flush while the queue was busy (0 = idle): the gap to the next one is main-thread time. */
+  private lastBusyFlushAt = 0;
   private stopTimedTicker: (() => void) | null = null;
   private timedIdleSince = 0;
 
   /** Run `fn` at `at` (performance.now() ms), on a Worker timer (~2–4 ms resolution). */
-  scheduleOnWorker(at: number, fn: () => void, tag?: string): void {
+  scheduleOnWorker(at: number, fn: () => void, tag?: string, dest?: string): void {
     const q = this.timedQueue;
     let i = q.length;
     while (i > 0 && q[i - 1].at > at) i--;   // keep sorted; messages mostly arrive in order
-    q.splice(i, 0, { at, fn, tag });
+    q.splice(i, 0, { at, fn, tag, dest });
     if (!this.stopTimedTicker) this.stopTimedTicker = createWorkerTicker(() => this.flushTimed(), 2);
   }
 
@@ -908,10 +911,15 @@ export class MidiService {
   private flushTimed(): void {
     const now = performance.now();
     const q = this.timedQueue;
+    if (this.lastBusyFlushAt) countFlushGap(now - this.lastBusyFlushAt);
     while (q.length > 0 && q[0].at <= now + 1) {
       const item = q.shift()!;
+      countSendDelay(now - item.at);
+      const t0 = performance.now();
       try { item.fn(); } catch (e) { console.warn('[MIDI] timed send failed', e); }
+      countSendCost(item.dest ?? '?', performance.now() - t0);
     }
+    this.lastBusyFlushAt = q.length > 0 ? performance.now() : 0;
     if (q.length > 0) { this.timedIdleSince = 0; return; }
     // Stop the Worker after 2 s with nothing queued.
     if (!this.timedIdleSince) this.timedIdleSince = now;
@@ -1525,7 +1533,7 @@ export class MidiService {
             out.send(fullMsg);
           };
           if (!scheduled) deliver();
-          else if (opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag);
+          else if (opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, out.name);
           // the latch decides (and may send releases) at play time — keep it on a timer
           else if (latched) setTimeout(deliver, deferMs);
           else {
@@ -1610,7 +1618,7 @@ export class MidiService {
             }
             this.sendToVirtualOutput(virtName, [status, ...bytes]);
           };
-          if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag);
+          if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virtName);
           // virtual instruments are plain JS callbacks: no timestamp, so a timer
           else if (scheduled) setTimeout(deliver, deferMs);
           else deliver();

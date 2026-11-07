@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
-import { StepScheduler, createWorkerTicker } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { DRUM_AI_SYSTEM_PROMPT } from '@/lib/drum-grid'
 import { useTransportManager } from '@/composables/useTransportManager'
@@ -335,18 +335,38 @@ const hasSolo = computed(() =>
 // already past (a live pad) goes out now.
 // channel (1–16, optional): a dedicated channel sent as is (the bassline's, bypassing the
 // MIDI Flow OUT channel remap); without it the global channel + routing, as before.
+// Gate: a step's note ends a little before the next step (10% of it, at most 15 ms), not
+// on it: with a 100% gate two 1/16 of the same note had the note-off of the first land on —
+// with a ms of jitter, after — the note-on of the second, and Live ended the new note at
+// once (a sliver). The note-off is counted from the step's time, not from a late send.
+// System clock: notes leave from a Worker-timed queue — not a timestamped send (ignored on
+// Windows MIDI Services loopbacks: on+off together, no sound) nor a page timer — and a note
+// of the same pitch still sounding (a tie, a late send) is ended just before the new one;
+// its own queued note-off is then skipped (_drumVoices, like the Sequencer's).
+const _drumVoices = new VoiceLedger()
 function _sendMidiNote(note, velocity, accent, fireTime, duration, channel = 0) {
   if (_silentStep) return
   const vel = Math.max(1, Math.min(127, Math.round(velocity * (accent ? 1.35 : 1))))
-  const onAt  = fireTime == null ? performance.now() : Math.max(performance.now(), audioTimeToPerfMs(fireTime))
-  const offAt = onAt + Math.max(10, duration * 1000)
+  const now = performance.now()
+  const wantAt = fireTime == null ? now : audioTimeToPerfMs(fireTime)
+  const onAt  = Math.max(now, wantAt)
+  const durMs = duration * 1000
+  const offAt = Math.max(onAt + 10, wantAt + durMs - Math.min(15, durMs * 0.1))
   const ch   = channel >= 1 && channel <= 16 ? channel : midiStore.midiChannel
   const opts = channel >= 1 && channel <= 16 ? { exactChannel: true } : {}
-  // System clock: notes leave from a Worker-timed queue — not a timestamped send (ignored on
-  // Windows MIDI Services loopbacks: on+off together, no sound) nor a page timer.
-  if (drumStore.systemClock) opts.workerTimed = true
-  midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, opts)
-  midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, offAt, opts)
+  if (!drumStore.systemClock) {
+    midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, opts)
+    midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, offAt, opts)
+    return
+  }
+  const key = `${ch}:${note}`
+  const prev = _drumVoices.cutKeyAt(key, onAt)
+  if (prev) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, onAt - 1, { ...opts, workerTimed: true })
+  const id = _drumVoices.start(key, offAt, true)
+  midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, { ...opts, workerTimed: true })
+  midiService.scheduleOnWorker(offAt, () => {
+    if (_drumVoices.end(key, id)) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, undefined, opts)
+  }, undefined, 'DRUM note-off')
 }
 
 // ── MIDI OUT ONLY (drumStore.midiOutOnly) — the virtual instruments the Drum Machine is wired to
@@ -407,7 +427,7 @@ function _startSystemClock() {
   _sysSched = new StepScheduler((_step, t, late) => {
     _silentStep = late
     try { _scheduleCallback(perfMsToAudioTime(t)) } finally { _silentStep = false }
-  })
+  }, { name: 'DRUM', startToleranceMs: 150 })
   _sysSched.start(startMs, bpm)
   _offExtGrid = externalGrid.on(e => {
     if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)

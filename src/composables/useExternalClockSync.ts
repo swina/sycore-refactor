@@ -19,6 +19,7 @@ import { midiService } from '@/core/midi/midi-service'
 import { ExternalClockFollower, PhaseLock, TONE_PPQ, isClockSourceEcho } from '@/core/midi/external-clock'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { externalGrid } from '@/core/midi/external-grid'
+import { takeSysClockStats, observeLongTasks } from '@/core/midi/sys-clock-stats'
 import { controlActionForNote, controlActionEvent, describeControlAction } from '@/lib/control-map'
 import { useMidiStore } from '@/stores/useMidiStore'
 
@@ -187,6 +188,8 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
       + ` · audio clock ${audioPct}% · resyncs ${store.resyncs} · own clock out: ${own || 'none'}`
       + ` · ctrl notes [${diag.controlNotes.join(',')}] other notes [${diag.otherNotes.join(',')}] last action: ${store.lastControlAction || '—'}`
       + (diag.ctrlAfterStart >= 0 ? ` · ctrl after Start ${diag.ctrlAfterStart} ms` : '')
+    const sys = takeSysClockStats()
+    if (sys) store.diag += ` · ${sys}`
     const clockTime = new Date().toLocaleTimeString()
     const focus = typeof document !== 'undefined' && document.hasFocus() ? 'focus' : 'NO focus'
     store.pushDiag(`${clockTime} [${focus}] ${store.mode} ${store.bpm.toFixed(1)} BPM · ${store.position} · phase ${store.lastPhaseErrorMs} ms · ${store.diag} · ${store.state}`)
@@ -315,6 +318,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   })
 
   onMounted(() => {
+    observeLongTasks()
     applySyncOutputBlock()
     watchOwnClockSends()
     removeRaw = midiService.addRawListener(onRaw)

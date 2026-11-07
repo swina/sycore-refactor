@@ -199,3 +199,39 @@ describe('VoiceLedger', () => {
     expect(v.end('64-1', ending)).toBe(true) // ends before the switch: its note-off goes out
   })
 })
+
+describe('StepScheduler — start tolerance (late start: the downbeat still sounds)', () => {
+  it('a step of the start late by less than the tolerance sounds (not late); older ones are skipped', () => {
+    const { s, steps } = collect({ lookaheadMs: 100, lateToleranceMs: 60, startToleranceMs: 150 })
+    s.start(1000, 100)  // a 16th = 150 ms
+    s.tick(1090)        // started 90 ms late: step 0 sounds now
+    expect(steps[0]).toEqual({ step: 0, t: 1000, late: false })
+  })
+
+  it('capped under a step: at most one step of the start sounds late', () => {
+    const { s, steps } = collect({ lookaheadMs: 100, lateToleranceMs: 60, startToleranceMs: 150 })
+    s.start(1000, 100)  // 16th = 150 ms → cap 135 ms
+    s.tick(1290)        // step 0 (290 late) skipped, step 1 (140 late) over the cap: skipped, step 2 on time
+    expect(steps.map(x => x.late)).toEqual([true, true, false])
+  })
+
+  it('after the start, a stall is skipped as before', () => {
+    const { s, steps } = collect({ lookaheadMs: 100, lateToleranceMs: 60, startToleranceMs: 150 })
+    s.start(1000, 100)
+    s.tick(1000)
+    s.tick(1400)        // steps 1 (1150) late by 250, 2 (1300) late by 100: both skipped
+    expect(steps.filter(x => x.t === 1150 || x.t === 1300).map(x => x.late)).toEqual([true, true])
+  })
+})
+
+describe('VoiceLedger.cutKeyAt — a new note of the same pitch', () => {
+  it('releases the old note still sounding after t, so its own note-off is skipped', async () => {
+    const { VoiceLedger } = await import('@/core/midi/step-scheduler')
+    const v = new VoiceLedger<string>()
+    const id = v.start('1:36', 1150, 'old')
+    expect(v.cutKeyAt('1:36', 1140)).toBe('old')
+    expect(v.end('1:36', id)).toBe(false)
+    v.start('1:38', 1000, 'x')
+    expect(v.cutKeyAt('1:38', 1100)).toBeNull()   // already ended before t
+  })
+})
