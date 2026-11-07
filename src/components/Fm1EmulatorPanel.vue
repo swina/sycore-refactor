@@ -8,13 +8,13 @@
 // MIDI learn (lib/fm1-controls.ts) maps CCs/notes from any input to the device's own encoders,
 // MASTER and buttons, so a controller drives any firmware whatever MIDI it implements.
 // Firmware, figures and LCD are shared with the DECK's FM-1 view through lib/fm1-bridge.ts.
-import { ref, watch, onUnmounted } from 'vue'
-import { Cpu, RefreshCw, ExternalLink, SlidersHorizontal, X } from 'lucide-vue-next'
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { Cpu, RefreshCw, ExternalLink, SlidersHorizontal, X, AppWindow } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
-import { FM1_FIRMWARES, FM1_EMU_URL, fm1EmbedUrl, fm1Parts, fm1NextPcTemplate } from '@/lib/fm1-firmwares'
+import { FM1_FIRMWARES, FM1_EMU_URL, fm1EmbedUrl, fm1WindowUrl, FM1_CHANNEL, fm1Parts, fm1NextPcTemplate } from '@/lib/fm1-firmwares'
 import { FM1_OUTPUT, FM1_PANEL_ID, fm1Firmware, fm1Stats, fm1Lcd, setFm1Poster, fm1LcdWanted, fm1RemapChannel } from '@/lib/fm1-bridge'
 import { FM1_CONTROLS, ENC_MODES, Fm1ControlMapper, findMapping, midiSource, describeMapping } from '@/lib/fm1-controls'
 import { midiService } from '@/core/midi/midi-service'
@@ -55,8 +55,45 @@ const midiStore = useMidiStore()
 let sentCount = 0
 const sent = ref(0)
 
+// ── Where the emulator runs: in this panel (iframe) or in a window of its own ──
+// The iframe shares SY.CORE's browser process: the CPU emulation is heavy enough to slow SY.CORE's
+// audio clock (the transport then falls behind Live). The window (opened with noopener) gets its
+// own process and audio thread; it is driven over a BroadcastChannel with the same messages.
+// This panel stays the "FM-1 Emulator" output in MIDI Flow either way: keep it open (minimized is fine).
+const STORAGE_MODE = 'SYCORE_FM1_MODE'
+const mode = ref(localStorage.getItem(STORAGE_MODE) === 'window' ? 'window' : 'panel')
+const inWindow = computed(() => mode.value === 'window')
+const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(FM1_CHANNEL) : null
+const windowAlive = ref(false)
+let lastSeen = 0
+const aliveTimer = setInterval(() => {
+  if (windowAlive.value && performance.now() - lastSeen > 4000) windowAlive.value = false
+}, 1000)
+
 function post(m) {
-  frame.value?.contentWindow?.postMessage(m, location.origin)
+  if (inWindow.value) channel?.postMessage(m)
+  else frame.value?.contentWindow?.postMessage(m, location.origin)
+}
+
+/** Open the window, unless one answers already (noopener: it can't be focused from here). */
+function openWindow() {
+  if (!channel) return
+  windowAlive.value = false
+  channel.postMessage({ type: 'sycore-ping' })
+  setTimeout(() => {
+    if (windowAlive.value) return
+    window.open(fm1WindowUrl(firmware.value), '_blank', 'popup,width=560,height=840,noopener')
+  }, 300)
+}
+
+function setMode(m) {
+  if (m === mode.value) return
+  if (m === 'panel') channel?.postMessage({ type: 'sycore-close' })
+  mode.value = m
+  try { localStorage.setItem(STORAGE_MODE, m) } catch {}
+  stats.value = null
+  fm1Lcd.value = null
+  if (m === 'window') openWindow()
 }
 
 function sendToEmulator(data) {
@@ -153,21 +190,42 @@ const unsubRaw = midiService.addRawListener((event) => {
 // ── Performance figures posted by the emulator page (public/fm1/main.js) ─
 const stats = fm1Stats
 function onFrameMessage(e) {
-  if (e.origin !== location.origin || e.source !== frame.value?.contentWindow) return
-  const type = e.data?.type
+  if (inWindow.value || e.origin !== location.origin || e.source !== frame.value?.contentWindow) return
+  fromEmulator(e.data)
+}
+function fromEmulator(data) {
+  const type = data?.type
   if (type === 'fm1-lcd') {
-    if (fm1LcdWanted()) fm1Lcd.value = e.data.lcd
+    if (fm1LcdWanted()) fm1Lcd.value = data.lcd
   } else if (type === 'fm1-ready') {
-    // a (re)loaded page: ask again for the LCD if the DECK shows it, and start it
+    // a (re)loaded page: ask again for the LCD if the DECK shows it, and start it (the window
+    // has had no click of its own: its Start button is clicked there)
     if (fm1LcdWanted()) post({ type: 'sycore-lcd', on: true })
-    autoStart()
+    if (!inWindow.value) autoStart()
   } else if (type === 'fm1-stats') {
-    stats.value = e.data
+    stats.value = data
     sent.value = sentCount
     sentCount = 0
   }
 }
 window.addEventListener('message', onFrameMessage)
+if (channel) channel.onmessage = (e) => {
+  if (!inWindow.value) return
+  const type = e.data?.type
+  if (type === 'fm1-bye') { windowAlive.value = false; stats.value = null; return }
+  if (type === 'fm1-ready' || type === 'fm1-stats') { windowAlive.value = true; lastSeen = performance.now() }
+  // a window on another firmware (e.g. left open from before): bring it to the picked one
+  if (type === 'fm1-ready' && e.data.fw && e.data.fw !== firmware.value) post({ type: 'sycore-fw', id: firmware.value })
+  fromEmulator(e.data)
+}
+// Window mode on a reload of SY.CORE: look for the window still open, else open it.
+if (inWindow.value) openWindow()
+// The firmware and the reboot reach the window as messages (it reloads itself).
+watch(firmware, id => { if (inWindow.value) post({ type: 'sycore-fw', id }) })
+function reboot() {
+  if (inWindow.value) post({ type: 'sycore-reload' })
+  else reloadKey.value++
+}
 
 // Auto start (no Start click): the browser lets audio start only after a click or a key on the
 // page, so the emulator is started at once if SY.CORE already had one, else at the first one.
@@ -196,6 +254,8 @@ onUnmounted(() => {
   GESTURES.forEach(t => window.removeEventListener(t, postStart, true))
   midiStore.unregisterPanelOutput(FM1_VIRTUAL_OUTPUT)
   setFm1Poster(null)
+  clearInterval(aliveTimer)
+  channel?.close()
   stats.value = null
   fm1Lcd.value = null
   unsubRaw()
@@ -230,7 +290,15 @@ onUnmounted(() => {
         >
           <SlidersHorizontal class="w-3.5 h-3.5" />
         </button>
-        <button class="p-1.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white" title="Reboot emulator" @click="reloadKey++">
+        <div class="flex rounded border border-white/10 overflow-hidden text-[10px] font-bold">
+          <button class="px-2 py-1" :class="!inWindow ? 'bg-cyan-500/30 text-cyan-200' : 'text-neutral-400 hover:text-white'"
+                  title="Run the emulator inside this panel (shares SY.CORE's browser process: heavy firmwares can slow SY.CORE's audio clock)"
+                  @click="setMode('panel')">In panel</button>
+          <button class="px-2 py-1 flex items-center gap-1" :class="inWindow ? 'bg-cyan-500/30 text-cyan-200' : 'text-neutral-400 hover:text-white'"
+                  title="Run the emulator in a window of its own: its own process and audio thread, SY.CORE's timing unaffected"
+                  @click="setMode('window')"><AppWindow class="w-3 h-3" /> Own window</button>
+        </div>
+        <button class="p-1.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white" title="Reboot emulator" @click="reboot">
           <RefreshCw class="w-3.5 h-3.5" />
         </button>
         <a :href="FM1_EMU_URL" target="_blank" rel="noopener" class="p-1.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white" title="Open full emulator page">
@@ -241,7 +309,7 @@ onUnmounted(() => {
     </div>
 
     <div class="px-4 pb-2 text-[10px] text-neutral-500 shrink-0">
-      Click the device to start audio. While this panel is open, route SY.CORE apps and controllers to the <span class="text-neutral-300">{{ FM1_VIRTUAL_OUTPUT }}</span> output in MIDI Flow (the emulator's own MIDI input is off here). Audio does not pass through the SY.CORE mixer.
+      {{ inWindow ? 'The emulator runs in its own window.' : 'Click the device to start audio.' }} While this panel is open, route SY.CORE apps and controllers to the <span class="text-neutral-300">{{ FM1_VIRTUAL_OUTPUT }}</span> output in MIDI Flow (the emulator's own MIDI input is off here). Audio does not pass through the SY.CORE mixer.
     </div>
 
     <div class="px-4 pb-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono shrink-0" title="Load: share of the audio thread the emulator takes (over 100%: the sound breaks up). Drift: how far the audio clock falls behind the wall clock. Latency: the emulator's AudioContext base + output latency.">
@@ -304,7 +372,21 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <div v-if="inWindow" class="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center text-[11px] text-neutral-400">
+      <AppWindow class="w-10 h-10" :class="windowAlive ? 'text-cyan-400' : 'text-neutral-600'" />
+      <div v-if="windowAlive" class="text-cyan-200 font-bold">The FM-1 runs in its own window</div>
+      <div v-else class="text-amber-300 font-bold">No FM-1 window open</div>
+      <div class="max-w-md leading-relaxed">
+        Click <span class="text-white">Start</span> (or the device) in the FM-1 window once to start its audio.
+        Keep this panel open — minimized is fine: it is the <span class="text-neutral-200">{{ FM1_VIRTUAL_OUTPUT }}</span> output in MIDI Flow
+        and forwards the notes, the MIDI controls and the DECK's screen to the window.
+      </div>
+      <button class="px-3 py-1.5 rounded border border-cyan-400/40 text-cyan-200 hover:bg-cyan-500/20 font-bold" @click="openWindow">
+        {{ windowAlive ? 'Already open (find it in the taskbar)' : 'Open the FM-1 window' }}
+      </button>
+    </div>
     <iframe
+      v-else
       ref="frame"
       :key="`${firmware}-${reloadKey}`"
       :src="fm1EmbedUrl(firmware)"

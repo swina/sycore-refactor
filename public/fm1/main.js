@@ -28,6 +28,15 @@ for (const f of catalog.firmwares) if (f.hub && !byId.has(f.hub)) byId.set(f.hub
 // <head> set data-embed before the first paint; style.css hides the rest). It does not change the
 // firmware this browser starts with on the full page.
 const EMBED = document.documentElement.hasAttribute("data-embed");
+// SY.CORE bridge: ?sycore=window — a standalone window SY.CORE opened (its own process and audio
+// thread, so the emulation doesn't slow SY.CORE's audio clock), driven over a BroadcastChannel
+// (same origin) instead of postMessage between an iframe and its parent. Same messages both ways.
+const SY_CHANNEL = params.get("sycore") === "window" && "BroadcastChannel" in self ? new BroadcastChannel("sycore-fm1") : null;
+const HOSTED = parent !== window || !!SY_CHANNEL;
+function toHost(m, transfer) {
+  if (parent !== window) parent.postMessage(m, location.origin, transfer || []);
+  else if (SY_CHANNEL) SY_CHANNEL.postMessage(m);
+}
 let fw = byId.get(params.get("fw")) || byId.get(stored(DEV.key + "fw")) || byId.get(catalog.default) || catalog.firmwares[0];
 let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 100);
 // the audio buffer: "interactive" (small: keys answer quickly) unless this device needed a larger
@@ -587,7 +596,7 @@ async function midiOpen() {
 // own input would play a controller a second time, unfiltered, on its own channel, and the
 // channel selector would fold Felucca's parts onto one: both off and hidden here, without
 // storing it (the full page keeps its own choice).
-if (EMBED && parent !== window) {
+if (EMBED && HOSTED) {
   midiSel.value = "";
   midiCh = 0;
   midiChSel.value = 0;
@@ -610,18 +619,20 @@ midiChSel.addEventListener("change", () => {
 let lcdWanted = false, lcdLast = null, lcdSentAt = 0, lcdTimer = 0;
 function lcdToParent(lcd) {
   if (lcd) lcdLast = lcd;
-  if (!lcdWanted || !lcdLast || lcdTimer || parent === window) return;
+  if (!lcdWanted || !lcdLast || lcdTimer || !HOSTED) return;
   lcdTimer = setTimeout(() => {
     lcdTimer = 0;
     if (!lcdWanted) return;
     lcdSentAt = performance.now();
     const copy = new Uint16Array(lcdLast);
-    parent.postMessage({ type: "fm1-lcd", lcd: copy }, location.origin, [copy.buffer]);
+    toHost({ type: "fm1-lcd", lcd: copy }, [copy.buffer]);
   }, Math.max(0, 50 - (performance.now() - lcdSentAt)));
 }
 addEventListener("message", (e) => {
   if (e.origin !== location.origin) return;
-  const m = e.data;
+  fromHost(e.data);
+});
+function fromHost(m) {
   if (m?.type === "sycore-midi") midiMessage({ data: m.bytes });
   else if (m?.type === "sycore-ctl" && ui) {
     if (m.kind === "enc") turn(m.index, m.clicks);
@@ -631,8 +642,26 @@ addEventListener("message", (e) => {
     lcdWanted = !!m.on;
     lcdToParent(null);
   }
-});
-if (parent !== window) parent.postMessage({ type: "fm1-ready" }, location.origin);
+}
+if (SY_CHANNEL) {
+  // the window only: SY.CORE asks whether it is open (one window, not two), starts it, picks
+  // the firmware (a reload with ?fw=), reboots it; it says when it goes
+  SY_CHANNEL.onmessage = (e) => {
+    const m = e.data;
+    if (m?.type === "sycore-ping") toHost({ type: "fm1-ready", fw: fw.id });
+    else if (m?.type === "sycore-start") start();
+    else if (m?.type === "sycore-fw" && m.id && m.id !== fw.id) {
+      const q = new URLSearchParams(location.search);
+      q.set("fw", m.id);
+      location.replace(`${location.pathname}?${q}`);
+    } else if (m?.type === "sycore-reload") location.reload();
+    else if (m?.type === "sycore-close") window.close();   // back to the panel: one emulator only
+    else fromHost(m);
+  };
+  addEventListener("pagehide", () => toHost({ type: "fm1-bye" }));
+  document.title = "FM-1 · SY.CORE";
+}
+if (HOSTED) toHost({ type: "fm1-ready", fw: fw.id });
 
 // ---------------------------------------------------------------- is the device keeping up?
 // Two measures, per second: the load (the share of the audio thread's time the emulation takes,
@@ -995,9 +1024,9 @@ function onWorklet(e) {
   const now = performance.now();
   if (!last || now - last.t > 1000) {
     perf.second(m);
-    if (parent !== window) parent.postMessage({ type: "fm1-stats", firmware: fw.name, mhz, latency,
+    if (HOSTED) toHost({ type: "fm1-stats", firmware: fw.name, mhz, latency,
       load: perf.load(), speed: perf.speed(), drift: perf.drift, worst: perf.worst, short: m.short,
-      halted: !!m.halted, baseLatency: ac?.baseLatency ?? null, outputLatency: ac?.outputLatency ?? null }, location.origin);
+      halted: !!m.halted, baseLatency: ac?.baseLatency ?? null, outputLatency: ac?.outputLatency ?? null });
     status.textContent = m.halted ? `${fw.name}: the emulated CPU halted` :
       `${fw.name} · ${mhz} MHz · ${perf.speedText()} · load ${perf.loadText()} · ` +
       `${(m.ms / 1000).toFixed(1)} s`;

@@ -68,3 +68,16 @@ describe('FM-1 MIDI Ch In', () => {
     expect(fm1RemapChannel([0xf8], [1])).toEqual([0xf8])
   })
 })
+
+import { fm1WindowUrl, fm1EmbedUrl, FM1_CHANNEL } from '@/lib/fm1-firmwares'
+describe('FM-1 own window', () => {
+  it('window URL: embed layout, firmware, sycore=window', () => {
+    const u = new URL(fm1WindowUrl('felucca'), 'http://x')
+    expect(u.pathname).toBe('/fm1/index.html')
+    expect(u.searchParams.get('fw')).toBe('felucca')
+    expect(u.searchParams.get('embed')).toBe('1')
+    expect(u.searchParams.get('sycore')).toBe('window')
+    expect(new URL(fm1EmbedUrl('felucca'), 'http://x').searchParams.get('sycore')).toBeNull()
+    expect(FM1_CHANNEL).toBe('sycore-fm1')
+  })
+})

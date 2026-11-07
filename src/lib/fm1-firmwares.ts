@@ -115,6 +115,16 @@ export function fm1EmbedUrl(firmwareId: string): string {
   return `${FM1_LOCAL_URL}?${q}`
 }
 
+/**
+ * Standalone window URL (`sycore=window`): the device panel in a window of its own — its own
+ * process and audio thread — driven over the BroadcastChannel FM1_CHANNEL (public/fm1/main.js).
+ */
+export function fm1WindowUrl(firmwareId: string): string {
+  const q = new URLSearchParams({ fw: firmwareId, embed: '1', sycore: 'window' })
+  return `${FM1_LOCAL_URL}?${q}`
+}
+export const FM1_CHANNEL = 'sycore-fm1'
+
 // MIDI channels (0-based) a firmware's parts listen on, where known — from the emulator's own
 // notes (public/fm1/main.js, MIDI_NOTES). More than one: a multi-timbral firmware. Anything else
 // gets channel 1 shown; SY.CORE sends to it on the channel each app plays on.

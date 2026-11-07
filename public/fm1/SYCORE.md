@@ -16,6 +16,11 @@ Local patch in `main.js` (search "SY.CORE bridge" / "fm1-stats"):
 - embedded with a parent (`?embed=1` in an iframe): the page's own MIDI input and channel
   selector are off and hidden (not stored) — MIDI comes only through the bridge
 
+- `?sycore=window` (SY.CORE's FM-1 panel, "Own window"): the page runs in a standalone window (own
+  process and audio thread) and the same messages go over `BroadcastChannel("sycore-fm1")` instead of
+  postMessage to a parent (`toHost()` / `fromHost()`); the window also answers `sycore-ping` (with
+  `fm1-ready`), and handles `sycore-start`, `sycore-fw` (reload on that firmware), `sycore-reload`,
+  `sycore-close`; it posts `fm1-bye` on `pagehide`
 - `main.js` `perf.second()`: the load is judged after the first 10 s, not 3 (the JIT's warm-up
   ran FMOS and Felucca over 100% for several seconds: a false "can't run in real time" warning)
 
