@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SY.CORE Link spike</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0b0d; --fg:#e6e6e6; --mut:#8a8a8a; --acc:#39ff9c; --bad:#ff5a5a; }
+  body { background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,Menlo,Consolas,monospace; margin:0; padding:16px; }
+  h1 { font-size:14px; letter-spacing:.1em; text-transform:uppercase; margin:0 0 12px }
+  input { background:#16161a; color:var(--fg); border:1px solid #333; border-radius:6px; padding:6px 8px; width:240px; font:inherit }
+  button { background:#1d1d22; color:var(--fg); border:1px solid #3a3a42; border-radius:6px; padding:6px 10px; font:inherit; cursor:pointer; margin:2px }
+  button:hover { border-color:var(--acc) }
+  .row { margin:8px 0 } .mut { color:var(--mut) } .ok { color:var(--acc) } .bad { color:var(--bad) }
+  pre { background:#111115; border:1px solid #222; border-radius:8px; padding:10px; max-height:45vh; overflow:auto; white-space:pre-wrap }
+</style>
+</head>
+<body>
+<h1>SY.CORE Link · spike</h1>
+<div class="row mut">Page origin: <span id="origin"></span> · secure context: <span id="secure"></span></div>
+<div class="row">
+  <input id="url" value="ws://127.0.0.1:9400">
+  <button id="connect">Connect</button>
+  <span id="state" class="mut">disconnected</span>
+</div>
+<div class="row">Live: <span id="tr" class="mut">—</span></div>
+<div class="row">
+  <button id="ping">Ping test (200)</button>
+  <button id="notes">Note test: 1/16 for 8 bars</button>
+  <label class="mut">lookahead <input id="look" type="number" value="100" style="width:60px"> ms</label>
+  <label class="mut">note <input id="pitch" type="number" value="60" style="width:60px"></label>
+</div>
+<pre id="log"></pre>
+<script>
+const $ = id => document.getElementById(id);
+$('origin').textContent = location.origin;
+$('secure').textContent = String(window.isSecureContext);
+const log = s => { $('log').textContent += s + '\n'; $('log').scrollTop = 1e9; };
+
+let ws = null;
+const tr = { playing: false, beat: 0, tempo: 120, at: 0 };
+const beatNow = () => tr.playing ? tr.beat + (performance.now() - tr.at) * tr.tempo / 60000 : tr.beat;
+const pings = new Map(); let rtts = [];
+
+$('connect').onclick = () => {
+  if (ws) { ws.close(); return; }
+  const t0 = performance.now();
+  try { ws = new WebSocket($('url').value); }
+  catch (e) { log('WebSocket constructor threw: ' + e); ws = null; return; }
+  $('state').textContent = 'connecting…';
+  ws.onopen = () => { $('state').textContent = 'connected'; $('state').className = 'ok'; log(`open in ${Math.round(performance.now() - t0)} ms`); };
+  ws.onerror = () => log('error (blocked by the browser? server not running?) — see the console');
+  ws.onclose = e => { $('state').textContent = `closed (${e.code})`; $('state').className = 'bad'; ws = null; };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'transport') {
+      Object.assign(tr, { playing: m.playing, beat: m.beat, tempo: m.tempo, at: performance.now() });
+      $('tr').textContent = `${m.playing ? 'PLAY' : 'STOP'} · beat ${m.beat.toFixed(2)} · ${m.tempo.toFixed(1)} BPM`;
+    } else if (m.type === 'pong') {
+      const sent = pings.get(m.t); if (sent != null) { rtts.push(performance.now() - sent); pings.delete(m.t); }
+    } else if (m.type === 'stats') {
+      log(`device: ${m.notes} notes on time, ${m.late} late · lead min ${m.leadMinMs} / avg ${m.leadAvgMs} ms`);
+    } else if (m.type === 'hello') log('hello: ' + JSON.stringify(m));
+  };
+};
+
+$('ping').onclick = async () => {
+  if (!ws) return log('not connected');
+  rtts = [];
+  for (let i = 0; i < 200; i++) {
+    const t = i + 1; pings.set(t, performance.now());
+    ws.send(JSON.stringify({ v: 1, type: 'ping', t }));
+    await new Promise(r => setTimeout(r, 20));
+  }
+  await new Promise(r => setTimeout(r, 300));
+  const s = [...rtts].sort((a, b) => a - b);
+  const pct = p => s[Math.min(s.length - 1, Math.floor(p * s.length))]?.toFixed(2);
+  log(`ping: ${s.length}/200 · RTT avg ${(s.reduce((a, b) => a + b, 0) / s.length).toFixed(2)} · p50 ${pct(.5)} · p99 ${pct(.99)} · max ${s.at(-1)?.toFixed(2)} ms`);
+};
+
+// Notes ahead of their beat from a Worker timer (not throttled in the background), as CLK SYS.
+$('notes').onclick = () => {
+  if (!ws) return log('not connected');
+  if (!tr.playing) return log('Live is stopped: press Play in Live');
+  const lookBeats = () => Number($('look').value) / (60000 / tr.tempo);
+  let next = Math.ceil(beatNow() * 4) / 4 + 0.25; const end = next + 32; let id = 0;
+  const src = 'setInterval(()=>postMessage(0),10)';
+  const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  w.onmessage = () => {
+    while (next < beatNow() + lookBeats() && next < end) {
+      ws?.send(JSON.stringify({ v: 1, type: 'note', id: ++id, note: Number($('pitch').value), vel: next % 1 === 0 ? 110 : 80, beat: next, durBeats: 0.125 }));
+      next += 0.25;
+    }
+    if (next >= end) { w.terminate(); log(`sent ${id} notes`); }
+  };
+  log(`note test from beat ${next.toFixed(2)}…`);
+};
+</script>
+</body>
+</html>
