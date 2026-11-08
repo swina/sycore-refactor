@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { LinkClient, type LinkEvent } from '@/lib/link-client'
+import { LinkClient, sanitizeMidi, type LinkEvent } from '@/lib/link-client'
 
 /** A fake WebSocket the test drives by hand. */
 class FakeWs {
@@ -164,5 +164,20 @@ describe('LinkClient', () => {
     const { client, ws } = connected()
     ws.recv({ type: 'stats', msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92 })
     expect(client.lastStats).toEqual({ msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92 })
+  })
+})
+
+describe('sanitizeMidi', () => {
+  it('integer bytes in range, the right length, missing ones as 0', () => {
+    expect(sanitizeMidi([0x90, 60.4, 101.6])).toEqual([0x90, 60, 102])
+    expect(sanitizeMidi([0x80, 60, undefined as any])).toEqual([0x80, 60, 0])
+    expect(sanitizeMidi([0x90, 60, 200])).toEqual([0x90, 60, 127])
+    expect(sanitizeMidi([0xc0, 5, 9])).toEqual([0xc0, 5])
+    expect(sanitizeMidi(new Uint8Array([0xb0, 7, 64]))).toEqual([0xb0, 7, 64])
+  })
+  it('not a channel message: null', () => {
+    expect(sanitizeMidi([0xf8])).toBeNull()
+    expect(sanitizeMidi([60, 100, 0])).toBeNull()
+    expect(sanitizeMidi([])).toBeNull()
   })
 })

@@ -68,6 +68,25 @@ export interface LinkClientOptions {
 }
 
 const OPEN = 1
+
+/**
+ * One channel message as plain integer bytes: the status byte kept (0x80–0xEF), the data
+ * bytes rounded and kept in 0–127, missing ones as 0; the length the status needs
+ * (2 for program change / channel pressure, else 3). Null when it isn't a channel message.
+ * Real MIDI ports accept loose values (truncated by the browser); the bridge doesn't.
+ */
+export function sanitizeMidi(data: ArrayLike<number>): number[] | null {
+  const status = Math.round(Number(data?.[0]))
+  if (!(status >= 0x80 && status <= 0xef)) return null
+  const kind = status & 0xf0
+  const len = kind === 0xc0 || kind === 0xd0 ? 2 : 3
+  const out = [status]
+  for (let i = 1; i < len; i++) {
+    const b = Math.round(Number(data[i]))
+    out.push(Number.isFinite(b) ? Math.min(127, Math.max(0, b)) : 0)
+  }
+  return out
+}
 const BACKOFF_MS = [500, 1000, 2000, 5000]
 
 export class LinkClient {
@@ -285,7 +304,8 @@ export class LinkClient {
    */
   sendMidi(data: ArrayLike<number>, at?: number): boolean {
     if (!this.isReady) return false
-    const bytes = Array.from(data)
+    const bytes = sanitizeMidi(data)
+    if (!bytes) return false
     const now = this.now()
     if (this.transport.playing && at !== undefined && at > now) {
       return this.sendRaw({ type: 'midi', data: bytes, beat: this.beatAt(at) })
