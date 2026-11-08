@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-11-08
+
+- **P11 SY.CORE Link — client and timestamped outputs (step 2, first part)** — `lib/link-client.ts` (new): WebSocket client of the Max for Live bridge, protocol v1 (`sycore-ableton/docs/link-protocol-v1.md`): hello, mirror of Live's transport (playing, beat, tempo, signature) interpolated between reports (`beatAt`, `timeOfBeat`), MIDI sent with the Live **beat** it must play on (`sendMidi(data, at)`), `clear` (drop the queued messages, end the sounding notes), ping RTT, reconnect with back-off (0.5 → 5 s), version check. `midiService.registerVirtualOutput(..., { timestamped: true })`: a virtual output that schedules on its own gets scheduled sends at once with their time, instead of a timer here (Worker queue or setTimeout) — the bridge plays them on Live's beat. Not wired to the UI yet (Live (M4L) clock source and MIDI Flow destination: next). `core/midi/midi-service.ts`; tests: `tests/unit/lib/link-client.test.ts`, `tests/unit/midi/timestamped-virtual-output.test.ts`. Branch: `feat/rig-controller-ui`
+
 ## 2026-11-07
 
 - **P11 spike — SY.CORE Link test page** — `public/link-spike.html` (copy of `sycore-ableton/m4l/spike/test.html`): served by the deployed app at `/link-spike.html`, to test from an **https** page the WebSocket connection to the Max for Live bridge on `ws://127.0.0.1:9400` (Chrome *Local Network Access*: allowed, prompted or blocked), ping RTT and beat-scheduled notes. Not linked from the app; to be removed after the spike. Branch: `feat/rig-controller-ui`

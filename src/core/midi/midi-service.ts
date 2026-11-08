@@ -153,6 +153,8 @@ export class MidiService {
 
   // ── Virtual output registry ──────────────────────────────────────────────
   private virtualOutputs = new Map<string, (data: number[], at?: number) => void>();
+  // Virtual outputs that schedule on their own (registerVirtualOutput opts.timestamped).
+  private timestampedVirtuals = new Set<string>();
   // Real hardware port each virtual instrument is bound to (its Output port
   // setting) — tracked separately since the registered sendFn closure is
   // opaque. Used to detect the physical-loop case: an instrument's own bound
@@ -286,8 +288,15 @@ export class MidiService {
     return !wiredAsInput;
   }
 
-  registerVirtualOutput(name: string, sendFn: (data: number[], at?: number) => void, portName?: string): void {
+  /**
+   * `opts.timestamped`: the output takes a future time itself (the SY.CORE Link
+   * bridge plays it on Live's beat) — scheduled sends reach it at once with their
+   * `at`, instead of being held back by a timer here.
+   */
+  registerVirtualOutput(name: string, sendFn: (data: number[], at?: number) => void, portName?: string, opts?: { timestamped?: boolean }): void {
     this.virtualOutputs.set(name, sendFn);
+    if (opts?.timestamped) this.timestampedVirtuals.add(name);
+    else this.timestampedVirtuals.delete(name);
     if (portName) {
       this.virtualOutputPorts.set(name, portName);
       // Immediately close the input side of this loopback port if it was
@@ -333,6 +342,7 @@ export class MidiService {
 
   unregisterVirtualOutput(name: string): void {
     this.virtualOutputs.delete(name);
+    this.timestampedVirtuals.delete(name);
     this.virtualOutputPorts.delete(name);
   }
 
@@ -1077,7 +1087,8 @@ export class MidiService {
     }
     if (virt) {
       const deliver = () => this.sendToVirtualOutput(virt, msg);
-      if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virt);
+      if (scheduled && this.timestampedVirtuals.has(virt)) this.sendToVirtualOutput(virt, msg, at);
+      else if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virt);
       else if (scheduled) setTimeout(deliver, deferMs);
       else deliver();
     }
@@ -1654,7 +1665,10 @@ export class MidiService {
             }
             this.sendToVirtualOutput(virtName, [status, ...bytes]);
           };
-          if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virtName);
+          // An output that schedules on its own (SY.CORE Link) gets the time now; latched notes
+          // need the latch at play time, so they keep the timer.
+          if (scheduled && !virtApplyLatch && this.timestampedVirtuals.has(virtName)) this.sendToVirtualOutput(virtName, [status, ...bytes], at);
+          else if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virtName);
           // virtual instruments are plain JS callbacks: no timestamp, so a timer
           else if (scheduled) setTimeout(deliver, deferMs);
           else deliver();
