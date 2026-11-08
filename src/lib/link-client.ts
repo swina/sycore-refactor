@@ -90,6 +90,11 @@ export function sanitizeMidi(data: ArrayLike<number>): number[] | null {
   return out
 }
 const BACKOFF_MS = [500, 1000, 2000, 5000]
+/** Mirror vs report off by more than this: Live jumped (beats). */
+const MIRROR_JUMP_BEATS = 0.25
+/** Share of a report's difference taken when it is ahead of the mirror / behind it (see mirrorBeat). */
+const MIRROR_GAIN_AHEAD = 0.3
+const MIRROR_GAIN_BEHIND = 0.02
 
 export class LinkClient {
   readonly url: string
@@ -242,10 +247,12 @@ export class LinkClient {
         break
       case 'transport': {
         const prev = this.transport
+        const playing = !!m.playing
+        const tempo = Number(m.tempo) > 0 ? Number(m.tempo) : prev.tempo
         const next: LinkTransport = {
-          playing: !!m.playing,
-          beat: Number.isFinite(Number(m.beat)) ? Number(m.beat) : this.beatAt(now),
-          tempo: Number(m.tempo) > 0 ? Number(m.tempo) : prev.tempo,
+          playing,
+          beat: this.mirrorBeat(prev, playing, tempo, m.beat, now),
+          tempo,
           num: Number(m.num) > 0 ? Number(m.num) : prev.num,
           den: Number(m.den) > 0 ? Number(m.den) : prev.den,
           at: now,
@@ -278,6 +285,26 @@ export class LinkClient {
   }
 
   // ── Time ───────────────────────────────────────────────────────────────────
+
+  /**
+   * The mirror's beat after a report `reported` received at `now`. While Live plays at a
+   * steady tempo the mirror runs on its own and only leans towards the reports: a report is
+   * never early (it was true when sent, it is read later — a busy page, the WebSocket), so
+   * one ahead of the mirror is taken in a good part (the mirror was behind), one behind it
+   * barely (most likely just read late). A big difference is a jump (loop, relocation) and
+   * is taken at once, as are a start, a stop and a tempo change. Without this each report
+   * re-anchored the mirror with its own delivery delay, and the beat of every note sent
+   * (`beatAt` of its time) wobbled by tens of ms.
+   */
+  private mirrorBeat(prev: LinkTransport, playing: boolean, tempo: number, reported: unknown, now: number): number {
+    const predicted = this.beatAt(now)
+    if (!Number.isFinite(Number(reported))) return predicted
+    const beat = Number(reported)
+    if (!playing || !prev.playing || tempo !== prev.tempo) return beat
+    const err = beat - predicted
+    if (Math.abs(err) > MIRROR_JUMP_BEATS) return beat
+    return predicted + err * (err > 0 ? MIRROR_GAIN_AHEAD : MIRROR_GAIN_BEHIND)
+  }
 
   /** Live's beat at performance.now() time `t` (extrapolated while playing). */
   beatAt(t: number): number {

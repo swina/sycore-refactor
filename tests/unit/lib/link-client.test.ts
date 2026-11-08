@@ -181,3 +181,33 @@ describe('sanitizeMidi', () => {
     expect(sanitizeMidi([])).toBeNull()
   })
 })
+
+describe('LinkClient transport mirror', () => {
+  it('a report read late barely moves the mirror (note beats stay put)', () => {
+    const { client, ws, setNow } = connected()
+    // Live at 120: beat 1 at t=500. The report of beat 1 is read 40 ms late (t=540).
+    setNow(540); ws.recv({ type: 'transport', playing: true, beat: 1, tempo: 120, num: 4, den: 4 })
+    // Unfiltered the mirror would say beat 1 at 540 (0.08 beat behind); now under 0.002.
+    expect(Math.abs(client.beatAt(540) - 1.08)).toBeLessThan(0.002)
+    // A note for t=600 keeps its beat 1.2 whatever the report's delay.
+    expect(Math.abs(client.beatAt(600) - 1.2)).toBeLessThan(0.002)
+  })
+
+  it('follows a report ahead of the mirror (the mirror was behind)', () => {
+    const { client, ws, setNow } = connected()
+    setNow(500); ws.recv({ type: 'transport', playing: true, beat: 1.04, tempo: 120, num: 4, den: 4 })
+    const b = client.beatAt(500)
+    expect(b).toBeGreaterThan(1.01)
+    expect(b).toBeLessThan(1.04)
+  })
+
+  it('takes a jump, a stop and a tempo change at once', () => {
+    const { client, ws, setNow } = connected()
+    setNow(500); ws.recv({ type: 'transport', playing: true, beat: 16, tempo: 120, num: 4, den: 4 })
+    expect(client.beatAt(500)).toBe(16)
+    setNow(1000); ws.recv({ type: 'transport', playing: true, beat: 17.1, tempo: 100, num: 4, den: 4 })
+    expect(client.beatAt(1000)).toBe(17.1)
+    setNow(1500); ws.recv({ type: 'transport', playing: false, beat: 18, tempo: 100, num: 4, den: 4 })
+    expect(client.beatAt(1500)).toBe(18)
+  })
+})
