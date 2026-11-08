@@ -84,9 +84,15 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   let pendingStart: ReturnType<typeof setTimeout> | null = null
   let startDownbeatT = 0
 
+  let lastPlayAllMs = 0
   function startApps(t: number) {
     pendingStart = null
+    const p0 = performance.now()
     playAll()
+    lastPlayAllMs = performance.now() - p0
+    if (store.isLink) {
+      linkStartDiag = `link start: seen ${linkStartSeenLate} ms after Live's downbeat, apps started ${Math.round(performance.now() - t)} ms after it (playAll ${Math.round(lastPlayAllMs)} ms)`
+    }
     // Starting the apps can block the main thread for a few hundred ms
     // (samples, presets): the transport started that late after Live's
     // downbeat. Count the start from the downbeat itself.
@@ -174,7 +180,14 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     store.state = active().state
   }
   follower.on(e => { if (!store.isLink) onClockEvent(e) })
-  linkClock.on(e => { if (store.isLink) onClockEvent(e) })
+  /** Link start timing for the diagnostics (shown once in the next line). */
+  let linkStartDiag = ''
+  let linkStartSeenLate = 0
+  linkClock.on(e => {
+    if (!store.isLink) return
+    if (e.type === 'start') linkStartSeenLate = Math.round(performance.now() - e.t)
+    onClockEvent(e)
+  })
   linkClient.on(e => {
     if (!store.isLink) return
     if (e.type === 'transport') linkClock.onTransport(performance.now())
@@ -222,6 +235,10 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
       + (diag.ctrlAfterStart >= 0 ? ` · ctrl after Start ${diag.ctrlAfterStart} ms` : '')
     const sys = takeSysClockStats()
     if (sys) store.diag += ` · ${sys}`
+    if (store.isLink) {
+      store.diag += ` · link RTT ${linkClient.rttMs ?? '?'} ms`
+      if (linkStartDiag) { store.diag += ` · ${linkStartDiag}`; linkStartDiag = '' }
+    }
     const clockTime = new Date().toLocaleTimeString()
     const focus = typeof document !== 'undefined' && document.hasFocus() ? 'focus' : 'NO focus'
     store.pushDiag(`${clockTime} [${focus}] ${store.mode} ${store.bpm.toFixed(1)} BPM · ${store.position} · phase ${store.lastPhaseErrorMs} ms · ${store.diag} · ${store.state}`)
@@ -366,6 +383,8 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     timeoutId = getContext().setInterval(() => {
       const now = performance.now()
       if (store.port) { follower.checkTimeout(now); flushDiag(now) }
+      // Link: the same diagnostics line (CLK SYS start / late steps, sends, audio clock) and the start timing.
+      else if (store.isLink) flushDiag(now)
       store.state = follower.state
     }, 0.1)
   })
