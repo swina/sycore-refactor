@@ -372,8 +372,9 @@ function _sendMidiNote(note, velocity, accent, fireTime, duration, channel = 0) 
 // ── MIDI OUT ONLY (drumStore.midiOutOnly) — the virtual instruments the Drum Machine is wired to
 // in MIDI Flow; while there's one and the switch is on, every track plays its MIDI note (the
 // channel set there) and no sample sounds: steps, ratchets, bassline voices, pads. ──
+// Panel outputs count too: "Live (M4L)" (SY.CORE Link) and the FM-1 Emulator.
 const midiOutTargets = computed(() => (midiStore.routingMatrix[MidiSource.DRUM_MACHINE] ?? [])
-  .filter(name => midiStore.virtualInstruments.some(v => v.name === name)))
+  .filter(name => midiStore.virtualInstruments.some(v => v.name === name) || midiStore.panelOutputs.includes(name)))
 const midiOutOnly = computed(() => drumStore.midiOutOnly && midiOutTargets.value.length > 0)
 
 // a pad hit (live pad, MIDI-triggered pad, preview): the track's MIDI note instead of its sample
