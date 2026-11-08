@@ -35,6 +35,8 @@ export interface LinkStats {
   dropped: number
   leadMinMs: number | null
   leadAvgMs: number | null
+  /** How much later than the device's estimate Live's position reports arrived (ms, max). */
+  reportJitterMs?: number | null
 }
 
 export type LinkEvent =
@@ -266,7 +268,7 @@ export class LinkClient {
         break
       }
       case 'stats':
-        this.lastStats = { msgs: m.msgs | 0, late: m.late | 0, dropped: m.dropped | 0, leadMinMs: m.leadMinMs ?? null, leadAvgMs: m.leadAvgMs ?? null }
+        this.lastStats = { msgs: m.msgs | 0, late: m.late | 0, dropped: m.dropped | 0, leadMinMs: m.leadMinMs ?? null, leadAvgMs: m.leadAvgMs ?? null, reportJitterMs: m.reportJitterMs ?? null }
         this.emit({ type: 'stats', stats: this.lastStats })
         break
       case 'error':

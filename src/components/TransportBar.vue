@@ -277,6 +277,7 @@ const _onTransportStopAll = () => { stopAll() }
             <p v-if="linkStore.ready && linkStore.stats" class="text-[8px] font-mono text-neutral-500">
               last s: {{ linkStore.stats.msgs }} msgs · {{ linkStore.stats.late }} late · {{ linkStore.stats.dropped }} dropped
               <span v-if="linkStore.stats.leadMinMs != null"> · lead min {{ linkStore.stats.leadMinMs }} ms</span>
+              <span v-if="linkStore.stats.reportJitterMs != null" title="How late Live's position reports reached the device (filtered out of the note times)"> · Live report jitter {{ linkStore.stats.reportJitterMs }} ms</span>
             </p>
             <p v-if="linkStore.ready" class="text-[7px] text-neutral-600 leading-relaxed">
               Cable apps to "Live (M4L)" in MIDI Flow: their notes play on the device's track, on Live's beat.

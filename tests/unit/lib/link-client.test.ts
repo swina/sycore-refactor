@@ -163,7 +163,7 @@ describe('LinkClient', () => {
   it('keeps the device stats', () => {
     const { client, ws } = connected()
     ws.recv({ type: 'stats', msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92 })
-    expect(client.lastStats).toEqual({ msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92 })
+    expect(client.lastStats).toEqual({ msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92, reportJitterMs: null })
   })
 })
 
