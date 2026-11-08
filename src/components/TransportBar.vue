@@ -8,6 +8,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useExternalClockSync } from '@/composables/useExternalClockSync'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
+import { useLinkStore } from '@/stores/useLinkStore'
 import { controlMapRows as getControlMapRows } from '@/lib/control-map'
 
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
@@ -16,6 +17,13 @@ const arpStore = useArpStore()
 const midiStore = useMidiStore()
 const { openMenu } = useMidiContextMenu()
 const clockStore = useExternalClockStore()
+const linkStore = useLinkStore()
+const linkStatus = computed(() => {
+  if (!linkStore.active) return 'off'
+  if (linkStore.ready) return `connected${linkStore.track ? ` · track "${linkStore.track}"` : ''}${linkStore.sim ? ' · simulated Live' : ''}`
+  if (linkStore.state === 'connected') return 'connected, waiting for Live…'
+  return linkStore.state === 'retrying' ? 'looking for the device…' : 'connecting…'
+})
 // Follow an external MIDI clock (e.g. Ableton Live on "SYC CTRL") when the
 // clock source is a MIDI input: Start/Stop/SPP drive Play All / Stop All.
 useExternalClockSync({ playAll: () => playAll(), stopAll: () => stopAll() })
@@ -190,6 +198,7 @@ const _onTransportStopAll = () => { stopAll() }
                 title="INT: SY.CORE is the master. A MIDI input: follow its clock, Start/Stop and Song Position"
               >
                 <option value="internal">Internal (INT)</option>
+                <option value="link">EXT · Live (M4L) — SY.CORE Link</option>
                 <option v-for="name in inputNames" :key="name" :value="`midi:${name}`">EXT · {{ name }}</option>
                 <option v-if="clockStore.port && !inputNames.includes(clockStore.port)" :value="clockStore.source">
                   EXT · {{ clockStore.port }} (offline)
@@ -206,13 +215,13 @@ const _onTransportStopAll = () => { stopAll() }
                 <option value="continue">Continue on INT</option>
               </select>
             </label>
-            <label v-if="clockStore.isExternal" class="flex items-center justify-between gap-2 cursor-pointer"
+            <label v-if="clockStore.isExternal && !clockStore.isLink" class="flex items-center justify-between gap-2 cursor-pointer"
               title="Send the source's clock, Start/Stop and Song Position to the outputs with Clock / Transport on. Leave off if an output loops back into the source.">
               <span class="text-[11px] font-mono text-neutral-300">Forward clock to devices</span>
               <input type="checkbox" v-model="clockStore.forwardClock" class="accent-synth-neon" />
             </label>
             <!-- Control Map (P3): Live's clips drive the apps through notes on one channel of the source port -->
-            <div v-if="clockStore.isExternal" class="pt-2 border-t border-neutral-800/60 space-y-1">
+            <div v-if="clockStore.isExternal && !clockStore.isLink" class="pt-2 border-t border-neutral-800/60 space-y-1">
               <label class="flex items-center justify-between gap-2 cursor-pointer"
                 title="Notes on this channel of the clock source port select slots in the apps (Live's clips as the control sheet). The port is never forwarded to devices.">
                 <span class="text-[11px] font-mono text-neutral-300">Control Map</span>
@@ -237,7 +246,11 @@ const _onTransportStopAll = () => { stopAll() }
             <p v-if="clockStore.isExternal && clockStore.samePortInputs > 1" class="text-[8px] text-amber-400 leading-relaxed">
               {{ clockStore.samePortInputs }} inputs are named "{{ clockStore.port }}": the clock is taken from the first one only.
             </p>
-            <p v-if="clockStore.isExternal" class="text-[7px] text-neutral-600 leading-relaxed">
+            <p v-if="clockStore.isLink" class="text-[7px] text-neutral-600 leading-relaxed">
+              Play, Stop, tempo and position read from Live by the SY.CORE Link device; the apps start on the next bar line.
+              Last phase error: {{ clockStore.lastPhaseErrorMs }} ms.
+            </p>
+            <p v-if="clockStore.isExternal && !clockStore.isLink" class="text-[7px] text-neutral-600 leading-relaxed">
               Start, Stop and Song Position from the source drive the apps above; they start on the bar line.
               In Live set MIDI Clock Type to "Song". Last phase error: {{ clockStore.lastPhaseErrorMs }} ms.
             </p>
@@ -249,6 +262,27 @@ const _onTransportStopAll = () => { stopAll() }
               class="text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500">
               {{ diagCopied ? 'Copied ✓' : `Copy diagnostics (${clockStore.diagHistory.length} s)` }}
             </button>
+          </div>
+
+          <!-- SY.CORE Link (P11): Max for Live bridge — clock source and "Live (M4L)" MIDI Flow destination -->
+          <div class="mt-4 pt-3 border-t border-neutral-800 space-y-1">
+            <label class="flex items-center justify-between gap-2 cursor-pointer"
+              title="Connect to the SY.CORE Link device in Ableton Live (ws://127.0.0.1:9400): Live's transport as clock source, and a &quot;Live (M4L)&quot; destination in MIDI Flow — no virtual MIDI ports">
+              <span class="text-[8px] font-bold uppercase tracking-widest text-neutral-500">SY.CORE Link</span>
+              <input type="checkbox" v-model="linkStore.enabled" :disabled="clockStore.isLink" class="accent-synth-neon" />
+            </label>
+            <p class="text-[9px] font-mono" :class="linkStore.ready ? 'text-cyan-300' : 'text-neutral-500'">
+              {{ linkStatus }}<span v-if="linkStore.ready && linkStore.rttMs != null"> · RTT {{ linkStore.rttMs.toFixed(1) }} ms</span>
+            </p>
+            <p v-if="linkStore.ready && linkStore.stats" class="text-[8px] font-mono text-neutral-500">
+              last s: {{ linkStore.stats.msgs }} msgs · {{ linkStore.stats.late }} late · {{ linkStore.stats.dropped }} dropped
+              <span v-if="linkStore.stats.leadMinMs != null"> · lead min {{ linkStore.stats.leadMinMs }} ms</span>
+            </p>
+            <p v-if="linkStore.ready" class="text-[7px] text-neutral-600 leading-relaxed">
+              Cable apps to "Live (M4L)" in MIDI Flow: their notes play on the device's track, on Live's beat.
+            </p>
+            <p v-if="linkStore.hint" class="text-[8px] text-amber-400 leading-relaxed">{{ linkStore.hint }}</p>
+            <p v-if="linkStore.lastError" class="text-[8px] text-red-400">{{ linkStore.lastError }}</p>
           </div>
         </div>
       </Transition>
@@ -265,8 +299,8 @@ const _onTransportStopAll = () => { stopAll() }
           ? 'text-cyan-300 border-cyan-500/50 bg-cyan-500/10'
           : 'text-neutral-400 border-neutral-700'"
       :title="clockStore.fallbackToInternal
-        ? `Clock lost on ${clockStore.port}: continuing on the internal clock`
-        : `Following the clock on ${clockStore.port}`"
+        ? `Clock lost on ${clockStore.sourceLabel}: continuing on the internal clock`
+        : `Following the clock on ${clockStore.sourceLabel}`"
     >
       <AlertTriangle v-if="clockStore.fallbackToInternal" class="w-3 h-3" />
       <span>{{ clockStore.mode }}</span>

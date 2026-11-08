@@ -19,8 +19,8 @@ const LS_FORWARD = 'S1_CLOCK_FORWARD'
 const LS_CONTROL_MAP = 'S1_CONTROL_MAP'
 const LS_CONTROL_CH = 'S1_CONTROL_MAP_CH'
 
-/** 'internal', or `midi:<input port name>`. */
-export type ClockSource = 'internal' | `midi:${string}`
+/** 'internal', 'link' (Live's transport through SY.CORE Link, P11), or `midi:<input port name>`. */
+export type ClockSource = 'internal' | 'link' | `midi:${string}`
 
 export function clockSourcePort(source: string): string | null {
   return source.startsWith('midi:') ? source.slice(5) : null
@@ -28,7 +28,7 @@ export function clockSourcePort(source: string): string | null {
 
 function readSource(): ClockSource {
   const v = localStorage.getItem(userKey(LS_SOURCE))
-  return v && (v === 'internal' || v.startsWith('midi:')) ? (v as ClockSource) : 'internal'
+  return v && (v === 'internal' || v === 'link' || v.startsWith('midi:')) ? (v as ClockSource) : 'internal'
 }
 
 function readLoss(): ClockLossBehavior {
@@ -78,7 +78,11 @@ export const useExternalClockStore = defineStore('externalClock', () => {
   }
 
   const port = computed(() => clockSourcePort(source.value))
-  const isExternal = computed(() => port.value !== null)
+  /** Following Live through SY.CORE Link (no MIDI port). */
+  const isLink = computed(() => source.value === 'link')
+  const isExternal = computed(() => port.value !== null || isLink.value)
+  /** The source as shown in the UI: the port, or "Live (M4L)". */
+  const sourceLabel = computed(() => port.value ?? (isLink.value ? 'Live (M4L)' : 'INT'))
   /** EXT while following, INT otherwise (including the clock-loss fallback). */
   const mode = computed<'EXT' | 'INT'>(() => (isExternal.value && !fallbackToInternal.value ? 'EXT' : 'INT'))
 
@@ -100,6 +104,6 @@ export const useExternalClockStore = defineStore('externalClock', () => {
 
   return {
     source, lossBehavior, forwardClock, controlMapEnabled, controlMapChannel, lastControlAction, controlMapFlood, state, bpm, position, fallbackToInternal, lastPhaseErrorMs, samePortInputs, diag, resyncs, audioClockPct, audioOverloaded, diagHistory, pushDiag,
-    port, isExternal, mode, setSource, switchToInternal,
+    port, isLink, isExternal, sourceLabel, mode, setSource, switchToInternal,
   }
 })

@@ -16,12 +16,15 @@
 import { watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getTransport, getContext } from 'tone'
 import { midiService } from '@/core/midi/midi-service'
-import { ExternalClockFollower, PhaseLock, TONE_PPQ, isClockSourceEcho } from '@/core/midi/external-clock'
+import { ExternalClockFollower, PhaseLock, TONE_PPQ, isClockSourceEcho, type ExternalClockEvent } from '@/core/midi/external-clock'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { externalGrid } from '@/core/midi/external-grid'
 import { takeSysClockStats, observeLongTasks } from '@/core/midi/sys-clock-stats'
 import { controlActionForNote, controlActionEvent, describeControlAction } from '@/lib/control-map'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { LinkClockAdapter } from '@/core/midi/link-clock'
+import { createWorkerTicker } from '@/core/midi/step-scheduler'
+import { linkClient, useLinkStore } from '@/stores/useLinkStore'
 
 const REALTIME = new Set([0xF8, 0xFA, 0xFB, 0xFC, 0xF2])
 
@@ -34,6 +37,11 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   const store = useExternalClockStore()
   const midiStore = useMidiStore()
   const follower = new ExternalClockFollower({ lossBehavior: store.lossBehavior })
+  // Live's transport through SY.CORE Link (P11): same events as the MIDI follower.
+  const linkStore = useLinkStore()
+  const linkClock = new LinkClockAdapter(linkClient, { lossBehavior: store.lossBehavior })
+  /** The source in use: the MIDI follower or the Link adapter. */
+  const active = () => (store.isLink ? linkClock : follower)
   // Over 1/4 beat off (e.g. a start delayed by a busy main thread): jump, don't drift back over bars.
   // Up to ±8% nudge: short audio drop-outs (the transport runs on the audio
   // clock, measured at 92–98% with the window in the background) are absorbed
@@ -90,7 +98,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     if (pendingStart !== null) { clearTimeout(pendingStart); pendingStart = null }
   }
 
-  follower.on(e => {
+  function onClockEvent(e: ExternalClockEvent) {
     switch (e.type) {
       case 'start': {
         if (store.fallbackToInternal) {
@@ -101,7 +109,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
         store.resyncs = 0
         if (e.bpm > 0) applyFineBpm(e.bpm)
         // System-clock apps (StepScheduler) align on this downbeat.
-        externalGrid.emit({ type: 'start', sixteenth: e.sixteenth, t: e.t, bpm: e.bpm || follower.bpm })
+        externalGrid.emit({ type: 'start', sixteenth: e.sixteenth, t: e.t, bpm: e.bpm || active().bpm })
         cancelPendingStart()
         startDownbeatT = e.t
         const t = e.t
@@ -118,7 +126,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
         store.bpm = Math.round(e.bpm * 10) / 10
         // Coarse follow on every beat (e.g. the first bar, or a tempo jump);
         // small differences are left to the phase lock.
-        if (follower.state === 'playing' && (!fineBpm || Math.abs(e.bpm - fineBpm) / fineBpm > 0.005)) {
+        if (active().state === 'playing' && (!fineBpm || Math.abs(e.bpm - fineBpm) / fineBpm > 0.005)) {
           applyFineBpm(e.bpm)
         }
         break
@@ -163,8 +171,32 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
       case 'position':
         break
     }
-    store.state = follower.state
+    store.state = active().state
+  }
+  follower.on(e => { if (!store.isLink) onClockEvent(e) })
+  linkClock.on(e => { if (store.isLink) onClockEvent(e) })
+  linkClient.on(e => {
+    if (!store.isLink) return
+    if (e.type === 'transport') linkClock.onTransport(performance.now())
+    else if (e.type === 'state' && e.state !== 'connected') linkClock.lost()
+    store.state = linkClock.state
   })
+  watch(() => store.isLink, v => { linkStore.neededByClock = v }, { immediate: true })
+  /** Link: beats and bars from a Worker timer (not throttled in the background). */
+  let stopLinkTicker: (() => void) | null = null
+  function linkTick() {
+    const now = performance.now()
+    linkClock.tick(now)
+    store.state = linkClock.state
+    if (linkClock.state === 'playing' || linkClock.state === 'waiting-bar') {
+      const label = linkClock.positionLabel(now)
+      if (label !== store.position) store.position = label
+    }
+  }
+  function applyLinkTicker() {
+    if (store.isLink && !stopLinkTicker) stopLinkTicker = createWorkerTicker(linkTick, 10)
+    else if (!store.isLink && stopLinkTicker) { stopLinkTicker(); stopLinkTicker = null }
+  }
 
   /** The one input the clock is taken from. Windows MIDI Services can show
    *  the same endpoint to the browser as two inputs with the same name: taking
@@ -254,7 +286,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   let removeState: (() => void) | null = null
   let timeoutId: number | null = null
 
-  watch(() => store.lossBehavior, v => { follower.lossBehavior = v })
+  watch(() => store.lossBehavior, v => { follower.lossBehavior = v; linkClock.lossBehavior = v })
   function countSamePortInputs() {
     const port = store.port
     store.samePortInputs = port ? midiService.getInputs().filter(i => i.name === port).length : 0
@@ -311,15 +343,20 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     pinnedInputId = null
     countSamePortInputs()
     follower.reset()
-    store.state = follower.state
+    linkClock.reset()
+    applyLinkTicker()
     store.bpm = 0
     store.position = '1.1.1'
     fineBpm = 0
+    // Already playing in Live when switching to Link: start on its next bar line.
+    if (store.isLink && linkClient.isReady) linkClock.onTransport(performance.now())
+    store.state = active().state
   })
 
   onMounted(() => {
     observeLongTasks()
     applySyncOutputBlock()
+    applyLinkTicker()
     watchOwnClockSends()
     removeRaw = midiService.addRawListener(onRaw)
     removeState = midiService.addStateChangeListener(() => countSamePortInputs())
@@ -335,6 +372,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
 
   onUnmounted(() => {
     removeRaw?.()
+    stopLinkTicker?.(); stopLinkTicker = null
     midiService.setSyncOutputBlock(null)
     midiService.setThruBlockedInput(null)
     midiService.setControlConsumer(null)

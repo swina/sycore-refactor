@@ -227,13 +227,13 @@ export const useMidiStore = defineStore('midi', () => {
   const panelOutputs = ref<string[]>([])
   const panelOutputPanels = ref<Record<string, string>>({})
 
-  function registerPanelOutput(name: string, sendFn: (data: number[]) => void, panelId?: string) {
+  function registerPanelOutput(name: string, sendFn: (data: number[], at?: number) => void, panelId?: string, opts?: { timestamped?: boolean }) {
     if (!routingConfig.value.registrations[name]) {
       addRegistration(name)
       // an instrument, not a controller: never treated as an input
       updateRegistration(name, 'inEnabled', false)
     }
-    midiService.registerVirtualOutput(name, sendFn)
+    midiService.registerVirtualOutput(name, sendFn, undefined, opts)
     if (!panelOutputs.value.includes(name)) panelOutputs.value.push(name)
     if (panelId) panelOutputPanels.value = { ...panelOutputPanels.value, [name]: panelId }
   }
