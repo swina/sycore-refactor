@@ -119,7 +119,10 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
         cancelPendingStart()
         startDownbeatT = e.t
         const t = e.t
-        pendingStart = setTimeout(() => startApps(t), Math.max(0, START_CONTROL_WINDOW_MS - (performance.now() - t)))
+        // Link: no Control Map notes on a MIDI port to wait for — start at once (the downbeat is
+        // already ~15 ms behind when Live's Play is seen).
+        const windowMs = store.isLink ? 0 : START_CONTROL_WINDOW_MS
+        pendingStart = setTimeout(() => startApps(t), Math.max(0, windowMs - (performance.now() - t)))
         break
       }
       case 'stop':
