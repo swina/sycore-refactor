@@ -2,6 +2,16 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## Da dove ripartire (scritto 2026-11-08 sera, branch `feat/rig-controller-ui`)
+
+Stato: SY.CORE Link funziona in Live (Count-In 1 bar per la partenza). Non pushati: sycore-refactor `b586273`, sycore-ableton `9c6fc92`, `8dcde2a`, `d976bf9` (file già copiati in `C:\Users\swina\Documents\sycore-link`).
+
+1. **Test del timing** (fix `b586273` + bridge `d976bf9`): ricarica SY.CORE (preview `:4100` o deploy), in Live togli e rimetti il device `sycore-link` (riavvia lo script), registra le drum, esporta il `.mid` in `C:\Users\swina\Documents\sycore-link\` e confrontalo con `Drums 43.mid` (prima: 0–25 ms in ritardo, punte ±50–70 ms, durate 0,18–0,37 beat).
+2. **Device nuovi da provare**: `sycore-link.amxd` (interfaccia: stato, stats, Channel) e `sycore-link-receive.amxd` (un canale per traccia). Il device vecchio nel set va sostituito.
+3. **Disposizione tracce per registrare** (verificata con le drum): traccia "SYC Drums" = solo Receive ch 10, nessuno strumento, Monitor In → traccia "Drums" con MIDI From = SYC Drums, **Post FX** + Drum Rack, armata. Da applicare anche a Chords (Receive ch 1), da cui prendono MIDI From Chords e le due Arp by Chord. Poi aggiornare il README del device (`sycore-ableton/m4l/link/README.md`, oggi dice Pre FX: sbagliato per questa disposizione).
+4. Se tutto ok: push di tutti e due i repo; togliere `public/link-spike.html`.
+5. Dopo: opzioni per traccia del Rig Controller (Density, Swing, Gate, sync).
+
 ## 2026-11-08
 
 - **SY.CORE Link: steadier note times in Live** — a Drum Machine recording through Live (M4L) came out up to ±50–70 ms off the grid (usually 0–25 ms late), note lengths 0.18–0.37 beat for 0.25: the client's mirror of Live's position was re-anchored on every report of the device (every 50 ms) at the moment it was read, so a report read late (a busy page, another audio app in the browser) shifted the beat of the notes sent right after it. The mirror now runs on its own between reports and leans on the most punctual ones: a report is never early, so one ahead of the mirror is taken in part (30%), one behind barely (2%); a jump (loop, relocation), a start, a stop or a tempo change is taken at once. The bridge's estimate follows the same rule (sycore-ableton `d976bf9`). `lib/link-client.ts` (`mirrorBeat`); tests: `tests/unit/lib/link-client.test.ts`. Branch: `feat/rig-controller-ui`
