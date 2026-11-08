@@ -48,6 +48,16 @@ describe('LinkClockAdapter', () => {
     expect(ev.find(e => e.type === 'start')).toEqual({ type: 'start', sixteenth: 32, bpm: 120, t: 1500 })
   })
 
+  it('a start seen up to 150 ms after the bar line starts on it, later waits for the next', () => {
+    const late = source({ beat: 4.28 })   // 140 ms after beat 4 at 120 BPM
+    const r1 = run(late); r1.a.onTransport(0); r1.a.tick(0)
+    expect(r1.ev.find(e => e.type === 'start')).toMatchObject({ sixteenth: 16, t: expect.closeTo(-140, 6) })
+    const later = source({ beat: 4.4 })   // 200 ms after
+    const r2 = run(later); r2.a.onTransport(0); r2.a.tick(0)
+    expect(r2.ev.find(e => e.type === 'start')).toBeUndefined()
+    expect(r2.a.state).toBe('waiting-bar')
+  })
+
   it('a start report a little past the bar line still starts on it', () => {
     const src = source({ beat: 4.02 })
     const { a, ev } = run(src)

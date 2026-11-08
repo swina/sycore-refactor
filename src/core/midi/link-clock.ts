@@ -23,8 +23,11 @@ export interface LinkTimeSource {
 }
 
 const CLOCKS_PER_BEAT = 24
-/** A start report this far past a bar line still starts on that bar line (beats). */
-const START_EPS_BEATS = 0.05
+/** A start seen up to this late after a bar line still starts on that bar line (ms): Live
+ *  reports Play and the position a moment apart, and the first report can arrive tens of ms
+ *  after the downbeat — without it the apps waited a whole bar. Same as the apps' own start
+ *  tolerance (StepScheduler startToleranceMs); the steps of those ms go out at once. */
+const START_TOLERANCE_MS = 150
 /** Position off the expected one by more than this: Live jumped (beats). */
 const JUMP_BEATS = 0.25
 
@@ -80,7 +83,8 @@ export class LinkClockAdapter {
   private waitForBar(now: number) {
     const bar = this.barBeats
     const b = this.src.beatAt(now)
-    this.pendingStartBeat = Math.max(0, Math.ceil((b - START_EPS_BEATS) / bar) * bar)
+    const tolBeats = (START_TOLERANCE_MS * this.src.transport.tempo) / 60000
+    this.pendingStartBeat = Math.max(0, Math.ceil((b - tolBeats) / bar) * bar)
     this.state = 'waiting-bar'
     this.last = { beat: b, t: now }
     if (this.src.transport.tempo !== this.lastBpm) {
