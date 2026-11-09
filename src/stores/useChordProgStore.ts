@@ -139,6 +139,9 @@ export const useChordProgStore = defineStore('chordProg', () => {
   // Its duration ('1m', '4n'… '' when nothing is playing) and the chord after it (chord-next.ts;
   // wraps = after the sequence restarts) — shown by the SY.CORE Rig device in Live.
   const playingChordDuration = ref('')
+  const playingChordMs = ref(0)
+  const playingChordBars = ref(0)
+  const playingChordSeq = ref(0)
   const nextChord = ref<{ name: string; duration: string; wraps: boolean } | null>(null)
   const selectedStepIdx = ref(0)
   const selectedKey = ref(saved?.selectedKey ?? 0)
@@ -752,7 +755,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   })
 
   return {
-    steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, nextChord, selectedStepIdx,
+    steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, playingChordMs, playingChordBars, playingChordSeq, nextChord, selectedStepIdx,
     selectedKey, keyMode, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,

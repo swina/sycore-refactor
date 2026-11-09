@@ -55,7 +55,7 @@ export interface LinkRigState {
   section: number
   queuedSection: number
   /** The chord sounding and the next one (labels: '1/1', '1/4'…), or null. */
-  chord?: { now: string; dur: string; next: string; nextDur: string } | null
+  chord?: { now: string; dur: string; next: string; nextDur: string; ms: number; bars: number; seq: number } | null
 }
 
 interface WsLike {

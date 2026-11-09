@@ -592,6 +592,10 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
         getDraw().schedule(() => {
           store.playingChordName = step?.active && step.notes?.length ? step.chordName : ''
           store.playingChordDuration = step?.active && step.notes?.length ? step.duration : ''
+          // its length (ms, bars of 4/4: 96 ticks a beat) and a counter per step — the Rig device's progress bar
+          store.playingChordMs = Math.round(ticksNeeded * 60000 / (state.bpm * 96))
+          store.playingChordBars = ticksNeeded / 384
+          store.playingChordSeq++
           const nx = chordAfter(state.steps, state.numSteps, state.stepPointer, state.loop)
           store.nextChord = nx ? { name: nx.step.chordName, duration: nx.step.duration, wraps: nx.wraps } : null
           if (state.chainSlotIndices) {

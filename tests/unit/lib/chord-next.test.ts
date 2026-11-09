@@ -15,9 +15,11 @@ describe('chord-next', () => {
   })
   it('rigChord: labels, and a queued slot first after the end', () => {
     expect(rigChord({ name: 'C', duration: '1m' }, { name: 'Am', duration: '2n', wraps: false }, null, L))
-      .toEqual({ now: 'C', dur: '1/1', next: 'Am', nextDur: '1/2' })
+      .toEqual({ now: 'C', dur: '1/1', next: 'Am', nextDur: '1/2', ms: 0, bars: 0, seq: 0 })
     expect(rigChord({ name: 'F', duration: '1m' }, { name: 'C', duration: '1m', wraps: true }, { steps: [st('Dm', '2n')], numSteps: 1 }, L))
-      .toEqual({ now: 'F', dur: '1/1', next: 'Dm', nextDur: '1/2' })
+      .toEqual({ now: 'F', dur: '1/1', next: 'Dm', nextDur: '1/2', ms: 0, bars: 0, seq: 0 })
+    expect(rigChord({ name: 'C', duration: '1m', ms: 2000, bars: 1, seq: 7 }, null, null, L)).toMatchObject({ ms: 2000, bars: 1, seq: 7 })
+    expect(rigChord({ name: '', duration: '', ms: 500 }, { name: 'C', duration: '1m', wraps: false }, null, L)).toMatchObject({ ms: 0 })
     expect(rigChord({ name: '', duration: '' }, null, null, L)).toBeNull()
   })
 })

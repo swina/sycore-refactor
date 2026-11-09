@@ -482,7 +482,7 @@ const rigLinkState = () => ({
   section: s.section ?? -1,
   queuedSection: s.queuedSection ?? -1,
   chord: chordStore.isPlaying ? rigChord(
-    { name: chordStore.playingChordName, duration: chordStore.playingChordDuration },
+    { name: chordStore.playingChordName, duration: chordStore.playingChordDuration, ms: chordStore.playingChordMs, bars: chordStore.playingChordBars, seq: chordStore.playingChordSeq },
     chordStore.nextChord,
     chordQueuedSlot(),
     DURATION_LABELS,
