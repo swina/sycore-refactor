@@ -207,15 +207,16 @@ describe('rig-live arming with Live stopped', () => {
 })
 
 describe('rig-live Bass and Arp rows', () => {
-  it('Bass: the sequences holding a bassline, none while it is off; pads drive the Drum Machine', async () => {
-    const { bassSnapshot, padApp, isLiveRow } = await import('@/lib/rig-live')
+  it('Bass: the sequences holding a bassline (playing only while it is on); Drum and Bass as parts', async () => {
+    const { bassSnapshot, rowPadEvents, isLiveRow } = await import('@/lib/rig-live')
     const on = { steps: [{ active: true }] }, off = { steps: [{ active: false }] }
     const bass = { A: [off], B: [on] }
     expect(bassSnapshot(bass, true, 'B', true, null)).toEqual({ filled: [false, true, false, false, false, false, false, false], playing: 1, queued: null })
     expect(bassSnapshot(bass, true, 'A', true, 1).playing).toBeNull()
-    expect(bassSnapshot(bass, false, 'B', true, null).filled.some(Boolean)).toBe(false)
-    expect(padApp('bass')).toBe('drum')
-    expect(padApp('arp')).toBeNull()
+    expect(bassSnapshot(bass, false, 'B', true, null).playing).toBeNull()
+    expect(rowPadEvents('bass', 1, 1, 16)).toEqual([{ name: 'dm-part', detail: { part: 'bass', on: false, sync: 16 } }])
+    expect(rowPadEvents('drum', 2, 1, 4)).toEqual([{ name: 'dm-part', detail: { part: 'drum', on: true, seq: 'C', sync: 4 } }])
+    expect(rowPadEvents('chord', 2, null, 0)[0].name).toBe('cp-slot-cue')
     expect(isLiveRow('bass') && isLiveRow('arp')).toBe(true)
   })
   it('Arp: pads A–H are modes; the mode playing again switches it off', async () => {

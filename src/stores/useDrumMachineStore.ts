@@ -901,6 +901,11 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     loaded ? mergeLoadedBassline(loaded) : makeDefaultBasslineSequences()
   )
   const currentBasslinePattern = computed(() => basslineSequences.value[activeSequence.value] ?? [])
+  // Rig Controller (LIVE): drums and bassline as two parts — each on or off, the bassline from its own
+  // sequence (null = the drums' one). Runtime only; reset when the Drum Machine stops.
+  const drumsOn = ref(true)
+  const bassOn = ref(true)
+  const basslineSequence = ref<string | null>(null)
 
   function toggleBasslineVoiceMute(voiceIdx: number) {
     const t = basslineSequences.value[activeSequence.value]?.[voiceIdx]
@@ -963,8 +968,8 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   // ── Bassline generation ────────────────────────────────────────────────
-  function generateBassline(rootNote = 24) {
-    const pattern = basslineSequences.value[activeSequence.value]
+  function generateBassline(rootNote = 24, seq?: string) {
+    const pattern = basslineSequences.value[seq ?? activeSequence.value]
     if (!pattern) return
     const r = Math.random
     const rnd = (lo, hi) => Math.floor(r() * (hi - lo + 1)) + lo
@@ -1521,7 +1526,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     loadImportedPattern,
     // Bassline
     basslineEnabled, basslineSourceSlots, basslineActive,
-    basslineSequences, currentBasslinePattern,
+    basslineSequences, currentBasslinePattern, drumsOn, bassOn, basslineSequence,
     BASSLINE_SLOT_LABELS, NUM_BASSLINE_VOICES,
     toggleBasslineVoiceMute,
     toggleBasslineVoiceSolo,

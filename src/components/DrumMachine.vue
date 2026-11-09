@@ -301,7 +301,7 @@ function buildPlayState() {
       steps:  t.steps.map(s => ({ ...s })),
     })),
     basslineEnabled: drumStore.basslineEnabled && showBassline.value,
-    basslineTracks: drumStore.currentBasslinePattern.map(t => ({
+    basslineTracks: (drumStore.basslineSequences[drumStore.basslineSequence ?? drumStore.activeSequence] ?? []).map(t => ({
       muted:  t.muted,
       solo:   t.solo,
       volume: t.volume,
@@ -414,6 +414,65 @@ let _startSteps = 0         // this start waits for a sync point: 16 = bar (Star
 let _rigStopSteps = 0
 let _rigSeqSteps = 0
 
+// ── Rig Controller rows Drum and Bass: two parts, independent ─────────────────────────────
+// Drums + bassline, drums only, bassline only: each row's pads turn its part on (from a sequence) or
+// off, on its Trigger sync; both off, the Drum Machine stops. 'dm-part' { part, on, seq?, sync }.
+let _drumsOn = true
+let _bassOn = true
+let _partPending = [] // { part, on, seq, steps } waiting for their sync point
+function _applyPart(p) {
+  if (p.part === 'drum') {
+    if (p.on && p.seq && p.seq !== drumStore.activeSequence) {
+      // a bassline playing on the drums' sequence stays where it is
+      if (_bassOn && drumStore.basslineSequence === null) drumStore.basslineSequence = drumStore.activeSequence
+      drumStore.swapSequence(p.seq)
+    }
+    _drumsOn = p.on
+  } else {
+    if (p.on) {
+      if (p.seq) drumStore.basslineSequence = p.seq
+      drumStore.basslineEnabled = true
+      showBassline.value = true
+    }
+    _bassOn = p.on
+  }
+  drumStore.drumsOn = _drumsOn
+  drumStore.bassOn = _bassOn
+}
+/** The parts' switches still waiting, for the Rig (the slot that will play). */
+function _reportParts() {
+  const L = 'ABCDEFGH'
+  const q = part => { const p = _partPending.find(x => x.part === part && x.on && x.seq); return p ? L.indexOf(p.seq) : null }
+  rigReports.queued.bass = q('bass')
+  if (!_rigSeqSteps && !_pendingSequence) rigReports.queued.drum = q('drum')
+}
+function _onPart(e) {
+  const { part, on, seq } = e.detail ?? {}
+  const sync = e.detail?.sync ?? 0
+  if (part !== 'drum' && part !== 'bass') return
+  _partPending = _partPending.filter(p => p.part !== part)
+  if (!drumStore.isPlaying) {
+    if (on) {
+      // Starting from this part alone (the other row may join right after, e.g. both armed).
+      _drumsOn = part === 'drum'
+      _bassOn = part === 'bass'
+      _applyPart({ part, on: true, seq })
+      requestPlay(true, sync)
+    }
+    _reportParts()
+    return
+  }
+  if (sync <= 0 || !externalGrid.active) {
+    _applyPart({ part, on, seq })
+    _reportParts()
+    if (!_drumsOn && !_bassOn) { drumStore.isPlaying = false; return }
+    playStateRef.current = buildPlayState()
+    return
+  }
+  _partPending.push({ part, on, seq, steps: sync })
+  _reportParts()
+}
+
 function _startSystemClock() {
   _stopSystemClock()
   const now = performance.now()
@@ -480,6 +539,21 @@ function _scheduleCallback(time) {
     playStateRef.current = buildPlayState()
     state = playStateRef.current
     getDraw().schedule(() => { pendingSequence.value = null }, time)
+  }
+  // ── Rig: a part (drums / bassline) on, off or switched, on its sync point ──
+  if (_partPending.length) {
+    const due = _partPending.filter(p => songStep % p.steps === 0)
+    if (due.length) {
+      _partPending = _partPending.filter(p => !due.includes(p))
+      for (const p of due) _applyPart(p)
+      getDraw().schedule(_reportParts, time)
+      if (!_drumsOn && !_bassOn) {
+        getDraw().schedule(() => { drumStore.isPlaying = false }, time)
+        return
+      }
+      playStateRef.current = buildPlayState()
+      state = playStateRef.current
+    }
   }
 
   // ── Bar boundary (step 0): pending sequence swap + fill auto-stop ──
@@ -566,6 +640,7 @@ function _scheduleCallback(time) {
   const soloActive = state.tracks.some(t => t.solo)
 
   state.tracks.forEach((track, trackIdx) => {
+    if (!_drumsOn) return // Rig: drums off, the bassline may play on
     const audible = soloActive ? track.solo : !track.muted
     if (!audible) return
 
@@ -639,10 +714,9 @@ function _scheduleCallback(time) {
   // Toolbar bar.beat badge — once per beat, never per 16th.
   const beatPos = beatPosition(_measureCount, globalStep)
   if (beatPos) getDraw().schedule(() => setDrumPosition(beatPos), time)
-  stepCounter++ // no wrap — each track uses its own modulo
 
-  // ── Bassline voices ──
-  if (state.basslineEnabled && state.basslineTracks) {
+  // ── Bassline voices (on the same step as the drums) ──
+  if (state.basslineEnabled && state.basslineTracks && _bassOn) {
     const bassSoloActive = state.basslineTracks.some(t => t.solo)
     state.basslineTracks.forEach((voice, vi) => {
       if (voice.muted || rigParts.bassMuted) return
@@ -669,10 +743,17 @@ function _scheduleCallback(time) {
       })
     })
   }
+  stepCounter++ // no wrap — each track uses its own modulo
 }
 
 watch(() => drumStore.isPlaying, (playing) => {
   if (!playing) {
+    // Rig parts: both on again for the next start, the bassline back on the drums' sequence.
+    _drumsOn = _bassOn = true
+    _partPending = []
+    drumStore.drumsOn = drumStore.bassOn = true
+    drumStore.basslineSequence = null
+    rigReports.queued.bass = null
     _startSteps = 0
     _rigStopSteps = 0
     _rigSeqSteps = 0
@@ -735,6 +816,12 @@ watch(
     () => drumStore.repeaterDivision,
     fillActive,
     fillPattern,
+    // the bassline too: an edit or a new bassline while playing is heard at once
+    () => drumStore.basslineSequences[drumStore.basslineSequence ?? drumStore.activeSequence],
+    () => drumStore.basslineSequence,
+    () => drumStore.basslineEnabled,
+    () => drumStore.basslineSourceSlots,
+    showBassline,
   ],
   () => {
     if (drumStore.isPlaying) playStateRef.current = buildPlayState()
@@ -813,8 +900,10 @@ function _onMidiGenerate()     { generatePattern() }
 // the Chord Prog's key, else the panel's root note.
 function _onGenerateBass(e) {
   const pc = e.detail?.root
-  drumStore.generateBassline(Number.isInteger(pc) ? 24 + pc : basslineRootNote.value)
+  // into the sequence the bassline plays from (the Rig's Bass row may hold another one than the drums)
+  drumStore.generateBassline(Number.isInteger(pc) ? 24 + pc : basslineRootNote.value, drumStore.basslineSequence ?? undefined)
   drumStore.basslineEnabled = true
+  showBassline.value = true
 }
 // quantize (Control Map, P3): on the next bar even with Sync Retrig off.
 // detail.sync (Rig pad's Trigger sync, sixteenths): 0 = at once, 4/8/16 = next beat / 2 beats / bar of the song grid.
@@ -966,6 +1055,7 @@ onMounted(async () => {
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
   window.addEventListener('dm-generate-bass',  _onGenerateBass)
+  window.addEventListener('dm-part',           _onPart)
   window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.addEventListener('dm-play-stop',      _onPlayStopRequest)
   window.addEventListener('timeline-dm-start', _tlDmStartHandler)
@@ -1012,6 +1102,7 @@ onUnmounted(() => {
   window.removeEventListener('dm-trigger-fill',   _onMidiFill)
   window.removeEventListener('dm-generate',       _onMidiGenerate)
   window.removeEventListener('dm-generate-bass',  _onGenerateBass)
+  window.removeEventListener('dm-part',           _onPart)
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.removeEventListener('dm-play-stop',      _onPlayStopRequest)
   window.removeEventListener('timeline-dm-start', _tlDmStartHandler)

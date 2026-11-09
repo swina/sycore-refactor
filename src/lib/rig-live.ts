@@ -8,9 +8,10 @@
  * (control-map.ts), so a clip in Live and a pad do exactly the same thing:
  * the slot starts on the next bar (Sequencer: at the end of its pattern).
  *
- * The Bass row is the Drum Machine's bassline: it shows the sequences A–H that hold one, and
- * its pads switch the Drum Machine's sequence like the Drum row; its Mute / Solo / Intensity act
- * on the bassline only (`rigParts`, read by the Drum Machine). The Arp row's pads A–H pick an
+ * The Bass row is the Drum Machine's bassline, a part of its own: the Drum and Bass rows each turn
+ * their part on (from a sequence A–H — the bassline may play another one than the drums) or off,
+ * so drums + bass, drums only or bass only ('dm-part'; both off, the Drum Machine stops). Bass's
+ * Mute / Solo / Intensity act on the bassline only (`rigParts`, read by the Drum Machine). The Arp row's pads A–H pick an
  * arp mode and switch the Arpeggiator on; the mode playing again switches it off. Its Density sets
  * the Arpeggiator's octave range and its Intensity the rate (so Arp has no volume Intensity).
  *
@@ -31,8 +32,9 @@ export const isLiveApp = (id: string): id is LiveAppId => (LIVE_APPS as readonly
 export type LiveRowId = LiveAppId | 'bass' | 'arp'
 export const LIVE_ROWS: readonly LiveRowId[] = ['chord', 'drum', 'seq', 'bass', 'arp']
 export const isLiveRow = (id: string): id is LiveRowId => (LIVE_ROWS as readonly string[]).includes(id)
-/** The app a row's pads drive: Bass switches the Drum Machine's sequence. */
-export const padApp = (id: LiveRowId): LiveAppId | null => (id === 'bass' ? 'drum' : id === 'arp' ? null : id)
+/** The rows with slots to launch, arm and put in a section (Arp's pads are modes). */
+export type SlotRowId = LiveAppId | 'bass'
+export const SLOT_ROWS: readonly SlotRowId[] = ['chord', 'drum', 'seq', 'bass']
 
 /** Inside the Drum Machine: its drums and its bassline muted, and their velocity factors (0–1),
  *  from the rig's Drum and Bass rows (Drum: when its Mute / Intensity act on the whole app). */
@@ -45,7 +47,7 @@ const LETTERS = 'ABCDEFGH'
 
 /** Reported by the apps: the slot queued (null = none), and the Sequencer's play state. */
 export const rigReports = reactive({
-  queued: { chord: null, drum: null, seq: null } as Record<LiveAppId, number | null>,
+  queued: { chord: null, drum: null, seq: null, bass: null } as Record<SlotRowId, number | null>,
   seqPlaying: false,
 })
 
@@ -72,12 +74,13 @@ export function drumSnapshot(
   return { filled, playing: isPlaying && idx >= 0 ? idx : null, queued }
 }
 
-/** Bass: the Drum Machine's sequences A–H holding a bassline (none while the bassline is off). */
+/** Bass: the Drum Machine's sequences A–H holding a bassline; the one playing while it's on. */
 export function bassSnapshot(
   bassline: Record<string, { steps: StepLike[] }[]> | undefined, enabled: boolean,
   active: string, isPlaying: boolean, queued: number | null,
 ): LiveSnapshot {
-  const filled = [...LETTERS].map(k => enabled && (bassline?.[k] ?? []).some(t => anyActive(t.steps)))
+  const filled = [...LETTERS].map(k => (bassline?.[k] ?? []).some(t => anyActive(t.steps)))
+  isPlaying = isPlaying && enabled
   const idx = LETTERS.indexOf(active)
   return { filled, playing: isPlaying && idx >= 0 && filled[idx] ? idx : null, queued }
 }
@@ -206,9 +209,23 @@ export function padEvents(id: LiveAppId, slot: number, playing: number | null, s
   return [select, start]
 }
 
-/** Slots armed with Live stopped (following Live): each app starts from its armed slot on Live's
+/** Slots armed with Live stopped (following Live): each row starts from its armed slot on Live's
  *  Start. A second press of the armed pad disarms it. */
-export const rigArmed = reactive({ chord: null, drum: null, seq: null } as Record<LiveAppId, number | null>)
+export const rigArmed = reactive({ chord: null, drum: null, seq: null, bass: null } as Record<SlotRowId, number | null>)
+
+/**
+ * The commands of a pad of a row with slots. Drum and Bass are parts of the Drum Machine: the slot
+ * playing turns that part off, another slot turns it on from that sequence (the Drum Machine starts
+ * if stopped) — each on its own, on the sync point. The other rows: padEvents.
+ */
+export function rowPadEvents(id: SlotRowId, slot: number, playing: number | null, sync: number): RigEvent[] {
+  if (id === 'drum' || id === 'bass') {
+    return [playing === slot
+      ? { name: 'dm-part', detail: { part: id, on: false, sync } }
+      : { name: 'dm-part', detail: { part: id, on: true, seq: LETTERS[slot], sync } }]
+  }
+  return padEvents(id, slot, playing, sync)
+}
 
 /** The armed slot after a press on `slot`: the same pad disarms, another pad arms that slot. */
 export const armPress = (armed: number | null, slot: number): number | null => (armed === slot ? null : slot)
