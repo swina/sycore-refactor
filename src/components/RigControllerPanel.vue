@@ -28,7 +28,7 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, isLiveRow, SLOT_ROWS, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, stopEvents, LIVE_APPS,
+  isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, stopEvents, LIVE_APPS,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -241,22 +241,26 @@ const endLiveLoop = () => { stopLiveLoop?.(); stopLiveLoop = null }
 
 /** Following Live (or another external master) as the clock. */
 const followingLive = () => clockStore.source !== 'internal' && !clockStore.fallbackToInternal
-// Live's Start: the armed apps start from their slot (on the Start's downbeat). Live's Stop: the
-// real apps stop at once (Live's grid is gone: no bar left to finish on), armed slots are kept.
-const offLiveGrid = externalGrid.on(e => {
-  if (!live.value) return
-  if (e.type === 'start') {
-    for (const id of SLOT_ROWS) {
-      const slot = rigArmed[id]
-      if (slot === null) continue
-      rigArmed[id] = null
-      for (const ev of rowPadEvents(id, slot, null, 0)) dispatchRig(ev)
-    }
-  } else if (e.type === 'stop') {
-    for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
+// Play (Live's or SY.CORE's): only the armed slots start (playAll skips the rig's apps — no
+// last progression starting on its own). Live's Stop: the real apps stop at once (Live's grid is
+// gone: no bar left to finish on), armed slots are kept.
+function startArmed() {
+  for (const id of SLOT_ROWS) {
+    const slot = rigArmed[id]
+    if (slot === null) continue
+    rigArmed[id] = null
+    for (const ev of rowPadEvents(id, slot, null, 0)) dispatchRig(ev)
   }
+}
+rigTransport.onPlayAll = startArmed
+watch(live, v => { rigTransport.live = v }, { immediate: true })
+const offLiveGrid = externalGrid.on(e => {
+  if (live.value && e.type === 'stop') for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
 })
-onUnmounted(() => { offLiveGrid(); rigDensity.active = false; for (const id of SLOT_ROWS) rigArmed[id] = null })
+onUnmounted(() => {
+  offLiveGrid(); rigDensity.active = false; for (const id of SLOT_ROWS) rigArmed[id] = null
+  rigTransport.live = false; if (rigTransport.onPlayAll === startArmed) rigTransport.onPlayAll = null
+})
 
 // ── Simulated clock (SIM: stands in for Live's MIDI clock) ────────────────
 let timer = null

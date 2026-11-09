@@ -7,6 +7,7 @@
  * Per-app start delays (in beats) are read from syncStore.appDelays.
  * The delay is calculated as: delayBeats * (60 / bpm) * 1000 ms.
  */
+import { rigTransport } from '@/lib/rig-live'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -48,15 +49,17 @@ export function useGlobalTransportControls() {
       scheduleStart(syncStore.appDelays['Step Sequencer'] ?? 0, () =>
         window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: true } })))
     }
-    if (syncStore.syncSequencer2ToTransport) {
+    // Rig Controller in LIVE: Chord Prog, Drum Machine and Sequencer start only from an armed slot
+    const rig = rigTransport.live
+    if (syncStore.syncSequencer2ToTransport && !rig) {
       scheduleStart(syncStore.appDelays['Sequencer'] ?? 0, () =>
         window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } })))
     }
-    if (syncStore.syncChordProgToTransport) {
+    if (syncStore.syncChordProgToTransport && !rig) {
       scheduleStart(syncStore.appDelays['Chord Prog'] ?? 0, () =>
         window.dispatchEvent(new CustomEvent('cp-start')))
     }
-    if (syncStore.syncDrumMachineToTransport) {
+    if (syncStore.syncDrumMachineToTransport && !rig) {
       scheduleStart(syncStore.appDelays['Drum Machine'] ?? 0, () =>
         window.dispatchEvent(new CustomEvent('timeline-dm-start', { detail: {} })))
     }
@@ -72,6 +75,7 @@ export function useGlobalTransportControls() {
       scheduleStart(syncStore.appDelays['Arm Record'] ?? 0, () =>
         window.dispatchEvent(new CustomEvent('capture-start-rec', { detail: { background: true } })))
     }
+    if (rig) rigTransport.onPlayAll?.()
   }
 
   function stopAll() {

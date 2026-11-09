@@ -178,6 +178,7 @@ While SY.CORE follows Live and Live is **stopped**:
 
 - a pad **arms** its slot: it is selected at once and blinks;
 - press **Play in Live**, and every armed app **starts from its slot on the first downbeat**, together;
+- an app with **no armed slot stays stopped**, even when it is in *Sync Apps to Transport*: with the Rig Controller in LIVE, Play starts Chord Prog, Drum Machine and Sequencer only from the Rig (Live's scenes: nothing plays that you didn't launch);
 - the armed pad again **disarms** it; another pad of the same row moves the arm.
 
 You can walk on stage with a progression and a drum pattern armed, and start the whole rig with Live's Play.

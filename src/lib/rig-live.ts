@@ -36,6 +36,11 @@ export const isLiveRow = (id: string): id is LiveRowId => (LIVE_ROWS as readonly
 export type SlotRowId = LiveAppId | 'bass'
 export const SLOT_ROWS: readonly SlotRowId[] = ['chord', 'drum', 'seq', 'bass']
 
+/** The Rig Controller in LIVE drives Chord Prog, Drum Machine and Sequencer: the transport's Play
+ *  (Live's, or SY.CORE's) does not start them from "Sync Apps to Transport" then — only the slots
+ *  armed in the Rig start (`onPlayAll`, called by playAll after its own starts), as Live's scenes. */
+export const rigTransport: { live: boolean; onPlayAll: (() => void) | null } = { live: false, onPlayAll: null }
+
 /** Inside the Drum Machine: its drums and its bassline muted, and their velocity factors (0–1),
  *  from the rig's Drum and Bass rows (Drum: when its Mute / Intensity act on the whole app). */
 export const rigParts = reactive({ drumMuted: false, bassMuted: false, drumVelocity: 1, bassVelocity: 1 })
