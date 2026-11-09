@@ -9,9 +9,10 @@
 import { keyLabel, keyRoot, keyFile } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
 import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
-import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor } from '@/lib/rig-actions'
+import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor, parseRigAction } from '@/lib/rig-actions'
 import { exportRigTemplate, parseRigTemplate, applyRigTemplate, clearRigMappings, rigMappedDevices, templateMatches, sysexBytes, templateFileName } from '@/lib/rig-template'
 import { useMappingStore } from '@/stores/useMappingStore'
+import { linkClient } from '@/stores/useLinkStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
@@ -470,6 +471,27 @@ function onRigAction(e) {
 }
 window.addEventListener('rig-action', onRigAction)
 onUnmounted(() => window.removeEventListener('rig-action', onRigAction))
+
+// ── SY.CORE Rig device in Live (through SY.CORE Link): the grid's state out, its clicks in ──
+const rigLinkState = () => ({
+  rows: s.apps.map(a => ({
+    filled: a.filled.reduce((m, f, i) => (f ? m | (1 << i) : m), 0),
+    playing: a.playing ?? -1, queued: a.queued ?? -1, muted: !!a.muted, solo: !!a.solo,
+  })),
+  section: s.section ?? -1,
+  queuedSection: s.queuedSection ?? -1,
+})
+let rigLinkJson = ''
+watch(() => JSON.stringify(rigLinkState()), json => { rigLinkJson = json; linkClient.sendRig(JSON.parse(json)) }, { immediate: true })
+const offRigLink = linkClient.on(e => {
+  // (re)connected: the devices get the state again; a click on a device: as a learned rig button
+  if (e.type === 'hello' && rigLinkJson) linkClient.sendRig(JSON.parse(rigLinkJson))
+  else if (e.type === 'rig-press') {
+    const action = parseRigAction(e.name)
+    if (action) window.dispatchEvent(new CustomEvent('rig-action', { detail: { action } }))
+  }
+})
+onUnmounted(() => { offRigLink(); linkClient.sendRig(null) })
 
 /** Right-click on a rig control: MIDI Learn it (any controller). The learned ones get an amber ring. */
 const mappingStore = useMappingStore()

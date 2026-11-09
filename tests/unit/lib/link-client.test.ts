@@ -60,6 +60,18 @@ function connected() {
 describe('LinkClient', () => {
   beforeEach(() => { FakeWs.last = null; FakeWs.all = [] })
 
+  it('Rig: sends the Rig state (or none) and reports the Rig devices\' clicks', () => {
+    const { client, events, ws } = connected()
+    const state = { rows: [{ filled: 3, playing: 0, queued: -1, muted: false, solo: false }], section: -1, queuedSection: -1 }
+    expect(client.sendRig(state)).toBe(true)
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'rig', ...state })
+    client.sendRig(null)
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'rig', active: false })
+    ws.recv({ type: 'rig-press', name: 'rig_slot_bass_c' })
+    ws.recv({ type: 'rig-press', name: 'dm_fill' })
+    expect(events.filter(e => e.type === 'rig-press')).toEqual([{ type: 'rig-press', name: 'rig_slot_bass_c' }])
+  })
+
   it('says hello on open and is ready after the device hello + a transport', () => {
     const s = setup()
     s.client.enable()

@@ -46,6 +46,15 @@ export type LinkEvent =
   | { type: 'transport'; transport: LinkTransport }
   | { type: 'stats'; stats: LinkStats }
   | { type: 'error'; code: string; message: string }
+  /** a click on a SY.CORE Rig device in Live: a rig action (rig_slot_drum_a, rig_mute_bass…) */
+  | { type: 'rig-press'; name: string }
+
+/** The Rig Controller's state for the SY.CORE Rig devices (5 rows: Chord Drum Seq Bass Arp). */
+export interface LinkRigState {
+  rows: { filled: number; playing: number; queued: number; muted: boolean; solo: boolean }[]
+  section: number
+  queuedSection: number
+}
 
 interface WsLike {
   readyState: number
@@ -281,6 +290,9 @@ export class LinkClient {
       case 'error':
         this.emit({ type: 'error', code: String(m.code ?? ''), message: String(m.message ?? '') })
         break
+      case 'rig-press':
+        if (typeof m.name === 'string' && m.name.startsWith('rig_')) this.emit({ type: 'rig-press', name: m.name })
+        break
     }
   }
 
@@ -340,6 +352,11 @@ export class LinkClient {
       return this.sendRaw({ type: 'midi', data: bytes, beat: this.beatAt(at) })
     }
     return this.sendRaw({ type: 'midi', data: bytes })
+  }
+
+  /** The Rig Controller's state to the SY.CORE Rig devices (null: no Rig Controller open). */
+  sendRig(state: LinkRigState | null): boolean {
+    return this.sendRaw(state ? { type: 'rig', ...state } : { type: 'rig', active: false })
   }
 
   /** Drop everything queued in the device and end the notes sounding (stop, panic). */

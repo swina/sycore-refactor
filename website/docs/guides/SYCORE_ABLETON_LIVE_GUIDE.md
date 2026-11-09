@@ -112,6 +112,10 @@ The receivers play SY.CORE's MIDI only: they ignore their track's own input. The
 
 The **Rig Controller** is a performance surface for the whole rig, not for one instrument. Open it from the toolbar (grid icon, after DECK).
 
+### The grid in Live: SY.CORE Rig
+
+Drop **`sycore-rig.amxd`** on any track (more than one if you like): it shows the Rig Controller's slot grid inside Live — rows Chord, Drum, Seq, Bass, Arp × slots A–H, **M** / **S** per row and **Sections 1–8**, in the Rig's colours (filled amber, playing green, queued or armed blinking, muted red). A click does what the panel's pad does (Trigger sync, arming with Live stopped, sections). **OPEN** shows the same grid larger in a floating window. It goes through the SY.CORE Link device of the set (no extra connection) and works while the **Rig Controller is open in SY.CORE** (minimized is fine); otherwise it says *Open the Rig Controller in SY.CORE*.
+
 ### LIVE and SIM
 
 | Mode | What it does |
