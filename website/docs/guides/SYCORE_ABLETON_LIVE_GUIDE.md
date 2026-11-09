@@ -121,7 +121,7 @@ The **Rig Controller** is a performance surface for the whole rig, not for one i
 Rows are ordered **Chord, Drum, Seq, Bass, Arp**. Two rows work differently from the others:
 
 - **Bass** is the Drum Machine's **bassline**, which lives inside the same sequences A–H as the drums. The row lights the sequences that hold a bassline (none while the bassline is off), and its pads switch the Drum Machine's sequence exactly like the Drum row (Latch, Trigger sync, arming). Its **Mute / Solo / Intensity** act on the bassline only, and the Drum row's (on the whole app) on the drums only, so you can drop the bass while the drums keep going. Intensity as **CC 7** needs the bassline on its own MIDI channel (Drum Machine › bassline › MIDI channel); otherwise it scales velocity. **GEN** makes a new bassline in the active sequence, on the Chord Prog's key when it is exact, and switches the bassline on.
-- **Arp** has no slots: pads **A–H pick an arp mode** (up, down, up-down, down-up, converge, diverge, pinky-up, random) and switch the Arpeggiator on; the mode playing, pressed again, switches it off. Mute / Solo / Intensity act on the Arpeggiator's output. The Arpeggiator runs on its own rate: Trigger sync and Live's Stop don't apply to it.
+- **Arp** has no slots: pads **A–H pick an arp mode** (up, down, up-down, down-up, converge, diverge, pinky-up, random) and switch the Arpeggiator on; the mode playing, pressed again, switches it off. Its **Density** sets the Arpeggiator's **octave range** (−3…+3) and its **Intensity** the **rate** (1/1 … 1/32, triplets and dotted included); both follow the Arpeggiator's panel and can be MIDI-learned (*Arp Octave*, *Arp Rate*). Mute / Solo act on the Arpeggiator's output (no volume Intensity, and Global doesn't touch it). The Arpeggiator runs on its own rate: Trigger sync and Live's Stop don't apply to it.
 
 Splits, repeat, latch, lane mutes and Undo are still simulation-only in LIVE; the panel says *not connected yet (SIM only)* when you press them.
 
@@ -183,7 +183,7 @@ You can walk on stage with a progression and a drum pattern armed, and start the
 
 ### Sections
 
-On the Launchpad, **row 6 (Sections 1–8)** switches every connected app that has that slot filled to it, like a scene in Session View: on the next bar while they play (the Sequencer at the end of its pattern); a stopped app is only switched to that slot, not started.
+**Sections 1–8** (the panel's *Sections* box, the Launchpad's **row 6**) work like a scene in Session View: every connected app that has that slot filled goes to it, as if you pressed its pad — on its track's **Trigger sync** (the Sequencer at the end of its pattern), and a stopped app starts. With Live stopped, the section **arms** those slots: they start on Live's Play. An app already on that slot is left alone (a section never stops anything). Bass follows the Drum Machine; Arp is left out. The section button is lit while its apps play it and blinks while one is still waiting.
 
 ---
 
@@ -305,7 +305,7 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 - **LED feedback**: SY.CORE sends the same note or CC back to the controller. On a **Launchpad Mini MK1** the colours match its Rig mode: a slot that holds something amber, playing green, queued or armed blinking green, Mute red. On other controllers a pad is lit (127) while it plays, blinks while queued or armed, and is dark otherwise; Mute and Solo are lit while on. This works on controllers that light a pad when they receive its own note / CC; other colours and LED protocols need a controller template.
 - The panel and the controller drive the same values: move either one and the other follows.
 - The same actions are listed under **Rig Controller** in the **Controller Designer**, to build an on-screen layout of your controller.
-- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_global`, `rig_fill`, `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode` (`<app>` = chord, drum, seq).
+- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode` (`<app>` = chord, drum, seq, bass, arp).
 
 Controllers you keep for Live (e.g. a MIDImix mapped to Live's mixer) are unaffected.
 

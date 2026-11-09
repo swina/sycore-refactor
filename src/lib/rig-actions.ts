@@ -13,6 +13,7 @@
  *   rig_intensity_<app>    Intensity (0–127)                                           knob / fader
  *   rig_global             Global intensity (0–127)                                    knob / fader
  *   rig_density_<drum|seq> Density (0–127; rig-density.ts)                             knob / fader
+ *   rig_density_arp        Arp octave range (−3…+3); rig_intensity_arp = Arp rate      knob / fader
  *
  * The MIDI Learn handler (useMidiCCListener) turns a mapped message into a
  * 'rig-action' window event; the Rig Controller panel acts on it while open
@@ -28,7 +29,7 @@ export type RigAction =
   | { kind: 'gen' | 'mute' | 'solo' | 'sync' | 'intensity'; app: RigActionApp }
   | { kind: 'fill' | 'key_down' | 'key_up' | 'key_mode' | 'global' }
   | { kind: 'section'; index: number }
-  | { kind: 'density'; app: 'drum' | 'seq' }
+  | { kind: 'density'; app: 'drum' | 'seq' | 'arp' }
 
 const isApp = (s: string): s is RigActionApp => (RIG_ACTION_APPS as readonly string[]).includes(s)
 
@@ -43,8 +44,8 @@ export function parseRigAction(name: string): RigAction | null {
   if (m && isApp(m[2])) return { kind: m[1] as 'gen', app: m[2] }
   m = /^section_([1-8])$/.exec(rest)
   if (m) return { kind: 'section', index: Number(m[1]) - 1 }
-  m = /^density_(drum|seq)$/.exec(rest)
-  if (m) return { kind: 'density', app: m[1] as 'drum' | 'seq' }
+  m = /^density_(drum|seq|arp)$/.exec(rest)
+  if (m) return { kind: 'density', app: m[1] as 'drum' | 'seq' | 'arp' }
   return null
 }
 
@@ -65,10 +66,11 @@ export function rigActionCatalog(): { paramName: string; label: string }[] {
     out.push({ paramName: `rig_mute_${app}`, label: `${L} Mute` })
     out.push({ paramName: `rig_solo_${app}`, label: `${L} Solo` })
     out.push({ paramName: `rig_sync_${app}`, label: `${L} Trigger sync (cycle)` })
-    out.push({ paramName: `rig_intensity_${app}`, label: `${L} Intensity` })
+    out.push({ paramName: `rig_intensity_${app}`, label: app === 'arp' ? 'Arp Rate' : `${L} Intensity` })
   }
   out.push({ paramName: 'rig_density_drum', label: 'Drum Density' })
   out.push({ paramName: 'rig_density_seq', label: 'Seq Density' })
+  out.push({ paramName: 'rig_density_arp', label: 'Arp Octave' })
   out.push({ paramName: 'rig_global', label: 'Global intensity' })
   out.push({ paramName: 'rig_fill', label: 'Fill' })
   for (let i = 1; i <= 8; i++) out.push({ paramName: `rig_section_${i}`, label: `Section ${i}` })

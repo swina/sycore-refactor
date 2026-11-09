@@ -115,7 +115,7 @@ describe('rig-live intensity', () => {
     expect(v.sources).toEqual({ SEQUENCER2: 0.5 })
     expect(v.parts).toEqual({ drum: 1, bass: 0 })
     const g = rigVelocityScales(apps({ seq: 63.5 }), 63.5)
-    expect(g.sources).toEqual({ CHORD_PROG: 0.5, SEQUENCER2: 0.25, ARP: 0.5 })
+    expect(g.sources).toEqual({ CHORD_PROG: 0.5, SEQUENCER2: 0.25 }) // Arp: Intensity is its rate
     expect(g.parts).toEqual({ drum: 0.5, bass: 0.5 })
   })
   it('scoped apps scale only their cables', () => {
@@ -136,7 +136,6 @@ describe('rig-live intensity modes', () => {
       { id: 'chord', source: 'CHORD_PROG', value: 127, targets: [] },
       { id: 'drum', source: 'DRUM_MACHINE', value: 0, targets: ['Live Drums'] },
       { id: 'seq', source: 'SEQUENCER2', value: 127, targets: [] },
-      { id: 'arp', source: 'ARP', value: 127, targets: [] },
     ])
   })
   it('Bass: CC 7 only with the bassline on its own channel, else velocity', () => {
@@ -226,5 +225,19 @@ describe('rig-live Bass and Arp rows', () => {
     expect(arpSnapshot(true, 'thumb-up').playing).toBeNull()
     expect(arpPress(1, 1)).toEqual({ enabled: false })
     expect(arpPress(1, 7)).toEqual({ enabled: true, mode: RIG_ARP_MODES[7] })
+  })
+})
+
+describe('rig-live Arp knobs', () => {
+  it('Density = octave range −3…+3, Intensity = rate; both round-trip', async () => {
+    const { arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, RIG_ARP_RATES } = await import('@/lib/rig-live')
+    expect(arpOctaveOf(0)).toBe(-3)
+    expect(arpOctaveOf(64)).toBe(0)
+    expect(arpOctaveOf(127)).toBe(3)
+    for (let o = -3; o <= 3; o++) expect(arpOctaveOf(arpOctaveValue(o))).toBe(o)
+    expect(arpRateOf(0)).toBe('1/1')
+    expect(arpRateOf(127)).toBe('1/32')
+    for (const r of RIG_ARP_RATES) expect(arpRateOf(arpRateValue(r))).toBe(r)
+    expect(RIG_ARP_RATES).toContain(arpRateOf(arpRateValue('1/64t')))
   })
 })

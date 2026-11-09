@@ -11,7 +11,8 @@
  * The Bass row is the Drum Machine's bassline: it shows the sequences A–H that hold one, and
  * its pads switch the Drum Machine's sequence like the Drum row; its Mute / Solo / Intensity act
  * on the bassline only (`rigParts`, read by the Drum Machine). The Arp row's pads A–H pick an
- * arp mode and switch the Arpeggiator on; the mode playing again switches it off.
+ * arp mode and switch the Arpeggiator on; the mode playing again switches it off. Its Density sets
+ * the Arpeggiator's octave range and its Intensity the rate (so Arp has no volume Intensity).
  *
  * The apps keep their queued slot and (the Sequencer) their play state in
  * component locals: they report them into `rigReports`.
@@ -84,6 +85,20 @@ export function bassSnapshot(
 export function arpSnapshot(enabled: boolean, mode: string): LiveSnapshot {
   const i = (RIG_ARP_MODES as readonly string[]).indexOf(mode)
   return { filled: RIG_ARP_MODES.map(() => true), playing: enabled && i >= 0 ? i : null, queued: null }
+}
+
+/** The Arp row's Rate (its Intensity control): subdivisions, slowest to fastest. */
+export const RIG_ARP_RATES = ['1/1', '1/2', '1/4', '1/8d', '1/4t', '1/8', '1/8t', '1/16', '1/16t', '1/32'] as const
+const clamp7 = (v: number) => Math.max(0, Math.min(127, v))
+/** Arp row Density (0–127) → the Arpeggiator's octave range −3…+3, and back (the middle of its step). */
+export const arpOctaveOf = (v: number): number => Math.round((clamp7(v) / 127) * 6) - 3
+export const arpOctaveValue = (oct: number): number => Math.round(((Math.max(-3, Math.min(3, oct)) + 3) / 6) * 127)
+/** Arp row Intensity (0–127) → a rate of RIG_ARP_RATES, and back (another rate: the nearest slot by name, else the middle). */
+export const arpRateOf = (v: number): string => RIG_ARP_RATES[Math.min(RIG_ARP_RATES.length - 1, Math.floor((clamp7(v) / 128) * RIG_ARP_RATES.length))]
+export function arpRateValue(rate: string): number {
+  const i = (RIG_ARP_RATES as readonly string[]).indexOf(rate)
+  const k = i >= 0 ? i : Math.floor(RIG_ARP_RATES.length / 2)
+  return Math.round(((k + 0.5) / RIG_ARP_RATES.length) * 128)
 }
 
 /** An Arp pad: the mode playing switches the Arpeggiator off, another one picks it and switches it on. */
@@ -269,7 +284,7 @@ export function rigVelocityScales(
   const parts = { drum: 1, bass: 1 }
   const g = Math.max(0, Math.min(127, global)) / 127
   for (const a of apps) {
-    if (!isLiveRow(a.id)) continue
+    if (!isLiveRow(a.id) || a.id === 'arp') continue // Arp: its Intensity is the rate
     // `modes` given: only the apps whose Intensity scales velocity (without it: all, as before)
     if (modes && effectiveMode(modes, a.id, opts) === 'cc7') continue
     const f = (Math.max(0, Math.min(127, a.intensity)) / 127) * g
@@ -306,7 +321,7 @@ export function rigCc7(
   apps: readonly { id: string; intensity: number }[], global: number, modes: IntensityModes = {}, scopes: MuteScopes = {}, opts: RigIntensityOpts = {},
 ): { id: LiveRowId; source: string; value: number; targets: string[] }[] {
   return apps
-    .filter(a => isLiveRow(a.id) && effectiveMode(modes, a.id, opts) !== 'velocity')
+    .filter(a => isLiveRow(a.id) && a.id !== 'arp' && effectiveMode(modes, a.id, opts) !== 'velocity')
     .map(a => ({ id: a.id as LiveRowId, source: LIVE_APP_SOURCE[a.id as LiveRowId], value: intensityCc7(a.intensity, global), targets: scopeOf(scopes, a.id as LiveRowId) }))
 }
 

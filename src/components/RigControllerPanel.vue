@@ -27,7 +27,7 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, isLiveRow, padApp, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, stopEvents, LIVE_APPS,
+  isLiveApp, isLiveRow, padApp, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, stopEvents, LIVE_APPS,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -87,7 +87,7 @@ function syncLive() {
     else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord ?? rigArmed.chord))
     else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
     else if (a.id === 'bass') applySnapshot(a, bassSnapshot(drumStore.basslineSequences, drumStore.basslineEnabled, drumStore.activeSequence, drumStore.isPlaying, rigReports.queued.drum ?? rigArmed.drum))
-    else if (a.id === 'arp') applySnapshot(a, arpSnapshot(arpStore.arpEnabled, arpStore.arpMode))
+    else if (a.id === 'arp') { applySnapshot(a, arpSnapshot(arpStore.arpEnabled, arpStore.arpMode)); mirrorArp(a) }
     // Density: the panel's value and a MIDI-learned encoder both drive rigDensity (the one that moved wins).
     if (DENSITY_APPS.includes(a.id)) {
       if (a.density !== lastDensity[a.id]) rigDensity[a.id] = a.density
@@ -95,13 +95,41 @@ function syncLive() {
       lastDensity[a.id] = a.density
     }
   }
+  syncSection()
 }
 const lastDensity = {}
+/** The focused row's knobs: on the Arp row in LIVE, Density is its Octave and Intensity its Rate. */
+const arpKnobs = () => live.value && focused.value?.id === 'arp'
+const knobLabel = k => (arpKnobs() && k[1] === 'density' ? 'Octave' : arpKnobs() && k[1] === 'intensity' ? 'Rate' : k[0])
+function knobValue(key) {
+  const v = focused.value[key]
+  if (arpKnobs() && key === 'density') { const o = arpOctaveOf(v); return o > 0 ? `+${o}` : `${o}` }
+  if (arpKnobs() && key === 'intensity') return arpRateOf(v)
+  return v
+}
+function knobTitle(key) {
+  if (key !== 'density' && key !== 'intensity') return ''
+  if (arpKnobs()) return `${key === 'density' ? "The Arpeggiator's octave range (−3…+3)" : "The Arpeggiator's rate"}. Right-click: MIDI Learn`
+  if (key === 'density' && live.value && ['drum', 'seq'].includes(focused.value.id)) return 'Density on the real app: 127 = as written, lower thins the weakest steps out. Right-click: MIDI Learn'
+  return ''
+}
+/** Arp row (LIVE): Density = the Arpeggiator's octave range, Intensity = its rate. The control that
+ *  moved writes the Arpeggiator; otherwise the row follows it (changed in its panel). */
+const lastArp = { density: null, intensity: null }
+function mirrorArp(a) {
+  if (lastArp.density !== null && a.density !== lastArp.density) arpStore.arpOctave = arpOctaveOf(a.density)
+  else if (arpOctaveOf(a.density) !== arpStore.arpOctave) a.density = arpOctaveValue(arpStore.arpOctave)
+  if (lastArp.intensity !== null && a.intensity !== lastArp.intensity) arpStore.arpSubdivision = arpRateOf(a.intensity)
+  else if (arpRateOf(a.intensity) !== arpStore.arpSubdivision) a.intensity = arpRateValue(arpStore.arpSubdivision)
+  lastArp.density = a.density
+  lastArp.intensity = a.intensity
+}
+let liveSection = null // LIVE: the section last launched (onSection / syncSection)
 const { openMenu } = useMidiContextMenu()
 /** Right-click on a Density control (LIVE, Drum / Seq): MIDI Learn it, e.g. on a Worlde encoder. */
 function densityMenu(ev, a) {
-  if (!live.value || !DENSITY_APPS.includes(a.id)) return
-  openMenu(ev, { name: `rig_density_${a.id}`, label: `Rig: ${a.label} Density` })
+  if (!live.value || !(DENSITY_APPS.includes(a.id) || a.id === 'arp')) return
+  openMenu(ev, { name: `rig_density_${a.id}`, label: a.id === 'arp' ? 'Rig: Arp Octave' : `Rig: ${a.label} Density` })
 }
 // Mute / Solo on the real apps (LIVE): their note-ons are dropped at the MIDI service —
 // the whole app, or only the cables picked in its scope (e.g. Chord → Live ch 2 only).
@@ -244,6 +272,8 @@ watch(mode, m => {
   cancelAnimationFrame(liveRaf)
   Object.assign(s, createRigState())
   for (const id of LIVE_APPS) rigArmed[id] = null
+  liveSection = null
+  lastArp.density = lastArp.intensity = null
   // Density acts on the real apps in LIVE only; it starts from their current value (127 = as written).
   rigDensity.active = m === 'live'
   for (const a of s.apps) if (DENSITY_APPS.includes(a.id)) { if (m === 'live') a.density = rigDensity[a.id]; lastDensity[a.id] = a.density }
@@ -358,13 +388,40 @@ function onFill() {
   if (live.value) { dispatchRig({ name: 'dm-trigger-fill' }); s.display = 'Drum: Fill'; return }
   s.fill = true; s.display = `Fill ${s.clock.running ? 'on the next bar' : 'armed'}`
 }
-/** A section: every connected app with that slot filled switches to it (LIVE), as the Song Composer does. */
+/**
+ * A section (LIVE), like a scene in Session View: every connected app with that slot filled goes to
+ * it as with its pad — on its track's Trigger sync, a stopped app starts; following Live while it
+ * is stopped, the slots are armed and start on Live's Play. An app already on that slot is left as
+ * it is (a section never stops anything). Bass follows the Drum Machine; Arp is left out.
+ */
 function onSection(i) {
   if (!live.value) return selectSection(s, i)
   const apps = s.apps.filter(a => isLiveApp(a.id) && a.filled[i])
   if (!apps.length) { s.display = `Section ${i + 1}: no app has slot ${SLOT_LABELS[i]}`; return }
-  for (const a of apps) dispatchRig(slotEvent(a.id, i))
-  s.display = `Section ${i + 1} → ${apps.map(a => a.label).join(', ')} ${SLOT_LABELS[i]} ${s.clock.running ? 'on the next bar' : 'now'}`
+  const arming = followingLive() && !externalGrid.active
+  for (const a of apps) {
+    if (arming) {
+      if (a.playing !== null) continue
+      rigArmed[a.id] = i
+      dispatchRig(padEvents(a.id, i, null, 0)[0]) // select the slot
+    } else if (a.playing !== i) {
+      for (const ev of padEvents(a.id, i, a.playing, liveSyncSteps(a.opts.triggerSync, externalGrid.active))) dispatchRig(ev)
+    }
+  }
+  liveSection = i
+  s.display = `Section ${i + 1} → ${apps.map(a => a.label).join(', ')} ${SLOT_LABELS[i]}${arming ? ": armed, starts on Live's Play" : externalGrid.active ? ' on their Trigger sync' : ' now'}`
+}
+/** LIVE: the section shown — lit while its apps play it, blinking while one is still queued or armed;
+ *  dropped when none of them is on it any more (or one moved to another slot). */
+function syncSection() {
+  const i = liveSection
+  const apps = i === null ? [] : s.apps.filter(a => isLiveApp(a.id) && a.filled[i])
+  const waiting = apps.some(a => a.queued === i)
+  const on = apps.some(a => a.playing === i) || waiting
+  const left = apps.some(a => a.playing !== null && a.playing !== i && a.queued !== i)
+  if (!on || left) liveSection = null
+  s.section = liveSection !== null && !waiting ? liveSection : null
+  s.queuedSection = liveSection !== null && waiting ? liveSection : null
 }
 function repeaterOn() { s.repeater = true; s.display = 'Repeater (hold)' }
 function repeaterOff() { if (s.repeater) { s.repeater = false; s.display = 'Repeater off' } }
@@ -402,6 +459,7 @@ function onRigAction(e) {
     case 'key_up': return onKeyShift(1)
     case 'key_mode': return onKeyMode()
     case 'intensity': if (app) app.intensity = value; return
+    case 'density': if (app) app.density = value; return // Arp: octave (Drum / Seq go to rigDensity directly)
     case 'global': s.globalIntensity = value; return
   }
 }
@@ -1130,7 +1188,8 @@ const arcPath = v => {
             <div v-if="tplMsg" class="text-[10px] text-neutral-400 break-words">{{ tplMsg }}</div>
           </section>
 
-          <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
+          <!-- Flow, splits and lane mutes: not connected to the apps yet — SIM only -->
+          <section v-if="!live" class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Rig</h3>
             <select v-model="flowConfig" class="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-white" @change="s.display = `Flow: ${flowConfig}`">
               <option v-for="c in FLOW_CONFIGS" :key="c">{{ c }}</option>
@@ -1225,14 +1284,15 @@ const arcPath = v => {
                         @click="toggleScope(focused.id, dev)">→ {{ dev }}</button>
                 <span v-if="!appCables(focused.id).length" class="text-[9px] text-neutral-600">no cables in MIDI Flow</span>
               </div>
-              <div class="flex items-center gap-1 mt-2">
+              <div v-if="focused.id !== 'arp'" class="flex items-center gap-1 mt-2">
                 <span class="text-[10px] text-neutral-400">Intensity sends</span>
                 <button v-for="m in [['cc7', 'CC 7 (volume)'], ['velocity', 'Velocity'], ['both', 'Both']]" :key="m[0]" class="px-1.5 py-0.5 rounded border text-[9px]"
                         :class="intensityMode(intensityModes, focused.id) === m[0] ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
                         :title="{ cc7: 'CC 7 = Intensity × Global, on the app\'s channel: MIDI-map it in Live to the track volume (any instrument)', velocity: 'Note-on velocity scaled by Intensity × Global (the instrument must respond to velocity)', both: 'CC 7 and velocity' }[m[0]]"
                         @click="setIntensityMode(focused.id, m[0])">{{ m[1] }}</button>
               </div>
-              <div class="mt-1 font-mono text-[9px]" :class="focused.intensity * s.globalIntensity < 127 * 127 ? 'text-amber-300' : 'text-neutral-500'">{{ velocityReadout(focused) }}</div>
+              <div v-if="focused.id === 'arp'" class="mt-1 text-[9px] text-neutral-500">Arp: Mute / Solo only — its Density is the octave range, its Intensity the rate.</div>
+              <div v-else class="mt-1 font-mono text-[9px]" :class="focused.intensity * s.globalIntensity < 127 * 127 ? 'text-amber-300' : 'text-neutral-500'">{{ velocityReadout(focused) }}</div>
             </div>
           </section>
 
@@ -1263,11 +1323,11 @@ const arcPath = v => {
             </div>
             <div class="text-[10px] text-neutral-500">Knobs → <span class="text-amber-300">{{ focused.label }}</span></div>
             <div v-for="k in [['Density', 'density'], ['Swing', 'swing'], ['Gate', 'gate'], ['Intensity', 'intensity']]" :key="k[1]" class="flex items-center gap-2">
-              <span class="w-14 text-[10px] text-neutral-400">{{ k[0] }}</span>
+              <span class="w-14 text-[10px] text-neutral-400">{{ knobLabel(k) }}</span>
               <input v-model.number="focused[k[1]]" type="range" min="0" max="127" class="flex-1 accent-amber-400"
-                     :title="k[1] === 'density' && live && ['drum', 'seq'].includes(focused.id) ? 'Density on the real app: 127 = as written, lower thins the weakest steps out. Right-click: MIDI Learn' : ''"
-                     @contextmenu="k[1] === 'density' && live && ['drum', 'seq'].includes(focused.id) ? ($event.preventDefault(), densityMenu($event, focused)) : k[1] === 'intensity' && isRigApp(focused.id) ? learnMenu($event, `rig_intensity_${focused.id}`, `${focused.label} Intensity`) : null" />
-              <span class="w-7 text-right font-mono text-neutral-300">{{ focused[k[1]] }}</span>
+                     :title="knobTitle(k[1])"
+                     @contextmenu="k[1] === 'density' && live && ['drum', 'seq', 'arp'].includes(focused.id) ? ($event.preventDefault(), densityMenu($event, focused)) : k[1] === 'intensity' && isRigApp(focused.id) ? learnMenu($event, `rig_intensity_${focused.id}`, `${knobLabel(k) === 'Rate' ? 'Arp Rate' : `${focused.label} Intensity`}`) : null" />
+              <span class="w-9 text-right font-mono text-neutral-300">{{ knobValue(k[1]) }}</span>
             </div>
             <button :class="[btn, 'w-full', s.generateMode === 'ai' ? btnOn : btnIdle]" @click="toggleGenMode">Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }}</button>
           </section>
