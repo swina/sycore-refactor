@@ -30,6 +30,7 @@ export interface SyCoreEventMap {
   // Drum Machine
   'dm-trigger-fill': void;
   'dm-generate': void;
+  'dm-generate-bass': { root?: number };
   // quantize: on the next bar even with Sync Retrig off (Control Map, P3)
   'dm-seq-switch': { seq: string; quantize?: boolean };
   // Chord Prog slot from the Control Map (P3): next bar line while playing, at once when stopped

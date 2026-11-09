@@ -115,10 +115,15 @@ The **Rig Controller** is a performance surface for the whole rig, not for one i
 
 | Mode | What it does |
 |---|---|
-| **Live** (default) | The **Chord**, **Drum** and **Seq** rows drive the real Chord Prog, Drum Machine and Sequencer, on the real clock. |
+| **Live** (default) | The **Chord**, **Drum**, **Seq**, **Bass** and **Arp** rows drive the real Chord Prog, Drum Machine, Sequencer, the Drum Machine's bassline and the Arpeggiator, on the real clock. |
 | **Sim** | A simulated rig and clock: try every option without sound. |
 
-In LIVE, the **Bass** and **Arp** rows, splits, repeat, latch, lane mutes and Undo are still simulation-only; the panel says *not connected yet (SIM only)* when you press them.
+Rows are ordered **Chord, Drum, Seq, Bass, Arp**. Two rows work differently from the others:
+
+- **Bass** is the Drum Machine's **bassline**, which lives inside the same sequences A–H as the drums. The row lights the sequences that hold a bassline (none while the bassline is off), and its pads switch the Drum Machine's sequence exactly like the Drum row (Latch, Trigger sync, arming). Its **Mute / Solo / Intensity** act on the bassline only, and the Drum row's (on the whole app) on the drums only, so you can drop the bass while the drums keep going. Intensity as **CC 7** needs the bassline on its own MIDI channel (Drum Machine › bassline › MIDI channel); otherwise it scales velocity. **GEN** makes a new bassline in the active sequence, on the Chord Prog's key when it is exact, and switches the bassline on.
+- **Arp** has no slots: pads **A–H pick an arp mode** (up, down, up-down, down-up, converge, diverge, pinky-up, random) and switch the Arpeggiator on; the mode playing, pressed again, switches it off. Mute / Solo / Intensity act on the Arpeggiator's output. The Arpeggiator runs on its own rate: Trigger sync and Live's Stop don't apply to it.
+
+Splits, repeat, latch, lane mutes and Undo are still simulation-only in LIVE; the panel says *not connected yet (SIM only)* when you press them.
 
 ### Three views of the same state
 
@@ -265,7 +270,7 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 
 | Area | Function |
 |---|---|
-| **Rows 1–5** | Chord, Drum, Bass, Seq, Arp × slots A–H |
+| **Rows 1–5** | Chord, Drum, Seq, Bass, Arp × slots A–H (Arp: modes) |
 | **Row 6** | Sections 1–8 |
 | **Row 7** | Split 1–4 · **Fill** · Repeat (hold) · Latch · Release all |
 | **Row 8** | Lane mute 1–8 (Shift: 9–16) |
@@ -304,6 +309,41 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 
 Controllers you keep for Live (e.g. a MIDImix mapped to Live's mixer) are unaffected.
 
+### Controller templates (JSON)
+
+A controller's rig controls can be saved as a **JSON file** and loaded again. Use the **Controller template** box in the Rig layout:
+
+- **Export** — pick the controller and download its rig controls as `<name>.sycore-rig.json`.
+- **Import** — load a template. It goes to the connected controller whose port name contains the template's `match`, or else to the controller picked in the box. Applying it replaces that controller's rig controls and leaves its other MIDI Learn mappings alone.
+- **✕** — forget the controller's rig controls.
+
+The file holds exactly what MIDI Learn stores, so LED feedback, the amber rings and the Controller Designer work as with hand-made mappings:
+
+```json
+{
+  "format": "sycore-rig-template",
+  "version": 1,
+  "name": "My Launchkey 49",
+  "match": "Launchkey",
+  "init": ["F0 … F7"],
+  "controls": {
+    "rig_slot_drum_a":  { "note": 40, "channel": 10 },
+    "rig_gen_drum":     { "note": 44, "channel": 10 },
+    "rig_density_drum": { "cc": 21, "channel": 1 }
+  },
+  "leds": { "palette": { "off": 0, "filled": 9, "playing": 21, "queued": 21, "muted": 5, "solo": 37 } }
+}
+```
+
+| Field | |
+|---|---|
+| `match` | part of the controller's MIDI port name (optional) |
+| `init` | SysEx messages sent when the template is applied and when the Rig Controller opens, e.g. to switch a controller to a programmer mode (optional) |
+| `controls` | rig parameter → `note` or `cc` (0–127) and `channel` (1–16) |
+| `leds.palette` | the value sent back for each LED state: `off`, `filled`, `playing`, `queued` (blink), `muted`, `solo` (optional; otherwise lit 127 / dark 0, or the Launchpad Mini MK1 colours) |
+
+Unknown controls and out-of-range values are skipped and reported after the import.
+
 ---
 
 ## 12. Troubleshooting
@@ -324,6 +364,6 @@ Controllers you keep for Live (e.g. a MIDImix mapped to Live's mixer) are unaffe
 
 - The sync grid counts bars in **4/4**.
 - The **first note after Play** may be a few tens of ms late: use a 1-bar Count-In when recording.
-- In LIVE, **Bass and Arp rows, splits, repeat, latch, lane mutes, Undo and Mutate** are simulation-only.
+- In LIVE, **splits, repeat, latch, lane mutes, Undo and Mutate** are simulation-only. GEN and Fill aren't connected on the Arp row.
 - **Trigger sync** applies to the Rig Controller's pads. The apps' own buttons (e.g. the Drum Machine's PLAY with *Start@bar*), Live's Start and the Control Map keep their own behaviour.
 - With SY.CORE on its own clock (not following Live), pads act at once.

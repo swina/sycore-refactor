@@ -589,7 +589,7 @@ export const useMappingStore = defineStore('mapping', () => {
     midiMappings, appMidiMappings,
     isMidiLearning, learnedCC, learnedNote, learnedNRPN, learnedDevice, learnedChannel,
     mappingCount, mappedParams, lastMappedParam, learningParamName,
-    startLearn, cancelLearn, confirmLearn, confirmLearnChecked, learnForParam, removeMapping, incomingCC, incomingNote, incomingNRPN,
+    startLearn, cancelLearn, confirmLearn, confirmLearnChecked, learnForParam, removeMapping, saveMidiMappings, incomingCC, incomingNote, incomingNRPN,
     loadAppMidiMappings, saveAppMidiMappings, clearAppMidiMappings, clearMidiMappings,
     velocityConfig, handleVelocity, restoreOriginalValues, toggleVelocityMapping,
     presets, activePresetId,

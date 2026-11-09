@@ -19,8 +19,8 @@
 export const RIG_APPS = [
   { id: 'chord', label: 'Chord' },
   { id: 'drum', label: 'Drum' },
-  { id: 'bass', label: 'Bass' },
   { id: 'seq', label: 'Seq' },
+  { id: 'bass', label: 'Bass' },
   { id: 'arp', label: 'Arp' },
 ] as const
 

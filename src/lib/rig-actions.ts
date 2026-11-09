@@ -16,11 +16,11 @@
  *
  * The MIDI Learn handler (useMidiCCListener) turns a mapped message into a
  * 'rig-action' window event; the Rig Controller panel acts on it while open
- * (as with its Launchpad Rig mode). <app> = chord | drum | seq.
+ * (as with its Launchpad Rig mode). <app> = chord | drum | seq | bass | arp (Arp slots: arp modes).
  */
-export type RigActionApp = 'chord' | 'drum' | 'seq'
-export const RIG_ACTION_APPS: readonly RigActionApp[] = ['chord', 'drum', 'seq']
-const APP_LABEL: Record<RigActionApp, string> = { chord: 'Chord', drum: 'Drum', seq: 'Seq' }
+export type RigActionApp = 'chord' | 'drum' | 'seq' | 'bass' | 'arp'
+export const RIG_ACTION_APPS: readonly RigActionApp[] = ['chord', 'drum', 'seq', 'bass', 'arp']
+const APP_LABEL: Record<RigActionApp, string> = { chord: 'Chord', drum: 'Drum', seq: 'Seq', bass: 'Bass', arp: 'Arp' }
 const SLOTS = 'abcdefgh'
 
 export type RigAction =

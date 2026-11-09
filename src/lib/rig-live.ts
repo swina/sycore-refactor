@@ -8,6 +8,11 @@
  * (control-map.ts), so a clip in Live and a pad do exactly the same thing:
  * the slot starts on the next bar (Sequencer: at the end of its pattern).
  *
+ * The Bass row is the Drum Machine's bassline: it shows the sequences A–H that hold one, and
+ * its pads switch the Drum Machine's sequence like the Drum row; its Mute / Solo / Intensity act
+ * on the bassline only (`rigParts`, read by the Drum Machine). The Arp row's pads A–H pick an
+ * arp mode and switch the Arpeggiator on; the mode playing again switches it off.
+ *
  * The apps keep their queued slot and (the Sequencer) their play state in
  * component locals: they report them into `rigReports`.
  */
@@ -19,6 +24,20 @@ import { STEPS_PER_BAR, STEPS_PER_BEAT } from '@/lib/rig-controller'
 export type LiveAppId = 'chord' | 'drum' | 'seq'
 export const LIVE_APPS: readonly LiveAppId[] = ['chord', 'drum', 'seq']
 export const isLiveApp = (id: string): id is LiveAppId => (LIVE_APPS as readonly string[]).includes(id)
+
+/** Every row connected in LIVE: the apps above plus Bass (the Drum Machine's bassline) and Arp. */
+export type LiveRowId = LiveAppId | 'bass' | 'arp'
+export const LIVE_ROWS: readonly LiveRowId[] = ['chord', 'drum', 'seq', 'bass', 'arp']
+export const isLiveRow = (id: string): id is LiveRowId => (LIVE_ROWS as readonly string[]).includes(id)
+/** The app a row's pads drive: Bass switches the Drum Machine's sequence. */
+export const padApp = (id: LiveRowId): LiveAppId | null => (id === 'bass' ? 'drum' : id === 'arp' ? null : id)
+
+/** Inside the Drum Machine: its drums and its bassline muted, and their velocity factors (0–1),
+ *  from the rig's Drum and Bass rows (Drum: when its Mute / Intensity act on the whole app). */
+export const rigParts = reactive({ drumMuted: false, bassMuted: false, drumVelocity: 1, bassVelocity: 1 })
+
+/** The Arp row's pads A–H: arp modes. */
+export const RIG_ARP_MODES = ['up', 'down', 'up-down', 'down-up', 'converge', 'diverge', 'pinky-up', 'random'] as const
 
 const LETTERS = 'ABCDEFGH'
 
@@ -50,6 +69,26 @@ export function drumSnapshot(
   const idx = LETTERS.indexOf(active)
   return { filled, playing: isPlaying && idx >= 0 ? idx : null, queued }
 }
+
+/** Bass: the Drum Machine's sequences A–H holding a bassline (none while the bassline is off). */
+export function bassSnapshot(
+  bassline: Record<string, { steps: StepLike[] }[]> | undefined, enabled: boolean,
+  active: string, isPlaying: boolean, queued: number | null,
+): LiveSnapshot {
+  const filled = [...LETTERS].map(k => enabled && (bassline?.[k] ?? []).some(t => anyActive(t.steps)))
+  const idx = LETTERS.indexOf(active)
+  return { filled, playing: isPlaying && idx >= 0 && filled[idx] ? idx : null, queued }
+}
+
+/** Arp: every pad holds a mode; the one playing is the Arpeggiator's mode while it's on. */
+export function arpSnapshot(enabled: boolean, mode: string): LiveSnapshot {
+  const i = (RIG_ARP_MODES as readonly string[]).indexOf(mode)
+  return { filled: RIG_ARP_MODES.map(() => true), playing: enabled && i >= 0 ? i : null, queued: null }
+}
+
+/** An Arp pad: the mode playing switches the Arpeggiator off, another one picks it and switches it on. */
+export const arpPress = (playing: number | null, slot: number): { enabled: boolean; mode?: string } =>
+  playing === slot ? { enabled: false } : { enabled: true, mode: RIG_ARP_MODES[slot] }
 
 /** Chord Prog: slots A–H; the one sounding is playingSlotIndex. */
 export function chordSnapshot(
@@ -177,36 +216,44 @@ export function dispatchRig(ev: { name: string; detail?: Record<string, unknown>
 }
 
 /** The MidiSource each real app sends its notes with. */
-export const LIVE_APP_SOURCE = { chord: 'CHORD_PROG', drum: 'DRUM_MACHINE', seq: 'SEQUENCER2' } as const
+export const LIVE_APP_SOURCE = { chord: 'CHORD_PROG', drum: 'DRUM_MACHINE', seq: 'SEQUENCER2', bass: 'DRUM_MACHINE', arp: 'ARP' } as const
 
-/** Which cables a real app's Mute/Solo acts on: [] = the whole app, else these devices only. */
-export type MuteScopes = Partial<Record<LiveAppId, string[]>>
+/** Which cables a real app's Mute/Solo acts on: [] = the whole app, else these devices only.
+ *  Bass has none (it shares the Drum Machine's cables): it acts on the bassline. */
+export type MuteScopes = Partial<Record<LiveRowId, string[]>>
+const scopeOf = (scopes: MuteScopes, id: LiveRowId): string[] => (id === 'bass' ? [] : scopes[id] ?? [])
 
-/** The apps the rig's Mute/Solo silences: with a Solo on among the real apps, all but the soloed ones; otherwise the muted ones. */
-function silencedApps(apps: readonly { id: string; muted: boolean; solo: boolean }[]): LiveAppId[] {
-  const live = apps.filter(a => isLiveApp(a.id))
+/** The rows the rig's Mute/Solo silences: with a Solo on among the connected rows, all but the soloed ones; otherwise the muted ones. */
+function silencedApps(apps: readonly { id: string; muted: boolean; solo: boolean }[]): LiveRowId[] {
+  const live = apps.filter(a => isLiveRow(a.id))
   const solo = live.some(a => a.solo)
-  return live.filter(a => (solo ? !a.solo : a.muted)).map(a => a.id as LiveAppId)
+  return live.filter(a => (solo ? !a.solo : a.muted)).map(a => a.id as LiveRowId)
 }
+
+/** Drum (whole app) and Bass act inside the Drum Machine (rigParts), so each leaves the other playing. */
+const inDrumMachine = (id: LiveRowId, scopes: MuteScopes) => id === 'bass' || (id === 'drum' && !scopeOf(scopes, id).length)
 
 /** The sources to mute (whole apps) for the rig's Mute/Solo. */
 export function mutedLiveSources(apps: readonly { id: string; muted: boolean; solo: boolean }[]): string[] {
-  return silencedApps(apps).map(id => LIVE_APP_SOURCE[id])
+  return rigMutes(apps).sources
 }
 
 /**
  * Mute/Solo with scopes: an app whose scope lists devices mutes only its cables
  * to them (`cables`, as [source, device] pairs); one with no scope, the whole app (`sources`).
  */
-export function rigMutes(apps: readonly { id: string; muted: boolean; solo: boolean }[], scopes: MuteScopes = {}): { sources: string[]; cables: [string, string][] } {
+export function rigMutes(apps: readonly { id: string; muted: boolean; solo: boolean }[], scopes: MuteScopes = {}):
+  { sources: string[]; cables: [string, string][]; parts: { drum: boolean; bass: boolean } } {
   const sources: string[] = []
   const cables: [string, string][] = []
+  const parts = { drum: false, bass: false }
   for (const id of silencedApps(apps)) {
-    const scope = scopes[id] ?? []
-    if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[id], dev])
+    const scope = scopeOf(scopes, id)
+    if (inDrumMachine(id, scopes)) parts[id as 'drum' | 'bass'] = true
+    else if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[id], dev])
     else sources.push(LIVE_APP_SOURCE[id])
   }
-  return { sources, cables }
+  return { sources, cables, parts }
 }
 
 /**
@@ -215,30 +262,38 @@ export function rigMutes(apps: readonly { id: string; muted: boolean; solo: bool
  * (`cables`, [source, device, factor]). Factors of 1 are left out.
  */
 export function rigVelocityScales(
-  apps: readonly { id: string; intensity: number }[], global: number, scopes: MuteScopes = {}, modes?: IntensityModes,
-): { sources: Record<string, number>; cables: [string, string, number][] } {
+  apps: readonly { id: string; intensity: number }[], global: number, scopes: MuteScopes = {}, modes?: IntensityModes, opts: RigIntensityOpts = {},
+): { sources: Record<string, number>; cables: [string, string, number][]; parts: { drum: number; bass: number } } {
   const sources: Record<string, number> = {}
   const cables: [string, string, number][] = []
+  const parts = { drum: 1, bass: 1 }
   const g = Math.max(0, Math.min(127, global)) / 127
   for (const a of apps) {
-    if (!isLiveApp(a.id)) continue
+    if (!isLiveRow(a.id)) continue
     // `modes` given: only the apps whose Intensity scales velocity (without it: all, as before)
-    if (modes && intensityMode(modes, a.id) === 'cc7') continue
+    if (modes && effectiveMode(modes, a.id, opts) === 'cc7') continue
     const f = (Math.max(0, Math.min(127, a.intensity)) / 127) * g
     if (f >= 1) continue
-    const scope = scopes[a.id] ?? []
-    if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[a.id], dev, f])
+    const scope = scopeOf(scopes, a.id)
+    if (inDrumMachine(a.id, scopes)) parts[a.id as 'drum' | 'bass'] = f
+    else if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[a.id], dev, f])
     else sources[LIVE_APP_SOURCE[a.id]] = f
   }
-  return { sources, cables }
+  return { sources, cables, parts }
 }
+
+/** The bassline's own MIDI channel (1–16; 0 = the Drum Machine's): CC 7 for Bass needs one. */
+export interface RigIntensityOpts { bassChannel?: number }
+/** A row's Intensity mode as it applies: Bass without a channel of its own can only scale velocity. */
+const effectiveMode = (modes: IntensityModes, id: LiveRowId, opts: RigIntensityOpts): IntensityMode =>
+  id === 'bass' && !(opts.bassChannel && opts.bassChannel >= 1) ? 'velocity' : intensityMode(modes, id)
 
 /** What a real app's Intensity sends: CC 7 (volume, any instrument), Velocity (note-on scale), or both. */
 export type IntensityMode = 'cc7' | 'velocity' | 'both'
-export type IntensityModes = Partial<Record<LiveAppId, IntensityMode>>
+export type IntensityModes = Partial<Record<LiveRowId, IntensityMode>>
 export const DEFAULT_INTENSITY_MODE: IntensityMode = 'cc7'
 export const intensityMode = (modes: IntensityModes, id: string): IntensityMode =>
-  (modes[id as LiveAppId] ?? DEFAULT_INTENSITY_MODE)
+  (modes[id as LiveRowId] ?? DEFAULT_INTENSITY_MODE)
 
 /** The CC 7 value for an app: Intensity × Global, 0–127. */
 export const intensityCc7 = (intensity: number, global: number): number =>
@@ -248,11 +303,11 @@ export const intensityCc7 = (intensity: number, global: number): number =>
  * The CC 7 sends: per real app in a CC mode, its value and where (`targets`: [] = all its cables).
  */
 export function rigCc7(
-  apps: readonly { id: string; intensity: number }[], global: number, modes: IntensityModes = {}, scopes: MuteScopes = {},
-): { id: LiveAppId; source: string; value: number; targets: string[] }[] {
+  apps: readonly { id: string; intensity: number }[], global: number, modes: IntensityModes = {}, scopes: MuteScopes = {}, opts: RigIntensityOpts = {},
+): { id: LiveRowId; source: string; value: number; targets: string[] }[] {
   return apps
-    .filter(a => isLiveApp(a.id) && intensityMode(modes, a.id) !== 'velocity')
-    .map(a => ({ id: a.id as LiveAppId, source: LIVE_APP_SOURCE[a.id as LiveAppId], value: intensityCc7(a.intensity, global), targets: scopes[a.id as LiveAppId] ?? [] }))
+    .filter(a => isLiveRow(a.id) && effectiveMode(modes, a.id, opts) !== 'velocity')
+    .map(a => ({ id: a.id as LiveRowId, source: LIVE_APP_SOURCE[a.id as LiveRowId], value: intensityCc7(a.intensity, global), targets: scopeOf(scopes, a.id as LiveRowId) }))
 }
 
 const LS_MODES = 'SYCORE_RIG_INTENSITY_MODES'

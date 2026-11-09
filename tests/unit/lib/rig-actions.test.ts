@@ -16,7 +16,7 @@ describe('rig-actions', () => {
   })
 
   it('rejects other names and unknown apps or slots', () => {
-    for (const n of ['dm_fill', 'rig_slot_bass_a', 'rig_slot_chord_i', 'rig_section_9', 'rig_gen', 'rig_density_chord']) {
+    for (const n of ['dm_fill', 'rig_slot_pad_a', 'rig_slot_chord_i', 'rig_section_9', 'rig_gen', 'rig_density_chord']) {
       expect(parseRigAction(n)).toBeNull()
     }
   })
@@ -26,7 +26,7 @@ describe('rig-actions', () => {
     expect(isContinuousRigAction({ kind: 'slot', app: 'drum', slot: 0 })).toBe(false)
     expect(rigSlotParam('drum', 7)).toBe('rig_slot_drum_h')
     const cat = rigActionCatalog()
-    expect(cat.length).toBe(3 * 13 + 2 + 1 + 1 + 8 + 3)
+    expect(cat.length).toBe(5 * 13 + 2 + 1 + 1 + 8 + 3)
     for (const { paramName } of cat) expect(parseRigAction(paramName)).not.toBeNull()
   })
 })

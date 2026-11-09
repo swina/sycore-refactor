@@ -33,7 +33,7 @@ import { buildDrumExportEvents, splitBars, drumEventsToMidi, renderDrumEvents, a
 import { captureInputDeviceId, isLoopbackAudioInput } from '@/lib/capture-input'
 import DrumExportModal from '@/components/DrumExportModal.vue'
 import { openCaptureInput, recordPart } from '@/lib/drum-export-capture'
-import { rigReports } from '@/lib/rig-live'
+import { rigReports, rigParts } from '@/lib/rig-live'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
@@ -588,6 +588,8 @@ function _scheduleCallback(time) {
     if (!step.active) return
     // Rig Controller Density (LIVE): the weakest steps of the bar on Live's grid go first.
     if (!densityKeeps(songStep, !!step.accent, densityFor('drum'))) return
+    // Rig Controller Drum row (LIVE): Mute / Solo and Intensity on the drums only (the bassline has its row).
+    if (rigParts.drumMuted) return
 
     // Gate duration: tie=0 → 1 step, tie=N → N steps
     const stepDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
@@ -599,11 +601,12 @@ function _scheduleCallback(time) {
     if (track.midiOutEnabled || midiOutOnly.value) {
       // MIDI Out (this track, or MIDI OUT ONLY for all): drive an external drum
       // machine/synth's own sound instead of SY.CORE's internal sample.
+      const vel = step.velocity * rigParts.drumVelocity
       if (divisions <= 1) {
-        _sendMidiNote(track.midiNote, step.velocity, step.accent, fireTime, stepDur)
+        _sendMidiNote(track.midiNote, vel, step.accent, fireTime, stepDur)
       } else {
         _sendMidiRatchet(track.midiNote, stepTimeSec, divisions, {
-          velocity: step.velocity,
+          velocity: vel,
           accent:   step.accent,
           baseTime: fireTime,
           duration: stepDur,
@@ -642,7 +645,7 @@ function _scheduleCallback(time) {
   if (state.basslineEnabled && state.basslineTracks) {
     const bassSoloActive = state.basslineTracks.some(t => t.solo)
     state.basslineTracks.forEach((voice, vi) => {
-      if (voice.muted) return
+      if (voice.muted || rigParts.bassMuted) return
       if (bassSoloActive && !voice.solo) return
       const padIdx = state.basslineSourceSlots?.[vi]
       if (padIdx == null || padIdx < 0 || padIdx >= 11) return
@@ -651,7 +654,7 @@ function _scheduleCallback(time) {
       if (!step.active) return
       const bassDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
       if (midiOutOnly.value) {
-        _sendMidiNote(step.note ?? 36, step.velocity, step.accent ?? false, fireTime, bassDur, drumStore.basslineMidiChannel)
+        _sendMidiNote(step.note ?? 36, step.velocity * rigParts.bassVelocity, step.accent ?? false, fireTime, bassDur, drumStore.basslineMidiChannel)
         return
       }
       if (_silentStep) return
@@ -806,6 +809,13 @@ function _onMasterVolume(e) {
 
 function _onMidiFill()         { triggerFill() }
 function _onMidiGenerate()     { generatePattern() }
+// Rig Controller Bass GEN: a new bassline in the active sequence, switched on; detail.root (0–11):
+// the Chord Prog's key, else the panel's root note.
+function _onGenerateBass(e) {
+  const pc = e.detail?.root
+  drumStore.generateBassline(Number.isInteger(pc) ? 24 + pc : basslineRootNote.value)
+  drumStore.basslineEnabled = true
+}
 // quantize (Control Map, P3): on the next bar even with Sync Retrig off.
 // detail.sync (Rig pad's Trigger sync, sixteenths): 0 = at once, 4/8/16 = next beat / 2 beats / bar of the song grid.
 function _onMidiSeqSwitch(e) {
@@ -955,6 +965,7 @@ onMounted(async () => {
   window.addEventListener('dm-master-volume',  _onMasterVolume)
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
+  window.addEventListener('dm-generate-bass',  _onGenerateBass)
   window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.addEventListener('dm-play-stop',      _onPlayStopRequest)
   window.addEventListener('timeline-dm-start', _tlDmStartHandler)
@@ -1000,6 +1011,7 @@ onUnmounted(() => {
   window.removeEventListener('dm-master-volume',  _onMasterVolume)
   window.removeEventListener('dm-trigger-fill',   _onMidiFill)
   window.removeEventListener('dm-generate',       _onMidiGenerate)
+  window.removeEventListener('dm-generate-bass',  _onGenerateBass)
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.removeEventListener('dm-play-stop',      _onPlayStopRequest)
   window.removeEventListener('timeline-dm-start', _tlDmStartHandler)

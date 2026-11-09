@@ -3,12 +3,14 @@
 // Three views of the same simulated rig state (src/lib/rig-controller.ts):
 // the reference layout, the Launchpad Mini MK1 mapping and the AKAI MIDImix mapping.
 // SIM: a simulated clock stands in for Ableton Live, nothing is driven.
-// LIVE (rig-live.ts): the Chord, Drum and Seq rows mirror the real apps and the
-// clock is the real one (EXT from Live, or INT); pads send the Control Map's commands.
+// LIVE (rig-live.ts): the Chord, Drum, Seq, Bass (the Drum Machine's bassline) and Arp rows
+// mirror the real apps and the clock is the real one (EXT from Live, or INT); pads send the
+// Control Map's commands (Arp: the pads pick its mode).
 import { keyLabel, keyRoot, keyFile } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
 import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
 import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor } from '@/lib/rig-actions'
+import { exportRigTemplate, parseRigTemplate, applyRigTemplate, clearRigMappings, rigMappedDevices, templateMatches, sysexBytes, templateFileName } from '@/lib/rig-template'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
@@ -25,7 +27,7 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, stopEvents, LIVE_APPS,
+  isLiveApp, isLiveRow, padApp, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, stopEvents, LIVE_APPS,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -35,6 +37,7 @@ import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVeloc
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
+import { useArpStore } from '@/stores/useArpStore'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
@@ -66,6 +69,7 @@ const live = computed(() => mode.value === 'live')
 const drumStore = useDrumMachineStore()
 const chordStore = useChordProgStore()
 const seqStore = useStepSequencerStore()
+const arpStore = useArpStore()
 const clockStore = useExternalClockStore()
 const midiStore = useMidiStore()
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
@@ -82,6 +86,8 @@ function syncLive() {
     if (a.id === 'drum') applySnapshot(a, drumSnapshot(drumStore.sequences, drumStore.basslineSequences, drumStore.activeSequence, drumStore.isPlaying, rigReports.queued.drum ?? rigArmed.drum))
     else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord ?? rigArmed.chord))
     else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
+    else if (a.id === 'bass') applySnapshot(a, bassSnapshot(drumStore.basslineSequences, drumStore.basslineEnabled, drumStore.activeSequence, drumStore.isPlaying, rigReports.queued.drum ?? rigArmed.drum))
+    else if (a.id === 'arp') applySnapshot(a, arpSnapshot(arpStore.arpEnabled, arpStore.arpMode))
     // Density: the panel's value and a MIDI-learned encoder both drive rigDensity (the one that moved wins).
     if (DENSITY_APPS.includes(a.id)) {
       if (a.density !== lastDensity[a.id]) rigDensity[a.id] = a.density
@@ -116,10 +122,12 @@ function clearScope(id) {
   saveMuteScopes({ ...muteScopes })
 }
 watch(() => {
-  if (!live.value) return '{"sources":[],"cables":[]}'
+  if (!live.value) return '{"sources":[],"cables":[],"parts":{}}'
   return JSON.stringify(rigMutes(s.apps, muteScopes))
 }, json => {
   const m = JSON.parse(json)
+  rigParts.drumMuted = !!m.parts.drum
+  rigParts.bassMuted = !!m.parts.bass
   midiService.setMutedSources(m.sources)
   midiService.setMutedCables(m.cables.map(([src, dev]) => cableMuteKey(src, dev)))
 }, { immediate: true })
@@ -129,14 +137,20 @@ function setIntensityMode(id, mode) {
   intensityModes[id] = mode
   saveIntensityModes({ ...intensityModes })
 }
+const intensityOpts = () => ({ bassChannel: drumStore.basslineMidiChannel })
 watch(() => {
-  if (!live.value) return '{"sources":{},"cables":[]}'
-  return JSON.stringify(rigVelocityScales(s.apps, s.globalIntensity, muteScopes, intensityModes))
+  if (!live.value) return '{"sources":{},"cables":[],"parts":{}}'
+  return JSON.stringify(rigVelocityScales(s.apps, s.globalIntensity, muteScopes, intensityModes, intensityOpts()))
 }, json => {
   const v = JSON.parse(json)
+  rigParts.drumVelocity = v.parts.drum ?? 1
+  rigParts.bassVelocity = v.parts.bass ?? 1
   midiService.setVelocityScales(v.sources, Object.fromEntries(v.cables.map(([src, dev, f]) => [cableMuteKey(src, dev), f])))
 }, { immediate: true })
-onUnmounted(() => { midiService.setMutedSources([]); midiService.setMutedCables([]); midiService.setVelocityScales({}) })
+onUnmounted(() => {
+  midiService.setMutedSources([]); midiService.setMutedCables([]); midiService.setVelocityScales({})
+  Object.assign(rigParts, { drumMuted: false, bassMuted: false, drumVelocity: 1, bassVelocity: 1 })
+})
 
 // CC 7: sent through the app's own routing (its cables' OUT channels, like its notes),
 // only when the value changes — opening the panel sends nothing. A CC 7 sent below 127
@@ -145,15 +159,17 @@ onUnmounted(() => { midiService.setMutedSources([]); midiService.setMutedCables(
 const cc7Sent = new Map() // `${source}|${targets}` → { value, source, targets }
 let cc7Timer = null
 let cc7Pending = []
-const appChannel = id => (id === 'chord' ? chordStore.midiChannel : midiStore.midiChannel) - 1
+const appChannel = id => (id === 'chord' ? chordStore.midiChannel : id === 'bass' ? drumStore.basslineMidiChannel : midiStore.midiChannel) - 1
 function sendCc7(source, targets, value, id) {
-  midiService.sendCC(7, value, Math.max(0, appChannel(id) ?? 0), source, null, targets.length ? { onlyTargets: targets } : undefined)
+  // Bass: on the bassline's own channel, as its notes (rigCc7 sends Bass only when it has one).
+  const opts = { ...(targets.length ? { onlyTargets: targets } : {}), ...(id === 'bass' ? { exactChannel: true } : {}) }
+  midiService.sendCC(7, value, Math.max(0, appChannel(id) ?? 0), source, null, Object.keys(opts).length ? opts : undefined)
 }
 function flushCc7() {
   cc7Timer = null
   const now = new Set()
   for (const c of cc7Pending) {
-    const key = `${c.source}|${c.targets.join(',')}`
+    const key = `${c.id}|${c.source}|${c.targets.join(',')}`
     now.add(key)
     const prev = cc7Sent.get(key)
     if (prev?.value === c.value) continue
@@ -167,7 +183,7 @@ function flushCc7() {
     cc7Sent.delete(key)
   }
 }
-watch(() => (live.value ? JSON.stringify(rigCc7(s.apps, s.globalIntensity, intensityModes, muteScopes)) : '[]'), json => {
+watch(() => (live.value ? JSON.stringify(rigCc7(s.apps, s.globalIntensity, intensityModes, muteScopes, intensityOpts())) : '[]'), json => {
   cc7Pending = JSON.parse(json)
   if (!cc7Timer) cc7Timer = setTimeout(flushCc7, 20)
 })
@@ -179,8 +195,9 @@ function velocityReadout(a) {
   const where = scope.length ? scope.map(d => `→ ${d}`).join(', ') : 'whole app'
   const mode = intensityMode(intensityModes, a.id)
   const parts = []
-  if (mode !== 'velocity') parts.push(`CC 7 = ${Math.round(a.intensity * s.globalIntensity / 127)}`)
-  if (mode !== 'cc7') parts.push(`Velocity ×${f.toFixed(2)}`)
+  const noCc7 = a.id === 'bass' && !(drumStore.basslineMidiChannel >= 1) // Bass: CC 7 needs the bassline's own channel
+  if (mode !== 'velocity' && !noCc7) parts.push(`CC 7 = ${Math.round(a.intensity * s.globalIntensity / 127)}`)
+  if (mode !== 'cc7' || noCc7) parts.push(`Velocity ×${f.toFixed(2)}`)
   return `${parts.join(' · ')} (Intensity ${a.intensity} · Global ${s.globalIntensity}) · ${where}`
 }
 let liveRaf = null
@@ -231,7 +248,7 @@ watch(mode, m => {
   rigDensity.active = m === 'live'
   for (const a of s.apps) if (DENSITY_APPS.includes(a.id)) { if (m === 'live') a.density = rigDensity[a.id]; lastDensity[a.id] = a.density }
   restartTimer()
-  if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq connected'; liveLoop() }
+  if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq, Bass, Arp connected'; liveLoop() }
 }, { immediate: true })
 onUnmounted(() => { clearInterval(timer); cancelAnimationFrame(liveRaf) })
 
@@ -270,28 +287,50 @@ function onSlotDown(appId, slot) {
   focusApp.value = appId
   if (!live.value) return pressSlot(s, appId, slot)
   const a = s.apps.find(x => x.id === appId)
-  if (!isLiveApp(appId)) return notConnected(a.label)
-  if (!a.filled[slot]) { s.display = `${a.label} ${SLOT_LABELS[slot]}: empty slot`; return }
+  if (!isLiveRow(appId)) return notConnected(a.label)
+  // Arp: the pad picks a mode and switches the Arpeggiator on; the mode playing switches it off.
+  if (appId === 'arp') {
+    const p = arpPress(a.playing, slot)
+    if (p.mode) arpStore.arpMode = p.mode
+    arpStore.arpEnabled = p.enabled
+    s.display = p.enabled ? `Arp ${SLOT_LABELS[slot]}: ${p.mode} on` : 'Arp off'
+    return
+  }
+  if (!a.filled[slot]) { s.display = `${a.label} ${SLOT_LABELS[slot]}: ${appId === 'bass' ? 'no bassline' : 'empty slot'}`; return }
+  // Bass switches the Drum Machine's sequence (drums and bassline), as the Drum row.
+  const target = padApp(appId)
+  const playing = s.apps.find(x => x.id === target).playing
+  const what = appId === 'bass' ? `${a.label} ${SLOT_LABELS[slot]} (Drum Machine)` : `${a.label} ${SLOT_LABELS[slot]}`
   // Following Live while it is stopped: the pad arms the slot (selected now); the app starts from it
   // on Live's Start. The armed pad again: disarmed.
-  if (followingLive() && !externalGrid.active && a.playing === null) {
-    rigArmed[appId] = armPress(rigArmed[appId], slot)
-    if (rigArmed[appId] === null) { s.display = `${a.label} ${SLOT_LABELS[slot]}: not armed`; return }
-    dispatchRig(padEvents(appId, slot, null, 0)[0]) // select the slot
-    s.display = `${a.label} ${SLOT_LABELS[slot]} armed: starts on Live's Play`
+  if (followingLive() && !externalGrid.active && playing === null) {
+    rigArmed[target] = armPress(rigArmed[target], slot)
+    if (rigArmed[target] === null) { s.display = `${what}: not armed`; return }
+    dispatchRig(padEvents(target, slot, null, 0)[0]) // select the slot
+    s.display = `${what} armed: starts on Live's Play`
     return
   }
   // Latch with the track's Trigger sync: the playing slot stops, another switches, a stopped app starts.
   // The sync point is on Live's grid: with Live stopped (or SY.CORE on its own clock), at once.
   const sync = liveSyncSteps(a.opts.triggerSync, externalGrid.active)
-  for (const ev of padEvents(appId, slot, a.playing, sync)) dispatchRig(ev)
-  s.display = `${a.label} ${SLOT_LABELS[slot]} ${padWhen(appId, a.playing, slot, sync)}`
+  for (const ev of padEvents(target, slot, playing, sync)) dispatchRig(ev)
+  s.display = `${what} ${padWhen(target, playing, slot, sync)}`
 }
+/** The rows whose GEN is connected in LIVE. */
+const GEN_APPS = ['drum', 'chord', 'seq', 'bass']
 function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
 function onGenerate(appId, mutate = false) {
   focusApp.value = appId
   if (!live.value) return generate(s, appId, mutate || s.shift)
-  if (!['drum', 'chord', 'seq'].includes(appId) || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
+  if (!GEN_APPS.includes(appId) || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
+  if (appId === 'bass') {
+    // A new bassline in the Drum Machine's active sequence, on the Chord Prog's key when it has an exact one.
+    const mode = chordStore.keyMode
+    const root = mode ? keyRoot(chordStore.selectedKey, mode) : null
+    dispatchRig({ name: 'dm-generate-bass', detail: root !== null ? { root } : {} })
+    s.display = `Bass: Generate ${root !== null ? `on ${KEY_NAMES[root]}` : '(its root note)'}`
+    return
+  }
   if (appId === 'seq') {
     // A new sequence, in the Chord Prog's key when it has an exact one (Major / Minor), else in its own.
     const mode = chordStore.keyMode
@@ -381,6 +420,9 @@ const learnedRing = name => (mappingStore.mappedParams.has(name) ? 'ring-1 ring-
 // the controller's palette (rig-actions.ts: Launchpad MK1 colours, else lit 127 / dark 0) — slots
 // filled / playing / blinking while queued or armed; Mute / Solo while on. Only changes are sent;
 // all dark when the panel closes.
+// Applied templates' LED palette and init SysEx are kept per MIDI port.
+const LS_RIG_TPL = 'S1_RIG_TEMPLATE_LEDS'
+const tplLeds = reactive((() => { try { return JSON.parse(localStorage.getItem(LS_RIG_TPL) || '{}') } catch { return {} } })())
 const ledBlink = ref(false)
 const blinkTimer = setInterval(() => { ledBlink.value = !ledBlink.value }, 300)
 const ledSent = new Map()
@@ -399,7 +441,7 @@ function rigLeds(off = false) {
     if (typeof m !== 'object' || !m.paramName?.startsWith('rig_')) continue
     const st = off ? 'off' : rigLedState(m.paramName, apps, ledBlink.value)
     if (st === null) continue
-    const val = ledPaletteFor(m.device)[st]
+    const val = { ...ledPaletteFor(m.device), ...(tplLeds[m.device]?.palette ?? {}) }[st]
     if (ledSent.get(key) === val) continue
     ledSent.set(key, val)
     sendRigLed(m, val)
@@ -407,6 +449,79 @@ function rigLeds(off = false) {
 }
 watch(() => [ledBlink.value, mappingStore.midiMappings, ...s.apps.map(a => `${a.playing}/${a.queued}/${a.muted}/${a.solo}/${a.filled.join('')}`)], () => rigLeds(), { deep: true })
 onUnmounted(() => { clearInterval(blinkTimer); ledSent.clear(); rigLeds(true) })
+
+// ── Controller templates (rig-template.ts): a controller's rig mappings as a JSON file ──
+const saveTplLeds = () => { try { localStorage.setItem(LS_RIG_TPL, JSON.stringify(tplLeds)) } catch {} }
+const tplDevice = ref('')
+const tplMsg = ref('')
+const tplFile = ref(null)
+const inputNames = ref([])
+const refreshInputs = () => { inputNames.value = midiService.getInputs().map(i => i.name).filter(Boolean) }
+const mappedDevices = computed(() => rigMappedDevices(mappingStore.midiMappings))
+/** The ports to pick from: connected inputs, plus the ones with rig controls learned. */
+const tplDevices = computed(() => [...new Set([...inputNames.value, ...mappedDevices.value.map(d => d.device)])])
+const tplCount = computed(() => mappedDevices.value.find(d => d.device === tplDevice.value)?.count ?? 0)
+function sendInit(device, init) {
+  const out = midiService.getOutputs().find(o => o.name === device)
+  if (!out) return
+  for (const hex of init ?? []) { const b = sysexBytes(hex); if (b) try { out.send(b) } catch {} }
+}
+// Controllers that need their init (e.g. a programmer mode) get it again when the panel opens.
+for (const [dev, t] of Object.entries(tplLeds)) sendInit(dev, t.init)
+refreshInputs()
+tplDevice.value = mappedDevices.value[0]?.device ?? inputNames.value[0] ?? ''
+
+function exportTemplate() {
+  const dev = tplDevice.value
+  if (!dev || !tplCount.value) { tplMsg.value = 'No rig controls learned on this controller yet'; return }
+  const kept = tplLeds[dev]
+  const t = exportRigTemplate(mappingStore.midiMappings, dev, dev, {
+    ...(kept?.init?.length ? { init: kept.init } : {}),
+    ...(kept?.palette ? { leds: { palette: kept.palette } } : {}),
+  })
+  const url = URL.createObjectURL(new Blob([JSON.stringify(t, null, 2)], { type: 'application/json' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = templateFileName(t)
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  tplMsg.value = `Exported ${Object.keys(t.controls).length} controls`
+}
+async function importTemplate(ev) {
+  const file = ev.target.files?.[0]
+  ev.target.value = ''
+  if (!file) return
+  const res = parseRigTemplate(await file.text())
+  if ('error' in res) { tplMsg.value = res.error; return }
+  const { template: t, warnings } = res
+  refreshInputs()
+  // The port named by the template (connected), else the one picked here.
+  const dev = inputNames.value.find(n => templateMatches(t, n)) ?? tplDevice.value
+  if (!dev) { tplMsg.value = `Connect the controller${t.match ? ` (${t.match})` : ''} or pick a port`; return }
+  const existing = mappedDevices.value.find(d => d.device === dev)?.count ?? 0
+  if (existing && !window.confirm(`Replace the ${existing} rig controls learned on ${dev} with "${t.name}"?`)) return
+  mappingStore.midiMappings = applyRigTemplate(mappingStore.midiMappings, t, dev)
+  mappingStore.saveMidiMappings()
+  tplLeds[dev] = { name: t.name, palette: t.leds?.palette ?? null, init: t.init ?? [] }
+  saveTplLeds()
+  sendInit(dev, t.init)
+  tplDevice.value = dev
+  ledSent.clear()
+  rigLeds()
+  tplMsg.value = `"${t.name}" → ${dev}: ${Object.keys(t.controls).length} controls${warnings.length ? ` · ${warnings.length} skipped: ${warnings.join('; ')}` : ''}`
+}
+function clearTemplate() {
+  const dev = tplDevice.value
+  if (!dev || !tplCount.value) return
+  if (!window.confirm(`Forget the ${tplCount.value} rig controls learned on ${dev}?`)) return
+  rigLeds(true)
+  mappingStore.midiMappings = clearRigMappings(mappingStore.midiMappings, dev)
+  mappingStore.saveMidiMappings()
+  delete tplLeds[dev]
+  saveTplLeds()
+  ledSent.clear()
+  tplMsg.value = `Rig controls of ${dev} forgotten`
+}
 const isRigApp = id => RIG_ACTION_APPS.includes(id)
 
 // Track options: labels and short badges for each row
@@ -462,7 +577,7 @@ function lpPad(row, col) {
     const a = s.apps[row]
     // The row's first pad names its app (Chord A, Drum A…).
     const short = col === 0 ? `${a.label} ${SLOT_LABELS[col]}` : SLOT_LABELS[col]
-    if (live.value && !isLiveApp(a.id)) return { label: `${a.label} ${SLOT_LABELS[col]} (not connected)`, short, color: 'off' }
+    if (live.value && !isLiveRow(a.id)) return { label: `${a.label} ${SLOT_LABELS[col]} (not connected)`, short, color: 'off' }
     const st = slotState(a, col)
     const color = a.muted && st === 'playing' ? 'red' : slotColor(st)
     return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
@@ -486,7 +601,7 @@ function lpPad(row, col) {
 function lpSide(row) {
   if (row < 5) {
     // LIVE: Generate is connected for the Drum Machine, Chord Prog and Sequencer (no Mutate yet).
-    const off = live.value && (!['drum', 'chord', 'seq'].includes(s.apps[row].id) || s.shift)
+    const off = live.value && (!GEN_APPS.includes(s.apps[row].id) || s.shift)
     return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: off ? 'off' : s.shift ? 'green' : 'amber' }
   }
   if (row === 5) return { label: LP_SIDE_LOW_LABELS[0], short: 'UNDO', color: s.undo ? 'amber' : 'off' }
@@ -909,7 +1024,7 @@ const arcPath = v => {
           <Grid3X3 class="w-4 h-4 text-amber-400" />
         </div>
         <h2 class="text-sm font-black text-white tracking-[0.1em] uppercase">Rig Controller</h2>
-        <span v-if="live" class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-wider text-emerald-300" title="Chord, Drum and Seq rows drive the real apps; the other controls are still simulated">Live · Chord, Drum, Seq connected</span>
+        <span v-if="live" class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-wider text-emerald-300" title="Chord, Drum, Seq, Bass and Arp rows drive the real apps; the other controls are still simulated">Live · all rows connected</span>
         <span v-else class="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold uppercase tracking-wider text-amber-300">Simulation · no MIDI</span>
       </div>
       <div class="flex items-center gap-2" @mousedown.stop>
@@ -960,7 +1075,7 @@ const arcPath = v => {
       </label>
       <span v-else class="font-mono text-white">{{ s.clock.bpm.toFixed(1) }} BPM</span>
       <span class="font-mono text-white">{{ s.clock.bar }}.{{ s.clock.beat }}.{{ (s.clock.step % 4) + 1 }}</span>
-      <span v-if="live" class="ml-auto truncate">Pads: Latch on the track's Trigger sync, on Live's grid. Live stopped: a pad arms its slot, it starts on Live's Play; Live's Stop stops all. Seq switches at the end of its pattern. Bass and Arp: SIM only.</span>
+      <span v-if="live" class="ml-auto truncate">Pads: Latch on the track's Trigger sync, on Live's grid. Live stopped: a pad arms its slot, it starts on Live's Play; Live's Stop stops all. Seq switches at the end of its pattern. Bass: the Drum Machine's sequence. Arp: pads pick its mode.</span>
       <span v-else class="ml-auto truncate">The controller only shows SY.CORE's state; each track's options decide how and when its slots start.</span>
     </div>
 
@@ -1000,6 +1115,22 @@ const arcPath = v => {
           </section>
 
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
+            <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500"
+                title="A controller's rig controls (learned with right-click › MIDI Learn) as a JSON file: export it, import it on another computer, or import a ready template">Controller template</h3>
+            <select v-model="tplDevice" @focus="refreshInputs" class="w-full bg-black/40 border border-white/10 rounded px-1 py-0.5 text-[10px] text-white">
+              <option v-if="!tplDevices.length" value="">No MIDI controller</option>
+              <option v-for="d in tplDevices" :key="d" :value="d">{{ d }}{{ mappedDevices.find(x => x.device === d) ? ` · ${mappedDevices.find(x => x.device === d).count} rig controls` : '' }}{{ tplLeds[d]?.name ? ` · ${tplLeds[d].name}` : '' }}</option>
+            </select>
+            <div class="flex gap-1">
+              <button :class="[btn, 'flex-1', btnIdle]" :disabled="!tplCount" @click="exportTemplate">Export</button>
+              <button :class="[btn, 'flex-1', btnIdle]" @click="tplFile?.click()">Import</button>
+              <button :class="[btn, btnIdle]" :disabled="!tplCount" title="Forget this controller's rig controls" @click="clearTemplate">✕</button>
+              <input ref="tplFile" type="file" accept=".json,application/json" class="hidden" @change="importTemplate" />
+            </div>
+            <div v-if="tplMsg" class="text-[10px] text-neutral-400 break-words">{{ tplMsg }}</div>
+          </section>
+
+          <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Rig</h3>
             <select v-model="flowConfig" class="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-white" @change="s.display = `Flow: ${flowConfig}`">
               <option v-for="c in FLOW_CONFIGS" :key="c">{{ c }}</option>
@@ -1023,8 +1154,8 @@ const arcPath = v => {
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">Slot grid (A–H)</h3>
             <div class="space-y-1.5">
-              <div v-for="a in s.apps" :key="a.id" class="flex items-center gap-1.5" :class="a.muted || (live && !isLiveApp(a.id)) ? 'opacity-40' : ''"
-                   :title="live && !isLiveApp(a.id) ? `${a.label}: not connected yet (SIM only)` : ''">
+              <div v-for="a in s.apps" :key="a.id" class="flex items-center gap-1.5" :class="a.muted || (live && !isLiveRow(a.id)) ? 'opacity-40' : ''"
+                   :title="live && !isLiveRow(a.id) ? `${a.label}: not connected yet (SIM only)` : ''">
                 <button class="w-16 text-left leading-tight" :title="'Track options: ' + rowBadge(a)" @click="focusApp = a.id">
                   <span class="block text-[11px] font-bold" :class="focusApp === a.id ? 'text-amber-300' : 'text-neutral-300'">{{ a.label }}</span>
                   <span class="block text-[8px] font-mono text-neutral-500 truncate">{{ rowBadge(a) }}</span>
@@ -1032,7 +1163,7 @@ const arcPath = v => {
                 <button v-for="(l, i) in SLOT_LABELS" :key="l"
                         class="relative w-9 h-9 rounded-md border text-[11px] font-black transition-colors overflow-hidden"
                         :class="[SLOT_CLASS[slotState(a, i)], isRigApp(a.id) ? learnedRing(rigSlotParam(a.id, i)) : '']"
-                        :title="`${a.label} ${l}: ${slotState(a, i)} · ${a.lengths[i]} bar${a.lengths[i] > 1 ? 's' : ''}${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
+                        :title="`${a.label} ${l}${live && a.id === 'arp' ? ` (${RIG_ARP_MODES[i]})` : ''}: ${slotState(a, i)} · ${a.lengths[i]} bar${a.lengths[i] > 1 ? 's' : ''}${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
                         @contextmenu="isRigApp(a.id) && learnMenu($event, rigSlotParam(a.id, i), `${a.label} slot ${l}`)"
                         @pointerdown="onSlotDown(a.id, i)" @pointerup="onSlotUp(a.id, i)" @pointerleave="a.held !== null && onSlotUp(a.id, i)">
                   {{ l }}
@@ -1081,9 +1212,10 @@ const arcPath = v => {
               </label>
             </div>
             <!-- Mute / Solo scope (LIVE, real apps): the whole app or some of its MIDI Flow cables -->
-            <div v-if="live && isLiveApp(focused.id)" class="mt-3 pt-2 border-t border-white/5">
+            <div v-if="live && isLiveRow(focused.id)" class="mt-3 pt-2 border-t border-white/5">
               <span class="text-[10px] text-neutral-400">Mute / Solo / Intensity act on</span>
-              <div class="flex flex-wrap gap-1 mt-1">
+              <div v-if="focused.id === 'bass'" class="mt-1 text-[9px] text-neutral-500">the Drum Machine's bassline only (Drum, on the whole app: its drums only). CC 7 needs the bassline's own MIDI channel.</div>
+              <div v-else class="flex flex-wrap gap-1 mt-1">
                 <button class="px-1.5 py-0.5 rounded border text-[9px] font-bold"
                         :class="!(muteScopes[focused.id] ?? []).length ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
                         title="Mute/Solo and Intensity act on the whole app, on every device it's cabled to" @click="clearScope(focused.id)">Whole app</button>
@@ -1182,7 +1314,7 @@ const arcPath = v => {
           <label class="flex items-center gap-2 text-neutral-300"><input v-model="showLabels" type="checkbox" class="accent-amber-400" /> Show labels (the real pads have none)</label>
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-1 text-neutral-300">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Map</h3>
-            <div>Rows 1–5 · Chord, Drum, Bass, Seq, Arp × slots A–H</div>
+            <div>Rows 1–5 · Chord, Drum, Seq, Bass, Arp × slots A–H (Arp: modes)</div>
             <div>Row 6 · Sections 1–8</div>
             <div>Row 7 · Split 1–4 · Fill · Repeat (hold) · Latch · Rel all</div>
             <div>Row 8 · Lane mute 1–8 (Shift: 9–16)</div>

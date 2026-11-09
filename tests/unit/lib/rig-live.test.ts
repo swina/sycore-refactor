@@ -90,15 +90,16 @@ describe('rig-live mute / solo', () => {
     expect(mutedLiveSources(apps({}))).toEqual([])
     expect(mutedLiveSources(apps({ seq: { muted: true } }))).toEqual(['SEQUENCER2'])
   })
-  it('solo: all the other real apps; a simulated row does not count', () => {
-    expect(mutedLiveSources(apps({ drum: { solo: true } }))).toEqual(['CHORD_PROG', 'SEQUENCER2'])
-    expect(mutedLiveSources(apps({ bass: { solo: true }, chord: { muted: true } }))).toEqual(['CHORD_PROG'])
+  it('solo: all the other connected rows (Arp too); Drum and Bass inside the Drum Machine', () => {
+    expect(rigMutes(apps({ drum: { solo: true } }))).toEqual({ sources: ['CHORD_PROG', 'SEQUENCER2', 'ARP'], cables: [], parts: { drum: false, bass: true } })
+    expect(rigMutes(apps({ bass: { solo: true }, chord: { muted: true } }))).toEqual({ sources: ['CHORD_PROG', 'SEQUENCER2', 'ARP'], cables: [], parts: { drum: true, bass: false } })
+    expect(mutedLiveSources(apps({ arp: { muted: true } }))).toEqual(['ARP'])
   })
-  it('scopes: an app with devices in its scope mutes only those cables', () => {
+  it('scopes: an app with devices in its scope mutes only those cables; Bass has no scope', () => {
     const a = apps({ chord: { muted: true }, drum: { muted: true } })
-    expect(rigMutes(a, { chord: ['Live · Chords'] })).toEqual({ sources: ['DRUM_MACHINE'], cables: [['CHORD_PROG', 'Live · Chords']] })
-    expect(rigMutes(apps({ seq: { solo: true } }), { drum: ['A', 'B'] })).toEqual({ sources: ['CHORD_PROG'], cables: [['DRUM_MACHINE', 'A'], ['DRUM_MACHINE', 'B']] })
-    expect(rigMutes(apps({}), { chord: ['X'] })).toEqual({ sources: [], cables: [] })
+    expect(rigMutes(a, { chord: ['Live · Chords'] })).toEqual({ sources: [], cables: [['CHORD_PROG', 'Live · Chords']], parts: { drum: true, bass: false } })
+    expect(rigMutes(apps({ seq: { solo: true } }), { drum: ['A', 'B'], bass: ['A'] })).toEqual({ sources: ['CHORD_PROG', 'ARP'], cables: [['DRUM_MACHINE', 'A'], ['DRUM_MACHINE', 'B']], parts: { drum: false, bass: true } })
+    expect(rigMutes(apps({}), { chord: ['X'] })).toEqual({ sources: [], cables: [], parts: { drum: false, bass: false } })
   })
 })
 
@@ -107,17 +108,19 @@ import { rigVelocityScales } from '@/lib/rig-live'
 describe('rig-live intensity', () => {
   const apps = (over: Record<string, number>) => ['chord', 'drum', 'bass', 'seq', 'arp'].map(id => ({ id, intensity: over[id] ?? 127 }))
   it('127 everywhere: nothing scaled', () => {
-    expect(rigVelocityScales(apps({}), 127)).toEqual({ sources: {}, cables: [] })
+    expect(rigVelocityScales(apps({}), 127)).toEqual({ sources: {}, cables: [], parts: { drum: 1, bass: 1 } })
   })
-  it('Intensity × Global per real app; simulated rows ignored', () => {
+  it('Intensity × Global per row; Drum (whole app) and Bass inside the Drum Machine', () => {
     const v = rigVelocityScales(apps({ seq: 63.5, bass: 0 }), 127)
     expect(v.sources).toEqual({ SEQUENCER2: 0.5 })
+    expect(v.parts).toEqual({ drum: 1, bass: 0 })
     const g = rigVelocityScales(apps({ seq: 63.5 }), 63.5)
-    expect(g.sources).toEqual({ CHORD_PROG: 0.5, DRUM_MACHINE: 0.5, SEQUENCER2: 0.25 })
+    expect(g.sources).toEqual({ CHORD_PROG: 0.5, SEQUENCER2: 0.25, ARP: 0.5 })
+    expect(g.parts).toEqual({ drum: 0.5, bass: 0.5 })
   })
   it('scoped apps scale only their cables', () => {
     const v = rigVelocityScales(apps({ chord: 63.5 }), 127, { chord: ['Live · Chords'] })
-    expect(v).toEqual({ sources: {}, cables: [['CHORD_PROG', 'Live · Chords', 0.5]] })
+    expect(v).toEqual({ sources: {}, cables: [['CHORD_PROG', 'Live · Chords', 0.5]], parts: { drum: 1, bass: 1 } })
   })
 })
 
@@ -133,12 +136,20 @@ describe('rig-live intensity modes', () => {
       { id: 'chord', source: 'CHORD_PROG', value: 127, targets: [] },
       { id: 'drum', source: 'DRUM_MACHINE', value: 0, targets: ['Live Drums'] },
       { id: 'seq', source: 'SEQUENCER2', value: 127, targets: [] },
+      { id: 'arp', source: 'ARP', value: 127, targets: [] },
     ])
   })
+  it('Bass: CC 7 only with the bassline on its own channel, else velocity', () => {
+    const only = { chord: 'velocity', drum: 'velocity', seq: 'velocity', arp: 'velocity' } as const
+    expect(rigCc7(apps({ bass: 64 }), 127, only)).toEqual([])
+    expect(rigCc7(apps({ bass: 64 }), 127, only, {}, { bassChannel: 2 })).toEqual([{ id: 'bass', source: 'DRUM_MACHINE', value: 64, targets: [] }])
+    expect(rigVelocityScales(apps({ bass: 0 }), 127, {}, {}).parts.bass).toBe(0)
+    expect(rigVelocityScales(apps({ bass: 0 }), 127, {}, {}, { bassChannel: 2 }).parts.bass).toBe(1)
+  })
   it('velocity mode: no CC 7; cc7 mode: no velocity scale', () => {
-    expect(rigCc7(apps({}), 127, { chord: 'velocity', drum: 'velocity', seq: 'velocity' })).toEqual([])
+    expect(rigCc7(apps({}), 127, { chord: 'velocity', drum: 'velocity', seq: 'velocity', arp: 'velocity' })).toEqual([])
     expect(rigVelocityScales(apps({ drum: 0, seq: 0 }), 127, {}, { seq: 'both' }).sources).toEqual({ SEQUENCER2: 0 })
-    expect(rigVelocityScales(apps({ drum: 0 }), 127, {}, { drum: 'velocity' }).sources).toEqual({ DRUM_MACHINE: 0 })
+    expect(rigVelocityScales(apps({ drum: 0 }), 127, {}, { drum: 'velocity' }).parts.drum).toBe(0)
   })
 })
 
@@ -193,5 +204,27 @@ describe('rig-live arming with Live stopped', () => {
     expect(stopEvents('chord')).toEqual([{ name: 'cp-stop' }])
     expect(stopEvents('drum')).toEqual([{ name: 'dm-play-stop', detail: { play: false, sync: 0 } }])
     expect(stopEvents('seq')).toEqual([{ name: 'toggle-sequencer2', detail: { play: false, sync: 0 } }])
+  })
+})
+
+describe('rig-live Bass and Arp rows', () => {
+  it('Bass: the sequences holding a bassline, none while it is off; pads drive the Drum Machine', async () => {
+    const { bassSnapshot, padApp, isLiveRow } = await import('@/lib/rig-live')
+    const on = { steps: [{ active: true }] }, off = { steps: [{ active: false }] }
+    const bass = { A: [off], B: [on] }
+    expect(bassSnapshot(bass, true, 'B', true, null)).toEqual({ filled: [false, true, false, false, false, false, false, false], playing: 1, queued: null })
+    expect(bassSnapshot(bass, true, 'A', true, 1).playing).toBeNull()
+    expect(bassSnapshot(bass, false, 'B', true, null).filled.some(Boolean)).toBe(false)
+    expect(padApp('bass')).toBe('drum')
+    expect(padApp('arp')).toBeNull()
+    expect(isLiveRow('bass') && isLiveRow('arp')).toBe(true)
+  })
+  it('Arp: pads A–H are modes; the mode playing again switches it off', async () => {
+    const { arpSnapshot, arpPress, RIG_ARP_MODES } = await import('@/lib/rig-live')
+    expect(arpSnapshot(true, 'down')).toEqual({ filled: Array(8).fill(true), playing: 1, queued: null })
+    expect(arpSnapshot(false, 'down').playing).toBeNull()
+    expect(arpSnapshot(true, 'thumb-up').playing).toBeNull()
+    expect(arpPress(1, 1)).toEqual({ enabled: false })
+    expect(arpPress(1, 7)).toEqual({ enabled: true, mode: RIG_ARP_MODES[7] })
   })
 })
