@@ -6,6 +6,8 @@
 // LIVE (rig-live.ts): the Chord, Drum and Seq rows mirror the real apps and the
 // clock is the real one (EXT from Live, or INT); pads send the Control Map's commands.
 import { externalGrid } from '@/core/midi/external-grid'
+import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
+import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
@@ -77,7 +79,20 @@ function syncLive() {
     if (a.id === 'drum') applySnapshot(a, drumSnapshot(drumStore.sequences, drumStore.basslineSequences, drumStore.activeSequence, drumStore.isPlaying, rigReports.queued.drum ?? rigArmed.drum))
     else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord ?? rigArmed.chord))
     else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
+    // Density: the panel's value and a MIDI-learned encoder both drive rigDensity (the one that moved wins).
+    if (DENSITY_APPS.includes(a.id)) {
+      if (a.density !== lastDensity[a.id]) rigDensity[a.id] = a.density
+      else a.density = rigDensity[a.id]
+      lastDensity[a.id] = a.density
+    }
   }
+}
+const lastDensity = {}
+const { openMenu } = useMidiContextMenu()
+/** Right-click on a Density control (LIVE, Drum / Seq): MIDI Learn it, e.g. on a Worlde encoder. */
+function densityMenu(ev, a) {
+  if (!live.value || !DENSITY_APPS.includes(a.id)) return
+  openMenu(ev, { name: `rig_density_${a.id}`, label: `Rig: ${a.label} Density` })
 }
 // Mute / Solo on the real apps (LIVE): their note-ons are dropped at the MIDI service —
 // the whole app, or only the cables picked in its scope (e.g. Chord → Live ch 2 only).
@@ -185,7 +200,7 @@ const offLiveGrid = externalGrid.on(e => {
     for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
   }
 })
-onUnmounted(() => { offLiveGrid(); for (const id of LIVE_APPS) rigArmed[id] = null })
+onUnmounted(() => { offLiveGrid(); rigDensity.active = false; for (const id of LIVE_APPS) rigArmed[id] = null })
 
 // ── Simulated clock (SIM: stands in for Live's MIDI clock) ────────────────
 let timer = null
@@ -209,6 +224,9 @@ watch(mode, m => {
   cancelAnimationFrame(liveRaf)
   Object.assign(s, createRigState())
   for (const id of LIVE_APPS) rigArmed[id] = null
+  // Density acts on the real apps in LIVE only; it starts from their current value (127 = as written).
+  rigDensity.active = m === 'live'
+  for (const a of s.apps) if (DENSITY_APPS.includes(a.id)) { if (m === 'live') a.density = rigDensity[a.id]; lastDensity[a.id] = a.density }
   restartTimer()
   if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq connected'; liveLoop() }
 }, { immediate: true })
@@ -273,6 +291,12 @@ function onGenerate(appId, mutate = false) {
   if (appId !== 'drum' || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
   dispatchRig({ name: 'dm-generate' })
   s.display = 'Drum: Generate (current style)'
+}
+/** A row's Fill button (rig layout; Mutate stays on Shift + Generate): the Drum Machine's Fill in LIVE. */
+function onRowFill(appId) {
+  focusApp.value = appId
+  if (live.value && appId !== 'drum') return notConnected(`${s.apps.find(x => x.id === appId).label} Fill (Drum Machine only)`)
+  onFill()
 }
 function onFill() {
   if (live.value) { dispatchRig({ name: 'dm-trigger-fill' }); s.display = 'Drum: Fill'; return }
@@ -906,7 +930,9 @@ const arcPath = v => {
                 </button>
                 <button :class="[btn, a.muted ? 'bg-red-600 border-red-400 text-white' : btnIdle, 'ml-1']" @click="toggleMute(s, a.id)">M</button>
                 <button :class="[btn, btnIdle]" @click="onGenerate(a.id)">Gen</button>
-                <button :class="[btn, btnIdle]" @click="onGenerate(a.id, true)">Mut</button>
+                <button :class="[btn, btnIdle, live && a.id !== 'drum' ? 'opacity-40' : '']"
+                        :title="a.id === 'drum' ? 'Fill (on the next bar)' : live ? 'Fill: Drum Machine only' : 'Fill'"
+                        @click="onRowFill(a.id)">Fill</button>
               </div>
             </div>
             <div class="flex gap-3 mt-3 text-[10px] text-neutral-500">
@@ -989,7 +1015,9 @@ const arcPath = v => {
             <div class="text-[10px] text-neutral-500">Knobs → <span class="text-amber-300">{{ focused.label }}</span></div>
             <div v-for="k in [['Density', 'density'], ['Swing', 'swing'], ['Gate', 'gate'], ['Intensity', 'intensity']]" :key="k[1]" class="flex items-center gap-2">
               <span class="w-14 text-[10px] text-neutral-400">{{ k[0] }}</span>
-              <input v-model.number="focused[k[1]]" type="range" min="0" max="127" class="flex-1 accent-amber-400" />
+              <input v-model.number="focused[k[1]]" type="range" min="0" max="127" class="flex-1 accent-amber-400"
+                     :title="k[1] === 'density' && live && ['drum', 'seq'].includes(focused.id) ? 'Density on the real app: 127 = as written, lower thins the weakest steps out. Right-click: MIDI Learn' : ''"
+                     @contextmenu="k[1] === 'density' && live && ['drum', 'seq'].includes(focused.id) && ($event.preventDefault(), densityMenu($event, focused))" />
               <span class="w-7 text-right font-mono text-neutral-300">{{ focused[k[1]] }}</span>
             </div>
             <button :class="[btn, 'w-full', s.generateMode === 'ai' ? btnOn : btnIdle]" @click="toggleGenMode">Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }}</button>

@@ -5,6 +5,7 @@ import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { StepScheduler, createWorkerTicker, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
+import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { DRUM_AI_SYSTEM_PROMPT } from '@/lib/drum-grid'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info, Sparkles } from 'lucide-vue-next'
@@ -585,6 +586,8 @@ function _scheduleCallback(time) {
     }
 
     if (!step.active) return
+    // Rig Controller Density (LIVE): the weakest steps of the bar on Live's grid go first.
+    if (!densityKeeps(songStep, !!step.accent, densityFor('drum'))) return
 
     // Gate duration: tie=0 → 1 step, tie=N → N steps
     const stepDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
@@ -1202,6 +1205,9 @@ function clickSequenceTab(seq, quantize = false) {
 
 // ── Fill ───────────────────────────────────────────────────────────────────────
 function triggerFill() {
+  // Fill always plays something: with no fill yet (never generated, nor loaded) one is made; then
+  // the same fill plays on each Fill until it is generated anew — or, with New, a new one each time.
+  if (newFillEachTime.value || !fillHasHits(fillPattern.value)) generateFill()
   fillActive.value = true
   _fillAutoStop = true
   if (drumStore.isPlaying) playStateRef.current = buildPlayState()
@@ -1693,6 +1699,9 @@ const stopAtEnd    = ref(_loadFlag('S1_DM_STOP_AT_END', false))
 watch(startAtBar, v => { try { localStorage.setItem('S1_DM_START_AT_BAR', v ? '1' : '0') } catch {} })
 watch(stopAtEnd,  v => { try { localStorage.setItem('S1_DM_STOP_AT_END',  v ? '1' : '0') } catch {} })
 const endWithFill  = ref(false)
+// Fill › New: each Fill generates a new fill (off: the same one until Gen). Remembered.
+const newFillEachTime = ref(_loadFlag('S1_DM_NEW_FILL', false))
+watch(newFillEachTime, v => { try { localStorage.setItem('S1_DM_NEW_FILL', v ? '1' : '0') } catch {} })
 const pendingStop  = ref(false)
 let   _pendingStop = false
 
@@ -3262,6 +3271,10 @@ function cycleChainSlot(i) {
             class="px-2 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-500 text-[9px] font-black uppercase tracking-widest hover:border-neutral-500 hover:text-white transition-colors"
             title="Generate new fill pattern"
           >Gen</button>
+          <label class="flex items-center gap-1 cursor-pointer select-none" title="New: each Fill plays a newly generated fill. Off: the same fill until Gen">
+            <input type="checkbox" v-model="newFillEachTime" class="w-3 h-3 accent-cyan-500 cursor-pointer" />
+            <span class="text-[8px] font-mono uppercase tracking-widest" :class="newFillEachTime ? 'text-cyan-400' : 'text-neutral-500'">New</span>
+          </label>
           <div class="flex items-center gap-0.5">
             <input
               v-model.number="fillSaveFrom"

@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { rigDensity } from '@/lib/rig-density'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -140,6 +141,11 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   }
   if (fieldName === 'toggle_sequencer') {
     if (fromNote || val > 0) uiStore.isSequencerOpen = !uiStore.isSequencerOpen
+    return
+  }
+  // ── Rig Controller: Density of the real apps (an encoder or fader, 0–127) ─────
+  if (fieldName === 'rig_density_drum' || fieldName === 'rig_density_seq') {
+    rigDensity[fieldName.slice(12)] = val
     return
   }
   // ── Drum Machine ─────────────────────────────────────────────────────────────

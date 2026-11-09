@@ -23,6 +23,7 @@ import AiPromptModal from './AiPromptModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
+import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
 import { rigReports } from '@/lib/rig-live'
@@ -1620,7 +1621,9 @@ watch(isPlaying, (playing) => {
         // Probability: roll once per pass — a miss skips this step's CC/notes
         // entirely for this loop but the playhead still advances normally
         // below (standard Elektron/Ableton-style step probability).
-        const probabilityHit = step.probability == null || Math.random() * 100 < step.probability
+        // Rig Controller Density (LIVE) thins the weakest steps of the bar out, like a missed probability roll.
+        const probabilityHit = (step.probability == null || Math.random() * 100 < step.probability)
+          && densityKeeps(stepIdx, !!step.accent, densityFor('seq'))
 
         // CLK SYS, a late step (late start after Live's Play, stalled page): a long note
         // (ties, slow Time) whose end is still ahead sounds now for what is left ("chase").
