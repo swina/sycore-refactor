@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { rigDensity } from '@/lib/rig-density'
+import { parseRigAction, isContinuousRigAction } from '@/lib/rig-actions'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -146,6 +147,13 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   // ── Rig Controller: Density of the real apps (an encoder or fader, 0–127) ─────
   if (fieldName === 'rig_density_drum' || fieldName === 'rig_density_seq') {
     rigDensity[fieldName.slice(12)] = val
+    return
+  }
+  // ── Rig Controller actions (rig-actions.ts): to the panel, which acts while open ─────
+  const rigAction = parseRigAction(fieldName)
+  if (rigAction) {
+    if (isContinuousRigAction(rigAction)) window.dispatchEvent(new CustomEvent('rig-action', { detail: { action: rigAction, value: val } }))
+    else if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) window.dispatchEvent(new CustomEvent('rig-action', { detail: { action: rigAction } }))
     return
   }
   // ── Drum Machine ─────────────────────────────────────────────────────────────

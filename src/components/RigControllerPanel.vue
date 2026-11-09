@@ -5,8 +5,11 @@
 // SIM: a simulated clock stands in for Ableton Live, nothing is driven.
 // LIVE (rig-live.ts): the Chord, Drum and Seq rows mirror the real apps and the
 // clock is the real one (EXT from Live, or INT); pads send the Control Map's commands.
+import { keyLabel, keyRoot, keyFile } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
 import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
+import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor } from '@/lib/rig-actions'
+import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
@@ -288,7 +291,21 @@ function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
 function onGenerate(appId, mutate = false) {
   focusApp.value = appId
   if (!live.value) return generate(s, appId, mutate || s.shift)
-  if (appId !== 'drum' || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
+  if (!['drum', 'chord', 'seq'].includes(appId) || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
+  if (appId === 'seq') {
+    // A new sequence, in the Chord Prog's key when it has an exact one (Major / Minor), else in its own.
+    const mode = chordStore.keyMode
+    const root = mode ? keyRoot(chordStore.selectedKey, mode) : null
+    dispatchRig({ name: 'seq-generate', detail: root !== null ? { root, mode } : {} })
+    s.display = `Seq: Generate ${root !== null ? `in ${keyText.value}` : '(its own key)'}`
+    return
+  }
+  if (appId === 'chord') {
+    // A new progression in the active slot (AI or built-in, per the rig's Generate mode).
+    dispatchRig({ name: 'cp-generate', detail: { mode: s.generateMode } })
+    s.display = `Chord: Generate (${s.generateMode === 'ai' ? 'AI — built-in if not configured' : 'built-in'})`
+    return
+  }
   dispatchRig({ name: 'dm-generate' })
   s.display = 'Drum: Generate (current style)'
 }
@@ -323,6 +340,74 @@ function cycleSync() {
   const i = TRIGGER_SYNC_OPTIONS.findIndex(o => o.value === focused.value.opts.triggerSync)
   setTrackOption(s, focused.value.id, 'triggerSync', TRIGGER_SYNC_OPTIONS[(i + 1) % TRIGGER_SYNC_OPTIONS.length].value)
 }
+
+// ── Rig actions from any MIDI-learned controller (rig-actions.ts) ─────────
+// useMidiCCListener sends a mapped control as 'rig-action'; the panel acts on it while open.
+function onRigAction(e) {
+  const { action: a, value } = e.detail ?? {}
+  if (!a) return
+  const app = a.app ? s.apps.find(x => x.id === a.app) : null
+  switch (a.kind) {
+    case 'slot': onSlotDown(a.app, a.slot); onSlotUp(a.app, a.slot); return
+    case 'gen': return onGenerate(a.app)
+    case 'mute': return toggleMute(s, a.app)
+    case 'solo': return toggleSolo(s, a.app)
+    case 'sync':
+      focusApp.value = a.app
+      cycleSync()
+      s.display = `${app.label} Trigger sync: ${SYNC_SHORT[app.opts.triggerSync]}`
+      return
+    case 'fill': return onFill()
+    case 'section': return onSection(a.index)
+    case 'key_down': return onKeyShift(-1)
+    case 'key_up': return onKeyShift(1)
+    case 'key_mode': return onKeyMode()
+    case 'intensity': if (app) app.intensity = value; return
+    case 'global': s.globalIntensity = value; return
+  }
+}
+window.addEventListener('rig-action', onRigAction)
+onUnmounted(() => window.removeEventListener('rig-action', onRigAction))
+
+/** Right-click on a rig control: MIDI Learn it (any controller). The learned ones get an amber ring. */
+const mappingStore = useMappingStore()
+function learnMenu(ev, name, label) {
+  ev.preventDefault()
+  openMenu(ev, { name, label: `Rig: ${label}` })
+}
+const learnedRing = name => (mappingStore.mappedParams.has(name) ? 'ring-1 ring-amber-500/70' : '')
+
+// LED feedback to MIDI-learned rig controls: the same note / CC sent back to the controller, with
+// the controller's palette (rig-actions.ts: Launchpad MK1 colours, else lit 127 / dark 0) — slots
+// filled / playing / blinking while queued or armed; Mute / Solo while on. Only changes are sent;
+// all dark when the panel closes.
+const ledBlink = ref(false)
+const blinkTimer = setInterval(() => { ledBlink.value = !ledBlink.value }, 300)
+const ledSent = new Map()
+function sendRigLed(m, val) {
+  const out = m.device ? midiService.getOutputs().find(o => o.name === m.device) : null
+  if (!out) return
+  const ch = (m.channel ?? 0) & 0x0f
+  try {
+    if ('cc' in m) out.send([0xB0 | ch, m.cc, val])
+    else if ('note' in m) out.send([0x90 | ch, m.note, val])
+  } catch {}
+}
+function rigLeds(off = false) {
+  const apps = s.apps.map(a => ({ id: a.id, playing: a.playing, queued: a.queued, muted: a.muted, solo: a.solo, filled: a.filled }))
+  for (const [key, m] of Object.entries(mappingStore.midiMappings)) {
+    if (typeof m !== 'object' || !m.paramName?.startsWith('rig_')) continue
+    const st = off ? 'off' : rigLedState(m.paramName, apps, ledBlink.value)
+    if (st === null) continue
+    const val = ledPaletteFor(m.device)[st]
+    if (ledSent.get(key) === val) continue
+    ledSent.set(key, val)
+    sendRigLed(m, val)
+  }
+}
+watch(() => [ledBlink.value, mappingStore.midiMappings, ...s.apps.map(a => `${a.playing}/${a.queued}/${a.muted}/${a.solo}/${a.filled.join('')}`)], () => rigLeds(), { deep: true })
+onUnmounted(() => { clearInterval(blinkTimer); ledSent.clear(); rigLeds(true) })
+const isRigApp = id => RIG_ACTION_APPS.includes(id)
 
 // Track options: labels and short badges for each row
 const OPTION_GROUPS = [
@@ -400,8 +485,8 @@ function lpPad(row, col) {
 
 function lpSide(row) {
   if (row < 5) {
-    // LIVE: only the Drum Machine's Generate is connected so far.
-    const off = live.value && (s.apps[row].id !== 'drum' || s.shift)
+    // LIVE: Generate is connected for the Drum Machine, Chord Prog and Sequencer (no Mutate yet).
+    const off = live.value && (!['drum', 'chord', 'seq'].includes(s.apps[row].id) || s.shift)
     return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: off ? 'off' : s.shift ? 'green' : 'amber' }
   }
   if (row === 5) return { label: LP_SIDE_LOW_LABELS[0], short: 'UNDO', color: s.undo ? 'amber' : 'off' }
@@ -440,7 +525,32 @@ function lpPadUp(row, col) {
 function lpSideDown(row) {
   if (row < 5) return onGenerate(s.apps[row].id)
   if (row === 5) return live.value ? notConnected('Undo') : undo(s)
-  shiftKey(s, row === 6 ? -1 : 1)
+  if (s.shift && live.value) return onKeyMode()
+  onKeyShift(row === 6 ? -1 : 1)
+}
+
+// ── Key (LIVE: the Chord Prog's key, root + mode — chord-key.ts) ──────────
+/** The key shown: LIVE = the Chord Prog's ("Cm", "Bb", "Eb/Cm"); SIM = the rig's own. */
+const keyText = computed(() => (live.value ? keyLabel(chordStore.selectedKey, chordStore.keyMode) || '—' : KEY_NAMES[s.key]))
+/** Key ◀ ▶: LIVE moves the Chord Prog's tonic a semitone, in the same mode (a genre / modal library
+ *  goes back to the keys, from C). */
+function onKeyShift(delta) {
+  if (!live.value) return shiftKey(s, delta)
+  const mode = chordStore.keyMode
+  const root = keyRoot(chordStore.selectedKey, mode) ?? (mode === 'minor' ? 9 : 0)
+  chordStore.selectedKey = keyFile(root + delta + 12, mode)
+  s.display = `Key ${keyText.value} (Chord Prog)`
+}
+/** Maj/Min (Launchpad: Shift + Key): LIVE switches the Chord Prog between the major and the minor
+ *  key on the same tonic (C ↔ Cm); from Both, it picks the major. */
+function onKeyMode() {
+  if (!live.value) return notConnected('Major / minor')
+  const mode = chordStore.keyMode
+  const root = keyRoot(chordStore.selectedKey, mode ?? 'major') ?? 0
+  const next = mode === 'major' ? 'minor' : 'major'
+  chordStore.keyMode = next
+  chordStore.selectedKey = keyFile(root, next)
+  s.display = `Key ${keyText.value} (Chord Prog)`
 }
 
 // ── Physical Launchpad Mini MK1 in Rig mode (rig-launchpad.ts) ────────────
@@ -874,7 +984,8 @@ const arcPath = v => {
             </div>
             <div class="flex gap-1.5 mt-2">
               <button :class="[btn, btnIdle, 'flex-1']" @click="tap">Tap</button>
-              <button :class="[btn, 'flex-1', btnIdle]" :title="`Trigger sync of ${focused.label} — click to cycle`" @click="cycleSync">Sync: {{ SYNC_SHORT[focused.opts.triggerSync] }}</button>
+              <button :class="[btn, 'flex-1', btnIdle]" :title="`Trigger sync of ${focused.label} — click to cycle`" @click="cycleSync"
+                      @contextmenu="isRigApp(focused.id) && learnMenu($event, `rig_sync_${focused.id}`, `${focused.label} Trigger sync`)">Sync: {{ SYNC_SHORT[focused.opts.triggerSync] }}</button>
             </div>
           </section>
 
@@ -883,6 +994,7 @@ const arcPath = v => {
             <div class="grid grid-cols-4 gap-1.5">
               <button v-for="i in SECTION_COUNT" :key="i"
                       :class="[btn, s.section === i - 1 ? btnOn : s.queuedSection === i - 1 ? 'bg-amber-400/50 border-amber-300 text-white animate-pulse' : btnIdle]"
+                      @contextmenu="learnMenu($event, `rig_section_${i}`, `Section ${i}`)"
                       @click="onSection(i - 1)">{{ i }}</button>
             </div>
           </section>
@@ -919,8 +1031,9 @@ const arcPath = v => {
                 </button>
                 <button v-for="(l, i) in SLOT_LABELS" :key="l"
                         class="relative w-9 h-9 rounded-md border text-[11px] font-black transition-colors overflow-hidden"
-                        :class="SLOT_CLASS[slotState(a, i)]"
-                        :title="`${a.label} ${l}: ${slotState(a, i)} · ${a.lengths[i]} bar${a.lengths[i] > 1 ? 's' : ''}`"
+                        :class="[SLOT_CLASS[slotState(a, i)], isRigApp(a.id) ? learnedRing(rigSlotParam(a.id, i)) : '']"
+                        :title="`${a.label} ${l}: ${slotState(a, i)} · ${a.lengths[i]} bar${a.lengths[i] > 1 ? 's' : ''}${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
+                        @contextmenu="isRigApp(a.id) && learnMenu($event, rigSlotParam(a.id, i), `${a.label} slot ${l}`)"
                         @pointerdown="onSlotDown(a.id, i)" @pointerup="onSlotUp(a.id, i)" @pointerleave="a.held !== null && onSlotUp(a.id, i)">
                   {{ l }}
                   <span v-if="a.filled[i] && a.lengths[i] > 1" class="absolute top-0 right-0.5 text-[7px] font-bold opacity-70">{{ a.lengths[i] }}</span>
@@ -928,10 +1041,13 @@ const arcPath = v => {
                   <span v-if="a.cursor === i && a.opts.press === 'holdMotion'" class="absolute inset-0 rounded-md ring-2 ring-sky-400 pointer-events-none" />
                   <span v-if="a.playing === i" class="absolute left-0 bottom-0 h-1 bg-black/50" :style="{ width: `${slotProgress(a, i) * 100}%` }" />
                 </button>
-                <button :class="[btn, a.muted ? 'bg-red-600 border-red-400 text-white' : btnIdle, 'ml-1']" @click="toggleMute(s, a.id)">M</button>
-                <button :class="[btn, btnIdle]" @click="onGenerate(a.id)">Gen</button>
+                <button :class="[btn, a.muted ? 'bg-red-600 border-red-400 text-white' : btnIdle, 'ml-1', isRigApp(a.id) ? learnedRing(`rig_mute_${a.id}`) : '']" @click="toggleMute(s, a.id)"
+                        @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_mute_${a.id}`, `${a.label} Mute`)">M</button>
+                <button :class="[btn, btnIdle, isRigApp(a.id) ? learnedRing(`rig_gen_${a.id}`) : '']" @click="onGenerate(a.id)"
+                        @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_gen_${a.id}`, `${a.label} GEN`)">Gen</button>
                 <button :class="[btn, btnIdle, live && a.id !== 'drum' ? 'opacity-40' : '']"
                         :title="a.id === 'drum' ? 'Fill (on the next bar)' : live ? 'Fill: Drum Machine only' : 'Fill'"
+                        @contextmenu="learnMenu($event, 'rig_fill', 'Fill')"
                         @click="onRowFill(a.id)">Fill</button>
               </div>
             </div>
@@ -992,7 +1108,7 @@ const arcPath = v => {
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1 font-sans">Display</h3>
             <div class="text-emerald-300 text-sm truncate">{{ s.display }}</div>
             <div class="text-[10px] text-neutral-500 mt-1">
-              Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }} · Key {{ KEY_NAMES[s.key] }} · Flow: {{ flowConfig }} · Split {{ s.split + 1 }}
+              Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }} · Key {{ keyText }} · Flow: {{ flowConfig }} · Split {{ s.split + 1 }}
             </div>
           </section>
         </div>
@@ -1008,16 +1124,17 @@ const arcPath = v => {
               <button :class="[btn, btnIdle]" @click="releaseAll">Rel all</button>
             </div>
             <div class="flex items-center justify-between">
-              <button :class="[btn, btnIdle]" @click="shiftKey(s, -1)">◀</button>
-              <span class="font-mono text-white">Key {{ KEY_NAMES[s.key] }}</span>
-              <button :class="[btn, btnIdle]" @click="shiftKey(s, 1)">▶</button>
+              <button :class="[btn, btnIdle, learnedRing('rig_key_down')]" @click="onKeyShift(-1)" @contextmenu="learnMenu($event, 'rig_key_down', 'Key −')">◀</button>
+              <span class="font-mono text-white">Key {{ keyText }}</span>
+              <button v-if="live" :class="[btn, btnIdle]" title="Major / minor on the same tonic (Launchpad: Shift + Key)" @click="onKeyMode" @contextmenu="learnMenu($event, 'rig_key_mode', 'Key Maj/Min')">Maj/Min</button>
+              <button :class="[btn, btnIdle, learnedRing('rig_key_up')]" @click="onKeyShift(1)" @contextmenu="learnMenu($event, 'rig_key_up', 'Key +')">▶</button>
             </div>
             <div class="text-[10px] text-neutral-500">Knobs → <span class="text-amber-300">{{ focused.label }}</span></div>
             <div v-for="k in [['Density', 'density'], ['Swing', 'swing'], ['Gate', 'gate'], ['Intensity', 'intensity']]" :key="k[1]" class="flex items-center gap-2">
               <span class="w-14 text-[10px] text-neutral-400">{{ k[0] }}</span>
               <input v-model.number="focused[k[1]]" type="range" min="0" max="127" class="flex-1 accent-amber-400"
                      :title="k[1] === 'density' && live && ['drum', 'seq'].includes(focused.id) ? 'Density on the real app: 127 = as written, lower thins the weakest steps out. Right-click: MIDI Learn' : ''"
-                     @contextmenu="k[1] === 'density' && live && ['drum', 'seq'].includes(focused.id) && ($event.preventDefault(), densityMenu($event, focused))" />
+                     @contextmenu="k[1] === 'density' && live && ['drum', 'seq'].includes(focused.id) ? ($event.preventDefault(), densityMenu($event, focused)) : k[1] === 'intensity' && isRigApp(focused.id) ? learnMenu($event, `rig_intensity_${focused.id}`, `${focused.label} Intensity`) : null" />
               <span class="w-7 text-right font-mono text-neutral-300">{{ focused[k[1]] }}</span>
             </div>
             <button :class="[btn, 'w-full', s.generateMode === 'ai' ? btnOn : btnIdle]" @click="toggleGenMode">Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }}</button>
@@ -1157,7 +1274,7 @@ const arcPath = v => {
               <button class="flex-1 py-1 rounded border text-[9px] font-bold" :class="mixPage === 'lane' ? 'bg-white/15 border-white/30 text-white' : 'bg-white/[0.04] border-white/10 text-neutral-400'" @click="mixPage = 'lane'">Bank ▶</button>
             </div>
             <button class="w-full py-1 rounded border text-[9px] font-bold" :class="s.shift ? 'bg-amber-500 border-amber-300 text-black' : 'bg-white/[0.04] border-white/10 text-neutral-400'" @click="toggleShift">Solo = Shift</button>
-            <input v-model.number="s.globalIntensity" type="range" min="0" max="127" class="h-28 accent-amber-400 mt-auto" style="writing-mode: vertical-lr; direction: rtl" />
+            <input v-model.number="s.globalIntensity" @contextmenu="learnMenu($event, 'rig_global', 'Global intensity')" title="Right-click: MIDI Learn" type="range" min="0" max="127" class="h-28 accent-amber-400 mt-auto" style="writing-mode: vertical-lr; direction: rtl" />
             <span class="text-[8px] text-neutral-500">Global {{ s.globalIntensity }}</span>
           </div>
         </div>

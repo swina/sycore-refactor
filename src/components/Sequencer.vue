@@ -709,6 +709,21 @@ watch(swingAmount, (val) => {
   getTransport().swingSubdivision = '16n'
 })
 
+// Rig Controller GEN (LIVE): generate, in the Chord Prog's key when it has one ({ root 0–11, mode }),
+// so the line sits on the chords: a scale of the same family is kept (e.g. Pentatonic Min in a minor
+// key), otherwise Major / Minor.
+const MINOR_FAMILY = ['Minor', 'Harmonic Min', 'Pentatonic Min', 'Blues', 'Dorian', 'Phrygian', 'Locrian']
+const MAJOR_FAMILY = ['Major', 'Pentatonic Maj', 'Lydian', 'Mixolydian']
+function handleRigGenerate(e) {
+  const { root, mode } = e?.detail ?? {}
+  if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) {
+    selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
+    const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY
+    if (!family.includes(selectedScale.value)) selectedScale.value = mode === 'minor' ? 'Minor' : 'Major'
+  }
+  generateSequence()
+}
+
 function generateSequence() {
   const styleCfg = STYLES[selectedStyle.value]
   const keyIdx = NOTE_NAMES.indexOf(selectedKey.value)
@@ -1115,6 +1130,7 @@ onMounted(() => {
   }
   window.addEventListener('seq-bank-select', handleBankSelect)
   window.addEventListener('seq-bank-cue', handleBankCue)
+  window.addEventListener('seq-generate', handleRigGenerate)
   window.addEventListener('seq-banks-reloaded', handleBanksReloaded)
 
   const handleTimeSet = (e) => {
@@ -1467,6 +1483,7 @@ onMounted(() => {
     window.removeEventListener('toggle-sequencer2', handleToggle2)
     window.removeEventListener('seq-bank-select', handleBankSelect)
     window.removeEventListener('seq-bank-cue', handleBankCue)
+    window.removeEventListener('seq-generate', handleRigGenerate)
     window.removeEventListener('seq-banks-reloaded', handleBanksReloaded)
     window.removeEventListener('seq-time-set', handleTimeSet)
     window.removeEventListener('seq-direction-set', handleDirectionSet)

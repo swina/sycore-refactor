@@ -845,6 +845,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { rigActionCatalog } from '@/lib/rig-actions'
 import { Cpu, Minus, X, Plus, Gamepad2, Save, Copy, Trash2, LayoutTemplate, GripHorizontal, ChevronDown, MousePointer2, Zap, Activity, Radio, Download, List, ImagePlus, ImageOff } from 'lucide-vue-next'
 import { useUiStore }            from '@/stores/useUiStore'
 import { useMidiStore }          from '@/stores/useMidiStore'
@@ -963,6 +964,11 @@ const APP_SECTIONS = [
       { paramName: 'cockpit_nav_item_encoder', label: 'Item Encoder' },
       { paramName: 'cockpit_nav_select',       label: 'Select' },
     ],
+  },
+  {
+    // Rig Controller actions (rig-actions.ts): any controller can drive the rig
+    key: 'rig', label: 'Rig Controller',
+    items: rigActionCatalog(),
   },
   {
     key: 'dm', label: 'Drum Machine',

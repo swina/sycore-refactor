@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { generateMajor, keyPhrase, keyRoot, type KeyMode } from '@/lib/chord-key'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
@@ -59,6 +60,7 @@ export interface ChordProgAllSlotsSnapshot {
   steps: ChordStep[]
   numSteps: number
   selectedKey: number
+  keyMode?: KeyMode
   playMode: PlayMode
   arpRate: DurationOption
   midiChannel: number
@@ -136,6 +138,9 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const playingChordName = ref('')
   const selectedStepIdx = ref(0)
   const selectedKey = ref(saved?.selectedKey ?? 0)
+  // The key's mode for generating (chord-key.ts): 'major' / 'minor' = exactly that key of the
+  // selectedKey pair (e.g. Cm), null = the pair (any progression of the file).
+  const keyMode = ref<KeyMode>(saved?.keyMode ?? null)
   const playMode = ref<PlayMode>(saved?.playMode ?? 'chord')
   const arpRate = ref<DurationOption>(saved?.arpRate ?? '16n')
   const midiChannel = ref(saved?.midiChannel ?? 1)
@@ -396,12 +401,13 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const libraryPatterns = ref<any[]>([])
   const loadingLibrary = ref(false)
 
-  watch([steps, numSteps, selectedKey, playMode, arpRate, midiChannel], () => {
+  watch([steps, numSteps, selectedKey, keyMode, playMode, arpRate, midiChannel], () => {
     try {
       localStorage.setItem(userKey(STORAGE_KEY), JSON.stringify({
         steps: steps.value,
         numSteps: numSteps.value,
         selectedKey: selectedKey.value,
+        keyMode: keyMode.value,
         playMode: playMode.value,
         arpRate: arpRate.value,
         midiChannel: midiChannel.value,
@@ -458,6 +464,13 @@ export const useChordProgStore = defineStore('chordProg', () => {
   }
 
   function generateAlgorithmic(progressionData: Record<string, any>) {
+    // A major key: the library has none (its progressions are minor) — generated from the major templates.
+    if (keyMode.value === 'major' && selectedKey.value >= 0 && selectedKey.value < 12) {
+      generateMajor(selectedKey.value, numSteps.value).forEach((c, i) => {
+        steps.value[i] = { ...DEFAULT_CHORD_STEP, chordName: c.chordName, notes: c.notes, active: true }
+      })
+      return
+    }
     const names = Object.keys(progressionData)
     if (!names.length) return
     const name = names[Math.floor(Math.random() * names.length)]
@@ -474,15 +487,16 @@ export const useChordProgStore = defineStore('chordProg', () => {
     const aiStore = useAiAgentStore()
     if (!aiStore.isConfigured) return false
 
-    const keyNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-    const rootMidi = 48 + (selectedKey.value % 12)
-    const keyLabel = keyNames[((selectedKey.value % 12) + 12) % 12]
+    // The exact key (root + mode), or the relative pair; none for the modal / genre libraries.
+    const phrase = keyPhrase(selectedKey.value, keyMode.value)
+    const root = keyRoot(selectedKey.value, keyMode.value)
+    const rootMidi = 48 + (root ?? 0)
 
     const systemPrompt = [
       'You are a music theory assistant for a 16-step chord sequencer.',
-      `Write a chord progression in the key of ${keyLabel}, ${numSteps.value} chords long, that matches the requested mood.`,
+      `Write a chord progression${phrase ? ` in ${phrase}` : ''}, ${numSteps.value} chords long, that matches the requested mood.`,
       `Output ONLY a valid JSON array (no markdown fences, no commentary) of objects with "chordName" (e.g. "Cmaj7", "Am7", "F") and "notes" — a flat array of MIDI note numbers. ` +
-      `The notes should sit near MIDI ${rootMidi} (that octave is the root of ${keyLabel}).`,
+      `The notes should sit near MIDI ${rootMidi}${root !== null ? ` (that octave is the root of the key)` : ''}.`,
       'Keep each chord to 3-5 notes, and use a cohesive key.'
     ].join('\n')
 
@@ -727,6 +741,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     steps.value = ensureSteps16(s?.steps ?? Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP })))
     numSteps.value = s?.numSteps ?? 8
     selectedKey.value = s?.selectedKey ?? 0
+    keyMode.value = s?.keyMode ?? null
     playMode.value = s?.playMode ?? 'chord'
     arpRate.value = s?.arpRate ?? '16n'
     midiChannel.value = s?.midiChannel ?? 1
@@ -734,7 +749,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
 
   return {
     steps, numSteps, isPlaying, currentStep, playingChordName, selectedStepIdx,
-    selectedKey, playMode, arpRate, midiChannel,
+    selectedKey, keyMode, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,

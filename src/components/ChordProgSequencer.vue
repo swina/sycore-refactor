@@ -28,6 +28,7 @@ import { sendPartPresets } from '@/lib/song-composer'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
+import { keyLabel } from '@/lib/chord-key'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 
@@ -843,6 +844,7 @@ onUnmounted(() => {
   window.removeEventListener('cp-stop', _onCpStop)
   window.removeEventListener('cp-slot-select', _onCpSlotSelect)
   window.removeEventListener('cp-slot-cue', _onCpSlotCue)
+  window.removeEventListener('cp-generate', _onCpGenerate)
   _unsubMidiNote?.()
   _unsubAppNote?.()
   _unsubRawMidi?.()
@@ -1217,6 +1219,18 @@ const _onCpStop = (e) => {
   store.isPlaying = false
 }
 const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
+// Rig Controller GEN (LIVE): a new progression into the active slot, played from its next chord.
+// { mode: 'ai' } asks the AI (key and length of the slot); not configured or failed → built-in.
+let _cpGenBusy = false
+const _onCpGenerate = async (e) => {
+  if (e?.detail?.mode === 'ai' && !_cpGenBusy) {
+    _cpGenBusy = true
+    try {
+      if (await store.generateFromAiPrompt('A fresh chord progression for a live set, different from the current one, same key')) return
+    } catch {} finally { _cpGenBusy = false }
+  }
+  handleGenerate()
+}
 
 // Control Map (P3, 'cp-slot-cue'): while playing, the slot starts on the next bar line, from its
 // first chord (as a clip launched in Live's Session View); stopped — or during chain playback,
@@ -1304,6 +1318,7 @@ onMounted(() => {
   window.addEventListener('cp-stop', _onCpStop)
   window.addEventListener('cp-slot-select', _onCpSlotSelect)
   window.addEventListener('cp-slot-cue', _onCpSlotCue)
+  window.addEventListener('cp-generate', _onCpGenerate)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
   _unsubAppNote = midiStore.addAppNoteListener(_onAppNoteIn)
   _unsubRawMidi = midiService.addRawListener(_onRawMidiIn)
@@ -2481,8 +2496,20 @@ function velBarColor(v) {
                 <span class="text-[11px] font-bold text-purple-300">{{ KEY_FILE_NAMES[store.selectedKey] }}</span>
                 <span class="text-[9px] text-neutral-600">(change in Library tab)</span>
               </div>
+              <!-- Mode: exactly the major or the minor key of the pair (e.g. Cm), or both -->
+              <div v-if="store.selectedKey < 12" class="flex items-center gap-2">
+                <span class="text-[10px] text-neutral-500 font-mono">Key:</span>
+                <div class="flex rounded border border-neutral-700 overflow-hidden">
+                  <button v-for="m in [['major', 'Major'], ['minor', 'Minor'], [null, 'Both']]" :key="String(m[0])"
+                          @click="store.keyMode = m[0]"
+                          :class="['px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest transition-colors',
+                            store.keyMode === m[0] ? 'bg-purple-800 text-purple-100' : 'text-neutral-500 hover:text-neutral-200']"
+                          :title="m[0] === 'major' ? 'Major key: generated from common major progressions' : m[0] === 'minor' ? 'Minor key: from the library (its progressions are minor)' : 'Any progression of the pair'">{{ m[1] }}</button>
+                </div>
+                <span class="text-[11px] font-bold text-purple-300 font-mono">{{ keyLabel(store.selectedKey, store.keyMode) }}</span>
+              </div>
               <div class="text-[10px] text-neutral-400 leading-relaxed max-w-[300px]">
-                Generate a random progression from the currently selected key source. 
+                Generate a random progression from the currently selected key source (Major / Minor: that key exactly). 
                 Chords are distributed across all active steps.
               </div>
 
