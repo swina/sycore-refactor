@@ -2,15 +2,12 @@
  
 A running log of new features added to SY.CORE, newest first.
 
-## Da dove ripartire (scritto 2026-11-08 sera, branch `feat/rig-controller-ui`)
+## 2026-11-09
 
-Stato: SY.CORE Link funziona in Live (Count-In 1 bar per la partenza). Non pushati: sycore-refactor `b586273`, sycore-ableton `9c6fc92`, `8dcde2a`, `d976bf9` (file già copiati in `C:\Users\swina\Documents\sycore-link`).
-
-1. **Test del timing** (fix `b586273` + bridge `d976bf9`): ricarica SY.CORE (preview `:4100` o deploy), in Live togli e rimetti il device `sycore-link` (riavvia lo script), registra le drum, esporta il `.mid` in `C:\Users\swina\Documents\sycore-link\` e confrontalo con `Drums 43.mid` (prima: 0–25 ms in ritardo, punte ±50–70 ms, durate 0,18–0,37 beat).
-2. **Device nuovi da provare**: `sycore-link.amxd` (interfaccia: stato, stats, Channel) e `sycore-link-receive.amxd` (un canale per traccia). Il device vecchio nel set va sostituito.
-3. **Disposizione tracce per registrare** (verificata con le drum): traccia "SYC Drums" = solo Receive ch 10, nessuno strumento, Monitor In → traccia "Drums" con MIDI From = SYC Drums, **Post FX** + Drum Rack, armata. Da applicare anche a Chords (Receive ch 1), da cui prendono MIDI From Chords e le due Arp by Chord. Poi aggiornare il README del device (`sycore-ableton/m4l/link/README.md`, oggi dice Pre FX: sbagliato per questa disposizione).
-4. Se tutto ok: push di tutti e due i repo; togliere `public/link-spike.html`.
-5. Dopo: opzioni per traccia del Rig Controller (Density, Swing, Gate, sync).
+- **SY.CORE Link: timing verified in Live** — Drum Machine recording `Drums 19.mid` vs yesterday's `Drums 43.mid`: mean offset +7.2 → +0.7 ms, sd 9.6 → 4.1 ms, notes off by more than 10 ms 47/104 → 2/87, lengths 0.24–0.27 beat. The first downbeat is still +26 ms late (was +47). Branch: `feat/rig-controller-ui`
+- **SY.CORE Link devices play only SY.CORE's MIDI** — with MIDI From = All Ins on the "SYC" tracks, the Launchkey's chord buttons (CC#111, CC#113) went through the devices and reached the Drum Rack as notes: the track's own input is no longer passed through, and the "SYC" tracks take MIDI From = No Input. Device README: track layout for recording (Post FX). sycore-ableton `m4l/link/make-patch.mjs`, devices rebuilt and copied to `C:\Users\swina\Documents\sycore-link\`. Branch: `feat/rig-controller-ui`
+- **Removed `public/link-spike.html`** — the Link spike page is replaced by the device and the Live (M4L) MIDI Flow output. Branch: `feat/rig-controller-ui`
+- **Open: first downbeat late in Live** — the first note of a recording is still 26 ms (Drums) to 47 ms (Chords) late, and the first chord's strum collapses. Branch: `feat/rig-controller-ui`
 
 ## 2026-11-08
 
