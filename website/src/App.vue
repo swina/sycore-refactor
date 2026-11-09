@@ -9,10 +9,19 @@ import {
   BookOpen
 } from 'lucide-vue-next'
 import GuidesPanel from './components/GuidesPanel.vue'
+import AbletonLivePage from './components/AbletonLivePage.vue'
 
 
 const isMobileNavOpen = ref(false)
 const showGuides = ref(false)
+const guideId = ref(null)
+// /ableton-live: the dedicated SY.CORE × Ableton Live page (Vercel serves index.html for every path).
+const isAbletonPage = window.location.pathname.replace(/\/+$/, '') === '/ableton-live'
+function openGuide(id) {
+  guideId.value = id
+  showGuides.value = true
+  isMobileNavOpen.value = false
+}
 const fullscreenImage = ref(null)
 
 function openImage(src) {
@@ -30,6 +39,7 @@ function onPageClick(e) {
 }
 
 function openDocs() {
+  guideId.value = null
   showGuides.value = true
   isMobileNavOpen.value = false
 }
@@ -76,6 +86,7 @@ const navLinks = [
   { label: 'Sound Engine', href: '#sound-engine' },
   { label: 'MIDI', href: '#midi' },
   { label: 'Live', href: '#live' },
+  { label: 'Ableton Live', href: '/ableton-live' },
   { label: 'Audio', href: '#audio' },
   { label: 'Freesound', href: '#freesound' },
   { label: 'Video', href: '#video' },
@@ -359,8 +370,11 @@ const scenarios = [
 </script>
 
 <template>
-  
-  <div class="h-screen overflow-y-auto overflow-x-hidden bg-neutral-950 text-white font-sans scroll-smooth" @click="onPageClick">
+  <template v-if="isAbletonPage">
+    <AbletonLivePage :app-url="appUrl" @open-guide="openGuide('ableton-guide')" />
+    <GuidesPanel v-if="showGuides" :initial-id="guideId" @close="showGuides = false" />
+  </template>
+  <div v-else class="h-screen overflow-y-auto overflow-x-hidden bg-neutral-950 text-white font-sans scroll-smooth" @click="onPageClick">
 
     <!-- ============ NAV ============ -->
     <header class="sticky top-0 z-50 border-b border-neutral-800/80 bg-neutral-950/80 backdrop-blur-md">
@@ -731,6 +745,24 @@ const scenarios = [
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- ============ ABLETON LIVE (teaser → /ableton-live) ============ -->
+    <section id="ableton-live" class="mx-auto max-w-6xl px-5 py-20 scroll-mt-16">
+      <a v-reveal href="/ableton-live" class="group block rounded-2xl border border-neutral-800 bg-grid-neon p-8 transition-colors hover:border-synth-neon md:p-12">
+        <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">SY.CORE × Ableton Live</p>
+        <h2 class="mt-3 max-w-3xl text-3xl font-extrabold md:text-4xl">
+          Generate while you play. <span class="text-synth-neon">In time with Live.</span>
+        </h2>
+        <p class="mt-4 max-w-2xl text-sm text-neutral-400">
+          SY.CORE Link plays the Drum Machine, Chord Prog and Sequencer inside your Live set, on Live's grid.
+          The Rig Controller launches them from the Launchpad like clips — with launch quantization, armed slots,
+          Density, Fill and live generation in an exact key.
+        </p>
+        <span class="mt-6 inline-flex items-center gap-2 font-mono text-xs font-black uppercase tracking-[0.2em] text-synth-neon">
+          Discover SY.CORE for Ableton Live <ArrowRight class="h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </span>
+      </a>
     </section>
 
     <!-- ============ AUDIO TOOLS ============ -->
@@ -1137,7 +1169,7 @@ const scenarios = [
     </Teleport>
 
     <!-- Documentation Guides -->
-    <GuidesPanel v-if="showGuides" @close="showGuides = false" />
+    <GuidesPanel v-if="showGuides" :initial-id="guideId" @close="showGuides = false" />
   </div>
 </template>
 
