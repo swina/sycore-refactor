@@ -36,7 +36,8 @@ import { isMidimixName, parseMidimixInput, mixLedDiff, mixLedsOff, Pickup, roleI
 import { learnToggle, matchToggle, toggleLabel, toggleShortLabel, sameToggle, loadToggle, saveToggle, RIG_TOGGLE_SLOTS } from '@/lib/rig-toggle'
 import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVelocity, RIG_INIT_MESSAGES, muteOtherSenders, unmuteOtherSenders, rigSend } from '@/lib/rig-launchpad'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
-import { useChordProgStore } from '@/stores/useChordProgStore'
+import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
+import { rigChord } from '@/lib/chord-next'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
@@ -480,7 +481,18 @@ const rigLinkState = () => ({
   })),
   section: s.section ?? -1,
   queuedSection: s.queuedSection ?? -1,
+  chord: chordStore.isPlaying ? rigChord(
+    { name: chordStore.playingChordName, duration: chordStore.playingChordDuration },
+    chordStore.nextChord,
+    chordQueuedSlot(),
+    DURATION_LABELS,
+  ) : null,
 })
+// The Chord slot that takes over at the end of the one playing (Trigger sync / armed), if another.
+function chordQueuedSlot() {
+  const q = rigReports.queued.chord ?? rigArmed.chord
+  return q !== null && q !== undefined && q !== chordStore.playingSlotIndex ? chordStore.slots[q] ?? null : null
+}
 let rigLinkJson = ''
 watch(() => JSON.stringify(rigLinkState()), json => { rigLinkJson = json; linkClient.sendRig(JSON.parse(json)) }, { immediate: true })
 const offRigLink = linkClient.on(e => {

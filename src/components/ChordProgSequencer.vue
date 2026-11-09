@@ -29,6 +29,7 @@ import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patte
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { keyLabel } from '@/lib/chord-key'
+import { chordAfter } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 
@@ -418,6 +419,8 @@ function stopAllNotes() {
   _stopPending = true
   midiService.cancelWorkerTimed(CP_WORKER_TAG)
   store.playingChordName = ''
+  store.playingChordDuration = ''
+  store.nextChord = null
   _pendingTimeouts.forEach(id => clearTimeout(id))
   _pendingTimeouts.clear()
 
@@ -588,6 +591,9 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       if (state.tickCounter === 0) {
         getDraw().schedule(() => {
           store.playingChordName = step?.active && step.notes?.length ? step.chordName : ''
+          store.playingChordDuration = step?.active && step.notes?.length ? step.duration : ''
+          const nx = chordAfter(state.steps, state.numSteps, state.stepPointer, state.loop)
+          store.nextChord = nx ? { name: nx.step.chordName, duration: nx.step.duration, wraps: nx.wraps } : null
           if (state.chainSlotIndices) {
             const slotIdx = state.chainSlotIndices[state.stepPointer]
             store.currentStep = state.chainLocalIndices[state.stepPointer]
@@ -1018,6 +1024,7 @@ const heldChordNotes = [] // { note, channel } — notes from MIDI Learn-trigger
 
 function stopHeldChord() {
   store.playingChordName = ''
+  store.playingChordDuration = ''
   heldChordNotes.forEach(({ note, channel }) =>
     midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
   heldChordNotes.length = 0

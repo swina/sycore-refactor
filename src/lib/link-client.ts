@@ -54,6 +54,8 @@ export interface LinkRigState {
   rows: { filled: number; playing: number; queued: number; muted: boolean; solo: boolean }[]
   section: number
   queuedSection: number
+  /** The chord sounding and the next one (labels: '1/1', '1/4'…), or null. */
+  chord?: { now: string; dur: string; next: string; nextDur: string } | null
 }
 
 interface WsLike {
