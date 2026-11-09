@@ -38,6 +38,8 @@ import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVeloc
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
 import { rigChord } from '@/lib/chord-next'
+import { frameLoop, uiTimeout } from '@/lib/ui-clock'
+import { createWorkerTicker } from '@/core/midi/step-scheduler'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
@@ -216,9 +218,9 @@ function flushCc7() {
 }
 watch(() => (live.value ? JSON.stringify(rigCc7(s.apps, s.globalIntensity, intensityModes, muteScopes, intensityOpts())) : '[]'), json => {
   cc7Pending = JSON.parse(json)
-  if (!cc7Timer) cc7Timer = setTimeout(flushCc7, 20)
+  if (!cc7Timer) cc7Timer = uiTimeout(flushCc7, 20) // a knob turned with Live in front: not 1 s late
 })
-onUnmounted(() => { clearTimeout(cc7Timer); cc7Pending = []; flushCc7() })
+onUnmounted(() => { cc7Timer?.(); cc7Pending = []; flushCc7() })
 /** Readout for the Track options: the velocity scale now applied to a real app, and where. */
 function velocityReadout(a) {
   const f = (a.intensity / 127) * (s.globalIntensity / 127)
@@ -231,8 +233,11 @@ function velocityReadout(a) {
   if (mode !== 'cc7' || noCc7) parts.push(`Velocity ×${f.toFixed(2)}`)
   return `${parts.join(' · ')} (Intensity ${a.intensity} · Global ${s.globalIntensity}) · ${where}`
 }
-let liveRaf = null
-function liveLoop() { syncLive(); liveRaf = requestAnimationFrame(liveLoop) }
+// Every frame — and every 40 ms with SY.CORE's window hidden (Live in front): rAF alone stopped
+// there, and the rig acted on an old state (ui-clock.ts).
+let stopLiveLoop = null
+function liveLoop() { stopLiveLoop?.(); stopLiveLoop = frameLoop(syncLive) }
+const endLiveLoop = () => { stopLiveLoop?.(); stopLiveLoop = null }
 
 /** Following Live (or another external master) as the clock. */
 const followingLive = () => clockStore.source !== 'internal' && !clockStore.fallbackToInternal
@@ -272,7 +277,7 @@ function togglePlay() {
 watch(() => s.clock.bpm, () => { if (!live.value) restartTimer() })
 watch(mode, m => {
   localStorage.setItem(LS_MODE, m)
-  cancelAnimationFrame(liveRaf)
+  endLiveLoop()
   Object.assign(s, createRigState())
   for (const id of SLOT_ROWS) rigArmed[id] = null
   liveSection = null
@@ -283,7 +288,7 @@ watch(mode, m => {
   restartTimer()
   if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq, Bass, Arp connected'; liveLoop() }
 }, { immediate: true })
-onUnmounted(() => { clearInterval(timer); cancelAnimationFrame(liveRaf) })
+onUnmounted(() => { clearInterval(timer); endLiveLoop() })
 
 /** LIVE: an action not connected to the apps yet. */
 const notConnected = what => { s.display = `${what}: not connected yet (SIM only)` }
@@ -521,7 +526,7 @@ const learnedRing = name => (mappingStore.mappedParams.has(name) ? 'ring-1 ring-
 const LS_RIG_TPL = 'S1_RIG_TEMPLATE_LEDS'
 const tplLeds = reactive((() => { try { return JSON.parse(localStorage.getItem(LS_RIG_TPL) || '{}') } catch { return {} } })())
 const ledBlink = ref(false)
-const blinkTimer = setInterval(() => { ledBlink.value = !ledBlink.value }, 300)
+const stopBlink = createWorkerTicker(() => { ledBlink.value = !ledBlink.value }, 300) // not throttled while hidden
 const ledSent = new Map()
 function sendRigLed(m, val) {
   const out = m.device ? midiService.getOutputs().find(o => o.name === m.device) : null
@@ -545,7 +550,7 @@ function rigLeds(off = false) {
   }
 }
 watch(() => [ledBlink.value, mappingStore.midiMappings, ...s.apps.map(a => `${a.playing}/${a.queued}/${a.muted}/${a.solo}/${a.filled.join('')}`)], () => rigLeds(), { deep: true })
-onUnmounted(() => { clearInterval(blinkTimer); ledSent.clear(); rigLeds(true) })
+onUnmounted(() => { stopBlink(); ledSent.clear(); rigLeds(true) })
 
 // ── Controller templates (rig-template.ts): a controller's rig mappings as a JSON file ──
 const saveTplLeds = () => { try { localStorage.setItem(LS_RIG_TPL, JSON.stringify(tplLeds)) } catch {} }

@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles, Star, ListMusic } from 'lucide-vue-next'
-import { getTransport, getDraw, start as toneStart } from 'tone'
+import { getTransport, start as toneStart } from 'tone'
+import { drawAt } from '@/lib/ui-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -513,7 +514,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
         _cpStopSteps = 0
         if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
         state.isPlaying = false
-        getDraw().schedule(() => { store.isPlaying = false }, time)
+        drawAt(() => { store.isPlaying = false }, time)
         return
       }
 
@@ -534,7 +535,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
         state.stepPointer = 0
         state.tickCounter = 0
         state.arpPatternStates = new Map()
-        getDraw().schedule(() => { cuedSlotIdx.value = null }, time)
+        drawAt(() => { cuedSlotIdx.value = null }, time)
       }
 
       // ── Audio capture sync with pre-roll & auto-stop ─────────────────
@@ -570,7 +571,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
           if (_captureBarsRemaining <= 0) {
             _captureRecording = false
             captureRecording.value = false
-            getDraw().schedule(() => {
+            drawAt(() => {
               window.dispatchEvent(new CustomEvent('capture-stop-rec'))
             }, time)
           }
@@ -589,7 +590,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       if (state.chainSlotIndices && store.drumFollow) cueNextSection(state)
 
       if (state.tickCounter === 0) {
-        getDraw().schedule(() => {
+        drawAt(() => {
           store.playingChordName = step?.active && step.notes?.length ? step.chordName : ''
           store.playingChordDuration = step?.active && step.notes?.length ? step.duration : ''
           // its length (ms, bars of 4/4: 96 ticks a beat) and a counter per step — the Rig device's progress bar
@@ -733,7 +734,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
         const nextPointer = state.stepPointer + 1
         if (nextPointer >= activeCount) {
           if (!state.loop) {
-            getDraw().schedule(() => { store.isPlaying = false }, time)
+            drawAt(() => { store.isPlaying = false }, time)
           }
           state.stepPointer = 0
         } else {

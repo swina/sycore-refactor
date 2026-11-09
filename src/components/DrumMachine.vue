@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
-import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
+import { getTransport, start as toneStart, now as toneNow } from 'tone'
+import { drawAt } from '@/lib/ui-clock'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { StepScheduler, createWorkerTicker, VoiceLedger } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
@@ -529,7 +530,7 @@ function _scheduleCallback(time) {
   if (_rigStopSteps && songStep % _rigStopSteps === 0) {
     _rigStopSteps = 0
     _pendingStop = false
-    getDraw().schedule(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
+    drawAt(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
     return
   }
   if (_rigSeqSteps && _pendingSequence !== null && !chainEnabled.value && songStep % _rigSeqSteps === 0) {
@@ -538,7 +539,7 @@ function _scheduleCallback(time) {
     _pendingSequence = null
     playStateRef.current = buildPlayState()
     state = playStateRef.current
-    getDraw().schedule(() => { pendingSequence.value = null }, time)
+    drawAt(() => { pendingSequence.value = null }, time)
   }
   // ── Rig: a part (drums / bassline) on, off or switched, on its sync point ──
   if (_partPending.length) {
@@ -546,9 +547,9 @@ function _scheduleCallback(time) {
     if (due.length) {
       _partPending = _partPending.filter(p => !due.includes(p))
       for (const p of due) _applyPart(p)
-      getDraw().schedule(_reportParts, time)
+      drawAt(_reportParts, time)
       if (!_drumsOn && !_bassOn) {
-        getDraw().schedule(() => { drumStore.isPlaying = false }, time)
+        drawAt(() => { drumStore.isPlaying = false }, time)
         return
       }
       playStateRef.current = buildPlayState()
@@ -560,7 +561,7 @@ function _scheduleCallback(time) {
   if (globalStep === 0) {
     if (_pendingStop) {
       _pendingStop = false
-      getDraw().schedule(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
+      drawAt(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
       return
     }
     if (chainEnabled.value) {
@@ -576,24 +577,24 @@ function _scheduleCallback(time) {
         _pendingSequence = null
         playStateRef.current = buildPlayState()
         state = playStateRef.current
-        getDraw().schedule(() => { pendingSequence.value = null; chainSlotRef.value = _chainSlotIdx }, time)
+        drawAt(() => { pendingSequence.value = null; chainSlotRef.value = _chainSlotIdx }, time)
       }
     } else if (_pendingSequence !== null && !_rigSeqSteps) {
       drumStore.swapSequence(_pendingSequence)
       _pendingSequence = null
       playStateRef.current = buildPlayState()
       state = playStateRef.current
-      getDraw().schedule(() => { pendingSequence.value = null }, time)
+      drawAt(() => { pendingSequence.value = null }, time)
     }
     _measureCount++
     if (autofillEnabled.value && _measureCount % autofillEvery.value === 0) {
-      getDraw().schedule(() => { generateFill(); triggerFill() }, time)
+      drawAt(() => { generateFill(); triggerFill() }, time)
     }
     if (_fillAutoStop) {
       _fillAutoStop = false
       playStateRef.current = { ...state, fillActive: false }
       state = playStateRef.current
-      getDraw().schedule(() => { fillActive.value = false }, time)
+      drawAt(() => { fillActive.value = false }, time)
     }
     // REC SYNC: stop first (completed 16 steps), then start if newly armed.
     // Both events are deferred via getDraw so they fire at actual playback
@@ -602,7 +603,7 @@ function _scheduleCallback(time) {
       _recSyncBarsRemaining--
       if (_recSyncBarsRemaining <= 0) {
         _recSyncRecording = false
-        getDraw().schedule(() => {
+        drawAt(() => {
           window.dispatchEvent(new CustomEvent('capture-stop-rec'))
           recSyncActive.value = false
         }, time)
@@ -624,7 +625,7 @@ function _scheduleCallback(time) {
           detail: { background: true, preRoll: actualPreRoll },
         }))
       }, delayMs)
-      getDraw().schedule(() => {
+      drawAt(() => {
         recSyncArmed.value = false
         recSyncActive.value = true
       }, time)
@@ -710,10 +711,10 @@ function _scheduleCallback(time) {
   // Not written to drumStore.currentStep: a store mutation per 16th costs (watchers,
   // Pinia devtools) and nothing reads the step any more — see paintPlayhead().
   // MIDI OUT ONLY: the Drum Machine is just a MIDI note source, no transport display.
-  if (!midiOutOnly.value) getDraw().schedule(() => paintPlayhead(globalStep), time)
+  if (!midiOutOnly.value) drawAt(() => paintPlayhead(globalStep), time)
   // Toolbar bar.beat badge — once per beat, never per 16th.
   const beatPos = beatPosition(_measureCount, globalStep)
-  if (beatPos) getDraw().schedule(() => setDrumPosition(beatPos), time)
+  if (beatPos) drawAt(() => setDrumPosition(beatPos), time)
 
   // ── Bassline voices (on the same step as the drums) ──
   if (state.basslineEnabled && state.basslineTracks && _bassOn) {

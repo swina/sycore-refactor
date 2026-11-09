@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, toRef } from 'vue'
 import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, FolderOpen, FolderPlus, Layers, Sparkles } from 'lucide-vue-next'
-import { getTransport, getDraw, start as toneStart } from 'tone'
+import { getTransport, start as toneStart } from 'tone'
+import { drawAt } from '@/lib/ui-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useArpStore } from '@/stores/useArpStore'
@@ -1697,7 +1698,7 @@ watch(isPlaying, (playing) => {
           })
         }
 
-        getDraw().schedule(() => {
+        drawAt(() => {
           currentStep.value = stepIdx
           playStateRef.current.currentStep = stepIdx
           followChainPlayback(stepIdx)
