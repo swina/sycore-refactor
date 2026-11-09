@@ -55,6 +55,18 @@ class ExternalGrid {
     return Math.max(0, Math.floor(s / 16) * 16)
   }
 
+  /** The first sync point (song sixteenth, multiple of `steps`: 4 = beat, 16 = bar) at or after
+   *  time `t` — or the one just passed, when `t` is within `graceMs` after it (a press a few ms
+   *  late on the beat starts on it, not a whole grid later). Null with no tempo yet. */
+  pointAtOrAfter(t: number, steps: number, graceMs = 0): number | null {
+    if (!this.anchor || !(this.bpm > 0) || !(steps > 0)) return null
+    const stepMs = 60000 / (this.bpm * 4)
+    const s = this.anchor.sixteenth + (t - this.anchor.t) / stepMs
+    const prev = Math.floor(s / steps + 1e-6) * steps
+    if ((s - prev) * stepMs <= graceMs) return Math.max(0, prev)
+    return prev + steps
+  }
+
   /** The first bar line (song sixteenth, multiple of 16) at or after time `t`. */
   barAtOrAfter(t: number): number | null {
     if (!this.anchor || !(this.bpm > 0)) return null

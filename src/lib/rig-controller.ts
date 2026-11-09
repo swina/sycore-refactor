@@ -72,7 +72,9 @@ const GRID_OPTIONS: { value: GridSync; label: string }[] = [
   { value: '4', label: '4 beats (bar)' },
 ]
 export const TRIGGER_SYNC_OPTIONS: { value: TriggerSync; label: string; hint: string }[] = [
-  ...GRID_OPTIONS.map(o => ({ ...o, hint: o.value === 'off' ? 'Starts at once' : `Starts on the next ${o.label}` })),
+  // ¼ and ½ beat left out: too short a wait to launch a part (they still work as stored values in SIM).
+  ...GRID_OPTIONS.filter(o => o.value !== '1/4' && o.value !== '1/2')
+    .map(o => ({ ...o, hint: o.value === 'off' ? 'Starts at once' : `Starts on the next ${o.label}` })),
   { value: 'auto', label: 'Auto', hint: "From the slot's length, up to 4 beats" },
   { value: 'queue', label: 'Queue', hint: 'Slots pressed while one plays are queued and play in that order' },
   { value: 'tolerant', label: 'Tolerant', hint: 'A press just after the bar line (within 1 beat) starts at once, cutting the beginning' },

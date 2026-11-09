@@ -407,7 +407,11 @@ let _sysSched = null
 let _stopTicker = null
 let _offExtGrid = null
 let _sysStartSixteenth = 0   // Live's song sixteenth of the Drum Machine's step 0
-let _startOnNextBar = false  // this start is a user's press with Start@bar on (see requestPlay)
+let _startSteps = 0         // this start waits for a sync point: 16 = bar (Start@bar), 8/4 = 2/1 beats (Rig pad)
+// Rig Controller pads (Trigger sync): a stop or a sequence switch on the next sync point of Live's song
+// grid (sixteenths: 16 bar, 8/4 two/one beats), instead of the Drum Machine's own bar line.
+let _rigStopSteps = 0
+let _rigSeqSteps = 0
 
 function _startSystemClock() {
   _stopSystemClock()
@@ -420,14 +424,14 @@ function _startSystemClock() {
     // Play): its steps already gone are handed out as late — the pattern advances silently and
     // comes in on the first step still in time, instead of waiting for the next bar.
     let bar = externalGrid.barAtOrBefore(now)
-    // Start@bar (a press of PLAY / its MIDI Learn): from the next bar line, not mid-bar —
-    // unless the press came just after a bar line (a few ms late on the downbeat).
-    if (_startOnNextBar && bar != null) {
-      const tBar = externalGrid.timeOf(bar)
+    // Start@bar (a press of PLAY / its MIDI Learn) or a Rig pad's Trigger sync: from the next
+    // sync point (bar line, or beat), not mid-bar — unless the press came just after one (a few
+    // ms late on the downbeat). Step 0 of the pattern is then that point.
+    if (_startSteps && bar != null) {
       const graceMs = Math.min(80, 15000 / (externalGrid.bpm || bpm) * 0.5)
-      if (tBar == null || now - tBar > graceMs) bar = externalGrid.barAtOrAfter(now) ?? bar
+      bar = externalGrid.pointAtOrAfter(now, _startSteps, graceMs) ?? bar
     }
-    _startOnNextBar = false
+    _startSteps = 0
     const t = bar != null ? externalGrid.timeOf(bar) : null
     if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
   } else if (transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value) {
@@ -460,6 +464,23 @@ function _scheduleCallback(time) {
   // Each track uses its own length for wrapping (per-track polymetry).
   const globalStep = stepCounter % 16
 
+  // ── Rig pad (Trigger sync): stop / switch on the song grid's sync point ──
+  const songStep = _sysStartSixteenth + stepCounter
+  if (_rigStopSteps && songStep % _rigStopSteps === 0) {
+    _rigStopSteps = 0
+    _pendingStop = false
+    getDraw().schedule(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
+    return
+  }
+  if (_rigSeqSteps && _pendingSequence !== null && !chainEnabled.value && songStep % _rigSeqSteps === 0) {
+    _rigSeqSteps = 0
+    drumStore.swapSequence(_pendingSequence)
+    _pendingSequence = null
+    playStateRef.current = buildPlayState()
+    state = playStateRef.current
+    getDraw().schedule(() => { pendingSequence.value = null }, time)
+  }
+
   // ── Bar boundary (step 0): pending sequence swap + fill auto-stop ──
   if (globalStep === 0) {
     if (_pendingStop) {
@@ -482,7 +503,7 @@ function _scheduleCallback(time) {
         state = playStateRef.current
         getDraw().schedule(() => { pendingSequence.value = null; chainSlotRef.value = _chainSlotIdx }, time)
       }
-    } else if (_pendingSequence !== null) {
+    } else if (_pendingSequence !== null && !_rigSeqSteps) {
       drumStore.swapSequence(_pendingSequence)
       _pendingSequence = null
       playStateRef.current = buildPlayState()
@@ -646,7 +667,9 @@ function _scheduleCallback(time) {
 
 watch(() => drumStore.isPlaying, (playing) => {
   if (!playing) {
-    _startOnNextBar = false
+    _startSteps = 0
+    _rigStopSteps = 0
+    _rigSeqSteps = 0
     _stopSystemClock()
     if (repeatEventIdRef !== null) {
       getTransport().clear(repeatEventIdRef)
@@ -781,7 +804,23 @@ function _onMasterVolume(e) {
 function _onMidiFill()         { triggerFill() }
 function _onMidiGenerate()     { generatePattern() }
 // quantize (Control Map, P3): on the next bar even with Sync Retrig off.
-function _onMidiSeqSwitch(e)   { clickSequenceTab(e.detail?.seq, !!e.detail?.quantize) }
+// detail.sync (Rig pad's Trigger sync, sixteenths): 0 = at once, 4/8/16 = next beat / 2 beats / bar of the song grid.
+function _onMidiSeqSwitch(e) {
+  const sync = e.detail?.sync
+  if (typeof sync !== 'number') { clickSequenceTab(e.detail?.seq, !!e.detail?.quantize); return }
+  const seq = e.detail?.seq
+  _rigSeqSteps = 0
+  if (!drumStore.isPlaying || sync <= 0 || !externalGrid.active || seq === drumStore.activeSequence) {
+    // Stopped, at once, or the one already playing: switch now (and drop a queued switch).
+    _pendingSequence = null
+    pendingSequence.value = null
+    if (seq !== drumStore.activeSequence) drumStore.swapSequence(seq)
+    return
+  }
+  _rigSeqSteps = sync
+  _pendingSequence = seq
+  pendingSequence.value = seq
+}
 
 // ── REC SYNC ───────────────────────────────────────────────────────────────────
 function toggleRecSync() {
@@ -1657,21 +1696,26 @@ const endWithFill  = ref(false)
 const pendingStop  = ref(false)
 let   _pendingStop = false
 
-/** A press asking to play (true) or stop (false), with Start@bar / Stop@end. */
-function requestPlay(play) {
+/** A press asking to play (true) or stop (false), with Start@bar / Stop@end — or, from a Rig pad,
+ *  on its Trigger sync (`sync`, sixteenths: 0 = at once, 4/8/16 = next beat / 2 beats / bar). */
+function requestPlay(play, sync) {
+  const rig = typeof sync === 'number'
   if (play) {
-    if (_pendingStop) { _pendingStop = false; pendingStop.value = false; return } // un-queue the stop
+    if (_pendingStop || _rigStopSteps) { _pendingStop = false; _rigStopSteps = 0; pendingStop.value = false; return } // un-queue the stop
     if (drumStore.isPlaying) return
-    _startOnNextBar = startAtBar.value
+    _startSteps = rig ? Math.max(0, sync) : (startAtBar.value ? 16 : 0)
     drumStore.isPlaying = true
     return
   }
-  if (drumStore.isPlaying) handlePlayStop()
+  if (!drumStore.isPlaying) return
+  if (!rig) { handlePlayStop(); return }
+  if (sync > 0 && externalGrid.active) { _rigStopSteps = sync; pendingStop.value = true } else drumStore.isPlaying = false
 }
-// 'dm-play-stop' (MIDI Learn, DECK card): { play: true/false }, or a toggle like the PLAY button.
+// 'dm-play-stop' (MIDI Learn, DECK card): { play: true/false }, or a toggle like the PLAY button;
+// a Rig pad adds { sync } (its Trigger sync).
 function _onPlayStopRequest(e) {
   const play = e.detail?.play
-  if (typeof play === 'boolean') requestPlay(play); else handlePlayStop()
+  if (typeof play === 'boolean') requestPlay(play, e.detail?.sync); else handlePlayStop()
 }
 
 function handlePlayStop() {

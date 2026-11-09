@@ -114,6 +114,64 @@ export function slotEvent(id: LiveAppId, slot: number) {
   return controlActionEvent(action)
 }
 
+/** Trigger sync in LIVE, as sixteenths of Live's song grid: Off = at once, 1 / 2 beats, Bar. */
+export const LIVE_SYNC_STEPS: Record<string, number> = { off: 0, '1': 4, '2': 8, '4': 16 }
+
+/** A track's Trigger sync for the real apps: its sixteenths (other values, SIM only, act as Bar);
+ *  0 with Live stopped (nothing to sync to). */
+export function liveSyncSteps(triggerSync: string, clockRunning: boolean): number {
+  if (!clockRunning) return 0
+  return LIVE_SYNC_STEPS[triggerSync] ?? 16
+}
+
+type RigEvent = { name: string; detail?: Record<string, unknown> }
+
+/**
+ * The commands of a pad press on a real app's slot (Latch, with its Trigger sync `sync`):
+ *  - the slot playing → stop the app on the sync point;
+ *  - another slot while it plays → switch on the sync point (the Sequencer: at the end of its pattern);
+ *  - stopped → select the slot, then start on the sync point.
+ */
+export function padEvents(id: LiveAppId, slot: number, playing: number | null, sync: number): RigEvent[] {
+  if (playing === slot) {
+    if (id === 'chord') return [{ name: 'cp-stop', detail: { sync } }]
+    if (id === 'drum') return [{ name: 'dm-play-stop', detail: { play: false, sync } }]
+    return [{ name: 'toggle-sequencer2', detail: { play: false, sync } }]
+  }
+  const select: RigEvent =
+    id === 'chord' ? { name: 'cp-slot-cue', detail: { idx: slot, sync } }
+    : id === 'drum' ? { name: 'dm-seq-switch', detail: { seq: LETTERS[slot], quantize: true, sync } }
+    : { name: 'seq-bank-cue', detail: { idx: slot } }
+  if (playing !== null) return [select]
+  const start: RigEvent =
+    id === 'chord' ? { name: 'cp-start', detail: { sync } }
+    : id === 'drum' ? { name: 'dm-play-stop', detail: { play: true, sync } }
+    : { name: 'toggle-sequencer2', detail: { play: true, sync } }
+  return [select, start]
+}
+
+/** Slots armed with Live stopped (following Live): each app starts from its armed slot on Live's
+ *  Start. A second press of the armed pad disarms it. */
+export const rigArmed = reactive({ chord: null, drum: null, seq: null } as Record<LiveAppId, number | null>)
+
+/** The armed slot after a press on `slot`: the same pad disarms, another pad arms that slot. */
+export const armPress = (armed: number | null, slot: number): number | null => (armed === slot ? null : slot)
+
+/** The commands that stop a real app at once (Live's Stop). */
+export function stopEvents(id: LiveAppId): RigEvent[] {
+  if (id === 'chord') return [{ name: 'cp-stop' }]
+  if (id === 'drum') return [{ name: 'dm-play-stop', detail: { play: false, sync: 0 } }]
+  return [{ name: 'toggle-sequencer2', detail: { play: false, sync: 0 } }]
+}
+
+/** What a pad press does, for the panel's display. */
+export function padWhen(id: LiveAppId, playing: number | null, slot: number, sync: number): string {
+  const at = sync === 0 ? 'now' : sync === 16 ? 'on the next bar' : `on the next ${sync / 4 === 1 ? 'beat' : '2 beats'}`
+  if (playing === slot) return `stops ${at}`
+  if (playing === null) return `starts ${at}`
+  return id === 'seq' ? 'at the end of its pattern' : at
+}
+
 export function dispatchRig(ev: { name: string; detail?: Record<string, unknown> }): void {
   window.dispatchEvent(new CustomEvent(ev.name, ev.detail ? { detail: ev.detail } : undefined))
 }

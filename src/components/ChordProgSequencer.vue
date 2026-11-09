@@ -379,13 +379,19 @@ function _startSystemClock(tickCb, alignToBar) {
   let bpm = arpStore.arpBpm || 120
   _sysStartSixteenth = 0
   if (externalGrid.active && externalGrid.anchor) {
-    // The bar Live is playing now; ticks already gone pass silently.
-    const bar = externalGrid.barAtOrBefore(now)
+    // The bar Live is playing now; ticks already gone pass silently. A Rig pad's start
+    // (Trigger sync) waits for the next sync point instead (bar line or beat).
+    let bar = externalGrid.barAtOrBefore(now)
+    if (_cpStartSteps && bar != null) {
+      const graceMs = Math.min(80, 15000 / (externalGrid.bpm || bpm) * 0.5)
+      bar = externalGrid.pointAtOrAfter(now, _cpStartSteps, graceMs) ?? bar
+    }
     const t = bar != null ? externalGrid.timeOf(bar) : null
     if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
   } else if (alignToBar) {
     startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
   }
+  _cpStartSteps = 0
   _sysSched = new StepScheduler((_step, t, late) => {
     _sysTickMs = t
     _sysSilent = late
@@ -453,6 +459,9 @@ watch(() => store.isPlaying, (playing) => {
   if (!playing) {
     _stopSystemClock()
     _cpCueSlot = null
+    _cpCueSteps = 0
+    _cpStopSteps = 0
+    _cpStartSteps = 0
     cuedSlotIdx.value = null
     if (repeatEventIdRef.value !== null) {
       getTransport().clear(repeatEventIdRef.value)
@@ -492,11 +501,25 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       if (!state.isPlaying || _stopPending) return
 
       _transportTicks++
+      // Position on Live's song grid (24 ticks per sixteenth), for a Rig pad's Trigger sync.
+      const songTick = _sysStartSixteenth * 24 + (_transportTicks - 1)
 
-      // A cued slot (Control Map) starts on the bar line, from its first chord.
-      if (_cpCueSlot !== null && (_transportTicks - 1) % 384 === 0 && !state.chainSlotIndices) {
+      // A Rig pad's stop: on its sync point; the chords end there.
+      if (_cpStopSteps && songTick % (_cpStopSteps * 24) === 0) {
+        _cpStopSteps = 0
+        if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
+        state.isPlaying = false
+        getDraw().schedule(() => { store.isPlaying = false }, time)
+        return
+      }
+
+      // A cued slot (Control Map) starts on the bar line, from its first chord — a Rig pad's on
+      // its sync point of the song grid.
+      const cueNow = _cpCueSteps ? songTick % (_cpCueSteps * 24) === 0 : (_transportTicks - 1) % 384 === 0
+      if (_cpCueSlot !== null && cueNow && !state.chainSlotIndices) {
         const idx = _cpCueSlot
         _cpCueSlot = null
+        _cpCueSteps = 0
         // The old slot's notes end on the bar line, not where their own note-offs were.
         if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
         handleSlotSelect(idx)
@@ -1178,8 +1201,21 @@ async function handleUpdatePattern(pattern) {
   await store.updateLibraryPattern(pattern)
 }
 
-const _onCpStart = () => { store.isPlaying = true }
-const _onCpStop = () => { store.isPlaying = false }
+// A Rig pad adds { sync } (its Trigger sync, sixteenths): the start waits for that sync point of
+// Live's song grid (0 = at once), the stop lets the chords play up to it.
+const _onCpStart = (e) => {
+  const sync = e?.detail?.sync
+  if (_cpStopSteps) { _cpStopSteps = 0; return } // a queued stop: un-queue it
+  if (store.isPlaying) return
+  _cpStartSteps = typeof sync === 'number' ? Math.max(0, sync) : 0
+  store.isPlaying = true
+}
+const _onCpStop = (e) => {
+  const sync = e?.detail?.sync
+  // Queued only while following Live's grid: on its own clock the Chord Prog stops at once.
+  if (typeof sync === 'number' && sync > 0 && store.isPlaying && externalGrid.active) { _cpStopSteps = sync; return }
+  store.isPlaying = false
+}
 const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
 
 // Control Map (P3, 'cp-slot-cue'): while playing, the slot starts on the next bar line, from its
@@ -1189,10 +1225,15 @@ const cuedSlotIdx = ref(null)
 // Rig Controller (rig-live.ts): the queued slot, mirrored for the pads.
 watch(cuedSlotIdx, v => { rigReports.queued.chord = v })
 let _cpCueSlot = null
+let _cpCueSteps = 0    // Rig pad (Trigger sync): the cue's sync point, sixteenths (1 = next sixteenth, "at once")
+let _cpStopSteps = 0   // Rig pad: a stop queued for that sync point
+let _cpStartSteps = 0  // Rig pad: the next start waits for that sync point
 const _onCpSlotCue = (e) => {
   const idx = e.detail?.idx
   if (idx == null || idx < 0 || idx >= (store.SLOT_COUNT ?? 8)) return
   if (!store.isPlaying || playStateRef.current?.chainSlotIndices) { handleSlotSelect(idx); return }
+  const sync = e.detail?.sync
+  _cpCueSteps = typeof sync === 'number' ? Math.max(1, sync) : 0
   _cpCueSlot = idx === store.activeSlotIndex ? null : idx
   cuedSlotIdx.value = _cpCueSlot
 }

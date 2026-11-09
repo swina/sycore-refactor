@@ -141,3 +141,57 @@ describe('rig-live intensity modes', () => {
     expect(rigVelocityScales(apps({ drum: 0 }), 127, {}, { drum: 'velocity' }).sources).toEqual({ DRUM_MACHINE: 0 })
   })
 })
+
+describe('rig-live Trigger sync (pads in LIVE)', () => {
+  it('maps Trigger sync to sixteenths of the song grid; Live stopped = at once; SIM-only values = bar', async () => {
+    const { liveSyncSteps } = await import('@/lib/rig-live')
+    expect(liveSyncSteps('off', true)).toBe(0)
+    expect(liveSyncSteps('1', true)).toBe(4)
+    expect(liveSyncSteps('2', true)).toBe(8)
+    expect(liveSyncSteps('4', true)).toBe(16)
+    expect(liveSyncSteps('queue', true)).toBe(16)
+    expect(liveSyncSteps('4', false)).toBe(0)
+  })
+
+  it('a pad is Latch: stopped → select and start, other slot → switch, playing slot → stop', async () => {
+    const { padEvents } = await import('@/lib/rig-live')
+    expect(padEvents('drum', 2, null, 16)).toEqual([
+      { name: 'dm-seq-switch', detail: { seq: 'C', quantize: true, sync: 16 } },
+      { name: 'dm-play-stop', detail: { play: true, sync: 16 } },
+    ])
+    expect(padEvents('drum', 2, 0, 4)).toEqual([{ name: 'dm-seq-switch', detail: { seq: 'C', quantize: true, sync: 4 } }])
+    expect(padEvents('drum', 2, 2, 8)).toEqual([{ name: 'dm-play-stop', detail: { play: false, sync: 8 } }])
+    expect(padEvents('chord', 1, null, 16).map(e => e.name)).toEqual(['cp-slot-cue', 'cp-start'])
+    expect(padEvents('chord', 1, 1, 16)).toEqual([{ name: 'cp-stop', detail: { sync: 16 } }])
+    expect(padEvents('seq', 3, null, 4)).toEqual([
+      { name: 'seq-bank-cue', detail: { idx: 3 } },
+      { name: 'toggle-sequencer2', detail: { play: true, sync: 4 } },
+    ])
+    expect(padEvents('seq', 3, 3, 4)).toEqual([{ name: 'toggle-sequencer2', detail: { play: false, sync: 4 } }])
+  })
+
+  it('describes what the press does', async () => {
+    const { padWhen } = await import('@/lib/rig-live')
+    expect(padWhen('drum', null, 0, 16)).toBe('starts on the next bar')
+    expect(padWhen('drum', 0, 0, 4)).toBe('stops on the next beat')
+    expect(padWhen('chord', 0, 1, 8)).toBe('on the next 2 beats')
+    expect(padWhen('seq', 0, 1, 16)).toBe('at the end of its pattern')
+    expect(padWhen('drum', null, 0, 0)).toBe('starts now')
+  })
+})
+
+describe('rig-live arming with Live stopped', () => {
+  it('a press arms the slot, the same pad disarms, another pad moves the arm', async () => {
+    const { armPress } = await import('@/lib/rig-live')
+    expect(armPress(null, 2)).toBe(2)
+    expect(armPress(2, 2)).toBeNull()
+    expect(armPress(2, 5)).toBe(5)
+  })
+
+  it("Live's Stop stops each real app at once", async () => {
+    const { stopEvents } = await import('@/lib/rig-live')
+    expect(stopEvents('chord')).toEqual([{ name: 'cp-stop' }])
+    expect(stopEvents('drum')).toEqual([{ name: 'dm-play-stop', detail: { play: false, sync: 0 } }])
+    expect(stopEvents('seq')).toEqual([{ name: 'toggle-sequencer2', detail: { play: false, sync: 0 } }])
+  })
+})

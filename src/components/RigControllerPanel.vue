@@ -5,6 +5,7 @@
 // SIM: a simulated clock stands in for Ableton Live, nothing is driven.
 // LIVE (rig-live.ts): the Chord, Drum and Seq rows mirror the real apps and the
 // clock is the real one (EXT from Live, or INT); pads send the Control Map's commands.
+import { externalGrid } from '@/core/midi/external-grid'
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
@@ -19,7 +20,7 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig,
+  isLiveApp, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, stopEvents, LIVE_APPS,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -73,9 +74,9 @@ function syncLive() {
     { following: clockStore.source !== 'internal' && !clockStore.fallbackToInternal, playing: clockStore.state === 'playing', bpm: clockStore.bpm, position: clockStore.position },
     { running: transportManager.isRunning.value, bpm: intBpm, ...t })
   for (const a of s.apps) {
-    if (a.id === 'drum') applySnapshot(a, drumSnapshot(drumStore.sequences, drumStore.basslineSequences, drumStore.activeSequence, drumStore.isPlaying, rigReports.queued.drum))
-    else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord))
-    else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq))
+    if (a.id === 'drum') applySnapshot(a, drumSnapshot(drumStore.sequences, drumStore.basslineSequences, drumStore.activeSequence, drumStore.isPlaying, rigReports.queued.drum ?? rigArmed.drum))
+    else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord ?? rigArmed.chord))
+    else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
   }
 }
 // Mute / Solo on the real apps (LIVE): their note-ons are dropped at the MIDI service —
@@ -167,6 +168,25 @@ function velocityReadout(a) {
 let liveRaf = null
 function liveLoop() { syncLive(); liveRaf = requestAnimationFrame(liveLoop) }
 
+/** Following Live (or another external master) as the clock. */
+const followingLive = () => clockStore.source !== 'internal' && !clockStore.fallbackToInternal
+// Live's Start: the armed apps start from their slot (on the Start's downbeat). Live's Stop: the
+// real apps stop at once (Live's grid is gone: no bar left to finish on), armed slots are kept.
+const offLiveGrid = externalGrid.on(e => {
+  if (!live.value) return
+  if (e.type === 'start') {
+    for (const id of LIVE_APPS) {
+      const slot = rigArmed[id]
+      if (slot === null) continue
+      rigArmed[id] = null
+      for (const ev of padEvents(id, slot, null, 0)) dispatchRig(ev)
+    }
+  } else if (e.type === 'stop') {
+    for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
+  }
+})
+onUnmounted(() => { offLiveGrid(); for (const id of LIVE_APPS) rigArmed[id] = null })
+
 // ── Simulated clock (SIM: stands in for Live's MIDI clock) ────────────────
 let timer = null
 function restartTimer() {
@@ -188,6 +208,7 @@ watch(mode, m => {
   localStorage.setItem(LS_MODE, m)
   cancelAnimationFrame(liveRaf)
   Object.assign(s, createRigState())
+  for (const id of LIVE_APPS) rigArmed[id] = null
   restartTimer()
   if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq connected'; liveLoop() }
 }, { immediate: true })
@@ -224,15 +245,26 @@ const doPanic = () => { panic(s); if (live.value) midiStore.panic() }
 const doInt = () => { if (live.value) return notConnected('EXT/INT (use Clock › Source in the transport)'); toggleClockSource(s) }
 
 // ── Actions shared by the three views ─────────────────────────────────────
-const liveWhen = (id) => (!s.clock.running ? 'now' : id === 'seq' ? 'at the end of its pattern' : 'on the next bar')
 function onSlotDown(appId, slot) {
   focusApp.value = appId
   if (!live.value) return pressSlot(s, appId, slot)
   const a = s.apps.find(x => x.id === appId)
   if (!isLiveApp(appId)) return notConnected(a.label)
   if (!a.filled[slot]) { s.display = `${a.label} ${SLOT_LABELS[slot]}: empty slot`; return }
-  dispatchRig(slotEvent(appId, slot))
-  s.display = `${a.label} → ${SLOT_LABELS[slot]} ${liveWhen(appId)}`
+  // Following Live while it is stopped: the pad arms the slot (selected now); the app starts from it
+  // on Live's Start. The armed pad again: disarmed.
+  if (followingLive() && !externalGrid.active && a.playing === null) {
+    rigArmed[appId] = armPress(rigArmed[appId], slot)
+    if (rigArmed[appId] === null) { s.display = `${a.label} ${SLOT_LABELS[slot]}: not armed`; return }
+    dispatchRig(padEvents(appId, slot, null, 0)[0]) // select the slot
+    s.display = `${a.label} ${SLOT_LABELS[slot]} armed: starts on Live's Play`
+    return
+  }
+  // Latch with the track's Trigger sync: the playing slot stops, another switches, a stopped app starts.
+  // The sync point is on Live's grid: with Live stopped (or SY.CORE on its own clock), at once.
+  const sync = liveSyncSteps(a.opts.triggerSync, externalGrid.active)
+  for (const ev of padEvents(appId, slot, a.playing, sync)) dispatchRig(ev)
+  s.display = `${a.label} ${SLOT_LABELS[slot]} ${padWhen(appId, a.playing, slot, sync)}`
 }
 function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
 function onGenerate(appId, mutate = false) {
@@ -794,7 +826,7 @@ const arcPath = v => {
       </label>
       <span v-else class="font-mono text-white">{{ s.clock.bpm.toFixed(1) }} BPM</span>
       <span class="font-mono text-white">{{ s.clock.bar }}.{{ s.clock.beat }}.{{ (s.clock.step % 4) + 1 }}</span>
-      <span v-if="live" class="ml-auto truncate">Pads send the Control Map's commands: slots start on the next bar (Seq: at the end of its pattern). Track options, Bass and Arp: SIM only for now.</span>
+      <span v-if="live" class="ml-auto truncate">Pads: Latch on the track's Trigger sync, on Live's grid. Live stopped: a pad arms its slot, it starts on Live's Play; Live's Stop stops all. Seq switches at the end of its pattern. Bass and Arp: SIM only.</span>
       <span v-else class="ml-auto truncate">The controller only shows SY.CORE's state; each track's options decide how and when its slots start.</span>
     </div>
 

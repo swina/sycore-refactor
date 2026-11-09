@@ -601,6 +601,11 @@ let _sysSched = null
 let _stopTicker = null
 let _offExtGrid = null
 let _sysStartSixteenth = 0
+// Rig Controller pads (Trigger sync, sixteenths: 16 bar, 8/4 two/one beats): the next start waits
+// for that sync point of Live's song grid; a stop lets the pattern play up to it (CLK SYS only).
+let _seqStartSteps = 0
+let _seqStopSteps = 0
+let _sysStep = 0 // the system clock's step index of the step being handed out
 
 function _startSystemClock(callback) {
   _stopSystemClock()
@@ -610,13 +615,20 @@ function _startSystemClock(callback) {
   _sysStartSixteenth = 0
   if (externalGrid.active && externalGrid.anchor) {
     // The bar Live is playing now; steps already gone pass silently (see DrumMachine.vue).
-    const bar = externalGrid.barAtOrBefore(now)
+    // A Rig pad's start waits for its sync point instead (bar line or beat).
+    let bar = externalGrid.barAtOrBefore(now)
+    if (_seqStartSteps && bar != null) {
+      const graceMs = Math.min(80, 15000 / (externalGrid.bpm || bpm) * 0.5)
+      bar = externalGrid.pointAtOrAfter(now, _seqStartSteps, graceMs) ?? bar
+    }
     const t = bar != null ? externalGrid.timeOf(bar) : null
     if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
   } else if (transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value) {
     startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
   }
-  _sysSched = new StepScheduler((_step, t, late) => callback(perfMsToAudioTime(t), t, late), { name: 'SEQ', startToleranceMs: 150 })
+  _seqStartSteps = 0
+  _sysStep = 0
+  _sysSched = new StepScheduler((step, t, late) => { _sysStep = step; callback(perfMsToAudioTime(t), t, late) }, { name: 'SEQ', startToleranceMs: 150 })
   _sysSched.start(startMs, bpm, tempoMultiplier.value?.beatsPerStep ?? 0.25)
   _offExtGrid = externalGrid.on(e => {
     if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)
@@ -1076,8 +1088,22 @@ onMounted(() => {
   // playAll/stopAll), distinct from the legacy 'toggle-sequencer' channel above.
   // No skipBackingTrackSync-style guard needed — nothing but Play All/Stop All
   // dispatches this event, so there's no bidirectional loop to break.
+  // A Rig pad adds { sync } (its Trigger sync, sixteenths): start on / stop at that sync point.
   const handleToggle2 = (e) => {
     const play = e.detail?.play
+    const sync = e.detail?.sync
+    if (typeof sync === 'number') {
+      if (play) {
+        if (_seqStopSteps) { _seqStopSteps = 0; return } // a queued stop: un-queue it
+        if (isPlaying.value) return
+        _seqStartSteps = Math.max(0, sync)
+        isPlaying.value = true
+      } else if (isPlaying.value) {
+        if (sync > 0 && _sysSched && externalGrid.active) _seqStopSteps = sync
+        else isPlaying.value = false
+      }
+      return
+    }
     isPlaying.value = play === undefined ? !isPlaying.value : play
   }
   window.addEventListener('toggle-sequencer2', handleToggle2)
@@ -1470,6 +1496,8 @@ watch(isPlaying, (playing) => {
 
   if (!playing) {
     _stopSystemClock()
+    _seqStartSteps = 0
+    _seqStopSteps = 0
     dynamicMidiTranspose.value = 0
     transportManager.releaseTransport()
     if (repeatEventIdRef.value !== null) {
@@ -1528,6 +1556,21 @@ watch(isPlaying, (playing) => {
       stepCallback = (time, tMs, late = false) => {
         const state = playStateRef.current
         if (!state.isPlaying) return
+        // A Rig pad's stop: on its sync point of the song grid; the notes still sounding end there.
+        if (_seqStopSteps && tMs != null) {
+          const songPos = _sysStartSixteenth + _sysStep * (tempoMultiplier.value?.beatsPerStep ?? 0.25) * 4
+          const off = songPos / _seqStopSteps
+          if (Math.abs(off - Math.round(off)) < 1e-6) {
+            _seqStopSteps = 0
+            for (const v of _seqVoices.cutAt(tMs)) {
+              midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.SEQUENCER2, null, tMs - 1, { workerTimed: true })
+              activeMidiNotes.value.delete(v.key)
+            }
+            state.isPlaying = false
+            setTimeout(() => { isPlaying.value = false }, Math.max(0, tMs - performance.now()))
+            return
+          }
+        }
         const len = state.steps.length
         let stepIdx
         const dir = sequenceDirection.value
