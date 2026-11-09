@@ -235,9 +235,8 @@ describe('rig-live Arp knobs', () => {
     expect(arpOctaveOf(64)).toBe(0)
     expect(arpOctaveOf(127)).toBe(3)
     for (let o = -3; o <= 3; o++) expect(arpOctaveOf(arpOctaveValue(o))).toBe(o)
-    expect(arpRateOf(0)).toBe('1/1')
-    expect(arpRateOf(127)).toBe('1/32')
-    for (const r of RIG_ARP_RATES) expect(arpRateOf(arpRateValue(r))).toBe(r)
-    expect(RIG_ARP_RATES).toContain(arpRateOf(arpRateValue('1/64t')))
+    expect(arpRateOf(0)).toBe('1/1d')
+    expect(arpRateOf(127)).toBe('1/64t')
+    for (const r of RIG_ARP_RATES) expect(arpRateOf(arpRateValue(r))).toBe(r) // every rate of the Arpeggiator's slider
   })
 })

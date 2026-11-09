@@ -18,6 +18,7 @@
  * component locals: they report them into `rigReports`.
  */
 import { reactive } from 'vue'
+import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { controlActionEvent, type ControlAction } from '@/lib/control-map'
 import type { RigAppState, RigState } from '@/lib/rig-controller'
 import { STEPS_PER_BAR, STEPS_PER_BEAT } from '@/lib/rig-controller'
@@ -87,13 +88,14 @@ export function arpSnapshot(enabled: boolean, mode: string): LiveSnapshot {
   return { filled: RIG_ARP_MODES.map(() => true), playing: enabled && i >= 0 ? i : null, queued: null }
 }
 
-/** The Arp row's Rate (its Intensity control): subdivisions, slowest to fastest. */
-export const RIG_ARP_RATES = ['1/1', '1/2', '1/4', '1/8d', '1/4t', '1/8', '1/8t', '1/16', '1/16t', '1/32'] as const
+/** The Arp row's Rate (its Intensity control): the Arpeggiator's own subdivisions, slowest to
+ *  fastest, as its Rate slider — so the two always show the same rate. */
+export const RIG_ARP_RATES = ARP_SUBDIVISIONS
 const clamp7 = (v: number) => Math.max(0, Math.min(127, v))
 /** Arp row Density (0–127) → the Arpeggiator's octave range −3…+3, and back (the middle of its step). */
 export const arpOctaveOf = (v: number): number => Math.round((clamp7(v) / 127) * 6) - 3
 export const arpOctaveValue = (oct: number): number => Math.round(((Math.max(-3, Math.min(3, oct)) + 3) / 6) * 127)
-/** Arp row Intensity (0–127) → a rate of RIG_ARP_RATES, and back (another rate: the nearest slot by name, else the middle). */
+/** Arp row Intensity (0–127) → a rate of RIG_ARP_RATES, and back (the middle of its step). */
 export const arpRateOf = (v: number): string => RIG_ARP_RATES[Math.min(RIG_ARP_RATES.length - 1, Math.floor((clamp7(v) / 128) * RIG_ARP_RATES.length))]
 export function arpRateValue(rate: string): number {
   const i = (RIG_ARP_RATES as readonly string[]).indexOf(rate)
