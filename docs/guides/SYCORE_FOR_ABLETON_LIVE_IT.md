@@ -114,6 +114,7 @@ I device hanno lo stile di SY.CORE e ti dicono a colpo d'occhio cosa succede: il
 - Ableton Live con Max for Live (Suite, o Standard con Max for Live).
 - Un browser con Web MIDI (Chrome o Edge).
 - Il **Launchpad** usato dal Rig non va impostato come Control Surface di Live, altrimenti Live lancia le sue clip insieme a SY.CORE.
+- **Dal vivo usa la Session View**: in Arrangement View il Play di Live riproduce anche le clip già registrate lì, sopra a SY.CORE. L'Arrangement serve per registrare.
 - La griglia di sync conta battute in 4/4.
 - La prima nota dopo il Play può arrivare con qualche decina di ms di ritardo: un **Count-In di 1 battuta** in Live lo evita.
 

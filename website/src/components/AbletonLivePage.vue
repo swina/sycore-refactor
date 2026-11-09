@@ -60,7 +60,7 @@ const demo = [
   'Change chords on the bar, then launch a Fill.',
   'Pull Density down for the break, open it again for the drop.',
   'GEN a new progression in Cm and play it straight away.',
-  'Stop Live: everything stops. Arrangement View holds it all, as ordinary MIDI clips.',
+  'Stop Live: everything stops. Recording? Arrangement View holds it all, as ordinary MIDI clips.',
 ]
 </script>
 
@@ -255,6 +255,7 @@ const demo = [
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Ableton Live with Max for Live (Suite, or Standard + Max for Live)</li>
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Chrome or Edge (Web MIDI)</li>
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Optional: a Launchpad Mini for Rig mode, any controller for Density and Intensity</li>
+            <li class="flex gap-2 text-neutral-500"><Zap class="mt-0.5 h-4 w-4 shrink-0" /> Perform in Session View, record in Arrangement View (its clips play along on Play)</li>
             <li class="flex gap-2 text-neutral-500"><Zap class="mt-0.5 h-4 w-4 shrink-0" /> Sync grid in 4/4 · use a 1-bar Count-In when recording</li>
           </ul>
         </div>

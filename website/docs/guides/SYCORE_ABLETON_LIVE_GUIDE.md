@@ -99,6 +99,7 @@ The receivers play SY.CORE's MIDI only: they ignore their track's own input. The
 | **Arp tracks** | Chords, Post FX | Auto | arpeggiator + instrument |
 
 - The "SYC" tracks only receive. The tracks that play (and record) take their MIDI from them, **Post FX**, that is after the receiver.
+- **To play live, use Session View.** Live's Play in Arrangement View also plays the clips already in the arrangement, on top of what SY.CORE sends. In Session View, with no clip launched on those tracks, you hear SY.CORE only. Keep Arrangement View for recording.
 - **To record**, arm the playing tracks and record in **Arrangement View**. Use a **1-bar Count-In**: the first note after Play can arrive a few tens of ms late, and the count-in covers it.
 - What you record is an ordinary MIDI clip, which you can edit, quantize, consolidate or reuse.
 - An arp track records the chords it receives, and its arpeggiator plays them back. That's normal: the arpeggio is made when the clip plays.
@@ -356,6 +357,7 @@ Unknown controls and out-of-range values are skipped and reported after the impo
 | Controller notes reach the Drum Rack | Set the "SYC" tracks to **MIDI From = No Input**. |
 | Launchpad pads record clips in Live | Remove the Launchpad as Control Surface in Live (see [section 10](#10-the-launchpad-in-rig-mode)). |
 | A pad doesn't start the app | Read the display: an empty slot, or the app armed for Live's Play. |
+| Notes doubled, or parts you didn't launch | Clips already in the Arrangement play along with SY.CORE: play live in **Session View** (Arrangement for recording only), or delete the old takes. |
 | Timing drifts | Test on a production build rather than a development server; dev tools slow the page down. |
 
 ---

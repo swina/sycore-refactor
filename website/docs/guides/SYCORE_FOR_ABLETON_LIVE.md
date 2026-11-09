@@ -114,6 +114,7 @@ The devices share SY.CORE's look and show what's going on at a glance: the statu
 - Ableton Live with Max for Live (Suite, or Standard with Max for Live).
 - A browser with Web MIDI (Chrome or Edge).
 - The **Launchpad** used by the Rig must not be set as a Live Control Surface, or Live will launch its own clips alongside SY.CORE.
+- **Play live in Session View**: in Arrangement View, Live's Play also plays the clips already recorded there, on top of SY.CORE. Arrangement is for recording.
 - The sync grid counts bars in 4/4.
 - The first note after Play may arrive a few tens of ms late: a **1-bar Count-In** in Live avoids it.
 
