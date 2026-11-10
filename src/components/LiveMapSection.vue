@@ -72,7 +72,7 @@ const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.na
                 title="The track whose instrument the encoders drive · right-click: MIDI Learn a knob that picks the track"
                 @contextmenu="learnMenu($event, MAP_TRACK_KNOB, 'Map Track (knob)')">
           <option value="follow">Follow selected track</option>
-          <option v-for="t in map.tracks" :key="t.index" :value="String(t.index)">{{ t.name }}</option>
+          <option v-for="t in map.instrumentTracks" :key="t.index" :value="String(t.index)">{{ t.name }} · {{ t.instrument }}</option>
         </select>
         <button :class="[btn, 'border-white/10 text-neutral-300', learnedRing('map_track_next')]" title="Next track · right-click: MIDI Learn"
                 @click="map.trackStep(1)" @contextmenu="learnMenu($event, 'map_track_next', 'Map Track ▶')">▶</button>

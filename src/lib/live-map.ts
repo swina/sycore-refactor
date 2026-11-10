@@ -61,14 +61,22 @@ export const MAP_VARIATION_BUTTONS = 8
 /** The knob that picks the track by position. */
 export const MAP_TRACK_KNOB = 'map_track'
 
-/** The track a step lands on (no wrap), from the current one (-1 = none: the first / last). */
-export function stepTrack(current: number, step: 1 | -1, count: number): number {
-  if (count <= 0) return -1
-  if (current < 0) return step > 0 ? 0 : count - 1
-  return Math.max(0, Math.min(count - 1, current + step))
+/**
+ * The track a step lands on, among `tracks` (the indexes of the tracks with an instrument, in order; no
+ * wrap). From a track not in the list (a group, the control track) the next / previous one after / before
+ * it; from none (-1) the first / last. -1 = no track to go to.
+ */
+export function stepTrack(tracks: readonly number[], current: number, step: 1 | -1): number {
+  if (!tracks.length) return -1
+  const at = tracks.indexOf(current)
+  if (at >= 0) return tracks[Math.max(0, Math.min(tracks.length - 1, at + step))]
+  if (current < 0) return step > 0 ? tracks[0] : tracks[tracks.length - 1]
+  const next = step > 0 ? tracks.find(t => t > current) : [...tracks].reverse().find(t => t < current)
+  return next ?? (step > 0 ? tracks[tracks.length - 1] : tracks[0])
 }
-/** The track of a knob (0–1) across `count` tracks. */
-export const knobTrack = (v: number, count: number): number => (count <= 0 ? -1 : Math.round(Math.max(0, Math.min(1, v)) * (count - 1)))
+/** The track of a knob (0–1) across `tracks` (the indexes of the tracks with an instrument). */
+export const knobTrack = (tracks: readonly number[], v: number): number =>
+  (tracks.length ? tracks[Math.round(Math.max(0, Math.min(1, v)) * (tracks.length - 1))] : -1)
 
 export interface PickupSlot {
   /** the knob drives the parameter (it reached it) */

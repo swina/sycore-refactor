@@ -6,7 +6,7 @@
  * Works whenever the bridge is connected (not only with the Rig Controller open).
  */
 import { defineStore } from 'pinia'
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { linkClient } from '@/stores/useLinkStore'
 import type { LinkMapInfo } from '@/lib/link-client'
@@ -65,14 +65,17 @@ export const useLiveMapStore = defineStore('liveMap', () => {
   function randomize() { linkClient.sendMapRandomize() }
   /** The track in focus now (picked here, or the one the device follows). */
   const currentTrack = () => (typeof target.value === 'number' ? target.value : info.value?.track?.index ?? -1)
-  /** The previous / next track: the target leaves Follow. */
+  /** The tracks with an instrument (the only ones worth pointing the encoders at). */
+  const instrumentTracks = computed(() => tracks.value.filter(t => t.instrument))
+  const instrumentIndexes = () => instrumentTracks.value.map(t => t.index)
+  /** The previous / next track with an instrument: the target leaves Follow. */
   function trackStep(step: 1 | -1) {
-    const i = stepTrack(currentTrack(), step, tracks.value.length)
-    if (i >= 0) setTarget(i)
+    const i = stepTrack(instrumentIndexes(), currentTrack(), step)
+    if (i >= 0 && i !== currentTrack()) setTarget(i)
   }
-  /** The track by a knob's position (sent only when it lands on another one). */
+  /** The track with an instrument at a knob's position (sent only when it lands on another one). */
   function trackKnob(v: number) {
-    const i = knobTrack(v, tracks.value.length)
+    const i = knobTrack(instrumentIndexes(), v)
     if (i >= 0 && i !== currentTrack()) setTarget(i)
   }
   /** Follow Live's selected track on / off (off: stay on the track in focus). */
@@ -97,5 +100,5 @@ export const useLiveMapStore = defineStore('liveMap', () => {
     if (d) move(d.slot, d.value)
   })
 
-  return { info, values, tracks, target, pickup, pick, move, setTarget, variation, randomize, trackStep, toggleFollow }
+  return { info, values, tracks, instrumentTracks, target, pickup, pick, move, setTarget, variation, randomize, trackStep, toggleFollow }
 })

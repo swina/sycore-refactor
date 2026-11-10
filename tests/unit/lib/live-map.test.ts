@@ -24,17 +24,21 @@ describe('live-map', () => {
     expect(parseMapButton('map_track_follow')).toEqual({ kind: 'follow' })
   })
 
-  it('track: steps without wrapping, a knob across the tracks', () => {
-    expect(stepTrack(2, 1, 5)).toBe(3)
-    expect(stepTrack(4, 1, 5)).toBe(4)
-    expect(stepTrack(0, -1, 5)).toBe(0)
-    expect(stepTrack(-1, 1, 5)).toBe(0)
-    expect(stepTrack(-1, -1, 5)).toBe(4)
-    expect(stepTrack(0, 1, 0)).toBe(-1)
-    expect(knobTrack(0, 5)).toBe(0)
-    expect(knobTrack(1, 5)).toBe(4)
-    expect(knobTrack(0.5, 5)).toBe(2)
-    expect(knobTrack(0.5, 0)).toBe(-1)
+  it('track: steps among the tracks with an instrument, without wrapping; a knob across them', () => {
+    const t = [1, 2, 4, 7]                               // 0 = a group, 3 / 5 / 6 = no instrument
+    expect(stepTrack(t, 2, 1)).toBe(4)
+    expect(stepTrack(t, 7, 1)).toBe(7)
+    expect(stepTrack(t, 1, -1)).toBe(1)
+    expect(stepTrack(t, 5, 1)).toBe(7)                   // from a track without one: the next after it
+    expect(stepTrack(t, 5, -1)).toBe(4)
+    expect(stepTrack(t, 0, -1)).toBe(1)
+    expect(stepTrack(t, -1, 1)).toBe(1)
+    expect(stepTrack(t, -1, -1)).toBe(7)
+    expect(stepTrack([], 2, 1)).toBe(-1)
+    expect(knobTrack(t, 0)).toBe(1)
+    expect(knobTrack(t, 1)).toBe(7)
+    expect(knobTrack(t, 0.5)).toBe(4)
+    expect(knobTrack([], 0.5)).toBe(-1)
   })
 
   it('pickup: a knob far from the parameter waits until it reaches or crosses it', () => {
