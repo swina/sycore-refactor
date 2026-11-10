@@ -51,9 +51,12 @@ export type LinkEvent =
 
 /** The Rig Controller's state for the SY.CORE Rig devices (5 rows: Chord Drum Seq Bass Arp). */
 export interface LinkRigState {
-  rows: { filled: number; playing: number; queued: number; muted: boolean; solo: boolean }[]
+  /** gen: Generates done on the row (a change flashes the devices' GEN) */
+  rows: { filled: number; playing: number; queued: number; muted: boolean; solo: boolean; gen?: number }[]
   section: number
   queuedSection: number
+  /** The Drum Machine's Fill is on (the devices' FILL lights). */
+  fill?: boolean
   /** The chord sounding and the next one (labels: '1/1', '1/4'…), or null. */
   chord?: { now: string; dur: string; next: string; nextDur: string; ms: number; bars: number; seq: number } | null
 }

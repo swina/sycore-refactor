@@ -2,6 +2,14 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-11-10
+
+- **SY.CORE Rig: GEN lights on every Generate** — the device's GEN flashes on a Generate from anywhere (Rig panel, a mapped controller, the device itself), not only on its own click: the panel counts the Generates per row (`gen` in the rig state), the bridge passes it on (`rig row … <gen>`), the jsui flashes GEN when it changes. The bridge logs each device click in the Max console (`rig: <action> → SY.CORE`, or `ignored`) and is now 1.1.0. `components/RigControllerPanel.vue`, `lib/link-client.ts`; sycore-ableton `m4l/link` (tests). Branch: `feat/rig-controller-ui`
+
+- **SY.CORE Rig: GEN, FILL and a visible Solo** — the device and its window get a **GEN** column (G in the device: `rig_gen_<app>`, as the panel's Gen) and a **FILL** button under M / S / GEN (`rig_fill`) that blinks while the Drum Machine's Fill plays; a soloed row's S is cyan and the other rows' labels go dim. In SY.CORE the Rig panel gets an **S** button per row (Solo was reachable only from controllers), rows silenced by a Solo are dimmed and the Drum Fill button pulses while the fill plays in LIVE too. `lib/rig-live.ts` (`rigReports.fill`), `components/DrumMachine.vue`, `components/RigControllerPanel.vue`, `lib/link-client.ts` (`fill`); sycore-ableton `m4l/link` (bridge: `rig fill`, GEN/Fill actions accepted; tests). Branch: `feat/rig-controller-ui`
+
+- **SY.CORE Rig: new floating window layout** — the OPEN window redrawn on the reference mockup: `SY.CORE RIG` title (SY. white, CORE green, RIG pink), NOW / NEXT chord line aligned with the pads and the progress bar under it, row labels on the left, pads A–H with filled slots in dark amber and amber letters (the device grid too), M / S set apart on the right, Sections 1–8 at the bottom; window 760 × 390. Clicks follow the new geometry. sycore-ableton `m4l/link/sycore-rig-grid.js`, `make-patch.mjs`; guide section updated. Branch: `feat/rig-controller-ui`
+
 ## 2026-11-09
 
 - **Rig Controller (LIVE): Play starts only the armed slots** — with no Chord pad armed, Live's Play still started the last progression (Chord Prog in *Sync Apps to Transport*); the same for the Drum Machine and the Sequencer. With the Rig Controller in LIVE, `playAll` now leaves those three to the Rig, which starts its armed slots (`rigTransport.onPlayAll`, also on SY.CORE's own Play); the rest of the sync list as before, and with the panel closed nothing changes. `lib/rig-live.ts` (`rigTransport`), `composables/useGlobalTransportControls.js`, `components/RigControllerPanel.vue`; guide section 7; tests: `tests/unit/composables/useGlobalTransportControls.rig.test.ts`. Branch: `feat/rig-controller-ui`

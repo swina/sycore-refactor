@@ -365,10 +365,13 @@ function selectSlot(id, slot) {
 /** The rows whose GEN is connected in LIVE. */
 const GEN_APPS = ['drum', 'chord', 'seq', 'bass']
 function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
+// Generates done per row (any source: panel, controller, Rig device): the devices flash GEN on each.
+const genCount = reactive({})
 function onGenerate(appId, mutate = false) {
   focusApp.value = appId
-  if (!live.value) return generate(s, appId, mutate || s.shift)
+  if (!live.value) { genCount[appId] = (genCount[appId] ?? 0) + 1; return generate(s, appId, mutate || s.shift) }
   if (!GEN_APPS.includes(appId) || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
+  genCount[appId] = (genCount[appId] ?? 0) + 1
   if (appId === 'bass') {
     // A new bassline in the Drum Machine's active sequence, on the Chord Prog's key when it has an exact one.
     const mode = chordStore.keyMode
@@ -446,6 +449,7 @@ function releaseAll() { s.latch = false; s.display = 'Note Latch: all notes rele
 function toggleShift() { s.shift = !s.shift }
 function toggleGenMode() { s.generateMode = s.generateMode === 'ai' ? 'builtin' : 'ai'; s.display = `Generate: ${s.generateMode === 'ai' ? 'AI' : 'built-in'}` }
 const focused = computed(() => s.apps.find(a => a.id === focusApp.value))
+const anySolo = computed(() => s.apps.some(a => a.solo))
 
 /** Cycle the focused track's Trigger sync (Launchpad top button "Sync"). */
 function cycleSync() {
@@ -486,10 +490,11 @@ onUnmounted(() => window.removeEventListener('rig-action', onRigAction))
 const rigLinkState = () => ({
   rows: s.apps.map(a => ({
     filled: a.filled.reduce((m, f, i) => (f ? m | (1 << i) : m), 0),
-    playing: a.playing ?? -1, queued: a.queued ?? -1, muted: !!a.muted, solo: !!a.solo,
+    playing: a.playing ?? -1, queued: a.queued ?? -1, muted: !!a.muted, solo: !!a.solo, gen: genCount[a.id] ?? 0,
   })),
   section: s.section ?? -1,
   queuedSection: s.queuedSection ?? -1,
+  fill: live.value ? rigReports.fill : s.fill,
   chord: chordStore.isPlaying ? rigChord(
     { name: chordStore.playingChordName, duration: chordStore.playingChordDuration, ms: chordStore.playingChordMs, bars: chordStore.playingChordBars, seq: chordStore.playingChordSeq },
     chordStore.nextChord,
@@ -1261,7 +1266,7 @@ const arcPath = v => {
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">Slot grid (A–H)</h3>
             <div class="space-y-1.5">
-              <div v-for="a in s.apps" :key="a.id" class="flex items-center gap-1.5" :class="a.muted || (live && !isLiveRow(a.id)) ? 'opacity-40' : ''"
+              <div v-for="a in s.apps" :key="a.id" class="flex items-center gap-1.5" :class="a.muted || (anySolo && !a.solo) || (live && !isLiveRow(a.id)) ? 'opacity-40' : ''"
                    :title="live && !isLiveRow(a.id) ? `${a.label}: not connected yet (SIM only)` : ''">
                 <button class="w-16 text-left leading-tight" :title="'Track options: ' + rowBadge(a)" @click="focusApp = a.id">
                   <span class="block text-[11px] font-bold" :class="focusApp === a.id ? 'text-amber-300' : 'text-neutral-300'">{{ a.label }}</span>
@@ -1281,9 +1286,12 @@ const arcPath = v => {
                 </button>
                 <button :class="[btn, a.muted ? 'bg-red-600 border-red-400 text-white' : btnIdle, 'ml-1', isRigApp(a.id) ? learnedRing(`rig_mute_${a.id}`) : '']" @click="toggleMute(s, a.id)"
                         @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_mute_${a.id}`, `${a.label} Mute`)">M</button>
+                <button :class="[btn, a.solo ? 'bg-sky-500 border-sky-300 text-black' : btnIdle, isRigApp(a.id) ? learnedRing(`rig_solo_${a.id}`) : '']" @click="toggleSolo(s, a.id)"
+                        :title="`${a.label} Solo: only the soloed row plays${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
+                        @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_solo_${a.id}`, `${a.label} Solo`)">S</button>
                 <button :class="[btn, btnIdle, isRigApp(a.id) ? learnedRing(`rig_gen_${a.id}`) : '']" @click="onGenerate(a.id)"
                         @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_gen_${a.id}`, `${a.label} GEN`)">Gen</button>
-                <button :class="[btn, btnIdle, live && a.id !== 'drum' ? 'opacity-40' : '']"
+                <button :class="[btn, a.id === 'drum' && (live ? rigReports.fill : s.fill) ? 'bg-amber-400/60 border-amber-300 text-white animate-pulse' : btnIdle, live && a.id !== 'drum' ? 'opacity-40' : '']"
                         :title="a.id === 'drum' ? 'Fill (on the next bar)' : live ? 'Fill: Drum Machine only' : 'Fill'"
                         @contextmenu="learnMenu($event, 'rig_fill', 'Fill')"
                         @click="onRowFill(a.id)">Fill</button>
@@ -1358,7 +1366,7 @@ const arcPath = v => {
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Performance</h3>
             <div class="grid grid-cols-2 gap-1.5">
-              <button :class="[btn, s.fill ? 'bg-amber-400/60 border-amber-300 text-white animate-pulse' : btnIdle]" @click="onFill">Fill</button>
+              <button :class="[btn, (live ? rigReports.fill : s.fill) ? 'bg-amber-400/60 border-amber-300 text-white animate-pulse' : btnIdle]" @click="onFill">Fill</button>
               <button :class="[btn, s.repeater ? btnOn : btnIdle]" @pointerdown="repeaterOn" @pointerup="repeaterOff" @pointerleave="repeaterOff">Repeat (hold)</button>
               <button :class="[btn, s.latch ? btnOn : btnIdle]" @click="toggleLatch">Latch</button>
               <button :class="[btn, btnIdle]" @click="releaseAll">Rel all</button>

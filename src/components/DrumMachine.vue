@@ -198,6 +198,7 @@ watch(pendingSequence, v => { rigReports.queued.drum = v ? 'ABCDEFGH'.indexOf(v)
 
 // Fill
 const fillActive    = ref(false)
+watch(fillActive, v => { rigReports.fill = v })
 let _fillAutoStop   = false
 const fillSaveFrom  = ref(1)
 const fillSaveTo    = ref(16)
@@ -1091,6 +1092,7 @@ watch(() => drumStore.systemClock, () => {
 
 onUnmounted(() => {
   rigReports.queued.drum = null
+  rigReports.fill = false
   _stopSystemClock()
   if (drumStore.isPlaying) drumStore.isPlaying = false
   if (repeatEventIdRef !== null) {

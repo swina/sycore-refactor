@@ -54,6 +54,8 @@ const LETTERS = 'ABCDEFGH'
 export const rigReports = reactive({
   queued: { chord: null, drum: null, seq: null, bass: null } as Record<SlotRowId, number | null>,
   seqPlaying: false,
+  /** The Drum Machine's Fill is on (triggered, until its bar ends): lit on the Rig and its devices. */
+  fill: false,
 })
 
 export interface LiveSnapshot {
