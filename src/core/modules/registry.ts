@@ -59,6 +59,7 @@ export const moduleRegistry: ModuleManifest[] = [
   { id: 'tracks-player', label: 'Tracks Player', icon: Music, category: 'performance', bg: '/backing-tracks.jpg' },
   { id: 'instrument-cockpit', label: 'DECK', icon: Sparkles, category: 'performance', bg: '/bg-performance.png' },
   { id: 'rig-controller', label: 'Rig Controller', icon: Grid3X3, category: 'performance', bg: '/live-performance-2.png', badge: 'Prototype' },
+  { id: 'live-map', label: 'Live Map', icon: SlidersHorizontal, category: 'performance', bg: '/live-performance-2.png', badge: 'Ableton Live' },
 
   // ── Toolbar/footer-only utilities (no launcher tile) ────────────────────
   { id: 'types', label: 'Sound Types', icon: Layers, category: 'sound-design', showOnLauncher: false },

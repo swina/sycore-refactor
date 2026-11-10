@@ -2,7 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { rigDensity } from '@/lib/rig-density'
 import { parseRigAction, isContinuousRigAction } from '@/lib/rig-actions'
-import { parseMapSlot, parseMapButton } from '@/lib/live-map'
+import { parseMapSlot, parseMapButton, MAP_TRACK_KNOB } from '@/lib/live-map'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -154,6 +154,10 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   const mapSlot = parseMapSlot(fieldName)
   if (mapSlot !== null) {
     window.dispatchEvent(new CustomEvent('live-map-slot', { detail: { slot: mapSlot, value: val / 127 } }))
+    return
+  }
+  if (fieldName === MAP_TRACK_KNOB) {
+    window.dispatchEvent(new CustomEvent('live-map-track', { detail: { value: val / 127 } }))
     return
   }
   const mapButton = parseMapButton(fieldName)

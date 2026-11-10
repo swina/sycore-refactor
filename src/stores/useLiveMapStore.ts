@@ -10,7 +10,7 @@ import { ref, reactive, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { linkClient } from '@/stores/useLinkStore'
 import type { LinkMapInfo } from '@/lib/link-client'
-import { MAP_SLOTS, pickupSlot, pickupMove, pickupFeedback, type PickupSlot, type MapButton } from '@/lib/live-map'
+import { MAP_SLOTS, pickupSlot, pickupMove, pickupFeedback, stepTrack, knobTrack, type PickupSlot, type MapButton } from '@/lib/live-map'
 
 const LS_PICKUP = 'S1_LIVE_MAP_PICKUP'
 
@@ -63,10 +63,33 @@ export const useLiveMapStore = defineStore('liveMap', () => {
   /** Recall a Macro Variation (index, next, prev) / randomize the Macros of the Rack in focus. */
   function variation(v: number | 'next' | 'prev') { linkClient.sendMapVariation(v) }
   function randomize() { linkClient.sendMapRandomize() }
+  /** The track in focus now (picked here, or the one the device follows). */
+  const currentTrack = () => (typeof target.value === 'number' ? target.value : info.value?.track?.index ?? -1)
+  /** The previous / next track: the target leaves Follow. */
+  function trackStep(step: 1 | -1) {
+    const i = stepTrack(currentTrack(), step, tracks.value.length)
+    if (i >= 0) setTarget(i)
+  }
+  /** The track by a knob's position (sent only when it lands on another one). */
+  function trackKnob(v: number) {
+    const i = knobTrack(v, tracks.value.length)
+    if (i >= 0 && i !== currentTrack()) setTarget(i)
+  }
+  /** Follow Live's selected track on / off (off: stay on the track in focus). */
+  function toggleFollow() {
+    if (target.value === 'follow') { const i = currentTrack(); if (i >= 0) setTarget(i) }
+    else setTarget('follow')
+  }
   window.addEventListener('live-map-button', (e: Event) => {
     const b = (e as CustomEvent<MapButton>).detail
     if (b?.kind === 'variation') variation(b.v)
     else if (b?.kind === 'randomize') randomize()
+    else if (b?.kind === 'track') trackStep(b.step)
+    else if (b?.kind === 'follow') toggleFollow()
+  })
+  window.addEventListener('live-map-track', (e: Event) => {
+    const d = (e as CustomEvent<{ value: number }>).detail
+    if (d) trackKnob(d.value)
   })
 
   window.addEventListener('live-map-slot', (e: Event) => {
@@ -74,5 +97,5 @@ export const useLiveMapStore = defineStore('liveMap', () => {
     if (d) move(d.slot, d.value)
   })
 
-  return { info, values, tracks, target, pickup, pick, move, setTarget, variation, randomize }
+  return { info, values, tracks, target, pickup, pick, move, setTarget, variation, randomize, trackStep, toggleFollow }
 })

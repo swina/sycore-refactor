@@ -26,6 +26,7 @@ import DeckChordProgSummary from '@/components/DeckChordProgSummary.vue'
 import DeckPlaylistSummary from '@/components/DeckPlaylistSummary.vue'
 import DeckSoloPerformanceSummary from '@/components/DeckSoloPerformanceSummary.vue'
 import DeckFm1Summary from '@/components/DeckFm1Summary.vue'
+import DeckLiveMapSummary from '@/components/DeckLiveMapSummary.vue'
 import VirtualDeviceView from '@/components/VirtualDeviceView.vue'
 import { FM1_OUTPUT, FM1_PANEL_ID, fm1Firmware, fm1InChannels } from '@/lib/fm1-bridge'
 import { fm1Parts } from '@/lib/fm1-firmwares'
@@ -161,6 +162,8 @@ const apps = computed(() =>
 const EXTRA_APPS = [
   { id: "solo-perf", name: "Solo", icon: Star, sourceId: "SOLO_PERFORMANCE", kind: "app" },
   { id: 'playlist', name: 'Playlist', icon: ListMusic, kind: 'playlist' },
+  // SY.CORE Map (P12): encoders → the instrument in focus in Ableton Live
+  { id: 'live-map', name: 'Map', icon: SlidersHorizontal, kind: 'live-map' },
 ]
 
 // ── Selected app — clicking an app icon shows its compact summary in the
@@ -209,6 +212,7 @@ const fm1View = computed(() => selectedApp.value?.kind === 'fm1')
 const selectedAppComponent = computed(() => {
   if (!selectedApp.value) return null
   if (selectedApp.value.kind === 'playlist') return DeckPlaylistSummary
+  if (selectedApp.value.kind === 'live-map') return DeckLiveMapSummary
   if (selectedApp.value.sourceId === MidiSource.DRUM_MACHINE) return DeckDrumMachineSummary
   if (selectedApp.value.sourceId === MidiSource.CHORD_PROG) return DeckChordProgSummary
   if (selectedApp.value.sourceId === "SOLO_PERFORMANCE") return DeckSoloPerformanceSummary

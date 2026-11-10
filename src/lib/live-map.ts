@@ -5,6 +5,9 @@
  *   map_slot_<1–16>   a MIDI Learn parameter (knob / fader, 0–127) → slot 0–15, 0–1
  *   map_var_prev / map_var_next / map_var_<1–8>   recall a Macro Variation of the Rack in focus   button
  *   map_randomize     randomize the Rack's Macros                                               button
+ *   map_track_prev / map_track_next   the previous / next track (the target leaves Follow)        button
+ *   map_track_follow  Follow Live's selected track on / off                                       button
+ *   map_track         the track by position (0–127 across the set's tracks)                      knob / fader
  *
  * Pickup (soft takeover) for absolute knobs: after a track change, or when the parameter moved in
  * Live (mouse, automation), a knob takes over only once it reaches the parameter's value (or crosses
@@ -29,18 +32,38 @@ export const mapSlotCatalog = (): { paramName: string; label: string }[] => [
   { paramName: 'map_var_next', label: 'Map Variation ▶' },
   ...Array.from({ length: MAP_VARIATION_BUTTONS }, (_, i) => ({ paramName: `map_var_${i + 1}`, label: `Map Variation ${i + 1}` })),
   { paramName: 'map_randomize', label: 'Map Randomize Macros' },
+  { paramName: 'map_track_prev', label: 'Map Track ◀' },
+  { paramName: 'map_track_next', label: 'Map Track ▶' },
+  { paramName: 'map_track_follow', label: 'Map Follow selected track' },
+  { paramName: MAP_TRACK_KNOB, label: 'Map Track (knob)' },
 ]
 
-export type MapButton = { kind: 'variation'; v: number | 'next' | 'prev' } | { kind: 'randomize' }
+export type MapButton =
+  | { kind: 'variation'; v: number | 'next' | 'prev' } | { kind: 'randomize' }
+  | { kind: 'track'; step: 1 | -1 } | { kind: 'follow' }
 /** A Map button of a MIDI Learn parameter name, or null. */
 export function parseMapButton(name: string): MapButton | null {
   if (name === 'map_var_next') return { kind: 'variation', v: 'next' }
   if (name === 'map_var_prev') return { kind: 'variation', v: 'prev' }
   if (name === 'map_randomize') return { kind: 'randomize' }
+  if (name === 'map_track_next') return { kind: 'track', step: 1 }
+  if (name === 'map_track_prev') return { kind: 'track', step: -1 }
+  if (name === 'map_track_follow') return { kind: 'follow' }
   const m = /^map_var_([1-8])$/.exec(name)
   return m ? { kind: 'variation', v: Number(m[1]) - 1 } : null
 }
 export const MAP_VARIATION_BUTTONS = 8
+/** The knob that picks the track by position. */
+export const MAP_TRACK_KNOB = 'map_track'
+
+/** The track a step lands on (no wrap), from the current one (-1 = none: the first / last). */
+export function stepTrack(current: number, step: 1 | -1, count: number): number {
+  if (count <= 0) return -1
+  if (current < 0) return step > 0 ? 0 : count - 1
+  return Math.max(0, Math.min(count - 1, current + step))
+}
+/** The track of a knob (0–1) across `count` tracks. */
+export const knobTrack = (v: number, count: number): number => (count <= 0 ? -1 : Math.round(Math.max(0, Math.min(1, v)) * (count - 1)))
 
 export interface PickupSlot {
   /** the knob drives the parameter (it reached it) */

@@ -15,7 +15,6 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { linkClient } from '@/stores/useLinkStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
-import LiveMapSection from '@/components/LiveMapSection.vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -45,9 +44,11 @@ import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
 
 const emit = defineEmits(['close'])
+const uiStore = useUiStore()
 
 const { panelStyle, onDragStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_RIG_CONTROLLER',
@@ -1308,8 +1309,12 @@ const arcPath = v => {
             </div>
           </section>
 
-          <!-- SY.CORE Map (P12): encoders → the instrument in focus in Live -->
-          <LiveMapSection v-if="live" :learn-menu="learnMenu" :learned-ring="learnedRing" />
+          <!-- SY.CORE Map (P12): encoders → the instrument in focus in Live — its own panel (and the DECK) -->
+          <button v-if="live" class="w-full p-2 rounded-lg bg-white/[0.03] border border-white/10 text-left text-[10px] text-neutral-400 hover:text-white hover:bg-white/[0.06]"
+                  @click="uiStore.openPanel('live-map')">
+            <span class="font-bold uppercase tracking-widest text-neutral-300">Map · Live instruments ↗</span>
+            <span class="ml-2">encoders on the instrument in focus in Live (also in the DECK)</span>
+          </button>
 
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
             <div class="flex items-center justify-between mb-2">

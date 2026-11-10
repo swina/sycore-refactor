@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapSlotParam, parseMapSlot, parseMapButton, mapSlotCatalog, pickupSlot, pickupMove, pickupFeedback, ECHO_MS } from '@/lib/live-map'
+import { mapSlotParam, parseMapSlot, parseMapButton, mapSlotCatalog, stepTrack, knobTrack, pickupSlot, pickupMove, pickupFeedback, ECHO_MS } from '@/lib/live-map'
 
 describe('live-map', () => {
   it('slot parameter names, 1–16', () => {
@@ -8,7 +8,7 @@ describe('live-map', () => {
     expect(parseMapSlot('map_slot_0')).toBeNull()
     expect(parseMapSlot('map_slot_17')).toBeNull()
     expect(parseMapSlot('rig_fill')).toBeNull()
-    expect(mapSlotCatalog()).toHaveLength(16 + 2 + 8 + 1)
+    expect(mapSlotCatalog()).toHaveLength(16 + 2 + 8 + 1 + 4)
   })
 
   it('Map buttons: variations and randomize', () => {
@@ -18,6 +18,21 @@ describe('live-map', () => {
     expect(parseMapButton('map_var_9')).toBeNull()
     expect(parseMapButton('map_randomize')).toEqual({ kind: 'randomize' })
     expect(parseMapButton('map_slot_1')).toBeNull()
+    expect(parseMapButton('map_track_next')).toEqual({ kind: 'track', step: 1 })
+    expect(parseMapButton('map_track_follow')).toEqual({ kind: 'follow' })
+  })
+
+  it('track: steps without wrapping, a knob across the tracks', () => {
+    expect(stepTrack(2, 1, 5)).toBe(3)
+    expect(stepTrack(4, 1, 5)).toBe(4)
+    expect(stepTrack(0, -1, 5)).toBe(0)
+    expect(stepTrack(-1, 1, 5)).toBe(0)
+    expect(stepTrack(-1, -1, 5)).toBe(4)
+    expect(stepTrack(0, 1, 0)).toBe(-1)
+    expect(knobTrack(0, 5)).toBe(0)
+    expect(knobTrack(1, 5)).toBe(4)
+    expect(knobTrack(0.5, 5)).toBe(2)
+    expect(knobTrack(0.5, 0)).toBe(-1)
   })
 
   it('pickup: a knob far from the parameter waits until it reaches or crosses it', () => {

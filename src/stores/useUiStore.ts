@@ -81,6 +81,7 @@ export interface PanelVisibility {
   isAudioDiagnosticsOpen: boolean
   isVirtualDevicePanelOpen: boolean
   isRigControllerOpen: boolean
+  isLiveMapOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -181,6 +182,7 @@ export const useUiStore = defineStore('ui', () => {
   const isAudioDiagnosticsOpen        = ref(false)
   const isVirtualDevicePanelOpen      = ref(false)
   const isRigControllerOpen           = ref(false)
+  const isLiveMapOpen                 = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
@@ -285,6 +287,7 @@ export const useUiStore = defineStore('ui', () => {
     audioDiagnostics:      () => isAudioDiagnosticsOpen.value,
     virtualDevice:         () => isVirtualDevicePanelOpen.value,
     rigController:         () => isRigControllerOpen.value,
+    liveMap:               () => isLiveMapOpen.value,
   }
 
   const openModalKeys: ComputedRef<string[]> = computed(() =>
@@ -345,6 +348,7 @@ export const useUiStore = defineStore('ui', () => {
     audioDiagnostics:      isAudioDiagnosticsOpen,
     virtualDevice:         isVirtualDevicePanelOpen,
     rigController:         isRigControllerOpen,
+    liveMap:               isLiveMapOpen,
   }
 
   function cycleFocusedModal(reverse = false) {
@@ -436,6 +440,7 @@ export const useUiStore = defineStore('ui', () => {
     isAudioDiagnosticsOpen.value = false
     isVirtualDevicePanelOpen.value = false
     isRigControllerOpen.value = false
+    isLiveMapOpen.value = false
     isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -511,6 +516,7 @@ export const useUiStore = defineStore('ui', () => {
     'audio-diagnostics': isAudioDiagnosticsOpen,
     'virtual-device': isVirtualDevicePanelOpen,
     'rig-controller': isRigControllerOpen,
+    'live-map': isLiveMapOpen,
   }
 
   function isPanelOpen(id: string): boolean {
@@ -673,7 +679,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isLiveInputOpen, isMidiControllerDesignerOpen,
-    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen,
+    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
