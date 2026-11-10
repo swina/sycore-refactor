@@ -27,6 +27,7 @@ SY.CORE is a performance environment that runs in the browser and **plays inside
 - a **Chord Prog** with chord progressions, strums and arpeggios;
 - a step **Sequencer** for melodic lines and basses;
 - a **Rig Controller** that drives them from the Launchpad as if they were clips.
+- **SY.CORE Map**, which puts your controller's encoders on the instrument of the track you select in Live: map it once, and it works on every track and every set.
 
 Everything reaches Live on ordinary MIDI tracks through a small Max for Live device, **SY.CORE Link**: no virtual MIDI ports, no routing to set up. The notes are played by your own instruments: your Drum Racks, your synths, your arpeggiators.
 
@@ -64,6 +65,20 @@ There's no new way of working to learn. The Rig Controller behaves like Session 
 | A Macro on a Rack | **Density**, **Intensity** (volume and velocity), Mute and Solo per track, also from a controller through MIDI Learn |
 
 You walk on stage with a progression armed and the drums ready, press Play in Live, and they start together on the first downbeat.
+
+---
+
+## Map your controller once
+
+In Live a knob is mapped to one parameter of one device: a new track, a new set or another synth, and you map it all again. With **SY.CORE Map** — one Max for Live device in the set — encoder *n* always drives **slot *n*** of the instrument in focus:
+
+- **it follows your selection:** select a track in Live and the encoders are on its instrument; or lock them to a track, and step through tracks from the controller;
+- **one table per instrument type:** filter on 1, resonance on 2… on every Drift, Analog or Simpler (factory tables built in);
+- **Racks and Live's presets:** the Rack's configured Macros first, with their names, then the instrument inside for the slots left; recall the Rack's **Macro Variations** or randomize the Macros from pads;
+- **pickup:** change track and turn, no jumps — the knob takes over once it reaches the value;
+- **hands off when you stop:** the mouse and automation keep working on every parameter.
+
+You map the controller once, in SY.CORE, and it stays mapped.
 
 ---
 

@@ -27,6 +27,7 @@ SY.CORE è un ambiente di performance che gira nel browser e **suona dentro il t
 - un **Chord Prog** con progressioni di accordi, strum e arpeggi;
 - un **Sequencer** a step per linee melodiche e bassi;
 - un **Rig Controller** che li comanda dal Launchpad come se fossero clip.
+- **SY.CORE Map**, che mette gli encoder del tuo controller sullo strumento della traccia che selezioni in Live: lo mappi una volta, e funziona su ogni traccia e in ogni set.
 
 Tutto arriva a Live su tracce MIDI normali, attraverso un piccolo device Max for Live, **SY.CORE Link**: niente porte MIDI virtuali e niente routing da configurare. Le note le suonano i tuoi strumenti: i tuoi Drum Rack, i tuoi synth, i tuoi arpeggiatori.
 
@@ -64,6 +65,20 @@ Non devi imparare un nuovo modo di lavorare. Il Rig Controller si comporta come 
 | Un Macro su un Rack | **Density**, **Intensity** (volume e velocity), Mute e Solo per traccia, anche da un controller via MIDI Learn |
 
 Arrivi al concerto con una progressione in attesa e la batteria pronta, premi Play in Live e partono insieme sul primo battere.
+
+---
+
+## Mappi il controller una volta sola
+
+In Live una manopola si mappa su un parametro di un device: una traccia nuova, un set nuovo o un altro synth, e si rimappa tutto. Con **SY.CORE Map** — un device Max for Live nel set — l'encoder *n* comanda sempre lo **slot *n*** dello strumento in primo piano:
+
+- **segue la tua selezione:** selezioni una traccia in Live e gli encoder sono sul suo strumento; oppure li blocchi su una traccia, e scorri le tracce dal controller;
+- **una tabella per tipo di strumento:** filtro sull'1, risonanza sul 2… su ogni Drift, Analog o Simpler (tabelle di fabbrica incluse);
+- **Rack e preset di Live:** prima le Macro configurate del Rack, con i loro nomi, poi lo strumento interno per gli slot rimasti; richiami le **Macro Variations** del Rack o rendi casuali le Macro dai pad;
+- **pickup:** cambi traccia e giri, niente salti — la manopola prende il controllo quando raggiunge il valore;
+- **mani libere quando ti fermi:** il mouse e le automazioni continuano a funzionare su ogni parametro.
+
+Il controller lo mappi una volta, in SY.CORE, e resta mappato.
 
 ---
 

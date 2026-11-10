@@ -1,9 +1,10 @@
 <script setup>
-// /ableton-live — SY.CORE with Ableton Live: SY.CORE Link and the Rig Controller.
+// /ableton-live — SY.CORE with Ableton Live: SY.CORE Link, the Rig Controller and SY.CORE Map.
 import { onMounted } from 'vue'
 import {
   Play, BookOpen, ArrowLeft, Zap, Cable, Clock, Grid3x3, SlidersHorizontal, Sparkles,
   Music, Drum, Timer, CircleDot, Square, KeyRound, Layers, Check, Ban, Globe, ShieldCheck, RefreshCw, Cpu,
+  Crosshair, Shuffle, Hand, Table2,
 } from 'lucide-vue-next'
 
 const props = defineProps({ appUrl: { type: String, required: true } })
@@ -39,6 +40,22 @@ const features = [
   { icon: Sparkles, title: 'GEN', text: 'New drums, chords or sequences into the playing slot. Chords built-in or with AI; the Sequencer follows the chords\' key.' },
   { icon: KeyRound, title: 'Exact key', text: 'Cm, Bb, F#m: move the key and switch major/minor from the Launchpad, then generate in it.' },
   { icon: Grid3x3, title: 'Launchpad Rig mode', text: 'The Launchpad becomes the rig: slots, sections, fill, GEN, key and transport, with LEDs that follow the music.' },
+]
+
+// SY.CORE Map: map a controller once, play every instrument
+const mapCompare = [
+  ['Ctrl+M: a knob on one parameter of one device', 'Encoder n is slot n of the instrument in focus: the same knob, the same job, on every track'],
+  ['A new track, a new set, another synth: map it all again', 'Map your controller once in SY.CORE. Every set, every track, already mapped'],
+  ['A template per controller, per set', 'One table per instrument type: filter on 1, resonance on 2… on every Drift, Analog or Simpler'],
+  ['Turn a knob and the parameter jumps', 'Pickup: the knob takes over only once it reaches the parameter\'s value'],
+]
+const mapFeatures = [
+  { icon: Crosshair, title: 'Follows your selection', text: 'Select a track in Live: the encoders are on its instrument. Lock it to one track, or step through tracks from the controller.' },
+  { icon: Table2, title: 'Tables per instrument', text: 'Factory tables for Drift, Analog and Simpler: the sound-shaping parameters on 16 slots, in the same order every time.' },
+  { icon: Layers, title: 'Racks and Macros', text: 'Live\'s presets: the Rack\'s configured Macros come first, with their names; the instrument inside fills the rest.' },
+  { icon: Shuffle, title: 'Macro Variations', text: 'Recall a Rack\'s variations, step through them or randomize the Macros, from pads or buttons.' },
+  { icon: Hand, title: 'Hands off when you stop', text: 'A slot holds its parameter only while you turn: the mouse and automation keep working.' },
+  { icon: SlidersHorizontal, title: 'Pickup', text: 'Change track and turn: no jumps. The knob catches the value, then drives it.' },
 ]
 
 const notAPlugin = [
@@ -234,6 +251,35 @@ const demo = [
       </div>
     </section>
 
+    <!-- SY.CORE Map -->
+    <section class="mx-auto max-w-6xl px-5 py-20">
+      <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">SY.CORE Map</p>
+      <h2 class="mt-3 max-w-3xl text-3xl font-extrabold md:text-4xl">
+        Map your controller once. <span class="text-synth-neon">Play every instrument.</span>
+      </h2>
+      <p class="mt-4 max-w-3xl text-neutral-400">
+        One Max for Live device in the set, and your encoders follow the instrument of the track you select —
+        Live's own instruments and Racks — with no MIDI mapping to redo, ever.
+      </p>
+      <div class="mt-12 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950">
+        <div class="grid grid-cols-2 border-b border-neutral-800 bg-neutral-900/60 font-mono text-[10px] uppercase tracking-widest">
+          <div class="px-4 py-3 text-neutral-500">In Live you're used to…</div>
+          <div class="px-4 py-3 text-synth-cyan">With SY.CORE Map</div>
+        </div>
+        <div v-for="row in mapCompare" :key="row[0]" class="grid grid-cols-2 border-b border-neutral-800/60 text-sm last:border-b-0">
+          <div class="px-4 py-3 text-neutral-400">{{ row[0] }}</div>
+          <div class="px-4 py-3 text-neutral-100">{{ row[1] }}</div>
+        </div>
+      </div>
+      <div class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div v-for="f in mapFeatures" :key="f.title" class="rounded-xl border border-neutral-800 bg-neutral-950 p-5">
+          <component :is="f.icon" class="h-6 w-6 text-synth-neon" />
+          <h3 class="mt-3 font-mono text-xs font-black uppercase tracking-[0.15em]">{{ f.title }}</h3>
+          <p class="mt-2 text-sm text-neutral-400">{{ f.text }}</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Demo -->
     <section class="mx-auto max-w-6xl px-5 py-20">
       <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">A 60-second set</p>
@@ -255,6 +301,7 @@ const demo = [
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Ableton Live with Max for Live (Suite, or Standard + Max for Live)</li>
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Chrome or Edge (Web MIDI)</li>
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Optional: a Launchpad Mini for Rig mode, any controller for Density and Intensity</li>
+            <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> SY.CORE Map: any controller with knobs or encoders (MIDImix, Launchkey…), enabled in SY.CORE only</li>
             <li class="flex gap-2 text-neutral-500"><Zap class="mt-0.5 h-4 w-4 shrink-0" /> Perform in Session View, record in Arrangement View (its clips play along on Play)</li>
             <li class="flex gap-2 text-neutral-500"><Zap class="mt-0.5 h-4 w-4 shrink-0" /> Sync grid in 4/4 · use a 1-bar Count-In when recording</li>
           </ul>
