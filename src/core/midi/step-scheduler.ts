@@ -236,14 +236,16 @@ export function createWorkerTicker(onTick: () => void, intervalMs = 10): () => v
     const id = setInterval(onTick, intervalMs);
     return () => clearInterval(id);
   }
-  const src = `let id=null;onmessage=e=>{if(e.data==='stop'){clearInterval(id);close();return}id=setInterval(()=>postMessage(0),${intervalMs})}`;
-  const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
-  const worker = new Worker(url);
+  // One Blob URL for every ticker (the interval comes with 'start'): createObjectURL is a synchronous
+  // call to the browser process and took up to ~90 ms on the main thread with MIDI playing.
+  tickerUrl ??= URL.createObjectURL(new Blob([TICKER_SRC], { type: 'text/javascript' }));
+  const worker = new Worker(tickerUrl);
   worker.onmessage = () => onTick();
-  worker.postMessage('start');
+  worker.postMessage(intervalMs);
   return () => {
     try { worker.postMessage('stop'); } catch {}
     worker.terminate();
-    URL.revokeObjectURL(url);
   };
 }
+const TICKER_SRC = `let id=null;onmessage=e=>{if(e.data==='stop'){clearInterval(id);close();return}clearInterval(id);id=setInterval(()=>postMessage(0),+e.data||10)}`;
+let tickerUrl: string | null = null;

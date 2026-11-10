@@ -30,8 +30,16 @@ export function flushUi(): void {
   for (let i = events.length - 1; i >= 0; i--) if (events[i].time <= now) due.push(events.splice(i, 1)[0])
   due.sort((a, b) => a.time - b.time)
   for (const e of due) { try { e.cb() } catch (err) { console.error('[ui-clock]', err) } }
-  if (!events.length && !timeouts.length && stopTicker) { stopTicker(); stopTicker = null }
+  // Stop the Worker only after IDLE_STOP_MS with nothing queued: stopping it as soon as the queue
+  // emptied made the apps' per-step drawAt() start a new Worker (thread + Blob URL) ~8 times a second.
+  if (events.length || timeouts.length) { idleSince = 0; return }
+  if (!stopTicker) return
+  const t = performance.now()
+  if (!idleSince) idleSince = t
+  else if (t - idleSince > IDLE_STOP_MS) { stopTicker(); stopTicker = null; idleSince = 0 }
 }
+const IDLE_STOP_MS = 2000
+let idleSince = 0
 function frame() { raf = 0; flushUi(); if (events.length && hasRaf()) raf = requestAnimationFrame(frame) }
 
 /** As Tone's getDraw().schedule(cb, time) (time: AudioContext seconds), also with the page hidden. */

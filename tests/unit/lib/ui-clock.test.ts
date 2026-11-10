@@ -9,6 +9,8 @@ describe('ui-clock', () => {
     const { drawAt, flushUi, _setUiNow } = await import('@/lib/ui-clock')
     let now = 0
     _setUiNow(() => now)
+    let t = 5000
+    const spy = vi.spyOn(performance, 'now').mockImplementation(() => t)
     const ran: string[] = []
     drawAt(() => ran.push('b'), 2)
     drawAt(() => ran.push('a'), 1)
@@ -17,11 +19,18 @@ describe('ui-clock', () => {
     now = 10 // seconds late: still run
     ticks[0]()
     expect(ran).toEqual(['a', 'b'])
-    expect(ticks.length).toBe(0) // the ticker stops with nothing queued
-    drawAt(() => ran.push('c'), 0)
+    // Nothing queued: the ticker stays for 2 s (a new Worker per step was the cost), then stops.
+    ticks[0]()
     expect(ticks.length).toBe(1)
+    drawAt(() => ran.push('c'), 0)
+    expect(ticks.length).toBe(1) // the same ticker, no new Worker
     flushUi()
     expect(ran).toEqual(['a', 'b', 'c'])
+    ticks[0]()
+    t = 7100
+    ticks[0]()
+    expect(ticks.length).toBe(0)
+    spy.mockRestore()
   })
   it('uiTimeout runs from the worker timer, and cancels', async () => {
     const { uiTimeout } = await import('@/lib/ui-clock')
@@ -36,6 +45,8 @@ describe('ui-clock', () => {
     t = 1030
     ticks[0]()
     expect(ran).toEqual(['x'])
+    t = 3100
+    ticks[0]()
     expect(ticks.length).toBe(0)
     spy.mockRestore()
   })
