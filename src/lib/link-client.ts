@@ -64,8 +64,9 @@ export type LinkMapTables = Record<string, (LinkMapSlot | null)[]>
 export interface LinkMapInfo {
   track: { index: number; name: string } | null
   device: { name: string; cls: string; rack: string | null } | null
-  /** table: the instrument's table · macros: a Rack's Macros · none: nothing to drive */
-  mode: 'table' | 'macros' | 'none'
+  /** table: the instrument's table · macros: a Rack's Macros · mixed: a Rack's configured Macros, then the
+   *  first instrument's table (parameters a Macro holds left out) · none: nothing to drive */
+  mode: 'table' | 'macros' | 'mixed' | 'none'
   slots: ({ param: string; name: string; value: number } | null)[]
 }
 export interface LinkMapParam { name: string; shown: string; min: number; max: number; quantized: 0 | 1 }

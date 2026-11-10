@@ -31,7 +31,8 @@ const head = computed(() => {
 const tag = computed(() => {
   const i = info.value
   if (!i?.device) return ''
-  return i.mode === 'macros' ? 'Rack Macros' : i.mode === 'table' ? i.device.cls : `No table · ${i.device.cls}`
+  const macros = i.slots.filter(s => s && /^Macro \d+$/.test(s.param)).length
+  return i.mode === 'macros' ? 'Rack Macros' : i.mode === 'mixed' ? `${macros} Macros + ${i.device.cls}` : i.mode === 'table' ? i.device.cls : `No table · ${i.device.cls}`
 })
 const targetValue = computed({
   get: () => (map.target === 'follow' ? 'follow' : String(map.target)),
