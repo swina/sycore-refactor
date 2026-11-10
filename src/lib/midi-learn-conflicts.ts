@@ -100,6 +100,8 @@ export function describeParam(name: string): string {
   if (name === 'map_var_prev') return 'SY.CORE Map · Variation ◀'
   if (name === 'map_var_next') return 'SY.CORE Map · Variation ▶'
   if (name === 'map_randomize') return 'SY.CORE Map · Randomize Macros'
+  if (name === 'map_var_store') return 'SY.CORE Map · Store variation'
+  if (name === 'map_var_delete') return 'SY.CORE Map · Delete variation'
   const mapVar = name.match(/^map_var_(\d)$/)
   if (mapVar) return `SY.CORE Map · Variation ${mapVar[1]}`
   if (name === 'cp_mode') return 'Chord Prog · Chord / Arp'

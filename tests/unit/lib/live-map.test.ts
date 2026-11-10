@@ -8,7 +8,7 @@ describe('live-map', () => {
     expect(parseMapSlot('map_slot_0')).toBeNull()
     expect(parseMapSlot('map_slot_17')).toBeNull()
     expect(parseMapSlot('rig_fill')).toBeNull()
-    expect(mapSlotCatalog()).toHaveLength(16 + 2 + 8 + 1 + 4)
+    expect(mapSlotCatalog()).toHaveLength(16 + 2 + 8 + 1 + 2 + 4)
   })
 
   it('Map buttons: variations and randomize', () => {
@@ -17,6 +17,8 @@ describe('live-map', () => {
     expect(parseMapButton('map_var_3')).toEqual({ kind: 'variation', v: 2 })
     expect(parseMapButton('map_var_9')).toBeNull()
     expect(parseMapButton('map_randomize')).toEqual({ kind: 'randomize' })
+    expect(parseMapButton('map_var_store')).toEqual({ kind: 'variation', v: 'store' })
+    expect(parseMapButton('map_var_delete')).toEqual({ kind: 'variation', v: 'delete' })
     expect(parseMapButton('map_slot_1')).toBeNull()
     expect(parseMapButton('map_track_next')).toEqual({ kind: 'track', step: 1 })
     expect(parseMapButton('map_track_follow')).toEqual({ kind: 'follow' })

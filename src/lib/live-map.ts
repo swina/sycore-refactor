@@ -4,6 +4,7 @@
  *
  *   map_slot_<1–16>   a MIDI Learn parameter (knob / fader, 0–127) → slot 0–15, 0–1
  *   map_var_prev / map_var_next / map_var_<1–8>   recall a Macro Variation of the Rack in focus   button
+ *   map_var_store / map_var_delete    store the Macros as a new variation / delete the selected one  button
  *   map_randomize     randomize the Rack's Macros                                               button
  *   map_track_prev / map_track_next   the previous / next track (the target leaves Follow)        button
  *   map_track_follow  Follow Live's selected track on / off                                       button
@@ -32,6 +33,8 @@ export const mapSlotCatalog = (): { paramName: string; label: string }[] => [
   { paramName: 'map_var_next', label: 'Map Variation ▶' },
   ...Array.from({ length: MAP_VARIATION_BUTTONS }, (_, i) => ({ paramName: `map_var_${i + 1}`, label: `Map Variation ${i + 1}` })),
   { paramName: 'map_randomize', label: 'Map Randomize Macros' },
+  { paramName: 'map_var_store', label: 'Map Store variation' },
+  { paramName: 'map_var_delete', label: 'Map Delete variation' },
   { paramName: 'map_track_prev', label: 'Map Track ◀' },
   { paramName: 'map_track_next', label: 'Map Track ▶' },
   { paramName: 'map_track_follow', label: 'Map Follow selected track' },
@@ -39,13 +42,15 @@ export const mapSlotCatalog = (): { paramName: string; label: string }[] => [
 ]
 
 export type MapButton =
-  | { kind: 'variation'; v: number | 'next' | 'prev' } | { kind: 'randomize' }
+  | { kind: 'variation'; v: number | 'next' | 'prev' | 'store' | 'delete' } | { kind: 'randomize' }
   | { kind: 'track'; step: 1 | -1 } | { kind: 'follow' }
 /** A Map button of a MIDI Learn parameter name, or null. */
 export function parseMapButton(name: string): MapButton | null {
   if (name === 'map_var_next') return { kind: 'variation', v: 'next' }
   if (name === 'map_var_prev') return { kind: 'variation', v: 'prev' }
   if (name === 'map_randomize') return { kind: 'randomize' }
+  if (name === 'map_var_store') return { kind: 'variation', v: 'store' }
+  if (name === 'map_var_delete') return { kind: 'variation', v: 'delete' }
   if (name === 'map_track_next') return { kind: 'track', step: 1 }
   if (name === 'map_track_prev') return { kind: 'track', step: -1 }
   if (name === 'map_track_follow') return { kind: 'follow' }

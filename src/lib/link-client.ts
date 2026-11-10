@@ -415,8 +415,10 @@ export class LinkClient {
   sendMapTarget(target: 'follow' | number): boolean {
     return this.sendRaw(target === 'follow' ? { type: 'map-target', follow: true } : { type: 'map-target', track: target })
   }
-  /** Recall a Macro Variation of the Rack in focus: its index, or the next / previous one. */
-  sendMapVariation(v: number | 'next' | 'prev'): boolean {
+  /** A Macro Variation of the Rack in focus: recall it (index, next, previous), store the Macros as a new
+   *  one, or delete the selected one. */
+  sendMapVariation(v: number | 'next' | 'prev' | 'store' | 'delete'): boolean {
+    if (v === 'store' || v === 'delete') return this.sendRaw({ type: 'map-variation', action: v })
     return this.sendRaw(typeof v === 'number' ? { type: 'map-variation', index: v } : { type: 'map-variation', step: v === 'next' ? 1 : -1 })
   }
   /** Randomize the Macros of the Rack in focus. */

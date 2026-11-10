@@ -61,7 +61,7 @@ export const useLiveMapStore = defineStore('liveMap', () => {
   }
 
   /** Recall a Macro Variation (index, next, prev) / randomize the Macros of the Rack in focus. */
-  function variation(v: number | 'next' | 'prev') { linkClient.sendMapVariation(v) }
+  function variation(v: number | 'next' | 'prev' | 'store' | 'delete') { linkClient.sendMapVariation(v) }
   function randomize() { linkClient.sendMapRandomize() }
   /** The track in focus now (picked here, or the one the device follows). */
   const currentTrack = () => (typeof target.value === 'number' ? target.value : info.value?.track?.index ?? -1)

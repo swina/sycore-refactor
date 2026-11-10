@@ -88,6 +88,8 @@ describe('LinkClient', () => {
     expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-variation', index: 2 })
     client.sendMapVariation('prev')
     expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-variation', step: -1 })
+    client.sendMapVariation('store')
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-variation', action: 'store' })
     client.sendMapRandomize()
     expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-randomize' })
     const slots = [{ param: 'LP Freq', name: 'LP Freq', value: 0.4 }, null]

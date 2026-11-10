@@ -52,6 +52,10 @@ const vars = computed(() => info.value?.variations ?? null)
 const varButtons = computed(() => Array.from({ length: Math.min(MAP_VARIATION_BUTTONS, vars.value?.count ?? 0) }, (_, i) => i))
 const btn = 'px-2 py-0.5 rounded border text-[10px] font-bold'
 const following = computed(() => map.target === 'follow')
+function confirmDelete() {
+  const v = vars.value
+  if (v && v.selected >= 0 && window.confirm(`Delete variation ${v.selected + 1} of ${info.value?.device?.rack ?? 'this Rack'}? (Live's Undo brings it back)`)) map.variation('delete')
+}
 const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.name ? ` (${s.param})` : ''}` : ' · empty'} · right-click: MIDI Learn`
 </script>
 
@@ -115,6 +119,12 @@ const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.na
         <span class="text-[10px] font-mono text-neutral-500 ml-1">{{ vars.selected >= 0 ? vars.selected + 1 : '–' }}/{{ vars.count }}</span>
       </template>
       <span v-else class="text-[10px] text-neutral-600">none stored in this Rack</span>
+      <!-- store the Macros as they are now (a new variation) / delete the selected one -->
+      <button :class="[btn, 'border-emerald-500/40 text-emerald-300', learnedRing('map_var_store')]" title="Store the Macros as a new variation · right-click: MIDI Learn"
+              @click="map.variation('store')" @contextmenu="learnMenu($event, 'map_var_store', 'Map Store variation')">＋ Store</button>
+      <button v-if="vars.count && vars.selected >= 0" :class="[btn, 'border-white/10 text-neutral-400 hover:text-rose-300', learnedRing('map_var_delete')]"
+              :title="`Delete variation ${vars.selected + 1} (Live's Undo brings it back) · right-click: MIDI Learn`"
+              @click="confirmDelete" @contextmenu="learnMenu($event, 'map_var_delete', 'Map Delete variation')">Delete</button>
       <button :class="[btn, 'ml-auto border-white/10 text-neutral-300', learnedRing('map_randomize')]" title="Randomize the Rack's Macros · right-click: MIDI Learn"
               @click="map.randomize()" @contextmenu="learnMenu($event, 'map_randomize', 'Map Randomize Macros')">Rand</button>
     </div>
