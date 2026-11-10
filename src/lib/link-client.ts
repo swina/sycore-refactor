@@ -48,6 +48,27 @@ export type LinkEvent =
   | { type: 'error'; code: string; message: string }
   /** a click on a SY.CORE Rig device in Live: a rig action (rig_slot_drum_a, rig_mute_bass…) */
   | { type: 'rig-press'; name: string }
+  /** SY.CORE Map (P12): the instrument the Map device drives now, and its slots */
+  | { type: 'map-info'; info: LinkMapInfo }
+  /** a slot's parameter moved in Live (mouse, automation): 0–1, for LEDs and pickup */
+  | { type: 'map-value'; slot: number; value: number }
+  | { type: 'map-tracks'; tracks: { index: number; name: string }[] }
+  /** every parameter of an instrument (asked with requestMapParams), for the table editor */
+  | { type: 'map-params'; cls: string; name: string; params: LinkMapParam[] }
+
+/** One slot of a SY.CORE Map table: a Live parameter by original_name, its range (the parameter's
+ *  own units, default its full range) and whether it moves by whole numbers. */
+export interface LinkMapSlot { param: string; min?: number; max?: number; int?: boolean }
+/** The tables by Live class_name (Drift, UltraAnalog, OriginalSimpler…), 16 slots each (null = empty). */
+export type LinkMapTables = Record<string, (LinkMapSlot | null)[]>
+export interface LinkMapInfo {
+  track: { index: number; name: string } | null
+  device: { name: string; cls: string; rack: string | null } | null
+  /** table: the instrument's table · macros: a Rack's Macros · none: nothing to drive */
+  mode: 'table' | 'macros' | 'none'
+  slots: ({ param: string; name: string; value: number } | null)[]
+}
+export interface LinkMapParam { name: string; shown: string; min: number; max: number; quantized: 0 | 1 }
 
 /** The Rig Controller's state for the SY.CORE Rig devices (5 rows: Chord Drum Seq Bass Arp). */
 export interface LinkRigState {
@@ -298,6 +319,18 @@ export class LinkClient {
       case 'rig-press':
         if (typeof m.name === 'string' && m.name.startsWith('rig_')) this.emit({ type: 'rig-press', name: m.name })
         break
+      case 'map-info':
+        if (Array.isArray(m.slots)) this.emit({ type: 'map-info', info: { track: m.track ?? null, device: m.device ?? null, mode: m.mode ?? 'none', slots: m.slots } })
+        break
+      case 'map-value':
+        if (Number.isInteger(m.slot) && typeof m.value === 'number') this.emit({ type: 'map-value', slot: m.slot, value: m.value })
+        break
+      case 'map-tracks':
+        if (Array.isArray(m.tracks)) this.emit({ type: 'map-tracks', tracks: m.tracks })
+        break
+      case 'map-params':
+        if (Array.isArray(m.params)) this.emit({ type: 'map-params', cls: String(m.cls ?? ''), name: String(m.name ?? ''), params: m.params })
+        break
     }
   }
 
@@ -362,6 +395,24 @@ export class LinkClient {
   /** The Rig Controller's state to the SY.CORE Rig devices (null: no Rig Controller open). */
   sendRig(state: LinkRigState | null): boolean {
     return this.sendRaw(state ? { type: 'rig', ...state } : { type: 'rig', active: false })
+  }
+
+  // ── SY.CORE Map (P12) ──────────────────────────────────────────────────────
+  /** The tables to the Map device (on connect and after each edit). */
+  sendMapTables(tables: LinkMapTables): boolean {
+    return this.sendRaw({ type: 'map-tables', tables })
+  }
+  /** Slot 0–15 to 0–1 (an encoder moved). */
+  sendMap(slot: number, value: number): boolean {
+    return this.sendRaw({ type: 'map', slot, value: Math.max(0, Math.min(1, value)) })
+  }
+  /** Follow Live's selected track, or one track (index). */
+  sendMapTarget(target: 'follow' | number): boolean {
+    return this.sendRaw(target === 'follow' ? { type: 'map-target', follow: true } : { type: 'map-target', track: target })
+  }
+  /** Every parameter of the instrument driven now (answered with a map-params event). */
+  requestMapParams(): boolean {
+    return this.sendRaw({ type: 'map-params-request' })
   }
 
   /** Drop everything queued in the device and end the notes sounding (stop, panic). */

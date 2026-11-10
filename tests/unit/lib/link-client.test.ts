@@ -72,6 +72,30 @@ describe('LinkClient', () => {
     expect(events.filter(e => e.type === 'rig-press')).toEqual([{ type: 'rig-press', name: 'rig_slot_bass_c' }])
   })
 
+  it('Map: tables, slot values, target and parameter requests out; the device\'s info, values and lists in', () => {
+    const { client, events, ws } = connected()
+    expect(client.sendMapTables({ Drift: [{ param: 'LP Freq' }, null] })).toBe(true)
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-tables', tables: { Drift: [{ param: 'LP Freq' }, null] } })
+    client.sendMap(3, 1.4)
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map', slot: 3, value: 1 })
+    client.sendMapTarget('follow')
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-target', follow: true })
+    client.sendMapTarget(2)
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-target', track: 2 })
+    client.requestMapParams()
+    expect(ws.sent.at(-1)).toEqual({ v: 1, type: 'map-params-request' })
+    const slots = [{ param: 'LP Freq', name: 'LP Freq', value: 0.4 }, null]
+    ws.recv({ type: 'map-info', track: { index: 3, name: 'Pad' }, device: { name: 'Drift', cls: 'Drift', rack: null }, mode: 'table', slots })
+    ws.recv({ type: 'map-value', slot: 0, value: 0.5 })
+    ws.recv({ type: 'map-value', slot: 'x', value: 0.5 })
+    ws.recv({ type: 'map-tracks', tracks: [{ index: 0, name: 'Drums' }] })
+    ws.recv({ type: 'map-params', cls: 'Drift', name: 'Drift', params: [{ name: 'LP Freq', shown: 'LP Freq', min: 0, max: 1, quantized: 0 }] })
+    expect(events.find(e => e.type === 'map-info')).toEqual({ type: 'map-info', info: { track: { index: 3, name: 'Pad' }, device: { name: 'Drift', cls: 'Drift', rack: null }, mode: 'table', slots } })
+    expect(events.filter(e => e.type === 'map-value')).toEqual([{ type: 'map-value', slot: 0, value: 0.5 }])
+    expect(events.find(e => e.type === 'map-tracks')).toEqual({ type: 'map-tracks', tracks: [{ index: 0, name: 'Drums' }] })
+    expect(events.find(e => e.type === 'map-params')).toMatchObject({ cls: 'Drift', params: [{ name: 'LP Freq' }] })
+  })
+
   it('says hello on open and is ready after the device hello + a transport', () => {
     const s = setup()
     s.client.enable()
