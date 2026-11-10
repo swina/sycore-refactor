@@ -245,6 +245,42 @@ describe('LinkClient transport mirror', () => {
     expect(b).toBeLessThan(1.04)
   })
 
+  it('a report read very late (a long task) is not a jump; the same offset twice is', () => {
+    const { client, ws, setNow } = connected()
+    // Live at 120 from beat 1 at t=500.
+    setNow(500); ws.recv({ type: 'transport', playing: true, beat: 1, tempo: 120, num: 4, den: 4 })
+    // The report of beat 2 (t=1000) read 200 ms late, 0.4 beat behind: the mirror stays.
+    setNow(1200); ws.recv({ type: 'transport', playing: true, beat: 2, tempo: 120, num: 4, den: 4 })
+    expect(Math.abs(client.beatAt(1200) - 2.4)).toBeLessThan(0.01)
+    // The next one on time: still in line.
+    setNow(1500); ws.recv({ type: 'transport', playing: true, beat: 3, tempo: 120, num: 4, den: 4 })
+    expect(Math.abs(client.beatAt(1500) - 3)).toBeLessThan(0.01)
+    // Live really went back half a beat: the second report saying so is taken.
+    setNow(2000); ws.recv({ type: 'transport', playing: true, beat: 3.5, tempo: 120, num: 4, den: 4 })
+    expect(Math.abs(client.beatAt(2000) - 4)).toBeLessThan(0.01)
+    setNow(2500); ws.recv({ type: 'transport', playing: true, beat: 4, tempo: 120, num: 4, den: 4 })
+    expect(client.beatAt(2500)).toBe(4)
+    // A jump back of bars (a loop) is taken at once.
+    setNow(3000); ws.recv({ type: 'transport', playing: true, beat: 0, tempo: 120, num: 4, den: 4 })
+    expect(client.beatAt(3000)).toBe(0)
+  })
+
+  it('bridge 1.3.4+: a burst of reports queued by a busy page (500 ms) does not move the mirror', () => {
+    const { client, ws, setNow } = connected()
+    // The bridge's clock is ours + 10000 ms; the pong (sent at 0, back at 2) gives the offset.
+    const ping = ws.sent.find(m => m.type === 'ping')
+    setNow(2); ws.recv({ type: 'pong', t: ping.t, beat: 0, nt: 10001 })
+    // Live at 120 from beat 1 at t=500.
+    setNow(500); ws.recv({ type: 'transport', playing: true, beat: 1, tempo: 120, num: 4, den: 4, at: 10500 })
+    // The page busy from 600 to 1100: the reports of 650…1050 all read at 1100.
+    setNow(1100)
+    for (let t = 650; t <= 1050; t += 50) ws.recv({ type: 'transport', playing: true, beat: 1 + (t - 500) / 500, tempo: 120, num: 4, den: 4, at: 10000 + t })
+    expect(Math.abs(client.beatAt(1100) - 2.2)).toBeLessThan(0.01)
+    // A real jump (a loop back to beat 0) is still taken at once.
+    setNow(1200); ws.recv({ type: 'transport', playing: true, beat: 0, tempo: 120, num: 4, den: 4, at: 11200 })
+    expect(Math.abs(client.beatAt(1200))).toBeLessThan(0.01)
+  })
+
   it('takes a jump, a stop and a tempo change at once', () => {
     const { client, ws, setNow } = connected()
     setNow(500); ws.recv({ type: 'transport', playing: true, beat: 16, tempo: 120, num: 4, den: 4 })

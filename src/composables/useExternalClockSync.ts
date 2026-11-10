@@ -15,7 +15,7 @@
  */
 import { watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getTransport, getContext } from 'tone'
-import { midiService } from '@/core/midi/midi-service'
+import { midiService, traceOn } from '@/core/midi/midi-service'
 import { ExternalClockFollower, PhaseLock, TONE_PPQ, isClockSourceEcho, type ExternalClockEvent } from '@/core/midi/external-clock'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { externalGrid } from '@/core/midi/external-grid'
@@ -25,6 +25,9 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { LinkClockAdapter } from '@/core/midi/link-clock'
 import { createWorkerTicker } from '@/core/midi/step-scheduler'
 import { linkClient, useLinkStore } from '@/stores/useLinkStore'
+import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { useChordProgStore } from '@/stores/useChordProgStore'
+import { rigReports } from '@/lib/rig-live'
 
 const REALTIME = new Set([0xF8, 0xFA, 0xFB, 0xFC, 0xF2])
 
@@ -126,6 +129,7 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
         break
       }
       case 'stop':
+        console.warn(`[ExtClock] stop from ${store.isLink ? 'Live (Link)' : 'the MIDI clock'} → Stop All`)
         cancelPendingStart()
         fineBpm = 0
         externalGrid.emit({ type: 'stop' })
@@ -183,6 +187,15 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     store.state = active().state
   }
   follower.on(e => { if (!store.isLink) onClockEvent(e) })
+
+  // Diagnostics (localStorage.SY_TRACE = '1'): an app that stops prints who stopped it (flush 'sync':
+  // the setter's own stack) — found the stop right after the first Play following a reload.
+  const drumStore = useDrumMachineStore()
+  const chordStore = useChordProgStore()
+  const traceStop = (app: string) => (now: boolean, was: boolean) => { if (was && !now && traceOn()) console.trace(`[ExtClock] ${app} stopped`) }
+  watch(() => drumStore.isPlaying, traceStop('Drum Machine'), { flush: 'sync' })
+  watch(() => chordStore.isPlaying, traceStop('Chord Prog'), { flush: 'sync' })
+  watch(() => rigReports.seqPlaying, traceStop('Sequencer'), { flush: 'sync' })
   /** Link start timing for the diagnostics (shown once in the next line). */
   let linkStartDiag = ''
   let linkStartSeenLate = 0

@@ -135,6 +135,11 @@ const MIRROR_JUMP_BEATS = 0.25
 /** Share of a report's difference taken when it is ahead of the mirror / behind it (see mirrorBeat). */
 const MIRROR_GAIN_AHEAD = 0.3
 const MIRROR_GAIN_BEHIND = 0.02
+/** A report behind the mirror by up to this (beats) is most likely one read late (a long task on the
+ *  page held the WebSocket message): taken as a jump only if the next report says the same. Taken at
+ *  once it moved the mirror back, the Link clock saw Live "jump", and SY.CORE stopped all its apps and
+ *  restarted them a bar later — on the first Play after a reload, whose long tasks are the longest. */
+const MIRROR_LATE_BEATS = 1
 
 export class LinkClient {
   readonly url: string
@@ -261,6 +266,8 @@ export class LinkClient {
   private stopPing() {
     if (this.pingTimer !== null) { this.clearTimer(this.pingTimer); this.pingTimer = null }
     this.pings.clear()
+    this.offsets = []
+    this.clockOffset = null
   }
 
   ping(): void {
@@ -291,7 +298,7 @@ export class LinkClient {
         const tempo = Number(m.tempo) > 0 ? Number(m.tempo) : prev.tempo
         const next: LinkTransport = {
           playing,
-          beat: this.mirrorBeat(prev, playing, tempo, m.beat, now),
+          beat: this.mirrorBeat(prev, playing, tempo, this.reportBeatNow(m, playing, tempo, now), now, this.reportAge(m, now) !== null),
           tempo,
           num: Number(m.num) > 0 ? Number(m.num) : prev.num,
           den: Number(m.den) > 0 ? Number(m.den) : prev.den,
@@ -311,6 +318,13 @@ export class LinkClient {
           this.pings.delete(m.t)
           this.rtts = [...this.rtts.slice(-9), now - sent]
           this.rttMs = Math.round((this.rtts.reduce((a, b) => a + b, 0) / this.rtts.length) * 100) / 100
+          // The device's clock at the pong (1.3.4+): offset = its clock − ours, from the ping with the
+          // shortest round trip of the last ones (the least delayed, so the most exact).
+          if (Number.isFinite(Number(m.nt))) {
+            const rtt = now - sent
+            this.offsets = [...this.offsets.slice(-9), { rtt, off: Number(m.nt) - (sent + rtt / 2) }]
+            this.clockOffset = this.offsets.reduce((a, b) => (b.rtt < a.rtt ? b : a)).off
+          }
         }
         break
       }
@@ -351,15 +365,38 @@ export class LinkClient {
    * re-anchored the mirror with its own delivery delay, and the beat of every note sent
    * (`beatAt` of its time) wobbled by tens of ms.
    */
-  private mirrorBeat(prev: LinkTransport, playing: boolean, tempo: number, reported: unknown, now: number): number {
+  /** How old a transport report is (ms), from its `at` and the clocks' offset; null = not known
+   *  (a bridge before 1.3.4, or no pong yet). */
+  private reportAge(m: any, now: number): number | null {
+    if (this.clockOffset === null || !Number.isFinite(Number(m.at))) return null
+    return Math.min(5000, Math.max(0, now - (Number(m.at) - this.clockOffset)))
+  }
+  /** The report's beat brought to `now`: a report read late (the page busy, reports queued) is
+   *  where Live was when it was sent, not now. */
+  private reportBeatNow(m: any, playing: boolean, tempo: number, now: number): unknown {
+    const age = this.reportAge(m, now)
+    if (age === null || !playing || !Number.isFinite(Number(m.beat))) return m.beat
+    return Number(m.beat) + (age * tempo) / 60000
+  }
+  /** The device's clock − ours (ms), from the pongs; null until the first one (1.3.4+). */
+  private clockOffset: number | null = null
+  private offsets: { rtt: number; off: number }[] = []
+
+  private mirrorBeat(prev: LinkTransport, playing: boolean, tempo: number, reported: unknown, now: number, aged = false): number {
     const predicted = this.beatAt(now)
     if (!Number.isFinite(Number(reported))) return predicted
     const beat = Number(reported)
-    if (!playing || !prev.playing || tempo !== prev.tempo) return beat
+    if (!playing || !prev.playing || tempo !== prev.tempo) { this.lateSuspect = false; return beat }
     const err = beat - predicted
+    // Reports with their age (bridge 1.3.4+) are already corrected: a difference is Live's own.
+    const suspect = !aged && err < -MIRROR_JUMP_BEATS && err >= -MIRROR_LATE_BEATS
+    if (suspect && !this.lateSuspect) { this.lateSuspect = true; return predicted }
+    this.lateSuspect = false
     if (Math.abs(err) > MIRROR_JUMP_BEATS) return beat
     return predicted + err * (err > 0 ? MIRROR_GAIN_AHEAD : MIRROR_GAIN_BEHIND)
   }
+  /** The last report was behind the mirror by a late read's amount (see MIRROR_LATE_BEATS). */
+  private lateSuspect = false
 
   /** Live's beat at performance.now() time `t` (extrapolated while playing). */
   beatAt(t: number): number {

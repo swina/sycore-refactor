@@ -76,6 +76,34 @@ export const scaleVelocity = (v: number, f: number): number => (f >= 1 ? v : Mat
 /** Key of one app → device cable for setMutedCables(). */
 export const cableMuteKey = (source: string, deviceName: string): string => `${source}→${deviceName.toLowerCase().trim()}`
 
+// ── Diagnostics: who sends All Notes Off ─────────────────────────────────────
+// Every CC 123 (All Notes Off) / CC 120 (All Sound Off) leaving SY.CORE — on a MIDI port (any
+// out.send, also the components' own) or a virtual output (SY.CORE Link) — logs the caller's stack
+// in the console, once per burst (250 ms): to find the notes cut that nobody asked for.
+// On with localStorage.SY_TRACE = '1' (every app's stop sends some: off by default).
+export function traceOn(): boolean {
+  try { return typeof localStorage !== 'undefined' && localStorage.getItem('SY_TRACE') === '1'; } catch { return false; }
+}
+let _anoBurstAt = 0;
+export function traceNotesOff(dest: string, data: ArrayLike<number>): void {
+  if (!data || data.length < 2 || (data[0] & 0xf0) !== 0xb0 || (data[1] !== 123 && data[1] !== 120)) return;
+  if (!traceOn()) return;
+  const now = performance.now();
+  if (now - _anoBurstAt < 250) return;
+  _anoBurstAt = now;
+  console.trace(`[MIDI] All Notes Off → ${dest} ch ${(data[0] & 0x0f) + 1} (CC ${data[1]})`);
+}
+let _outputSendPatched = false;
+function patchOutputSend(): void {
+  if (_outputSendPatched || typeof MIDIOutput === 'undefined') return;
+  _outputSendPatched = true;
+  const send = MIDIOutput.prototype.send;
+  MIDIOutput.prototype.send = function (this: MIDIOutput, data: number[] | Uint8Array, ts?: number) {
+    traceNotesOff(this.name ?? '?', data);
+    return send.call(this, data, ts);
+  } as typeof send;
+}
+
 export class MidiService {
   // ── Core references ──────────────────────────────────────────────────────
   private midiAccess: MIDIAccess | null = null;
@@ -412,6 +440,7 @@ export class MidiService {
   private sendToVirtualOutput(name: string, data: number[], at?: number): void {
     const fn = this.virtualOutputs.get(name);
     if (!fn) return;
+    traceNotesOff(name, data);
 
     // Log to monitor — skip Clock (0xF8) same as broadcast() does for real
     // outputs, since at 24 ticks/quarter-note this would otherwise blow
@@ -599,6 +628,7 @@ export class MidiService {
     try {
       if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] Requesting Access...');
       this.midiAccess = await navigator.requestMIDIAccess();
+      patchOutputSend();
       if ((window as any).SY_LOG) (window as any).SY_LOG('[MIDI] Access Granted.');
       this.setupStateChangeHandler();
       await this.reScanInputs();
@@ -1128,6 +1158,8 @@ export class MidiService {
 
   panic(): void {
     console.log('[MIDI] PANIC! Sending All Notes Off to all devices and channels.');
+    // who called it (a stop, a learned control, the Rig's hold…): the stack in the console
+    console.trace('[MIDI] PANIC caller');
     this.router.clearThruNotes();
     this.virtualThruNotes.clear();
     const panicMsg = (ch: number) => [0xb0 + ch, 123, 0];

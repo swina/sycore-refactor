@@ -110,6 +110,7 @@ export class LinkClockAdapter {
     if (this.last) {
       const expected = this.last.beat + ((now - this.last.t) * tempo) / 60000
       if (Math.abs(b - expected) > JUMP_BEATS) {
+        console.warn(`[LinkClock] Live's position jumped (${this.state}): beat ${b.toFixed(2)}, expected ${expected.toFixed(2)} → ${this.state === 'playing' ? 'stop, ' : ''}start again on the next bar`)
         if (this.state === 'playing') this.emit({ type: 'stop' })
         this.waitForBar(now)
         return
