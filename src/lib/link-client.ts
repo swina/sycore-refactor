@@ -68,6 +68,8 @@ export interface LinkMapInfo {
    *  first instrument's table (parameters a Macro holds left out) · none: nothing to drive */
   mode: 'table' | 'macros' | 'mixed' | 'none'
   slots: ({ param: string; name: string; value: number } | null)[]
+  /** the Macro Variations of the Rack in focus (selected -1 = none); null: no Rack */
+  variations?: { count: number; selected: number } | null
 }
 export interface LinkMapParam { name: string; shown: string; min: number; max: number; quantized: 0 | 1 }
 
@@ -321,7 +323,7 @@ export class LinkClient {
         if (typeof m.name === 'string' && m.name.startsWith('rig_')) this.emit({ type: 'rig-press', name: m.name })
         break
       case 'map-info':
-        if (Array.isArray(m.slots)) this.emit({ type: 'map-info', info: { track: m.track ?? null, device: m.device ?? null, mode: m.mode ?? 'none', slots: m.slots } })
+        if (Array.isArray(m.slots)) this.emit({ type: 'map-info', info: { track: m.track ?? null, device: m.device ?? null, mode: m.mode ?? 'none', slots: m.slots, variations: m.variations ?? null } })
         break
       case 'map-value':
         if (Number.isInteger(m.slot) && typeof m.value === 'number') this.emit({ type: 'map-value', slot: m.slot, value: m.value })
@@ -410,6 +412,14 @@ export class LinkClient {
   /** Follow Live's selected track, or one track (index). */
   sendMapTarget(target: 'follow' | number): boolean {
     return this.sendRaw(target === 'follow' ? { type: 'map-target', follow: true } : { type: 'map-target', track: target })
+  }
+  /** Recall a Macro Variation of the Rack in focus: its index, or the next / previous one. */
+  sendMapVariation(v: number | 'next' | 'prev'): boolean {
+    return this.sendRaw(typeof v === 'number' ? { type: 'map-variation', index: v } : { type: 'map-variation', step: v === 'next' ? 1 : -1 })
+  }
+  /** Randomize the Macros of the Rack in focus. */
+  sendMapRandomize(): boolean {
+    return this.sendRaw({ type: 'map-randomize' })
   }
   /** Every parameter of the instrument driven now (answered with a map-params event). */
   requestMapParams(): boolean {

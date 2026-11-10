@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapSlotParam, parseMapSlot, mapSlotCatalog, pickupSlot, pickupMove, pickupFeedback, ECHO_MS } from '@/lib/live-map'
+import { mapSlotParam, parseMapSlot, parseMapButton, mapSlotCatalog, pickupSlot, pickupMove, pickupFeedback, ECHO_MS } from '@/lib/live-map'
 
 describe('live-map', () => {
   it('slot parameter names, 1–16', () => {
@@ -8,7 +8,16 @@ describe('live-map', () => {
     expect(parseMapSlot('map_slot_0')).toBeNull()
     expect(parseMapSlot('map_slot_17')).toBeNull()
     expect(parseMapSlot('rig_fill')).toBeNull()
-    expect(mapSlotCatalog()).toHaveLength(16)
+    expect(mapSlotCatalog()).toHaveLength(16 + 2 + 8 + 1)
+  })
+
+  it('Map buttons: variations and randomize', () => {
+    expect(parseMapButton('map_var_next')).toEqual({ kind: 'variation', v: 'next' })
+    expect(parseMapButton('map_var_prev')).toEqual({ kind: 'variation', v: 'prev' })
+    expect(parseMapButton('map_var_3')).toEqual({ kind: 'variation', v: 2 })
+    expect(parseMapButton('map_var_9')).toBeNull()
+    expect(parseMapButton('map_randomize')).toEqual({ kind: 'randomize' })
+    expect(parseMapButton('map_slot_1')).toBeNull()
   })
 
   it('pickup: a knob far from the parameter waits until it reaches or crosses it', () => {

@@ -8,7 +8,7 @@
 import { computed } from 'vue'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { useLinkStore } from '@/stores/useLinkStore'
-import { mapSlotParam } from '@/lib/live-map'
+import { mapSlotParam, MAP_VARIATION_BUTTONS } from '@/lib/live-map'
 
 const props = defineProps({
   /** (ev, paramName, label) → the panel's MIDI Learn menu */
@@ -38,6 +38,10 @@ const targetValue = computed({
   get: () => (map.target === 'follow' ? 'follow' : String(map.target)),
   set: v => map.setTarget(v === 'follow' ? 'follow' : Number(v)),
 })
+// Macro Variations of the Rack in focus: up to 8 buttons (more: ◀ ▶ reach them)
+const vars = computed(() => info.value?.variations ?? null)
+const varButtons = computed(() => Array.from({ length: Math.min(MAP_VARIATION_BUTTONS, vars.value?.count ?? 0) }, (_, i) => i))
+const btn = 'px-2 py-0.5 rounded border text-[10px] font-bold'
 const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.name ? ` (${s.param})` : ''}` : ' · empty'} · right-click: MIDI Learn`
 </script>
 
@@ -75,6 +79,24 @@ const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.na
                 class="absolute -top-0.5 w-0.5 h-2 bg-amber-400" :style="{ left: `${map.pick[i].knob * 100}%` }" />
         </span>
       </button>
+    </div>
+    <!-- Macro Variations (Racks): recall, ◀ ▶, randomize; right-click: MIDI Learn -->
+    <div v-if="vars" class="flex items-center gap-1 flex-wrap">
+      <span class="text-[10px] text-neutral-500 mr-1">Variations</span>
+      <template v-if="vars.count">
+        <button :class="[btn, 'border-white/10 text-neutral-300', props.learnedRing('map_var_prev')]" title="Previous variation · right-click: MIDI Learn"
+                @click="map.variation('prev')" @contextmenu="props.learnMenu($event, 'map_var_prev', 'Map Variation ◀')">◀</button>
+        <button v-for="i in varButtons" :key="i"
+                :class="[btn, vars.selected === i ? 'bg-emerald-500 border-emerald-300 text-black' : 'border-white/10 text-neutral-300', props.learnedRing(`map_var_${i + 1}`)]"
+                :title="`Recall variation ${i + 1} · right-click: MIDI Learn`"
+                @click="map.variation(i)" @contextmenu="props.learnMenu($event, `map_var_${i + 1}`, `Map Variation ${i + 1}`)">{{ i + 1 }}</button>
+        <button :class="[btn, 'border-white/10 text-neutral-300', props.learnedRing('map_var_next')]" title="Next variation · right-click: MIDI Learn"
+                @click="map.variation('next')" @contextmenu="props.learnMenu($event, 'map_var_next', 'Map Variation ▶')">▶</button>
+        <span class="text-[10px] font-mono text-neutral-500 ml-1">{{ vars.selected >= 0 ? vars.selected + 1 : '–' }}/{{ vars.count }}</span>
+      </template>
+      <span v-else class="text-[10px] text-neutral-600">none stored in this Rack</span>
+      <button :class="[btn, 'ml-auto border-white/10 text-neutral-300', props.learnedRing('map_randomize')]" title="Randomize the Rack's Macros · right-click: MIDI Learn"
+              @click="map.randomize()" @contextmenu="props.learnMenu($event, 'map_randomize', 'Map Randomize Macros')">Rand</button>
     </div>
     <p class="text-[9px] text-neutral-500">Right-click a slot to MIDI-learn an encoder: encoder <i>n</i> drives slot <i>n</i> of the instrument in focus. Amber mark: the knob waiting to reach the value (pickup).</p>
   </section>

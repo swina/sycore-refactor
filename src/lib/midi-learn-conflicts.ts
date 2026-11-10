@@ -97,6 +97,11 @@ export function describeParam(name: string): string {
   if (vdp) return `${vdp[2] ? vdp[2] + ' · ' : ''}Virtual Device ${vdp[1].replace(/_/g, ' ')}`
   const mapSlot = name.match(/^map_slot_(\d+)$/)
   if (mapSlot) return `SY.CORE Map · slot ${mapSlot[1]}`
+  if (name === 'map_var_prev') return 'SY.CORE Map · Variation ◀'
+  if (name === 'map_var_next') return 'SY.CORE Map · Variation ▶'
+  if (name === 'map_randomize') return 'SY.CORE Map · Randomize Macros'
+  const mapVar = name.match(/^map_var_(\d)$/)
+  if (mapVar) return `SY.CORE Map · Variation ${mapVar[1]}`
   if (name === 'cp_mode') return 'Chord Prog · Chord / Arp'
   if (name === 'cp_chain') return 'Chord Prog · Chain On / Off'
   const slot = name.match(/^cp_slot_(\d+)$/)

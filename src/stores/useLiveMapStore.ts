@@ -10,7 +10,7 @@ import { ref, reactive, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { linkClient } from '@/stores/useLinkStore'
 import type { LinkMapInfo } from '@/lib/link-client'
-import { MAP_SLOTS, pickupSlot, pickupMove, pickupFeedback, type PickupSlot } from '@/lib/live-map'
+import { MAP_SLOTS, pickupSlot, pickupMove, pickupFeedback, type PickupSlot, type MapButton } from '@/lib/live-map'
 
 const LS_PICKUP = 'S1_LIVE_MAP_PICKUP'
 
@@ -60,10 +60,19 @@ export const useLiveMapStore = defineStore('liveMap', () => {
     linkClient.sendMapTarget(t)
   }
 
+  /** Recall a Macro Variation (index, next, prev) / randomize the Macros of the Rack in focus. */
+  function variation(v: number | 'next' | 'prev') { linkClient.sendMapVariation(v) }
+  function randomize() { linkClient.sendMapRandomize() }
+  window.addEventListener('live-map-button', (e: Event) => {
+    const b = (e as CustomEvent<MapButton>).detail
+    if (b?.kind === 'variation') variation(b.v)
+    else if (b?.kind === 'randomize') randomize()
+  })
+
   window.addEventListener('live-map-slot', (e: Event) => {
     const d = (e as CustomEvent<{ slot: number; value: number }>).detail
     if (d) move(d.slot, d.value)
   })
 
-  return { info, values, tracks, target, pickup, pick, move, setTarget }
+  return { info, values, tracks, target, pickup, pick, move, setTarget, variation, randomize }
 })

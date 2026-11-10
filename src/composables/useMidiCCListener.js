@@ -2,7 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { rigDensity } from '@/lib/rig-density'
 import { parseRigAction, isContinuousRigAction } from '@/lib/rig-actions'
-import { parseMapSlot } from '@/lib/live-map'
+import { parseMapSlot, parseMapButton } from '@/lib/live-map'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -154,6 +154,11 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   const mapSlot = parseMapSlot(fieldName)
   if (mapSlot !== null) {
     window.dispatchEvent(new CustomEvent('live-map-slot', { detail: { slot: mapSlot, value: val / 127 } }))
+    return
+  }
+  const mapButton = parseMapButton(fieldName)
+  if (mapButton) {
+    if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) window.dispatchEvent(new CustomEvent('live-map-button', { detail: mapButton }))
     return
   }
   // ── Rig Controller actions (rig-actions.ts): to the panel, which acts while open ─────

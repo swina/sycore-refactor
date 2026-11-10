@@ -3,6 +3,8 @@
  * of the instrument the SY.CORE Map device in Live points at (the device holds the tables).
  *
  *   map_slot_<1–16>   a MIDI Learn parameter (knob / fader, 0–127) → slot 0–15, 0–1
+ *   map_var_prev / map_var_next / map_var_<1–8>   recall a Macro Variation of the Rack in focus   button
+ *   map_randomize     randomize the Rack's Macros                                               button
  *
  * Pickup (soft takeover) for absolute knobs: after a track change, or when the parameter moved in
  * Live (mouse, automation), a knob takes over only once it reaches the parameter's value (or crosses
@@ -21,8 +23,24 @@ export function parseMapSlot(name: string): number | null {
 }
 
 /** Every Map slot, for MIDI Learn menus and docs: { paramName, label }. */
-export const mapSlotCatalog = (): { paramName: string; label: string }[] =>
-  Array.from({ length: MAP_SLOTS }, (_, i) => ({ paramName: mapSlotParam(i), label: `Map slot ${i + 1}` }))
+export const mapSlotCatalog = (): { paramName: string; label: string }[] => [
+  ...Array.from({ length: MAP_SLOTS }, (_, i) => ({ paramName: mapSlotParam(i), label: `Map slot ${i + 1}` })),
+  { paramName: 'map_var_prev', label: 'Map Variation ◀' },
+  { paramName: 'map_var_next', label: 'Map Variation ▶' },
+  ...Array.from({ length: MAP_VARIATION_BUTTONS }, (_, i) => ({ paramName: `map_var_${i + 1}`, label: `Map Variation ${i + 1}` })),
+  { paramName: 'map_randomize', label: 'Map Randomize Macros' },
+]
+
+export type MapButton = { kind: 'variation'; v: number | 'next' | 'prev' } | { kind: 'randomize' }
+/** A Map button of a MIDI Learn parameter name, or null. */
+export function parseMapButton(name: string): MapButton | null {
+  if (name === 'map_var_next') return { kind: 'variation', v: 'next' }
+  if (name === 'map_var_prev') return { kind: 'variation', v: 'prev' }
+  if (name === 'map_randomize') return { kind: 'randomize' }
+  const m = /^map_var_([1-8])$/.exec(name)
+  return m ? { kind: 'variation', v: Number(m[1]) - 1 } : null
+}
+export const MAP_VARIATION_BUTTONS = 8
 
 export interface PickupSlot {
   /** the knob drives the parameter (it reached it) */
