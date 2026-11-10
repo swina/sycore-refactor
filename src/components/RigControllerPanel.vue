@@ -15,6 +15,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { linkClient } from '@/stores/useLinkStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { reactive, ref, computed, watch, onUnmounted } from 'vue'
+import LiveMapSection from '@/components/LiveMapSection.vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -1306,6 +1307,9 @@ const arcPath = v => {
               <span>2 = slot length in bars · #n = queue order</span>
             </div>
           </section>
+
+          <!-- SY.CORE Map (P12): encoders → the instrument in focus in Live -->
+          <LiveMapSection v-if="live" :learn-menu="learnMenu" :learned-ring="learnedRing" />
 
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
             <div class="flex items-center justify-between mb-2">

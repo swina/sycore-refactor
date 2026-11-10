@@ -13,6 +13,7 @@ import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { LinkClient, type LinkState, type LinkStats } from '@/lib/link-client'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useLiveMapStore } from '@/stores/useLiveMapStore'
 
 export const LINK_OUTPUT_NAME = 'Live (M4L)'
 const LS_ENABLED = 'S1_LINK_ENABLED'
@@ -90,5 +91,7 @@ export const useLinkStore = defineStore('link', () => {
   // RTT refreshes with every pong; poll it for the UI (cheap).
   setInterval(() => { if (linkClient.rttMs !== rttMs.value) rttMs.value = linkClient.rttMs }, 1000)
 
+  // SY.CORE Map (P12): its encoders work whenever the bridge is connected
+  useLiveMapStore()
   return { enabled, neededByClock, active, state, ready, connected, track, deviceVersion, sim, rttMs, stats, lastError, failedAttempts, hint }
 })

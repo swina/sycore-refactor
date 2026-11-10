@@ -2,6 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { rigDensity } from '@/lib/rig-density'
 import { parseRigAction, isContinuousRigAction } from '@/lib/rig-actions'
+import { parseMapSlot } from '@/lib/live-map'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -147,6 +148,12 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   // ── Rig Controller: Density of the real apps (an encoder or fader, 0–127) ─────
   if (fieldName === 'rig_density_drum' || fieldName === 'rig_density_seq') {
     rigDensity[fieldName.slice(12)] = val
+    return
+  }
+  // ── SY.CORE Map (live-map.ts): encoder n → slot n of the instrument in Live (useLiveMapStore) ─────
+  const mapSlot = parseMapSlot(fieldName)
+  if (mapSlot !== null) {
+    window.dispatchEvent(new CustomEvent('live-map-slot', { detail: { slot: mapSlot, value: val / 127 } }))
     return
   }
   // ── Rig Controller actions (rig-actions.ts): to the panel, which acts while open ─────
