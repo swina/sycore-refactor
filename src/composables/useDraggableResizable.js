@@ -8,8 +8,25 @@ import { useViewportClass } from './useViewportClass'
 
 // Shared counter for draggable panels. Capped at 399 so non-draggable
 // modals (z-[400]+) always layer above floating panels.
-let _topZ = 50
+const DRAGGABLE_Z_MIN = 50
 const DRAGGABLE_Z_MAX = 399
+// Every mounted panel's z ref: when the counter reaches the cap they are renumbered in their current
+// order (bottom → top) from the floor. It used to wrap to 50 instead: after ~350 clicks the panel just
+// clicked dropped *below* all the others — it seemed to close, or another one "jumped" on top.
+const _panelZs = new Set()
+// Panels start at their own zIndex (100 by default): the next one raised goes above the highest
+// present, not above the counter (it started at 50: a clicked panel landed *under* the untouched ones).
+function _raise(z) {
+  let top = DRAGGABLE_Z_MIN
+  for (const r of _panelZs) if (r !== z && r.value > top) top = r.value
+  if (z.value > top) return                                          // already on top: nothing to change
+  if (top >= DRAGGABLE_Z_MAX) {
+    const order = [..._panelZs].filter(r => r !== z).sort((x, y) => x.value - y.value)
+    top = DRAGGABLE_Z_MIN
+    for (const r of order) r.value = ++top
+  }
+  z.value = top + 1
+}
 
 export function useDraggableResizable({
   storageKey = null,
@@ -54,6 +71,8 @@ export function useDraggableResizable({
   if (pos.value.minimized === undefined) pos.value.minimized = false
 
   const activeZ = ref(zIndex)
+  _panelZs.add(activeZ)
+  onUnmounted(() => _panelZs.delete(activeZ))
   const uiStore = useUiStore()
 
   // SynthApp.vue's focusStyle() gives whichever panel holds
@@ -68,8 +87,7 @@ export function useDraggableResizable({
   // interaction lets plain activeZ ordering (i.e. "last thing you touched")
   // decide, which is what users actually expect from a click-to-front panel.
   function bringToFront() {
-    if (_topZ >= DRAGGABLE_Z_MAX) _topZ = 50
-    activeZ.value = ++_topZ
+    _raise(activeZ)
     uiStore.focusedModalKey = null
   }
 
