@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles, Star, ListMusic } from 'lucide-vue-next'
-import { getTransport, getDraw, start as toneStart } from 'tone'
+import { getTransport, start as toneStart } from 'tone'
+import { drawAt } from '@/lib/ui-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -26,6 +27,12 @@ import AiPromptModal from './AiPromptModal.vue'
 import SongComposerDialog from './SongComposerDialog.vue'
 import { sendPartPresets } from '@/lib/song-composer'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
+import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
+import { externalGrid } from '@/core/midi/external-grid'
+import { keyLabel } from '@/lib/chord-key'
+import { chordAfter } from '@/lib/chord-next'
+import { rigReports } from '@/lib/rig-live'
+import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -127,7 +134,7 @@ const rafRef = ref(null)
 let _pendingTimeouts = new Set()  // all scheduled timeout IDs
 let _activeNoteKeys = new Set()   // "note-channel" keys currently sounding
 let _activeBassNote = null        // { note, channel, tid } — auto-timed bass note from scheduler
-let heldBassNote = null           // { note, channel } — held bass note from manual trigger
+let heldBassNote = null           // { dev, note, channel } — held bass note from manual trigger
 let _stopPending = false          // set synchronously on stop; blocks any queued tid callbacks
 let _transportTicks = 0          // our own tick counter (384n resolution, resets on each play)
 let _captureArmed = false         // set true on play, consumed by next schedule tick
@@ -144,7 +151,15 @@ const loopEnabled = ref(true)
 const bassEnabled = ref(localStorage.getItem(userKey('S1_CP_BASS_ENABLED')) === 'true')
 const bassDevice = ref(localStorage.getItem(userKey('S1_CP_BASS_DEVICE')) || '')
 const bassChannel = ref(parseInt(localStorage.getItem(userKey('S1_CP_BASS_CHANNEL')) ?? '2', 10))
-const midiOutputs = computed(() => midiService.getOutputs())
+// Reactive (midiStore.outputs, refreshed on connect / hot-plug): midiService.getOutputs() read
+// once at mount — before Web MIDI was ready — left the list empty. Plus the virtual instruments.
+const midiOutputs = computed(() => {
+  const names = new Set()
+  const list = []
+  for (const o of midiStore.outputs) if (o?.name && !names.has(o.name)) { names.add(o.name); list.push({ name: o.name }) }
+  for (const v of midiStore.virtualInstruments) if (v?.name && !names.has(v.name)) { names.add(v.name); list.push({ name: v.name }) }
+  return list
+})
 
 watch(bassEnabled, v => localStorage.setItem(userKey('S1_CP_BASS_ENABLED'), v ? 'true' : 'false'))
 watch(bassDevice, v => localStorage.setItem(userKey('S1_CP_BASS_DEVICE'), v))
@@ -169,26 +184,65 @@ function getBassNote(notes, shift = 0) {
   return Math.min(...notes) + shift
 }
 
-function sendBassNoteOn(note, velocity, durationMs) {
+// Bass: straight to its own device and channel (midiService.sendNoteTo), not through the
+// Chord Prog's MIDI Flow cables — else it went to the chords' devices, on their channel
+// (remapped by the cable / OUT CH), and never reached e.g. SYC OUT ch 2 for a Live track.
+// `dev` is kept with each note so its note-off reaches the same device after a change.
+function _bassOn(dev, n, velocity, ch, atMs = null) {
+  const opts = atMs != null ? { workerTimed: true, workerTag: CP_WORKER_TAG } : undefined
+  midiService.sendNoteTo(dev, 'noteon', n, velocity, ch - 1, MidiSource.CHORD_PROG, atMs ?? undefined, opts)
+}
+function _bassOff(b, atMs = null) {
+  if (!b) return
+  midiService.sendNoteTo(b.dev, 'noteoff', b.note, 0, b.channel - 1, MidiSource.CHORD_PROG, atMs ?? undefined, atMs != null ? { workerTimed: true } : undefined)
+}
+
+function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
+  if (atMs != null) {
+    // CLK SYS: the previous bass note ends when this one starts, both at their times.
+    if (_activeBassNote) {
+      const prev = _activeBassNote
+      if (prev.tid) { clearTimeout(prev.tid); _pendingTimeouts.delete(prev.tid) }
+      // Its own queued note-off is skipped from now on (it could cut this note, same pitch).
+      if (prev.id == null || _cpVoices.end(prev.key, prev.id)) {
+        _bassOff(prev, atMs - 1)
+      }
+      _activeBassNote = null
+    }
+    if (!bassEnabled.value || !bassDevice.value || note === null) return
+    const ch = Math.max(1, Math.min(16, bassChannel.value))
+    const n = Math.max(0, Math.min(127, note))
+    const dev = bassDevice.value
+    const key = `bass-${n}-${ch}`
+    const bass = { dev, note: n, channel: ch, key, bass: true }
+    const id = _cpVoices.start(key, atMs + durationMs, bass)
+    _bassOn(dev, n, velocity, ch, atMs)
+    midiService.scheduleOnWorker(atMs + durationMs, () => {
+      if (_cpVoices.end(key, id)) _bassOff(bass)
+    }, undefined, 'CHORDS note-off')
+    _activeBassNote = { ...bass, tid: null, id }
+    return
+  }
   stopBassNote()
   if (!bassEnabled.value || !bassDevice.value || note === null) return
   const ch = Math.max(1, Math.min(16, bassChannel.value))
   const n = Math.max(0, Math.min(127, note))
-  midiStore.sendNoteOn(n, velocity, ch, MidiSource.CHORD_PROG)
+  const bass = { dev: bassDevice.value, note: n, channel: ch }
+  _bassOn(bass.dev, n, velocity, ch)
   const tid = window.setTimeout(() => {
-    midiStore.sendNoteOff(n, 0, ch, MidiSource.CHORD_PROG)
+    _bassOff(bass)
     _pendingTimeouts.delete(tid)
     _activeBassNote = null
   }, durationMs)
   _pendingTimeouts.add(tid)
-  _activeBassNote = { note: n, channel: ch, tid }
+  _activeBassNote = { ...bass, tid }
 }
 
 function stopBassNote() {
   if (!_activeBassNote) return
-  const { note, channel, tid } = _activeBassNote
+  const { tid } = _activeBassNote
   if (tid) { clearTimeout(tid); _pendingTimeouts.delete(tid) }
-  midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
+  _bassOff(_activeBassNote)
   _activeBassNote = null
 }
 
@@ -270,9 +324,104 @@ function cueNextSection(state) {
 
 let _panicTimeout = null
 
+// ── System clock (CLK SYS) — the 384n tick from a StepScheduler on performance.now() (steps of
+// 1/96 beat), ticked by a Worker timer, instead of the Tone.js transport (audio clock). The tick
+// callback is the same; while it runs, _sysTickMs holds the tick's time and the notes leave from
+// the Worker-timed queue at their times (strum notes at their own offsets) instead of now + page
+// timers. Off by default (see DrumMachine.vue / Sequencer.vue). ──
+const LS_CP_SYSTEM_CLOCK = 'SYCORE_CP_SYSTEM_CLOCK'
+const systemClock = ref((() => { try { return localStorage.getItem(userKey(LS_CP_SYSTEM_CLOCK)) === '1' } catch { return false } })())
+watch(systemClock, v => { try { localStorage.setItem(userKey(LS_CP_SYSTEM_CLOCK), v ? '1' : '0') } catch {} })
+const CP_WORKER_TAG = 'chord-prog'
+const CP_TICK_BEATS = 1 / 96         // the 384n tick
+let _sysTickMs = null                // CLK SYS: performance.now() ms of the tick being run
+let _sysSilent = false               // a tick found too late (stalled page): advance, don't sound
+let _sysSched = null
+let _stopTicker = null
+let _offExtGrid = null
+let _sysStartSixteenth = 0
+
+/** CLK SYS "chase": a note whose start is already gone (a late start after Live's Play, a
+ *  stalled page) but whose end is still ahead sounds now, for what is left of it — a chord
+ *  lasting the whole first bar was skipped, leaving the bar silent. Null: nothing left to play. */
+function _chase(onMs, durMs) {
+  return chaseNote(onMs, durMs, performance.now(), _sysSilent)
+}
+
+/** CLK SYS: who owns each sounding pitch (chords, arp, bass), so a slot switch ends the old
+ *  notes and their queued note-offs don't cut the new slot's notes of the same pitch. */
+const _cpVoices = new VoiceLedger()
+
+/** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue. */
+function _cpNoteAt(note, velocity, channel, onMs, durMs) {
+  const noteKey = `${note}-${channel}`
+  const id = _cpVoices.start(noteKey, onMs + durMs, { note, channel, key: noteKey })
+  midiStore.sendNoteOn(note, velocity, channel, MidiSource.CHORD_PROG, null, onMs, { workerTimed: true, workerTag: CP_WORKER_TAG })
+  _activeNoteKeys.add(noteKey)
+  midiService.scheduleOnWorker(onMs + durMs, () => {
+    if (!_cpVoices.end(noteKey, id)) return
+    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
+    _activeNoteKeys.delete(noteKey)
+  }, undefined, 'CHORDS note-off')
+}
+
+/** CLK SYS, a slot switch at atMs: the notes still sounding then end there. */
+function _cpCutVoicesAt(atMs) {
+  for (const v of _cpVoices.cutAt(atMs)) {
+    if (v.bass) _bassOff(v, atMs - 1)
+    else midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.CHORD_PROG, null, atMs - 1, { workerTimed: true })
+    _activeNoteKeys.delete(v.key)
+  }
+  _activeBassNote = null
+}
+
+function _startSystemClock(tickCb, alignToBar) {
+  _stopSystemClock()
+  const now = performance.now()
+  let startMs = now + 20
+  let bpm = arpStore.arpBpm || 120
+  _sysStartSixteenth = 0
+  if (externalGrid.active && externalGrid.anchor) {
+    // The bar Live is playing now; ticks already gone pass silently. A Rig pad's start
+    // (Trigger sync) waits for the next sync point instead (bar line or beat).
+    let bar = externalGrid.barAtOrBefore(now)
+    if (_cpStartSteps && bar != null) {
+      const graceMs = Math.min(80, 15000 / (externalGrid.bpm || bpm) * 0.5)
+      bar = externalGrid.pointAtOrAfter(now, _cpStartSteps, graceMs) ?? bar
+    }
+    const t = bar != null ? externalGrid.timeOf(bar) : null
+    if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
+  } else if (alignToBar) {
+    startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+  }
+  _cpStartSteps = 0
+  _sysSched = new StepScheduler((_step, t, late) => {
+    _sysTickMs = t
+    _sysSilent = late
+    try { tickCb(perfMsToAudioTime(t)) } finally { _sysTickMs = null; _sysSilent = false }
+  }, { name: 'CHORDS' })
+  _sysSched.start(startMs, bpm, CP_TICK_BEATS)
+  _offExtGrid = externalGrid.on(e => {
+    if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)
+  })
+  _stopTicker = createWorkerTicker(() => _sysSched?.tick(performance.now()))
+  _sysSched.tick(performance.now())
+}
+
+function _stopSystemClock() {
+  _stopTicker?.(); _stopTicker = null
+  _offExtGrid?.(); _offExtGrid = null
+  _sysSched?.stop(); _sysSched = null
+  // Note-ons still queued would sound after Stop (their note-offs stay queued: harmless).
+  midiService.cancelWorkerTimed(CP_WORKER_TAG)
+}
+
 function stopAllNotes() {
   _stopPending = true
+  midiService.cancelWorkerTimed(CP_WORKER_TAG)
   store.playingChordName = ''
+  store.playingChordDuration = ''
+  store.nextChord = null
   _pendingTimeouts.forEach(id => clearTimeout(id))
   _pendingTimeouts.clear()
 
@@ -301,7 +450,7 @@ function stopAllNotes() {
     _activeNoteKeys.clear()
     stopBassNote()
     if (heldBassNote) {
-      midiStore.sendNoteOff(heldBassNote.note, 0, heldBassNote.channel, MidiSource.CHORD_PROG)
+      _bassOff(heldBassNote)
       heldBassNote = null
     }
     midiStore.panic()
@@ -313,6 +462,12 @@ function stopAllNotes() {
 
 watch(() => store.isPlaying, (playing) => {
   if (!playing) {
+    _stopSystemClock()
+    _cpCueSlot = null
+    _cpCueSteps = 0
+    _cpStopSteps = 0
+    _cpStartSteps = 0
+    cuedSlotIdx.value = null
     if (repeatEventIdRef.value !== null) {
       getTransport().clear(repeatEventIdRef.value)
       repeatEventIdRef.value = null
@@ -339,17 +494,49 @@ watch(() => store.isPlaying, (playing) => {
   _lastFollowedSlot = null
   _pendingTimeouts.clear()
   _activeNoteKeys.clear()
+  _cpVoices.clear()
   playStateRef.current = buildPlayState()
 
   toneStart().then(() => {
     getTransport().bpm.value = arpStore.arpBpm || 120
 
 const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgToTransport.value
-    repeatEventIdRef.value = getTransport().scheduleRepeat((time) => {
+    const tickCb = (time) => {
       const state = playStateRef.current
       if (!state.isPlaying || _stopPending) return
 
       _transportTicks++
+      // Position on Live's song grid (24 ticks per sixteenth), for a Rig pad's Trigger sync.
+      const songTick = _sysStartSixteenth * 24 + (_transportTicks - 1)
+
+      // A Rig pad's stop: on its sync point; the chords end there.
+      if (_cpStopSteps && songTick % (_cpStopSteps * 24) === 0) {
+        _cpStopSteps = 0
+        if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
+        state.isPlaying = false
+        drawAt(() => { store.isPlaying = false }, time)
+        return
+      }
+
+      // A cued slot (Control Map) starts on the bar line, from its first chord — a Rig pad's on
+      // its sync point of the song grid.
+      const cueNow = _cpCueSteps ? songTick % (_cpCueSteps * 24) === 0 : (_transportTicks - 1) % 384 === 0
+      if (_cpCueSlot !== null && cueNow && !state.chainSlotIndices) {
+        const idx = _cpCueSlot
+        _cpCueSlot = null
+        _cpCueSteps = 0
+        // The old slot's notes end on the bar line, not where their own note-offs were.
+        if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
+        handleSlotSelect(idx)
+        state.steps = store.steps
+        state.numSteps = store.numSteps
+        state.playMode = store.playMode
+        state.arpRate = store.arpRate
+        state.stepPointer = 0
+        state.tickCounter = 0
+        state.arpPatternStates = new Map()
+        drawAt(() => { cuedSlotIdx.value = null }, time)
+      }
 
       // ── Audio capture sync with pre-roll & auto-stop ─────────────────
       if (syncStore.syncChordProgToAudioCapture) {
@@ -384,7 +571,7 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
           if (_captureBarsRemaining <= 0) {
             _captureRecording = false
             captureRecording.value = false
-            getDraw().schedule(() => {
+            drawAt(() => {
               window.dispatchEvent(new CustomEvent('capture-stop-rec'))
             }, time)
           }
@@ -403,8 +590,15 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
       if (state.chainSlotIndices && store.drumFollow) cueNextSection(state)
 
       if (state.tickCounter === 0) {
-        getDraw().schedule(() => {
+        drawAt(() => {
           store.playingChordName = step?.active && step.notes?.length ? step.chordName : ''
+          store.playingChordDuration = step?.active && step.notes?.length ? step.duration : ''
+          // its length (ms, bars of 4/4: 96 ticks a beat) and a counter per step — the Rig device's progress bar
+          store.playingChordMs = Math.round(ticksNeeded * 60000 / (state.bpm * 96))
+          store.playingChordBars = ticksNeeded / 384
+          store.playingChordSeq++
+          const nx = chordAfter(state.steps, state.numSteps, state.stepPointer, state.loop)
+          store.nextChord = nx ? { name: nx.step.chordName, duration: nx.step.duration, wraps: nx.wraps } : null
           if (state.chainSlotIndices) {
             const slotIdx = state.chainSlotIndices[state.stepPointer]
             store.currentStep = state.chainLocalIndices[state.stepPointer]
@@ -432,7 +626,17 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
           const noteDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
           const channel = state.channel
 
-          if (!step.chordMode) {
+          if (_sysTickMs != null) {
+            // CLK SYS: every note at its time — together, or strummed at its own offset;
+            // late (chase): now, for what is left of the chord.
+            const play = _chase(_sysTickMs, noteDurationMs)
+            const ordered = step.chordMode ? orderChordStrumNotes(step.notes, step.chordMode) : step.notes
+            const strumStepMs = step.chordMode ? Math.min(25, stepMs / (ordered.length + 1)) : 0
+            if (play) ordered.forEach((note, i) => {
+              const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
+              _cpNoteAt(clampedNote, step.velocity, channel, play.onMs + strumStepMs * i, play.durMs)
+            })
+          } else if (!step.chordMode) {
             // Simultaneous — today's only behavior, unchanged.
             step.notes.forEach(note => {
               const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
@@ -481,7 +685,11 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
             const tickMs = 60000 / (state.bpm * 96)
             const stepMs = tickMs * ticksNeeded
             const bassDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
-            sendBassNoteOn(bassNote, step.velocity, bassDurationMs)
+            if (_sysTickMs == null) sendBassNoteOn(bassNote, step.velocity, bassDurationMs)
+            else {
+              const play = _chase(_sysTickMs, bassDurationMs)
+              if (play) sendBassNoteOn(bassNote, step.velocity, play.durMs, play.onMs)
+            }
           }
         }
       }  // closes if (state.tickCounter === 0)
@@ -504,15 +712,19 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
           if (noteIdx < 0) return
 
           const clampedNote = Math.max(0, Math.min(127, sortedNotes[noteIdx] + (state.transpose || 0) + (step.transpose || 0)))
-          const noteKey = `${clampedNote}-${channel}`
-          midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
-          _activeNoteKeys.add(noteKey)
-          const tid = window.setTimeout(() => {
-            _pendingTimeouts.delete(tid)
-            midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
-            _activeNoteKeys.delete(noteKey)
-          }, arpMs)
-          _pendingTimeouts.add(tid)
+          if (_sysTickMs != null) {
+            if (!_sysSilent) _cpNoteAt(clampedNote, step.velocity, channel, _sysTickMs, arpMs)
+          } else {
+            const noteKey = `${clampedNote}-${channel}`
+            midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)
+            _activeNoteKeys.add(noteKey)
+            const tid = window.setTimeout(() => {
+              _pendingTimeouts.delete(tid)
+              midiStore.sendNoteOff(clampedNote, 0, channel, MidiSource.CHORD_PROG)
+              _activeNoteKeys.delete(noteKey)
+            }, arpMs)
+            _pendingTimeouts.add(tid)
+          }
         }
       }
 
@@ -522,14 +734,22 @@ const alignToBar = transportManager.isRunning.value && syncStore.syncChordProgTo
         const nextPointer = state.stepPointer + 1
         if (nextPointer >= activeCount) {
           if (!state.loop) {
-            getDraw().schedule(() => { store.isPlaying = false }, time)
+            drawAt(() => { store.isPlaying = false }, time)
           }
           state.stepPointer = 0
         } else {
           state.stepPointer = nextPointer
         }
       }
-    }, '384n', alignToBar ? transportManager.getNextBarPosition() : undefined)
+    }
+
+    if (systemClock.value) {
+      if (!store.isPlaying) return
+      _startSystemClock(tickCb, alignToBar)
+      transportManager.acquireTransport()
+      return
+    }
+    repeatEventIdRef.value = getTransport().scheduleRepeat(tickCb, '384n', alignToBar ? transportManager.getNextBarPosition() : undefined)
 
     transportManager.acquireTransport()
   })
@@ -581,6 +801,15 @@ watch(() => arpStore.arpBpm, (bpm) => {
     playStateRef.current.bpm = bpm
     getTransport().bpm.value = bpm
   }
+  // System clock on the internal tempo (with an external master the grid follows Live's beats).
+  if (_sysSched && !externalGrid.active) _sysSched.setTempo(bpm)
+})
+
+// Switching the clock while playing: restart on the other one.
+watch(systemClock, () => {
+  if (!store.isPlaying) return
+  store.isPlaying = false
+  setTimeout(() => { store.isPlaying = true }, 0)
 })
 
 // Transport position display — derived from our own tick counter (independent of global Tone.js transport)
@@ -606,6 +835,8 @@ watch(() => store.isPlaying, (playing) => {
 })
 
 onUnmounted(() => {
+  rigReports.queued.chord = null
+  _stopSystemClock()
   store.isPlaying = false
   if (_scheduledMidiEventId !== null) { getTransport().cancel(_scheduledMidiEventId); _scheduledMidiEventId = null }
   if (repeatEventIdRef.value !== null) getTransport().clear(repeatEventIdRef.value)
@@ -623,6 +854,8 @@ onUnmounted(() => {
   window.removeEventListener('cp-start', _onCpStart)
   window.removeEventListener('cp-stop', _onCpStop)
   window.removeEventListener('cp-slot-select', _onCpSlotSelect)
+  window.removeEventListener('cp-slot-cue', _onCpSlotCue)
+  window.removeEventListener('cp-generate', _onCpGenerate)
   _unsubMidiNote?.()
   _unsubAppNote?.()
   _unsubRawMidi?.()
@@ -796,6 +1029,7 @@ const heldChordNotes = [] // { note, channel } — notes from MIDI Learn-trigger
 
 function stopHeldChord() {
   store.playingChordName = ''
+  store.playingChordDuration = ''
   heldChordNotes.forEach(({ note, channel }) =>
     midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
   heldChordNotes.length = 0
@@ -807,7 +1041,7 @@ function stopHeldChord() {
   })
   _activeNoteKeys.clear()
   if (heldBassNote) {
-    midiStore.sendNoteOff(heldBassNote.note, 0, heldBassNote.channel, MidiSource.CHORD_PROG)
+    _bassOff(heldBassNote)
     heldBassNote = null
   }
 }
@@ -878,8 +1112,8 @@ function triggerChordStep(idx, forcePlay = false) {
       const bassNote = getBassNote(step.notes, shift)
       if (bassNote !== null) {
         const n = Math.max(0, Math.min(127, bassNote))
-        midiStore.sendNoteOn(n, velocity, bassChannel.value, MidiSource.CHORD_PROG)
-        heldBassNote = { note: n, channel: bassChannel.value }
+        heldBassNote = { dev: bassDevice.value, note: n, channel: Math.max(1, Math.min(16, bassChannel.value)) }
+        _bassOn(heldBassNote.dev, n, velocity, heldBassNote.channel)
       }
     }
   } else {
@@ -894,8 +1128,8 @@ function triggerChordStep(idx, forcePlay = false) {
       const bassNote = getBassNote(step.notes, shift)
       if (bassNote !== null) {
         const n = Math.max(0, Math.min(127, bassNote))
-        midiStore.sendNoteOn(n, step.velocity || 90, bassChannel.value, MidiSource.CHORD_PROG)
-        heldBassNote = { note: n, channel: bassChannel.value }
+        heldBassNote = { dev: bassDevice.value, note: n, channel: Math.max(1, Math.min(16, bassChannel.value)) }
+        _bassOn(heldBassNote.dev, n, step.velocity || 90, heldBassNote.channel)
       }
     }
   }
@@ -981,9 +1215,54 @@ async function handleUpdatePattern(pattern) {
   await store.updateLibraryPattern(pattern)
 }
 
-const _onCpStart = () => { store.isPlaying = true }
-const _onCpStop = () => { store.isPlaying = false }
+// A Rig pad adds { sync } (its Trigger sync, sixteenths): the start waits for that sync point of
+// Live's song grid (0 = at once), the stop lets the chords play up to it.
+const _onCpStart = (e) => {
+  const sync = e?.detail?.sync
+  if (_cpStopSteps) { _cpStopSteps = 0; return } // a queued stop: un-queue it
+  if (store.isPlaying) return
+  _cpStartSteps = typeof sync === 'number' ? Math.max(0, sync) : 0
+  store.isPlaying = true
+}
+const _onCpStop = (e) => {
+  const sync = e?.detail?.sync
+  // Queued only while following Live's grid: on its own clock the Chord Prog stops at once.
+  if (typeof sync === 'number' && sync > 0 && store.isPlaying && externalGrid.active) { _cpStopSteps = sync; return }
+  store.isPlaying = false
+}
 const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
+// Rig Controller GEN (LIVE): a new progression into the active slot, played from its next chord.
+// { mode: 'ai' } asks the AI (key and length of the slot); not configured or failed → built-in.
+let _cpGenBusy = false
+const _onCpGenerate = async (e) => {
+  if (e?.detail?.mode === 'ai' && !_cpGenBusy) {
+    _cpGenBusy = true
+    try {
+      if (await store.generateFromAiPrompt('A fresh chord progression for a live set, different from the current one, same key')) return
+    } catch {} finally { _cpGenBusy = false }
+  }
+  handleGenerate()
+}
+
+// Control Map (P3, 'cp-slot-cue'): while playing, the slot starts on the next bar line, from its
+// first chord (as a clip launched in Live's Session View); stopped — or during chain playback,
+// where the chain decides — it's selected at once.
+const cuedSlotIdx = ref(null)
+// Rig Controller (rig-live.ts): the queued slot, mirrored for the pads.
+watch(cuedSlotIdx, v => { rigReports.queued.chord = v })
+let _cpCueSlot = null
+let _cpCueSteps = 0    // Rig pad (Trigger sync): the cue's sync point, sixteenths (1 = next sixteenth, "at once")
+let _cpStopSteps = 0   // Rig pad: a stop queued for that sync point
+let _cpStartSteps = 0  // Rig pad: the next start waits for that sync point
+const _onCpSlotCue = (e) => {
+  const idx = e.detail?.idx
+  if (idx == null || idx < 0 || idx >= (store.SLOT_COUNT ?? 8)) return
+  if (!store.isPlaying || playStateRef.current?.chainSlotIndices) { handleSlotSelect(idx); return }
+  const sync = e.detail?.sync
+  _cpCueSteps = typeof sync === 'number' ? Math.max(1, sync) : 0
+  _cpCueSlot = idx === store.activeSlotIndex ? null : idx
+  cuedSlotIdx.value = _cpCueSlot
+}
 
 // ── MIDI feedback for Learn-mapped params ──────────────────────────────────
 function sendChMappingFeedback(paramNamePrefix, isOn) {
@@ -1050,6 +1329,8 @@ onMounted(() => {
   window.addEventListener('cp-start', _onCpStart)
   window.addEventListener('cp-stop', _onCpStop)
   window.addEventListener('cp-slot-select', _onCpSlotSelect)
+  window.addEventListener('cp-slot-cue', _onCpSlotCue)
+  window.addEventListener('cp-generate', _onCpGenerate)
   _unsubMidiNote = midiService.addNoteListener(_onMidiNoteIn)
   _unsubAppNote = midiStore.addAppNoteListener(_onAppNoteIn)
   _unsubRawMidi = midiService.addRawListener(_onRawMidiIn)
@@ -1413,6 +1694,20 @@ function velBarColor(v) {
           </span>
         </div>
 
+        <!-- Step clock: Audio (Tone.js transport, default) / System (Worker timer + Worker-timed MIDI) -->
+        <button
+          @click.stop="systemClock = !systemClock"
+          :title="systemClock
+            ? 'Clock: SYSTEM — ticks on the system clock (a Worker timer), chords, strums, arps and bass sent at their times: in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
+            : 'Clock: AUDIO — ticks on the Tone.js transport (audio clock), as before. Click for SYSTEM (Worker timer).'"
+          :class="[
+            'px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-widest transition-colors',
+            systemClock
+              ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
+          ]"
+        >CLK {{ systemClock ? 'SYS' : 'AUDIO' }}</button>
+
         <!-- Play / Stop -->
         <button
           @click.stop="togglePlay"
@@ -1445,7 +1740,8 @@ function velBarColor(v) {
               'relative w-8 h-8 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
               store.activeSlotIndex === i - 1
                 ? 'bg-purple-700 text-white ring-1 ring-purple-400'
-                : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700'
+                : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700',
+              cuedSlotIdx === i - 1 ? 'ring-2 ring-amber-400 animate-pulse' : ''
             ]"
           >
             {{ String.fromCharCode(64 + i) }}
@@ -1585,6 +1881,7 @@ function velBarColor(v) {
             title="MIDI output device for bass note"
           >
             <option value="">—</option>
+            <option v-if="bassDevice && !midiOutputs.some(o => o.name === bassDevice)" :value="bassDevice">{{ bassDevice }} (offline)</option>
             <option v-for="out in midiOutputs" :key="out.name" :value="out.name">{{ out.name }}</option>
           </select>
           <select
@@ -2211,8 +2508,20 @@ function velBarColor(v) {
                 <span class="text-[11px] font-bold text-purple-300">{{ KEY_FILE_NAMES[store.selectedKey] }}</span>
                 <span class="text-[9px] text-neutral-600">(change in Library tab)</span>
               </div>
+              <!-- Mode: exactly the major or the minor key of the pair (e.g. Cm), or both -->
+              <div v-if="store.selectedKey < 12" class="flex items-center gap-2">
+                <span class="text-[10px] text-neutral-500 font-mono">Key:</span>
+                <div class="flex rounded border border-neutral-700 overflow-hidden">
+                  <button v-for="m in [['major', 'Major'], ['minor', 'Minor'], [null, 'Both']]" :key="String(m[0])"
+                          @click="store.keyMode = m[0]"
+                          :class="['px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest transition-colors',
+                            store.keyMode === m[0] ? 'bg-purple-800 text-purple-100' : 'text-neutral-500 hover:text-neutral-200']"
+                          :title="m[0] === 'major' ? 'Major key: generated from common major progressions' : m[0] === 'minor' ? 'Minor key: from the library (its progressions are minor)' : 'Any progression of the pair'">{{ m[1] }}</button>
+                </div>
+                <span class="text-[11px] font-bold text-purple-300 font-mono">{{ keyLabel(store.selectedKey, store.keyMode) }}</span>
+              </div>
               <div class="text-[10px] text-neutral-400 leading-relaxed max-w-[300px]">
-                Generate a random progression from the currently selected key source. 
+                Generate a random progression from the currently selected key source (Major / Minor: that key exactly). 
                 Chords are distributed across all active steps.
               </div>
 

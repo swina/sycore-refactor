@@ -43,3 +43,9 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #404040;
 }
+/* Faint brand grid (as in the app): the Ableton Live page and the sections that already used the class */
+.bg-grid-neon {
+    background-size: 30px 30px;
+    background-image: linear-gradient(to right, color-mix(in srgb, var(--color-brand) 5%, transparent) 1px, transparent 1px),
+        linear-gradient(to bottom, color-mix(in srgb, var(--color-brand) 5%, transparent) 1px, transparent 1px);
+}

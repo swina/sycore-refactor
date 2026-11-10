@@ -15,3 +15,14 @@ export function audioTimeToPerfMs(time: number, ctx: BaseAudioContext | undefine
   }
   return now + (time - ctx.currentTime) * 1000
 }
+
+/** performance.now() ms → AudioContext time: the inverse of audioTimeToPerfMs (same pairing),
+ *  for a step computed on the system clock that also sounds through the audio graph. */
+export function perfMsToAudioTime(ms: number, ctx: BaseAudioContext | undefined = (getContext() as any)?.rawContext): number {
+  if (!ctx) return 0
+  const ts = typeof (ctx as AudioContext).getOutputTimestamp === 'function' ? (ctx as AudioContext).getOutputTimestamp() : null
+  if (ts && ts.contextTime != null && ts.performanceTime != null && ts.performanceTime > 0) {
+    return ts.contextTime + (ms - ts.performanceTime) / 1000
+  }
+  return ctx.currentTime + (ms - performance.now()) / 1000
+}

@@ -17,12 +17,10 @@ function openPanel() {
   uiStore.openPanel('drum-machine')
 }
 
-// Simple direct toggle — same as the "stopAtEnd" bypass DrumMachine.vue's own
-// dm_play_stop MIDI Learn field already uses; the panel's own PLAY/STOP
-// button additionally supports a "stop at end of pattern" queue, but that's
-// local UI state (pendingStop) this card doesn't have access to.
+// Same as the panel's PLAY/STOP and its MIDI Learn (dm_play_stop): DrumMachine.vue
+// handles 'dm-play-stop' with its Start@bar / Stop@end options.
 function togglePlay() {
-  drumStore.isPlaying = !drumStore.isPlaying
+  window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: {} }))
 }
 </script>
 

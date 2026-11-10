@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, toRef } from 'vue'
 import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, FolderOpen, FolderPlus, Layers, Sparkles } from 'lucide-vue-next'
-import { getTransport, getDraw, start as toneStart } from 'tone'
+import { getTransport, start as toneStart } from 'tone'
+import { drawAt } from '@/lib/ui-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useArpStore } from '@/stores/useArpStore'
@@ -21,6 +22,12 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import AiPromptModal from './AiPromptModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
+import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
+import { externalGrid } from '@/core/midi/external-grid'
+import { densityKeeps, densityFor } from '@/lib/rig-density'
+import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
+import { userKey } from '@/lib/userKey'
+import { rigReports } from '@/lib/rig-live'
 
 defineOptions({ inheritAttrs: false })
 
@@ -207,6 +214,7 @@ const chordsEnabled = ref(seqStore.activeBank.chordsEnabled)
 const maxPolyphony = ref(seqStore.activeBank.maxPolyphony)
 const chordDensity = ref(seqStore.activeBank.chordDensity)
 const isPlaying = ref(false)
+watch(isPlaying, v => { rigReports.seqPlaying = v })
 const isRecording = ref(false)
 const currentStep = ref(0)
 const transportPosition = ref('1:1:1')
@@ -353,15 +361,17 @@ let lastFollowedBank = -1
 // Chord Prog FOLLOW ('seq-bank-cue', one bar before a section ends): the bank of the next section
 // starts when the playing one wraps to its first step; stopped, it's selected now.
 let _pendingBank = null
+// Rig Controller (rig-live.ts): the queued bank, mirrored for the pads.
+function setPendingBank(v) { _pendingBank = v; rigReports.queued.seq = v }
 function handleBankCue(e) {
   const idx = e.detail?.idx
   if (idx == null || idx < 0 || idx >= BANK_COUNT) return
-  if (!isPlaying.value) { _pendingBank = null; selectBank(idx); return }
-  _pendingBank = idx === seqStore.activeBankIndex ? null : idx
+  if (!isPlaying.value) { setPendingBank(null); selectBank(idx); return }
+  setPendingBank(idx === seqStore.activeBankIndex ? null : idx)
 }
 // The banks were replaced from outside (AI Song Composer, undo): drop the working copy.
 function handleBanksReloaded() {
-  _pendingBank = null
+  setPendingBank(null)
   loadBankIntoLocal()
   selectedStepIdx.value = 0
 }
@@ -575,6 +585,73 @@ watch([
 watch(() => props.bpm, (bpm) => {
   getTransport().bpm.value = bpm
   midiStore.setBpm(bpm)
+  // System clock on the internal tempo (with an external master the grid follows Live's beats).
+  if (_sysSched && !externalGrid.active) _sysSched.setTempo(bpm)
+})
+
+// ── System clock (CLK SYS) — steps from a StepScheduler on performance.now(), ticked by a
+// Worker timer, instead of the Tone.js transport (audio clock); notes leave from a Worker-timed
+// queue at their time (see DrumMachine.vue). Off by default. ──
+const LS_SEQ_SYSTEM_CLOCK = 'SYCORE_SEQ2_SYSTEM_CLOCK'
+const systemClock = ref((() => { try { return localStorage.getItem(userKey(LS_SEQ_SYSTEM_CLOCK)) === '1' } catch { return false } })())
+watch(systemClock, v => { try { localStorage.setItem(userKey(LS_SEQ_SYSTEM_CLOCK), v ? '1' : '0') } catch {} })
+const SEQ_WORKER_TAG = 'sequencer2'
+/** CLK SYS: who owns each sounding pitch, so a bank switch ends a tied note of the old bank
+ *  and its queued note-off doesn't cut the new bank's note of the same pitch. */
+const _seqVoices = new VoiceLedger()
+let _sysSched = null
+let _stopTicker = null
+let _offExtGrid = null
+let _sysStartSixteenth = 0
+// Rig Controller pads (Trigger sync, sixteenths: 16 bar, 8/4 two/one beats): the next start waits
+// for that sync point of Live's song grid; a stop lets the pattern play up to it (CLK SYS only).
+let _seqStartSteps = 0
+let _seqStopSteps = 0
+let _sysStep = 0 // the system clock's step index of the step being handed out
+
+function _startSystemClock(callback) {
+  _stopSystemClock()
+  const now = performance.now()
+  let startMs = now + 20
+  let bpm = props.bpm || 120
+  _sysStartSixteenth = 0
+  if (externalGrid.active && externalGrid.anchor) {
+    // The bar Live is playing now; steps already gone pass silently (see DrumMachine.vue).
+    // A Rig pad's start waits for its sync point instead (bar line or beat).
+    let bar = externalGrid.barAtOrBefore(now)
+    if (_seqStartSteps && bar != null) {
+      const graceMs = Math.min(80, 15000 / (externalGrid.bpm || bpm) * 0.5)
+      bar = externalGrid.pointAtOrAfter(now, _seqStartSteps, graceMs) ?? bar
+    }
+    const t = bar != null ? externalGrid.timeOf(bar) : null
+    if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
+  } else if (transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value) {
+    startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+  }
+  _seqStartSteps = 0
+  _sysStep = 0
+  _sysSched = new StepScheduler((step, t, late) => { _sysStep = step; callback(perfMsToAudioTime(t), t, late) }, { name: 'SEQ', startToleranceMs: 150 })
+  _sysSched.start(startMs, bpm, tempoMultiplier.value?.beatsPerStep ?? 0.25)
+  _offExtGrid = externalGrid.on(e => {
+    if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)
+  })
+  _stopTicker = createWorkerTicker(() => _sysSched?.tick(performance.now()))
+  _sysSched.tick(performance.now())
+}
+
+function _stopSystemClock() {
+  _stopTicker?.(); _stopTicker = null
+  _offExtGrid?.(); _offExtGrid = null
+  _sysSched?.stop(); _sysSched = null
+  // Note-ons still queued would sound after Stop (their note-offs stay queued: harmless).
+  midiService.cancelWorkerTimed(SEQ_WORKER_TAG)
+}
+
+// Switching the clock while playing: restart on the other one.
+watch(systemClock, () => {
+  if (!isPlaying.value) return
+  isPlaying.value = false
+  setTimeout(() => { isPlaying.value = true }, 0)
 })
 
 const TEMPO_MULTIPLIERS = [
@@ -612,6 +689,7 @@ let stepCallback = null
 // Time changed while playing: restart the repeat at the new interval from the next boundary of
 // the new grid, so the steps stay on the beat and the playhead keeps its position.
 watch(tempoMultiplier, (opt) => {
+  if (_sysSched && opt) { _sysSched.setStepBeats(opt.beatsPerStep); return }
   if (!stepCallback || repeatEventIdRef.value === null || !opt) return
   const transport = getTransport()
   const ticksPerStep = transport.toTicks(opt.interval)
@@ -631,6 +709,21 @@ watch(swingAmount, (val) => {
   getTransport().swing = val / 100
   getTransport().swingSubdivision = '16n'
 })
+
+// Rig Controller GEN (LIVE): generate, in the Chord Prog's key when it has one ({ root 0–11, mode }),
+// so the line sits on the chords: a scale of the same family is kept (e.g. Pentatonic Min in a minor
+// key), otherwise Major / Minor.
+const MINOR_FAMILY = ['Minor', 'Harmonic Min', 'Pentatonic Min', 'Blues', 'Dorian', 'Phrygian', 'Locrian']
+const MAJOR_FAMILY = ['Major', 'Pentatonic Maj', 'Lydian', 'Mixolydian']
+function handleRigGenerate(e) {
+  const { root, mode } = e?.detail ?? {}
+  if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) {
+    selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
+    const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY
+    if (!family.includes(selectedScale.value)) selectedScale.value = mode === 'minor' ? 'Minor' : 'Major'
+  }
+  generateSequence()
+}
 
 function generateSequence() {
   const styleCfg = STYLES[selectedStyle.value]
@@ -1012,8 +1105,22 @@ onMounted(() => {
   // playAll/stopAll), distinct from the legacy 'toggle-sequencer' channel above.
   // No skipBackingTrackSync-style guard needed — nothing but Play All/Stop All
   // dispatches this event, so there's no bidirectional loop to break.
+  // A Rig pad adds { sync } (its Trigger sync, sixteenths): start on / stop at that sync point.
   const handleToggle2 = (e) => {
     const play = e.detail?.play
+    const sync = e.detail?.sync
+    if (typeof sync === 'number') {
+      if (play) {
+        if (_seqStopSteps) { _seqStopSteps = 0; return } // a queued stop: un-queue it
+        if (isPlaying.value) return
+        _seqStartSteps = Math.max(0, sync)
+        isPlaying.value = true
+      } else if (isPlaying.value) {
+        if (sync > 0 && _sysSched && externalGrid.active) _seqStopSteps = sync
+        else isPlaying.value = false
+      }
+      return
+    }
     isPlaying.value = play === undefined ? !isPlaying.value : play
   }
   window.addEventListener('toggle-sequencer2', handleToggle2)
@@ -1024,6 +1131,7 @@ onMounted(() => {
   }
   window.addEventListener('seq-bank-select', handleBankSelect)
   window.addEventListener('seq-bank-cue', handleBankCue)
+  window.addEventListener('seq-generate', handleRigGenerate)
   window.addEventListener('seq-banks-reloaded', handleBanksReloaded)
 
   const handleTimeSet = (e) => {
@@ -1376,6 +1484,7 @@ onMounted(() => {
     window.removeEventListener('toggle-sequencer2', handleToggle2)
     window.removeEventListener('seq-bank-select', handleBankSelect)
     window.removeEventListener('seq-bank-cue', handleBankCue)
+    window.removeEventListener('seq-generate', handleRigGenerate)
     window.removeEventListener('seq-banks-reloaded', handleBanksReloaded)
     window.removeEventListener('seq-time-set', handleTimeSet)
     window.removeEventListener('seq-direction-set', handleDirectionSet)
@@ -1405,6 +1514,9 @@ watch(isPlaying, (playing) => {
   }
 
   if (!playing) {
+    _stopSystemClock()
+    _seqStartSteps = 0
+    _seqStopSteps = 0
     dynamicMidiTranspose.value = 0
     transportManager.releaseTransport()
     if (repeatEventIdRef.value !== null) {
@@ -1430,6 +1542,7 @@ watch(isPlaying, (playing) => {
       midiStore.sendNoteOff(note, 0, chan, MidiSource.SEQUENCER2)
     })
     activeMidiNotes.value.clear()
+    _seqVoices.clear()
 
     if (midiStore.syncSequencerTransport) midiStore.sendStop()
     midiStore.allNotesOff(props.channel)
@@ -1442,7 +1555,7 @@ watch(isPlaying, (playing) => {
     seqStore.playingChainIndex = null
     seqStore.playingBankIndex = null
     lastFollowedBank = -1
-    _pendingBank = null
+    setPendingBank(null)
   } else {
     if (fadeOutIntervalRef.value !== null) {
       clearInterval(fadeOutIntervalRef.value)
@@ -1458,9 +1571,25 @@ watch(isPlaying, (playing) => {
       midiStore.setBpm(props.bpm)
       if (midiStore.syncSequencerTransport) midiStore.sendStart()
 
-      stepCallback = (time) => {
+      // tMs (performance.now() ms) and late: only on the system clock (CLK SYS).
+      stepCallback = (time, tMs, late = false) => {
         const state = playStateRef.current
         if (!state.isPlaying) return
+        // A Rig pad's stop: on its sync point of the song grid; the notes still sounding end there.
+        if (_seqStopSteps && tMs != null) {
+          const songPos = _sysStartSixteenth + _sysStep * (tempoMultiplier.value?.beatsPerStep ?? 0.25) * 4
+          const off = songPos / _seqStopSteps
+          if (Math.abs(off - Math.round(off)) < 1e-6) {
+            _seqStopSteps = 0
+            for (const v of _seqVoices.cutAt(tMs)) {
+              midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.SEQUENCER2, null, tMs - 1, { workerTimed: true })
+              activeMidiNotes.value.delete(v.key)
+            }
+            state.isPlaying = false
+            setTimeout(() => { isPlaying.value = false }, Math.max(0, tMs - performance.now()))
+            return
+          }
+        }
         const len = state.steps.length
         let stepIdx
         const dir = sequenceDirection.value
@@ -1482,8 +1611,15 @@ watch(isPlaying, (playing) => {
           }
         }
         if (_pendingBank !== null && stepIdx === 0 && !seqStore.chainEnabled) {
+          // The old bank's notes still sounding (ties) end where the new bank starts.
+          if (tMs != null) {
+            for (const v of _seqVoices.cutAt(tMs)) {
+              midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.SEQUENCER2, null, tMs - 1, { workerTimed: true })
+              activeMidiNotes.value.delete(v.key)
+            }
+          }
           selectBank(_pendingBank)
-          _pendingBank = null
+          setPendingBank(null)
           const pb = seqStore.playbackSteps
           state.steps = pb.steps
           state.numSteps = pb.numSteps
@@ -1503,9 +1639,21 @@ watch(isPlaying, (playing) => {
         // Probability: roll once per pass — a miss skips this step's CC/notes
         // entirely for this loop but the playhead still advances normally
         // below (standard Elektron/Ableton-style step probability).
-        const probabilityHit = step.probability == null || Math.random() * 100 < step.probability
+        // Rig Controller Density (LIVE) thins the weakest steps of the bar out, like a missed probability roll.
+        const probabilityHit = (step.probability == null || Math.random() * 100 < step.probability)
+          && densityKeeps(stepIdx, !!step.accent, densityFor('seq'))
 
-        if (step.active && probabilityHit) {
+        // CLK SYS, a late step (late start after Live's Play, stalled page): a long note
+        // (ties, slow Time) whose end is still ahead sounds now for what is left ("chase").
+        let chase = null
+        if (step.active && probabilityHit && late && tMs != null) {
+          const stepMs = 60000 / (state.bpm * 4) * (tempoMultiplier.value.beatsPerStep * 4)
+          let durMs = stepMs * (step.gate / 100)
+          if (step.tieSteps > 0) durMs += stepMs * Math.min(step.tieSteps, state.steps.length - 1)
+          chase = chaseNote(tMs, Math.max(durMs, 10), performance.now(), true)
+        }
+
+        if (step.active && probabilityHit && (!late || chase)) {
           if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel, MidiSource.SEQUENCER2)
           if (state.param2CC !== null) midiStore.sendCC(state.param2CC, step.param2Value, state.channel, MidiSource.SEQUENCER2)
 
@@ -1513,6 +1661,7 @@ watch(isPlaying, (playing) => {
           let noteDurationMs = stepDurationMs * (step.gate / 100)
           if (step.tieSteps > 0) noteDurationMs += stepDurationMs * Math.min(step.tieSteps, state.steps.length - 1)
           noteDurationMs = Math.max(noteDurationMs, 10)
+          if (chase) { tMs = chase.onMs; noteDurationMs = chase.durMs }
 
           // Accent boosts velocity the same way the style generator's own
           // accentGrid already does (see generateSequence() below).
@@ -1520,6 +1669,21 @@ watch(isPlaying, (playing) => {
 
           step.notes.forEach(note => {
             const clampedNote = Math.max(0, Math.min(127, note + state.transpose + (state.dynamicMidiTranspose || 0)))
+            if (tMs != null) {
+              // CLK SYS: on and off at their times, from the Worker-timed queue.
+              const noteKey = `${clampedNote}-${state.channel}`
+              const ch = state.channel
+              const id = _seqVoices.start(noteKey, tMs + noteDurationMs, { note: clampedNote, channel: ch, key: noteKey })
+              midiStore.sendNoteOn(clampedNote, velocity, ch, MidiSource.SEQUENCER2, null, tMs, { workerTimed: true, workerTag: SEQ_WORKER_TAG })
+              activeMidiNotes.value.add(noteKey)
+              midiService.scheduleOnWorker(tMs + noteDurationMs, () => {
+                // A newer note of the same pitch owns it now: this note-off would cut it.
+                if (!_seqVoices.end(noteKey, id)) return
+                midiStore.sendNoteOff(clampedNote, 0, ch, MidiSource.SEQUENCER2)
+                activeMidiNotes.value.delete(noteKey)
+              }, undefined, 'SEQ note-off')
+              return
+            }
             midiStore.sendNoteOn(clampedNote, velocity, state.channel, MidiSource.SEQUENCER2)
             
             const noteKey = `${clampedNote}-${state.channel}`
@@ -1534,11 +1698,17 @@ watch(isPlaying, (playing) => {
           })
         }
 
-        getDraw().schedule(() => {
+        drawAt(() => {
           currentStep.value = stepIdx
           playStateRef.current.currentStep = stepIdx
           followChainPlayback(stepIdx)
         }, time)
+      }
+      if (systemClock.value) {
+        if (!playStateRef.current.isPlaying) return
+        _startSystemClock(stepCallback)
+        transportManager.acquireTransport()
+        return
       }
       repeatEventIdRef.value = getTransport().scheduleRepeat(stepCallback, tempoMultiplier.value.interval, transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value ? transportManager.getNextBarPosition() : undefined)
 
@@ -1594,6 +1764,9 @@ watch(() => midiStore.isTransportPlaying, (isPlayingMIDI) => {
 })
 
 onUnmounted(() => {
+  rigReports.seqPlaying = false
+  rigReports.queued.seq = null
+  _stopSystemClock()
   transportManager.releaseTransport()
   if (repeatEventIdRef.value !== null) {
     getTransport().clear(repeatEventIdRef.value)
@@ -2004,6 +2177,20 @@ let generateHidden = ref(false)
               >{{ opt.label }}</option>
             </select>
           </div>
+
+          <!-- Step clock: Audio (Tone.js transport, default) / System (Worker timer + Worker-timed MIDI) -->
+          <button
+            @click.stop="systemClock = !systemClock"
+            :title="systemClock
+              ? 'Clock: SYSTEM — steps on the system clock (a Worker timer), notes sent at their time: in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
+              : 'Clock: AUDIO — steps on the Tone.js transport (audio clock), as before. Click for SYSTEM (Worker timer).'"
+            :class="[
+              'px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-widest transition-colors',
+              systemClock
+                ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+                : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
+            ]"
+          >CLK {{ systemClock ? 'SYS' : 'AUDIO' }}</button>
 
           <!-- Direction -->
           <span class="text-[12px] text-neutral-500 font-mono">Direction</span>  

@@ -25,6 +25,8 @@ import { cableOutChannels } from '@/types/midi';
 import { MidiSource } from '@/types/midi';
 import { MidiMonitor } from './midi-monitor';
 import { MidiTransport } from './midi-transport';
+import { createWorkerTicker } from './step-scheduler';
+import { countSendDelay, countFlushGap, countSendCost } from './sys-clock-stats';
 import { SmartLatch } from './midi-smart-latch';
 import { MidiRouter, ThruNoteTracker } from './midi-routing';
 import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte, snapFaderValue } from './midi-broadcast';
@@ -53,7 +55,26 @@ function _parseSysExString(input: string): number[] | null {
 export interface BroadcastOptions {
   /** send on exactly `channel`, bypassing the cable / device OUT channel remap and channel filter */
   exactChannel?: boolean
+  /** a scheduled send (real port or virtual output) is delivered by a
+   *  Worker-timed queue, instead of a timestamped send (real ports) or a page
+   *  setTimeout (virtual outputs, which stutters with the page and is throttled
+   *  in the background). Measured on a Windows MIDI Services loopback
+   *  (MIDIWIN): the timestamp is ignored — note-on and note-off left together
+   *  and the note didn't sound. */
+  workerTimed?: boolean
+  /** tag of a workerTimed send, so it can be cancelled before it leaves
+   *  (cancelWorkerTimed: an app stopping drops its queued note-ons) */
+  workerTag?: string
+  /** only to these cables' devices (names, case/space tolerant) — e.g. the Rig Controller's
+   *  CC 7 to the cables picked in an app's scope */
+  onlyTargets?: string[]
 }
+
+/** A note-on velocity scaled by `f` (0–1); never below 1, as velocity 0 would be a note-off. */
+export const scaleVelocity = (v: number, f: number): number => (f >= 1 ? v : Math.max(1, Math.min(127, Math.round(v * Math.max(0, f)))))
+
+/** Key of one app → device cable for setMutedCables(). */
+export const cableMuteKey = (source: string, deviceName: string): string => `${source}→${deviceName.toLowerCase().trim()}`
 
 export class MidiService {
   // ── Core references ──────────────────────────────────────────────────────
@@ -95,8 +116,22 @@ export class MidiService {
   private static readonly ECHO_WINDOW_MS = 20;
   private static readonly LOOPBACK_MIN_ECHOES = 8;
   private _echoStats = new Map<string, { echo: number; other: number }>();
+  /** Set while following an external clock: outputs that get no clock / transport (see MidiTransport). */
+  private syncOutputBlock: ((outputName: string) => boolean) | null = null;
   private _loopbackInputs = new Map<string, string>(); // input id → name (echoes our output)
   private ingressFilter: ((event: MIDIMessageEvent) => boolean) | null = null;
+  /** Takes an input over entirely (Rig Controller's Launchpad Rig mode): a message it
+   *  returns true for reaches nothing else — raw listeners, MIDI Learn, mappings, Thru. */
+  private exclusiveInput: ((event: MIDIMessageEvent) => boolean) | null = null;
+  // Sources whose note-ons are dropped (the Rig Controller's Mute/Solo on the real apps).
+  // Note-offs still go out, so notes already playing end.
+  private mutedSources = new Set<MidiSource>();
+  // Single cables (app → device, as in MIDI Flow) whose note-ons are dropped: cableMuteKey().
+  private mutedCables = new Set<string>();
+  // Note-on velocity scales (the Rig Controller's Intensity): per source (whole app)
+  // and per cable (cableMuteKey()); 1 = as played.
+  private sourceVelocityScale = new Map<string, number>();
+  private cableVelocityScale = new Map<string, number>();
 
   // ── Echo / ingress suppression ───────────────────────────────────────────
   private lastSentMessages = new Map<string, { data: string; time: number }>();
@@ -117,7 +152,9 @@ export class MidiService {
   private sysexEnabled = false;
 
   // ── Virtual output registry ──────────────────────────────────────────────
-  private virtualOutputs = new Map<string, (data: number[]) => void>();
+  private virtualOutputs = new Map<string, (data: number[], at?: number) => void>();
+  // Virtual outputs that schedule on their own (registerVirtualOutput opts.timestamped).
+  private timestampedVirtuals = new Set<string>();
   // Real hardware port each virtual instrument is bound to (its Output port
   // setting) — tracked separately since the registered sendFn closure is
   // opaque. Used to detect the physical-loop case: an instrument's own bound
@@ -217,8 +254,8 @@ export class MidiService {
       if (this._resettingInputs.has(key) || Date.now() - lastReset < 500) continue;
       this._resettingInputs.add(key);
       console.log(`[MIDI] Poll-resetting new input: ${input.name}`);
-      input.removeEventListener('midimessage', this.handleIngressBound);
-      input.addEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
+      this.attachIngress(input);
       this._resettingInputs.delete(key);
       this._lastInputResetAt.set(key, Date.now());
     }
@@ -251,8 +288,15 @@ export class MidiService {
     return !wiredAsInput;
   }
 
-  registerVirtualOutput(name: string, sendFn: (data: number[]) => void, portName?: string): void {
+  /**
+   * `opts.timestamped`: the output takes a future time itself (the SY.CORE Link
+   * bridge plays it on Live's beat) — scheduled sends reach it at once with their
+   * `at`, instead of being held back by a timer here.
+   */
+  registerVirtualOutput(name: string, sendFn: (data: number[], at?: number) => void, portName?: string, opts?: { timestamped?: boolean }): void {
     this.virtualOutputs.set(name, sendFn);
+    if (opts?.timestamped) this.timestampedVirtuals.add(name);
+    else this.timestampedVirtuals.delete(name);
     if (portName) {
       this.virtualOutputPorts.set(name, portName);
       // Immediately close the input side of this loopback port if it was
@@ -269,7 +313,7 @@ export class MidiService {
     const target = this.normPort(portName);
     this.midiAccess.inputs.forEach(input => {
       if (this.normPort(input.name) === target && this.isBlockedLoopbackInput(input.name)) {
-        input.removeEventListener('midimessage', this.handleIngressBound);
+        this.detachIngress(input);
         input.close();
       }
     });
@@ -284,13 +328,13 @@ export class MidiService {
     for (const input of Array.from(this.midiAccess.inputs.values())) {
       if (this.normPort(input.name) !== target) continue;
       if (this.isBlockedLoopbackInput(input.name)) return; // never reopen a loopback output side
-      input.removeEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
       // open() only — same as reScanInputs(): a close()+open() cycle
       // corrupts some USB MIDI drivers (Worlde, etc.) until a replug.
       try { await input.open(); } catch (e) {
         console.warn(`[MIDI] Failed to open input "${input.name}":`, e);
       }
-      input.addEventListener('midimessage', this.handleIngressBound);
+      this.attachIngress(input);
       console.log(`[MIDI] Reconnected input: ${input.name}`);
       break;
     }
@@ -298,6 +342,7 @@ export class MidiService {
 
   unregisterVirtualOutput(name: string): void {
     this.virtualOutputs.delete(name);
+    this.timestampedVirtuals.delete(name);
     this.virtualOutputPorts.delete(name);
   }
 
@@ -329,6 +374,9 @@ export class MidiService {
     groups.forEach(names => {
       const anyEnabled = names.some(n => {
         const c = this.routingConfig?.registrations[n];
+        // A virtual instrument on the external clock source's loopback peer
+        // would echo our clock back into the source.
+        if (this.syncOutputBlock?.(this.virtualOutputPorts.get(n) ?? n)) return false;
         return c?.outEnabled && c?.[configField];
       });
       if (anyEnabled) targets.push(names[0]);
@@ -361,7 +409,7 @@ export class MidiService {
   }
 
   /** Send raw bytes to a virtual output by name */
-  private sendToVirtualOutput(name: string, data: number[]): void {
+  private sendToVirtualOutput(name: string, data: number[], at?: number): void {
     const fn = this.virtualOutputs.get(name);
     if (!fn) return;
 
@@ -371,8 +419,10 @@ export class MidiService {
     // everything else.
     this.logOutbound(name, data);
 
-    fn(data);
-    this.globalSentHashes.set(data.join(','), Date.now());
+    fn(data, at);
+    // echo matching uses the time it will actually leave
+    const deferMs = at != null ? Math.max(0, at - performance.now()) : 0;
+    this.globalSentHashes.set(data.join(','), Date.now() + deferMs);
   }
 
   /**
@@ -516,7 +566,8 @@ export class MidiService {
     const sendToVirtualOutput = (name: string, data: number[]) => this.sendToVirtualOutput(name, data);
 
     this.monitor = new MidiMonitor();
-    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualClockTargets, getVirtualTransportTargets, sendToVirtualOutput });
+    const isSyncOutputBlocked = (name: string) => !!this.syncOutputBlock?.(name);
+    this.transport = new MidiTransport({ getMidiAccess, getRoutingConfig, getVirtualClockTargets, getVirtualTransportTargets, sendToVirtualOutput, isSyncOutputBlocked });
     this.latch = new SmartLatch({ getMidiAccess, getRoutingConfig, getGlobalChannel });
     this.router = new MidiRouter({
       getMidiAccess,
@@ -647,7 +698,7 @@ export class MidiService {
     const inputs = Array.from(this.midiAccess.inputs.values())
       .filter(input => !this.isBlockedLoopbackInput(input.name));
     for (const input of inputs) {
-      input.removeEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
       try {
         // open() alone on an already-open port is a spec no-op, but on
         // Chromium it actually re-establishes the internal stream that
@@ -658,8 +709,8 @@ export class MidiService {
       } catch (e) {
         console.warn(`[MIDI] Failed to open input "${input.name}" on startup:`, e);
       }
-      input.removeEventListener('midimessage', this.handleIngressBound);
-      input.addEventListener('midimessage', this.handleIngressBound);
+      this.detachIngress(input);
+      this.attachIngress(input);
     }
     console.log(`[MIDI] Attached to ${inputs.length} inputs: ${inputs.map(i => i.name).join(', ')}`);
   }
@@ -722,6 +773,60 @@ export class MidiService {
 
   setGlobalChannel(channel: number): void {
     this.globalChannel = channel;
+  }
+
+  // ── External clock source port (P1/P3) ──────────────────────────────────
+  /** Inputs whose messages never go through Thru (the clock source port, e.g. "SYC CTRL B"). */
+  private thruBlockedInput: ((inputName: string) => boolean) | null = null;
+  /** Consumes control messages (the Control Map): true = handled, no Thru, no app listener. */
+  private controlConsumer: ((data: ArrayLike<number>, inputName: string) => boolean) | null = null;
+
+  setThruBlockedInput(fn: ((inputName: string) => boolean) | null): void {
+    this.thruBlockedInput = fn;
+  }
+
+  setControlConsumer(fn: ((data: ArrayLike<number>, inputName: string) => boolean) | null): void {
+    this.controlConsumer = fn;
+  }
+
+  setExclusiveInput(fn: ((event: MIDIMessageEvent) => boolean) | null): void {
+    this.exclusiveInput = fn;
+  }
+
+  /** Drop the note-ons of these sources (empty: none). */
+  setMutedSources(sources: Iterable<MidiSource>): void {
+    this.mutedSources = new Set(sources);
+  }
+
+  isSourceMuted(source: MidiSource): boolean {
+    return this.mutedSources.has(source);
+  }
+
+  /** Drop the note-ons of these cables only (keys from cableMuteKey(); empty: none). */
+  setMutedCables(keys: Iterable<string>): void {
+    this.mutedCables = new Set(keys);
+  }
+
+  isCableMuted(source: MidiSource | string, deviceName: string): boolean {
+    return this.mutedCables.size > 0 && this.mutedCables.has(cableMuteKey(source, deviceName));
+  }
+
+  /** Note-on velocity scales: per source and per cable key (cableMuteKey()); factors 0–1, missing = 1. */
+  setVelocityScales(sources: Record<string, number>, cables: Record<string, number> = {}): void {
+    this.sourceVelocityScale = new Map(Object.entries(sources).filter(([, f]) => f < 1));
+    this.cableVelocityScale = new Map(Object.entries(cables).filter(([, f]) => f < 1));
+  }
+
+  /** The velocity a note-on of `source` goes out with to `deviceName`. */
+  private cableVelocity(source: string, deviceName: string, v: number): number {
+    if (!this.cableVelocityScale.size) return v;
+    const f = this.cableVelocityScale.get(cableMuteKey(source, deviceName));
+    return f === undefined ? v : scaleVelocity(v, f);
+  }
+
+  /** The devices an app is cabled to in MIDI Flow (routing matrix targets). */
+  getCableTargets(source: MidiSource | string): string[] {
+    return Array.from(this.router.matrix.get(source as string) ?? []);
   }
 
   setIngressFilter(fn: ((event: MIDIMessageEvent) => boolean) | null): void {
@@ -792,6 +897,62 @@ export class MidiService {
     return Array.from(this._loopbackInputs.values());
   }
 
+  // ── Worker-timed delivery (BroadcastOptions.workerTimedVirtual) ───────────
+  private timedQueue: { at: number; fn: () => void; tag?: string; dest?: string }[] = [];
+  /** Last flush while the queue was busy (0 = idle): the gap to the next one is main-thread time. */
+  private lastBusyFlushAt = 0;
+  private stopTimedTicker: (() => void) | null = null;
+  private timedIdleSince = 0;
+
+  /** Run `fn` at `at` (performance.now() ms), on a Worker timer (~2–4 ms resolution). */
+  scheduleOnWorker(at: number, fn: () => void, tag?: string, dest?: string): void {
+    const q = this.timedQueue;
+    let i = q.length;
+    while (i > 0 && q[i - 1].at > at) i--;   // keep sorted; messages mostly arrive in order
+    q.splice(i, 0, { at, fn, tag, dest });
+    if (!this.stopTimedTicker) this.stopTimedTicker = createWorkerTicker(() => this.flushTimed(), 2);
+  }
+
+  /** Drop the queued workerTimed sends with this tag (not yet sent). */
+  cancelWorkerTimed(tag: string): void {
+    this.timedQueue = this.timedQueue.filter(item => item.tag !== tag);
+  }
+
+  private flushTimed(): void {
+    const now = performance.now();
+    const q = this.timedQueue;
+    if (this.lastBusyFlushAt) countFlushGap(now - this.lastBusyFlushAt);
+    while (q.length > 0 && q[0].at <= now + 1) {
+      const item = q.shift()!;
+      countSendDelay(now - item.at);
+      const t0 = performance.now();
+      try { item.fn(); } catch (e) { console.warn('[MIDI] timed send failed', e); }
+      countSendCost(item.dest ?? '?', performance.now() - t0);
+    }
+    this.lastBusyFlushAt = q.length > 0 ? performance.now() : 0;
+    if (q.length > 0) { this.timedIdleSince = 0; return; }
+    // Stop the Worker after 2 s with nothing queued.
+    if (!this.timedIdleSince) this.timedIdleSince = now;
+    else if (now - this.timedIdleSince > 2000) {
+      this.stopTimedTicker?.();
+      this.stopTimedTicker = null;
+      this.timedIdleSince = 0;
+    }
+  }
+
+  setSyncOutputBlock(fn: ((outputName: string) => boolean) | null): void {
+    this.syncOutputBlock = fn;
+  }
+
+  /** Following an external clock: stop our own clock and forward the source's (see MidiTransport). */
+  setFollowingExternalClock(on: boolean): void {
+    this.transport.setFollowingExternal(on);
+  }
+
+  forwardExternalRealTime(data: ArrayLike<number>): void {
+    this.transport.forwardRealTime(data);
+  }
+
   addRawListener(callback: (event: MIDIMessageEvent) => void): () => void {
     this.onRawListeners.push(callback);
     return () => { this.onRawListeners = this.onRawListeners.filter(l => l !== callback); };
@@ -858,8 +1019,8 @@ export class MidiService {
 
   // ── High-level message send ──────────────────────────────────────────────
 
-  sendCC(cc: number, value: number, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null): void {
-    this.broadcast('cc', { cc, value }, channel, source, skipDeviceId);
+  sendCC(cc: number, value: number, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, opts?: BroadcastOptions): void {
+    this.broadcast('cc', { cc, value }, channel, source, skipDeviceId, undefined, opts);
   }
 
   sendProgramChange(program: number, channel = 0, source: MidiSource = MidiSource.UI): void {
@@ -873,6 +1034,9 @@ export class MidiService {
    * delivered by a timer at that time.
    */
   sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions): void {
+    if (this.mutedSources.size && this.mutedSources.has(source)) return;
+    const vf = this.sourceVelocityScale.get(source);
+    if (vf !== undefined) velocity = scaleVelocity(velocity, vf);
     if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
       this.sendNoteSplit('noteon', note, velocity, channel);
       return;
@@ -892,6 +1056,43 @@ export class MidiService {
     const lsb = value & 0x7F;
     const msb = (value >> 7) & 0x7F;
     this.broadcast('pitchbend', { lsb, msb }, channel, source, skipDeviceId);
+  }
+
+  /**
+   * A note to ONE device by name (a real port or a virtual instrument), on exactly `channel`
+   * (0–15), outside the MIDI Flow cables: an app's own dedicated output, e.g. the Chord Prog's
+   * Bass (lowest note of each chord → its device/channel). Muted sources and velocity scale
+   * apply as in broadcast; `at` / workerTimed schedule it the same way. False: no such device.
+   */
+  sendNoteTo(deviceName: string, type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number,
+    source: MidiSource = MidiSource.UI, at?: number, opts?: BroadcastOptions): boolean {
+    if (!deviceName) return false;
+    if (type === 'noteon' && this.mutedSources.has(source)) return true;
+    const vf = this.sourceVelocityScale.get(source);
+    if (type === 'noteon' && vf !== undefined) velocity = scaleVelocity(velocity, vf);
+    const msg = [noteStatusByte(type, channel & 0x0f), note & 0x7f, velocity & 0x7f];
+    const want = deviceName.toLowerCase().trim();
+    const outs = this.midiAccess
+      ? Array.from(this.midiAccess.outputs.values()).filter(o => (o.name ?? '').toLowerCase().trim() === want)
+      : [];
+    const virt = this.virtualOutputs.has(deviceName) ? deviceName : null;
+    if (!outs.length && !virt) return false;
+    const deferMs = at != null ? at - performance.now() : 0;
+    const scheduled = deferMs > 1;
+    for (const out of outs) {
+      const deliver = () => { this.globalSentHashes.set(msg.join(','), Date.now()); out.send(msg); };
+      if (!scheduled) { this.logOutbound(out.name ?? deviceName, msg); deliver(); }
+      else if (opts?.workerTimed) this.scheduleOnWorker(at!, () => { this.logOutbound(out.name ?? deviceName, msg); deliver(); }, opts.workerTag, out.name ?? deviceName);
+      else { this.logOutbound(out.name ?? deviceName, msg); this.globalSentHashes.set(msg.join(','), Date.now() + deferMs); out.send(msg, at); }
+    }
+    if (virt) {
+      const deliver = () => this.sendToVirtualOutput(virt, msg);
+      if (scheduled && this.timestampedVirtuals.has(virt)) this.sendToVirtualOutput(virt, msg, at);
+      else if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virt);
+      else if (scheduled) setTimeout(deliver, deferMs);
+      else deliver();
+    }
+    return true;
   }
 
   sendRawNote(outputId: string | null, type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number): void {
@@ -999,9 +1200,10 @@ export class MidiService {
     }
   }
 
-  sendRawToDeviceByName(deviceName: string, data: number[]): void {
+  /** `at` (performance.now() ms, optional): a timestamped send — the browser puts it out then. */
+  sendRawToDeviceByName(deviceName: string, data: number[], at?: number): void {
     if (!this.midiAccess) {
-      this.sendToVirtualOutput(deviceName, data);
+      this.sendToVirtualOutput(deviceName, data, at);
       return;
     }
 
@@ -1016,7 +1218,7 @@ export class MidiService {
         const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === portName);
         if (out) {
           try {
-            out.send(data);
+            if (at != null) out.send(data, at); else out.send(data);
             this.logOutbound(deviceName, data);
             sent = true;
           } catch (e) {
@@ -1032,7 +1234,7 @@ export class MidiService {
     const out = Array.from(this.midiAccess.outputs.values()).find((p: any) => p.name === deviceName);
     if (out) {
       try {
-        out.send(data);
+        if (at != null) out.send(data, at); else out.send(data);
         this.logOutbound(deviceName, data);
         this._clearSendIssues(deviceName);
         return;
@@ -1048,7 +1250,7 @@ export class MidiService {
     }
 
     // 3. Try virtual output
-    this.sendToVirtualOutput(deviceName, data);
+    this.sendToVirtualOutput(deviceName, data, at);
   }
 
   /**
@@ -1210,6 +1412,8 @@ export class MidiService {
     // exactChannel: the app picked this channel itself (e.g. the Drum Machine's bassline channel) —
     // it goes out on it as is, ignoring the cable / device OUT channel remap and channel filter.
     const exactChannel = !!opts?.exactChannel;
+    const onlyTargets = opts?.onlyTargets ? new Set(opts.onlyTargets.map(n => n.toLowerCase().trim())) : null;
+    const allowed = (name: string) => !onlyTargets || onlyTargets.has(name.toLowerCase().trim());
 
     if (this.isSequencerPlaying && (type === 'noteon' || type === 'noteoff') && source === MidiSource.KEYBOARD) {
       return;
@@ -1299,6 +1503,9 @@ export class MidiService {
     targetDeviceIds.forEach(id => {
       const out = this.midiAccess?.outputs.get(id);
       if (!out) return;
+      if (!allowed(out.name)) return;
+      if (type === 'noteon' && this.isCableMuted(source, out.name)) return;
+      const vel = type === 'noteon' ? this.cableVelocity(source, out.name, data.velocity) : data?.velocity;
 
       const config = this.routingConfig?.registrations[out.name];
 
@@ -1348,7 +1555,7 @@ export class MidiService {
         let bytes: number[] = [];
 
         switch (type) {
-          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, vel]; break;
           case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
           case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
           case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
@@ -1365,7 +1572,7 @@ export class MidiService {
           const deliver = () => {
             if (latched) {
               const forward = type === 'noteon'
-                ? this.latch.handleNoteOn(out, config, data.note, data.velocity, targetChannel, '', Date.now())
+                ? this.latch.handleNoteOn(out, config, data.note, vel, targetChannel, '', Date.now())
                 : this.latch.handleNoteOff(out, data.note, targetChannel);
               if (!forward) return;
             }
@@ -1373,6 +1580,7 @@ export class MidiService {
             out.send(fullMsg);
           };
           if (!scheduled) deliver();
+          else if (opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, out.name);
           // the latch decides (and may send releases) at play time — keep it on a timer
           else if (latched) setTimeout(deliver, deferMs);
           else {
@@ -1389,6 +1597,9 @@ export class MidiService {
     virtualTargets.forEach(virtName => {
       const config = this.routingConfig?.registrations[virtName];
       if (!config || !config.outEnabled) return;
+      if (!allowed(virtName)) return;
+      if (type === 'noteon' && this.isCableMuted(source, virtName)) return;
+      const vel = type === 'noteon' ? this.cableVelocity(source, virtName, data.velocity) : data?.velocity;
 
           // Note-range + channel filter for app→virtual-instrument cables (MIDI Flow)
           const outputFilter = this.getOutputRouteFilter(source as string, virtName);
@@ -1433,7 +1644,7 @@ export class MidiService {
         let bytes: number[] = [];
 
         switch (type) {
-          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, data.velocity]; break;
+          case 'noteon': status = 0x90 + statusCh; bytes = [data.note, vel]; break;
           case 'noteoff': status = 0x80 + statusCh; bytes = [data.note, data.velocity]; break;
           case 'cc': status = 0xb0 + statusCh; bytes = [data.cc, data.value]; break;
           case 'pc': status = 0xc0 + statusCh; bytes = [data.program]; break;
@@ -1448,14 +1659,18 @@ export class MidiService {
           const deliver = () => {
             if (virtApplyLatch && (type === 'noteon' || type === 'noteoff')) {
               const forward = type === 'noteon'
-                ? this.latch.handleNoteOn(virtDevice, config, data.note, data.velocity, targetChannel, '', Date.now())
+                ? this.latch.handleNoteOn(virtDevice, config, data.note, vel, targetChannel, '', Date.now())
                 : this.latch.handleNoteOff(virtDevice, data.note, targetChannel);
               if (!forward) return;
             }
             this.sendToVirtualOutput(virtName, [status, ...bytes]);
           };
+          // An output that schedules on its own (SY.CORE Link) gets the time now; latched notes
+          // need the latch at play time, so they keep the timer.
+          if (scheduled && !virtApplyLatch && this.timestampedVirtuals.has(virtName)) this.sendToVirtualOutput(virtName, [status, ...bytes], at);
+          else if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virtName);
           // virtual instruments are plain JS callbacks: no timestamp, so a timer
-          if (scheduled) setTimeout(deliver, deferMs);
+          else if (scheduled) setTimeout(deliver, deferMs);
           else deliver();
         }
       });
@@ -1492,8 +1707,8 @@ export class MidiService {
           if (!this._resettingInputs.has(key) && Date.now() - lastReset > 500) {
             this._resettingInputs.add(key);
             console.log(`[MIDI] Device (re)connected: ${name}`);
-            input.removeEventListener('midimessage', this.handleIngressBound);
-            input.addEventListener('midimessage', this.handleIngressBound);
+            this.detachIngress(input);
+            this.attachIngress(input);
             this._resettingInputs.delete(key);
             this._lastInputResetAt.set(key, Date.now());
           }
@@ -1509,6 +1724,9 @@ export class MidiService {
     const inputId = input?.id;
     const status = event.data[0];
     const now = Date.now();
+
+    // An input taken over (setExclusiveInput): nobody else sees its messages.
+    if (this.exclusiveInput && this.exclusiveInput(event)) return;
 
     // Fire raw listeners
     this.onRawListeners.forEach(l => l(event));
@@ -1626,8 +1844,12 @@ export class MidiService {
     const recent = this.lastSentMessages.get(inputId);
     if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
 
-    // Global Thru routing
-    if (this.routingConfig && this.routingConfig.globalThruEnabled) {
+    // Control Map (P3): consumed here — no Thru, no app sees it as a note.
+    if (status < 0xF0 && this.controlConsumer?.(processedData, inputDevice?.name ?? '')) return;
+
+    // Global Thru routing (never from the external clock source port)
+    const thruBlocked = !!this.thruBlockedInput?.(inputDevice?.name ?? '');
+    if (this.routingConfig && this.routingConfig.globalThruEnabled && !thruBlocked) {
       const type = status & 0xf0;
       const isNote = type === 0x90 || type === 0x80;
       const isCC = type === 0xb0;
@@ -1682,6 +1904,32 @@ export class MidiService {
   }
 
   private handleIngressBound = this.handleIngress.bind(this);
+
+  /** The input object the ingress listener is attached to, per port id. */
+  private ingressAttached = new Map<string, MIDIInput>();
+
+  /**
+   * Attach the ingress listener to an input — exactly once per port id. The
+   * listener is (re)attached from several places (startup scan, reconnect,
+   * statechange, device poll); when one of them got a different object for the
+   * same port, the listener ended up on both and every message was handled
+   * twice: notes were saved by echo suppression, but an incoming MIDI clock
+   * read at double tempo (Live at 75 BPM → 150).
+   */
+  private attachIngress(input: MIDIInput): void {
+    const prev = this.ingressAttached.get(input.id);
+    if (prev && prev !== input) prev.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    input.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    input.addEventListener('midimessage', this.handleIngressBound as EventListener);
+    this.ingressAttached.set(input.id, input);
+  }
+
+  private detachIngress(input: MIDIInput): void {
+    input.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    const prev = this.ingressAttached.get(input.id);
+    if (prev && prev !== input) prev.removeEventListener('midimessage', this.handleIngressBound as EventListener);
+    this.ingressAttached.delete(input.id);
+  }
 
   /** Epoch ms when the browser received the message; `fallback` if the timestamp is unusable. */
   private arrivalTime(event: MIDIMessageEvent, fallback: number): number {

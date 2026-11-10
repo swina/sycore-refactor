@@ -1,0 +1,79 @@
+/**
+ * external-grid.ts — the external master's beat grid, shared with the apps
+ * that schedule on the system clock (StepScheduler). Fed by
+ * useExternalClockSync from ExternalClockFollower; read by the apps.
+ *
+ * Positions are song sixteenths (as in Song Position Pointer); times are
+ * performance.now() ms.
+ */
+export type ExternalGridEvent =
+  | { type: 'start'; sixteenth: number; t: number; bpm: number }
+  | { type: 'beat'; sixteenth: number; t: number; bpm: number }
+  | { type: 'stop' }
+
+class ExternalGrid {
+  /** Following a master that is playing. */
+  active = false
+  bpm = 0
+  /** Latest known grid point: song sixteenth `sixteenth` at time `t`. */
+  anchor: { sixteenth: number; t: number } | null = null
+  private listeners: ((e: ExternalGridEvent) => void)[] = []
+
+  on(cb: (e: ExternalGridEvent) => void): () => void {
+    this.listeners.push(cb)
+    return () => { this.listeners = this.listeners.filter(l => l !== cb) }
+  }
+
+  emit(e: ExternalGridEvent): void {
+    if (e.type === 'stop') {
+      this.active = false
+      this.anchor = null
+    } else {
+      this.active = true
+      if (e.bpm > 0) this.bpm = e.bpm
+      this.anchor = { sixteenth: e.sixteenth, t: e.t }
+    }
+    this.listeners.forEach(l => l(e))
+  }
+
+  /** Time of song sixteenth `s` from the latest anchor, or null. With no tempo
+   *  yet (the first Start after a reload: Live sends no clock while stopped)
+   *  only the anchor itself — the Start's downbeat — has a time. */
+  timeOf(s: number): number | null {
+    if (!this.anchor) return null
+    if (!(this.bpm > 0)) return s === this.anchor.sixteenth ? this.anchor.t : null
+    return this.anchor.t + (s - this.anchor.sixteenth) * (60000 / (this.bpm * 4))
+  }
+
+  /** The bar line (song sixteenth, multiple of 16) of the bar playing at time `t`. */
+  barAtOrBefore(t: number): number | null {
+    if (!this.anchor) return null
+    // No tempo yet: the Start's downbeat (a bar line) is the bar playing.
+    if (!(this.bpm > 0)) return Math.floor(this.anchor.sixteenth / 16) * 16
+    const stepMs = 60000 / (this.bpm * 4)
+    const s = this.anchor.sixteenth + Math.floor((t - this.anchor.t) / stepMs + 1e-6)
+    return Math.max(0, Math.floor(s / 16) * 16)
+  }
+
+  /** The first sync point (song sixteenth, multiple of `steps`: 4 = beat, 16 = bar) at or after
+   *  time `t` — or the one just passed, when `t` is within `graceMs` after it (a press a few ms
+   *  late on the beat starts on it, not a whole grid later). Null with no tempo yet. */
+  pointAtOrAfter(t: number, steps: number, graceMs = 0): number | null {
+    if (!this.anchor || !(this.bpm > 0) || !(steps > 0)) return null
+    const stepMs = 60000 / (this.bpm * 4)
+    const s = this.anchor.sixteenth + (t - this.anchor.t) / stepMs
+    const prev = Math.floor(s / steps + 1e-6) * steps
+    if ((s - prev) * stepMs <= graceMs) return Math.max(0, prev)
+    return prev + steps
+  }
+
+  /** The first bar line (song sixteenth, multiple of 16) at or after time `t`. */
+  barAtOrAfter(t: number): number | null {
+    if (!this.anchor || !(this.bpm > 0)) return null
+    const stepMs = 60000 / (this.bpm * 4)
+    const s = this.anchor.sixteenth + Math.ceil((t - this.anchor.t) / stepMs)
+    return Math.ceil(s / 16) * 16
+  }
+}
+
+export const externalGrid = new ExternalGrid()

@@ -13,7 +13,7 @@ import { useNoteLatchStore } from '@/stores/useNoteLatchStore'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { dispatch } from '@/types/events'
-import { FM1_OUTPUT, FM1_PANEL_ID } from '@/lib/fm1-bridge'
+import { FM1_OUTPUT } from '@/lib/fm1-bridge'
 import { DEVICE_TYPE_META, typeMeta } from '@/lib/device-type-meta'
 import { loadControllerPresets } from '@/lib/midi-controller-presets'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
@@ -752,12 +752,13 @@ watch(canvasNodes, (nodes) => {
   if (_silentActivated.value || !nodes?.length) return
   _silentActivated.value = true
   for (const node of nodes) {
-    // FM-1 Emulator on the canvas: load its panel hidden (its output only exists while it's mounted);
-    // the DECK shows it (InstrumentCockpitPanel)
-    if (node.name === FM1_OUTPUT && !node.sourceId) { if (!uiStore.isFm1EmulatorOpen) uiStore.openSilentPanel(FM1_PANEL_ID); continue }
+    // Not loaded at startup (user's choice, 2026-11-09): the FM-1 Emulator (heavy; open it from the
+    // launcher or the DECK when needed) and the Arpeggiator (its panel has no hidden mode: it showed
+    // up as a modal). Their cables work once they are opened.
+    if (node.name === FM1_OUTPUT && !node.sourceId) continue
     if (!node.sourceId) continue
     const panelId = APP_PANEL_ID[node.sourceId]
-    if (panelId) uiStore.openSilentPanel(panelId)
+    if (panelId && panelId !== 'arp') uiStore.openSilentPanel(panelId)
   }
 }, { immediate: true })
 

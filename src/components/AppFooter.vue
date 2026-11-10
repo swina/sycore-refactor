@@ -8,7 +8,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Music2, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SquareStack, Sparkles, BookOpen, Radio } from 'lucide-vue-next'
+import { AlertTriangle, Captions, Play, Square, SkipBack, SkipForward, Pause, Music, Music2, Volume2, Repeat, Link, Settings, Save, Home, User, Menu, X, SquareStack, Sparkles, BookOpen, Radio, Grid3X3 } from 'lucide-vue-next'
 import VirtualDeviceBadge from '@/components/ui/VirtualDeviceBadge.vue'
 import AppLauncherModal from '@/components/ui/AppLauncherModal.vue'
 import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
@@ -180,6 +180,7 @@ onMounted(() => {
     if (paramName === 'globalTransport') midiStore.toggleGlobalTransport()
     else if (paramName === 'panic') midiStore.panic()
     else if (paramName === 'deckToggle') uiStore.openPanel('instrument-cockpit')
+    else if (paramName === 'rigControllerToggle') uiStore.openPanel('rig-controller')
   })
 })
 
@@ -379,6 +380,20 @@ onUnmounted(() => {
           </button>
           <span
             v-if="mappingStore.learningParamName === 'deckToggle'"
+            class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
+          />
+        </div>
+        <div v-if="authStore.user" class="relative">
+          <button
+            @click="uiStore.openPanel('rig-controller')"
+            @contextmenu.prevent="openMenu($event, { name: 'rigControllerToggle', label: 'Rig Controller (Open)' })"
+            title="Rig Controller · Right-click to MIDI learn"
+            class="w-8 h-8 flex items-center justify-center hover:bg-synth-neon/40 rounded-full transition-all active:scale-90"
+          >
+            <Grid3X3 class="w-5 h-5 text-synth-neon" />
+          </button>
+          <span
+            v-if="mappingStore.learningParamName === 'rigControllerToggle'"
             class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
           />
         </div>

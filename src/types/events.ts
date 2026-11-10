@@ -30,7 +30,15 @@ export interface SyCoreEventMap {
   // Drum Machine
   'dm-trigger-fill': void;
   'dm-generate': void;
-  'dm-seq-switch': { seq: string };
+  'dm-generate-bass': { root?: number };
+  // quantize: on the next bar even with Sync Retrig off (Control Map, P3)
+  'dm-seq-switch': { seq: string; quantize?: boolean };
+  // Chord Prog slot from the Control Map (P3): next bar line while playing, at once when stopped
+  'cp-slot-cue': { idx: number; sync?: number };
+  // Rig Controller GEN: a new progression in the active slot
+  'cp-generate': { mode?: 'ai' | 'builtin' };
+  // Rig Controller GEN: a new sequence, in the Chord Prog's key when given
+  'seq-generate': { root?: number; mode?: 'major' | 'minor' };
   'seq-bank-cue': { idx: number };
   'seq-banks-reloaded': void;
   'dm-pad-trigger': { trackIdx: number; velocity: number };

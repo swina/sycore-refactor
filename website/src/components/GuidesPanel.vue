@@ -50,6 +50,15 @@ const CATEGORIES = [
     ],
   },
   {
+    label: 'Ableton Live',
+    color: 'text-synth-cyan',
+    items: [
+      { id: 'ableton-guide',    label: 'Link & Rig Controller — Guide', file: 'SYCORE_ABLETON_LIVE_GUIDE' },
+      { id: 'ableton-overview', label: 'SY.CORE for Ableton Live',      file: 'SYCORE_FOR_ABLETON_LIVE' },
+      { id: 'ableton-it',       label: 'SY.CORE per Ableton Live (IT)', file: 'SYCORE_FOR_ABLETON_LIVE_IT' },
+    ],
+  },
+  {
     label: 'Platform',
     color: 'text-amber-400',
     items: [
@@ -122,7 +131,8 @@ const ALL_ITEMS = CATEGORIES.flatMap(c => c.items)
 // filename (no extension) → id, for resolving inter-guide links
 const fileToId = Object.fromEntries(ALL_ITEMS.map(i => [i.file, i.id]))
 
-const activeId  = ref('commercial')
+const props = defineProps({ initialId: { type: String, default: null } })
+const activeId  = ref(props.initialId && ALL_ITEMS.some(i => i.id === props.initialId) ? props.initialId : 'commercial')
 const contentEl = ref(null)
 
 const renderedHtml = computed(() => {

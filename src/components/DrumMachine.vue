@@ -1,8 +1,12 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
-import { getTransport, getDraw, start as toneStart, now as toneNow } from 'tone'
-import { audioTimeToPerfMs } from '@/lib/audio-clock'
+import { getTransport, start as toneStart, now as toneNow } from 'tone'
+import { drawAt } from '@/lib/ui-clock'
+import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
+import { StepScheduler, createWorkerTicker, VoiceLedger } from '@/core/midi/step-scheduler'
+import { externalGrid } from '@/core/midi/external-grid'
+import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { DRUM_AI_SYSTEM_PROMPT } from '@/lib/drum-grid'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { Drum, Play, Square, X, Minus, ChevronDown, Copy, Trash2, Zap, Save, FolderOpen, Shuffle, Layers, Music2, Download, Settings2, Info, Sparkles } from 'lucide-vue-next'
@@ -30,6 +34,7 @@ import { buildDrumExportEvents, splitBars, drumEventsToMidi, renderDrumEvents, a
 import { captureInputDeviceId, isLoopbackAudioInput } from '@/lib/capture-input'
 import DrumExportModal from '@/components/DrumExportModal.vue'
 import { openCaptureInput, recordPart } from '@/lib/drum-export-capture'
+import { rigReports, rigParts } from '@/lib/rig-live'
 
 const uiStore        = useUiStore()
 const drumStore      = useDrumMachineStore()
@@ -188,9 +193,12 @@ function overwritePresetWithToast(id) {
 // Quantized sequence switching — set by tab click, applied at next bar start
 let _pendingSequence = null
 const pendingSequence = ref(null) // UI display only (drives pulsing tab border)
+// Rig Controller (rig-live.ts): the queued sequence, mirrored for the pads.
+watch(pendingSequence, v => { rigReports.queued.drum = v ? 'ABCDEFGH'.indexOf(v) : null })
 
 // Fill
 const fillActive    = ref(false)
+watch(fillActive, v => { rigReports.fill = v })
 let _fillAutoStop   = false
 const fillSaveFrom  = ref(1)
 const fillSaveTo    = ref(16)
@@ -214,6 +222,8 @@ watch(() => drumStore.bpm, v => {
   // state.bpm: retune the Transport too, or a tempo change while playing
   // leaves the grid on the old BPM and those offsets drift off-beat.
   if (drumStore.isPlaying) getTransport().bpm.value = v
+  // System clock on the internal tempo (with an external master the grid follows Live's beats).
+  if (_sysSched && !externalGrid.active) _sysSched.setTempo(v)
 })
 
 // ── FX strip visibility per track ─────────────────────────────────────────────
@@ -293,7 +303,7 @@ function buildPlayState() {
       steps:  t.steps.map(s => ({ ...s })),
     })),
     basslineEnabled: drumStore.basslineEnabled && showBassline.value,
-    basslineTracks: drumStore.currentBasslinePattern.map(t => ({
+    basslineTracks: (drumStore.basslineSequences[drumStore.basslineSequence ?? drumStore.activeSequence] ?? []).map(t => ({
       muted:  t.muted,
       solo:   t.solo,
       volume: t.volume,
@@ -328,21 +338,46 @@ const hasSolo = computed(() =>
 // already past (a live pad) goes out now.
 // channel (1–16, optional): a dedicated channel sent as is (the bassline's, bypassing the
 // MIDI Flow OUT channel remap); without it the global channel + routing, as before.
+// Gate: a step's note ends a little before the next step (10% of it, at most 15 ms), not
+// on it: with a 100% gate two 1/16 of the same note had the note-off of the first land on —
+// with a ms of jitter, after — the note-on of the second, and Live ended the new note at
+// once (a sliver). The note-off is counted from the step's time, not from a late send.
+// System clock: notes leave from a Worker-timed queue — not a timestamped send (ignored on
+// Windows MIDI Services loopbacks: on+off together, no sound) nor a page timer — and a note
+// of the same pitch still sounding (a tie, a late send) is ended just before the new one;
+// its own queued note-off is then skipped (_drumVoices, like the Sequencer's).
+const _drumVoices = new VoiceLedger()
 function _sendMidiNote(note, velocity, accent, fireTime, duration, channel = 0) {
+  if (_silentStep) return
   const vel = Math.max(1, Math.min(127, Math.round(velocity * (accent ? 1.35 : 1))))
-  const onAt  = fireTime == null ? performance.now() : Math.max(performance.now(), audioTimeToPerfMs(fireTime))
-  const offAt = onAt + Math.max(10, duration * 1000)
+  const now = performance.now()
+  const wantAt = fireTime == null ? now : audioTimeToPerfMs(fireTime)
+  const onAt  = Math.max(now, wantAt)
+  const durMs = duration * 1000
+  const offAt = Math.max(onAt + 10, wantAt + durMs - Math.min(15, durMs * 0.1))
   const ch   = channel >= 1 && channel <= 16 ? channel : midiStore.midiChannel
-  const opts = channel >= 1 && channel <= 16 ? { exactChannel: true } : undefined
-  midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, opts)
-  midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, offAt, opts)
+  const opts = channel >= 1 && channel <= 16 ? { exactChannel: true } : {}
+  if (!drumStore.systemClock) {
+    midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, opts)
+    midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, offAt, opts)
+    return
+  }
+  const key = `${ch}:${note}`
+  const prev = _drumVoices.cutKeyAt(key, onAt)
+  if (prev) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, onAt - 1, { ...opts, workerTimed: true })
+  const id = _drumVoices.start(key, offAt, true)
+  midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, { ...opts, workerTimed: true })
+  midiService.scheduleOnWorker(offAt, () => {
+    if (_drumVoices.end(key, id)) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, undefined, opts)
+  }, undefined, 'DRUM note-off')
 }
 
 // ── MIDI OUT ONLY (drumStore.midiOutOnly) — the virtual instruments the Drum Machine is wired to
 // in MIDI Flow; while there's one and the switch is on, every track plays its MIDI note (the
 // channel set there) and no sample sounds: steps, ratchets, bassline voices, pads. ──
+// Panel outputs count too: "Live (M4L)" (SY.CORE Link) and the FM-1 Emulator.
 const midiOutTargets = computed(() => (midiStore.routingMatrix[MidiSource.DRUM_MACHINE] ?? [])
-  .filter(name => midiStore.virtualInstruments.some(v => v.name === name)))
+  .filter(name => midiStore.virtualInstruments.some(v => v.name === name) || midiStore.panelOutputs.includes(name)))
 const midiOutOnly = computed(() => drumStore.midiOutOnly && midiOutTargets.value.length > 0)
 
 // a pad hit (live pad, MIDI-triggered pad, preview): the track's MIDI note instead of its sample
@@ -366,6 +401,123 @@ function _sendMidiRatchet(note, stepTimeSec, divisions, { velocity, accent, base
   }
 }
 
+// ── System clock (drumStore.systemClock) — steps from a StepScheduler on performance.now(),
+// ticked by a Worker timer, instead of the Tone.js transport (audio clock). With an external
+// master (Ableton Live, P1) the grid re-anchors on every beat of it. _scheduleCallback is the
+// same in both modes: it gets the step's time converted to AudioContext time, as before. ──
+let _silentStep = false      // a step found too late (stalled page): advance, don't sound
+let _sysSched = null
+let _stopTicker = null
+let _offExtGrid = null
+let _sysStartSixteenth = 0   // Live's song sixteenth of the Drum Machine's step 0
+let _startSteps = 0         // this start waits for a sync point: 16 = bar (Start@bar), 8/4 = 2/1 beats (Rig pad)
+// Rig Controller pads (Trigger sync): a stop or a sequence switch on the next sync point of Live's song
+// grid (sixteenths: 16 bar, 8/4 two/one beats), instead of the Drum Machine's own bar line.
+let _rigStopSteps = 0
+let _rigSeqSteps = 0
+
+// ── Rig Controller rows Drum and Bass: two parts, independent ─────────────────────────────
+// Drums + bassline, drums only, bassline only: each row's pads turn its part on (from a sequence) or
+// off, on its Trigger sync; both off, the Drum Machine stops. 'dm-part' { part, on, seq?, sync }.
+let _drumsOn = true
+let _bassOn = true
+let _partPending = [] // { part, on, seq, steps } waiting for their sync point
+function _applyPart(p) {
+  if (p.part === 'drum') {
+    if (p.on && p.seq && p.seq !== drumStore.activeSequence) {
+      // a bassline playing on the drums' sequence stays where it is
+      if (_bassOn && drumStore.basslineSequence === null) drumStore.basslineSequence = drumStore.activeSequence
+      drumStore.swapSequence(p.seq)
+    }
+    _drumsOn = p.on
+  } else {
+    if (p.on) {
+      if (p.seq) drumStore.basslineSequence = p.seq
+      drumStore.basslineEnabled = true
+      showBassline.value = true
+    }
+    _bassOn = p.on
+  }
+  drumStore.drumsOn = _drumsOn
+  drumStore.bassOn = _bassOn
+}
+/** The parts' switches still waiting, for the Rig (the slot that will play). */
+function _reportParts() {
+  const L = 'ABCDEFGH'
+  const q = part => { const p = _partPending.find(x => x.part === part && x.on && x.seq); return p ? L.indexOf(p.seq) : null }
+  rigReports.queued.bass = q('bass')
+  if (!_rigSeqSteps && !_pendingSequence) rigReports.queued.drum = q('drum')
+}
+function _onPart(e) {
+  const { part, on, seq } = e.detail ?? {}
+  const sync = e.detail?.sync ?? 0
+  if (part !== 'drum' && part !== 'bass') return
+  _partPending = _partPending.filter(p => p.part !== part)
+  if (!drumStore.isPlaying) {
+    if (on) {
+      // Starting from this part alone (the other row may join right after, e.g. both armed).
+      _drumsOn = part === 'drum'
+      _bassOn = part === 'bass'
+      _applyPart({ part, on: true, seq })
+      requestPlay(true, sync)
+    }
+    _reportParts()
+    return
+  }
+  if (sync <= 0 || !externalGrid.active) {
+    _applyPart({ part, on, seq })
+    _reportParts()
+    if (!_drumsOn && !_bassOn) { drumStore.isPlaying = false; return }
+    playStateRef.current = buildPlayState()
+    return
+  }
+  _partPending.push({ part, on, seq, steps: sync })
+  _reportParts()
+}
+
+function _startSystemClock() {
+  _stopSystemClock()
+  const now = performance.now()
+  let startMs = now + 20
+  let bpm = drumStore.bpm || 120
+  _sysStartSixteenth = 0
+  if (externalGrid.active && externalGrid.anchor) {
+    // The bar Live is playing now, even when this start comes late (a busy page after Live's
+    // Play): its steps already gone are handed out as late — the pattern advances silently and
+    // comes in on the first step still in time, instead of waiting for the next bar.
+    let bar = externalGrid.barAtOrBefore(now)
+    // Start@bar (a press of PLAY / its MIDI Learn) or a Rig pad's Trigger sync: from the next
+    // sync point (bar line, or beat), not mid-bar — unless the press came just after one (a few
+    // ms late on the downbeat). Step 0 of the pattern is then that point.
+    if (_startSteps && bar != null) {
+      const graceMs = Math.min(80, 15000 / (externalGrid.bpm || bpm) * 0.5)
+      bar = externalGrid.pointAtOrAfter(now, _startSteps, graceMs) ?? bar
+    }
+    _startSteps = 0
+    const t = bar != null ? externalGrid.timeOf(bar) : null
+    if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
+  } else if (transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value) {
+    // INT, with other apps on the Tone.js transport: their next bar line.
+    startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+  }
+  _sysSched = new StepScheduler((_step, t, late) => {
+    _silentStep = late
+    try { _scheduleCallback(perfMsToAudioTime(t)) } finally { _silentStep = false }
+  }, { name: 'DRUM', startToleranceMs: 150 })
+  _sysSched.start(startMs, bpm)
+  _offExtGrid = externalGrid.on(e => {
+    if (e.type === 'beat' && _sysSched) _sysSched.anchorTo(e.sixteenth - _sysStartSixteenth, e.t, e.bpm)
+  })
+  _stopTicker = createWorkerTicker(() => _sysSched?.tick(performance.now()))
+  _sysSched.tick(performance.now())
+}
+
+function _stopSystemClock() {
+  _stopTicker?.(); _stopTicker = null
+  _offExtGrid?.(); _offExtGrid = null
+  _sysSched?.stop(); _sysSched = null
+}
+
 function _scheduleCallback(time) {
   let state = playStateRef.current
   if (!state) return
@@ -374,11 +526,43 @@ function _scheduleCallback(time) {
   // Each track uses its own length for wrapping (per-track polymetry).
   const globalStep = stepCounter % 16
 
+  // ── Rig pad (Trigger sync): stop / switch on the song grid's sync point ──
+  const songStep = _sysStartSixteenth + stepCounter
+  if (_rigStopSteps && songStep % _rigStopSteps === 0) {
+    _rigStopSteps = 0
+    _pendingStop = false
+    drawAt(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
+    return
+  }
+  if (_rigSeqSteps && _pendingSequence !== null && !chainEnabled.value && songStep % _rigSeqSteps === 0) {
+    _rigSeqSteps = 0
+    drumStore.swapSequence(_pendingSequence)
+    _pendingSequence = null
+    playStateRef.current = buildPlayState()
+    state = playStateRef.current
+    drawAt(() => { pendingSequence.value = null }, time)
+  }
+  // ── Rig: a part (drums / bassline) on, off or switched, on its sync point ──
+  if (_partPending.length) {
+    const due = _partPending.filter(p => songStep % p.steps === 0)
+    if (due.length) {
+      _partPending = _partPending.filter(p => !due.includes(p))
+      for (const p of due) _applyPart(p)
+      drawAt(_reportParts, time)
+      if (!_drumsOn && !_bassOn) {
+        drawAt(() => { drumStore.isPlaying = false }, time)
+        return
+      }
+      playStateRef.current = buildPlayState()
+      state = playStateRef.current
+    }
+  }
+
   // ── Bar boundary (step 0): pending sequence swap + fill auto-stop ──
   if (globalStep === 0) {
     if (_pendingStop) {
       _pendingStop = false
-      getDraw().schedule(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
+      drawAt(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
       return
     }
     if (chainEnabled.value) {
@@ -394,24 +578,24 @@ function _scheduleCallback(time) {
         _pendingSequence = null
         playStateRef.current = buildPlayState()
         state = playStateRef.current
-        getDraw().schedule(() => { pendingSequence.value = null; chainSlotRef.value = _chainSlotIdx }, time)
+        drawAt(() => { pendingSequence.value = null; chainSlotRef.value = _chainSlotIdx }, time)
       }
-    } else if (_pendingSequence !== null) {
+    } else if (_pendingSequence !== null && !_rigSeqSteps) {
       drumStore.swapSequence(_pendingSequence)
       _pendingSequence = null
       playStateRef.current = buildPlayState()
       state = playStateRef.current
-      getDraw().schedule(() => { pendingSequence.value = null }, time)
+      drawAt(() => { pendingSequence.value = null }, time)
     }
     _measureCount++
     if (autofillEnabled.value && _measureCount % autofillEvery.value === 0) {
-      getDraw().schedule(() => { generateFill(); triggerFill() }, time)
+      drawAt(() => { generateFill(); triggerFill() }, time)
     }
     if (_fillAutoStop) {
       _fillAutoStop = false
       playStateRef.current = { ...state, fillActive: false }
       state = playStateRef.current
-      getDraw().schedule(() => { fillActive.value = false }, time)
+      drawAt(() => { fillActive.value = false }, time)
     }
     // REC SYNC: stop first (completed 16 steps), then start if newly armed.
     // Both events are deferred via getDraw so they fire at actual playback
@@ -420,7 +604,7 @@ function _scheduleCallback(time) {
       _recSyncBarsRemaining--
       if (_recSyncBarsRemaining <= 0) {
         _recSyncRecording = false
-        getDraw().schedule(() => {
+        drawAt(() => {
           window.dispatchEvent(new CustomEvent('capture-stop-rec'))
           recSyncActive.value = false
         }, time)
@@ -442,7 +626,7 @@ function _scheduleCallback(time) {
           detail: { background: true, preRoll: actualPreRoll },
         }))
       }, delayMs)
-      getDraw().schedule(() => {
+      drawAt(() => {
         recSyncArmed.value = false
         recSyncActive.value = true
       }, time)
@@ -458,6 +642,7 @@ function _scheduleCallback(time) {
   const soloActive = state.tracks.some(t => t.solo)
 
   state.tracks.forEach((track, trackIdx) => {
+    if (!_drumsOn) return // Rig: drums off, the bassline may play on
     const audible = soloActive ? track.solo : !track.muted
     if (!audible) return
 
@@ -478,6 +663,10 @@ function _scheduleCallback(time) {
     }
 
     if (!step.active) return
+    // Rig Controller Density (LIVE): the weakest steps of the bar on Live's grid go first.
+    if (!densityKeeps(songStep, !!step.accent, densityFor('drum'))) return
+    // Rig Controller Drum row (LIVE): Mute / Solo and Intensity on the drums only (the bassline has its row).
+    if (rigParts.drumMuted) return
 
     // Gate duration: tie=0 → 1 step, tie=N → N steps
     const stepDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
@@ -489,17 +678,18 @@ function _scheduleCallback(time) {
     if (track.midiOutEnabled || midiOutOnly.value) {
       // MIDI Out (this track, or MIDI OUT ONLY for all): drive an external drum
       // machine/synth's own sound instead of SY.CORE's internal sample.
+      const vel = step.velocity * rigParts.drumVelocity
       if (divisions <= 1) {
-        _sendMidiNote(track.midiNote, step.velocity, step.accent, fireTime, stepDur)
+        _sendMidiNote(track.midiNote, vel, step.accent, fireTime, stepDur)
       } else {
         _sendMidiRatchet(track.midiNote, stepTimeSec, divisions, {
-          velocity: step.velocity,
+          velocity: vel,
           accent:   step.accent,
           baseTime: fireTime,
           duration: stepDur,
         })
       }
-    } else {
+    } else if (!_silentStep) {
       drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
       if (divisions <= 1) {
         drumEngine.triggerPad(trackIdx, { velocity: step.velocity, accent: step.accent, time: fireTime, duration: stepDur })
@@ -522,17 +712,16 @@ function _scheduleCallback(time) {
   // Not written to drumStore.currentStep: a store mutation per 16th costs (watchers,
   // Pinia devtools) and nothing reads the step any more — see paintPlayhead().
   // MIDI OUT ONLY: the Drum Machine is just a MIDI note source, no transport display.
-  if (!midiOutOnly.value) getDraw().schedule(() => paintPlayhead(globalStep), time)
+  if (!midiOutOnly.value) drawAt(() => paintPlayhead(globalStep), time)
   // Toolbar bar.beat badge — once per beat, never per 16th.
   const beatPos = beatPosition(_measureCount, globalStep)
-  if (beatPos) getDraw().schedule(() => setDrumPosition(beatPos), time)
-  stepCounter++ // no wrap — each track uses its own modulo
+  if (beatPos) drawAt(() => setDrumPosition(beatPos), time)
 
-  // ── Bassline voices ──
-  if (state.basslineEnabled && state.basslineTracks) {
+  // ── Bassline voices (on the same step as the drums) ──
+  if (state.basslineEnabled && state.basslineTracks && _bassOn) {
     const bassSoloActive = state.basslineTracks.some(t => t.solo)
     state.basslineTracks.forEach((voice, vi) => {
-      if (voice.muted) return
+      if (voice.muted || rigParts.bassMuted) return
       if (bassSoloActive && !voice.solo) return
       const padIdx = state.basslineSourceSlots?.[vi]
       if (padIdx == null || padIdx < 0 || padIdx >= 11) return
@@ -541,9 +730,10 @@ function _scheduleCallback(time) {
       if (!step.active) return
       const bassDur = step.tie > 0 ? step.tie * stepTimeSec : stepTimeSec
       if (midiOutOnly.value) {
-        _sendMidiNote(step.note ?? 36, step.velocity, step.accent ?? false, fireTime, bassDur, drumStore.basslineMidiChannel)
+        _sendMidiNote(step.note ?? 36, step.velocity * rigParts.bassVelocity, step.accent ?? false, fireTime, bassDur, drumStore.basslineMidiChannel)
         return
       }
+      if (_silentStep) return
       drumEngine.setPadVolume(padIdx, (voice.volume ?? 0.85) * mixer.effectiveDrumsLevel)
       drumEngine.setPadPitch(padIdx, voice.pitch ?? 0)
       drumEngine.triggerPadWithNote(padIdx, step.note ?? 36, {
@@ -555,10 +745,21 @@ function _scheduleCallback(time) {
       })
     })
   }
+  stepCounter++ // no wrap — each track uses its own modulo
 }
 
 watch(() => drumStore.isPlaying, (playing) => {
   if (!playing) {
+    // Rig parts: both on again for the next start, the bassline back on the drums' sequence.
+    _drumsOn = _bassOn = true
+    _partPending = []
+    drumStore.drumsOn = drumStore.bassOn = true
+    drumStore.basslineSequence = null
+    rigReports.queued.bass = null
+    _startSteps = 0
+    _rigStopSteps = 0
+    _rigSeqSteps = 0
+    _stopSystemClock()
     if (repeatEventIdRef !== null) {
       getTransport().clear(repeatEventIdRef)
       repeatEventIdRef = null
@@ -592,6 +793,13 @@ watch(() => drumStore.isPlaying, (playing) => {
   resetDrumPosition()
 
   toneStart().then(() => {
+    if (drumStore.systemClock) {
+      if (!drumStore.isPlaying) return
+      playStateRef.current = buildPlayState()
+      _startSystemClock()
+      transportManager.acquireTransport()
+      return
+    }
     getTransport().bpm.value = drumStore.bpm
     playStateRef.current = buildPlayState()
 
@@ -610,6 +818,12 @@ watch(
     () => drumStore.repeaterDivision,
     fillActive,
     fillPattern,
+    // the bassline too: an edit or a new bassline while playing is heard at once
+    () => drumStore.basslineSequences[drumStore.basslineSequence ?? drumStore.activeSequence],
+    () => drumStore.basslineSequence,
+    () => drumStore.basslineEnabled,
+    () => drumStore.basslineSourceSlots,
+    showBassline,
   ],
   () => {
     if (drumStore.isPlaying) playStateRef.current = buildPlayState()
@@ -684,7 +898,33 @@ function _onMasterVolume(e) {
 
 function _onMidiFill()         { triggerFill() }
 function _onMidiGenerate()     { generatePattern() }
-function _onMidiSeqSwitch(e)   { clickSequenceTab(e.detail?.seq) }
+// Rig Controller Bass GEN: a new bassline in the active sequence, switched on; detail.root (0–11):
+// the Chord Prog's key, else the panel's root note.
+function _onGenerateBass(e) {
+  const pc = e.detail?.root
+  // into the sequence the bassline plays from (the Rig's Bass row may hold another one than the drums)
+  drumStore.generateBassline(Number.isInteger(pc) ? 24 + pc : basslineRootNote.value, drumStore.basslineSequence ?? undefined)
+  drumStore.basslineEnabled = true
+  showBassline.value = true
+}
+// quantize (Control Map, P3): on the next bar even with Sync Retrig off.
+// detail.sync (Rig pad's Trigger sync, sixteenths): 0 = at once, 4/8/16 = next beat / 2 beats / bar of the song grid.
+function _onMidiSeqSwitch(e) {
+  const sync = e.detail?.sync
+  if (typeof sync !== 'number') { clickSequenceTab(e.detail?.seq, !!e.detail?.quantize); return }
+  const seq = e.detail?.seq
+  _rigSeqSteps = 0
+  if (!drumStore.isPlaying || sync <= 0 || !externalGrid.active || seq === drumStore.activeSequence) {
+    // Stopped, at once, or the one already playing: switch now (and drop a queued switch).
+    _pendingSequence = null
+    pendingSequence.value = null
+    if (seq !== drumStore.activeSequence) drumStore.swapSequence(seq)
+    return
+  }
+  _rigSeqSteps = sync
+  _pendingSequence = seq
+  pendingSequence.value = seq
+}
 
 // ── REC SYNC ───────────────────────────────────────────────────────────────────
 function toggleRecSync() {
@@ -816,7 +1056,10 @@ onMounted(async () => {
   window.addEventListener('dm-master-volume',  _onMasterVolume)
   window.addEventListener('dm-trigger-fill',   _onMidiFill)
   window.addEventListener('dm-generate',       _onMidiGenerate)
+  window.addEventListener('dm-generate-bass',  _onGenerateBass)
+  window.addEventListener('dm-part',           _onPart)
   window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
+  window.addEventListener('dm-play-stop',      _onPlayStopRequest)
   window.addEventListener('timeline-dm-start', _tlDmStartHandler)
   window.addEventListener('timeline-dm-stop',  _tlDmStopHandler)
   window.addEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
@@ -840,7 +1083,17 @@ const _onBassMidiNote = (e) => {
   basslineMidiCapture.value = -1
 }
 
+// Switching the clock while playing: restart on the other one.
+watch(() => drumStore.systemClock, () => {
+  if (!drumStore.isPlaying) return
+  drumStore.isPlaying = false
+  nextTick(() => { drumStore.isPlaying = true })
+})
+
 onUnmounted(() => {
+  rigReports.queued.drum = null
+  rigReports.fill = false
+  _stopSystemClock()
   if (drumStore.isPlaying) drumStore.isPlaying = false
   if (repeatEventIdRef !== null) {
     getTransport().clear(repeatEventIdRef)
@@ -851,7 +1104,10 @@ onUnmounted(() => {
   window.removeEventListener('dm-master-volume',  _onMasterVolume)
   window.removeEventListener('dm-trigger-fill',   _onMidiFill)
   window.removeEventListener('dm-generate',       _onMidiGenerate)
+  window.removeEventListener('dm-generate-bass',  _onGenerateBass)
+  window.removeEventListener('dm-part',           _onPart)
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
+  window.removeEventListener('dm-play-stop',      _onPlayStopRequest)
   window.removeEventListener('timeline-dm-start', _tlDmStartHandler)
   window.removeEventListener('timeline-dm-stop',  _tlDmStopHandler)
   window.removeEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
@@ -1042,8 +1298,8 @@ async function saveDefaultKitDraft() {
 // Sync Retrig: TRUE = switch pattern on next first beat (quantized), FALSE = switch immediately on click
 const syncRetrig = ref(true)
 
-function clickSequenceTab(seq) {
-  if (syncRetrig.value && drumStore.isPlaying && seq !== drumStore.activeSequence) {
+function clickSequenceTab(seq, quantize = false) {
+  if ((syncRetrig.value || quantize) && drumStore.isPlaying && seq !== drumStore.activeSequence) {
     _pendingSequence = seq
     pendingSequence.value = seq
   } else {
@@ -1055,6 +1311,9 @@ function clickSequenceTab(seq) {
 
 // ── Fill ───────────────────────────────────────────────────────────────────────
 function triggerFill() {
+  // Fill always plays something: with no fill yet (never generated, nor loaded) one is made; then
+  // the same fill plays on each Fill until it is generated anew — or, with New, a new one each time.
+  if (newFillEachTime.value || !fillHasHits(fillPattern.value)) generateFill()
   fillActive.value = true
   _fillAutoStop = true
   if (drumStore.isPlaying) playStateRef.current = buildPlayState()
@@ -1535,13 +1794,47 @@ function resizeChain(len) {
 const autofillEvery   = ref(4)
 let _measureCount     = 0
 
-const stopAtEnd    = ref(false)
+// Start@bar / Stop@end: for a press of PLAY/STOP (panel, DECK card, MIDI Learn dm_play_stop).
+// With Live playing (CLK SYS) the start waits for the next bar line; the stop lets the bar end.
+// Starts from Live's own Start, the Timeline or the Control Map are not affected. Remembered.
+function _loadFlag(key, def) {
+  try { const v = localStorage.getItem(key); return v == null ? def : v === '1' } catch { return def }
+}
+const startAtBar   = ref(_loadFlag('S1_DM_START_AT_BAR', false))
+const stopAtEnd    = ref(_loadFlag('S1_DM_STOP_AT_END', false))
+watch(startAtBar, v => { try { localStorage.setItem('S1_DM_START_AT_BAR', v ? '1' : '0') } catch {} })
+watch(stopAtEnd,  v => { try { localStorage.setItem('S1_DM_STOP_AT_END',  v ? '1' : '0') } catch {} })
 const endWithFill  = ref(false)
+// Fill › New: each Fill generates a new fill (off: the same one until Gen). Remembered.
+const newFillEachTime = ref(_loadFlag('S1_DM_NEW_FILL', false))
+watch(newFillEachTime, v => { try { localStorage.setItem('S1_DM_NEW_FILL', v ? '1' : '0') } catch {} })
 const pendingStop  = ref(false)
 let   _pendingStop = false
 
+/** A press asking to play (true) or stop (false), with Start@bar / Stop@end — or, from a Rig pad,
+ *  on its Trigger sync (`sync`, sixteenths: 0 = at once, 4/8/16 = next beat / 2 beats / bar). */
+function requestPlay(play, sync) {
+  const rig = typeof sync === 'number'
+  if (play) {
+    if (_pendingStop || _rigStopSteps) { _pendingStop = false; _rigStopSteps = 0; pendingStop.value = false; return } // un-queue the stop
+    if (drumStore.isPlaying) return
+    _startSteps = rig ? Math.max(0, sync) : (startAtBar.value ? 16 : 0)
+    drumStore.isPlaying = true
+    return
+  }
+  if (!drumStore.isPlaying) return
+  if (!rig) { handlePlayStop(); return }
+  if (sync > 0 && externalGrid.active) { _rigStopSteps = sync; pendingStop.value = true } else drumStore.isPlaying = false
+}
+// 'dm-play-stop' (MIDI Learn, DECK card): { play: true/false }, or a toggle like the PLAY button;
+// a Rig pad adds { sync } (its Trigger sync).
+function _onPlayStopRequest(e) {
+  const play = e.detail?.play
+  if (typeof play === 'boolean') requestPlay(play, e.detail?.sync); else handlePlayStop()
+}
+
 function handlePlayStop() {
-  if (!drumStore.isPlaying) { drumStore.isPlaying = true; return }
+  if (!drumStore.isPlaying) { requestPlay(true); return }
   if (_pendingStop) { _pendingStop = false; pendingStop.value = false; drumStore.isPlaying = false; return }
   if (stopAtEnd.value) {
     _pendingStop = true
@@ -2774,8 +3067,12 @@ function cycleChainSlot(i) {
           />
         </div>
 
-        <!-- Stop at end options -->
+        <!-- Start at bar / stop at end options -->
         <div class="flex flex-col gap-0.5 mb-2">
+          <label class="flex items-center gap-1 cursor-pointer select-none" title="With Live playing: PLAY (and its MIDI Learn) starts on the next bar line">
+            <input type="checkbox" v-model="startAtBar" class="w-3 h-3 accent-emerald-500 cursor-pointer" />
+            <span class="text-[8px] font-mono uppercase tracking-widest" :class="startAtBar ? 'text-emerald-400' : 'text-neutral-500'">Start@bar</span>
+          </label>
           <label class="flex items-center gap-1 cursor-pointer select-none" title="Let the current pattern finish before stopping">
             <input type="checkbox" v-model="stopAtEnd" class="w-3 h-3 accent-red-500 cursor-pointer" />
             <span class="text-[8px] font-mono uppercase tracking-widest" :class="stopAtEnd ? 'text-red-400' : 'text-neutral-500'">Stop@end</span>
@@ -2998,6 +3295,23 @@ function cycleChainSlot(i) {
           <div class="w-px h-4 bg-neutral-800 shrink-0" />
         </template>
 
+        <!-- Step clock: Audio (Tone.js transport, default) / System (Worker timer + timestamped MIDI) -->
+        <button
+          @click.stop="drumStore.systemClock = !drumStore.systemClock"
+          :title="drumStore.systemClock
+            ? 'Clock: SYSTEM — steps on the system clock (a Worker timer, timestamped MIDI): MIDI stays in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
+            : 'Clock: AUDIO — steps on the Tone.js transport (audio clock), as before. Click for SYSTEM (Worker timer, timestamped MIDI): best with MIDI OUT ONLY.'"
+          :class="[
+            'flex items-center gap-1 px-2 py-0.5 -mt-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
+            drumStore.systemClock
+              ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
+          ]"
+        >
+          CLK {{ drumStore.systemClock ? 'SYS' : 'AUDIO' }}
+        </button>
+        <div class="w-px h-4 bg-neutral-800 shrink-0" />
+
         <!-- Repeater -->
         <div class="flex items-center gap-2">
           <div class="relative -mt-1" :class="mappingStore.mappedParams.has('dm_repeat') ? 'ring-1 ring-amber-500/60 rounded' : ''">
@@ -3063,6 +3377,10 @@ function cycleChainSlot(i) {
             class="px-2 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-500 text-[9px] font-black uppercase tracking-widest hover:border-neutral-500 hover:text-white transition-colors"
             title="Generate new fill pattern"
           >Gen</button>
+          <label class="flex items-center gap-1 cursor-pointer select-none" title="New: each Fill plays a newly generated fill. Off: the same fill until Gen">
+            <input type="checkbox" v-model="newFillEachTime" class="w-3 h-3 accent-cyan-500 cursor-pointer" />
+            <span class="text-[8px] font-mono uppercase tracking-widest" :class="newFillEachTime ? 'text-cyan-400' : 'text-neutral-500'">New</span>
+          </label>
           <div class="flex items-center gap-0.5">
             <input
               v-model.number="fillSaveFrom"
