@@ -76,7 +76,7 @@ In Live una manopola si mappa su un parametro di un device: una traccia nuova, u
 - **una tabella per tipo di strumento:** filtro sull'1, risonanza sul 2… su ogni Drift, Analog o Simpler (tabelle di fabbrica incluse);
 - **Rack e preset di Live:** prima le Macro configurate del Rack, con i loro nomi, poi lo strumento interno per gli slot rimasti; richiami le **Macro Variations** del Rack o rendi casuali le Macro dai pad;
 - **pickup:** cambi traccia e giri, niente salti — la manopola prende il controllo quando raggiunge il valore;
-- **mani libere quando ti fermi:** il mouse e le automazioni continuano a funzionare su ogni parametro.
+- **niente blocchi:** gli encoder muovono i parametri come il mouse; le manopole in Live seguono, il mouse e le automazioni continuano a funzionare.
 
 Il controller lo mappi una volta, in SY.CORE, e resta mappato.
 

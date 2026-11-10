@@ -55,7 +55,7 @@ const mapFeatures = [
   { icon: Table2, title: 'Tables per instrument', text: 'Factory tables for Drift, Analog and Simpler: the sound-shaping parameters on 16 slots, in the same order every time.' },
   { icon: Layers, title: 'Racks and Macros', text: 'Live\'s presets: the Rack\'s configured Macros come first, with their names; the instrument inside fills the rest.' },
   { icon: Shuffle, title: 'Macro Variations', text: 'Recall a Rack\'s variations, step through them or randomize the Macros, from pads or buttons.' },
-  { icon: Hand, title: 'Hands off when you stop', text: 'A slot holds its parameter only while you turn: the mouse and automation keep working.' },
+  { icon: Hand, title: 'Nothing locked', text: 'Encoders move parameters like the mouse: the knobs in Live follow, the mouse and automation keep working.' },
   { icon: SlidersHorizontal, title: 'Pickup', text: 'Change track and turn: no jumps. The knob catches the value, then drives it.' },
 ]
 

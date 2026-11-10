@@ -76,7 +76,7 @@ In Live a knob is mapped to one parameter of one device: a new track, a new set 
 - **one table per instrument type:** filter on 1, resonance on 2… on every Drift, Analog or Simpler (factory tables built in);
 - **Racks and Live's presets:** the Rack's configured Macros first, with their names, then the instrument inside for the slots left; recall the Rack's **Macro Variations** or randomize the Macros from pads;
 - **pickup:** change track and turn, no jumps — the knob takes over once it reaches the value;
-- **hands off when you stop:** the mouse and automation keep working on every parameter.
+- **nothing locked:** the encoders move parameters like the mouse; the knobs in Live follow, the mouse and automation keep working.
 
 You map the controller once, in SY.CORE, and it stays mapped.
 
