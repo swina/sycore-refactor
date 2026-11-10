@@ -38,6 +38,10 @@ export const useLiveMapStore = defineStore('liveMap', () => {
       if (e.slot < 0 || e.slot >= MAP_SLOTS) return
       values[e.slot] = e.value
       pickupFeedback(pick[e.slot], e.value, performance.now())
+    } else if (e.type === 'hello') {
+      // (re)connected: the device takes SY.CORE's target (after a reload SY.CORE starts on Follow, while the
+      // bridge may still hold a track picked before)
+      linkClient.sendMapTarget(target.value)
     } else if (e.type === 'map-tracks') {
       tracks.value = e.tracks
     } else if (e.type === 'state' && e.state !== 'connected') {

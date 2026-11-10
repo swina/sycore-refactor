@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-10
 
+- **SY.CORE Map: the target in step after a reload** — on (re)connecting to SY.CORE Link, SY.CORE sends its own target (Follow, or the track picked) to the Map device: after a page reload SY.CORE starts on Follow, and the device no longer stays locked on a track picked before. `stores/useLiveMapStore.ts`. Branch: `feat/sycore-map`
+
 - **SY.CORE Map: the track menu lists only tracks with an instrument** — Live Map's track menu shows "track · instrument" for the tracks with one; ◀ ▶ and the Track knob move among them only (from a group or the control track: the next / previous one with an instrument). `lib/live-map.ts` (`stepTrack`, `knobTrack` over a list), `stores/useLiveMapStore.ts` (`instrumentTracks`), `components/LiveMapSection.vue`; tests updated. Branch: `feat/sycore-map`
 
 - **SY.CORE Map: store and delete Macro Variations** — in Live Map's Variations row, **＋ Store** saves the Rack's Macros as they are now as a new variation (also on a Rack with none yet) and **Delete** removes the selected one (asks first; Live's Undo brings it back); both MIDI-learnable (`map_var_store`, `map_var_delete`). `lib/live-map.ts`, `lib/link-client.ts`, `stores/useLiveMapStore.ts`, `components/LiveMapSection.vue`, `lib/midi-learn-conflicts.ts`; tests updated; sycore-ableton bridge 1.3.3, `sycore-map.js`. Branch: `feat/sycore-map`
