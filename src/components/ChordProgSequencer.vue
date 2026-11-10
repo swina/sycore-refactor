@@ -416,6 +416,14 @@ function _stopSystemClock() {
   midiService.cancelWorkerTimed(CP_WORKER_TAG)
 }
 
+/**
+ * All Notes Off on the Chord Prog's own channels (chords, bass) — not a PANIC: a global one cut the
+ * Sequencer, the Bass line and every other app whenever the Chord Prog stopped (2026-11-10).
+ */
+function cpNotesOff(chan) {
+  for (const ch of new Set([chan, Math.max(1, Math.min(16, bassChannel.value))])) midiStore.allNotesOff(ch)
+}
+
 function stopAllNotes() {
   _stopPending = true
   midiService.cancelWorkerTimed(CP_WORKER_TAG)
@@ -453,7 +461,7 @@ function stopAllNotes() {
       _bassOff(heldBassNote)
       heldBassNote = null
     }
-    midiStore.panic()
+    cpNotesOff(chan)
     // Expression back to full (the channel's CC7 level was never touched)
     setTimeout(() => midiStore.sendCC(11, 127, chan, MidiSource.CHORD_PROG), 10)
     _panicTimeout = null
@@ -847,7 +855,7 @@ onUnmounted(() => {
     captureRecording.value = false
     window.dispatchEvent(new CustomEvent('capture-stop-rec'))
   }
-  if (_panicTimeout) { clearTimeout(_panicTimeout); midiStore.panic() }
+  if (_panicTimeout) { clearTimeout(_panicTimeout); cpNotesOff(midiStore.midiChannel) }
   if (rafRef.value !== null) cancelAnimationFrame(rafRef.value)
   previewTimeouts.forEach(id => clearTimeout(id))
   stopHeldChord()
