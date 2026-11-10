@@ -66,8 +66,9 @@ export interface LinkMapInfo {
   track: { index: number; name: string } | null
   device: { name: string; cls: string; rack: string | null } | null
   /** table: the instrument's table · macros: a Rack's Macros · mixed: a Rack's configured Macros, then the
-   *  first instrument's table (parameters a Macro holds left out) · none: nothing to drive */
-  mode: 'table' | 'macros' | 'mixed' | 'none'
+   *  first instrument's table (parameters a Macro holds left out) · auto: no table, the instrument's first
+   *  16 parameters (Max for Live devices, plugins) · none: nothing to drive */
+  mode: 'table' | 'macros' | 'mixed' | 'auto' | 'none'
   slots: ({ param: string; name: string; value: number } | null)[]
   /** the Macro Variations of the Rack in focus (selected -1 = none); null: no Rack */
   variations?: { count: number; selected: number } | null
