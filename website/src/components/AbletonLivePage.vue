@@ -1,6 +1,7 @@
 <script setup>
 // /ableton-live — SY.CORE with Ableton Live: SY.CORE Link, the Rig Controller and SY.CORE Map.
 import { onMounted } from 'vue'
+import AbletonModesDiagram from './AbletonModesDiagram.vue'
 import {
   Play, BookOpen, ArrowLeft, Zap, Cable, Clock, Grid3x3, SlidersHorizontal, Sparkles,
   Music, Drum, Timer, CircleDot, Square, KeyRound, Layers, Check, Ban, Globe, ShieldCheck, RefreshCw, Cpu,
@@ -200,6 +201,19 @@ const demo = [
           <div class="flex items-center gap-2"><Music class="h-4 w-4 text-synth-cyan" /> Your Drum Racks and synths play the parts</div>
         </div>
       </div>
+    </section>
+
+    <!-- Operating modes -->
+    <section class="mx-auto max-w-6xl px-5 py-20">
+      <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">Operating modes</p>
+      <h2 class="mt-3 max-w-3xl text-3xl font-extrabold md:text-4xl">
+        One bridge, four flows. <span class="text-synth-neon">Live stays the DAW.</span>
+      </h2>
+      <p class="mt-4 max-w-3xl text-neutral-400">
+        Your controllers talk to SY.CORE; SY.CORE talks to Live through SY.CORE Link. Live keeps the clock,
+        your instruments play the notes, and the Rig and Map devices bring SY.CORE's controls into the set.
+      </p>
+      <div class="mt-10"><AbletonModesDiagram /></div>
     </section>
 
     <!-- Timing -->
