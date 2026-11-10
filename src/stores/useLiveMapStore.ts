@@ -19,7 +19,7 @@ export const useLiveMapStore = defineStore('liveMap', () => {
   const info = ref<LinkMapInfo | null>(null)
   /** Each slot's parameter value, 0–1 (from Live; null = unknown) */
   const values = reactive<(number | null)[]>(Array(MAP_SLOTS).fill(null))
-  const tracks = ref<{ index: number; name: string }[]>([])
+  const tracks = ref<{ index: number; name: string; instrument?: string }[]>([])
   /** Follow Live's selected track, or a track index picked here */
   const target = ref<'follow' | number>('follow')
   /** Pickup (soft takeover) for absolute knobs; off = the parameter jumps to the knob */

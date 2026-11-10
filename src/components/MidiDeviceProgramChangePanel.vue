@@ -68,7 +68,8 @@ const devices = computed(() => {
   )
   // Add virtual instrument names to the set so they pass the filter
   midiStore.virtualInstruments.forEach(v => instrumentNames.add(v.name))
-  midiStore.panelOutputs.forEach(n => instrumentNames.add(n))
+  // panel outputs (FM-1 Emulator), not bridges ("Live (M4L)": SY.CORE Link has no programs of its own)
+  midiStore.panelOutputs.forEach(n => { if (!midiStore.isBridgeOutput(n)) instrumentNames.add(n) })
 
   return Object.values(midiStore.routingConfig.registrations)
     .filter(r => r.outEnabled && (r.pcEnabled || r.pc) && instrumentNames.has(r.name))

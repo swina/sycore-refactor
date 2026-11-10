@@ -52,7 +52,8 @@ export type LinkEvent =
   | { type: 'map-info'; info: LinkMapInfo }
   /** a slot's parameter moved in Live (mouse, automation): 0–1, for LEDs and pickup */
   | { type: 'map-value'; slot: number; value: number }
-  | { type: 'map-tracks'; tracks: { index: number; name: string }[] }
+  /** the set's tracks; instrument: its first instrument's name ('' = none) */
+  | { type: 'map-tracks'; tracks: { index: number; name: string; instrument?: string }[] }
   /** every parameter of an instrument (asked with requestMapParams), for the table editor */
   | { type: 'map-params'; cls: string; name: string; params: LinkMapParam[] }
 

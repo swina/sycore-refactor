@@ -47,7 +47,8 @@ export const useLinkStore = defineStore('link', () => {
   })
 
   function registerOutput() {
-    midiStore.registerPanelOutput(LINK_OUTPUT_NAME, (data, at) => { linkClient.sendMidi(data, at) }, undefined, { timestamped: true })
+    // a bridge, not an instrument: out of the Program Change list and the DECK's instruments
+    midiStore.registerPanelOutput(LINK_OUTPUT_NAME, (data, at) => { linkClient.sendMidi(data, at) }, undefined, { timestamped: true, bridge: true })
   }
   function unregisterOutput() {
     if (midiStore.panelOutputs.includes(LINK_OUTPUT_NAME)) midiStore.unregisterPanelOutput(LINK_OUTPUT_NAME)

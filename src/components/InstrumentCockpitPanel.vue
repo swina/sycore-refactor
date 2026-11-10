@@ -27,6 +27,8 @@ import DeckPlaylistSummary from '@/components/DeckPlaylistSummary.vue'
 import DeckSoloPerformanceSummary from '@/components/DeckSoloPerformanceSummary.vue'
 import DeckFm1Summary from '@/components/DeckFm1Summary.vue'
 import DeckLiveMapSummary from '@/components/DeckLiveMapSummary.vue'
+import { useLiveMapStore } from '@/stores/useLiveMapStore'
+import { useLinkStore } from '@/stores/useLinkStore'
 import VirtualDeviceView from '@/components/VirtualDeviceView.vue'
 import { FM1_OUTPUT, FM1_PANEL_ID, fm1Firmware, fm1InChannels } from '@/lib/fm1-bridge'
 import { fm1Parts } from '@/lib/fm1-firmwares'
@@ -313,13 +315,20 @@ const highlightedInstrumentNames = computed(() => {
 // e.g. Program Change, still read patch data from it), so without this
 // filter a device removed from the MIDI Flow canvas would keep showing up
 // here forever. ──
+// ── Ableton Live tracks with an instrument (SY.CORE Map device), in place of the "Live (M4L)" bridge ──
+const liveMap = useLiveMapStore()
+const linkStore = useLinkStore()
+const liveTracks = computed(() => (linkStore.connected ? liveMap.tracks.filter(t => t.instrument) : []))
+const liveFocus = computed(() => liveMap.info?.track?.index ?? -1)
+
 const instruments = computed(() => {
   // Force re-evaluation after performance set / solo set recall
   void patchVersion.value
   const uiOutputs = midiStore.routingMatrix[MidiSource.UI] ?? []
 
   return Object.values(midiStore.routingConfig?.registrations ?? {})
-    .filter(reg => deviceType(reg.name) !== 'controller' && canvasInstrumentNames.value.has(reg.name))
+    // a bridge ("Live (M4L)") is not an instrument: its Live tracks are listed instead (liveTracks)
+    .filter(reg => deviceType(reg.name) !== 'controller' && canvasInstrumentNames.value.has(reg.name) && !midiStore.isBridgeOutput(reg.name))
     .map(reg => {
       const virtualInstrument = midiStore.virtualInstruments.find(v => v.name === reg.name)
       const isVirtual = !!virtualInstrument
@@ -841,6 +850,22 @@ function handleBpmChange(e) {
                     {{ cp.patchName ?? 'No preset' }} {{ cp.patchCategory ? '(' + cp.patchCategory + ')' : '' }}
                   </span>
                   <span class="shrink-0 text-synth-neon/70">CH {{ cp.channel }}</span>
+                </div>
+              </template>
+              <!-- Ableton Live (SY.CORE Link is only a bridge): the tracks with an instrument; a click points
+                   SY.CORE Map's encoders at it -->
+              <template v-if="liveTracks.length">
+                <p class="pt-1.5 px-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80">Live</p>
+                <div v-for="t in liveTracks" :key="'live:' + t.index"
+                  @click="liveMap.setTarget(t.index)"
+                  title="Point SY.CORE Map's encoders at this track's instrument"
+                  class="flex items-center gap-2 py-0.5 px-1 border-b font-mono text-[14px] rounded transition-colors cursor-pointer hover:bg-white/5"
+                  :class="t.index === liveFocus ? 'border-emerald-700/50 bg-emerald-500/30' : 'border-neutral-900/60'"
+                >
+                  <Circle class="w-1.5 h-1.5 fill-current shrink-0" :class="t.index === liveFocus ? 'text-emerald-400' : 'text-neutral-600'" />
+                  <span class="truncate text-neutral-300 w-42 shrink-0" :title="t.name">{{ t.name }}</span>
+                  <span class="truncate flex-1 min-w-0 text-neutral-300">{{ t.instrument }}</span>
+                  <span class="shrink-0 text-emerald-400/70">MAP</span>
                 </div>
               </template>
             </div>

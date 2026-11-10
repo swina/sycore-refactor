@@ -227,13 +227,18 @@ export const useMidiStore = defineStore('midi', () => {
   const panelOutputs = ref<string[]>([])
   const panelOutputPanels = ref<Record<string, string>>({})
 
-  function registerPanelOutput(name: string, sendFn: (data: number[], at?: number) => void, panelId?: string, opts?: { timestamped?: boolean }) {
+  /** Panel outputs that are bridges, not instruments ("Live (M4L)": SY.CORE Link): left out of the
+   *  Program Change list and the DECK's instruments. */
+  const bridgeOutputs = ref<string[]>([])
+  const isBridgeOutput = (name: string) => bridgeOutputs.value.includes(name)
+  function registerPanelOutput(name: string, sendFn: (data: number[], at?: number) => void, panelId?: string, opts?: { timestamped?: boolean; bridge?: boolean }) {
+    if (opts?.bridge && !bridgeOutputs.value.includes(name)) bridgeOutputs.value.push(name)
     if (!routingConfig.value.registrations[name]) {
       addRegistration(name)
       // an instrument, not a controller: never treated as an input
       updateRegistration(name, 'inEnabled', false)
     }
-    midiService.registerVirtualOutput(name, sendFn, undefined, opts)
+    midiService.registerVirtualOutput(name, sendFn, undefined, opts && { timestamped: opts.timestamped })
     if (!panelOutputs.value.includes(name)) panelOutputs.value.push(name)
     if (panelId) panelOutputPanels.value = { ...panelOutputPanels.value, [name]: panelId }
   }
@@ -1067,6 +1072,8 @@ export const useMidiStore = defineStore('midi', () => {
     panelOutputs,
     panelOutputPanels,
     registerPanelOutput,
+    bridgeOutputs,
+    isBridgeOutput,
     isOutputOnline,
     unregisterPanelOutput,
     renameVirtualInstrument,
