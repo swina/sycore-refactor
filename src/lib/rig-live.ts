@@ -236,6 +236,15 @@ export function rowPadEvents(id: SlotRowId, slot: number, playing: number | null
   return padEvents(id, slot, playing, sync)
 }
 
+/** Live's Stop: the slots playing stay armed (unless the row already has one armed), so Live's next
+ *  Play starts them again — as Live's clips after a Stop / Play of the scene. */
+export function armPlaying(playing: Partial<Record<SlotRowId, number | null | undefined>>): void {
+  for (const id of SLOT_ROWS) {
+    const slot = playing[id]
+    if (slot != null && rigArmed[id] === null) rigArmed[id] = slot
+  }
+}
+
 /** The armed slot after a press on `slot`: the same pad disarms, another pad arms that slot. */
 export const armPress = (armed: number | null, slot: number): number | null => (armed === slot ? null : slot)
 

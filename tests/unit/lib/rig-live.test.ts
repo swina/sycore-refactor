@@ -255,3 +255,13 @@ describe('rig-live Arp knobs', () => {
     for (const r of RIG_ARP_RATES) expect(arpRateOf(arpRateValue(r))).toBe(r) // every rate of the Arpeggiator's slider
   })
 })
+
+import { armPlaying, rigArmed } from '@/lib/rig-live'
+describe("rig-live: Live's Stop arms the slots playing", () => {
+  it('arms each row playing; keeps a slot already armed; rows stopped stay unarmed', () => {
+    Object.assign(rigArmed, { chord: null, drum: 5, seq: null, bass: null })
+    armPlaying({ chord: 2, drum: 1, seq: null, bass: 0 })
+    expect({ ...rigArmed }).toEqual({ chord: 2, drum: 5, seq: null, bass: 0 })
+    Object.assign(rigArmed, { chord: null, drum: null, seq: null, bass: null })
+  })
+})
