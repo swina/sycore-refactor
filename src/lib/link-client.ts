@@ -39,6 +39,12 @@ export interface LinkStats {
   leadAvgMs: number | null
   /** How much later than the device's estimate Live's position reports arrived (ms, max). */
   reportJitterMs?: number | null
+  /** Bridge 1.4+: messages played on MIDI ports (via SY.CORE Link), late / dropped, to missing ports, timed-queue lateness (ms, max). */
+  portMsgs?: number
+  portLate?: number
+  portDropped?: number
+  portMissing?: number
+  portTimerMaxMs?: number | null
 }
 
 export type LinkEvent =
@@ -171,6 +177,8 @@ export class LinkClient {
   rttMs: number | null = null
   private rtts: number[] = []
   lastStats: LinkStats | null = null
+  /** performance.now() of lastStats (the device sends stats only while MIDI arrives). */
+  lastStatsAt = 0
 
   constructor(opts: LinkClientOptions = {}) {
     this.url = opts.url ?? LINK_DEFAULT_URL
@@ -333,7 +341,9 @@ export class LinkClient {
         break
       }
       case 'stats':
-        this.lastStats = { msgs: m.msgs | 0, late: m.late | 0, dropped: m.dropped | 0, leadMinMs: m.leadMinMs ?? null, leadAvgMs: m.leadAvgMs ?? null, reportJitterMs: m.reportJitterMs ?? null }
+        this.lastStats = { msgs: m.msgs | 0, late: m.late | 0, dropped: m.dropped | 0, leadMinMs: m.leadMinMs ?? null, leadAvgMs: m.leadAvgMs ?? null, reportJitterMs: m.reportJitterMs ?? null,
+          portMsgs: m.portMsgs | 0, portLate: m.portLate | 0, portDropped: m.portDropped | 0, portMissing: m.portMissing | 0, portTimerMaxMs: m.portTimerMaxMs ?? null }
+        this.lastStatsAt = performance.now()
         this.emit({ type: 'stats', stats: this.lastStats })
         break
       case 'error':

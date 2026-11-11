@@ -28,7 +28,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 <template>
   <Teleport to="body">
     <div
-      :class="['fixed inset-0 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm', zClass]"
+      :class="['fixed inset-0 flex items-center justify-center p-4 bg-black/85', zClass]"
       @click.self="emit('close')"
     >
       <Transition name="sy-modal" appear>

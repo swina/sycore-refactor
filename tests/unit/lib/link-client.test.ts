@@ -232,7 +232,14 @@ describe('LinkClient', () => {
   it('keeps the device stats', () => {
     const { client, ws } = connected()
     ws.recv({ type: 'stats', msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92 })
-    expect(client.lastStats).toEqual({ msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92, reportJitterMs: null })
+    expect(client.lastStats).toEqual({ msgs: 10, late: 1, dropped: 0, leadMinMs: 80, leadAvgMs: 92, reportJitterMs: null,
+      portMsgs: 0, portLate: 0, portDropped: 0, portMissing: 0, portTimerMaxMs: null })
+  })
+
+  it('keeps the bridge port stats (1.4)', () => {
+    const { client, ws } = connected()
+    ws.recv({ type: 'stats', msgs: 27, late: 0, dropped: 0, leadMinMs: 145, leadAvgMs: 160, portMsgs: 44, portLate: 0, portDropped: 0, portMissing: 0, portTimerMaxMs: 1.85 })
+    expect(client.lastStats).toMatchObject({ portMsgs: 44, portTimerMaxMs: 1.85 })
   })
 })
 

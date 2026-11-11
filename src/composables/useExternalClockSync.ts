@@ -25,6 +25,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { LinkClockAdapter } from '@/core/midi/link-clock'
 import { createWorkerTicker } from '@/core/midi/step-scheduler'
 import { linkClient, useLinkStore } from '@/stores/useLinkStore'
+import type { LinkStats } from '@/lib/link-client'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { rigReports } from '@/lib/rig-live'
@@ -253,6 +254,8 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     if (sys) store.diag += ` · ${sys}`
     if (store.isLink) {
       store.diag += ` · link RTT ${linkClient.rttMs ?? '?'} ms`
+      const ls = linkClient.lastStats
+      if (ls && now - linkClient.lastStatsAt < 1500) store.diag += ` · ${linkStatsText(ls)}`
       if (linkStartDiag) { store.diag += ` · ${linkStartDiag}`; linkStartDiag = '' }
     }
     const clockTime = new Date().toLocaleTimeString()
@@ -418,4 +421,16 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
   })
 
   return { follower }
+}
+
+/** The SY.CORE Link device's stats line, as in its device strip (+ ports, bridge 1.4). */
+export function linkStatsText(s: LinkStats): string {
+  const lead = s.leadMinMs == null ? '' : `, lead min ${Math.round(s.leadMinMs)} ms`
+  const jit = s.reportJitterMs == null ? '' : `, Live reports off max ${s.reportJitterMs} ms`
+  let t = `bridge ${s.msgs} msgs, ${s.late} late, ${s.dropped} dropped${lead}${jit}`
+  if (s.portMsgs || s.portLate || s.portDropped || s.portMissing) {
+    t += ` · bridge ports ${s.portMsgs ?? 0} msgs, ${s.portLate ?? 0} late, ${s.portDropped ?? 0} dropped, timer max ${s.portTimerMaxMs ?? '?'} ms`
+    if (s.portMissing) t += `, ${s.portMissing} to missing ports`
+  }
+  return t
 }

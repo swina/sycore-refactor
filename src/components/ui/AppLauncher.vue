@@ -66,7 +66,7 @@ function selectItem(m) {
           :key="'pinned-' + m.id"
           @click="selectItem(m)"
           :class="compact
-            ? 'group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 p-2.5 cursor-pointer transition-all active:scale-[0.97] hover:border-brand/40 dark:hover:border-synth-neon/30'
+            ? 'group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 p-2.5 cursor-pointer transition-colors active:scale-[0.97] hover:border-brand/40 dark:hover:border-synth-neon/30'
             : 'group relative aspect-[3/2] rounded-xl border overflow-hidden cursor-pointer transition-all duration-200 active:scale-[0.97] border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 backdrop-blur-sm hover:border-brand/40 dark:hover:border-synth-neon/30 hover:bg-surface-panel dark:hover:bg-neutral-900/70 shadow-sm dark:shadow-none'"
           :style="lazyBg(m.bg)"
         >
@@ -119,7 +119,7 @@ function selectItem(m) {
         :key="m.id"
         @click="selectItem(m)"
         :class="compact
-          ? 'group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 p-2.5 cursor-pointer transition-all active:scale-[0.97] hover:border-brand/40 dark:hover:border-synth-neon/30'
+          ? 'group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 p-2.5 cursor-pointer transition-colors active:scale-[0.97] hover:border-brand/40 dark:hover:border-synth-neon/30'
           : 'group relative aspect-[3/2] rounded-xl border overflow-hidden cursor-pointer transition-all duration-200 active:scale-[0.97] border-black/10 dark:border-neutral-800/80 bg-surface-panel dark:bg-neutral-900/40 backdrop-blur-sm hover:border-brand/40 dark:hover:border-synth-neon/30 hover:bg-surface-panel dark:hover:bg-neutral-900/70 shadow-sm dark:shadow-none'"
         :style="lazyBg(m.bg)"
       >
