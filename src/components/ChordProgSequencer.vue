@@ -456,6 +456,11 @@ function stopAllNotes() {
       midiStore.sendNoteOff(parseInt(noteStr), 0, parseInt(chanStr), MidiSource.CHORD_PROG)
     })
     _activeNoteKeys.clear()
+    // A chord clicked in chord mode (triggerChordStep) is held in heldChordNotes: explicit note-offs,
+    // since the channel's All Notes Off alone doesn't release it in Live (it used to rely on a PANIC).
+    heldChordNotes.forEach(({ note, channel }) =>
+      midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG))
+    heldChordNotes.length = 0
     stopBassNote()
     if (heldBassNote) {
       _bassOff(heldBassNote)
@@ -1072,6 +1077,14 @@ function triggerChordStep(idx, forcePlay = false) {
 
   // Stop any held chord + any preview notes
   stopHeldChord()
+  // A stop still fading out (stopAllNotes): cancel its end, or it would release this new chord;
+  // Expression back to full (the fade lowered it).
+  if (_panicTimeout) {
+    clearTimeout(_panicTimeout)
+    _panicTimeout = null
+    _stopPending = false
+    midiStore.sendCC(11, 127, channel, MidiSource.CHORD_PROG)
+  }
   previewTimeouts.forEach(id => clearTimeout(id))
   previewTimeouts.length = 0
   previewActiveNotes.forEach(({ note, channel }) =>

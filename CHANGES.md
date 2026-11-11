@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-11
 
+- **Chord Prog: a second click on a playing chord stops it again** — a chord clicked in chord mode stayed latched: its notes were held apart from the step notes and only the global PANIC (replaced on 2026-11-11 by All Notes Off on the Chord Prog's channels, which Live doesn't honour on its own) released them. The stop now sends their note-offs; a chord clicked while a stop is still fading out is no longer cut by that stop's end. `components/ChordProgSequencer.vue`. Branch: `feat/sycore-map`
+
 - **Drum, Chord Prog, Sequencer: steps computed 200 ms ahead (was 100)** — opening a panel or switching window can stop the page for 130–210 ms (Sync diagnostic: flush gap 211 ms, long tasks 129 ms, CLK SYS late steps CHORDS 12): with 100 ms the steps of those moments went out late, heard as jitter in Live, more with 1/4-note chords. The notes still play on their time (Web MIDI timestamps, the Worker queue, SY.CORE Link's beat): no latency added. The Arpeggiator stays at 100 ms (played live: a longer one plays on after the keys are released). `core/midi/step-scheduler.ts`; tests: `tests/unit/midi/step-scheduler.test.ts`. Branch: `feat/sycore-map`
 
 - **SY.CORE Map: tracks again after the SY.CORE Link device is reloaded** — the Map device sent its tracks and instrument to the bridge only when it loaded: after a reload of SY.CORE Link (a new bridge) Map · Live Instruments showed "no tracks" and FOLLOW could not be turned off (it needs a track to stay on). Now the bridge asks the Map device for everything when it starts (`map sync`, again after 3 s if nothing came). sycore-ableton bridge 1.3.5 (`sycore-link.js`), `sycore-map.js`. Branch: `feat/sycore-map` (sycore-ableton: `main`)
