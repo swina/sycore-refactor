@@ -143,8 +143,10 @@ export function applySnapshot(a: RigAppState, snap: LiveSnapshot): void {
   for (let i = 0; i < a.filled.length; i++) a.filled[i] = !!snap.filled[i]
   a.playing = snap.playing
   a.queued = snap.queued !== null && snap.queued !== snap.playing ? snap.queued : null
-  a.queue = []
-  a.lengths.fill(1)
+  // Called every frame (RigControllerPanel syncLive): a new [] each time made Vue re-render the Rig
+  // 60 times a second with nothing changed. Only write what differs.
+  if (a.queue.length) a.queue = []
+  for (let i = 0; i < a.lengths.length; i++) if (a.lengths[i] !== 1) a.lengths[i] = 1
 }
 
 /** Mirror the real clock: EXT (a MIDI source selected, not fallen back to INT) from Live, else the internal transport. */

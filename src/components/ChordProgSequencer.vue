@@ -1616,7 +1616,7 @@ function velBarColor(v) {
             >
               <span
                 :class="[
-                  'w-1.5 h-1.5 rounded-full transition-all duration-300',
+                  'w-1.5 h-1.5 rounded-full transition-colors duration-300',
                   captureRecording
                     ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] animate-pulse'
                     : syncStore.syncChordProgToAudioCapture
@@ -1926,10 +1926,10 @@ function velBarColor(v) {
           v-for="(step, idx) in store.steps.slice(0, 16)"
           :key="idx"
           :class="[
-            'relative flex flex-col items-center justify-between rounded border transition-all overflow-hidden',
+            'relative flex flex-col items-center justify-between rounded border transition-colors overflow-hidden',
             mappingStore.mappedParams.has('cp_step_' + idx) ? 'ring-1 ring-amber-500/60' : '',
             idx >= store.numSteps ? 'opacity-25 pointer-events-none' : '',
-            isCurrentPlayingStep(idx) ? 'border-yellow-400 bg-yellow-500/25 shadow-[0_0_12px_rgba(250,204,21,0.4)]' : '',
+            isCurrentPlayingStep(idx) ? 'border-yellow-400 bg-yellow-500/25 ring-1 ring-yellow-400/60' : '',
             idx === store.selectedStepIdx && !isCurrentPlayingStep(idx) ? 'border-purple-500 bg-purple-900/20' : '',
             step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-purple-700/60 bg-purple-950/40' : '',
             !step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-neutral-800 bg-neutral-950/60' : '',

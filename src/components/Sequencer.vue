@@ -2369,7 +2369,7 @@ let generateHidden = ref(false)
         <div class="inline-flex gap-1" style="min-width: max-content">
 
           <!-- Sticky row labels: Accent / Prob / Oct header rows, then B..C -->
-          <div class="flex flex-col shrink-0 sticky left-0 z-20 bg-neutral-900/95 backdrop-blur-sm rounded-lg">
+          <div class="flex flex-col shrink-0 sticky left-0 z-20 bg-neutral-900 rounded-lg">
             <div class="text-[9px] font-mono text-center py-0.5 select-none">&nbsp;</div>
             <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">Notes</div>
             <div class="h-4 flex items-center justify-end pr-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-500 border-t border-neutral-800">A</div>
@@ -2387,7 +2387,7 @@ let generateHidden = ref(false)
             class="group relative flex flex-col w-13 shrink-0 rounded-lg border transition-all"
             :class="[
               selectedStepIdx === idx ? 'border-synth-amber ring-1 ring-synth-amber/50 bg-neutral-800' : 'border-neutral-800 bg-neutral-950/40',
-              gridCurrentStep === idx && isPlaying ? 'border-amber-400 ring-1 ring-amber-400/50 z-10 shadow-[0_0_10px_rgba(245,158,11,0.25)]' : ''
+              gridCurrentStep === idx && isPlaying ? 'border-amber-400 ring-1 ring-amber-400/50 z-10' : ''
             ]"
           >
             <!-- Step Number -->

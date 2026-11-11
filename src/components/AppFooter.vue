@@ -191,7 +191,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <footer class="fixed bottom-0 left-0 w-full bg-surface-panel/95 dark:bg-black/95 backdrop-blur-md border-t border-black/5 dark:border-neutral-900/80 z-[960] text-[10px] font-mono tracking-widest text-neutral-500 uppercase h-10">
+  <footer class="fixed bottom-0 left-0 w-full bg-surface-panel dark:bg-black border-t border-black/5 dark:border-neutral-900/80 z-[960] text-[10px] font-mono tracking-widest text-neutral-500 uppercase h-10">
     <div class="h-full px-4 md:px-2 flex flex-row justify-between items-center gap-2">
 
       <button

@@ -50,6 +50,20 @@ describe('rig-live snapshots', () => {
     applySnapshot(a, { filled: Array(8).fill(true), playing: 1, queued: 3 })
     expect(a.queued).toBe(3)
   })
+
+  it('applySnapshot writes nothing when the snapshot did not change (it runs every frame)', async () => {
+    const { reactive, watch, nextTick } = await import('vue')
+    const s = reactive(createRigState())
+    const a = s.apps.find(x => x.id === 'drum')!
+    const snap = { filled: [true, false, false, false, false, false, false, false], playing: 0, queued: null }
+    applySnapshot(a, snap)
+    let changes = 0
+    watch(() => a, () => { changes++ }, { deep: true, flush: 'sync' })
+    applySnapshot(a, snap)
+    applySnapshot(a, snap)
+    await nextTick()
+    expect(changes).toBe(0)
+  })
 })
 
 describe('rig-live clock', () => {
