@@ -11,6 +11,7 @@ const router = useRouter()
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useChordProgEngine } from '@/core/engines/chord-prog'
 import { useSequencerEngine } from '@/core/engines/sequencer'
+import { useDrumMachineEngine } from '@/core/engines/drum-machine'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -104,6 +105,8 @@ const midiStore = useMidiStore()
 useChordProgEngine()
 // Same for the Sequencer (sequencer2): core/engines/sequencer.js.
 useSequencerEngine()
+// And the Drum Machine: core/engines/drum-machine.js (its samples, last preset and Default Kit load here).
+useDrumMachineEngine()
 const authStore = useAuthStore()
 const presetStore = usePresetStore()
 const arpStore = useArpStore()
@@ -168,7 +171,6 @@ function focusStyle(key) {
 const alwaysMountedPanels = [
   { focusKey: 'unifiedMidi', component: UnifiedMidiManager },
   { focusKey: 'loopMachine', component: LoopMachine },
-  { focusKey: 'drumMachine', component: DrumMachine },
   { focusKey: 'sampler', component: SamplerPanel },
   { focusKey: 'liveInput', component: LiveInputPanel },
   { focusKey: 'midiControllerDesigner', component: MidiControllerDesigner },
@@ -335,6 +337,10 @@ onMounted(() => {
       <!-- Always-mounted panels (no props) + simple single-flag toggle panels -->
       <div v-for="m in alwaysMountedPanels" :key="m.focusKey" :style="focusStyle(m.focusKey)">
         <component :is="m.component" />
+      </div>
+      <!-- Drum Machine: mounted only while open; its engine (core/engines/drum-machine.js) plays without it -->
+      <div :style="focusStyle('drumMachine')">
+        <DrumMachine v-if="uiStore.isDrumMachineOpen" />
       </div>
       <template v-for="m in simpleTogglePanels" :key="m.openId">
         <div :style="focusStyle(m.focusKey)">
