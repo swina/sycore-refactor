@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Maximize2, Settings, History, Zap, Keyboard, Music, BarChart3, Radio,
@@ -10,6 +10,7 @@ import {
 const router = useRouter()
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useChordProgEngine } from '@/core/engines/chord-prog'
+import { useSequencerEngine } from '@/core/engines/sequencer'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -101,6 +102,8 @@ import { IS_DEMO } from '@/lib/demo'
 const midiStore = useMidiStore()
 // The Chord Prog plays (Rig pads, Control Map, MIDI Flow) with its panel closed: its engine starts here.
 useChordProgEngine()
+// Same for the Sequencer (sequencer2): core/engines/sequencer.js.
+useSequencerEngine()
 const authStore = useAuthStore()
 const presetStore = usePresetStore()
 const arpStore = useArpStore()
@@ -131,7 +134,7 @@ onMounted(async () => {
 })
 
 // Local state
-const globalTranspose       = ref(0)
+const globalTranspose       = toRef(uiStore, 'seqGlobalTranspose') // shared with the Sequencer engine
 const sessionBpmOverride    = ref(false)
 
 const isAdmin = computed(() => authStore.isAdmin)
@@ -526,7 +529,9 @@ onMounted(() => {
            storage, so no initialConfig/configChange/activeSlot/savePattern —
            it persists purely via its own local autosave + Save/Load Library. -->
       <div :style="focusStyle('sequencer2')">
+        <!-- Mounted only while open: its engine (core/engines/sequencer.js) plays without it -->
         <Sequencer
+          v-if="uiStore.isSequencer2Open"
           :isOpen="uiStore.isSequencer2Open"
           :bpm="midiStore.currentBpm || 120"
           :channel="midiStore.midiChannel"

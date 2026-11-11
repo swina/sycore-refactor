@@ -227,6 +227,8 @@ export const useUiStore = defineStore('ui', () => {
   const activeVisualizerCategory: Ref<string> = ref('FILTER')
   const seqCurrentConfig: Ref<any> = ref(null)
   const seqCurrentConfig2: Ref<any> = ref(null)
+  /** The step sequencers' global transpose (semitones; set by a loaded pattern, CC 77). */
+  const seqGlobalTranspose: Ref<number> = ref(0)
   const seqActiveSlot: Ref<number> = ref(1)
 
   // Global MIDI modifiers (shared between VirtualKeyboard and ArpeggiatorPanel)
@@ -685,7 +687,7 @@ export const useUiStore = defineStore('ui', () => {
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
     isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, isAudioPlaying, lastPlaylistName,
-    activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqActiveSlot,
+    activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqGlobalTranspose, seqActiveSlot,
     globalModCC, globalTranspose,
     theme, toggleTheme,
     focusedModalKey, openModalKeys, cycleFocusedModal,
