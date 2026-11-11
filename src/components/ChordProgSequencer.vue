@@ -27,7 +27,7 @@ import AiPromptModal from './AiPromptModal.vue'
 import SongComposerDialog from './SongComposerDialog.vue'
 import { sendPartPresets } from '@/lib/song-composer'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
-import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { keyLabel } from '@/lib/chord-key'
 import { chordAfter } from '@/lib/chord-next'
@@ -204,7 +204,8 @@ function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
       const prev = _activeBassNote
       if (prev.tid) { clearTimeout(prev.tid); _pendingTimeouts.delete(prev.tid) }
       // Its own queued note-off is skipped from now on (it could cut this note, same pitch).
-      if (prev.id == null || _cpVoices.end(prev.key, prev.id)) {
+      // (its note-off already sent for later — release() — still ends it here: an earlier one)
+      if (prev.id == null || _cpVoices.end(prev.key, prev.id) || _cpVoices.sentOffAfter(prev.key, atMs) !== null) {
         _bassOff(prev, atMs - 1)
       }
       _activeBassNote = null
@@ -215,10 +216,15 @@ function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
     const dev = bassDevice.value
     const key = `bass-${n}-${ch}`
     const bass = { dev, note: n, channel: ch, key, bass: true }
-    const id = _cpVoices.start(key, atMs + durationMs, bass)
+    const offAt = atMs + durationMs
+    const id = _cpVoices.start(key, offAt, bass)
     _bassOn(dev, n, velocity, ch, atMs)
-    midiService.scheduleOnWorker(atMs + durationMs, () => {
-      if (_cpVoices.end(key, id)) _bassOff(bass)
+    // a note-off of this pitch already sent for later would cut it: strike it again just after
+    const cutBy = _cpVoices.sentOffAfter(key, atMs)
+    if (cutBy !== null && cutBy + 1 < offAt) _bassOn(dev, n, velocity, ch, cutBy + 1)
+    // decided NOTE_OFF_LEAD_MS early, sent timestamped (not when due: the main thread delayed it)
+    midiService.scheduleOnWorker(noteOffDecideAt(offAt, performance.now()), () => {
+      if (_cpVoices.release(key, id)) _bassOff(bass, offAt)
     }, undefined, 'CHORDS note-off')
     _activeBassNote = { ...bass, tid: null, id }
     return
@@ -355,12 +361,17 @@ const _cpVoices = new VoiceLedger()
 /** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue. */
 function _cpNoteAt(note, velocity, channel, onMs, durMs) {
   const noteKey = `${note}-${channel}`
-  const id = _cpVoices.start(noteKey, onMs + durMs, { note, channel, key: noteKey })
+  const offAt = onMs + durMs
+  const id = _cpVoices.start(noteKey, offAt, { note, channel, key: noteKey })
   midiStore.sendNoteOn(note, velocity, channel, MidiSource.CHORD_PROG, null, onMs, { workerTimed: true, workerTag: CP_WORKER_TAG })
+  // a note-off of this pitch already sent for later would cut it: strike it again just after
+  const cutBy = _cpVoices.sentOffAfter(noteKey, onMs)
+  if (cutBy !== null && cutBy + 1 < offAt) midiStore.sendNoteOn(note, velocity, channel, MidiSource.CHORD_PROG, null, cutBy + 1, { workerTimed: true, workerTag: CP_WORKER_TAG })
   _activeNoteKeys.add(noteKey)
-  midiService.scheduleOnWorker(onMs + durMs, () => {
-    if (!_cpVoices.end(noteKey, id)) return
-    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG)
+  // decided NOTE_OFF_LEAD_MS early, sent timestamped (not when due: the main thread delayed it)
+  midiService.scheduleOnWorker(noteOffDecideAt(offAt, performance.now()), () => {
+    if (!_cpVoices.release(noteKey, id)) return
+    midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG, null, offAt, { workerTimed: true })
     _activeNoteKeys.delete(noteKey)
   }, undefined, 'CHORDS note-off')
 }

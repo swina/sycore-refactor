@@ -48,7 +48,9 @@ export const useLinkStore = defineStore('link', () => {
 
   function registerOutput() {
     // a bridge, not an instrument: out of the Program Change list and the DECK's instruments
-    midiStore.registerPanelOutput(LINK_OUTPUT_NAME, (data, at) => { linkClient.sendMidi(data, at) }, undefined, { timestamped: true, bridge: true })
+    // Timestamped only while Live plays (link-client turns `at` into a Live beat then): stopped, it
+    // would send a future message at once — notes early, note-offs sent ahead cut short.
+    midiStore.registerPanelOutput(LINK_OUTPUT_NAME, (data, at) => { linkClient.sendMidi(data, at) }, undefined, { timestamped: () => linkClient.isReady && linkClient.transport.playing, bridge: true })
   }
   function unregisterOutput() {
     if (midiStore.panelOutputs.includes(LINK_OUTPUT_NAME)) midiStore.unregisterPanelOutput(LINK_OUTPUT_NAME)

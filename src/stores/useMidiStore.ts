@@ -231,7 +231,7 @@ export const useMidiStore = defineStore('midi', () => {
    *  Program Change list and the DECK's instruments. */
   const bridgeOutputs = ref<string[]>([])
   const isBridgeOutput = (name: string) => bridgeOutputs.value.includes(name)
-  function registerPanelOutput(name: string, sendFn: (data: number[], at?: number) => void, panelId?: string, opts?: { timestamped?: boolean; bridge?: boolean }) {
+  function registerPanelOutput(name: string, sendFn: (data: number[], at?: number) => void, panelId?: string, opts?: { timestamped?: boolean | (() => boolean); bridge?: boolean }) {
     if (opts?.bridge && !bridgeOutputs.value.includes(name)) bridgeOutputs.value.push(name)
     if (!routingConfig.value.registrations[name]) {
       addRegistration(name)

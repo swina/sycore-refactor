@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia'
 import { getTransport, start as toneStart, now as toneNow } from 'tone'
 import { drawAt } from '@/lib/ui-clock'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
-import { StepScheduler, createWorkerTicker, VoiceLedger } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { DRUM_AI_SYSTEM_PROMPT } from '@/lib/drum-grid'
@@ -367,8 +367,10 @@ function _sendMidiNote(note, velocity, accent, fireTime, duration, channel = 0) 
   if (prev) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, onAt - 1, { ...opts, workerTimed: true })
   const id = _drumVoices.start(key, offAt, true)
   midiStore.sendNoteOn(note, vel, ch, MidiSource.DRUM_MACHINE, null, onAt, { ...opts, workerTimed: true })
-  midiService.scheduleOnWorker(offAt, () => {
-    if (_drumVoices.end(key, id)) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, undefined, opts)
+  // decided NOTE_OFF_LEAD_MS early, sent timestamped (not when due: the main thread delayed it). No
+  // second strike when a note-off already sent cuts a newer hit (a drum hit twice is worse than short).
+  midiService.scheduleOnWorker(noteOffDecideAt(offAt, performance.now()), () => {
+    if (_drumVoices.release(key, id)) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, offAt, { ...opts, workerTimed: true })
   }, undefined, 'DRUM note-off')
 }
 

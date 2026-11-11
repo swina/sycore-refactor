@@ -22,7 +22,7 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import AiPromptModal from './AiPromptModal.vue'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
-import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger } from '@/core/midi/step-scheduler'
+import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
@@ -1684,13 +1684,18 @@ watch(isPlaying, (playing) => {
               // CLK SYS: on and off at their times, from the Worker-timed queue.
               const noteKey = `${clampedNote}-${state.channel}`
               const ch = state.channel
-              const id = _seqVoices.start(noteKey, tMs + noteDurationMs, { note: clampedNote, channel: ch, key: noteKey })
+              const offAt = tMs + noteDurationMs
+              const id = _seqVoices.start(noteKey, offAt, { note: clampedNote, channel: ch, key: noteKey })
               midiStore.sendNoteOn(clampedNote, velocity, ch, MidiSource.SEQUENCER2, null, tMs, { workerTimed: true, workerTag: SEQ_WORKER_TAG })
+              // a note-off of this pitch already sent for later would cut it: strike it again just after
+              const cutBy = _seqVoices.sentOffAfter(noteKey, tMs)
+              if (cutBy !== null && cutBy + 1 < offAt) midiStore.sendNoteOn(clampedNote, velocity, ch, MidiSource.SEQUENCER2, null, cutBy + 1, { workerTimed: true, workerTag: SEQ_WORKER_TAG })
               activeMidiNotes.value.add(noteKey)
-              midiService.scheduleOnWorker(tMs + noteDurationMs, () => {
+              // decided NOTE_OFF_LEAD_MS early, sent timestamped (not when due: the main thread delayed it)
+              midiService.scheduleOnWorker(noteOffDecideAt(offAt, performance.now()), () => {
                 // A newer note of the same pitch owns it now: this note-off would cut it.
-                if (!_seqVoices.end(noteKey, id)) return
-                midiStore.sendNoteOff(clampedNote, 0, ch, MidiSource.SEQUENCER2)
+                if (!_seqVoices.release(noteKey, id)) return
+                midiStore.sendNoteOff(clampedNote, 0, ch, MidiSource.SEQUENCER2, null, offAt, { workerTimed: true })
                 activeMidiNotes.value.delete(noteKey)
               }, undefined, 'SEQ note-off')
               return

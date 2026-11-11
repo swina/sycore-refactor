@@ -244,3 +244,42 @@ describe('VoiceLedger.cutKeyAt — a new note of the same pitch', () => {
     expect(v.cutKeyAt('1:38', 1100)).toBeNull()   // already ended before t
   })
 })
+
+import { noteOffDecideAt, NOTE_OFF_LEAD_MS } from '@/core/midi/step-scheduler'
+
+describe('VoiceLedger — note-offs sent ahead (release)', () => {
+  it('decides a note-off NOTE_OFF_LEAD_MS before it is due, never in the past', () => {
+    expect(noteOffDecideAt(1000, 0)).toBe(1000 - NOTE_OFF_LEAD_MS)
+    expect(noteOffDecideAt(1000, 950)).toBe(950)
+  })
+
+  it('release() is end() for a note-off sent ahead: skipped when a newer note owns the key', () => {
+    const v = new VoiceLedger<{ n: number }>()
+    const a = v.start('60-1', 1000, { n: 60 })
+    const b = v.start('60-1', 1500, { n: 60 })
+    expect(v.release('60-1', a)).toBe(false)
+    expect(v.release('60-1', b)).toBe(true)
+    expect(v.size).toBe(0)
+  })
+
+  it('a new note of a key whose note-off already left for later: that note-off time (strike again after it)', () => {
+    const v = new VoiceLedger<{ n: number }>()
+    const a = v.start('60-1', 1000, { n: 60 })
+    expect(v.release('60-1', a)).toBe(true)  // at 850: sent, timestamped for 1000
+    expect(v.sentOffAfter('60-1', 900)).toBe(1000) // a click plays 60 at 900: cut at 1000
+    expect(v.sentOffAfter('60-1', 1000)).toBeNull() // at 1000 or later: nothing to cut
+    expect(v.sentOffAfter('60-1', 900)).toBeNull()  // forgotten once past
+  })
+
+  it('a switch ends the notes whose note-off left for later as well (an earlier note-off)', () => {
+    const v = new VoiceLedger<{ n: number }>()
+    const a = v.start('60-1', 1000, { n: 60 })
+    v.start('64-1', 2000, { n: 64 })
+    v.release('60-1', a)
+    expect(v.cutAt(900).map(x => x.n).sort()).toEqual([60, 64])
+    expect(v.cutKeyAt('60-1', 950)).toEqual({ n: 60 })
+    expect(v.cutAt(1200)).toEqual([]) // past its time: forgotten
+    v.clear()
+    expect(v.sentOffAfter('60-1', 0)).toBeNull()
+  })
+})

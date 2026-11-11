@@ -52,4 +52,19 @@ describe('timestamped virtual outputs', () => {
     vi.advanceTimersByTime(90)
     expect(got).toHaveLength(1)
   })
+
+  it('timestamped only while it can (SY.CORE Link with Live stopped): else held until its time', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'performance'] })
+    const { svc, got } = setup()
+    let playing = false
+    svc.registerVirtualOutput('Live (M4L)', (data: number[], at?: number) => got.push({ msg: data, at }), undefined, { timestamped: () => playing })
+    svc.sendNoteOff(36, 0, 9, MidiSource.DRUM_MACHINE, null, performance.now() + 80)
+    expect(got).toEqual([]) // not sent early: Live stopped would play it at once
+    vi.advanceTimersByTime(90)
+    expect(got).toEqual([{ msg: [0x89, 36, 0], at: undefined }])
+    playing = true
+    const at = performance.now() + 80
+    svc.sendNoteOff(36, 0, 9, MidiSource.DRUM_MACHINE, null, at)
+    expect(got[1]).toEqual({ msg: [0x89, 36, 0], at })
+  })
 })

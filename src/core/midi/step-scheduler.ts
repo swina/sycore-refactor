@@ -177,6 +177,20 @@ export function chaseNote(onMs: number, durMs: number, now: number, late: boolea
 // ── Voices ──────────────────────────────────────────────────────────────────
 
 /**
+ * How early a queued note-off is decided and sent, timestamped for its time. Sent only when due
+ * (the old way), it waited on the main thread: a page stalled 50–250 ms let the notes ring on
+ * in Live by as much (Sync diagnostic 2026-11-11: send delay avg 20–60 ms, max 226). SY.CORE Link
+ * plays it on its beat; other outputs still get it at its time from the Worker queue. Under the
+ * StepScheduler's lookahead (200 ms): the note-ons before it are already known by then.
+ */
+export const NOTE_OFF_LEAD_MS = 150;
+
+/** When to decide a note-off due at `offAt` (never before `now`). */
+export function noteOffDecideAt(offAt: number, now: number): number {
+  return Math.max(now, offAt - NOTE_OFF_LEAD_MS);
+}
+
+/**
  * Who owns a sounding pitch, for notes whose note-off is queued ahead (CLK SYS).
  * A slot switch while a long note (a tie, a chord lasting a bar) still sounds:
  * the old note must end at the switch (else it rings on, like a tie), and its
@@ -186,6 +200,8 @@ export function chaseNote(onMs: number, durMs: number, now: number, late: boolea
  */
 export class VoiceLedger<T = unknown> {
   private voices = new Map<string, { id: number; offAt: number; data: T }>();
+  /** Voices whose note-off already left, timestamped for `offAt` (release()): it can't be called back. */
+  private sent = new Map<string, { offAt: number; data: T }>();
   private seq = 0;
 
   /** A note starts (ends at `offAt`): its id, for `end()`. A newer note of the same key takes it over. */
@@ -203,11 +219,34 @@ export class VoiceLedger<T = unknown> {
     return true;
   }
 
+  /** As end(), when the note-off is sent ahead (timestamped for `offAt`, NOTE_OFF_LEAD_MS early): the
+   *  voice is remembered until then, as that note-off would still cut a new note of its key (sentOffAfter). */
+  release(key: string, id: number): boolean {
+    const v = this.voices.get(key);
+    if (!v || v.id !== id) return false;
+    this.voices.delete(key);
+    this.sent.set(key, { offAt: v.offAt, data: v.data });
+    return true;
+  }
+
+  /** A new note of `key` starting at `t`: the time of a note-off of that key already sent that lands
+   *  after `t` (it will cut the new note: strike it again just after), else null. */
+  sentOffAfter(key: string, t: number): number | null {
+    const v = this.sent.get(key);
+    if (!v) return null;
+    if (v.offAt <= t) { this.sent.delete(key); return null; }
+    return v.offAt;
+  }
+
   /** A new note of `key` at `t`: the old note of that key still sounding after `t` is
    *  released (its queued note-off will be skipped); its data, to end it just before `t`. */
   cutKeyAt(key: string, t: number): T | null {
     const v = this.voices.get(key);
-    if (!v || v.offAt <= t) return null;
+    if (!v || v.offAt <= t) {
+      // its note-off already sent, for later: end it at `t` all the same (an extra early note-off)
+      const s = this.sent.get(key);
+      return s && s.offAt > t ? s.data : null;
+    }
     this.voices.delete(key);
     return v.data;
   }
@@ -219,10 +258,14 @@ export class VoiceLedger<T = unknown> {
     for (const [k, v] of this.voices) {
       if (v.offAt > t) { out.push(v.data); this.voices.delete(k); }
     }
+    // note-offs already sent for later: these notes end at `t` too (an extra, earlier note-off)
+    for (const [k, v] of this.sent) {
+      if (v.offAt > t) { if (!this.voices.has(k)) out.push(v.data); } else this.sent.delete(k);
+    }
     return out;
   }
 
-  clear(): void { this.voices.clear(); }
+  clear(): void { this.voices.clear(); this.sent.clear(); }
   get size(): number { return this.voices.size; }
 }
 
