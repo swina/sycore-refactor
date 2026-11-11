@@ -3,13 +3,22 @@ import { StepScheduler, chaseNote } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { ExternalClockFollower, type ExternalClockEvent } from '@/core/midi/external-clock'
 
+// The cases below are written for a 100 ms lookahead (the default is 200: see its own test).
 function collect(opts = {}) {
   const steps: { step: number; t: number; late: boolean }[] = []
-  const s = new StepScheduler((step, t, late) => steps.push({ step, t, late }), opts)
+  const s = new StepScheduler((step, t, late) => steps.push({ step, t, late }), { lookaheadMs: 100, ...opts })
   return { s, steps }
 }
 
 describe('StepScheduler — system-clock step grid', () => {
+  it('looks 200 ms ahead by default (a page stalled up to that long still sends its steps in time)', () => {
+    const steps: number[] = []
+    const s = new StepScheduler(step => steps.push(step))
+    s.start(1000, 120) // 16ths of 125 ms
+    s.tick(1000)
+    expect(steps).toEqual([0, 1])
+  })
+
   it('hands out steps up to the lookahead, each at its grid time', () => {
     const { s, steps } = collect({ lookaheadMs: 100 })
     s.start(1000, 120) // a 16th = 125 ms
@@ -105,7 +114,7 @@ describe('ExternalClockFollower — beat events for the system-clock grid', () =
 describe('StepScheduler — a late start joins the bar in phase', () => {
   it('steps already gone are late (silent); the first one still in time sounds on the grid', () => {
     const steps: { step: number; t: number; late: boolean }[] = []
-    const s = new StepScheduler((step, t, late) => steps.push({ step, t, late }))
+    const s = new StepScheduler((step, t, late) => steps.push({ step, t, late }), { lookaheadMs: 100 })
     // Live's bar started at 0 (75 BPM: a 16th = 200 ms); the app only starts at 450 ms.
     s.start(0, 75)
     s.tick(450)

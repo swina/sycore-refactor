@@ -56,7 +56,10 @@ export class StepScheduler {
   private sawOnTime = false;
 
   constructor(private onStep: StepCallback, opts: StepSchedulerOptions = {}) {
-    this.lookaheadMs = opts.lookaheadMs ?? 100;
+    // 200 ms: the page can stop for 130–210 ms (a panel opened, a window switch); with 100 the steps of
+    // those moments went out late (CLK SYS late steps, heard as jitter in Live). The notes still play on
+    // their time (Web MIDI timestamps, the Worker queue, SY.CORE Link's beat), so no latency is added.
+    this.lookaheadMs = opts.lookaheadMs ?? 200;
     this.lateToleranceMs = opts.lateToleranceMs ?? 60;
     this.name = opts.name;
     this.startToleranceMs = opts.startToleranceMs ?? 0;
