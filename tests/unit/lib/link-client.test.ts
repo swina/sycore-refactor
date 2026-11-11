@@ -144,6 +144,17 @@ describe('LinkClient', () => {
     expect(m.beat).toBeCloseTo(0.5)
   })
 
+  it('an exact beat from the app grid goes out as is (not converted from the time)', () => {
+    const { client, ws } = connected()
+    const fixes: number[] = []
+    client.onExactBeat = ms => fixes.push(ms)
+    client.sendMidi([0x90, 60, 100], 252, 0.5) // its time gives beat 0.504: the grid says 0.5
+    expect(ws.sent.at(-1).beat).toBe(0.5)
+    expect(fixes[0]).toBeCloseTo(-2) // the conversion was 2 ms off
+    client.sendMidi([0x90, 60, 100], 252, 3) // far from its time: not trusted, converted
+    expect(ws.sent.at(-1).beat).toBeCloseTo(0.504)
+  })
+
   it('sends MIDI without a beat when stopped or already due', () => {
     const { client, ws } = connected()
     client.sendMidi([0xb0, 7, 64])

@@ -23,6 +23,7 @@ import { userKey } from '@/lib/userKey'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
+import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useChordProgStore, DURATION_OPTIONS } from '@/stores/useChordProgStore'
 import { useProgressionLoader } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
@@ -61,6 +62,7 @@ function createChordProgEngine() {
   const syncStore = useSyncStore()
   const uiStore = useUiStore()
   const mappingStore = useMappingStore()
+  const clockStore = useExternalClockStore()
   // Its own progression data for the selected key (Generate from the Rig, with the panel closed).
   const { progressionData, loadByIndex } = useProgressionLoader()
   watch(() => store.selectedKey, idx => loadByIndex(idx), { immediate: true })
@@ -142,16 +144,16 @@ function createChordProgEngine() {
   // Chord Prog's MIDI Flow cables — else it went to the chords' devices, on their channel
   // (remapped by the cable / OUT CH), and never reached e.g. SYC OUT ch 2 for a Live track.
   // `dev` is kept with each note so its note-off reaches the same device after a change.
-  function _bassOn(dev, n, velocity, ch, atMs = null) {
-    const opts = atMs != null ? { workerTimed: true, workerTag: CP_WORKER_TAG } : undefined
+  function _bassOn(dev, n, velocity, ch, atMs = null, beat = null) {
+    const opts = atMs != null ? { workerTimed: true, workerTag: CP_WORKER_TAG, ...(beat != null ? { beat } : {}) } : undefined
     midiService.sendNoteTo(dev, 'noteon', n, velocity, ch - 1, MidiSource.CHORD_PROG, atMs ?? undefined, opts)
   }
-  function _bassOff(b, atMs = null) {
+  function _bassOff(b, atMs = null, beat = null) {
     if (!b) return
-    midiService.sendNoteTo(b.dev, 'noteoff', b.note, 0, b.channel - 1, MidiSource.CHORD_PROG, atMs ?? undefined, atMs != null ? { workerTimed: true } : undefined)
+    midiService.sendNoteTo(b.dev, 'noteoff', b.note, 0, b.channel - 1, MidiSource.CHORD_PROG, atMs ?? undefined, atMs != null ? { workerTimed: true, ...(beat != null ? { beat } : {}) } : undefined)
   }
 
-  function sendBassNoteOn(note, velocity, durationMs, atMs = null) {
+  function sendBassNoteOn(note, velocity, durationMs, atMs = null, onBeat = null) {
     if (atMs != null) {
       // CLK SYS: the previous bass note ends when this one starts, both at their times.
       if (_activeBassNote) {
@@ -172,13 +174,14 @@ function createChordProgEngine() {
       const bass = { dev, note: n, channel: ch, key, bass: true }
       const offAt = atMs + durationMs
       const id = _cpVoices.start(key, offAt, bass)
-      _bassOn(dev, n, velocity, ch, atMs)
+      const offBeat = onBeat != null ? onBeat + _msToBeats(durationMs) : null
+      _bassOn(dev, n, velocity, ch, atMs, onBeat)
       // a note-off of this pitch already sent for later would cut it: strike it again just after
       const cutBy = _cpVoices.sentOffAfter(key, atMs)
       if (cutBy !== null && cutBy + 1 < offAt) _bassOn(dev, n, velocity, ch, cutBy + 1)
       // decided NOTE_OFF_LEAD_MS early, sent timestamped (not when due: the main thread delayed it)
       midiService.scheduleOnWorker(noteOffDecideAt(offAt, performance.now()), () => {
-        if (_cpVoices.release(key, id)) _bassOff(bass, offAt)
+        if (_cpVoices.release(key, id)) _bassOff(bass, offAt, offBeat)
       }, undefined, 'CHORDS note-off')
       _activeBassNote = { ...bass, tid: null, id }
       return
@@ -311,12 +314,30 @@ function createChordProgEngine() {
    *  notes and their queued note-offs don't cut the new slot's notes of the same pitch. */
   const _cpVoices = new VoiceLedger()
 
-  /** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue. */
-  function _cpNoteAt(note, velocity, channel, onMs, durMs) {
+  /**
+   * Following Live over SY.CORE Link: the exact Live beat of the tick being run (null otherwise,
+   * or for a late tick). Its notes go to SY.CORE Link with it — a chord on beat 4 is sent as 4.000,
+   * not as a beat converted back from its time, which wobbled by some ms with the transport mirror's
+   * corrections (heard as jitter on 1/4-note chords).
+   */
+  function _tickBeat() {
+    if (_sysTickMs == null || _sysSilent || !externalGrid.active || !clockStore.isLink) return null
+    return (_sysStartSixteenth * 24 + (_transportTicks - 1)) / 96
+  }
+  /** ms → Live beats, at Live's tempo. */
+  function _msToBeats(ms) {
+    return ms * (externalGrid.bpm || arpStore.arpBpm || 120) / 60000
+  }
+
+  /** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue (onBeat: its exact
+   *  Live beat, see _tickBeat). */
+  function _cpNoteAt(note, velocity, channel, onMs, durMs, onBeat = null) {
     const noteKey = `${note}-${channel}`
     const offAt = onMs + durMs
+    const beatOpt = b => (b != null ? { beat: b } : {})
+    const offBeat = onBeat != null ? onBeat + _msToBeats(durMs) : null
     const id = _cpVoices.start(noteKey, offAt, { note, channel, key: noteKey })
-    midiStore.sendNoteOn(note, velocity, channel, MidiSource.CHORD_PROG, null, onMs, { workerTimed: true, workerTag: CP_WORKER_TAG })
+    midiStore.sendNoteOn(note, velocity, channel, MidiSource.CHORD_PROG, null, onMs, { workerTimed: true, workerTag: CP_WORKER_TAG, ...beatOpt(onBeat) })
     // a note-off of this pitch already sent for later would cut it: strike it again just after
     const cutBy = _cpVoices.sentOffAfter(noteKey, onMs)
     if (cutBy !== null && cutBy + 1 < offAt) midiStore.sendNoteOn(note, velocity, channel, MidiSource.CHORD_PROG, null, cutBy + 1, { workerTimed: true, workerTag: CP_WORKER_TAG })
@@ -324,7 +345,7 @@ function createChordProgEngine() {
     // decided NOTE_OFF_LEAD_MS early, sent timestamped (not when due: the main thread delayed it)
     midiService.scheduleOnWorker(noteOffDecideAt(offAt, performance.now()), () => {
       if (!_cpVoices.release(noteKey, id)) return
-      midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG, null, offAt, { workerTimed: true })
+      midiStore.sendNoteOff(note, 0, channel, MidiSource.CHORD_PROG, null, offAt, { workerTimed: true, ...beatOpt(offBeat) })
       _activeNoteKeys.delete(noteKey)
     }, undefined, 'CHORDS note-off')
   }
@@ -609,9 +630,12 @@ function createChordProgEngine() {
               const play = _chase(_sysTickMs, noteDurationMs)
               const ordered = step.chordMode ? orderChordStrumNotes(step.notes, step.chordMode) : step.notes
               const strumStepMs = step.chordMode ? Math.min(25, stepMs / (ordered.length + 1)) : 0
+              // exact beat only for a chord on its time (not a chased one)
+              const beat = play && play.onMs === _sysTickMs ? _tickBeat() : null
               if (play) ordered.forEach((note, i) => {
                 const clampedNote = Math.max(0, Math.min(127, note + (state.transpose || 0) + (step.transpose || 0)))
-                _cpNoteAt(clampedNote, step.velocity, channel, play.onMs + strumStepMs * i, play.durMs)
+                _cpNoteAt(clampedNote, step.velocity, channel, play.onMs + strumStepMs * i, play.durMs,
+                  beat != null ? beat + _msToBeats(strumStepMs * i) : null)
               })
             } else if (!step.chordMode) {
               // Simultaneous — today's only behavior, unchanged.
@@ -665,7 +689,7 @@ function createChordProgEngine() {
               if (_sysTickMs == null) sendBassNoteOn(bassNote, step.velocity, bassDurationMs)
               else {
                 const play = _chase(_sysTickMs, bassDurationMs)
-                if (play) sendBassNoteOn(bassNote, step.velocity, play.durMs, play.onMs)
+                if (play) sendBassNoteOn(bassNote, step.velocity, play.durMs, play.onMs, play.onMs === _sysTickMs ? _tickBeat() : null)
               }
             }
           }
@@ -690,7 +714,7 @@ function createChordProgEngine() {
 
             const clampedNote = Math.max(0, Math.min(127, sortedNotes[noteIdx] + (state.transpose || 0) + (step.transpose || 0)))
             if (_sysTickMs != null) {
-              if (!_sysSilent) _cpNoteAt(clampedNote, step.velocity, channel, _sysTickMs, arpMs)
+              if (!_sysSilent) _cpNoteAt(clampedNote, step.velocity, channel, _sysTickMs, arpMs, _tickBeat())
             } else {
               const noteKey = `${clampedNote}-${channel}`
               midiStore.sendNoteOn(clampedNote, step.velocity, channel, MidiSource.CHORD_PROG)

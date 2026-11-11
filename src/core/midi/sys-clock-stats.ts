@@ -99,6 +99,18 @@ export function countLateStep(app: string): void {
   lateSteps.set(app, (lateSteps.get(app) ?? 0) + 1);
 }
 
+let beatFixCount = 0;
+let beatFixSum = 0;
+let beatFixMax = 0;
+/** A note to SY.CORE Link sent with its exact Live beat: how far (ms) the beat converted from its
+ *  time would have been — the wobble of the time → beat round trip it no longer has. */
+export function countLinkBeatFix(ms: number): void {
+  const a = Math.abs(ms);
+  beatFixCount++;
+  beatFixSum += a;
+  if (a > beatFixMax) beatFixMax = a;
+}
+
 /** A Worker-timed send went out `lateMs` after it was due (negative counts as 0). */
 export function countSendDelay(lateMs: number): void {
   const ms = lateMs > 0 ? lateMs : 0;
@@ -120,6 +132,9 @@ export function takeSysClockStats(): string {
     parts.push(`send delay avg ${(delaySum / delayCount).toFixed(1)} / max ${Math.round(delayMax)} ms (${delayCount} msgs)`);
   }
   if (flushGapMax > 0) parts.push(`flush gap max ${Math.round(flushGapMax)} ms`);
+  if (beatFixCount > 0) {
+    parts.push(`link exact beat ${beatFixCount} msgs, time→beat was off avg ${(beatFixSum / beatFixCount).toFixed(1)} / max ${beatFixMax.toFixed(1)} ms`);
+  }
   const costTotal = [...sendCost.values()].reduce((a, b) => a + b, 0);
   if (costTotal >= 1) {
     const top = [...sendCost.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2)
@@ -135,6 +150,7 @@ export function takeSysClockStats(): string {
 }
 
 export function resetSysClockStats(): void {
+  beatFixCount = 0; beatFixSum = 0; beatFixMax = 0;
   lateSteps.clear();
   startLate.clear();
   delayCount = 0;

@@ -161,6 +161,8 @@ export class LinkClient {
   private readonly appVersion: string
   private readonly pingEveryMs: number
 
+  /** Diagnostics: a note sent with its exact beat, and how far (ms) its converted time was. */
+  onExactBeat: ((ms: number) => void) | null = null
   transport: LinkTransport = { playing: false, beat: 0, tempo: 120, num: 4, den: 4, at: 0 }
   device: { name: string; version: string; track: string; sim: boolean } | null = null
   /** Mean of the last round trips, ms (null until measured). */
@@ -423,13 +425,20 @@ export class LinkClient {
    * While Live plays, `at` becomes a Live beat; stopped, it goes out at once.
    * False when not connected (nothing sent).
    */
-  sendMidi(data: ArrayLike<number>, at?: number): boolean {
+  sendMidi(data: ArrayLike<number>, at?: number, beat?: number): boolean {
     if (!this.isReady) return false
     const bytes = sanitizeMidi(data)
     if (!bytes) return false
     const now = this.now()
     if (this.transport.playing && at !== undefined && at > now) {
-      return this.sendRaw({ type: 'midi', data: bytes, beat: this.beatAt(at) })
+      const converted = this.beatAt(at)
+      // The exact beat from the app's grid (a chord on beat 4 is 4.000): the time → beat round trip
+      // wobbled with the transport mirror's corrections. Trusted within a quarter beat of its time.
+      if (beat !== undefined && Number.isFinite(beat) && Math.abs(beat - converted) < 0.25) {
+        this.onExactBeat?.((beat - converted) * 60000 / this.transport.tempo)
+        return this.sendRaw({ type: 'midi', data: bytes, beat })
+      }
+      return this.sendRaw({ type: 'midi', data: bytes, beat: converted })
     }
     return this.sendRaw({ type: 'midi', data: bytes })
   }

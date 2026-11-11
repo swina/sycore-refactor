@@ -12,6 +12,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { LinkClient, type LinkState, type LinkStats } from '@/lib/link-client'
+import { countLinkBeatFix } from '@/core/midi/sys-clock-stats'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 
@@ -20,6 +21,8 @@ const LS_ENABLED = 'S1_LINK_ENABLED'
 
 /** One client for the whole app. */
 export const linkClient = new LinkClient({ appVersion: 'sycore' })
+// Sync diagnostic: the notes sent with their exact Live beat (and what the time → beat conversion gave)
+linkClient.onExactBeat = countLinkBeatFix
 
 export const useLinkStore = defineStore('link', () => {
   const midiStore = useMidiStore()
@@ -50,7 +53,7 @@ export const useLinkStore = defineStore('link', () => {
     // a bridge, not an instrument: out of the Program Change list and the DECK's instruments
     // Timestamped only while Live plays (link-client turns `at` into a Live beat then): stopped, it
     // would send a future message at once — notes early, note-offs sent ahead cut short.
-    midiStore.registerPanelOutput(LINK_OUTPUT_NAME, (data, at) => { linkClient.sendMidi(data, at) }, undefined, { timestamped: () => linkClient.isReady && linkClient.transport.playing, bridge: true })
+    midiStore.registerPanelOutput(LINK_OUTPUT_NAME, (data, at, beat) => { linkClient.sendMidi(data, at, beat) }, undefined, { timestamped: () => linkClient.isReady && linkClient.transport.playing, bridge: true })
   }
   function unregisterOutput() {
     if (midiStore.panelOutputs.includes(LINK_OUTPUT_NAME)) midiStore.unregisterPanelOutput(LINK_OUTPUT_NAME)
