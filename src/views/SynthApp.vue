@@ -9,6 +9,7 @@ import {
 
 const router = useRouter()
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useChordProgEngine } from '@/core/engines/chord-prog'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -98,6 +99,8 @@ import { IS_DEMO } from '@/lib/demo'
 
 // Stores
 const midiStore = useMidiStore()
+// The Chord Prog plays (Rig pads, Control Map, MIDI Flow) with its panel closed: its engine starts here.
+useChordProgEngine()
 const authStore = useAuthStore()
 const presetStore = usePresetStore()
 const arpStore = useArpStore()
@@ -551,7 +554,9 @@ onMounted(() => {
 
       <!-- Chord Progression Sequencer -->
       <div :style="focusStyle('chordProg')">
+        <!-- Mounted only while open: its engine (core/engines/chord-prog.js) plays without it -->
         <ChordProgSequencer
+          v-if="uiStore.isChordProgOpen"
           :isOpen="uiStore.isChordProgOpen"
           :bpm="midiStore.currentBpm || 120"
           :channel="midiStore.midiChannel"
