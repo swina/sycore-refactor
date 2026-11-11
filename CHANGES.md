@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-11
 
+- **Plan: Scenario Workspaces** — Sound Design / Creative / Performance workspaces: player engines out of the Vue components (they play with their view closed), modules mounted only when shown, docked zones instead of overlapping modals, per-scenario settings; Phase 0 = baseline + rendering fixes (blur, `transition-all`). `docs/plans/scenario-workspaces.md`. Branch: `feat/scenario-workspaces`
+
 - **Chord Prog: a second click on a playing chord stops it again** — a chord clicked in chord mode stayed latched: its notes were held apart from the step notes and only the global PANIC (replaced on 2026-11-11 by All Notes Off on the Chord Prog's channels, which Live doesn't honour on its own) released them. The stop now sends their note-offs; a chord clicked while a stop is still fading out is no longer cut by that stop's end. `components/ChordProgSequencer.vue`. Branch: `feat/sycore-map`
 
 - **Drum, Chord Prog, Sequencer: steps computed 200 ms ahead (was 100)** — opening a panel or switching window can stop the page for 130–210 ms (Sync diagnostic: flush gap 211 ms, long tasks 129 ms, CLK SYS late steps CHORDS 12): with 100 ms the steps of those moments went out late, heard as jitter in Live, more with 1/4-note chords. The notes still play on their time (Web MIDI timestamps, the Worker queue, SY.CORE Link's beat): no latency added. The Arpeggiator stays at 100 ms (played live: a longer one plays on after the keys are released). `core/midi/step-scheduler.ts`; tests: `tests/unit/midi/step-scheduler.test.ts`. Branch: `feat/sycore-map`
