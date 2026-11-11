@@ -153,6 +153,8 @@ describe('LinkClient', () => {
     expect(fixes[0]).toBeCloseTo(-2) // the conversion was 2 ms off
     client.sendMidi([0x90, 60, 100], 252, 3) // far from its time: not trusted, converted
     expect(ws.sent.at(-1).beat).toBeCloseTo(0.504)
+    client.sendMidi([0x90, 60, 100], 252, 0.45) // 27 ms off (a late start: the grid's beat is gone): converted
+    expect(ws.sent.at(-1).beat).toBeCloseTo(0.504)
   })
 
   it('a port message (bridge 1.4) carries its port and beat; refused when the bridge cannot play ports', () => {

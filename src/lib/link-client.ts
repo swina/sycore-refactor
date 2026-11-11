@@ -15,6 +15,8 @@
 
 export const LINK_PROTOCOL_VERSION = 1
 export const LINK_DEFAULT_URL = 'ws://127.0.0.1:9400'
+/** An app's exact beat is used only within this many ms of the beat of its time (else converted). */
+export const EXACT_BEAT_MAX_MS = 15
 
 export type LinkState = 'off' | 'connecting' | 'connected' | 'retrying'
 
@@ -433,14 +435,20 @@ export class LinkClient {
     if (this.transport.playing && at !== undefined && at > now) {
       const converted = this.beatAt(at)
       // The exact beat from the app's grid (a chord on beat 4 is 4.000): the time → beat round trip
-      // wobbled with the transport mirror's corrections. Trusted within a quarter beat of its time.
-      if (beat !== undefined && Number.isFinite(beat) && Math.abs(beat - converted) < 0.25) {
+      // wobbled with the transport mirror's corrections (< 2 ms measured). Trusted only that close
+      // to its time (EXACT_BEAT_MAX_MS): at a late start the grid's beat can be gone already.
+      if (this.exactBeatOk(beat, converted)) {
         this.onExactBeat?.((beat - converted) * 60000 / this.transport.tempo)
         return this.sendRaw({ type: 'midi', data: bytes, beat })
       }
       return this.sendRaw({ type: 'midi', data: bytes, beat: converted })
     }
     return this.sendRaw({ type: 'midi', data: bytes })
+  }
+
+  /** An app's exact beat, close enough to the beat of its time to be used (see sendMidi). */
+  private exactBeatOk(beat: number | undefined, converted: number): boolean {
+    return beat !== undefined && Number.isFinite(beat) && Math.abs(beat - converted) * 60000 / this.transport.tempo < EXACT_BEAT_MAX_MS
   }
 
   /** The device plays MIDI ports itself (bridge 1.4+: MIDI Flow cables "via SY.CORE Link"). */
@@ -457,7 +465,7 @@ export class LinkClient {
     const now = this.now()
     if (this.transport.playing && at !== undefined && at > now) {
       const converted = this.beatAt(at)
-      const b = beat !== undefined && Number.isFinite(beat) && Math.abs(beat - converted) < 0.25 ? beat : converted
+      const b = this.exactBeatOk(beat, converted) ? beat! : converted
       return this.sendRaw({ type: 'midi', data: bytes, beat: b, port })
     }
     return this.sendRaw({ type: 'midi', data: bytes, port })
