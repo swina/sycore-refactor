@@ -4,7 +4,7 @@ import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, C
 import { getTransport, start as toneStart } from 'tone'
 import { drawAt } from '@/lib/ui-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
-import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { midiService, MidiSource, traceOn } from '@/core/midi/midi-service'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
@@ -217,7 +217,17 @@ const isPlaying = ref(false)
 watch(isPlaying, v => { rigReports.seqPlaying = v })
 const isRecording = ref(false)
 const currentStep = ref(0)
-const transportPosition = ref('1:1:1')
+// Written straight into its <span> (not a ref in the template): a ref re-rendered the whole Sequencer
+// 30 times a second while playing, also with its panel hidden (trace 2026-11-11: ~570 ms in 25 s).
+const transportPosEl = ref(null)
+let _transportPosText = '1:1:1'
+// re-created (minimized and restored): the current position at once
+watch(transportPosEl, el => { if (el) el.textContent = _transportPosText })
+function setTransportPosition(text) {
+  if (text === _transportPosText) return
+  _transportPosText = text
+  if (transportPosEl.value) transportPosEl.value.textContent = text
+}
 const selectedStepIdx = ref(0)
 const syncTrack = computed({
   get: () => syncStore.syncTrack,
@@ -1221,7 +1231,8 @@ onMounted(() => {
   }
 
   const handleIncomingNote = (type, note, velocity, chan, inputId, sourceApp) => {
-    if (window.SY_LOG) {
+    // Every note any app plays passes here: logged only with localStorage.SY_TRACE = '1'.
+    if (window.SY_LOG && traceOn()) {
       window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, sourceApp=${sourceApp || 'null'}, isOpen=${props.isOpen}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
     }
     const allowed = sourceApp ? isAppSourceAllowed(sourceApp, note) : isMidiDeviceAllowed(chan, inputId, note)
@@ -1744,14 +1755,14 @@ watch(isPlaying, (playing) => {
       if (now - lastUpdate >= 33) {
         lastUpdate = now
         const pos = String(getTransport().position).split('.')[0].split(':')
-        transportPosition.value = `${parseInt(pos[0]) + 1}:${parseInt(pos[1]) + 1}:${parseInt(pos[2]) + 1}`
+        setTransportPosition(`${parseInt(pos[0]) + 1}:${parseInt(pos[1]) + 1}:${parseInt(pos[2]) + 1}`)
       }
       rafRef.value = requestAnimationFrame(tick)
     }
     rafRef.value = requestAnimationFrame(tick)
   } else {
     if (rafRef.value !== null) { cancelAnimationFrame(rafRef.value); rafRef.value = null }
-    transportPosition.value = '1:1:1'
+    setTransportPosition('1:1:1')
   }
 })
 
@@ -1902,9 +1913,7 @@ let generateHidden = ref(false)
               />
             </div>
             <div class="w-px h-3 bg-neutral-800" />
-            <span class="text-3xl text-red-800 font-mono tabular-nums leading-none">
-              {{ transportPosition }}
-            </span>
+            <span ref="transportPosEl" class="text-3xl text-red-800 font-mono tabular-nums leading-none">1:1:1</span>
           </div>
 
           <!-- Tempo Multiplier -->

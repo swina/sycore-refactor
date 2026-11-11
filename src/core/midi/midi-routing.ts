@@ -8,6 +8,9 @@ import type { RoutingConfig, MidiSource, InputRouteFilter } from '@/types/midi'
 import { cableOutChannels } from '@/types/midi';
 import type { SmartLatch } from './midi-smart-latch';
 
+/** Devices already told "Latch active but skipped" (logged once each). */
+const latchSkipLogged = new Set<string>();
+
 const MIDI_ROUTING_KEY = 'S1_MIDI_ROUTING';
 const MIDI_BROADCAST_KEY = 'S1_MIDI_BROADCAST';
 
@@ -268,8 +271,11 @@ export class MidiRouter {
           shouldForward = latch.handleNoteOff(outDevice, note, channel);
         }
       } else if (latch.isActive && (isNoteOn || isNoteOff) && !outConfig.smartLatch && !outConfig.latchEnabled) {
-        if (isNoteOn && (window as any).SY_LOG)
+        // Once per device (it was logged on every note-on: a CustomEvent per note while playing).
+        if (isNoteOn && (window as any).SY_LOG && !latchSkipLogged.has(outDevice.name)) {
+          latchSkipLogged.add(outDevice.name);
           (window as any).SY_LOG(`[MIDI] Latch active but skipped for ${outDevice.name} (Device Lock is OFF)`);
+        }
       }
 
       if (!shouldForward) return;

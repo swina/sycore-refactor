@@ -826,14 +826,24 @@ watch(systemClock, () => {
 })
 
 // Transport position display — derived from our own tick counter (independent of global Tone.js transport)
-const transportPos = ref('001:1:1')
+// Written straight into its <span> (not a ref in the template): a ref re-rendered the whole Chord Prog
+// at every sixteenth while playing, also with its panel hidden.
+const transportPosEl = ref(null)
+let _transportPosText = '001:1:1'
+// re-created (minimized and restored): the current position at once
+watch(transportPosEl, el => { if (el) el.textContent = _transportPosText })
+function setTransportPos(text) {
+  if (text === _transportPosText) return
+  _transportPosText = text
+  if (transportPosEl.value) transportPosEl.value.textContent = text
+}
 
 function updateTransportPos() {
   const t    = _transportTicks
   const bar  = (Math.floor(t / 384) + 1).toString().padStart(3, '0')
   const beat = (Math.floor((t % 384) / 96) + 1).toString()
   const sixteenth = (Math.floor((t % 96) / 24) + 1).toString()
-  transportPos.value = `${bar}:${beat}:${sixteenth}`
+  setTransportPos(`${bar}:${beat}:${sixteenth}`)
 }
 
 // Step highlight animation + transport position update
@@ -843,7 +853,7 @@ watch(() => store.isPlaying, (playing) => {
     tick()
   } else {
     if (rafRef.value !== null) { cancelAnimationFrame(rafRef.value); rafRef.value = null }
-    transportPos.value = '001:1:1'
+    setTransportPos('001:1:1')
   }
 })
 
@@ -1710,9 +1720,7 @@ function velBarColor(v) {
       <div class="flex items-center gap-2 justify-start w-full gap-5">
         <!-- Transport position -->
         <div class="flex items-center gap-1 px-2 py-0.5 bg-black/60 border border-neutral-800 rounded font-mono" title="Bar : Beat : Sixteenth">
-          <span :class="['text-[14px] font-bold tabular-nums tracking-wider', store.isPlaying ? 'text-red-700' : 'text-neutral-500']">
-            {{ transportPos }}
-          </span>
+          <span ref="transportPosEl" :class="['text-[14px] font-bold tabular-nums tracking-wider', store.isPlaying ? 'text-red-700' : 'text-neutral-500']">001:1:1</span>
         </div>
 
         <!-- Step clock: Audio (Tone.js transport, default) / System (Worker timer + Worker-timed MIDI) -->
