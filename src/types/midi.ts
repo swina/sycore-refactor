@@ -47,6 +47,10 @@ export interface DeviceRegistration {
   latchEnabled?: boolean;   // per-device latch on/off (independent of global smartLatch)
   latchMaxNotes?: number;   // 1–16, default 4
   latchReplace?: boolean;   // true = FIFO (oldest dropped), false = block (new note rejected)
+  // The apps' messages to this port are played by the SY.CORE Link bridge (Node, in Live) on Live's
+  // beat while Live plays, instead of from the browser's Worker queue (main thread: 5–240 ms late,
+  // Windows loopbacks ignore Web MIDI timestamps). Else, or with no bridge 1.4+, as before.
+  viaLink?: boolean;
   midiThru: boolean;
   velocityMin: number;
   velocityMax: number;

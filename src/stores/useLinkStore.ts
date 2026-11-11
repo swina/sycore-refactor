@@ -13,6 +13,7 @@ import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { LinkClient, type LinkState, type LinkStats } from '@/lib/link-client'
 import { countLinkBeatFix } from '@/core/midi/sys-clock-stats'
+import { midiService } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 
@@ -53,6 +54,12 @@ export const useLinkStore = defineStore('link', () => {
     // a bridge, not an instrument: out of the Program Change list and the DECK's instruments
     // Timestamped only while Live plays (link-client turns `at` into a Live beat then): stopped, it
     // would send a future message at once — notes early, note-offs sent ahead cut short.
+    // MIDI Flow ports marked "via SY.CORE Link": played by the bridge (1.4+) while Live plays
+    midiService.setLinkPort({
+      can: () => linkClient.isReady && linkClient.portsSupported && linkClient.transport.playing,
+      send: (port, data, at, beat) => linkClient.sendMidiPort(port, data, at, beat),
+      clear: () => { if (linkClient.isReady) linkClient.clear() },
+    })
     midiStore.registerPanelOutput(LINK_OUTPUT_NAME, (data, at, beat) => { linkClient.sendMidi(data, at, beat) }, undefined, { timestamped: () => linkClient.isReady && linkClient.transport.playing, bridge: true })
   }
   function unregisterOutput() {

@@ -184,6 +184,19 @@ export class MidiService {
 
   // ── Virtual output registry ──────────────────────────────────────────────
   private virtualOutputs = new Map<string, (data: number[], at?: number, beat?: number) => void>();
+  // SY.CORE Link bridge 1.4+: plays MIDI ports on Live's beat (registrations[name].viaLink).
+  private linkPort: { can: () => boolean; send: (port: string, data: number[], at?: number, beat?: number) => boolean; clear: () => void } | null = null;
+  /** SY.CORE Link's port player (useLinkStore), or null. */
+  setLinkPort(p: MidiService['linkPort']): void { this.linkPort = p; }
+  /** Whether this port's messages go through SY.CORE Link now (marked, and Link can play ports). */
+  private viaLink(config: { viaLink?: boolean } | undefined): boolean {
+    return !!config?.viaLink && !!this.linkPort && this.linkPort.can();
+  }
+  /** A virtual instrument marked viaLink (e.g. "E-MU X3 MULTI" on MIDIWIN (B)): its port, for SY.CORE Link; else null. */
+  private linkPortOfVirtual(virtName: string): string | null {
+    const port = this.virtualOutputPorts.get(virtName);
+    return port && this.viaLink(this.routingConfig?.registrations[virtName]) ? port : null;
+  }
   // Virtual outputs that schedule on their own (registerVirtualOutput opts.timestamped): a check
   // of whether they can right now (SY.CORE Link: only while Live plays), or always.
   private timestampedVirtuals = new Map<string, () => boolean>();
@@ -1119,6 +1132,12 @@ export class MidiService {
     const deferMs = at != null ? at - performance.now() : 0;
     const scheduled = deferMs > 1;
     for (const out of outs) {
+      // MIDI Flow "via SY.CORE Link": the bridge plays it on Live's beat (now if not scheduled)
+      if (this.viaLink(this.routingConfig?.registrations[out.name ?? ''])) {
+        this.logOutbound(out.name ?? deviceName, msg);
+        this.linkPort!.send(out.name ?? deviceName, msg, scheduled ? at : undefined, opts?.beat);
+        continue;
+      }
       const deliver = () => { this.globalSentHashes.set(msg.join(','), Date.now()); out.send(msg); };
       if (!scheduled) { this.logOutbound(out.name ?? deviceName, msg); deliver(); }
       else if (opts?.workerTimed) this.scheduleOnWorker(at!, () => { this.logOutbound(out.name ?? deviceName, msg); deliver(); }, opts.workerTag, out.name ?? deviceName);
@@ -1126,7 +1145,9 @@ export class MidiService {
     }
     if (virt) {
       const deliver = () => this.sendToVirtualOutput(virt, msg);
-      if (scheduled && this.canTimestamp(virt)) this.sendToVirtualOutput(virt, msg, at, opts?.beat);
+      const linkPortName = this.linkPortOfVirtual(virt);
+      if (linkPortName) { this.logOutbound(virt, msg); this.linkPort!.send(linkPortName, msg, scheduled ? at : undefined, opts?.beat); }
+      else if (scheduled && this.canTimestamp(virt)) this.sendToVirtualOutput(virt, msg, at, opts?.beat);
       else if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virt);
       else if (scheduled) setTimeout(deliver, deferMs);
       else deliver();
@@ -1167,6 +1188,8 @@ export class MidiService {
 
   panic(): void {
     console.log('[MIDI] PANIC! Sending All Notes Off to all devices and channels.');
+    // SY.CORE Link: drop what is pending there (Live's track and the ports) and end what sounds
+    try { this.linkPort?.clear(); } catch {}
     // who called it (a stop, a learned control, the Rig's hold…): the stack in the console
     console.trace('[MIDI] PANIC caller');
     this.router.clearThruNotes();
@@ -1610,6 +1633,13 @@ export class MidiService {
         if (status > 0) {
           const fullMsg = [status, ...bytes];
           const latched = applyLatch && (type === 'noteon' || type === 'noteoff');
+          // MIDI Flow "via SY.CORE Link": the bridge plays it on Live's beat (now if not scheduled)
+          if (!latched && type !== 'clock' && type !== 'start' && type !== 'stop' && this.viaLink(config)) {
+            this.logOutbound(out.name ?? '', fullMsg);
+            this.globalSentHashes.set(fullMsg.join(','), Date.now() + (scheduled ? deferMs : 0));
+            this.linkPort!.send(out.name ?? '', fullMsg, scheduled ? at : undefined, opts?.beat);
+            return;
+          }
           const deliver = () => {
             if (latched) {
               const forward = type === 'noteon'
@@ -1708,7 +1738,13 @@ export class MidiService {
           };
           // An output that schedules on its own (SY.CORE Link) gets the time now; latched notes
           // need the latch at play time, so they keep the timer.
-          if (scheduled && !virtApplyLatch && this.canTimestamp(virtName)) this.sendToVirtualOutput(virtName, [status, ...bytes], at, opts?.beat);
+          // MIDI Flow "via SY.CORE Link": the bridge plays the instrument's port on Live's beat
+          const linkPortName = !virtApplyLatch && type !== 'clock' && type !== 'start' && type !== 'stop' ? this.linkPortOfVirtual(virtName) : null;
+          if (linkPortName) {
+            this.logOutbound(virtName, [status, ...bytes]);
+            this.linkPort!.send(linkPortName, [status, ...bytes], scheduled ? at : undefined, opts?.beat);
+          }
+          else if (scheduled && !virtApplyLatch && this.canTimestamp(virtName)) this.sendToVirtualOutput(virtName, [status, ...bytes], at, opts?.beat);
           else if (scheduled && opts?.workerTimed) this.scheduleOnWorker(at!, deliver, opts.workerTag, virtName);
           // virtual instruments are plain JS callbacks: no timestamp, so a timer
           else if (scheduled) setTimeout(deliver, deferMs);

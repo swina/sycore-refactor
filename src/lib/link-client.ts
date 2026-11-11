@@ -164,7 +164,7 @@ export class LinkClient {
   /** Diagnostics: a note sent with its exact beat, and how far (ms) its converted time was. */
   onExactBeat: ((ms: number) => void) | null = null
   transport: LinkTransport = { playing: false, beat: 0, tempo: 120, num: 4, den: 4, at: 0 }
-  device: { name: string; version: string; track: string; sim: boolean } | null = null
+  device: { name: string; version: string; track: string; sim: boolean; ports: boolean } | null = null
   /** Mean of the last round trips, ms (null until measured). */
   rttMs: number | null = null
   private rtts: number[] = []
@@ -291,7 +291,7 @@ export class LinkClient {
     const now = this.now()
     switch (m.type) {
       case 'hello':
-        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim }
+        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports }
         this.emit({ type: 'hello', device: this.device.name, version: this.device.version, track: this.device.track, sim: this.device.sim })
         break
       case 'transport': {
@@ -441,6 +441,26 @@ export class LinkClient {
       return this.sendRaw({ type: 'midi', data: bytes, beat: converted })
     }
     return this.sendRaw({ type: 'midi', data: bytes })
+  }
+
+  /** The device plays MIDI ports itself (bridge 1.4+: MIDI Flow cables "via SY.CORE Link"). */
+  get portsSupported(): boolean { return !!this.device?.ports }
+
+  /**
+   * One channel message to the MIDI port `port`, played by the device (bridge 1.4+) at the Live
+   * beat of `at` — or `beat`, exact from the app's grid (see sendMidi) — or now.
+   */
+  sendMidiPort(port: string, data: ArrayLike<number>, at?: number, beat?: number): boolean {
+    if (!this.isReady || !this.portsSupported) return false
+    const bytes = sanitizeMidi(data)
+    if (!bytes) return false
+    const now = this.now()
+    if (this.transport.playing && at !== undefined && at > now) {
+      const converted = this.beatAt(at)
+      const b = beat !== undefined && Number.isFinite(beat) && Math.abs(beat - converted) < 0.25 ? beat : converted
+      return this.sendRaw({ type: 'midi', data: bytes, beat: b, port })
+    }
+    return this.sendRaw({ type: 'midi', data: bytes, port })
   }
 
   /** The Rig Controller's state to the SY.CORE Rig devices (null: no Rig Controller open). */

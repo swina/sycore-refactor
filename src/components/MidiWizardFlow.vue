@@ -223,6 +223,7 @@ function onCanvasDrop(e) {
     outChannels: [],
     sync: true, transport: true, notes: true, cc: true, pc: true,
     latchEnabled: false, latchMaxNotes: 4, latchReplace: true,
+    viaLink: false,
     collapsed: false,
   })
 }
@@ -374,6 +375,7 @@ function finish() {
       midiStore.updateRegistration(canonicalName, 'latchEnabled',  dst.latchEnabled  ?? false)
       midiStore.updateRegistration(canonicalName, 'latchMaxNotes', dst.latchMaxNotes ?? 4)
       midiStore.updateRegistration(canonicalName, 'latchReplace',  dst.latchReplace  ?? true)
+      midiStore.updateRegistration(canonicalName, 'viaLink',       !!dst.viaLink)
       outputNames.push(canonicalName)
 
       // Note-range filter for device→device cables (Controller → Instrument,
@@ -431,6 +433,7 @@ function finish() {
     midiStore.updateRegistration(canonicalName, 'latchEnabled',  node.latchEnabled  ?? false)
     midiStore.updateRegistration(canonicalName, 'latchMaxNotes', node.latchMaxNotes ?? 4)
     midiStore.updateRegistration(canonicalName, 'latchReplace',  node.latchReplace  ?? true)
+    midiStore.updateRegistration(canonicalName, 'viaLink',       !!node.viaLink)
   }
 
   midiStore.setOutputRouteFilters(newOutputFilters)
@@ -499,6 +502,7 @@ function initFromStore() {
       latchEnabled: reg.latchEnabled ?? false,
       latchMaxNotes: reg.latchMaxNotes ?? 4,
       latchReplace: reg.latchReplace ?? true,
+      viaLink: !!reg.viaLink,
       collapsed: false,
     }
     if (isDest) destNodes.push(node)
@@ -620,6 +624,7 @@ const routingSignature = computed(() => JSON.stringify([
     inChannel: n.inChannel, outChannel: n.outChannel, outChannels: n.outChannels,
     sync: n.sync, transport: n.transport, notes: n.notes, cc: n.cc, pc: n.pc,
     latchEnabled: n.latchEnabled, latchMaxNotes: n.latchMaxNotes, latchReplace: n.latchReplace,
+    viaLink: n.viaLink,
   })),
   cables.value.map(c => ({ fromId: c.fromId, toId: c.toId, filter: c.filter })),
 ]))
@@ -1369,6 +1374,16 @@ function pendingPath() {
                     class="px-1.5 py-0.5 text-[7px] font-black uppercase tracking-widest rounded border transition-colors"
                     :class="node[flag.key] ? 'bg-synth-neon/10 border-synth-neon/50 text-synth-neon' : 'bg-neutral-900 border-neutral-700 text-neutral-600'"
                   >{{ flag.label }}</button>
+                </div>
+                <!-- Timing: the apps' messages to this port played by SY.CORE Link on Live's beat -->
+                <div v-if="node.hasOut" class="flex items-center gap-2 px-3 pt-1 flex-wrap" @mousedown.stop>
+                  <span class="text-[7px] font-bold uppercase tracking-widest text-neutral-600 shrink-0 w-8">TIME</span>
+                  <button
+                    @click.stop="node.viaLink = !node.viaLink"
+                    :class="node.viaLink ? 'bg-violet-500/20 border-violet-500/40 text-violet-300' : 'bg-neutral-900 border-neutral-700 text-neutral-600 hover:border-neutral-600'"
+                    class="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border transition-colors"
+                    title="VIA LINK: while Live plays, the apps' notes to this port are played by the SY.CORE Link device (bridge 1.4+) on Live's beat — steady timing, also with SY.CORE busy or in the background (e.g. Emulator X3 on a Windows MIDI Services loopback). Live stopped or no bridge: sent directly, as with DIRECT. The keyboard's Thru to this port stays direct."
+                  >{{ node.viaLink ? 'VIA LINK' : 'DIRECT' }}</button>
                 </div>
                 <!-- Per-device note latch row -->
                 <div class="flex items-center gap-2 px-3 pt-1 pb-1 flex-wrap" @mousedown.stop>

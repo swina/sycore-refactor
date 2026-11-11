@@ -155,6 +155,18 @@ describe('LinkClient', () => {
     expect(ws.sent.at(-1).beat).toBeCloseTo(0.504)
   })
 
+  it('a port message (bridge 1.4) carries its port and beat; refused when the bridge cannot play ports', () => {
+    const { client, ws } = connected()
+    expect(client.sendMidiPort('MIDIWIN (B)', [0x93, 60, 100], 250, 0.5)).toBe(false) // hello without ports
+    ws.recv({ type: 'hello', device: 'sycore-link', version: '1.4.0', track: '', sim: false, ports: true })
+    expect(client.portsSupported).toBe(true)
+    expect(client.sendMidiPort('MIDIWIN (B)', [0x93, 60, 100], 250, 0.5)).toBe(true)
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'midi', data: [0x93, 60, 100], beat: 0.5, port: 'MIDIWIN (B)' })
+    client.sendMidiPort('MIDIWIN (B)', [0x83, 60, 0])
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'midi', port: 'MIDIWIN (B)' })
+    expect(ws.sent.at(-1).beat).toBeUndefined()
+  })
+
   it('sends MIDI without a beat when stopped or already due', () => {
     const { client, ws } = connected()
     client.sendMidi([0xb0, 7, 64])
