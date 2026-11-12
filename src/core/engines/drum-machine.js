@@ -95,7 +95,10 @@ function createDrumMachineEngine() {
 
   // Fill
   const fillActive    = ref(false)
-  watch(fillActive, v => { rigReports.fill = v })
+  // Fill on the next bar (drumStore.fillWhen 'bar'): armed until the bar line, then the whole bar.
+  let _fillArmed      = false
+  const fillArmed     = ref(false)
+  watch([fillActive, fillArmed], ([a, b]) => { rigReports.fill = a || b; rigReports.fillArmed = b && !a })
   let _fillAutoStop   = false
   const fillSaveFrom  = ref(1)
   const fillSaveTo    = ref(16)
@@ -201,6 +204,9 @@ function createDrumMachineEngine() {
       return
     }
     const key = `${ch}:${note}`
+    // the previous hit of this pad ends by now: its note-off now, timestamped (else lost, see takeEndedBy)
+    const ended = _drumVoices.takeEndedBy(key, onAt)
+    if (ended) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, Math.min(ended.offAt, onAt - 1), { ...opts, workerTimed: true })
     const prev = _drumVoices.cutKeyAt(key, onAt)
     if (prev) midiStore.sendNoteOff(note, 0, ch, MidiSource.DRUM_MACHINE, null, onAt - 1, { ...opts, workerTimed: true })
     const id = _drumVoices.start(key, offAt, true)
@@ -429,13 +435,21 @@ function createDrumMachineEngine() {
       }
       _measureCount++
       if (autofillEnabled.value && _measureCount % autofillEvery.value === 0) {
-        drawAt(() => { generateFill(); triggerFill() }, time)
+        drawAt(() => { generateFill(); triggerFill('now') }, time)
       }
       if (_fillAutoStop) {
         _fillAutoStop = false
         playStateRef.current = { ...state, fillActive: false }
         state = playStateRef.current
         drawAt(() => { fillActive.value = false }, time)
+      }
+      // A Fill armed for this bar: from its first step to its end.
+      if (_fillArmed) {
+        _fillArmed = false
+        _fillAutoStop = true
+        playStateRef.current = { ...state, fillActive: true }
+        state = playStateRef.current
+        drawAt(() => { fillArmed.value = false; fillActive.value = true }, time)
       }
       // REC SYNC: stop first (completed 16 steps), then start if newly armed.
       // Both events are deferred via getDraw so they fire at actual playback
@@ -591,6 +605,9 @@ function createDrumMachineEngine() {
 
   watch(() => drumStore.isPlaying, (playing) => {
     if (!playing) {
+      // a Fill armed for the next bar: dropped with the stop
+      _fillArmed = false
+      fillArmed.value = false
       // Rig parts: both on again for the next start, the bassline back on the drums' sequence.
       _drumsOn = _bassOn = true
       _partPending = []
@@ -963,7 +980,14 @@ function createDrumMachineEngine() {
   }
 
   // ── Fill ───────────────────────────────────────────────────────────────────────
-  function triggerFill() {
+  function triggerFill(when = drumStore.fillWhen) {
+    // Next bar, playing: armed (pressed again: disarmed); the bar line starts it for the whole bar.
+    if (when === 'bar' && drumStore.isPlaying && !fillActive.value) {
+      _fillArmed = !_fillArmed
+      fillArmed.value = _fillArmed
+      if (_fillArmed && (newFillEachTime.value || !fillHasHits(fillPattern.value))) generateFill()
+      return
+    }
     // Fill always plays something: with no fill yet (never generated, nor loaded) one is made; then
     // the same fill plays on each Fill until it is generated anew — or, with New, a new one each time.
     if (newFillEachTime.value || !fillHasHits(fillPattern.value)) generateFill()
@@ -1200,6 +1224,7 @@ function createDrumMachineEngine() {
   onScopeDispose(() => {
   rigReports.queued.drum = null
   rigReports.fill = false
+  rigReports.fillArmed = false
   _stopSystemClock()
   if (repeatEventIdRef !== null) {
     getTransport().clear(repeatEventIdRef)
@@ -1230,6 +1255,7 @@ function createDrumMachineEngine() {
     basslineRootNote, pendingSequence, fillActive, fillSaveFrom, fillSaveTo, fillPattern,
     recSyncArmed, recSyncActive, recSyncMultiplier, hasSolo, midiOutTargets, midiOutOnly, syncRetrig,
     chainLength, chain, chainSlotRef, autofillEvery, startAtBar, stopAtEnd, endWithFill,
+    fillArmed,
     newFillEachTime, pendingStop,
     // actions
     buildPlayState, hitPad: _hitPad, setMasterVolume: _setMasterVolume, loadAllSamples, pushAllFxToEngine, sendMidiMappingFeedback,

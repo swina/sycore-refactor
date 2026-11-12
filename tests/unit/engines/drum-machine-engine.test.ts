@@ -86,6 +86,22 @@ describe('Drum Machine engine — no panel mounted', () => {
     expect(store.isPlaying).toBe(true)
   })
 
+  it('Fill on the next bar: armed (not playing yet), a second press cancels it, a stop drops it', async () => {
+    const { engine, store } = await setup()
+    store.fillWhen = 'bar'
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: true } }))
+    await flush()
+    window.dispatchEvent(new CustomEvent('dm-trigger-fill'))
+    expect(engine.fillArmed.value).toBe(true)
+    expect(engine.fillActive.value).toBe(false)
+    window.dispatchEvent(new CustomEvent('dm-trigger-fill'))
+    expect(engine.fillArmed.value).toBe(false)
+    window.dispatchEvent(new CustomEvent('dm-trigger-fill'))
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: false } }))
+    await flush()
+    expect(engine.fillArmed.value).toBe(false)
+  })
+
   it('the Rig turns the drums part on from a sequence: the Drum Machine starts', async () => {
     const { store } = await setup()
     window.dispatchEvent(new CustomEvent('dm-part', { detail: { part: 'drum', on: true, seq: 'B', sync: 0 } }))

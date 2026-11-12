@@ -34,7 +34,7 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, armPlaying, armedDrumLoads, stopEvents, LIVE_APPS,
+  isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, armPlaying, armedDrumLoads, fillLook, stopEvents, LIVE_APPS,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -116,7 +116,7 @@ function syncLive() {
   let intBpm = 0
   try { intBpm = getTransport().bpm.value } catch {}
   applyClock(s,
-    { following: clockStore.source !== 'internal' && !clockStore.fallbackToInternal, playing: clockStore.state === 'playing', bpm: clockStore.bpm, position: clockStore.position },
+    { following: clockStore.source !== 'internal' && !clockStore.fallbackToInternal, playing: clockStore.state === 'playing', bpm: clockStore.bpm || midiStore.currentBpm, position: clockStore.position }, // no tempo from the source yet: SY.CORE's (not the rig's default)
     { running: transportManager.isRunning.value, bpm: intBpm, ...t })
   for (const a of s.apps) {
     // Drum and Bass: the Drum Machine's two parts, each on its own (drums only / bass only / both).
@@ -338,14 +338,67 @@ onUnmounted(() => { clearInterval(timer); endLiveLoop() })
 const notConnected = what => { s.display = `${what}: not connected yet (SIM only)` }
 
 let taps = []
+// ── Tempo: TAP, − / + and the tempo knob ─────────────────────────────────
+// LIVE following Live over SY.CORE Link: Live's tempo (bridge 1.6+; SY.CORE follows its report);
+// LIVE on the internal clock: SY.CORE's tempo (whole BPM); a MIDI clock master: its own; SIM: the rig's.
+function setTempo(bpm) {
+  const b = Math.round(Math.min(240, Math.max(40, bpm)) * 10) / 10
+  if (!live.value) { s.clock.bpm = b; return `${b.toFixed(1)} BPM` }
+  if (s.clock.source === 'EXT') {
+    if (!clockStore.isLink) { s.display = 'Tempo: from the MIDI clock master'; return null }
+    if (!linkClient.sendTempo(b)) { s.display = 'Tempo: Live\'s (SY.CORE Link 1.6+ sets it from here)'; return null }
+    return `Live ${b.toFixed(1)} BPM`
+  }
+  midiStore.setGlobalBpm(b)
+  return `${Math.round(b)} BPM`
+}
 function tap() {
   const now = performance.now()
   taps = taps.filter(t => now - t < 2500).concat(now)
   if (taps.length >= 2) {
     const avg = (taps.at(-1) - taps[0]) / (taps.length - 1)
-    s.clock.bpm = Math.min(240, Math.max(40, Math.round(60000 / avg * 10) / 10))
-    s.display = `Tap · ${s.clock.bpm.toFixed(1)} BPM`
+    // whole BPM: a tapped tempo is never exact (124.3, 123.8…)
+    const said = setTempo(Math.round(60000 / avg))
+    if (said) s.display = `Tap · ${said}`
   }
+}
+/** Round: the tempo to the nearest whole BPM (after the knob, or a tempo set in Live). */
+function tempoRound() {
+  const said = setTempo(Math.round(s.clock.bpm))
+  if (said) s.display = `Tempo ${said}`
+}
+/** Tempo − / +: 1 BPM, with Shift 0.1. */
+function tempoStep(dir) {
+  const said = setTempo(s.clock.bpm + dir * (s.shift ? 0.1 : 1))
+  if (said) s.display = `Tempo ${said}`
+}
+// The tempo knob (MIDI Learn rig_tempo): relative — each step it moves is 0.5 BPM, so a knob
+// picked up anywhere never jumps the tempo.
+let tempoKnobLast = null
+function tempoKnob(value) {
+  const prev = tempoKnobLast
+  tempoKnobLast = value
+  if (prev === null || value === prev) return
+  const said = setTempo(s.clock.bpm + (value - prev) * 0.5)
+  if (said) s.display = `Tempo ${said}`
+}
+// On the screen: drag the BPM up / down (mouse, touch), 0.1 BPM per 2 px.
+function tempoDrag(e) {
+  if (e.button !== 0) return
+  const el = e.currentTarget
+  el.setPointerCapture?.(e.pointerId)
+  const y0 = e.clientY
+  const b0 = s.clock.bpm
+  let raf = 0, pending = null
+  const move = ev => {
+    pending = b0 + Math.round((y0 - ev.clientY) / 2) / 10
+    if (raf) return
+    raf = requestAnimationFrame(() => { raf = 0; if (pending !== null) { const said = setTempo(pending); if (said) s.display = `Tempo ${said}` } })
+  }
+  const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up) }
+  el.addEventListener('pointermove', move)
+  el.addEventListener('pointerup', up)
+  el.addEventListener('pointercancel', up)
 }
 
 // ── Hold-to-confirm (Panic, INT) ──────────────────────────────────────────
@@ -454,7 +507,7 @@ function onRowFill(appId) {
   onFill()
 }
 function onFill() {
-  if (live.value) { dispatchRig({ name: 'dm-trigger-fill' }); s.display = 'Drum: Fill'; return }
+  if (live.value) { dispatchRig({ name: 'dm-trigger-fill' }); s.display = drumStore.fillWhen === 'bar' && drumStore.isPlaying ? 'Drum: Fill on the next bar' : 'Drum: Fill'; return }
   s.fill = true; s.display = `Fill ${s.clock.running ? 'on the next bar' : 'armed'}`
 }
 /**
@@ -492,10 +545,27 @@ function syncSection() {
   s.section = liveSection !== null && !waiting ? liveSection : null
   s.queuedSection = liveSection !== null && waiting ? liveSection : null
 }
-function repeaterOn() { s.repeater = true; s.display = 'Repeater (hold)' }
-function repeaterOff() { if (s.repeater) { s.repeater = false; s.display = 'Repeater off' } }
+// Repeat (hold): LIVE = the Drum Machine's Repeat (each step of the drums rolled ÷2 / ÷3 / ÷4, its
+// panel's division) while held; back as it was on release (on if it was on in the panel).
+let repeatWasOn = false
+function repeaterOn() {
+  if (s.repeater) return
+  s.repeater = true
+  if (live.value) {
+    repeatWasOn = drumStore.repeaterActive
+    drumStore.repeaterActive = true
+    s.display = `Drum: Repeat ÷${drumStore.repeaterDivision} (hold)`
+    return
+  }
+  s.display = 'Repeater (hold)'
+}
+function repeaterOff() {
+  if (!s.repeater) return
+  s.repeater = false
+  if (live.value) drumStore.repeaterActive = repeatWasOn
+  s.display = 'Repeater off'
+}
 function toggleLatch() { s.latch = !s.latch; s.display = `Latch ${s.latch ? 'on' : 'off'}` }
-function releaseAll() { s.latch = false; s.display = 'Note Latch: all notes released' }
 function toggleShift() { s.shift = !s.shift }
 function toggleGenMode() { s.generateMode = s.generateMode === 'ai' ? 'builtin' : 'ai'; s.display = `Generate: ${s.generateMode === 'ai' ? 'AI' : 'built-in'}` }
 const focused = computed(() => s.apps.find(a => a.id === focusApp.value))
@@ -531,6 +601,11 @@ function onRigAction(e) {
     case 'intensity': if (app) app.intensity = value; return
     case 'density': if (app) app.density = value; return // Arp: octave (Drum / Seq go to rigDensity directly)
     case 'global': s.globalIntensity = value; return
+    case 'tap': return tap()
+    case 'tempo_down': return tempoStep(-1)
+    case 'tempo_up': return tempoStep(1)
+    case 'tempo_round': return tempoRound()
+    case 'tempo': return tempoKnob(value)
   }
 }
 window.addEventListener('rig-action', onRigAction)
@@ -703,7 +778,7 @@ const queueOrder = (a, i) => { const k = a.queue.indexOf(i); return k === -1 ? n
 const sectionHasContent = i => s.apps.some(a => a.filled[i])
 const lanePageOffset = computed(() => (s.shift ? 8 : 0))
 /** The Launchpad's row 6 (Performance pads). */
-const LP_PERF_LABELS = ['Fill', 'Repeat', 'Latch', 'Rel all']
+const LP_PERF_LABELS = ['Fill', 'Repeat', 'Latch']
 
 // ── Tailwind classes ──────────────────────────────────────────────────────
 const SLOT_CLASS = {
@@ -722,6 +797,13 @@ const LED_CLASS = {
 const btn = 'px-2 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wider transition-colors select-none'
 const btnIdle = 'bg-white/[0.04] border-white/10 text-neutral-300 hover:bg-white/10'
 const btnOn = 'bg-emerald-500/80 border-emerald-300 text-black'
+// The Fill buttons (Rig layout, Rig Controls): dark amber idle · light amber blinking waiting · red playing
+const FILL_CLASS = {
+  idle: 'bg-amber-950/60 border-amber-900/70 text-amber-200/80 hover:bg-amber-900/60',
+  waiting: 'bg-amber-400/80 border-amber-200 text-black animate-pulse',
+  playing: 'bg-red-600 border-red-400 text-white',
+}
+const fillClass = computed(() => FILL_CLASS[live.value ? fillLook(rigReports) : s.fill ? 'playing' : 'idle'])
 
 // ── Launchpad Mini MK1 view model ─────────────────────────────────────────
 const lpTop = computed(() => LP_TOP_LABELS.map((label, i) => {
@@ -746,14 +828,19 @@ function lpPad(row, col) {
     const color = a.muted && st === 'playing' ? 'red' : slotColor(st)
     return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
   }
-  // Row 6: Fill (red: the Drum Machine's), Repeat, Latch, Rel all — the last three not connected
-  // in LIVE yet (dark) — and four free pads.
+  // Row 6: Fill (red: the Drum Machine's), Repeat (hold: the Drum Machine's Repeat), Latch (not
+  // connected in LIVE: the master keyboard's) and five free pads.
   if (row === 5) {
     const label = LP_PERF_LABELS[col]
     if (!label) return { label: '—', short: '', color: 'off' }
-    if (col === 0) return { label, short: label, color: (live.value ? rigReports.fill : s.fill) ? 'amberFlash' : 'red' }
+    // Fill: dark amber idle · light amber blinking waiting (armed for the next bar) · red playing
+    if (col === 0) {
+      const look = live.value ? fillLook(rigReports) : s.fill ? 'playing' : 'idle'
+      return { label, short: label, color: look === 'playing' ? 'red' : look === 'waiting' ? 'amberFlash' : 'amber' }
+    }
+    if (col === 1) return { label: 'Repeat (hold)', short: label, color: s.repeater || (live.value && drumStore.repeaterActive) ? 'green' : 'amber' }
     if (live.value) return { label: `${label} (not connected)`, short: label, color: 'off' }
-    return { label, short: label, color: (col === 1 && s.repeater) || (col === 2 && s.latch) ? 'green' : 'amber' }
+    return { label, short: label, color: s.latch ? 'green' : 'amber' }
   }
   // Row 7: the sections (scenes A–H on every app).
   if (row === 6) {
@@ -793,11 +880,10 @@ function lpPadDown(row, col) {
   if (row < 5) return onSlotDown(s.apps[row].id, col)
   if (row === 5) {
     if (col === 0) return onFill()
-    if (col > 3) return
-    if (live.value) return notConnected(LP_PERF_LABELS[col])
     if (col === 1) return repeaterOn()
-    if (col === 2) return toggleLatch()
-    return releaseAll()
+    if (col !== 2) return
+    if (live.value) return notConnected('Latch (the master keyboard\'s)')
+    return toggleLatch()
   }
   if (row === 6) return onSection(col)
   if (s.apps[col]) toggleMute(s, s.apps[col].id)
@@ -1186,7 +1272,7 @@ const arcPath = v => {
 // The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
 // (Performance), teleported there while it is open.
 provide(RIG_CONTROLS_CTX, {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleLatch, releaseAll, learnedRing, onKeyShift, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleLatch, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 })
 </script>
 
@@ -1324,7 +1410,7 @@ provide(RIG_CONTROLS_CTX, {
                         @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_solo_${a.id}`, `${a.label} Solo`)">S</button>
                 <button :class="[btn, btnIdle, isRigApp(a.id) ? learnedRing(`rig_gen_${a.id}`) : '']" @click="onGenerate(a.id)"
                         @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_gen_${a.id}`, `${a.label} GEN`)">Gen</button>
-                <button :class="[btn, a.id === 'drum' && (live ? rigReports.fill : s.fill) ? 'bg-amber-400/60 border-amber-300 text-white animate-pulse' : btnIdle, live && a.id !== 'drum' ? 'opacity-40' : '']"
+                <button :class="[btn, a.id === 'drum' ? fillClass : btnIdle, live && a.id !== 'drum' ? 'opacity-40' : '']"
                         :title="a.id === 'drum' ? 'Fill (on the next bar)' : live ? 'Fill: Drum Machine only' : 'Fill'"
                         @contextmenu="learnMenu($event, 'rig_fill', 'Fill')"
                         @click="onRowFill(a.id)">Fill</button>
@@ -1416,16 +1502,16 @@ provide(RIG_CONTROLS_CTX, {
                :style="play ? 'grid-template-columns: repeat(9, minmax(0, 1fr)); grid-template-rows: repeat(9, minmax(0, 1fr))' : 'grid-template-columns: repeat(9, 2.6rem)'">
             <!-- top round buttons -->
             <button v-for="(t, i) in lpTop" :key="'t' + i"
-                    :class="['mx-auto rounded-full border font-bold leading-tight', play ? 'w-4/5 h-4/5 my-auto text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(t.color)]" :title="`${t.id} · ${t.label}`"
+                    :class="['mx-auto rounded-full border font-sans font-semibold tracking-tight leading-tight', play ? 'w-4/5 h-4/5 my-auto text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(t.color)]" :title="`${t.id} · ${t.label}`"
                     @pointerdown="lpTopDown(i)" @pointerup="lpTopUp(i)" @pointerleave="lpTopUp(i)">{{ showLabels || play ? t.label : '' }}</button>
             <span />
             <!-- 8 rows: 8 pads + 1 side button -->
             <template v-for="row in 8" :key="'r' + row">
               <button v-for="col in 8" :key="'p' + row + col"
-                      :class="['rounded-md border font-bold leading-tight', play ? 'w-full h-full text-[clamp(10px,2.6cqmin,18px)]' : 'w-10 h-10 text-[10px]', ledClass(lpPad(row - 1, col - 1).color)]"
+                      :class="['rounded-md border font-sans font-semibold tracking-tight leading-tight', play ? 'w-full h-full text-[clamp(10px,2.6cqmin,18px)]' : 'w-10 h-10 text-[10px]', ledClass(lpPad(row - 1, col - 1).color)]"
                       :title="`Note ${lpGridNote(row - 1, col - 1)} · ${lpPad(row - 1, col - 1).label}`"
                       @pointerdown="lpPadDown(row - 1, col - 1)" @pointerup="lpPadUp(row - 1, col - 1)" @pointerleave="lpPadUp(row - 1, col - 1)">{{ showLabels || play ? lpPad(row - 1, col - 1).short : '' }}</button>
-              <button :class="['m-auto rounded-full border font-bold leading-tight', play ? 'w-4/5 h-4/5 text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(lpSide(row - 1).color)]"
+              <button :class="['m-auto rounded-full border font-sans font-semibold tracking-tight leading-tight', play ? 'w-4/5 h-4/5 text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(lpSide(row - 1).color)]"
                       :title="`Note ${lpSideNote(row - 1)} · ${lpSide(row - 1).label}`"
                       @pointerdown="lpSideDown(row - 1)">{{ showLabels || play ? lpSide(row - 1).short : '' }}</button>
             </template>
@@ -1435,10 +1521,10 @@ provide(RIG_CONTROLS_CTX, {
           <label class="flex items-center gap-2 text-neutral-300"><input v-model="showLabels" type="checkbox" class="accent-amber-400" /> Show labels (the real pads have none)</label>
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-1 text-neutral-300">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Map</h3>
-            <div>Rows 1–5 · Chord, Drum, Seq, Bass, Arp × slots A–H (Arp: modes)</div>
-            <div>Row 6 · Sections 1–8</div>
-            <div>Row 7 · Split 1–4 · Fill · Repeat (hold) · Latch · Rel all</div>
-            <div>Row 8 · Lane mute 1–8 (Shift: 9–16)</div>
+            <div>Rows 1–5 · Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes)</div>
+            <div>Row 6 · Fill · Repeat (hold) · Latch</div>
+            <div>Row 7 · Sections 1–8</div>
+            <div>Row 8 · Mute 1–5 (Drum, Chord, Seq, Bass, Arp)</div>
             <div>Side · Generate per row (Shift: Mutate) · Undo · Key − · Key +</div>
             <div>Top · Beat/Tap · EXT/INT (hold) · Shift · Gen AI · Sync (cycles the focused track's Trigger sync) · Rig · — · Panic (hold)</div>
             <div class="text-[10px] text-neutral-500">Slot pads follow each track's Press mode: hold modes react on release too.</div>

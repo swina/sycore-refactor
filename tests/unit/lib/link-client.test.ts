@@ -180,6 +180,16 @@ describe('LinkClient', () => {
     expect(ws.sent.at(-1)).toMatchObject({ type: 'play', on: false })
   })
 
+  it('Live\'s tempo (bridge 1.6): sent only when the bridge takes it, within Live\'s range', () => {
+    const { client, ws } = connected()
+    expect(client.sendTempo(128)).toBe(false) // hello without tempo
+    ws.recv({ type: 'hello', device: 'sycore-link', version: '1.6.0', track: '', sim: false, ports: true, play: true, tempo: true })
+    expect(client.sendTempo(127.456)).toBe(true)
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'tempo', bpm: 127.46 })
+    client.sendTempo(5)
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'tempo', bpm: 20 })
+  })
+
   it('sends MIDI without a beat when stopped or already due', () => {
     const { client, ws } = connected()
     client.sendMidi([0xb0, 7, 64])

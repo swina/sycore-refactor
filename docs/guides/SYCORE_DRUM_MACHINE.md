@@ -192,7 +192,8 @@ The bassline section lets you control 3 melodic voices assigned to the last thre
 Click the **Bass** button in the header to toggle the bassline panel. When active:
 - The bassline panel slides open below the track grid
 - Drum slots 8–10 (Rim Shot, Cowbell, Tambourine) are **automatically hidden** from the track grid
-- Bassline voices use those slots as their audio output
+- Bassline voices use those slots as their audio output (in **MIDI OUT ONLY**: their notes go out on the bassline's MIDI channel)
+- With the **Rig Controller** playing the drums alone (its Bass row off), those three pads play their **drum** steps like the others; they become the bassline's voices only while the Bass part is on. In the Performance play view they show as **BASS 1–3** (purple) while a bassline is in use (playing, or a Bass slot armed with Live stopped), otherwise as drums
 
 ### Voice Controls
 
@@ -264,7 +265,8 @@ A one-bar overlay pattern that temporarily replaces (or augments) the main seque
 
 | Control | Description |
 |---------|-------------|
-| **Fill button** | Triggers the fill for one bar. Pulses cyan while active. MIDI-learnable |
+| **Fill button** | Triggers the fill. Pulses cyan while active (blinking softer while armed for the next bar). MIDI-learnable |
+| **Now / Bar** | When the Fill plays: **Now** = at once, to the end of this bar (late in a bar: a few steps); **Bar** = armed, then the whole next bar (pressed again while armed: cancelled; dropped at a stop). The Rig Controller's Fill follows it. Remembered per user |
 | **Gen** | Generates a new random fill pattern using one of 6 musical archetypes (snare roll, tom cascade, kick frenzy, HH frenzy, broken/syncopated, crash & build) |
 | **Step range inputs** | Two number fields (default 1–16). Defines which steps are written when saving |
 | **Save icon** | Writes the fill steps within the configured range into the current active sequence |
@@ -344,7 +346,9 @@ When **Repeat** is active (orange), every playing step is retriggered at a sub-s
 | **÷3** | Three hits per step |
 | **÷4** | Four hits per step |
 
-Velocity tapers per retrigger (each hit is slightly softer) for a natural machine-gun feel. Repeater overrides the per-step ratchet setting while active.
+Velocity tapers per retrigger (each hit is slightly softer) for a natural machine-gun feel. Repeater overrides the per-step ratchet setting while active. It works in **MIDI OUT ONLY** too (each hit with its own note-off). The Rig Controller's **Repeat (hold)** turns it on while held.
+
+> **Performance workspace**: the Drum Machine shows its play view (sequences, beat bar, the pattern); its header has **EDIT** (the full panel; **Play view** goes back) and the **style** menu — the style Generate and the Rig's GEN write.
 
 ---
 

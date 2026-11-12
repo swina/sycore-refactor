@@ -288,3 +288,12 @@ describe('bassline in use (its source pads as BASS 1–3)', () => {
     expect(bassInUse({ basslineEnabled: false, isPlaying: true, bassOn: true }, 1)).toBe(false)
   })
 })
+
+import { fillLook } from '@/lib/rig-live'
+describe('Fill look on the Rig', () => {
+  it('idle dark amber, waiting (armed for the next bar) light amber, playing red', () => {
+    expect(fillLook({ fill: false, fillArmed: false })).toBe('idle')
+    expect(fillLook({ fill: true, fillArmed: true })).toBe('waiting')
+    expect(fillLook({ fill: true, fillArmed: false })).toBe('playing')
+  })
+})

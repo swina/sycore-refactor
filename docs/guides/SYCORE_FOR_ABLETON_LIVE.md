@@ -108,6 +108,8 @@ The devices share SY.CORE's look and show what's going on at a glance: the statu
 
 - **You play, you don't press Play and wait.** Pick the progression, launch the chords one at a time, open and close the drums, end the phrase with a fill.
 - **Use the controllers you have.** The Launchpad becomes the Rig's panel, the encoders of any controller drive Density and Intensity, and the rest of your setup stays mapped to Live as before.
+- **One stage screen.** The **Performance** workspace puts the players, the Rig's controls and the Launchpad grid side by side, no windows on top of each other; panels resize by touch, and Live's instrument parameters become vertical faders under your fingers.
+- **Live's transport and tempo from the Rig.** Play / Stop starts and stops Live itself; TAP, − / + and the tempo knob set Live's tempo.
 - **Nothing to install.** SY.CORE opens from an address in the browser: no drivers, no plugins to update.
 
 ---

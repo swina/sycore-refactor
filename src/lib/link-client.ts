@@ -172,7 +172,7 @@ export class LinkClient {
   /** Diagnostics: a note sent with its exact beat, and how far (ms) its converted time was. */
   onExactBeat: ((ms: number) => void) | null = null
   transport: LinkTransport = { playing: false, beat: 0, tempo: 120, num: 4, den: 4, at: 0 }
-  device: { name: string; version: string; track: string; sim: boolean; ports: boolean; play: boolean } | null = null
+  device: { name: string; version: string; track: string; sim: boolean; ports: boolean; play: boolean; tempo: boolean } | null = null
   /** Mean of the last round trips, ms (null until measured). */
   rttMs: number | null = null
   private rtts: number[] = []
@@ -301,7 +301,7 @@ export class LinkClient {
     const now = this.now()
     switch (m.type) {
       case 'hello':
-        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports, play: !!m.play }
+        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports, play: !!m.play, tempo: !!m.tempo }
         this.emit({ type: 'hello', device: this.device.name, version: this.device.version, track: this.device.track, sim: this.device.sim })
         break
       case 'transport': {
@@ -521,6 +521,15 @@ export class LinkClient {
   sendPlay(on: boolean): boolean {
     if (!this.isReady || !this.playSupported) return false
     return this.sendRaw({ type: 'play', on })
+  }
+
+  /** The device can set Live's tempo (bridge 1.6+: `tempo`). */
+  get tempoSupported(): boolean { return !!this.device?.tempo }
+
+  /** Set Live's tempo (bridge 1.6+). False: not sent. */
+  sendTempo(bpm: number): boolean {
+    if (!this.isReady || !this.tempoSupported || !Number.isFinite(bpm)) return false
+    return this.sendRaw({ type: 'tempo', bpm: Math.round(Math.max(20, Math.min(999, bpm)) * 100) / 100 })
   }
 
   /** Drop everything queued in the device and end the notes sounding (stop, panic). */

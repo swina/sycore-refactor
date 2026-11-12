@@ -1,4 +1,5 @@
 <script setup>
+import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import SeqPlayView from '@/components/play/SeqPlayView.vue'
@@ -465,6 +466,8 @@ let generateHidden = ref(false)
         </div>
         <span class="text-[11px] font-black uppercase tracking-widest text-white">Sequencer</span>
       </div>
+      <!-- Performance, in EDIT: back to the play view -->
+      <PlayEditToggle panel-id="sequencer2" />
       <div class="flex-1" />
       <div class="flex items-center gap-1 pointer-events-auto">
         <button

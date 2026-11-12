@@ -23,6 +23,16 @@ function run(src: ReturnType<typeof source>) {
 }
 
 describe('LinkClockAdapter', () => {
+  it('Live\'s tempo changed while it is stopped: a tempo event (no start)', () => {
+    const src = source({ playing: false, tempo: 120 })
+    const { a, ev } = run(src)
+    a.onTransport(0)
+    src.transport.tempo = 124
+    a.onTransport(10)
+    expect(ev).toEqual([{ type: 'tempo', bpm: 120 }, { type: 'tempo', bpm: 124 }])
+    expect(a.state).toBe('stopped')
+  })
+
   it('Live starts at 1.1.1: start on beat 0, then a beat per quarter and a bar every 4', () => {
     const src = source()
     const { a, ev, tickTo } = run(src)
@@ -129,10 +139,10 @@ describe('LinkClockAdapter', () => {
     expect(r2.a.state).toBe('lost')
   })
 
-  it('stopped: ticks emit nothing', () => {
+  it('stopped: only Live\'s tempo, ticks emit nothing (no start, beats or bars)', () => {
     const src = source({ playing: false })
     const { a, ev, tickTo } = run(src)
     a.onTransport(0); tickTo(0, 2000)
-    expect(ev).toEqual([])
+    expect(ev).toEqual([{ type: 'tempo', bpm: 120 }])
   })
 })

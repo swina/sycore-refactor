@@ -815,6 +815,10 @@ export const useDrumMachineStore = defineStore('drumMachine', () => {
   const currentStep = ref(-1)
   const repeaterActive = ref(false)
   const repeaterDivision = ref(2)
+  // Fill: 'now' = from the step playing to the end of this bar; 'bar' = armed, the whole next bar.
+  const LS_FILL_WHEN = 'SYCORE_DM_FILL_WHEN'
+  const fillWhen = ref<'now' | 'bar'>((() => { try { return localStorage.getItem(userKey(LS_FILL_WHEN)) === 'bar' ? 'bar' : 'now' } catch { return 'now' } })())
+  watch(fillWhen, v => { try { localStorage.setItem(userKey(LS_FILL_WHEN), v) } catch {} })
 
   // MIDI OUT ONLY: every track (and the bassline) plays as MIDI notes to the virtual instrument the
   // Drum Machine is wired to in MIDI Flow, without the internal samples — applied by DrumMachine.vue
@@ -1506,7 +1510,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   return {
-    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, midiOutOnly, systemClock, basslineMidiChannel,
+    bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, fillWhen, midiOutOnly, systemClock, basslineMidiChannel,
     autofillEnabled, chainEnabled,
     sequences, activeSequence, currentPattern,
     TRACK_LABELS, DRUM_STYLES, DRUM_STYLE_NAMES,

@@ -190,6 +190,15 @@ describe('externalGrid — the first Start after a reload (no tempo yet)', () =>
 import { VoiceLedger } from '@/core/midi/step-scheduler'
 
 describe('VoiceLedger', () => {
+  it('takeEndedBy: a hit of the same key after the previous one ended hands its note-off back (ratchet / Repeat: none lost)', () => {
+    const v = new VoiceLedger<{ n: number }>()
+    const a = v.start('9:36', 100, { n: 1 })
+    expect(v.takeEndedBy('9:36', 90)).toBeNull()       // still sounding at 90: cutKeyAt's case
+    expect(v.takeEndedBy('9:36', 110)).toEqual({ offAt: 100, data: { n: 1 } })
+    const b = v.start('9:36', 150, { n: 2 })
+    expect(v.release('9:36', a)).toBe(false)            // its note-off already sent by the caller
+    expect(v.release('9:36', b)).toBe(true)
+  })
   it("a newer note of the same pitch takes the key over: the old note-off is skipped", () => {
     const v = new VoiceLedger<{ n: number }>()
     const a = v.start('60-1', 1000, { n: 60 })

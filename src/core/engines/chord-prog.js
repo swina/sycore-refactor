@@ -12,6 +12,7 @@
  * component changed: `props.isOpen` → `uiStore.isChordProgOpen`, previewChord takes the
  * transpose, the progression data has its own loader, the transport ticks are read by a getter.
  */
+import { chordBassNote } from '@/lib/chord-custom'
 import { ref, computed, watch, effectScope, onScopeDispose } from 'vue'
 import { getTransport, start as toneStart } from 'tone'
 import { drawAt } from '@/lib/ui-clock'
@@ -135,9 +136,9 @@ function createChordProgEngine() {
     return step.notes.map(n => NOTES_NAME[(n + (seqTranspose.value || 0) + (step.transpose || 0)) % 12] + Math.floor((n + (seqTranspose.value || 0) + (step.transpose || 0)) / 12))
   }
 
-  function getBassNote(notes, shift = 0) {
-    if (!notes?.length) return null
-    return Math.min(...notes) + shift
+  // The bass of a step: a chord symbol's root in octave 2; custom notes: the lowest an octave down (chord-custom.ts)
+  function getBassNote(step, shift = 0) {
+    return chordBassNote(step, shift)
   }
 
   // Bass: straight to its own device and channel (midiService.sendNoteTo), not through the
@@ -681,7 +682,7 @@ function createChordProgEngine() {
 
           // Bass note: send lowest note to dedicated bass device/channel on step start
           if (bassEnabled.value && bassDevice.value && step?.active && step.velocity > 0 && step.notes?.length > 0) {
-            const bassNote = getBassNote(step.notes, (state.transpose || 0) + (step.transpose || 0))
+            const bassNote = getBassNote(step, (state.transpose || 0) + (step.transpose || 0))
             if (bassNote !== null) {
               const tickMs = 60000 / (state.bpm * 96)
               const stepMs = tickMs * ticksNeeded
@@ -933,7 +934,7 @@ function createChordProgEngine() {
 
       // Bass note for arp mode: hold the lowest note for the step duration
       if (bassEnabled.value && bassDevice.value) {
-        const bassNote = getBassNote(step.notes, shift)
+        const bassNote = getBassNote(step, shift)
         if (bassNote !== null) {
           const n = Math.max(0, Math.min(127, bassNote))
           heldBassNote = { dev: bassDevice.value, note: n, channel: Math.max(1, Math.min(16, bassChannel.value)) }
@@ -949,7 +950,7 @@ function createChordProgEngine() {
 
       // Bass note for chord mode
       if (bassEnabled.value && bassDevice.value) {
-        const bassNote = getBassNote(step.notes, shift)
+        const bassNote = getBassNote(step, shift)
         if (bassNote !== null) {
           const n = Math.max(0, Math.min(127, bassNote))
           heldBassNote = { dev: bassDevice.value, note: n, channel: Math.max(1, Math.min(16, bassChannel.value)) }

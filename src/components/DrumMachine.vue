@@ -1,4 +1,5 @@
 <script setup>
+import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import DrumPlayView from '@/components/play/DrumPlayView.vue'
@@ -76,7 +77,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 const engine = useDrumMachineEngine()
 const {
   selectedStyle, generateAsFill, currentPresetId, loadingDefaultKit, showBassline, basslineMidiCapture,
-  basslineRootNote, pendingSequence, fillActive, fillSaveFrom, fillSaveTo, fillPattern,
+  basslineRootNote, pendingSequence, fillActive, fillArmed, fillSaveFrom, fillSaveTo, fillPattern,
   recSyncArmed, recSyncActive, recSyncMultiplier, midiOutTargets, midiOutOnly, syncRetrig,
   chainLength, chain, chainSlotRef, autofillEvery, startAtBar, stopAtEnd, endWithFill,
   newFillEachTime, pendingStop,
@@ -762,6 +763,8 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
       >
         <Drum class="w-3.5 h-3.5 text-purple-400 shrink-0" />
         <span class="text-[11px] font-black uppercase tracking-widest text-white">Drum Machine</span>
+        <!-- Performance, in EDIT: back to the play view -->
+        <PlayEditToggle panel-id="drum-machine" />
 
         <!-- BPM display -->
         <span class="ml-2 text-[12px] font-mono bg-black p-1 rounded-lg px-2 text-synth-neon">{{ drumStore.bpm }} BPM</span>
@@ -2254,9 +2257,11 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
                 'flex items-center gap-1 px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
                 fillActive
                   ? 'bg-cyan-500/30 border-cyan-400 text-cyan-300 animate-pulse'
-                  : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-cyan-500 hover:text-cyan-300'
+                  : fillArmed
+                    ? 'bg-cyan-500/15 border-cyan-500/70 text-cyan-300 animate-pulse'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-cyan-500 hover:text-cyan-300'
               ]"
-              title="Trigger fill for one bar"
+              :title="drumStore.fillWhen === 'bar' ? 'Fill on the next bar (the whole bar) · pressed again while armed: cancelled' : 'Fill now, to the end of this bar'"
             >
               <Layers class="w-2.5 h-2.5" />
               Fill
@@ -2266,6 +2271,13 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
               class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)] animate-pulse pointer-events-none z-50"
             />
           </div>
+          <!-- when the Fill plays: now (to the end of this bar) or the whole next bar -->
+          <button
+            @click.stop="drumStore.fillWhen = drumStore.fillWhen === 'bar' ? 'now' : 'bar'"
+            class="px-1.5 py-0.5 rounded border text-[9px] font-black uppercase tracking-widest transition-colors"
+            :class="drumStore.fillWhen === 'bar' ? 'border-cyan-500/60 text-cyan-300 bg-cyan-500/10' : 'border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white'"
+            title="Fill: Now = at once, to the end of this bar · Bar = armed, the whole next bar"
+          >{{ drumStore.fillWhen === 'bar' ? 'Bar' : 'Now' }}</button>
           <button
             @click.stop="generateFill"
             class="px-2 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-500 text-[9px] font-black uppercase tracking-widest hover:border-neutral-500 hover:text-white transition-colors"

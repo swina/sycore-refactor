@@ -1,3 +1,4 @@
+import { customChordName, normalizeCustomStep } from '@/lib/chord-custom'
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { generateMajor, keyPhrase, keyRoot, type KeyMode } from '@/lib/chord-key'
@@ -126,7 +127,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const steps = ref<ChordStep[]>(
     ensureSteps16(
       saved?.steps
-        ? saved.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s }))
+        ? saved.steps.map(s => normalizeCustomStep({ ...DEFAULT_CHORD_STEP, ...s }))
         : Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP }))
     )
   )
@@ -197,7 +198,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed) && parsed.length === SLOT_COUNT) {
           slots.value = parsed.map((s: any) => ({
-            steps: s.steps?.map((st: any) => ({ ...DEFAULT_CHORD_STEP, ...st })) ?? makeEmptySlot().steps,
+            steps: s.steps?.map((st: any) => normalizeCustomStep({ ...DEFAULT_CHORD_STEP, ...st })) ?? makeEmptySlot().steps,
             numSteps: s.numSteps ?? 8,
             playMode: s.playMode ?? 'chord',
             arpRate: s.arpRate ?? '16n',
@@ -443,7 +444,9 @@ export const useChordProgStore = defineStore('chordProg', () => {
 
   function assignChordToStep(idx: number, chordName: string, notes: number[]) {
     if (idx < 0 || idx >= 16) return
-    steps.value[idx] = { ...steps.value[idx], chordName, notes: [...notes], active: true }
+    // custom notes ("Custom", or no name): named by their notes, e.g. G3G4 (chord-custom.ts)
+    const name = !chordName || chordName === 'Custom' ? customChordName(notes) : chordName
+    steps.value[idx] = { ...steps.value[idx], chordName: name, notes: [...notes], active: true }
   }
 
   function cycleDuration(idx: number, reverse = false) {
@@ -654,7 +657,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   }
 
   function loadFromDocument(pattern: Partial<ChordProgSnapshot>) {
-    if (pattern.steps) steps.value = ensureSteps16(pattern.steps.map(s => ({ ...DEFAULT_CHORD_STEP, ...s })))
+    if (pattern.steps) steps.value = ensureSteps16(pattern.steps.map(s => normalizeCustomStep({ ...DEFAULT_CHORD_STEP, ...s })))
     if (pattern.numSteps) numSteps.value = pattern.numSteps
     if (pattern.selectedKey !== undefined) selectedKey.value = pattern.selectedKey
     if (pattern.playMode) playMode.value = pattern.playMode
@@ -665,7 +668,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   function loadAllSlotsFromDocument(pattern: ChordProgAllSlotsSnapshot) {
     if (pattern.slots) {
       slots.value = pattern.slots.map((s: any) => ({
-        steps: s.steps?.map((st: any) => ({ ...DEFAULT_CHORD_STEP, ...st })) ?? makeEmptySlot().steps,
+        steps: s.steps?.map((st: any) => normalizeCustomStep({ ...DEFAULT_CHORD_STEP, ...st })) ?? makeEmptySlot().steps,
         numSteps: s.numSteps ?? 8,
         playMode: s.playMode ?? 'chord',
         arpRate: s.arpRate ?? '16n',

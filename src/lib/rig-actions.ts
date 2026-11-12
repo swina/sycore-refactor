@@ -10,6 +10,9 @@
  *   rig_fill               Fill (Drum Machine)                                         button
  *   rig_section_<1–8>      section: every app to that slot                             button
  *   rig_key_down / rig_key_up / rig_key_mode   Key ◀ ▶, Maj/Min                       button
+ *   rig_tap / rig_tempo_down / rig_tempo_up    TAP (whole BPM), tempo − / + (1 BPM; Shift 0.1) button
+ *   rig_tempo_round        the tempo to a whole BPM                                    button
+ *   rig_tempo              tempo knob: each step it moves = 0.5 BPM (relative: no jump) knob
  *   rig_intensity_<app>    Intensity (0–127)                                           knob / fader
  *   rig_global             Global intensity (0–127)                                    knob / fader
  *   rig_density_<drum|seq> Density (0–127; rig-density.ts)                             knob / fader
@@ -27,7 +30,7 @@ const SLOTS = 'abcdefgh'
 export type RigAction =
   | { kind: 'slot'; app: RigActionApp; slot: number }
   | { kind: 'gen' | 'mute' | 'solo' | 'sync' | 'intensity'; app: RigActionApp }
-  | { kind: 'fill' | 'key_down' | 'key_up' | 'key_mode' | 'global' }
+  | { kind: 'fill' | 'key_down' | 'key_up' | 'key_mode' | 'global' | 'tap' | 'tempo_down' | 'tempo_up' | 'tempo_round' | 'tempo' }
   | { kind: 'section'; index: number }
   | { kind: 'density'; app: 'drum' | 'seq' | 'arp' }
 
@@ -37,7 +40,7 @@ const isApp = (s: string): s is RigActionApp => (RIG_ACTION_APPS as readonly str
 export function parseRigAction(name: string): RigAction | null {
   if (!name.startsWith('rig_')) return null
   const rest = name.slice(4)
-  if (rest === 'fill' || rest === 'key_down' || rest === 'key_up' || rest === 'key_mode' || rest === 'global') return { kind: rest }
+  if (rest === 'fill' || rest === 'key_down' || rest === 'key_up' || rest === 'key_mode' || rest === 'global' || rest === 'tap' || rest === 'tempo_down' || rest === 'tempo_up' || rest === 'tempo_round' || rest === 'tempo') return { kind: rest }
   let m = /^slot_([a-z]+)_([a-h])$/.exec(rest)
   if (m && isApp(m[1])) return { kind: 'slot', app: m[1], slot: SLOTS.indexOf(m[2]) }
   m = /^(gen|mute|solo|sync|intensity)_([a-z]+)$/.exec(rest)
@@ -51,7 +54,7 @@ export function parseRigAction(name: string): RigAction | null {
 
 /** Knobs and faders (the value matters) vs buttons (a press fires). */
 export const isContinuousRigAction = (a: RigAction): boolean =>
-  a.kind === 'intensity' || a.kind === 'global' || a.kind === 'density'
+  a.kind === 'intensity' || a.kind === 'global' || a.kind === 'density' || a.kind === 'tempo'
 
 /** The parameter name of a slot pad. */
 export const rigSlotParam = (app: RigActionApp, slot: number) => `rig_slot_${app}_${SLOTS[slot]}`
@@ -77,6 +80,11 @@ export function rigActionCatalog(): { paramName: string; label: string }[] {
   out.push({ paramName: 'rig_key_down', label: 'Key −' })
   out.push({ paramName: 'rig_key_up', label: 'Key +' })
   out.push({ paramName: 'rig_key_mode', label: 'Key Maj/Min' })
+  out.push({ paramName: 'rig_tap', label: 'Tap tempo' })
+  out.push({ paramName: 'rig_tempo_down', label: 'Tempo −' })
+  out.push({ paramName: 'rig_tempo_up', label: 'Tempo +' })
+  out.push({ paramName: 'rig_tempo_round', label: 'Tempo round' })
+  out.push({ paramName: 'rig_tempo', label: 'Tempo (knob)' })
   return out
 }
 

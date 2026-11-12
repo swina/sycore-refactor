@@ -69,13 +69,15 @@ export class LinkClockAdapter {
   onTransport(now: number): void {
     const tr = this.src.transport
     const running = this.state === 'playing' || this.state === 'waiting-bar'
+    // Live's tempo, also while it is stopped (a tempo set in Live, or from SY.CORE's TAP / − +,
+    // before Play): SY.CORE shows and takes it at once.
+    if (tr.tempo > 0 && tr.tempo !== this.lastBpm) {
+      this.lastBpm = tr.tempo
+      this.emit({ type: 'tempo', bpm: tr.tempo })
+    }
     if (!tr.playing) {
       if (running) this.stopNow()
       return
-    }
-    if (tr.tempo !== this.lastBpm) {
-      this.lastBpm = tr.tempo
-      this.emit({ type: 'tempo', bpm: tr.tempo })
     }
     if (!running) this.waitForBar(now)
   }

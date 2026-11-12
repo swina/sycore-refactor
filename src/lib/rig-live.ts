@@ -54,9 +54,17 @@ const LETTERS = 'ABCDEFGH'
 export const rigReports = reactive({
   queued: { chord: null, drum: null, seq: null, bass: null } as Record<SlotRowId, number | null>,
   seqPlaying: false,
-  /** The Drum Machine's Fill is on (triggered, until its bar ends): lit on the Rig and its devices. */
+  /** The Drum Machine's Fill is on (triggered, until its bar ends) or armed for the next bar: lit on the Rig's devices. */
   fill: false,
+  /** Its Fill armed for the next bar, not playing yet (Fill: Bar). */
+  fillArmed: false,
 })
+
+/** The Fill's look on the Rig: dark amber idle, light amber blinking waiting (armed for the next bar),
+ *  red playing. */
+export type FillLook = 'idle' | 'waiting' | 'playing'
+export const fillLook = (r: { fill: boolean; fillArmed: boolean }): FillLook =>
+  r.fillArmed ? 'waiting' : r.fill ? 'playing' : 'idle'
 
 export interface LiveSnapshot {
   filled: boolean[]

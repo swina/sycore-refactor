@@ -155,7 +155,20 @@ Collect your favorite chords and assign to any slot later. Click the **Favorite*
 | **Clear** | Discards the current capture and resets the display. |
 | **Assign to Step N** | Writes the captured notes and name to the selected step. Closes the modal. |
 
-Chord detection covers 18 qualities: major, minor, dim, aug, sus2, sus4, 7, maj7, m7, mMaj7, dim7, ø7, aug7, add9, m(add9), 9, 6, m6. Voicings that don't match a known quality still assign fine — just enter a name manually in the Chord Name field before clicking Assign.
+Chord detection covers 18 qualities: major, minor, dim, aug, sus2, sus4, 7, maj7, m7, mMaj7, dim7, ø7, aug7, add9, m(add9), 9, 6, m6. Voicings that don't match a known quality still assign fine — enter a name in the Chord Name field, or leave it empty: the chord is then named by its **notes**, lowest first (e.g. `G3G4`, C4 = MIDI 60; steps saved as "Custom" before are renamed so when loaded).
+
+### 7.2 The bass
+
+With **Bass** on (its device and channel in the Chord Prog's settings), each step also plays one bass note on its own device / channel:
+
+| The step's chord | Bass note |
+|---|---|
+| a chord symbol (Ebm, DbM, Bb, Cm7, F#m7b5, C/E…) | its **root in octave 2** (Ebm → Eb2) |
+| anything else (custom notes such as `G3G4`, a typed name, MIDI-imported names) | its **lowest note, an octave down** (`G3G4` → G2) |
+
+The step's and the global transpose apply to it as to the chord.
+
+> **Performance workspace**: the Chord Prog's play view shows the slots and the chords, each pad with its length (`1/1` = a bar, `1/4`…), the chord sounding lit; **Now / Next** (under the Sequencer) shows the chord sounding and the next one. **EDIT** opens the full panel, **Play view** goes back.
 
 ---
 

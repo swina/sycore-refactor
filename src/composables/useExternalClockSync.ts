@@ -139,8 +139,10 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
       case 'tempo': {
         store.bpm = Math.round(e.bpm * 10) / 10
         // Coarse follow on every beat (e.g. the first bar, or a tempo jump);
-        // small differences are left to the phase lock.
-        if (active().state === 'playing' && (!fineBpm || Math.abs(e.bpm - fineBpm) / fineBpm > 0.005)) {
+        // small differences are left to the phase lock. Stopped (Live's tempo changed before Play):
+        // SY.CORE's tempo is set to it as it is (the toolbar, the apps).
+        const running = active().state === 'playing' || active().state === 'waiting-bar'
+        if (!running || !fineBpm || Math.abs(e.bpm - fineBpm) / fineBpm > 0.005) {
           applyFineBpm(e.bpm)
         }
         break
@@ -218,6 +220,14 @@ export function useExternalClockSync({ playAll, stopAll }: Controls) {
     const now = performance.now()
     linkClock.tick(now)
     store.state = linkClock.state
+    // The tempo shown (Rig, diagnostics) is always Live's as reported: after a reload, a source switch
+    // or the bridge reconnecting Live may report the tempo it already had — no tempo event (Rig at
+    // its default 124 while Live and the toolbar were at 91).
+    const tempo = linkClient.transport.tempo
+    if (linkClient.isReady && tempo > 0) {
+      const b = Math.round(tempo * 10) / 10
+      if (store.bpm !== b) store.bpm = b
+    }
     if (linkClock.state === 'playing' || linkClock.state === 'waiting-bar') {
       const label = linkClock.positionLabel(now)
       if (label !== store.position) store.position = label

@@ -238,6 +238,18 @@ export class VoiceLedger<T = unknown> {
     return v.offAt;
   }
 
+  /** A new note of `key` at `t`: the old note of that key that ends by `t` (its note-off not sent
+   *  yet: decided NOTE_OFF_LEAD_MS early, after this note was scheduled) gives up its key — start()
+   *  would take it over and that note-off would be skipped (a ratchet / Repeat, close hits of a pad:
+   *  note-on, note-on… one note-off). Its end time and data, to send its note-off now (timestamped),
+   *  else null. */
+  takeEndedBy(key: string, t: number): { offAt: number; data: T } | null {
+    const v = this.voices.get(key);
+    if (!v || v.offAt > t) return null;
+    this.voices.delete(key);
+    return { offAt: v.offAt, data: v.data };
+  }
+
   /** A new note of `key` at `t`: the old note of that key still sounding after `t` is
    *  released (its queued note-off will be skipped); its data, to end it just before `t`. */
   cutKeyAt(key: string, t: number): T | null {

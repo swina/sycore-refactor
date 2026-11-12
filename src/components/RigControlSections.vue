@@ -3,7 +3,6 @@
 // section per `only`. The state and actions are the Rig panel's (provided as RIG_CONTROLS_CTX): shown in
 // its Rig layout and, in Performance, in the Rig Controls panel (teleported there by the Rig panel).
 import { inject, ref } from 'vue'
-import { rigReports } from '@/lib/rig-live'
 import { undo } from '@/lib/rig-controller'
 import { RIG_CONTROLS_CTX } from '@/lib/rig-controls-host'
 
@@ -11,7 +10,7 @@ defineProps({ only: { type: String, required: true } }) // transport | template 
 const {
   s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu,
   tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg,
-  onFill, repeaterOn, repeaterOff, toggleLatch, releaseAll, learnedRing, onKeyShift, keyText, onKeyMode,
+  onFill, repeaterOn, repeaterOff, toggleLatch, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, keyText, onKeyMode,
   knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 } = inject(RIG_CONTROLS_CTX)
 const tplFile = ref(null)
@@ -23,7 +22,18 @@ const tplFile = ref(null)
       <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">Transport / Clock</h3>
       <div class="flex items-center justify-between">
         <span class="px-2 py-0.5 rounded text-[10px] font-black" :class="s.clock.source === 'EXT' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'">{{ s.clock.source }}</span>
-        <span class="font-mono text-2xl text-white">{{ s.clock.bpm.toFixed(1) }}</span>
+        <!-- the tempo knob: drag up / down (EXT over SY.CORE Link: Live's tempo) · right-click: MIDI Learn -->
+        <span class="font-mono text-2xl text-white touch-none cursor-ns-resize select-none rounded px-0.5 hover:bg-white/5" :class="learnedRing('rig_tempo')"
+              title="Tempo: drag up / down (0.1 BPM per 2 px) · right-click: MIDI Learn a knob (0.5 BPM per step, no jumps)"
+              @pointerdown="tempoDrag" @contextmenu="learnMenu($event, 'rig_tempo', 'Rig Tempo (knob)')">{{ s.clock.bpm.toFixed(1) }}</span>
+      </div>
+      <div class="flex gap-1.5 mt-2">
+        <button :class="[btn, btnIdle, 'flex-1', learnedRing('rig_tempo_down')]" title="Tempo − 1 BPM (Shift: 0.1) · right-click: MIDI Learn"
+                @click="tempoStep(-1)" @contextmenu="learnMenu($event, 'rig_tempo_down', 'Rig Tempo −')">−</button>
+        <button :class="[btn, btnIdle, 'flex-1', learnedRing('rig_tempo_round')]" title="Round the tempo to a whole BPM · right-click: MIDI Learn"
+                @click="tempoRound" @contextmenu="learnMenu($event, 'rig_tempo_round', 'Rig Tempo round')">Round</button>
+        <button :class="[btn, btnIdle, 'flex-1', learnedRing('rig_tempo_up')]" title="Tempo + 1 BPM (Shift: 0.1) · right-click: MIDI Learn"
+                @click="tempoStep(1)" @contextmenu="learnMenu($event, 'rig_tempo_up', 'Rig Tempo +')">+</button>
       </div>
       <div class="flex items-center justify-between mt-2">
         <span class="font-mono text-neutral-300">{{ s.clock.bar }}.{{ s.clock.beat }}</span>
@@ -33,7 +43,8 @@ const tplFile = ref(null)
         </div>
       </div>
       <div class="flex gap-1.5 mt-2">
-        <button :class="[btn, btnIdle, 'flex-1']" @click="tap">Tap</button>
+        <button :class="[btn, btnIdle, 'flex-1', learnedRing('rig_tap')]" title="Tap the tempo (EXT over SY.CORE Link: Live's) · right-click: MIDI Learn"
+                @click="tap" @contextmenu="learnMenu($event, 'rig_tap', 'Rig Tap tempo')">Tap</button>
         <button :class="[btn, 'flex-1', btnIdle]" :title="`Trigger sync of ${focused.label} — click to cycle`" @click="cycleSync"
                 @contextmenu="isRigApp(focused.id) && learnMenu($event, `rig_sync_${focused.id}`, `${focused.label} Trigger sync`)">Sync: {{ SYNC_SHORT[focused.opts.triggerSync] }}</button>
       </div>
@@ -60,10 +71,14 @@ const tplFile = ref(null)
     <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
       <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Performance</h3>
       <div class="grid grid-cols-2 gap-1.5">
-        <button :class="[btn, (live ? rigReports.fill : s.fill) ? 'bg-amber-400/60 border-amber-300 text-white animate-pulse' : btnIdle]" @click="onFill">Fill</button>
-        <button :class="[btn, s.repeater ? btnOn : btnIdle]" @pointerdown="repeaterOn" @pointerup="repeaterOff" @pointerleave="repeaterOff">Repeat (hold)</button>
+        <div class="flex gap-1">
+          <button :class="[btn, 'flex-1', fillClass]" @click="onFill">Fill</button>
+          <!-- the Drum Machine's Fill: now (to the end of this bar) or the whole next bar -->
+          <button :class="[btn, drumStore.fillWhen === 'bar' ? btnOn : btnIdle]" title="Fill: Now = at once, to the end of this bar · Bar = armed, the whole next bar"
+                  @click="drumStore.fillWhen = drumStore.fillWhen === 'bar' ? 'now' : 'bar'">{{ drumStore.fillWhen === 'bar' ? 'Bar' : 'Now' }}</button>
+        </div>
+        <button :class="[btn, s.repeater ? btnOn : btnIdle]" title="The Drum Machine's Repeat while held (its ÷2 / ÷3 / ÷4)" @pointerdown="repeaterOn" @pointerup="repeaterOff" @pointerleave="repeaterOff">Repeat (hold)</button>
         <button :class="[btn, s.latch ? btnOn : btnIdle]" @click="toggleLatch">Latch</button>
-        <button :class="[btn, btnIdle]" @click="releaseAll">Rel all</button>
       </div>
       <div class="flex items-center justify-between">
         <button :class="[btn, btnIdle, learnedRing('rig_key_down')]" @click="onKeyShift(-1)" @contextmenu="learnMenu($event, 'rig_key_down', 'Key −')">◀</button>

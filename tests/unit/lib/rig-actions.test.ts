@@ -26,7 +26,7 @@ describe('rig-actions', () => {
     expect(isContinuousRigAction({ kind: 'slot', app: 'drum', slot: 0 })).toBe(false)
     expect(rigSlotParam('drum', 7)).toBe('rig_slot_drum_h')
     const cat = rigActionCatalog()
-    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 8 + 3)
+    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 8 + 3 + 5) // + tap, tempo − / +, round, tempo knob
     for (const { paramName } of cat) expect(parseRigAction(paramName)).not.toBeNull()
   })
 })
@@ -56,5 +56,17 @@ describe('rig-actions LED feedback', () => {
     expect(ledPaletteFor('Launchpad Mini MK3 LPMiniMK3 MIDI')).toBe(GENERIC_PALETTE)
     expect(ledPaletteFor('Launchkey MK3 49')).toBe(GENERIC_PALETTE)
     expect(LAUNCHPAD_MK1_PALETTE.playing).not.toBe(LAUNCHPAD_MK1_PALETTE.filled)
+  })
+})
+
+describe('rig tempo actions', () => {
+  it('TAP and tempo − / + are buttons, the tempo knob is continuous; all in the catalog', () => {
+    expect(parseRigAction('rig_tap')).toEqual({ kind: 'tap' })
+    expect(parseRigAction('rig_tempo_down')).toEqual({ kind: 'tempo_down' })
+    expect(parseRigAction('rig_tempo_up')).toEqual({ kind: 'tempo_up' })
+    expect(isContinuousRigAction(parseRigAction('rig_tempo')!)).toBe(true)
+    expect(isContinuousRigAction(parseRigAction('rig_tap')!)).toBe(false)
+    const names = rigActionCatalog().map(a => a.paramName)
+    for (const n of ['rig_tap', 'rig_tempo_down', 'rig_tempo_up', 'rig_tempo_round', 'rig_tempo']) expect(names).toContain(n)
   })
 })

@@ -30,6 +30,7 @@ At the heart of the sequencer is its style- and scale-based generation engine, w
 - **Global Transpose**: Transpose the entire sequence in real-time without stopping playback.
 - **Backing Track Sync**: Automatic synchronization with the Backing Track Player to start/stop sequences in sync with the backing tracks.
 - **MIDI Export**: Export your patterns as standard MIDI files (.mid) for use in your favorite DAW.
+- **Performance workspace**: a play view (banks A–H, the pattern on one row, the step sounding lit); its header has **EDIT** (the full panel; **Play view** goes back) and the active bank's **Style** menu — what Generate and the Rig's GEN write.
 
 ## 4. Interface & UX
 - **Step Visualizer**: Immediate visual feedback of the current transport position.

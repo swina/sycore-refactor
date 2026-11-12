@@ -1,4 +1,5 @@
 <script setup>
+import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import ChordProgPlayView from '@/components/play/ChordProgPlayView.vue'
@@ -524,6 +525,8 @@ function velBarColor(v) {
       <div class="flex items-center gap-2 w-full">
         <Music2 class="w-4 h-4 text-purple-400 shrink-0" />
         <h2 class="text-lg font-black uppercase tracking-widest text-purple-400 shrink-0">Chord Prog</h2>
+        <!-- Performance, in EDIT: back to the play view -->
+        <PlayEditToggle panel-id="chord-prog" />
         <div v-if="loadedPatternName" class="flex items-center gap-1.5 px-2 py-0.5 bg-black/60 border border-purple-700/40 rounded text-[11px] font-mono text-purple-300 w-[300px] max-w-[300px] truncate" :title="loadedPatternName">
           <FolderOpen class="w-3 h-3 shrink-0" />
           <span class="">{{ loadedPatternName }}</span>
