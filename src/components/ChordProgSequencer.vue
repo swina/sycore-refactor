@@ -1,4 +1,10 @@
 <script setup>
+import ResizeHandles from '@/components/ui/ResizeHandles.vue'
+import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
+import ChordProgPlayView from '@/components/play/ChordProgPlayView.vue'
+import { usePlayView } from '@/composables/usePlayView'
+// Performance: a play view (slots, chords) instead of the panel; EDIT: the panel.
+const { play } = usePlayView('chord-prog')
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Play, Square, X, Minus, ChevronLeft, ChevronRight, RotateCcw, Save, FolderOpen, Trash2, Zap, Music2, AudioLines, Sparkles, Star, ListMusic } from 'lucide-vue-next'
 import { getTransport, start as toneStart } from 'tone'
@@ -510,6 +516,7 @@ function velBarColor(v) {
     @mousedown.capture="bringToFront"
   >
     <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
+    <template v-if="!play">
     <div
       class="shrink-0 px-3 py-2 bg-black/50 border-b border-neutral-800 flex flex-col items-center gap-3 cursor-grab active:cursor-grabbing"
       @mousedown="onDragStart"
@@ -1773,14 +1780,15 @@ function velBarColor(v) {
 
       </div>
     </div>
+    </template>
+    <!-- Performance: the play view (display only; the Rig plays it) -->
+    <template v-else>
+      <PlayPanelHeader title="Chord Prog" panel-id="chord-prog" accent="text-purple-300" @pointerdown="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
+      <ChordProgPlayView v-if="!isMinimized" class="flex-1 overflow-hidden" />
+    </template>
 
-    <!-- Resize handle -->
-    <div
-      v-if="!isMinimized"
-      class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-30 hover:opacity-80 transition-opacity"
-      @mousedown.stop="e => onResizeStart(e, 'se')"
-      style="background: linear-gradient(135deg, transparent 50%, #7c3aed 50%); border-radius: 0 0 4px 0;"
-    />
+    <!-- Resize handles: every edge and corner -->
+    <ResizeHandles v-if="!isMinimized" :start="onResizeStart" />
 
     <!-- Custom chord assignment modal -->
     <ChordAssignModal

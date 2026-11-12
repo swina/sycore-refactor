@@ -486,8 +486,9 @@ function createDrumMachineEngine() {
       const audible = soloActive ? track.solo : !track.muted
       if (!audible) return
 
-      // When bassline is active, skip drum tracks that are assigned to bassline source slots
-      if (state.basslineEnabled && state.basslineSourceSlots?.includes(trackIdx)) return
+      // The bassline playing (its part on): its source pads are its voices, not drums. Rig: the
+      // drums alone (bass part off) play those pads as drums, like the others.
+      if (state.basslineEnabled && _bassOn && state.basslineSourceSlots?.includes(trackIdx)) return
 
       // Each track wraps at its own length
       const trackStep = stepCounter % (track.length || 16)

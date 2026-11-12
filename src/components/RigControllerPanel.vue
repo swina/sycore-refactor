@@ -1,4 +1,10 @@
 <script setup>
+import ResizeHandles from '@/components/ui/ResizeHandles.vue'
+import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
+import RigControlSections from '@/components/RigControlSections.vue'
+import { rigControlsHost, RIG_CONTROLS_CTX } from '@/lib/rig-controls-host'
+import { usePlayView } from '@/composables/usePlayView'
+import { PLAY_LED_CLASS } from '@/lib/play-colors'
 // Rig Controller — UI prototype (branch feat/rig-controller-ui).
 // Three views of the same simulated rig state (src/lib/rig-controller.ts):
 // the reference layout, the Launchpad Mini MK1 mapping and the AKAI MIDImix mapping.
@@ -12,15 +18,15 @@ import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
 import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor, parseRigAction } from '@/lib/rig-actions'
 import { exportRigTemplate, parseRigTemplate, applyRigTemplate, clearRigMappings, rigMappedDevices, templateMatches, sysexBytes, templateFileName } from '@/lib/rig-template'
 import { useMappingStore } from '@/stores/useMappingStore'
-import { linkClient } from '@/stores/useLinkStore'
+import { linkClient, useLinkStore } from '@/stores/useLinkStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { reactive, ref, computed, watch, onUnmounted } from 'vue'
+import { reactive, ref, computed, watch, onUnmounted, provide } from 'vue'
 import { Grid3X3, Play, Square } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import {
   SLOT_LABELS, SECTION_COUNT, SPLIT_COUNT, KEY_NAMES,
-  LP_TOP_LABELS, LP_ROW6_LABELS, LP_SIDE_LOW_LABELS,
+  LP_TOP_LABELS, LP_SIDE_LOW_LABELS,
   PRESS_OPTIONS, MOTION_OPTIONS, TRIGGER_SYNC_OPTIONS, POSITION_SYNC_OPTIONS,
   createRigState, slotState, slotColor, slotProgress, pressSlot, releaseSlot, setTrackOption,
   generate, undo, selectSection,
@@ -28,7 +34,7 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, armPlaying, stopEvents, LIVE_APPS,
+  isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, armPlaying, armedDrumLoads, stopEvents, LIVE_APPS,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -38,6 +44,8 @@ import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVeloc
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
 import { rigChord } from '@/lib/chord-next'
+/** The SY.CORE Rig device's rows (bridge protocol: rows 0–4). */
+const RIG_LINK_ORDER = ['chord', 'drum', 'seq', 'bass', 'arp']
 import { frameLoop, uiTimeout } from '@/lib/ui-clock'
 import { createWorkerTicker } from '@/core/midi/step-scheduler'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
@@ -50,7 +58,7 @@ import { useGlobalTransportControls } from '@/composables/useGlobalTransportCont
 const emit = defineEmits(['close'])
 const uiStore = useUiStore()
 
-const { panelStyle, onDragStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
+const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_RIG_CONTROLLER',
   minimizeLabel: 'Rig Controller',
   initialWidth: 1040,
@@ -63,6 +71,12 @@ const { panelStyle, onDragStart, isMinimized, toggleMinimize, bringToFront, maxi
 
 const s = reactive(createRigState())
 const view = ref('rig')
+// Performance (play view): the Launchpad layout filling the panel, in the play views' amber scheme
+// (dark: filled · blinking: queued / armed · full: playing), labels on; the mode bar folded (clock,
+// tempo and position are in the toolbar). EDIT: the views as usual.
+const { play } = usePlayView('rig-controller')
+const shownView = computed(() => play.value ? 'launchpad' : view.value)
+const ledClass = (c) => (play.value ? PLAY_LED_CLASS : LED_CLASS)[c]
 const showLabels = ref(true)
 const focusApp = ref('drum')
 const flowConfig = ref('Live — Techno Set')
@@ -77,6 +91,22 @@ const chordStore = useChordProgStore()
 const seqStore = useStepSequencerStore()
 const arpStore = useArpStore()
 const clockStore = useExternalClockStore()
+const linkStore = useLinkStore()
+// The big Play of Rig Controls: following Live over SY.CORE Link it plays / stops Live, so it shows
+// Live's own transport (as reported, one change per Play / Stop); else the rig clock.
+const playOn = computed(() => live.value && s.clock.source === 'EXT' && clockStore.isLink && linkStore.ready ? linkStore.livePlaying : s.clock.running)
+// Diagnostics: the rig clock's running flag flipping back and forth (seen: the Play button
+// alternating Play / Stop while Live played). Prints what the clock sources said, at most every 5 s.
+let flips = []
+let flipLogAt = 0
+watch(() => s.clock.running, (now) => {
+  const t = performance.now()
+  flips = [...flips.filter(x => t - x < 2000), t]
+  if (flips.length >= 4 && t - flipLogAt > 5000) {
+    flipLogAt = t
+    console.warn(`[Rig] clock running flapping: ${flips.length} changes in 2 s (now ${now}) · source ${s.clock.source} · clock ${clockStore.source}${clockStore.isLink ? ' (Link)' : ''} state ${clockStore.state} fallbackINT ${clockStore.fallbackToInternal} · Live playing ${linkClient.transport.playing} · Tone running ${transportManager.isRunning.value} · mode ${mode.value}`)
+  }
+})
 const midiStore = useMidiStore()
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
 
@@ -276,7 +306,12 @@ function restartTimer() {
 }
 function togglePlay() {
   if (live.value) {
-    if (s.clock.source === 'EXT') { s.display = 'Live is the clock master: Play / Stop from Live'; return }
+    if (s.clock.source === 'EXT') {
+      // Live is the clock: Play / Stop Live itself (SY.CORE Link 1.5+); its transport report follows
+      const on = !linkClient.transport.playing
+      s.display = linkClient.sendPlay(on) ? `Live: ${on ? 'Play' : 'Stop'}` : 'Live is the clock master: Play / Stop from Live (SY.CORE Link 1.5+ plays it from here)'
+      return
+    }
     if (s.clock.running) stopAll(); else playAll()
     return
   }
@@ -362,11 +397,21 @@ function onSlotDown(appId, slot) {
   for (const ev of rowPadEvents(appId, slot, playing, sync)) dispatchRig(ev)
   s.display = `${what} ${padWhen(appId, playing, slot, sync)}`
 }
-/** Arming: Chord and Seq select the slot now; Drum and Bass only start from it (selecting the drums'
- *  sequence would also move a bassline that follows it). */
+/** Arming: Chord and Seq select the slot now; Drum and Bass load theirs from the watcher below. */
 function selectSlot(id, slot) {
   if (id === 'chord' || id === 'seq') dispatchRig(padEvents(id, slot, null, 0)[0])
 }
+// Drum and Bass armed with the Drum Machine stopped (a pad with Live stopped, or the slots kept
+// armed at Live's Stop): the slot is loaded at once, as Chord and Seq — the drums' sequence and the
+// bassline's own (pinned to its armed slot: the drums' switch doesn't move it). Not armed: the
+// bassline follows the drums' sequence, as when stopped before. The start on Live's Play is
+// unchanged (each part from its armed slot). After the engine's reset at a stop (flush 'post').
+watch(() => [rigArmed.drum, rigArmed.bass, drumStore.isPlaying, live.value], ([drum, bass, playing, isLive]) => {
+  if (!isLive || playing) return
+  const load = armedDrumLoads({ drum: drum ?? null, bass: bass ?? null }, drumStore.activeSequence)
+  if (drumStore.basslineSequence !== load.bassline) drumStore.basslineSequence = load.bassline
+  if (load.drums) dispatchRig({ name: 'dm-seq-switch', detail: { seq: load.drums, sync: 0 } })
+}, { flush: 'post' })
 /** The rows whose GEN is connected in LIVE. */
 const GEN_APPS = ['drum', 'chord', 'seq', 'bass']
 function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
@@ -493,7 +538,8 @@ onUnmounted(() => window.removeEventListener('rig-action', onRigAction))
 
 // ── SY.CORE Rig device in Live (through SY.CORE Link): the grid's state out, its clicks in ──
 const rigLinkState = () => ({
-  rows: s.apps.map(a => ({
+  // the device's rows in its order (Chord, Drum, Seq, Bass, Arp), whatever the Rig's row order
+  rows: RIG_LINK_ORDER.map(id => s.apps.find(a => a.id === id)).map(a => ({
     filled: a.filled.reduce((m, f, i) => (f ? m | (1 << i) : m), 0),
     playing: a.playing ?? -1, queued: a.queued ?? -1, muted: !!a.muted, solo: !!a.solo, gen: genCount[a.id] ?? 0,
   })),
@@ -656,6 +702,8 @@ const rowBadge = a => `${PRESS_SHORT[a.opts.press]} · ${MOTION_SHORT[a.opts.mot
 const queueOrder = (a, i) => { const k = a.queue.indexOf(i); return k === -1 ? null : k + 1 }
 const sectionHasContent = i => s.apps.some(a => a.filled[i])
 const lanePageOffset = computed(() => (s.shift ? 8 : 0))
+/** The Launchpad's row 6 (Performance pads). */
+const LP_PERF_LABELS = ['Fill', 'Repeat', 'Latch', 'Rel all']
 
 // ── Tailwind classes ──────────────────────────────────────────────────────
 const SLOT_CLASS = {
@@ -698,20 +746,24 @@ function lpPad(row, col) {
     const color = a.muted && st === 'playing' ? 'red' : slotColor(st)
     return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
   }
+  // Row 6: Fill (red: the Drum Machine's), Repeat, Latch, Rel all — the last three not connected
+  // in LIVE yet (dark) — and four free pads.
   if (row === 5) {
+    const label = LP_PERF_LABELS[col]
+    if (!label) return { label: '—', short: '', color: 'off' }
+    if (col === 0) return { label, short: label, color: (live.value ? rigReports.fill : s.fill) ? 'amberFlash' : 'red' }
+    if (live.value) return { label: `${label} (not connected)`, short: label, color: 'off' }
+    return { label, short: label, color: (col === 1 && s.repeater) || (col === 2 && s.latch) ? 'green' : 'amber' }
+  }
+  // Row 7: the sections (scenes A–H on every app).
+  if (row === 6) {
     const color = s.section === col ? 'green' : s.queuedSection === col ? 'amberFlash' : sectionHasContent(col) ? 'amber' : 'off'
     return { label: `Section ${col + 1}`, short: `S${col + 1}`, color }
   }
-  if (row === 6) {
-    let color = 'amber'
-    if (col < 4) color = s.split === col ? 'green' : 'amber'
-    if (col === 4) color = s.fill ? 'amberFlash' : 'amber'
-    if (col === 5) color = s.repeater ? 'green' : 'amber'
-    if (col === 6) color = s.latch ? 'green' : 'amber'
-    return { label: LP_ROW6_LABELS[col], short: LP_ROW6_LABELS[col].replace('Split ', 'Sp'), color }
-  }
-  const lane = col + lanePageOffset.value
-  return { label: `Lane ${lane + 1} mute`, short: `L${lane + 1}`, color: s.laneMutes[lane] ? 'red' : 'green' }
+  // Row 8: Mute 1–5 = the app rows (Drums, Chords, Sequencer, Bassline, Arp), as the MIDImix's Mute; 6–8 free.
+  const a = s.apps[col]
+  if (!a) return { label: `Mute ${col + 1} (free)`, short: '', color: 'off' }
+  return { label: `Mute ${col + 1} · ${a.label}`, short: `Mute ${col + 1}`, color: a.muted ? 'red' : 'amber' }
 }
 
 function lpSide(row) {
@@ -739,19 +791,20 @@ function lpTopUp(i) {
 }
 function lpPadDown(row, col) {
   if (row < 5) return onSlotDown(s.apps[row].id, col)
-  if (row === 5) return onSection(col)
-  if (row === 6) {
-    if (col < 4) return selectSplit(s, col)
-    if (col === 4) return onFill()
-    if (col === 5) return repeaterOn()
-    if (col === 6) return toggleLatch()
+  if (row === 5) {
+    if (col === 0) return onFill()
+    if (col > 3) return
+    if (live.value) return notConnected(LP_PERF_LABELS[col])
+    if (col === 1) return repeaterOn()
+    if (col === 2) return toggleLatch()
     return releaseAll()
   }
-  toggleLaneMute(s, col + lanePageOffset.value)
+  if (row === 6) return onSection(col)
+  if (s.apps[col]) toggleMute(s, s.apps[col].id)
 }
 function lpPadUp(row, col) {
   if (row < 5) return onSlotUp(s.apps[row].id, col)
-  if (row === 6 && col === 5) repeaterOff()
+  if (row === 5 && col === 1) repeaterOff()
 }
 function lpSideDown(row) {
   if (row < 5) return onGenerate(s.apps[row].id)
@@ -1129,22 +1182,29 @@ const arcPath = v => {
   const large = (v / 127) * 270 > 180 ? 1 : 0
   return `M${cx + r * Math.cos(a0)} ${cy + r * Math.sin(a0)} A${r} ${r} 0 ${large} 1 ${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`
 }
+
+// The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
+// (Performance), teleported there while it is open.
+provide(RIG_CONTROLS_CTX, {
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleLatch, releaseAll, learnedRing, onKeyShift, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
+})
 </script>
 
 <template>
   <div class="bg-neutral-950 border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden relative" :style="panelStyle" v-show="!isMinimized" @mousedown.capture="bringToFront">
     <!-- Header -->
-    <div class="flex items-center justify-between gap-3 px-4 py-2 bg-gradient-to-b from-white/5 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
+    <div class="flex items-center justify-between gap-3 px-4 py-2 bg-gradient-to-b from-white/5 to-transparent shrink-0 touch-none cursor-grab active:cursor-grabbing select-none" @pointerdown="onDragStart">
       <div class="flex items-center gap-3">
         <div class="p-1.5 bg-amber-500/20 rounded-lg border border-amber-500/20">
           <Grid3X3 class="w-4 h-4 text-amber-400" />
         </div>
         <h2 class="text-sm font-black text-white tracking-[0.1em] uppercase">Rig Controller</h2>
-        <span v-if="live" class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-wider text-emerald-300" title="Chord, Drum, Seq, Bass and Arp rows drive the real apps; the other controls are still simulated">Live · all rows connected</span>
-        <span v-else class="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold uppercase tracking-wider text-amber-300">Simulation · no MIDI</span>
+        <span @mousedown.stop><PlayEditToggle panel-id="rig-controller" /></span>
+        <span v-if="live && !play" class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-wider text-emerald-300" title="Chord, Drum, Seq, Bass and Arp rows drive the real apps; the other controls are still simulated">Live · all rows connected</span>
+        <span v-else-if="!live" class="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-bold uppercase tracking-wider text-amber-300">Simulation · no MIDI</span>
       </div>
       <div class="flex items-center gap-2" @mousedown.stop>
-        <div class="flex rounded-md border border-white/10 overflow-hidden">
+        <div v-if="!play" class="flex rounded-md border border-white/10 overflow-hidden">
           <button v-for="v in [['rig', 'Rig layout'], ['launchpad', 'Launchpad Mini MK1'], ['midimix', 'AKAI MIDImix']]" :key="v[0]"
                   class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
                   :class="view === v[0] ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
@@ -1155,7 +1215,7 @@ const arcPath = v => {
     </div>
 
     <!-- Mode bar: LIVE (real apps and clock) or SIM (simulated Live) -->
-    <div class="flex items-center gap-3 px-4 py-1.5 border-y border-white/5 bg-white/[0.02] text-[10px] text-neutral-400 shrink-0">
+    <div v-if="!play" class="flex items-center gap-3 px-4 py-1.5 border-y border-white/5 bg-white/[0.02] text-[10px] text-neutral-400 shrink-0">
       <div class="flex rounded border border-white/10 overflow-hidden">
         <button v-for="m in [['live', 'Live'], ['sim', 'Sim']]" :key="m[0]" class="px-2 py-0.5 font-bold uppercase"
                 :class="mode === m[0] ? (m[0] === 'live' ? 'bg-emerald-500/80 text-black' : 'bg-amber-500/70 text-black') : 'text-neutral-400 hover:text-white'"
@@ -1195,30 +1255,12 @@ const arcPath = v => {
       <span v-else class="ml-auto truncate">The controller only shows SY.CORE's state; each track's options decide how and when its slots start.</span>
     </div>
 
-    <div class="flex-1 overflow-auto p-4 text-xs">
+    <div :class="['flex-1 text-xs min-h-0', play ? 'overflow-hidden p-3 flex flex-col gap-2' : 'overflow-auto p-4']">
       <!-- ═══════════ RIG LAYOUT ═══════════ -->
-      <div v-if="view === 'rig'" class="grid gap-3" style="grid-template-columns: 220px minmax(420px, 1fr) 230px">
+      <div v-if="shownView === 'rig'" class="grid gap-3" style="grid-template-columns: 220px minmax(420px, 1fr) 230px">
         <!-- Left column -->
         <div class="space-y-3">
-          <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
-            <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">Transport / Clock</h3>
-            <div class="flex items-center justify-between">
-              <span class="px-2 py-0.5 rounded text-[10px] font-black" :class="s.clock.source === 'EXT' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'">{{ s.clock.source }}</span>
-              <span class="font-mono text-2xl text-white">{{ s.clock.bpm.toFixed(1) }}</span>
-            </div>
-            <div class="flex items-center justify-between mt-2">
-              <span class="font-mono text-neutral-300">{{ s.clock.bar }}.{{ s.clock.beat }}</span>
-              <div class="flex gap-1">
-                <span v-for="b in 4" :key="b" class="w-2.5 h-2.5 rounded-full"
-                      :class="s.clock.running && s.clock.beat === b ? (b === 1 ? 'bg-emerald-400' : 'bg-amber-400') : 'bg-neutral-700'" />
-              </div>
-            </div>
-            <div class="flex gap-1.5 mt-2">
-              <button :class="[btn, btnIdle, 'flex-1']" @click="tap">Tap</button>
-              <button :class="[btn, 'flex-1', btnIdle]" :title="`Trigger sync of ${focused.label} — click to cycle`" @click="cycleSync"
-                      @contextmenu="isRigApp(focused.id) && learnMenu($event, `rig_sync_${focused.id}`, `${focused.label} Trigger sync`)">Sync: {{ SYNC_SHORT[focused.opts.triggerSync] }}</button>
-            </div>
-          </section>
+          <RigControlSections only="transport" />
 
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">Sections (Song)</h3>
@@ -1230,21 +1272,7 @@ const arcPath = v => {
             </div>
           </section>
 
-          <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
-            <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500"
-                title="A controller's rig controls (learned with right-click › MIDI Learn) as a JSON file: export it, import it on another computer, or import a ready template">Controller template</h3>
-            <select v-model="tplDevice" @focus="refreshInputs" class="w-full bg-black/40 border border-white/10 rounded px-1 py-0.5 text-[10px] text-white">
-              <option v-if="!tplDevices.length" value="">No MIDI controller</option>
-              <option v-for="d in tplDevices" :key="d" :value="d">{{ d }}{{ mappedDevices.find(x => x.device === d) ? ` · ${mappedDevices.find(x => x.device === d).count} rig controls` : '' }}{{ tplLeds[d]?.name ? ` · ${tplLeds[d].name}` : '' }}</option>
-            </select>
-            <div class="flex gap-1">
-              <button :class="[btn, 'flex-1', btnIdle]" :disabled="!tplCount" @click="exportTemplate">Export</button>
-              <button :class="[btn, 'flex-1', btnIdle]" @click="tplFile?.click()">Import</button>
-              <button :class="[btn, btnIdle]" :disabled="!tplCount" title="Forget this controller's rig controls" @click="clearTemplate">✕</button>
-              <input ref="tplFile" type="file" accept=".json,application/json" class="hidden" @change="importTemplate" />
-            </div>
-            <div v-if="tplMsg" class="text-[10px] text-neutral-400 break-words">{{ tplMsg }}</div>
-          </section>
+          <RigControlSections only="template" />
 
           <!-- Flow, splits and lane mutes: not connected to the apps yet — SIM only -->
           <section v-if="!live" class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
@@ -1375,70 +1403,35 @@ const arcPath = v => {
 
         <!-- Right column -->
         <div class="space-y-3">
-          <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
-            <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Performance</h3>
-            <div class="grid grid-cols-2 gap-1.5">
-              <button :class="[btn, (live ? rigReports.fill : s.fill) ? 'bg-amber-400/60 border-amber-300 text-white animate-pulse' : btnIdle]" @click="onFill">Fill</button>
-              <button :class="[btn, s.repeater ? btnOn : btnIdle]" @pointerdown="repeaterOn" @pointerup="repeaterOff" @pointerleave="repeaterOff">Repeat (hold)</button>
-              <button :class="[btn, s.latch ? btnOn : btnIdle]" @click="toggleLatch">Latch</button>
-              <button :class="[btn, btnIdle]" @click="releaseAll">Rel all</button>
-            </div>
-            <div class="flex items-center justify-between">
-              <button :class="[btn, btnIdle, learnedRing('rig_key_down')]" @click="onKeyShift(-1)" @contextmenu="learnMenu($event, 'rig_key_down', 'Key −')">◀</button>
-              <span class="font-mono text-white">Key {{ keyText }}</span>
-              <button v-if="live" :class="[btn, btnIdle]" title="Major / minor on the same tonic (Launchpad: Shift + Key)" @click="onKeyMode" @contextmenu="learnMenu($event, 'rig_key_mode', 'Key Maj/Min')">Maj/Min</button>
-              <button :class="[btn, btnIdle, learnedRing('rig_key_up')]" @click="onKeyShift(1)" @contextmenu="learnMenu($event, 'rig_key_up', 'Key +')">▶</button>
-            </div>
-            <div class="text-[10px] text-neutral-500">Knobs → <span class="text-amber-300">{{ focused.label }}</span></div>
-            <div v-for="k in [['Density', 'density'], ['Swing', 'swing'], ['Gate', 'gate'], ['Intensity', 'intensity']]" :key="k[1]" class="flex items-center gap-2">
-              <span class="w-14 text-[10px] text-neutral-400">{{ knobLabel(k) }}</span>
-              <input v-model.number="focused[k[1]]" type="range" min="0" max="127" class="flex-1 accent-amber-400"
-                     :title="knobTitle(k[1])"
-                     @contextmenu="k[1] === 'density' && live && ['drum', 'seq', 'arp'].includes(focused.id) ? ($event.preventDefault(), densityMenu($event, focused)) : k[1] === 'intensity' && isRigApp(focused.id) ? learnMenu($event, `rig_intensity_${focused.id}`, `${knobLabel(k) === 'Rate' ? 'Arp Rate' : `${focused.label} Intensity`}`) : null" />
-              <span class="w-9 text-right font-mono text-neutral-300">{{ knobValue(k[1]) }}</span>
-            </div>
-            <button :class="[btn, 'w-full', s.generateMode === 'ai' ? btnOn : btnIdle]" @click="toggleGenMode">Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }}</button>
-          </section>
+          <RigControlSections only="performance" />
 
-          <section class="p-3 rounded-lg bg-red-950/20 border border-red-500/20 space-y-1.5">
-            <h3 class="text-[10px] font-bold uppercase tracking-widest text-red-300/70">Safety</h3>
-            <button :class="[btn, 'w-full relative overflow-hidden', holding.panic ? 'bg-red-500 border-red-300 text-white' : 'bg-red-600/30 border-red-500/50 text-red-200']"
-                    @pointerdown="holdStart('panic', doPanic)" @pointerup="holdEnd('panic')" @pointerleave="holdEnd('panic')">Panic (hold)</button>
-            <button :class="[btn, 'w-full', holding.int ? 'bg-amber-500 border-amber-300 text-black' : btnIdle]"
-                    @pointerdown="holdStart('int', doInt)" @pointerup="holdEnd('int')" @pointerleave="holdEnd('int')">{{ s.clock.source === 'EXT' ? '→ INT' : '→ EXT' }} (hold)</button>
-            <div class="grid grid-cols-2 gap-1.5">
-              <button :class="[btn, btnIdle]" @click="undo(s)">Undo</button>
-              <button :class="[btn, s.shift ? btnOn : btnIdle]" @click="toggleShift">Shift</button>
-            </div>
-          </section>
+          <RigControlSections only="safety" />
         </div>
       </div>
 
       <!-- ═══════════ LAUNCHPAD MINI MK1 ═══════════ -->
-      <div v-else-if="view === 'launchpad'" class="flex gap-6 items-start">
-        <div class="p-4 rounded-2xl bg-neutral-900 border border-white/10 shadow-inner select-none">
-          <div class="grid gap-1.5" style="grid-template-columns: repeat(9, 2.6rem)">
+      <div v-else-if="shownView === 'launchpad'" :class="play ? 'flex-1 min-h-0 flex justify-center' : 'flex gap-6 items-start'">
+        <div :class="play ? 'h-full aspect-square max-w-full select-none [container-type:size]' : 'p-4 rounded-2xl bg-neutral-900 border border-white/10 shadow-inner select-none'">
+          <div class="grid gap-1.5" :class="play ? 'h-full' : ''"
+               :style="play ? 'grid-template-columns: repeat(9, minmax(0, 1fr)); grid-template-rows: repeat(9, minmax(0, 1fr))' : 'grid-template-columns: repeat(9, 2.6rem)'">
             <!-- top round buttons -->
             <button v-for="(t, i) in lpTop" :key="'t' + i"
-                    class="w-9 h-9 mx-auto rounded-full border text-[7px] font-bold leading-tight"
-                    :class="LED_CLASS[t.color]" :title="`${t.id} · ${t.label}`"
-                    @pointerdown="lpTopDown(i)" @pointerup="lpTopUp(i)" @pointerleave="lpTopUp(i)">{{ showLabels ? t.label : '' }}</button>
+                    :class="['mx-auto rounded-full border font-bold leading-tight', play ? 'w-4/5 h-4/5 my-auto text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(t.color)]" :title="`${t.id} · ${t.label}`"
+                    @pointerdown="lpTopDown(i)" @pointerup="lpTopUp(i)" @pointerleave="lpTopUp(i)">{{ showLabels || play ? t.label : '' }}</button>
             <span />
             <!-- 8 rows: 8 pads + 1 side button -->
             <template v-for="row in 8" :key="'r' + row">
               <button v-for="col in 8" :key="'p' + row + col"
-                      class="w-10 h-10 rounded-md border text-[8px] font-bold leading-tight"
-                      :class="LED_CLASS[lpPad(row - 1, col - 1).color]"
+                      :class="['rounded-md border font-bold leading-tight', play ? 'w-full h-full text-[clamp(10px,2.6cqmin,18px)]' : 'w-10 h-10 text-[10px]', ledClass(lpPad(row - 1, col - 1).color)]"
                       :title="`Note ${lpGridNote(row - 1, col - 1)} · ${lpPad(row - 1, col - 1).label}`"
-                      @pointerdown="lpPadDown(row - 1, col - 1)" @pointerup="lpPadUp(row - 1, col - 1)" @pointerleave="lpPadUp(row - 1, col - 1)">{{ showLabels ? lpPad(row - 1, col - 1).short : '' }}</button>
-              <button class="w-9 h-9 m-auto rounded-full border text-[7px] font-bold"
-                      :class="LED_CLASS[lpSide(row - 1).color]"
+                      @pointerdown="lpPadDown(row - 1, col - 1)" @pointerup="lpPadUp(row - 1, col - 1)" @pointerleave="lpPadUp(row - 1, col - 1)">{{ showLabels || play ? lpPad(row - 1, col - 1).short : '' }}</button>
+              <button :class="['m-auto rounded-full border font-bold leading-tight', play ? 'w-4/5 h-4/5 text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(lpSide(row - 1).color)]"
                       :title="`Note ${lpSideNote(row - 1)} · ${lpSide(row - 1).label}`"
-                      @pointerdown="lpSideDown(row - 1)">{{ showLabels ? lpSide(row - 1).short : '' }}</button>
+                      @pointerdown="lpSideDown(row - 1)">{{ showLabels || play ? lpSide(row - 1).short : '' }}</button>
             </template>
           </div>
         </div>
-        <div class="space-y-3 max-w-xs">
+        <div v-if="!play" class="space-y-3 max-w-xs">
           <label class="flex items-center gap-2 text-neutral-300"><input v-model="showLabels" type="checkbox" class="accent-amber-400" /> Show labels (the real pads have none)</label>
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-1 text-neutral-300">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Map</h3>
@@ -1540,6 +1533,25 @@ const arcPath = v => {
         </div>
         <div class="p-2 rounded bg-black border border-emerald-500/20 font-mono text-emerald-300 truncate w-fit min-w-[24rem]">{{ s.display }}</div>
       </div>
+      <div v-if="play" class="shrink-0 px-2 py-1 rounded bg-black border border-amber-900/40 font-mono text-[11px] text-amber-200/80 truncate">{{ s.display }}</div>
     </div>
+
+    <ResizeHandles :start="onResizeStart" />
+
+    <!-- Performance: the controls in the Rig Controls panel (lib/rig-controls-host.ts) -->
+    <Teleport v-if="play && rigControlsHost" :to="rigControlsHost">
+      <div class="flex flex-col gap-2 text-xs min-h-0 h-full">
+        <RigControlSections only="transport" />
+        <RigControlSections only="performance" />
+        <RigControlSections only="safety" />
+        <RigControlSections only="template" />
+        <button class="mt-auto shrink-0 h-14 flex items-center justify-center gap-2 rounded-lg border text-sm font-black uppercase tracking-widest select-none"
+                :class="playOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-neutral-800 border-white/15 text-neutral-200 hover:bg-neutral-700'"
+                :title="live && s.clock.source === 'EXT' ? 'Play / Stop Ableton Live (SY.CORE Link)' : 'Play / Stop the clock'"
+                @click="togglePlay">
+          <component :is="playOn ? Square : Play" class="w-5 h-5" /> {{ playOn ? 'Stop' : 'Play' }}
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>

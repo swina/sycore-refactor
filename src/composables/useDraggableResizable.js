@@ -8,6 +8,33 @@ import { useViewportClass } from './useViewportClass'
 
 // Shared counter for draggable panels. Capped at 399 so non-draggable
 // modals (z-[400]+) always layer above floating panels.
+// Panels placed from outside (workspaces, core/workspaces): a mounted panel takes a new geometry at
+// once; one not mounted reads it from its storage key when it mounts. Geometry changes by hand are
+// reported (the active workspace remembers them).
+const _livePanels = new Map() // panelId → (rect) => void
+const _geometryListeners = new Set()
+/** Place a panel: live if mounted, else written to its storage key for its next mount. */
+export function setPanelGeometry(panelId, storageKey, rect) {
+  const live = _livePanels.get(panelId)
+  if (live) { live(rect); return }
+  if (!storageKey) return
+  try { localStorage.setItem(userKey(storageKey), JSON.stringify({ minimized: false, ...rect })) } catch {}
+}
+const _liveGetters = new Map() // panelId → () => { x, y, w, h, minimized }
+/** A panel's place: live if mounted, else as saved under its storage key (null: never placed). */
+export function getPanelGeometry(panelId, storageKey) {
+  const live = _liveGetters.get(panelId)
+  if (live) return live()
+  if (!storageKey) return null
+  try { const v = JSON.parse(localStorage.getItem(userKey(storageKey))); return v && typeof v.x === 'number' ? v : null } catch { return null }
+}
+/** (panelId, { x, y, w, h }) after a drag or a resize by hand. Returns the unsubscribe. */
+// A smaller minimum size while resizing by hand (a workspace with play views: Performance) — the
+// panels' Classic minimums fit their full settings, not their play views. null: the panel's own.
+let _minOverride = null
+export function setResizeMinimum(fn) { _minOverride = fn }
+export function onPanelGeometryChange(fn) { _geometryListeners.add(fn); return () => _geometryListeners.delete(fn) }
+
 const DRAGGABLE_Z_MIN = 50
 const DRAGGABLE_Z_MAX = 399
 // Every mounted panel's z ref: when the counter reaches the cap they are renumbered in their current
@@ -141,11 +168,29 @@ export function useDraggableResizable({
       try { localStorage.setItem(userKey(storageKey), JSON.stringify(pos.value)) } catch {}
     }
   }
+  if (panelId) {
+    // placed by a workspace: kept in the window, not grown to the Classic minimum size (the play
+    // views are compact)
+    _livePanels.set(panelId, (rect) => {
+      pos.value = { ...pos.value, minimized: false, ...rect }
+      const p = pos.value
+      p.x = Math.max(0, Math.min(window.innerWidth - p.w, p.x))
+      p.y = Math.max(0, Math.min(window.innerHeight - p.h, p.y))
+      persist()
+    })
+    _liveGetters.set(panelId, () => ({ ...pos.value }))
+    onUnmounted(() => { _livePanels.delete(panelId); _liveGetters.delete(panelId) })
+  }
+  const reportGeometry = () => {
+    if (!panelId) return
+    const { x, y, w, h } = pos.value
+    for (const fn of _geometryListeners) fn(panelId, { x, y, w, h })
+  }
 
+  // The size's minimum is kept by the resize (_computeResize): moving a panel a workspace placed
+  // smaller (a compact play view) doesn't grow it.
   function constrain() {
     const p = pos.value
-    p.w = Math.max(minWidth, p.w)
-    p.h = Math.max(minHeight, p.h)
     p.x = Math.max(0, Math.min(window.innerWidth - p.w, p.x))
     p.y = Math.max(0, Math.min(window.innerHeight - p.h, p.y))
   }
@@ -181,8 +226,9 @@ export function useDraggableResizable({
     if (e.target.closest('button, input, select, a, [role="button"]')) return
     e.preventDefault()
     _drag = { ox: e.clientX, oy: e.clientY, px: pos.value.x, py: pos.value.y }
-    window.addEventListener('mousemove', _onDragMove)
-    window.addEventListener('mouseup', _onDragEnd)
+    window.addEventListener('pointermove', _onDragMove)
+    window.addEventListener('pointerup', _onDragEnd)
+    window.addEventListener('pointercancel', _onDragEnd)
   }
 
   // Batched to one commit per animation frame — a raw mousemove stream can
@@ -206,9 +252,11 @@ export function useDraggableResizable({
     if (_dragRAF) { cancelAnimationFrame(_dragRAF); _dragRAF = null }
     if (_dragLatest) { pos.value.x = _dragLatest.x; pos.value.y = _dragLatest.y; constrain(); _dragLatest = null }
     _drag = null
-    window.removeEventListener('mousemove', _onDragMove)
-    window.removeEventListener('mouseup', _onDragEnd)
+    window.removeEventListener('pointermove', _onDragMove)
+    window.removeEventListener('pointerup', _onDragEnd)
+    window.removeEventListener('pointercancel', _onDragEnd)
     persist()
+    reportGeometry()
   }
 
   /* ── Resize ────────────────────────────────────────────────────── */
@@ -228,18 +276,22 @@ export function useDraggableResizable({
       sw: pos.value.w, sh: pos.value.h,
       sx: pos.value.x, sy: pos.value.y,
     }
-    window.addEventListener('mousemove', _onResizeMove)
-    window.addEventListener('mouseup', _onResizeEnd)
+    window.addEventListener('pointermove', _onResizeMove)
+    window.addEventListener('pointerup', _onResizeEnd)
+    window.addEventListener('pointercancel', _onResizeEnd)
   }
 
   function _computeResize(e) {
     const { dir, ox, oy, sw, sh, sx, sy } = _res
     const dx = e.clientX - ox, dy = e.clientY - oy
     const next = { w: sw, h: sh, x: sx, y: sy }
-    if (dir.includes('e')) next.w = Math.max(minWidth, sw + dx)
-    if (dir.includes('s')) next.h = Math.max(minHeight, sh + dy)
-    if (dir.includes('w')) { next.w = Math.max(minWidth, sw - dx); next.x = sx + (sw - next.w) }
-    if (dir.includes('n')) { next.h = Math.max(minHeight, sh - dy); next.y = sy + (sh - next.h) }
+    const o = _minOverride?.()
+    const minW = o ? Math.min(minWidth, o.w) : minWidth
+    const minH = o ? Math.min(minHeight, o.h) : minHeight
+    if (dir.includes('e')) next.w = Math.max(minW, sw + dx)
+    if (dir.includes('s')) next.h = Math.max(minH, sh + dy)
+    if (dir.includes('w')) { next.w = Math.max(minW, sw - dx); next.x = sx + (sw - next.w) }
+    if (dir.includes('n')) { next.h = Math.max(minH, sh - dy); next.y = sy + (sh - next.h) }
     return next
   }
 
@@ -263,9 +315,11 @@ export function useDraggableResizable({
     if (_resizeRAF) { cancelAnimationFrame(_resizeRAF); _resizeRAF = null }
     if (_resizeLatest) { Object.assign(pos.value, _resizeLatest); constrain(); _resizeLatest = null }
     _res = null
-    window.removeEventListener('mousemove', _onResizeMove)
-    window.removeEventListener('mouseup', _onResizeEnd)
+    window.removeEventListener('pointermove', _onResizeMove)
+    window.removeEventListener('pointerup', _onResizeEnd)
+    window.removeEventListener('pointercancel', _onResizeEnd)
     persist()
+    reportGeometry()
   }
 
   // When an open-state ref is provided, restore from minimize whenever the panel is opened.

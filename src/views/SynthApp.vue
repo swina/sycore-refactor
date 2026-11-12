@@ -12,6 +12,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useChordProgEngine } from '@/core/engines/chord-prog'
 import { useSequencerEngine } from '@/core/engines/sequencer'
 import { useDrumMachineEngine } from '@/core/engines/drum-machine'
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -58,6 +59,8 @@ import VirtualDevicePanel from '@/components/VirtualDevicePanel.vue'
 import AudioDiagnosticsPanel from '@/components/AudioDiagnosticsPanel.vue'
 import RigControllerPanel from '@/components/RigControllerPanel.vue'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
+import RigControlsPanel from '@/components/RigControlsPanel.vue'
+import ChordNowPanel from '@/components/ChordNowPanel.vue'
 import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import Welcome from '@/components/Welcome.vue'
@@ -107,6 +110,9 @@ useChordProgEngine()
 useSequencerEngine()
 // And the Drum Machine: core/engines/drum-machine.js (its samples, last preset and Default Kit load here).
 useDrumMachineEngine()
+// The workspace of the last session (its panels in their places, its effects level).
+const workspaceStore = useWorkspaceStore()
+onMounted(() => workspaceStore.apply())
 const authStore = useAuthStore()
 const presetStore = usePresetStore()
 const arpStore = useArpStore()
@@ -194,6 +200,8 @@ const simpleTogglePanels = [
   { openId: 'virtual-device', focusKey: 'virtualDevice', component: VirtualDevicePanel, transition: null },
   { openId: 'rig-controller', focusKey: 'rigController', component: RigControllerPanel, transition: null },
   { openId: 'live-map', focusKey: 'liveMap', component: LiveMapPanel, transition: null },
+  { openId: 'rig-controls', focusKey: 'rigControls', component: RigControlsPanel, transition: null },
+  { openId: 'chord-now', focusKey: 'chordNow', component: ChordNowPanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {

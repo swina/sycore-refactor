@@ -16,9 +16,11 @@
  * The simulated clock runs in 16ths, 4/4: 16 steps = 1 bar.
  */
 
+// The Rig's rows, top to bottom (Launchpad rows 1–5, MIDImix strips 1–5). The SY.CORE Rig device
+// in Live gets its rows in its own order (RIG_LINK_ORDER, rig-live).
 export const RIG_APPS = [
-  { id: 'chord', label: 'Chord' },
   { id: 'drum', label: 'Drum' },
+  { id: 'chord', label: 'Chord' },
   { id: 'seq', label: 'Seq' },
   { id: 'bass', label: 'Bass' },
   { id: 'arp', label: 'Arp' },

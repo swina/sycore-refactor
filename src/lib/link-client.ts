@@ -172,7 +172,7 @@ export class LinkClient {
   /** Diagnostics: a note sent with its exact beat, and how far (ms) its converted time was. */
   onExactBeat: ((ms: number) => void) | null = null
   transport: LinkTransport = { playing: false, beat: 0, tempo: 120, num: 4, den: 4, at: 0 }
-  device: { name: string; version: string; track: string; sim: boolean; ports: boolean } | null = null
+  device: { name: string; version: string; track: string; sim: boolean; ports: boolean; play: boolean } | null = null
   /** Mean of the last round trips, ms (null until measured). */
   rttMs: number | null = null
   private rtts: number[] = []
@@ -301,7 +301,7 @@ export class LinkClient {
     const now = this.now()
     switch (m.type) {
       case 'hello':
-        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports }
+        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports, play: !!m.play }
         this.emit({ type: 'hello', device: this.device.name, version: this.device.version, track: this.device.track, sim: this.device.sim })
         break
       case 'transport': {
@@ -512,6 +512,15 @@ export class LinkClient {
   /** Every parameter of the instrument driven now (answered with a map-params event). */
   requestMapParams(): boolean {
     return this.sendRaw({ type: 'map-params-request' })
+  }
+
+  /** The device can start / stop Live (bridge 1.5+: `play`). */
+  get playSupported(): boolean { return !!this.device?.play }
+
+  /** Start (true) or stop (false) Live's transport (bridge 1.5+). False: not sent. */
+  sendPlay(on: boolean): boolean {
+    if (!this.isReady || !this.playSupported) return false
+    return this.sendRaw({ type: 'play', on })
   }
 
   /** Drop everything queued in the device and end the notes sounding (stop, panic). */

@@ -1,4 +1,10 @@
 <script setup>
+import ResizeHandles from '@/components/ui/ResizeHandles.vue'
+import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
+import DrumPlayView from '@/components/play/DrumPlayView.vue'
+import { usePlayView } from '@/composables/usePlayView'
+// Performance: a play view (sequences, beat bar, pads) instead of the panel; EDIT: the panel.
+const { play } = usePlayView('drum-machine')
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDrumMachineEngine } from '@/core/engines/drum-machine'
 import { storeToRefs } from 'pinia'
@@ -749,6 +755,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
       @click="closeStepContext"
     >
       <!-- ── Header ──────────────────────────────────────────────────────────── -->
+    <template v-if="!play">
       <div
         class="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-neutral-800 bg-gradient-to-r from-sky-950/70 to-transparent cursor-grab active:cursor-grabbing"
         @mousedown.stop="onDragStart"
@@ -2298,16 +2305,22 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
           {{ drumStore.activeSequence }} · <span ref="stepCounterEl">--</span>/16
         </span>
       </div>
+    </template>
+      <!-- Performance: the play view (display only; the Rig plays it) -->
+      <template v-else>
+        <PlayPanelHeader title="Drum Machine" panel-id="drum-machine" @pointerdown.stop="onDragStart" @close="uiStore.isDrumMachineOpen = false" @minimize="toggleMinimize" @maximize="maximize">
+          <!-- the style Generate uses (also the Rig's GEN on the Drum row) -->
+          <select v-model="selectedStyle" title="Drum style: what Generate (and the Rig's GEN) writes"
+                  class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-200 max-w-36 cursor-pointer"
+                  @pointerdown.stop @mousedown.stop>
+            <option v-for="style in DRUM_STYLE_NAMES" :key="style" :value="style">{{ style }}</option>
+          </select>
+        </PlayPanelHeader>
+        <DrumPlayView class="flex-1 overflow-hidden" />
+      </template>
 
       <!-- Resize handles -->
-      <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3 right-3  h-1  cursor-n-resize  z-50" />
-      <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3 right-3  h-1  cursor-s-resize  z-50" />
-      <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3 right-0   w-1  cursor-e-resize  z-50" />
-      <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3 left-0    w-1  cursor-w-resize  z-50" />
-      <div @mousedown.stop="e => onResizeStart(e, 'ne')" class="absolute top-0    right-0  w-3 h-3 cursor-ne-resize z-50" />
-      <div @mousedown.stop="e => onResizeStart(e, 'nw')" class="absolute top-0    left-0   w-3 h-3 cursor-nw-resize z-50" />
-      <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-3 h-3 cursor-sw-resize z-50" />
-      <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-1 right-1  w-3 h-3 cursor-se-resize z-50 opacity-40 hover:opacity-80" style="background:radial-gradient(circle,#aaa 1px,transparent 1px) 0 0/3px 3px" />
+      <ResizeHandles :start="onResizeStart" />
     </div>
 
     <!-- ── Step context menu ───────────────────────────────────────────────── -->

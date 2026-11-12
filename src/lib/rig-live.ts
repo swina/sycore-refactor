@@ -245,6 +245,25 @@ export function armPlaying(playing: Partial<Record<SlotRowId, number | null | un
   }
 }
 
+/**
+ * Drum and Bass armed with the Drum Machine stopped: what to load now, as Chord and Seq select
+ * theirs. `bassline`: the bassline's own sequence (its armed slot; null = it follows the drums', when
+ * not armed). `drums`: the sequence the drums switch to (null: nothing to switch).
+ */
+export function armedDrumLoads(armed: { drum: number | null; bass: number | null }, activeSequence: string): { bassline: string | null; drums: string | null } {
+  const bassline = armed.bass !== null ? LETTERS[armed.bass] : null
+  const drums = armed.drum !== null && LETTERS[armed.drum] !== activeSequence ? LETTERS[armed.drum] : null
+  return { bassline, drums }
+}
+
+/**
+ * The bassline in use (its voices replace the drums' bassline source pads, e.g. the last three):
+ * playing, while the Rig's bass part is on; stopped, while a Bass slot is armed. With no bassline
+ * in use the source pads are drums like the others.
+ */
+export const bassInUse = (d: { basslineEnabled: boolean; isPlaying: boolean; bassOn: boolean }, armedBass: number | null): boolean =>
+  d.basslineEnabled && (d.isPlaying ? d.bassOn : armedBass !== null)
+
 /** The armed slot after a press on `slot`: the same pad disarms, another pad arms that slot. */
 export const armPress = (armed: number | null, slot: number): number | null => (armed === slot ? null : slot)
 

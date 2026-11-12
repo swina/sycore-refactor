@@ -421,3 +421,12 @@ body.sy-midi-learn #app {
 .cockpit-root--fixed {
   background-attachment: fixed;
 }
+/* Workspaces with lowEffects (Performance, core/workspaces/registry.ts): no backdrop blur (re-blurred
+   at every change behind it) and no CSS transitions; keyframe animations (blinking pads, pulses) stay. */
+.low-effects *,
+.low-effects *::before,
+.low-effects *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition-property: none !important;
+}

@@ -59,6 +59,16 @@ export const useLiveMapStore = defineStore('liveMap', () => {
     linkClient.sendMap(slot, knob)
   }
 
+  /** A slot moved on the screen (slider / drag, 0–1): straight to the value, no pickup (the
+   *  finger is where the value goes); an absolute knob picks the new value up again. */
+  function touch(slot: number, value: number) {
+    if (slot < 0 || slot >= MAP_SLOTS || !info.value?.slots[slot]) return
+    const v = Math.max(0, Math.min(1, value))
+    values[slot] = v
+    Object.assign(pick[slot], pickupSlot())
+    linkClient.sendMap(slot, v)
+  }
+
   function setTarget(t: 'follow' | number) {
     target.value = t
     linkClient.sendMapTarget(t)
@@ -104,5 +114,5 @@ export const useLiveMapStore = defineStore('liveMap', () => {
     if (d) move(d.slot, d.value)
   })
 
-  return { info, values, tracks, instrumentTracks, target, pickup, pick, move, setTarget, variation, randomize, trackStep, toggleFollow }
+  return { info, values, tracks, instrumentTracks, target, pickup, pick, move, touch, setTarget, variation, randomize, trackStep, toggleFollow }
 })

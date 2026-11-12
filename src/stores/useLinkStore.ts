@@ -32,6 +32,8 @@ export const useLinkStore = defineStore('link', () => {
   const enabled = ref(localStorage.getItem(userKey(LS_ENABLED)) === 'true')
   const state = ref<LinkState>(linkClient.state)
   const ready = ref(false)
+  /** Live is playing (its transport reports, as they come: one change per Play / Stop). */
+  const livePlaying = ref(false)
   const track = ref('')
   const deviceVersion = ref('')
   const sim = ref(false)
@@ -72,7 +74,7 @@ export const useLinkStore = defineStore('link', () => {
         state.value = e.state
         if (e.state === 'connected') { everConnected = true; failedAttempts.value = 0; lastError.value = '' }
         else if (e.state === 'retrying') failedAttempts.value++
-        if (e.state !== 'connected') { ready.value = false; unregisterOutput() }
+        if (e.state !== 'connected') { ready.value = false; livePlaying.value = false; unregisterOutput() }
         break
       case 'hello':
         track.value = e.track
@@ -81,6 +83,7 @@ export const useLinkStore = defineStore('link', () => {
         break
       case 'transport':
         if (linkClient.isReady && !ready.value) { ready.value = true; registerOutput() }
+        if (e.transport.playing !== livePlaying.value) livePlaying.value = e.transport.playing
         break
       case 'stats':
         stats.value = e.stats
@@ -106,5 +109,5 @@ export const useLinkStore = defineStore('link', () => {
 
   // SY.CORE Map (P12): its encoders work whenever the bridge is connected
   useLiveMapStore()
-  return { enabled, neededByClock, active, state, ready, connected, track, deviceVersion, sim, rttMs, stats, lastError, failedAttempts, hint }
+  return { enabled, neededByClock, active, state, ready, livePlaying, connected, track, deviceVersion, sim, rttMs, stats, lastError, failedAttempts, hint }
 })

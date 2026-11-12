@@ -265,3 +265,26 @@ describe("rig-live: Live's Stop arms the slots playing", () => {
     Object.assign(rigArmed, { chord: null, drum: null, seq: null, bass: null })
   })
 })
+
+import { armedDrumLoads } from '@/lib/rig-live'
+describe('Drum / Bass armed with the Drum Machine stopped', () => {
+  it('the drums switch to their armed slot; the bassline is pinned to its own', () => {
+    expect(armedDrumLoads({ drum: 2, bass: null }, 'A')).toEqual({ drums: 'C', bassline: null })
+    expect(armedDrumLoads({ drum: 2, bass: 0 }, 'A')).toEqual({ drums: 'C', bassline: 'A' })
+    expect(armedDrumLoads({ drum: null, bass: 4 }, 'A')).toEqual({ drums: null, bassline: 'E' })
+  })
+  it('nothing to switch on the slot already shown; disarmed: the bassline follows the drums again', () => {
+    expect(armedDrumLoads({ drum: 0, bass: null }, 'A')).toEqual({ drums: null, bassline: null })
+  })
+})
+
+import { bassInUse } from '@/lib/rig-live'
+describe('bassline in use (its source pads as BASS 1–3)', () => {
+  it('playing: while the bass part is on; stopped: while a Bass slot is armed; never with the bassline off', () => {
+    expect(bassInUse({ basslineEnabled: true, isPlaying: true, bassOn: true }, null)).toBe(true)
+    expect(bassInUse({ basslineEnabled: true, isPlaying: true, bassOn: false }, 3)).toBe(false)
+    expect(bassInUse({ basslineEnabled: true, isPlaying: false, bassOn: true }, null)).toBe(false)
+    expect(bassInUse({ basslineEnabled: true, isPlaying: false, bassOn: true }, 1)).toBe(true)
+    expect(bassInUse({ basslineEnabled: false, isPlaying: true, bassOn: true }, 1)).toBe(false)
+  })
+})

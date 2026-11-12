@@ -1,4 +1,10 @@
 <script setup>
+import ResizeHandles from '@/components/ui/ResizeHandles.vue'
+import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
+import SeqPlayView from '@/components/play/SeqPlayView.vue'
+import { usePlayView } from '@/composables/usePlayView'
+// Performance: a play view (banks, pattern) instead of the panel; EDIT: the panel.
+const { play } = usePlayView('sequencer2')
 import { ref, computed, watch, onUnmounted, toRef } from 'vue'
 import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, FolderOpen, FolderPlus, Layers, Sparkles } from 'lucide-vue-next'
 import { getTransport } from 'tone'
@@ -446,13 +452,9 @@ let generateHidden = ref(false)
     :style="panelStyle"
     @mousedown.capture="bringToFront"
   >
-    <div @mousedown.stop="e => onResizeStart(e, 'n')"  class="absolute top-0    left-3  right-3  h-1.5  cursor-n-resize  z-50" />
-    <div @mousedown.stop="e => onResizeStart(e, 's')"  class="absolute bottom-0 left-3  right-3  h-1.5  cursor-s-resize  z-50" />
-    <div @mousedown.stop="e => onResizeStart(e, 'e')"  class="absolute top-3 bottom-3   right-0  w-1.5  cursor-e-resize  z-50" />
-    <div @mousedown.stop="e => onResizeStart(e, 'w')"  class="absolute top-3 bottom-3   left-0   w-1.5  cursor-w-resize  z-50" />
-    <div @mousedown.stop="e => onResizeStart(e, 'se')" class="absolute bottom-0 right-0  w-4 h-4  cursor-se-resize z-50" />
-    <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-4 h-4  cursor-sw-resize z-50" />
+    <ResizeHandles :start="onResizeStart" />
 
+    <template v-if="!play">
     <div
       class="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-neutral-800 bg-gradient-to-r from-amber-950/70 to-transparent cursor-grab active:cursor-grabbing"
       @mousedown.stop="onDragStart"
@@ -1165,6 +1167,19 @@ let generateHidden = ref(false)
         </div>
       </Transition>
     </div>
+    </template>
+    <!-- Performance: the play view (display only; the Rig plays it) -->
+    <template v-else>
+      <PlayPanelHeader title="Sequencer" panel-id="sequencer2" @pointerdown.stop="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
+        <!-- the active bank's style: what Generate (and the Rig's GEN on the Seq row) writes -->
+        <select v-model="selectedStyle" title="Sequencer style (this bank): what Generate (and the Rig's GEN) writes"
+                class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-200 max-w-36 cursor-pointer [color-scheme:dark]"
+                @pointerdown.stop @mousedown.stop>
+          <option v-for="style in Object.keys(STYLES)" :key="style" :value="style">{{ style }}</option>
+        </select>
+      </PlayPanelHeader>
+      <SeqPlayView class="flex-1 overflow-hidden" />
+    </template>
 
     <!-- AI Prompt -->
     <AiPromptModal

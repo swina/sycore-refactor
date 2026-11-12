@@ -169,6 +169,17 @@ describe('LinkClient', () => {
     expect(ws.sent.at(-1).beat).toBeUndefined()
   })
 
+  it('Play / Stop Live (bridge 1.5): sent only when the bridge takes it', () => {
+    const { client, ws } = connected()
+    expect(client.sendPlay(true)).toBe(false) // hello without play
+    ws.recv({ type: 'hello', device: 'sycore-link', version: '1.5.0', track: '', sim: false, ports: true, play: true })
+    expect(client.playSupported).toBe(true)
+    expect(client.sendPlay(true)).toBe(true)
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'play', on: true })
+    client.sendPlay(false)
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'play', on: false })
+  })
+
   it('sends MIDI without a beat when stopped or already due', () => {
     const { client, ws } = connected()
     client.sendMidi([0xb0, 7, 64])
