@@ -43,6 +43,8 @@ export interface SeqBank {
   melodyMode: 'line' | 'classic'
   /** Generate's Lock / Vary: the share of the pattern a Generate replaces, 0–100 (seq-gen/mutate.ts) */
   varyAmount: number
+  /** the Arpeggio style's notes (seq-gen/melody.ts arpDegrees): chord (default), chord7, scale (as before) */
+  arpNotes: 'chord' | 'chord7' | 'scale'
   chordsEnabled: boolean
   maxPolyphony: number
   chordDensity: number
@@ -68,6 +70,7 @@ function makeBank(): SeqBank {
     euclidRotation: 0,
     melodyMode: 'line',
     varyAmount: 100,
+    arpNotes: 'chord',
     chordsEnabled: false,
     maxPolyphony: 4,
     chordDensity: 4,
@@ -148,6 +151,7 @@ function migrateFromOldState(): SeqBank[] | null {
         euclidRotation: old.euclidRotation ?? 0,
         melodyMode: old.melodyMode ?? 'line',
         varyAmount: old.varyAmount ?? 100,
+        arpNotes: old.arpNotes ?? 'chord',
         chordsEnabled: old.chordsEnabled ?? false,
         maxPolyphony: old.maxPolyphony ?? 4,
         chordDensity: old.chordDensity ?? 4,
@@ -320,6 +324,7 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     if (cfg.euclidRotation !== undefined) bank.euclidRotation = cfg.euclidRotation
     if (cfg.melodyMode !== undefined) bank.melodyMode = cfg.melodyMode
     if (cfg.varyAmount !== undefined) bank.varyAmount = cfg.varyAmount
+    if (cfg.arpNotes !== undefined) bank.arpNotes = cfg.arpNotes
     if (cfg.chordsEnabled !== undefined) bank.chordsEnabled = cfg.chordsEnabled
     if (cfg.maxPolyphony !== undefined) bank.maxPolyphony = cfg.maxPolyphony
     if (cfg.chordDensity !== undefined) bank.chordDensity = cfg.chordDensity

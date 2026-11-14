@@ -37,7 +37,7 @@ import { userKey } from '@/lib/userKey'
 import { rigReports } from '@/lib/rig-live'
 import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
 import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
-import { melodyLine, motifLength, repeatOnsets } from '@/lib/seq-gen/melody'
+import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
 import { mixSteps, mutateAmount, varyFromMidi } from '@/lib/seq-gen/mutate'
 
 export const DEFAULT_STEP = {
@@ -195,6 +195,8 @@ function createSequencerEngine() {
   const melodyMode = ref(seqStore.activeBank.melodyMode ?? 'line')
   // Generate's Lock / Vary: the share of the pattern a Generate replaces (100 = all, as before)
   const varyAmount = ref(seqStore.activeBank.varyAmount ?? 100)
+  // the Arpeggio style's notes: 'chord' (default: the tonic triad), 'chord7', 'scale' (as before)
+  const arpNotes = ref(seqStore.activeBank.arpNotes ?? 'chord')
   const _onVarySet = (e) => { varyAmount.value = varyFromMidi(e.detail?.value ?? 0) }
   window.addEventListener('seq-vary-set', _onVarySet)
   const arpModeForGen = ref('up')
@@ -297,6 +299,7 @@ function createSequencerEngine() {
     bank.euclidRotation = euclidRotation.value
     bank.melodyMode = melodyMode.value
     bank.varyAmount = varyAmount.value
+    bank.arpNotes = arpNotes.value
     bank.chordsEnabled = chordsEnabled.value
     bank.maxPolyphony = maxPolyphony.value
     bank.chordDensity = chordDensity.value
@@ -349,6 +352,7 @@ function createSequencerEngine() {
     euclidRotation.value = bank.euclidRotation ?? 0
     melodyMode.value = bank.melodyMode ?? 'line'
     varyAmount.value = bank.varyAmount ?? 100
+    arpNotes.value = bank.arpNotes ?? 'chord'
     chordsEnabled.value = bank.chordsEnabled
     maxPolyphony.value = bank.maxPolyphony
     chordDensity.value = bank.chordDensity
@@ -453,7 +457,7 @@ function createSequencerEngine() {
     numSteps, steps, param1CC, param2CC, param1Variation, param2Variation,
     selectedOctave, octaveRange, () => uiStore.seqGlobalTranspose, () => midiStore.currentBpm,
     dynamicMidiTranspose, dynamicDegreeShift, () => uiStore.seqFollowMode, selectedKey, selectedScale, selectedStyle,
-    genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, chordsEnabled, maxPolyphony, chordDensity
+    genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, chordsEnabled, maxPolyphony, chordDensity
   ], () => {
     const config = { 
       numSteps: numSteps.value, 
@@ -475,6 +479,7 @@ function createSequencerEngine() {
       euclidRotation: euclidRotation.value,
       melodyMode: melodyMode.value,
       varyAmount: varyAmount.value,
+      arpNotes: arpNotes.value,
       chordsEnabled: chordsEnabled.value,
       maxPolyphony: maxPolyphony.value,
       chordDensity: chordDensity.value
@@ -687,9 +692,11 @@ function createSequencerEngine() {
     if (selectedStyle.value === 'Arpeggio') {
       const arpMode = arpModeForGen.value
       const allNotes = []
+      // the tonic chord's notes (default; following the Chord Prog moves them onto each chord), or the scale
+      const arpIntervals = arpDegrees(scaleIntervals, arpNotes.value).map(d => scaleIntervals[d])
       for (let oct = finalOctMin; oct <= finalOctMax; oct++) {
         const root = (oct + 1) * 12 + keyIdx
-        for (const interval of scaleIntervals) {
+        for (const interval of arpIntervals) {
           const note = root + interval
           if (note >= 0 && note <= 127) allNotes.push(note)
         }
@@ -1640,7 +1647,7 @@ function createSequencerEngine() {
   return {
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
-    isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpModeForGen,
+    isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
     swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
     param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
     dynamicMidiTranspose, dynamicDegreeShift, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,

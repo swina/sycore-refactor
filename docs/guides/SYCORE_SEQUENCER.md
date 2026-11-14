@@ -88,6 +88,7 @@ The fastest way to get a pattern is to use the algorithmic generator.
 | Pop | Balanced melodic | 16 | Accent grid, mid density |
 | Rock | Energetic | 16 | High velocity, accent grid |
 | Electronic | General purpose | 16 | Accent grid, mid gate |
+| Arpeggio | Arpeggiator | 16 | Every step, in the **Arp** mode's order (Up, Down…); its notes: **1-3-5** (default: the key's chord — following the Chord Prog moves it onto each chord as it plays), **+7** (with its 7th), **Scale** (every note of the scale, as before) |
 
 2. Set **Scale** and **Key** — all generated notes are constrained to the scale. Available scales: Major, Minor, Harmonic Minor, Pentatonic Major, Pentatonic Minor, Blues, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Whole Tone, Hungarian Minor, Chromatic.
 

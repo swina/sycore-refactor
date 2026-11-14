@@ -114,6 +114,22 @@ describe('Sequencer engine — no panel mounted', () => {
     window.dispatchEvent(new CustomEvent('seq-vary-set', { detail: { value: 127 } }))
     expect(engine.varyAmount.value).toBe(100)
   })
+  it('Arpeggio: the tonic chord by default (C major: C E G only), the scale as an option', async () => {
+    const { engine } = setup()
+    engine.selectedKey.value = 'C'
+    engine.selectedScale.value = 'Major'
+    engine.selectedStyle.value = 'Arpeggio'
+    engine.numSteps.value = 16
+    engine.varyAmount.value = 100
+    engine.arpNotes.value = 'chord'
+    engine.generateSequence()
+    const pcs = new Set(engine.steps.value.flatMap((st: any) => st.notes.map((n: number) => n % 12)))
+    expect([...pcs].every(pc => [0, 4, 7].includes(pc as number))).toBe(true)
+    engine.arpNotes.value = 'scale'
+    engine.generateSequence()
+    const pcs2 = new Set(engine.steps.value.flatMap((st: any) => st.notes.map((n: number) => n % 12)))
+    expect(pcs2.size).toBeGreaterThan(3)
+  })
   it('selects a bank and generates from the Rig with its panel closed', async () => {
     const { engine } = setup()
     const seqStore = useStepSequencerStore()

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { melodyLine, motifLength, repeatOnsets } from '@/lib/seq-gen/melody'
+import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
 import { seededRng } from '@/lib/seq-gen/rhythm'
 
 const MAJOR = [0, 2, 4, 5, 7, 9, 11]
@@ -79,5 +79,19 @@ describe('melodyLine', () => {
       for (const n of m.values()) { total++; if (n % 12 === 0) roots++ }
     }
     expect(roots / total).toBeGreaterThan(0.3)
+  })
+})
+
+describe('arpDegrees', () => {
+  it('the tonic triad, with its 7th, or the scale', () => {
+    expect(arpDegrees(MAJOR, 'chord')).toEqual([0, 2, 4])          // C E G
+    expect(arpDegrees(MAJOR, 'chord7')).toEqual([0, 2, 4, 6])      // + B
+    expect(arpDegrees(MINOR, 'chord7')).toEqual([0, 2, 4, 6])      // A C E G
+    expect(arpDegrees(MAJOR, 'scale')).toEqual([0, 1, 2, 3, 4, 5, 6])
+  })
+  it('a pentatonic: the nearest degrees', () => {
+    const PENT_MIN = [0, 3, 5, 7, 10]
+    expect(arpDegrees(PENT_MIN, 'chord')).toEqual([0, 1, 3])       // 0 3 7
+    expect(arpDegrees(PENT_MIN, 'chord7')).toEqual([0, 1, 3, 4])   // + 10
   })
 })

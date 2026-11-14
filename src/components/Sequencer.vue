@@ -74,7 +74,7 @@ const showAiPrompt = ref(false)
 const engine = useSequencerEngine()
 const {
   selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
-  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpModeForGen,
+  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
   swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
   param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
   dynamicMidiTranspose, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
@@ -642,6 +642,13 @@ let generateHidden = ref(false)
           <select v-model="arpModeForGen" class="bg-black/40 border border-cyan-700 text-cyan-400 rounded-lg px-2 py-1 text-[14px] font-mono uppercase outline-none cursor-pointer [color-scheme:dark]">
             <option v-for="mode in ARP_MODES" :key="mode" :value="mode" class="bg-neutral-900">{{ mode }}</option>
           </select>
+          <!-- the notes it arpeggiates: the tonic chord (following the Chord Prog moves it onto each chord), or the scale -->
+          <div class="flex rounded-lg border border-neutral-800 overflow-hidden"
+               title="Arpeggio notes — 1-3-5: the key's chord (following the Chord Prog moves it onto each chord as it plays) · +7: with its 7th · Scale: every note of the scale (as before)">
+            <button v-for="m in [['chord', '1-3-5'], ['chord7', '+7'], ['scale', 'Scale']]" :key="m[0]"
+                    @click="arpNotes = m[0]"
+                    :class="['px-2 py-1 text-[11px] font-bold uppercase transition-colors', arpNotes === m[0] ? 'bg-cyan-500/20 text-cyan-400' : 'bg-black/40 text-neutral-500 hover:text-neutral-300']">{{ m[1] }}</button>
+          </div>
         </div>
 
         <div v-if="selectedStyle !== 'Arpeggio'" class="flex items-center gap-2">

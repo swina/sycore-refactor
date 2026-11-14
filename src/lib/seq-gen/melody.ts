@@ -41,6 +41,24 @@ export function repeatOnsets(block: Set<number>, blockLen: number, steps: number
   return out
 }
 
+/** The Arpeggio's notes: the tonic chord (1-3-5), with its 7th, or the whole scale (as before). */
+export type ArpNotes = 'chord' | 'chord7' | 'scale'
+export const ARP_NOTES: ArpNotes[] = ['chord', 'chord7', 'scale']
+
+/**
+ * The scale degrees (indices) an Arpeggio uses: the tonic triad, + the 7th (10 / 11 semitones, or the
+ * nearest degree), or every degree. Following the Chord Prog moves them onto each chord's tones.
+ */
+export function arpDegrees(scale: readonly number[], notes: ArpNotes): number[] {
+  if (notes === 'scale' || !scale.length) return scale.map((_, i) => i)
+  const deg = [...triadDegrees(scale)]
+  if (notes === 'chord7') {
+    const i = scale.includes(10) ? scale.indexOf(10) : scale.includes(11) ? scale.indexOf(11) : -1
+    if (i >= 0) deg.push(i)
+  }
+  return [...new Set(deg)].sort((a, b) => a - b)
+}
+
 /** Pitch classes above the tonic of the tonic triad in this scale: 0, the third (3 / 4), the fifth (7 / nearest). */
 function triadDegrees(scale: readonly number[]): Set<number> {
   const near = (target: number) => {
