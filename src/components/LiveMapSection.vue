@@ -86,6 +86,12 @@ const head = computed(() => {
   if (!i.device) return 'No instrument on the selected track'
   return `${i.track?.name ?? ''} › ${i.device.rack ? i.device.rack + ' › ' : ''}${i.device.name}`
 })
+// The track in focus: its number in Live (1-based) in the amber box, its name large (not in the DECK)
+const trackNo = computed(() => (info.value?.track && Number.isInteger(info.value.track.index) ? info.value.track.index + 1 : null))
+const deviceLine = computed(() => {
+  const d = info.value?.device
+  return d ? `${d.rack ? d.rack + ' › ' : ''}${d.name}` : ''
+})
 const tag = computed(() => {
   const i = info.value
   if (!i?.device) return ''
@@ -135,8 +141,23 @@ const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.na
                 title="The slots as vertical sliders (touch screens) or as tiles (drag up / down)"
                 @click="sliders = !sliders">{{ sliders ? 'SLIDERS' : 'TILES' }}</button>
       </div>
+      <!-- the track's number in Live, top right -->
+      <div v-if="!compact" class="ml-auto shrink-0 min-w-12 h-10 px-2 rounded-md flex flex-col items-center justify-center border"
+           :class="trackNo ? 'bg-amber-500 border-amber-300 text-black' : 'bg-neutral-900 border-white/10 text-neutral-600'"
+           :title="trackNo ? `Live track ${trackNo}` : 'No track'">
+        <span class="text-[8px] font-bold uppercase leading-none tracking-widest opacity-70">Track</span>
+        <span class="text-xl font-black font-mono leading-none">{{ trackNo ?? '–' }}</span>
+      </div>
     </div>
-    <div class="flex items-center justify-between text-[11px]">
+    <!-- the track's name large, the instrument under it -->
+    <div v-if="!compact && info?.device" class="flex items-center justify-between gap-2">
+      <div class="min-w-0 flex items-baseline gap-2 truncate">
+        <span class="text-lg font-black text-white leading-tight">{{ info.track?.name ?? '' }}</span>
+        <span class="text-sm font-bold text-emerald-300 leading-tight truncate">› {{ deviceLine }}</span>
+      </div>
+      <span class="text-[10px] font-mono shrink-0" :class="info?.mode === 'none' ? 'text-amber-400' : 'text-neutral-500'">{{ tag }}</span>
+    </div>
+    <div v-else class="flex items-center justify-between text-[11px]">
       <span class="font-bold truncate" :class="info?.device ? 'text-neutral-200' : 'text-neutral-500'">{{ head }}</span>
       <span class="text-[10px] font-mono shrink-0 ml-2" :class="info?.mode === 'none' ? 'text-amber-400' : 'text-neutral-500'">{{ tag }}</span>
     </div>
