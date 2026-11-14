@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { detectChord } from '@/lib/chord-detector'
 
 export const KEY_FILE_NAMES = [
   'C Major / A min', 'Db Major / Bb min', 'D Major / B min',
@@ -37,12 +38,14 @@ const KEY_FILE_MAP = [
 // Vite glob import for all progression JSON files
 const progressionModules = import.meta.glob('../data/progressions/*.json')
 
-function normalizeChord(entry) {
+export function normalizeChord(entry) {
   if (!Array.isArray(entry) || entry.length < 2) return null
   const [name, second] = entry
-  // Format A (key files): ["ChordName", [note1, note2, ...]]
+  // Format A (key files): ["ChordName", [note1, note2, ...]]. The files' names are unreliable (A–C–E
+  // named "A", F–A–C "F#", C–E–G "C#"): named from the notes, the file's name only when not detected.
   if (Array.isArray(second) && (second.length === 0 || typeof second[0] === 'number')) {
-    return { chordName: String(name), notes: second.map(Number) }
+    const notes = second.map(Number)
+    return { chordName: detectChord(notes)?.name ?? String(name), notes }
   }
   // Format B (custom files): ["DisplayName", ["ChordType", [note1, ...]]]
   if (Array.isArray(second) && second.length === 2 && Array.isArray(second[1])) {

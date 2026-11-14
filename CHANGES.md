@@ -5,6 +5,7 @@ A running log of new features added to SY.CORE, newest first.
 ## 2026-11-13
 
 
+- **Chord Prog: Generate (and the progression library) names the chords right** — the key files' chord names are wrong (A–C–E named `A`, F–A–C `F#`, C–E–G `C#`, D–F–A `D`…): Generate in A minor showed `A` for an A minor. Now each library chord is named from its notes (`detectChord`: `Am`, `F`, `C`, `Dm`…); the file's name only for the few the detector doesn't know (power chords, 9ths: 125 of 7972). Progressions already generated keep their old labels until generated / loaded again. `composables/useProgressionLoader.js` (`normalizeChord`); tests: `progression-loader.test.ts`. Branch: `feat/scenario-workspaces`
 
 - **Count-in also on Rig Controls' Play when it plays Live** — the big Play in Performance (and its MIDI Learn `rig_play`), with Rig Controls on EXT, sends Play to Live over SY.CORE Link: it skipped the count-in. Now it counts the bars first (at Live's tempo, the same countdown on screen), then sends Live's Play; the button reads `Count N` meanwhile; pressed again, or the toolbar's Stop, cancels it (Live is not started). Also on the simulated clock (SIM). `RigControllerPanel.vue` (`countedPlay`); docs: `SYCORE_GLOBAL_TRANSPORT.md`. Branch: `feat/scenario-workspaces`
 
