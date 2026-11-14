@@ -9,7 +9,10 @@
  * its cables send the clips to a device on the cable's OUT ch (else the device's). The clip itself is
  * channel-free: it goes out on channel 1, which the cable / device remaps. The Rig's own controllers never
  * reach the recording (rigIngress takes their input first). Live's Stop / SY.CORE's Stop stops the
- * clips (they stay in their slots).
+ * clips (they stay in their slots). With nothing playing a pad waits for Play and starts on its 1.
+ *
+ * Kept: every clip set, recorded over or cleared is journaled in Session takes (app 'capt'); named
+ * sets of the 8 pads in IndexedDB (saveSet / loadSet / deleteSet).
  */
 import { reactive, watch } from 'vue'
 import { getTransport } from 'tone'
@@ -22,9 +25,15 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { userKey } from '@/lib/userKey'
+import { bigLoad, bigSave } from '@/lib/big-storage'
+import { useSessionTakesStore } from '@/stores/useSessionTakesStore'
 import { CLIP_SLOTS, buildClip, clipEventsAt, targetSlot, clipSummary } from '@/lib/rig-captures'
 
 const LS_KEY = 'SYCORE_RIG_CAPTURES'
+/** The named sets (the 8 pads saved under a name) — IndexedDB (lib/big-storage.ts). */
+const SETS_KEY = 'SYCORE_RIG_CAPTURE_SETS'
+const clone = v => JSON.parse(JSON.stringify(v ?? null))
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 
 function loadClips() {
   try {
@@ -41,6 +50,7 @@ export function useRigCaptures() {
   const midiStore = useMidiStore()
   const arpStore = useArpStore()
   const transportManager = useTransportManager()
+  const takes = useSessionTakesStore()
 
   const state = reactive({
     clips: loadClips(),
@@ -49,6 +59,10 @@ export function useRigCaptures() {
     recording: false,
     /** Per slot: 'idle' | 'queued' (starts on the next bar) | 'playing' | 'stopping' (ends on the next bar). */
     play: Array(CLIP_SLOTS).fill('idle'),
+    /** The named sets: { name, clips, at }[] (loaded from IndexedDB at start). */
+    sets: [],
+    /** The set last saved or loaded (the pads may have changed since). */
+    setName: null,
   })
   watch(() => state.clips, v => { try { localStorage.setItem(userKey(LS_KEY), JSON.stringify(v)) } catch {} }, { deep: true })
 
@@ -121,20 +135,67 @@ export function useRigCaptures() {
     recNotes = []
     if (!clip) return 'Capture: no notes played'
     const slot = targetSlot(state.clips, state.selected)
-    if (slot == null) return 'Capture: all 8 slots full (Shift + a pad clears it)'
-    stopSlot(slot, true)
-    state.clips[slot] = clip
+    if (slot == null) return 'Capture: all 8 slots full (Shift + a pad clears it; or, while recording, press a pad to record over it)'
+    const over = !!state.clips[slot]
+    setClip(slot, clip)
     state.selected = null
-    return `Capture → S${slot + 1}: ${clipSummary(clip)} — press S${slot + 1} to play it`
+    return `Capture → S${slot + 1}${over ? ' (recorded over: the old one is in Session takes)' : ''}: ${clipSummary(clip)} — press S${slot + 1} to play it`
   }
   function toggleRecording() { return state.recording ? stopRecording() : (startRecording(), 'Capture: recording — Capt again to stop') }
 
-  /** An empty slot picked for the next recording (a second press: none). */
+  /** The slot picked for the next recording — an empty one, or (while recording) a full one to record
+   *  over. A second press: none (the first empty). */
   function select(i) { state.selected = state.selected === i ? null : i }
-  function clear(i) {
+  /** Put a clip (or null) into a slot, journaled in Session takes (app 'capt'): what was there before
+   *  and the new one — a clip recorded over or cleared can be brought back. */
+  function setClip(i, clip) {
+    const old = state.clips[i]
+    if (same(old, clip)) return
     stopSlot(i, true)
-    state.clips[i] = null
+    try { if (old) takes.before('capt', i, clone(old)) } catch {}
+    state.clips[i] = clip ? clone(clip) : null
+    try { if (clip) takes.after('capt', i, clone(clip)) } catch {}
+  }
+  function clear(i) {
+    setClip(i, null)
     if (state.selected === i) state.selected = null
+  }
+
+  // ── Named sets: the 8 pads saved under a name (IndexedDB) ────────────────
+  const setsReady = bigLoad(userKey(SETS_KEY), []).then(v => { if (Array.isArray(v)) state.sets = v }).catch(() => {})
+  async function saveSet(name) {
+    name = String(name || '').trim()
+    if (!name) return 'Set: give it a name'
+    if (state.clips.every(c => !c)) return 'Set: the pads are empty'
+    await setsReady
+    const set = { name, clips: clone(state.clips), at: Date.now() }
+    const i = state.sets.findIndex(s => s.name === name)
+    const sets = [...state.sets]
+    if (i === -1) sets.push(set); else sets[i] = set
+    state.sets = sets
+    state.setName = name
+    await bigSave(userKey(SETS_KEY), sets)
+    return `Set "${name}" ${i === -1 ? 'saved' : 'updated'}`
+  }
+  /** Load a set onto the pads (they stop; each pad's clip before is kept in Session takes). */
+  function loadSet(name) {
+    const set = state.sets.find(s => s.name === name)
+    if (!set) return ''
+    stopAllClips()
+    for (let i = 0; i < CLIP_SLOTS; i++) {
+      const c = set.clips?.[i]
+      setClip(i, c && Array.isArray(c.notes) ? c : null)
+    }
+    state.selected = null
+    state.setName = name
+    return `Set "${name}" loaded`
+  }
+  async function deleteSet(name) {
+    await setsReady
+    state.sets = state.sets.filter(s => s.name !== name)
+    if (state.setName === name) state.setName = null
+    await bigSave(userKey(SETS_KEY), state.sets)
+    return `Set "${name}" deleted`
   }
 
   // ── Playback: one grid for all the clips ────────────────────────────────
@@ -145,13 +206,20 @@ export function useRigCaptures() {
   /** Per slot: the song sixteenth its loop started on. */
   const clipStart = Array(CLIP_SLOTS).fill(0)
 
-  function startGrid() {
+  /** Live (followed) or SY.CORE's transport playing: a pad starts on the next bar; else it waits. */
+  const clockRunning = () => externalGrid.active || transportManager.isRunning.value
+  const anyQueued = () => state.play.some(p => p === 'queued')
+
+  /** The grid from the next bar of the clock playing — or from `at` ({ t, sixteenth, bpm? }: a Play). */
+  function startGrid(at = null) {
     if (sched) return
     const now = performance.now()
     let startMs = now + 20
     let tempo = bpm()
     startSixteenth = 0
-    if (externalGrid.active && externalGrid.anchor) {
+    if (at) {
+      startMs = at.t; startSixteenth = at.sixteenth; tempo = at.bpm || tempo
+    } else if (externalGrid.active && externalGrid.anchor) {
       const graceMs = Math.min(80, 15000 / (externalGrid.bpm || tempo) * 0.5)
       const bar = externalGrid.pointAtOrAfter(now, 16, graceMs)
       const t = bar != null ? externalGrid.timeOf(bar) : null
@@ -194,11 +262,12 @@ export function useRigCaptures() {
     if (!state.play.some(p => p !== 'idle')) stopGrid()
   }
 
-  /** A slot's pad: idle → plays from the next bar; playing → ends on the next bar; queued → called off. */
+  /** A slot's pad: idle → plays from the next bar (nothing playing: waits for Play, starts on its 1);
+   *  playing → ends on the next bar; queued → called off. */
   function toggleSlot(i) {
     if (!state.clips[i]) return
     const p = state.play[i]
-    if (p === 'idle') { state.play[i] = 'queued'; startGrid() }
+    if (p === 'idle') { state.play[i] = 'queued'; if (clockRunning()) startGrid() }
     else if (p === 'queued') state.play[i] = 'idle'
     else if (p === 'playing') state.play[i] = 'stopping'
     else state.play[i] = 'playing'
@@ -212,9 +281,31 @@ export function useRigCaptures() {
     for (let i = 0; i < CLIP_SLOTS; i++) state.play[i] = 'idle'
     stopGrid()
   }
-  // The transport's Stop (Live's, SY.CORE's): the clips stop, they stay in their slots.
-  externalGrid.on(e => { if (e.type === 'stop') stopAllClips() })
-  watch(() => transportManager.isRunning.value, (run, was) => { if (was && !run && !externalGrid.active) stopAllClips() })
+  // Play (Live's, SY.CORE's): the pads waiting start on its first bar line. Stop: the clips stop
+  // (they stay in their slots).
+  externalGrid.on(e => {
+    if (e.type === 'stop') { stopAllClips(); return }
+    if (sched || !anyQueued()) return
+    if (e.type === 'start') {
+      const bar = Math.ceil(e.sixteenth / 16) * 16
+      const tempo = e.bpm || bpm()
+      startGrid({ t: e.t + (bar - e.sixteenth) * 15000 / tempo, sixteenth: bar, bpm: e.bpm })
+    } else startGrid()
+  })
+  watch(() => transportManager.isRunning.value, (run, was) => {
+    if (was && !run && !externalGrid.active) { stopAllClips(); return }
+    if (run && !was && !externalGrid.active && anyQueued() && !sched) {
+      // the transport's first bar line from now (0 on a Play from the top), at its exact audio time
+      const tr = getTransport()
+      const barTicks = tr.PPQ * 4
+      const at = Math.ceil(tr.ticks / barTicks) * barTicks
+      try {
+        tr.scheduleOnce(time => {
+          if (!sched && anyQueued() && transportManager.isRunning.value) startGrid({ t: audioTimeToPerfMs(time), sixteenth: at / (tr.PPQ / 4) })
+        }, `${at}i`)
+      } catch { startGrid() }
+    }
+  })
 
   /** Live Perf has an OUT cable in MIDI Flow (else its clips only reach the broadcast outputs). */
   const hasOutCable = () => { try { return midiService.getRouting(MidiSource.LIVE_PERF).length > 0 } catch { return false } }
@@ -230,7 +321,7 @@ export function useRigCaptures() {
   /** Live Perf's OUT cables (routing matrix targets), for the display. */
   const outTargets = () => { try { return midiService.getRouting(MidiSource.LIVE_PERF) } catch { return [] } }
 
-  engine = { state, hasOutCable, staleNode, outTargets, toggleRecording, startRecording, stopRecording, select, clear, toggleSlot, stopAllClips }
+  engine = { state, hasOutCable, staleNode, outTargets, toggleRecording, startRecording, stopRecording, select, clear, setClip, toggleSlot, stopAllClips, clockRunning, saveSet, loadSet, deleteSet, setsReady }
   return engine
 }
 

@@ -7,7 +7,7 @@ import { defineStore } from 'pinia'
 import { shallowRef, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 
-export type TakeApp = 'drum' | 'bass' | 'chord' | 'seq'
+export type TakeApp = 'drum' | 'bass' | 'chord' | 'seq' | 'capt'
 export type TakeKind = 'start' | 'before' | 'gen'
 export type TakeTarget = string | number
 

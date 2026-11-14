@@ -24,7 +24,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 
 const takes = useSessionTakesStore()
 const filter = ref('all')
-const FILTERS = [['all', 'All'], ['drum', 'Drum'], ['bass', 'Bass'], ['chord', 'Chord'], ['seq', 'Seq']]
+const FILTERS = [['all', 'All'], ['drum', 'Drum'], ['bass', 'Bass'], ['chord', 'Chord'], ['seq', 'Seq'], ['capt', 'Capt']]
 const APP_CLASS = { drum: 'text-amber-300', bass: 'text-violet-300', chord: 'text-emerald-300', seq: 'text-sky-300' }
 
 const rows = computed(() => takes.takes

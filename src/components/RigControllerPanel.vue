@@ -106,9 +106,41 @@ function toggleSMode() {
 function onCapt() {
   s.display = captures.toggleRecording()
 }
+/** A capture pad clicked in the panel: Shift held = the Rig's Shift (clear). */
+function onCapturePadClick(e, i) {
+  const was = s.shift
+  if (e.shiftKey) s.shift = true
+  onCapturePad(i)
+  if (e.shiftKey) s.shift = was
+}
+// Capture sets (named, IndexedDB): the 8 pads saved / loaded under a name
+const captSetName = ref('')
+const captSetPick = ref('')
+async function onSaveSet() {
+  const name = captSetName.value || captures.state.setName || ''
+  s.display = await captures.saveSet(name)
+  if (captures.state.setName === name.trim()) { captSetPick.value = name.trim(); captSetName.value = '' }
+}
+function onLoadSet() {
+  if (!captSetPick.value) return
+  s.display = captures.loadSet(captSetPick.value)
+}
+async function onDeleteSet() {
+  const name = captSetPick.value
+  if (!name || !window.confirm(`Delete the capture set "${name}"?`)) return
+  s.display = await captures.deleteSet(name)
+  captSetPick.value = ''
+}
 function onCapturePad(i) {
   const c = captures.state
-  if (s.shift) { if (c.clips[i]) { captures.clear(i); s.display = `S${i + 1} cleared` } return }
+  if (s.shift) { if (c.clips[i]) { captures.clear(i); s.display = `S${i + 1} cleared (back from Session takes › Capt)` } return }
+  // while recording, a pad picks where the capture goes — a full one is recorded over
+  if (c.recording) {
+    captures.select(i)
+    s.display = c.selected !== i ? 'Capture goes to: the first empty pad'
+      : c.clips[i] ? `Capture goes to S${i + 1}: records over it (the old one kept in Session takes)` : `Capture goes to S${i + 1}`
+    return
+  }
   if (!c.clips[i]) {
     captures.select(i)
     s.display = c.selected === i ? `S${i + 1} picked for the next capture` : 'Next capture: the first empty pad'
@@ -118,7 +150,7 @@ function onCapturePad(i) {
   captures.toggleSlot(i)
   const p = c.play[i]
   const started = was === 'idle' && p !== 'idle'
-  s.display = `S${i + 1} (${clipSummary(c.clips[i])}): ${p === 'queued' ? 'plays from the next bar' : p === 'stopping' ? 'stops at the end of the bar' : p === 'playing' ? 'plays on' : 'called off'}`
+  s.display = `S${i + 1} (${clipSummary(c.clips[i])}): ${p === 'queued' ? (captures.clockRunning() ? 'plays from the next bar' : 'waits for Play (starts on its 1)') : p === 'stopping' ? 'stops at the end of the bar' : p === 'playing' ? 'plays on' : 'called off'}`
     + (!started ? '' : captures.hasOutCable() ? ` → ${captures.outTargets().join(', ')}`
       : captures.staleNode() ? ' — MIDI Flow: the Live Perf node was saved as a device (no app id): reload the page, delete it and drag Live Perf in again, then cable it'
       : ' — MIDI Flow: cable Live Perf → your device (no cable: broadcast outputs only)')
@@ -957,8 +989,9 @@ function lpPad(row, col) {
       const picked = c.selected === col
       return { label: `Capture ${col + 1}: empty${picked ? ' (next capture)' : ''}`, short: `C${col + 1}`, color: picked ? (c.recording ? 'redFlash' : 'redDim') : 'off' }
     }
+    if (c.recording && c.selected === col) return { label: `Capture ${col + 1}: ${clipSummary(c.clips[col])} · recorded over by the capture`, short: `C${col + 1}`, color: 'redFlash' }
     const color = p === 'playing' ? 'green' : p === 'queued' || p === 'stopping' ? 'amberFlash' : 'amber'
-    return { label: `Capture ${col + 1}: ${clipSummary(c.clips[col])} · ${p}`, short: `C${col + 1}`, color }
+    return { label: `Capture ${col + 1}: ${clipSummary(c.clips[col])} · ${p === 'queued' && !captures.clockRunning() ? 'waits for Play' : p}`, short: `C${col + 1}`, color }
   }
   if (row === 6) {
     const color = s.section === col ? 'green' : s.queuedSection === col ? 'amberFlash' : sectionHasContent(col) ? 'amber' : 'off'
@@ -1493,6 +1526,34 @@ provide(RIG_CONTROLS_CTX, {
                       :class="[btn, s.section === i - 1 ? btnOn : s.queuedSection === i - 1 ? 'bg-amber-400/50 border-amber-300 text-white animate-pulse' : btnIdle]"
                       @contextmenu="learnMenu($event, `rig_section_${i}`, `Section ${i}`)"
                       @click="onSection(i - 1)">{{ i }}</button>
+            </div>
+          </section>
+
+          <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10">
+            <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2" title="Row S in Captures mode (S·CAP): Capt records, a pad plays its capture. Sets: the 8 pads saved under a name">Captures (Live Perf)</h3>
+            <div class="grid grid-cols-4 gap-1.5 mb-2">
+              <button v-for="i in 8" :key="i"
+                      :class="[btn, captures.state.recording && captures.state.selected === i - 1 ? 'bg-red-500/50 border-red-300 text-white animate-pulse'
+                        : captures.state.play[i - 1] === 'playing' ? btnOn
+                        : captures.state.play[i - 1] !== 'idle' ? 'bg-amber-400/50 border-amber-300 text-white animate-pulse'
+                        : captures.state.clips[i - 1] ? 'bg-amber-500/20 border-amber-400/50 text-amber-100'
+                        : captures.state.selected === i - 1 ? 'bg-red-500/20 border-red-400/50 text-red-100' : btnIdle]"
+                      :title="`S${i}: ${clipSummary(captures.state.clips[i - 1])} · Shift-click: clear`"
+                      @click="onCapturePadClick($event, i - 1)">{{ i }}</button>
+            </div>
+            <button :class="[btn, 'w-full mb-2', captures.state.recording ? 'bg-red-500/60 border-red-300 text-white animate-pulse' : btnIdle]" @click="onCapt">
+              {{ captures.state.recording ? 'Capt ● stop' : 'Capt' }}</button>
+            <div class="flex gap-1 mb-1">
+              <input v-model="captSetName" placeholder="Set name" class="flex-1 min-w-0 bg-black/40 border border-white/10 rounded px-1.5 py-0.5 text-[10px] text-white" @keydown.enter="onSaveSet" />
+              <button :class="[btn, btnIdle, 'px-2']" title="Save the 8 pads as a set (same name: updated)" @click="onSaveSet">Save</button>
+            </div>
+            <div class="flex gap-1">
+              <select v-model="captSetPick" class="flex-1 min-w-0 bg-black/40 border border-white/10 rounded px-1 py-0.5 text-[10px] text-white">
+                <option value="">{{ captures.state.sets.length ? 'Sets…' : 'No sets saved' }}</option>
+                <option v-for="st in captures.state.sets" :key="st.name" :value="st.name">{{ st.name }}{{ st.name === captures.state.setName ? ' ●' : '' }}</option>
+              </select>
+              <button :class="[btn, btnIdle, 'px-2']" :disabled="!captSetPick" title="Load onto the pads (the pads' clips before are kept in Session takes › Capt)" @click="onLoadSet">Load</button>
+              <button :class="[btn, btnIdle, 'px-2']" :disabled="!captSetPick" title="Delete the set" @click="onDeleteSet">✕</button>
             </div>
           </section>
 

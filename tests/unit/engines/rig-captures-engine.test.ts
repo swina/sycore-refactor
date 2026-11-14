@@ -16,6 +16,7 @@ import { midiService } from '@/core/midi/midi-service'
 import { externalGrid } from '@/core/midi/external-grid'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
+import { useSessionTakesStore } from '@/stores/useSessionTakesStore'
 
 let now = 0
 type NoteCb = (type: 'on' | 'off', note: number, velocity: number, chan: number, inputId?: string) => void
@@ -38,7 +39,7 @@ describe('Rig captures engine', () => {
     localStorage.clear(); now = 1000
     vi.spyOn(performance, 'now').mockImplementation(() => now)
   })
-  afterEach(() => { _resetRigCaptures(); vi.restoreAllMocks() })
+  afterEach(() => { externalGrid.emit({ type: 'stop' }); _resetRigCaptures(); vi.restoreAllMocks() })
 
   it('Capt records a phrase into the first empty pad; its pad loops it from the bar', () => {
     const { eng, on, play } = setup()
@@ -51,8 +52,11 @@ describe('Rig captures engine', () => {
     expect(msg).toMatch(/S1: 1 bar · 2 notes/)
     expect(eng.state.clips[0]!.notes.map(n => [n.step, n.pitch, n.channel])).toEqual([[0, 60, 2], [2, 64, 2]])
 
-    // nothing playing (free): the grid starts at once and its step 0 is the bar line (200 ms lookahead)
+    // nothing playing: the pad waits for Play, then starts on its 1 (200 ms lookahead)
     eng.toggleSlot(0)
+    expect(eng.state.play[0]).toBe('queued')
+    expect(on).toEqual([])
+    externalGrid.emit({ type: 'start', sixteenth: 0, t: now, bpm: 120 })
     expect(eng.state.play[0]).toBe('playing')
     expect(on).toEqual([[60, 1]])
     now += 250; ticker!() // step 2 within the lookahead
@@ -71,7 +75,9 @@ describe('Rig captures engine', () => {
     expect(eng.toggleRecording()).toMatch(/S5/)
     expect(eng.state.clips[4]).not.toBeNull()
     expect(eng.state.selected).toBeNull()
-    eng.toggleSlot(4); ticker!()
+    eng.toggleSlot(4)
+    expect(eng.state.play[4]).toBe('queued')
+    externalGrid.emit({ type: 'start', sixteenth: 0, t: now, bpm: 120 })
     expect(eng.state.play[4]).toBe('playing')
     externalGrid.emit({ type: 'stop' })
     expect(eng.state.play[4]).toBe('idle')
@@ -89,8 +95,43 @@ describe('Rig captures engine', () => {
     now = 3000; eng.toggleRecording()
     expect(eng.state.clips[0]!.notes.map(n => n.pitch)).toEqual([60])
     eng.toggleSlot(0)
+    externalGrid.emit({ type: 'start', sixteenth: 0, t: now, bpm: 120 })
     expect(on).toEqual([[60, 1]])
     expect(sources).toEqual(['LIVE_PERF'])
+  })
+
+  it('Live playing: a pad starts on the next bar; while recording a full pad is recorded over, the old clip kept as a take', () => {
+    const { eng, play } = setup()
+    eng.toggleRecording(); play('on', 60); now = 1200; play('off', 60); now = 3000; eng.toggleRecording()
+    externalGrid.emit({ type: 'start', sixteenth: 0, t: now, bpm: 120 })
+    eng.toggleSlot(0)
+    expect(eng.state.play[0]).not.toBe('idle')
+    // record over S1
+    eng.toggleRecording()
+    eng.select(0)
+    play('on', 67); now += 200; play('off', 67); now += 2000
+    expect(eng.toggleRecording()).toMatch(/S1 \(recorded over/)
+    expect(eng.state.clips[0]!.notes.map(n => n.pitch)).toEqual([67])
+    expect(eng.state.play[0]).toBe('idle')
+    const takes = useSessionTakesStore().takes.filter(t => t.app === 'capt' && t.target === 0)
+    expect(takes.map(t => (t.data as any).notes[0].pitch)).toEqual([60, 67])
+    // Shift + pad: cleared, the clip kept as a take
+    eng.clear(0)
+    expect(eng.state.clips[0]).toBeNull()
+    expect((useSessionTakesStore().lastFor('capt', 0)!.data as any).notes[0].pitch).toBe(67)
+  })
+
+  it('named sets: saved and loaded back onto the pads', async () => {
+    const { eng, play } = setup()
+    eng.toggleRecording(); play('on', 60); now = 1200; play('off', 60); now = 3000; eng.toggleRecording()
+    await eng.setsReady
+    expect(await eng.saveSet('Jam')).toMatch(/saved/)
+    eng.clear(0)
+    expect(eng.loadSet('Jam')).toMatch(/loaded/)
+    expect(eng.state.clips[0]!.notes[0].pitch).toBe(60)
+    expect(eng.state.sets.map(s => s.name)).toEqual(['Jam'])
+    await eng.deleteSet('Jam')
+    expect(eng.state.sets).toEqual([])
   })
 
   it('no notes: nothing stored', () => {
@@ -103,7 +144,7 @@ describe('Rig captures engine', () => {
 
 describe('Rig captures engine — out through MIDI Flow', () => {
   beforeEach(() => { localStorage.clear(); now = 1000; vi.spyOn(performance, 'now').mockImplementation(() => now) })
-  afterEach(() => { _resetRigCaptures(); vi.restoreAllMocks(); (midiService as any).midiAccess = null; (midiService as any).routingConfig = null; midiService.setRouting('LIVE_PERF', []) })
+  afterEach(() => { externalGrid.emit({ type: 'stop' }); _resetRigCaptures(); vi.restoreAllMocks(); (midiService as any).midiAccess = null; (midiService as any).routingConfig = null; midiService.setRouting('LIVE_PERF', []) })
 
   it('a clip reaches the device cabled from Live Perf, on the cable OUT ch, note-off after its length', () => {
     setActivePinia(createPinia())
@@ -122,6 +163,7 @@ describe('Rig captures engine — out through MIDI Flow', () => {
     input('on', 60, 100, 0); now = 1250; input('off', 60, 0, 0) // 2 sixteenths long
     now = 3000; eng.toggleRecording()
     eng.toggleSlot(0)
+    externalGrid.emit({ type: 'start', sixteenth: 0, t: now + 20, bpm: 120 })
     expect(sent.map(([m]) => m)).toEqual([[0x97, 60, 100], [0x87, 60, 0]]) // ch 8 (device OUT ch 7, 0-based)
     const [onAt, offAt] = sent.map(([, at]) => at!)
     expect(offAt - onAt).toBeGreaterThan(200) // 2 × 125 ms (×0.98)

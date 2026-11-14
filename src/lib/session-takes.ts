@@ -4,30 +4,36 @@
 //   bass  — target 'A'–'H': the bassline voices' steps of that sequence
 //   chord — target 0–7: the Chord Prog slot (steps, length, play mode, arp rate)
 //   seq   — target 0–7: the Sequencer bank (steps, length, key, scale, style, generator settings)
+//   capt  — target 0–7: the Rig's capture pad S1–S8 (a clip recorded with Capt; journaled by the engine)
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStore'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
+import { useRigCaptures } from '@/core/engines/rig-captures'
+import { clipSummary, CLIP_SLOTS } from '@/lib/rig-captures'
 import { useSessionTakesStore, type SessionTake, type TakeApp, type TakeTarget } from '@/stores/useSessionTakesStore'
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
-export const TAKE_APP_LABELS: Record<TakeApp, string> = { drum: 'Drum', bass: 'Bass', chord: 'Chord', seq: 'Seq' }
+export const TAKE_APP_LABELS: Record<TakeApp, string> = { drum: 'Drum', bass: 'Bass', chord: 'Chord', seq: 'Seq', capt: 'Capt' }
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
 /** The slots a take of the app can be loaded into. */
 export function takeTargets(app: TakeApp): { value: TakeTarget; label: string }[] {
   if (app === 'drum' || app === 'bass') return LETTERS.map(l => ({ value: l, label: `${TAKE_APP_LABELS[app]} ${l}` }))
+  if (app === 'capt') return Array.from({ length: CLIP_SLOTS }, (_, i) => ({ value: i, label: `Pad S${i + 1}` }))
   const n = app === 'chord' ? useChordProgStore().slots.length : useStepSequencerStore().banks.length
   return Array.from({ length: n }, (_, i) => ({ value: i, label: `${app === 'chord' ? 'Slot' : 'Bank'} ${i + 1}` }))
 }
 
 export function targetLabel(app: TakeApp, target: TakeTarget): string {
   if (app === 'drum' || app === 'bass') return `${TAKE_APP_LABELS[app]} ${target}`
+  if (app === 'capt') return `Pad S${Number(target) + 1}`
   return `${app === 'chord' ? 'Slot' : 'Bank'} ${Number(target) + 1}`
 }
 
 /** The slot's content now. */
 export function snapshot(app: TakeApp, target: TakeTarget): unknown {
+  if (app === 'capt') return clone(useRigCaptures().state.clips[Number(target)] ?? null)
   if (app === 'drum') return clone((useDrumMachineStore().sequences[target as string] ?? []).map((t: any) => t.steps))
   if (app === 'bass') return clone((useDrumMachineStore().basslineSequences[target as string] ?? []).map((t: any) => t.steps))
   if (app === 'chord') {
@@ -49,6 +55,12 @@ export function applyTake(take: Pick<SessionTake, 'app' | 'data'>, target: TakeT
   const { app } = take
   const data = clone(take.data) as any
   if (data === null || data === undefined) return false
+  if (app === 'capt') {
+    // the engine keeps the pad's clip before as a take itself
+    if (!Array.isArray(data.notes) || !(Number(target) >= 0 && Number(target) < CLIP_SLOTS)) return false
+    useRigCaptures().setClip(Number(target), data)
+    return true
+  }
   useSessionTakesStore().before(app, target, snapshot(app, target))
   if (app === 'drum' || app === 'bass') {
     const dm = useDrumMachineStore()
@@ -92,6 +104,7 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 export function takeSummary(take: Pick<SessionTake, 'app' | 'data' | 'note'>): string {
   const d = take.data as any
   if (!d) return '—'
+  if (take.app === 'capt') return clipSummary(d)
   if (take.app === 'drum' || take.app === 'bass') {
     const hits = (d as any[]).reduce((n, steps) => n + (Array.isArray(steps) ? steps.filter((s: any) => s?.active).length : 0), 0)
     if (take.app === 'bass') {
