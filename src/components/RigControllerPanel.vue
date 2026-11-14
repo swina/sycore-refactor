@@ -40,6 +40,7 @@ import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
 import { isMidimixName, parseMidimixInput, mixLedDiff, mixLedsOff, Pickup, roleId, learnMixMsg, assignMix, mixMsgLabel, loadMixMap, saveMixMap } from '@/lib/rig-midimix'
 import { learnToggle, matchToggle, toggleLabel, toggleShortLabel, sameToggle, loadToggle, saveToggle, RIG_TOGGLE_SLOTS } from '@/lib/rig-toggle'
+import { rigLinkLaunchpad, parseRigLinkPress } from '@/lib/rig-link-launchpad'
 import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVelocity, RIG_INIT_MESSAGES, muteOtherSenders, unmuteOtherSenders, rigSend } from '@/lib/rig-launchpad'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useDrumMachineEngine } from '@/core/engines/drum-machine' // one per app (SynthApp): its chain
@@ -734,23 +735,18 @@ const rigLinkState = () => ({
     chordQueuedSlot(),
     DURATION_LABELS,
   ) : null,
+  // the Launchpad layout as on screen (top 8, pads 8×8 by rows, side 8): the device draws it as is
+  lp: rigLinkLaunchpad({
+    top: lpTop.value.map(t => ({ label: t.label, color: t.color })),
+    pads: Array.from({ length: 64 }, (_, i) => { const p = lpPad(Math.floor(i / 8), i % 8); return { label: p.short, color: p.color } }),
+    side: Array.from({ length: 8 }, (_, i) => { const p = lpSide(i); return { label: p.short, color: p.color } }),
+  }),
 })
 // The Chord slot that takes over at the end of the one playing (Trigger sync / armed), if another.
 function chordQueuedSlot() {
   const q = rigReports.queued.chord ?? rigArmed.chord
   return q !== null && q !== undefined && q !== chordStore.playingSlotIndex ? chordStore.slots[q] ?? null : null
 }
-let rigLinkJson = ''
-watch(() => JSON.stringify(rigLinkState()), json => { rigLinkJson = json; linkClient.sendRig(JSON.parse(json)) }, { immediate: true })
-const offRigLink = linkClient.on(e => {
-  // (re)connected: the devices get the state again; a click on a device: as a learned rig button
-  if (e.type === 'hello' && rigLinkJson) linkClient.sendRig(JSON.parse(rigLinkJson))
-  else if (e.type === 'rig-press') {
-    const action = parseRigAction(e.name)
-    if (action) window.dispatchEvent(new CustomEvent('rig-action', { detail: { action } }))
-  }
-})
-onUnmounted(() => { offRigLink(); linkClient.sendRig(null) })
 
 /** Right-click on a rig control: MIDI Learn it (any controller). The learned ones get an amber ring. */
 const mappingStore = useMappingStore()
@@ -1069,6 +1065,28 @@ function lpSideDown(row) {
   if (s.shift && live.value) return onKeyMode()
   onKeyShift(row === 4 ? -1 : 1)
 }
+
+// The device's state out / presses in — set up here, after the Launchpad view it sends (lpTop…).
+let rigLinkJson = ''
+watch(() => JSON.stringify(rigLinkState()), json => { rigLinkJson = json; linkClient.sendRig(JSON.parse(json)) }, { immediate: true })
+const offRigLink = linkClient.on(e => {
+  // (re)connected: the devices get the state again; a click on a device: as a learned rig button
+  if (e.type === 'hello' && rigLinkJson) linkClient.sendRig(JSON.parse(rigLinkJson))
+  else if (e.type === 'rig-press') {
+    // the device's Launchpad layout: a pad / side / top button pressed or released, as on the Launchpad
+    const lp = parseRigLinkPress(e.name)
+    if (lp) {
+      if (lp.kind === 'pad') { if (lp.down) lpPadDown(lp.row, lp.col); else lpPadUp(lp.row, lp.col) }
+      else if (lp.kind === 'side') { if (lp.down) lpSideDown(lp.index) }
+      else if (lp.down) lpTopDown(lp.index)
+      else lpTopUp(lp.index)
+      return
+    }
+    const action = parseRigAction(e.name)
+    if (action) window.dispatchEvent(new CustomEvent('rig-action', { detail: { action } }))
+  }
+})
+onUnmounted(() => { offRigLink(); linkClient.sendRig(null) })
 
 // ── Key (LIVE: the Chord Prog's key, root + mode — chord-key.ts) ──────────
 /** The key shown: LIVE = the Chord Prog's ("Cm", "Bb", "Eb/Cm"); SIM = the rig's own. */

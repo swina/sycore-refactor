@@ -84,6 +84,8 @@ export interface LinkMapInfo {
 export interface LinkMapParam { name: string; shown: string; min: number; max: number; quantized: 0 | 1 }
 
 /** The Rig Controller's state for the SY.CORE Rig devices (5 rows: Chord Drum Seq Bass Arp). */
+import type { RigLpView } from './rig-link-launchpad'
+
 export interface LinkRigState {
   /** gen: Generates done on the row (a change flashes the devices' GEN) */
   rows: { filled: number; playing: number; queued: number; muted: boolean; solo: boolean; gen?: number }[]
@@ -93,6 +95,8 @@ export interface LinkRigState {
   fill?: boolean
   /** The chord sounding and the next one (labels: '1/1', '1/4'…), or null. */
   chord?: { now: string; dur: string; next: string; nextDur: string; ms: number; bars: number; seq: number } | null
+  /** The Rig's Launchpad layout as on screen (bridge 1.7+: the device draws it; rig-link-launchpad.ts). */
+  lp?: RigLpView
 }
 
 interface WsLike {

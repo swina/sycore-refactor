@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-11-15
+
+- **SY.CORE Rig device in Live mirrors the Rig Controller's Launchpad layout** — the device drew its own grid (rows Chord, Drum, Seq, Bass, Arp, M / S / GEN, Sections, FILL), not what the Rig Controller and the Launchpad show. Now SY.CORE sends the device the Launchpad view itself — top 8, pads 8×8, side 8, each with its short label and LED colour, as on screen — and the device draws it as is, in the device and larger in its OPEN window (under NOW / NEXT); a click is a Launchpad press and its release (Repeat, a held slot). Needs bridge 1.7 (sycore-ableton); with an older bridge the device keeps its grid. `lib/rig-link-launchpad.ts` (new), `lib/link-client.ts` (`LinkRigState.lp`), `RigControllerPanel.vue` (`rigLinkState().lp`, `lp_*` presses; the device's state set up after the Launchpad view); docs: `SYCORE_ABLETON_LIVE_GUIDE.md`; tests: `rig-link-launchpad.test.ts`. Branch: `feat/scenario-workspaces`
+
 ## 2026-11-14
 
 - **Website /ableton-live: Captures, takes and sets, Live's transport, Performance workspace** — the page's Rig Controller section gains four features (Captures: Capt records a phrase onto a pad, looped from the next bar; takes and named sets; Play / TAP / tempo driving Live with a count-in; the Performance workspace), two rows in the "In Live you're used to…" table (Session record → Capt, Live's Play / Tap → SY.CORE's), a capture step in the 60-second set, and the Launchpad's Live setting in the requirements. A screenshot of the Performance workspace in a session with Live under the feature cards (click: full size). The guides on the site brought up to date with `docs/guides` (9 were behind); the Ableton guide says why the Control Surface, not the port toggles, must be None. `website/src/components/AbletonLivePage.vue`, `website/docs/guides/*`, `docs/guides/SYCORE_ABLETON_LIVE_GUIDE.md`. Branch: `feat/scenario-workspaces`
