@@ -104,7 +104,9 @@ The fastest way to get a pattern is to use the algorithmic generator.
    - **Line** (default): a **motif** — half a bar at 16 steps, a bar at 32+ — whose rhythm and notes repeat, the last block (and every other one) **varied** in its last notes (A A′, A A′ A A″). The line moves **mostly by step**; a leap is followed by a step back the other way; it keeps to the middle of the range; the **tonic chord's notes (1-3-5) fall on the strong steps** and the phrase **ends on the tonic**. A low range (top octave 3 or below) plays as a **bass**: on the root more, octave jumps allowed. Following the Chord Prog (Follow: Degree) moves those notes onto each chord's as it plays.
    - **Classic**: a random note of the scale on each step, in a random octave of the range (the generator before).
 
-6. Click **Generate**. A new pattern fills the grid immediately and playback starts if the transport is already running.
+6. Set **Vary** (next to Generate; right-click: MIDI Learn `seq_vary`) — the share of the pattern Generate replaces: **100** = a new pattern (default), **25** = a quarter of it, the rest kept, so the phrase changes a little at a time (a Turing Machine's lock). Positions are counted within the motif, so its repeats change together. The Rig's **Shift + GEN** on the Seq row (**Mutate**) uses Vary, or 25 % when Vary is at 100.
+
+7. Click **Generate**. A new pattern fills the grid immediately and playback starts if the transport is already running.
 
 > Enable **Chords** mode and set **Max Polyphony** (1–4) before generating to get multi-note steps. The generator builds chord voicings from the selected scale.
 

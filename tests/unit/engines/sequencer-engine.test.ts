@@ -88,6 +88,32 @@ describe('Sequencer engine — no panel mounted', () => {
     engine.generateSequence()
     expect(engine.steps.value.map((st: any) => (st.active ? 1 : 0))).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
   })
+  it('Generate with Vary 25 keeps most of the pattern; the Rig\'s Mutate too; Vary 100 replaces it', async () => {
+    const { engine } = setup()
+    engine.chordsEnabled.value = false
+    engine.numSteps.value = 16
+    engine.genDensity.value = 75
+    engine.varyAmount.value = 100
+    engine.generateSequence()
+    const sig = () => engine.steps.value.map((st: any) => `${st.active ? 1 : 0}:${st.notes.join('.')}:${st.velocity}`)
+    let kept = 0
+    for (let i = 0; i < 10; i++) {
+      const before = sig()
+      engine.varyAmount.value = 25
+      engine.generateSequence()
+      kept += sig().filter((x: string, j: number) => x === before[j]).length
+    }
+    expect(kept / 160).toBeGreaterThan(0.6)
+    // the Rig's Shift + GEN (Mutate) at Vary 100: a quarter
+    engine.varyAmount.value = 100
+    const before = sig()
+    window.dispatchEvent(new CustomEvent('seq-generate', { detail: { mutate: true } }))
+    await flush()
+    expect(sig().filter((x: string, j: number) => x === before[j]).length).toBeGreaterThan(8)
+    // MIDI Learn seq_vary: 0–127 → 0–100
+    window.dispatchEvent(new CustomEvent('seq-vary-set', { detail: { value: 127 } }))
+    expect(engine.varyAmount.value).toBe(100)
+  })
   it('selects a bank and generates from the Rig with its panel closed', async () => {
     const { engine } = setup()
     const seqStore = useStepSequencerStore()

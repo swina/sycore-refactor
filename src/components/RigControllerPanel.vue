@@ -577,7 +577,9 @@ const genCount = reactive({})
 function onGenerate(appId, mutate = false) {
   focusApp.value = appId
   if (!live.value) { genCount[appId] = (genCount[appId] ?? 0) + 1; return generate(s, appId, mutate || s.shift) }
-  if (!GEN_APPS.includes(appId) || mutate || s.shift) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mutate || s.shift ? 'Mutate' : 'Generate'}`)
+  // LIVE: Mutate (Shift + GEN) is connected for the Sequencer (a part of its pattern: Lock / Vary)
+  const mut = mutate || s.shift
+  if (!GEN_APPS.includes(appId) || (mut && appId !== 'seq')) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mut ? 'Mutate' : 'Generate'}`)
   genCount[appId] = (genCount[appId] ?? 0) + 1
   if (appId === 'bass') {
     // A new bassline in the Drum Machine's active sequence, on the Chord Prog's key when it has an exact one.
@@ -591,8 +593,8 @@ function onGenerate(appId, mutate = false) {
     // A new sequence, in the Chord Prog's key when it has an exact one (Major / Minor), else in its own.
     const mode = chordStore.keyMode
     const root = mode ? keyRoot(chordStore.selectedKey, mode) : null
-    dispatchRig({ name: 'seq-generate', detail: root !== null ? { root, mode } : {} })
-    s.display = `Seq: Generate ${root !== null ? `in ${keyText.value}` : '(its own key)'}`
+    dispatchRig({ name: 'seq-generate', detail: { ...(root !== null ? { root, mode } : {}), ...(mut ? { mutate: true } : {}) } })
+    s.display = `Seq: ${mut ? 'Mutate' : 'Generate'} ${root !== null ? `in ${keyText.value}` : '(its own key)'}`
     return
   }
   if (appId === 'chord') {
@@ -1008,8 +1010,8 @@ function lpSide(row) {
     ? { label: 'Row S: Captures (press: Sections)', short: 'S·CAP', color: 'red' }
     : { label: 'Row S: Sections (press: Captures)', short: 'S·SEC', color: 'amber' }
   if (row < 5) {
-    // LIVE: Generate is connected for the Drum Machine, Chord Prog and Sequencer (no Mutate yet).
-    const off = live.value && (!GEN_APPS.includes(s.apps[row].id) || s.shift)
+    // LIVE: Generate is connected for the Drum Machine, Chord Prog and Sequencer; Mutate (Shift) for the Sequencer.
+    const off = live.value && (!GEN_APPS.includes(s.apps[row].id) || (s.shift && s.apps[row].id !== 'seq'))
     return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: off ? 'off' : s.shift ? 'green' : 'amber' }
   }
 }

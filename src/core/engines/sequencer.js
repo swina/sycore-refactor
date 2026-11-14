@@ -38,6 +38,7 @@ import { rigReports } from '@/lib/rig-live'
 import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
 import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 import { melodyLine, motifLength, repeatOnsets } from '@/lib/seq-gen/melody'
+import { mixSteps, mutateAmount, varyFromMidi } from '@/lib/seq-gen/mutate'
 
 export const DEFAULT_STEP = {
   active: false,
@@ -192,6 +193,10 @@ function createSequencerEngine() {
   const euclidRotation = ref(seqStore.activeBank.euclidRotation ?? 0)
   // Generate's pitches: 'line' (default: a motif and a melodic walk) or 'classic' (as before)
   const melodyMode = ref(seqStore.activeBank.melodyMode ?? 'line')
+  // Generate's Lock / Vary: the share of the pattern a Generate replaces (100 = all, as before)
+  const varyAmount = ref(seqStore.activeBank.varyAmount ?? 100)
+  const _onVarySet = (e) => { varyAmount.value = varyFromMidi(e.detail?.value ?? 0) }
+  window.addEventListener('seq-vary-set', _onVarySet)
   const arpModeForGen = ref('up')
   const swingAmount = ref(0)
   const basePatternLength = ref(seqStore.activeBank.basePatternLength || seqStore.activeBank.numSteps)
@@ -291,6 +296,7 @@ function createSequencerEngine() {
     bank.syncopation = syncopation.value
     bank.euclidRotation = euclidRotation.value
     bank.melodyMode = melodyMode.value
+    bank.varyAmount = varyAmount.value
     bank.chordsEnabled = chordsEnabled.value
     bank.maxPolyphony = maxPolyphony.value
     bank.chordDensity = chordDensity.value
@@ -342,6 +348,7 @@ function createSequencerEngine() {
     syncopation.value = bank.syncopation ?? 30
     euclidRotation.value = bank.euclidRotation ?? 0
     melodyMode.value = bank.melodyMode ?? 'line'
+    varyAmount.value = bank.varyAmount ?? 100
     chordsEnabled.value = bank.chordsEnabled
     maxPolyphony.value = bank.maxPolyphony
     chordDensity.value = bank.chordDensity
@@ -446,7 +453,7 @@ function createSequencerEngine() {
     numSteps, steps, param1CC, param2CC, param1Variation, param2Variation,
     selectedOctave, octaveRange, () => uiStore.seqGlobalTranspose, () => midiStore.currentBpm,
     dynamicMidiTranspose, dynamicDegreeShift, () => uiStore.seqFollowMode, selectedKey, selectedScale, selectedStyle,
-    genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, chordsEnabled, maxPolyphony, chordDensity
+    genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, chordsEnabled, maxPolyphony, chordDensity
   ], () => {
     const config = { 
       numSteps: numSteps.value, 
@@ -467,6 +474,7 @@ function createSequencerEngine() {
       syncopation: syncopation.value,
       euclidRotation: euclidRotation.value,
       melodyMode: melodyMode.value,
+      varyAmount: varyAmount.value,
       chordsEnabled: chordsEnabled.value,
       maxPolyphony: maxPolyphony.value,
       chordDensity: chordDensity.value
@@ -631,13 +639,14 @@ function createSequencerEngine() {
   const MAJOR_FAMILY = ['Major', 'Pentatonic Maj', 'Lydian', 'Mixolydian']
   function handleRigGenerate(e) { journaledGenerate(() => _rigGenerate(e)) }
   function _rigGenerate(e) {
-    const { root, mode } = e?.detail ?? {}
+    const { root, mode, mutate } = e?.detail ?? {}
     if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) {
       selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
       const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY
       if (!family.includes(selectedScale.value)) selectedScale.value = mode === 'minor' ? 'Minor' : 'Major'
     }
-    _generateSequence()
+    // the Rig's Mutate (Shift + GEN): a part of the pattern, Vary's amount or a quarter
+    _generateSequence(mutate ? mutateAmount(varyAmount.value) : varyAmount.value)
   }
 
   // The bank as it is now: the working copy written into it first (its watcher syncs a tick later).
@@ -651,7 +660,21 @@ function createSequencerEngine() {
   }
   function generateSequence() { journaledGenerate(_generateSequence) }
 
-  function _generateSequence() {
+  /**
+   * Generate: a new pattern by the rules (_generateFresh), of which only `amount` % of the positions
+   * replace the pattern (Lock / Vary, seq-gen/mutate.ts; positions within the motif, so its repeats
+   * change together). 100 = all new (the default), 0 = nothing.
+   */
+  function _generateSequence(amount = varyAmount.value) {
+    const before = steps.value.map(st => ({ ...st, notes: [...(st.notes ?? [])] }))
+    _generateFresh()
+    if (amount < 100 && before.length === steps.value.length) {
+      const motifLen = melodyMode.value !== 'classic' && !chordsEnabled.value && selectedStyle.value !== 'Arpeggio' ? motifLength(numSteps.value) : numSteps.value
+      steps.value = mixSteps(before, steps.value, amount, { motifLen })
+    }
+  }
+
+  function _generateFresh() {
     const styleCfg = STYLES[selectedStyle.value]
     const keyIdx = NOTE_NAMES.indexOf(selectedKey.value)
     const scaleIntervals = SCALES[selectedScale.value] ?? SCALES['Major']
@@ -1601,6 +1624,7 @@ function createSequencerEngine() {
     window.removeEventListener('toggle-sequencer2', handleToggle2)
     window.removeEventListener('cp-chord-release', _onChordRelease)
     window.removeEventListener('cp-chord-on', _onChordOn)
+    window.removeEventListener('seq-vary-set', _onVarySet)
     window.removeEventListener('seq-bank-select', handleBankSelect)
     window.removeEventListener('seq-bank-cue', handleBankCue)
     window.removeEventListener('seq-generate', handleRigGenerate)
@@ -1616,7 +1640,7 @@ function createSequencerEngine() {
   return {
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
-    isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, arpModeForGen,
+    isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpModeForGen,
     swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
     param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
     dynamicMidiTranspose, dynamicDegreeShift, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,

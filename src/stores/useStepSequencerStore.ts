@@ -41,6 +41,8 @@ export interface SeqBank {
   euclidRotation: number
   /** Generate's pitches (seq-gen/melody.ts): line (default: motif + melodic walk) or classic (as before) */
   melodyMode: 'line' | 'classic'
+  /** Generate's Lock / Vary: the share of the pattern a Generate replaces, 0–100 (seq-gen/mutate.ts) */
+  varyAmount: number
   chordsEnabled: boolean
   maxPolyphony: number
   chordDensity: number
@@ -65,6 +67,7 @@ function makeBank(): SeqBank {
     syncopation: 30,
     euclidRotation: 0,
     melodyMode: 'line',
+    varyAmount: 100,
     chordsEnabled: false,
     maxPolyphony: 4,
     chordDensity: 4,
@@ -144,6 +147,7 @@ function migrateFromOldState(): SeqBank[] | null {
         syncopation: old.syncopation ?? 30,
         euclidRotation: old.euclidRotation ?? 0,
         melodyMode: old.melodyMode ?? 'line',
+        varyAmount: old.varyAmount ?? 100,
         chordsEnabled: old.chordsEnabled ?? false,
         maxPolyphony: old.maxPolyphony ?? 4,
         chordDensity: old.chordDensity ?? 4,
@@ -315,6 +319,7 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     if (cfg.syncopation !== undefined) bank.syncopation = cfg.syncopation
     if (cfg.euclidRotation !== undefined) bank.euclidRotation = cfg.euclidRotation
     if (cfg.melodyMode !== undefined) bank.melodyMode = cfg.melodyMode
+    if (cfg.varyAmount !== undefined) bank.varyAmount = cfg.varyAmount
     if (cfg.chordsEnabled !== undefined) bank.chordsEnabled = cfg.chordsEnabled
     if (cfg.maxPolyphony !== undefined) bank.maxPolyphony = cfg.maxPolyphony
     if (cfg.chordDensity !== undefined) bank.chordDensity = cfg.chordDensity

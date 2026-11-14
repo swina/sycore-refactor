@@ -74,7 +74,7 @@ const showAiPrompt = ref(false)
 const engine = useSequencerEngine()
 const {
   selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
-  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, arpModeForGen,
+  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpModeForGen,
   swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
   param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
   dynamicMidiTranspose, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
@@ -692,8 +692,18 @@ let generateHidden = ref(false)
 
         
 
+        <!-- Lock / Vary: the share of the pattern Generate replaces (right-click: MIDI Learn seq_vary) -->
+        <div class="ml-auto flex items-center gap-2"
+             title="Vary — the share of the pattern Generate replaces: 100 = a new pattern (as before), 25 = a quarter of it, the rest kept (the motif's repeats change together). The Rig's Shift + GEN (Mutate) uses it, or 25 at 100. Right-click: MIDI Learn."
+             @contextmenu.prevent="openMenu($event, { name: 'seq_vary', label: 'Sequencer: Vary' })">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Vary</span>
+          <div class="flex items-center gap-2 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7">
+            <input v-model.number="varyAmount" type="range" min="0" max="100" step="5" class="w-16 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+            <span class="text-[12px] font-mono text-synth-amber w-8 text-right">{{ varyAmount }}%</span>
+          </div>
+        </div>
         <button @click="generateSequence" 
-          class="ml-auto flex items-center gap-1 px-1 py-1.5 bg-synth-amber text-black rounded-lg hover:bg-white transition-all font-black text-[9px] uppercase shadow-[0_0_15px_rgba(0,255,166,0.3)]">
+          class="flex items-center gap-1 px-1 py-1.5 bg-synth-amber text-black rounded-lg hover:bg-white transition-all font-black text-[9px] uppercase shadow-[0_0_15px_rgba(0,255,166,0.3)]">
           <Zap class="w-3.5 h-3.5" />
           Generate
         </button>

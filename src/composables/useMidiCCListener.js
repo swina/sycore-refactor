@@ -274,6 +274,11 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     window.dispatchEvent(new CustomEvent(event, { detail: { value: val, fromNote } }))
     return
   }
+  // the Sequencer's Generate Lock / Vary (0–127 → 0–100 %)
+  if (fieldName === 'seq_vary') {
+    window.dispatchEvent(new CustomEvent('seq-vary-set', { detail: { value: val } }))
+    return
+  }
   if (fieldName.startsWith('seq_bank_')) {
     const idx = parseInt(fieldName.slice(9))
     if (!isNaN(idx) && (fromNote || val > 0)) window.dispatchEvent(new CustomEvent('seq-bank-select', { detail: { idx } }))

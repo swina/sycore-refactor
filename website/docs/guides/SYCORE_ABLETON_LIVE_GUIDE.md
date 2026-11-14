@@ -294,7 +294,7 @@ The Fill pad / button: **dark amber** off, **light amber blinking** waiting for 
 
 > GEN overwrites the active slot. Keep a progression you like in another slot, or save it, before generating over it.
 
-**Shift + GEN** (Mutate) is simulation-only for now.
+**Shift + GEN** (Mutate) works in LIVE for the **Sequencer**: a part of its pattern is generated again (its **Vary** amount, or a quarter at Vary 100), the rest kept; for the other rows it is simulation-only for now.
 
 ### The key
 
@@ -433,6 +433,6 @@ Unknown controls and out-of-range values are skipped and reported after the impo
 
 - The sync grid counts bars in **4/4**.
 - The **first note after Play** may be a few tens of ms late: use a 1-bar Count-In when recording.
-- In LIVE, **splits, lane mutes and Mutate** are simulation-only (Undo is no longer on the Launchpad), **Latch** isn't connected. GEN and Fill aren't connected on the Arp row.
+- In LIVE, **splits, lane mutes and Mutate** (except the Sequencer's) are simulation-only (Undo is no longer on the Launchpad), **Latch** isn't connected. GEN and Fill aren't connected on the Arp row.
 - **Trigger sync** applies to the Rig Controller's pads. The apps' own buttons (e.g. the Drum Machine's PLAY with *Start@bar*), Live's Start and the Control Map keep their own behaviour.
 - With SY.CORE on its own clock (not following Live), pads act at once.
