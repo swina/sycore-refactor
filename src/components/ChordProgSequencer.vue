@@ -124,7 +124,7 @@ const {
   seqTranspose, loopEnabled, bassEnabled, bassDevice, bassChannel, midiOutputs,
   captureBarCount, captureAutoStop, captureArmed, captureRecording,
   systemClock, panicDelayMs, cuedSlotIdx, fillDuration, fillDurationRandom,
-  getTransportTicks, chordNotes, handleSlotSelect, triggerChordStep, stopHeldChord,
+  getTransportTicks, chordNotes, handleSlotSelect, triggerChordStep, stopHeldChord, releaseChord,
   previewStep, handleGenerate,
 } = engine
 /** A library chord: selected, and heard (with the library's transpose). */
@@ -1291,7 +1291,7 @@ function velBarColor(v) {
         </button>
         <!-- Panic (stop held step note-off only on chord prog channel) -->
         <button
-          @click.stop="stopHeldChord(); store.currentStep = -1"
+          @click.stop="releaseChord()"
           @contextmenu.prevent="openMenu($event, { name: 'cp_panic', label: 'Chord Prog: Panic' })"
           class="absolute right-10 mt-8 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider bg-neutral-800 hover:bg-red-900 text-neutral-500 hover:text-red-300 border border-neutral-700 hover:border-red-700 transition-all"
           title="Stop any manually-triggered step — sends note-offs on chord prog channel only"

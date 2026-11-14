@@ -477,6 +477,7 @@ function createChordProgEngine() {
       }
       transportManager.releaseTransport()
       stopAllNotes()
+      window.dispatchEvent(new CustomEvent('cp-chord-release'))
       store.currentStep = 0
       store.playingChordName = ''
       store.playingSlotIndex = null
@@ -904,6 +905,14 @@ function createChordProgEngine() {
     }
   }
 
+  /** Stop a chord played on its own (no Play): the panel's STOP, MIDI cp_panic, a click on the chord
+   *  sounding. A Sequencer the chords auto-started (MIDI Flow Chord Prog → Sequencer) stops with it. */
+  function releaseChord() {
+    stopHeldChord()
+    store.currentStep = -1
+    window.dispatchEvent(new CustomEvent('cp-chord-release'))
+  }
+
   function triggerChordStep(idx, forcePlay = false) {
     const step = store.steps[idx]
     if (!step?.active || !step.notes?.length) return
@@ -913,6 +922,7 @@ function createChordProgEngine() {
       stopAllNotes()
       store.currentStep = -1
       store.selectedStepIdx = idx
+      window.dispatchEvent(new CustomEvent('cp-chord-release'))
       return
     }
 
@@ -1165,8 +1175,7 @@ function createChordProgEngine() {
     const paramName = typeof mapping === 'object' ? mapping.paramName : mapping
     if (!paramName.startsWith('cp_step_') && paramName !== 'cp_panic') return
     if (paramName === 'cp_panic') {
-      stopHeldChord()
-      store.currentStep = -1
+      releaseChord()
       sendChMappingFeedback('cp_panic', true)
       setTimeout(() => sendChMappingFeedback('cp_panic', false), 100)
       return
@@ -1229,7 +1238,7 @@ function createChordProgEngine() {
     /** Our own tick counter (384n), for the transport position readout. */
     getTransportTicks: () => _transportTicks,
     // actions
-    chordNotes, handleSlotSelect, triggerChordStep, stopHeldChord, stopAllNotes,
+    chordNotes, handleSlotSelect, triggerChordStep, stopHeldChord, releaseChord, stopAllNotes,
     previewChord, previewStep, handleGenerate,
   }
 }

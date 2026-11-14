@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-11-14
+
+- **Sequencer stops with the Chord Prog's chord it followed** — with MIDI Flow Chord Prog → Sequencer and AUTO on, a chord played on its own (no Play) starts the Sequencer in the chord's root, but the Chord Prog's STOP left the Sequencer playing. Now a Sequencer auto-started by the Chord Prog's notes stops when the chord does: STOP / `cp_panic`, the chord clicked off, or the Chord Prog's Play stopped (`cp-chord-release`). Started by Play, Play All or a Rig pad it plays on. `core/engines/chord-prog.js` (`releaseChord`), `core/engines/sequencer.js` (`_autoStartedByChord`), `ChordProgSequencer.vue`; docs: `SYCORE_SEQUENCER.md`; tests: `sequencer-engine.test.ts`. Branch: `feat/scenario-workspaces`
+
 ## 2026-11-13
 
 - **MIDI Capture: Tema — record a theme in time, extract chords and melody** — **Tema** arms the capture: the first note played starts the transport (Play All, no count-in: the groove / Drum Machine) on its bar's 1; Stop (the panel's or the transport's) ends both. In review, **Tema →**: Split (Auto: 3+ notes together = chords; or a split note, two hands), **Chords → Chord Prog** (active slot: a chord per bar, two at half bar when it changes, named from the notes, merged into 2/4/8 bars, up to 16 steps) and **Melody → Sequencer** (a bar per bank from the active one at 1/16, tied long notes; chain set to the banks), each a Session take. `lib/theme-extract.ts` (new), `lib/theme-apply.ts` (new), `MidiCapture.vue`; docs: `SYCORE_MIDI_CAPTURE.md`; tests: `theme-extract.test.ts`. Branch: `feat/scenario-workspaces`

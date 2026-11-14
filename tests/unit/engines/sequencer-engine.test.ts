@@ -24,6 +24,7 @@ import { useSequencerEngine, _resetSequencerEngine } from '@/core/engines/sequen
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { MidiSource } from '@/types/midi'
 
 // The Sequencer's playback without its panel (Scenario Workspaces, Phase 1).
 function setup() {
@@ -82,6 +83,28 @@ describe('Sequencer engine — no panel mounted', () => {
     // virtual notes carry no input / app: allowed (no device gate)
     expect(engine.dynamicMidiTranspose.value).toBe(2) // root 60 → 62
   })
+  it("auto-started by the Chord Prog's chord: the chord's stop stops it; started by Play, it plays on", async () => {
+    const { engine } = setup()
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    useUiStore().seqAutoStart = true
+    ;(midiStore.sendNoteOn as any).mockRestore() // the Chord Prog's real note: it reaches the app listeners
+    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.isPlaying.value).toBe(true)
+    expect(engine.dynamicMidiTranspose.value).toBe(-3) // root 60 → A 57
+    window.dispatchEvent(new CustomEvent('cp-chord-release'))
+    await flush()
+    expect(engine.isPlaying.value).toBe(false)
+    // started by Play (not by the chords): a chord's stop leaves it playing
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
+    window.dispatchEvent(new CustomEvent('cp-chord-release'))
+    await flush()
+    expect(engine.isPlaying.value).toBe(true)
+  })
+
   it('CLK SYS: plays on the system clock (a step falls due → its notes go out)', async () => {
     const { engine, on } = setup()
     engine.systemClock.value = true

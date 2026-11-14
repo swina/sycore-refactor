@@ -952,6 +952,16 @@ function createSequencerEngine() {
     return !!sourceKey && midiStore.hasExplicitInputRouting(sourceKey)
   }
 
+  // Auto-started by the Chord Prog's notes (MIDI Flow Chord Prog → Sequencer): its chord stopped (the
+  // panel's STOP, cp_panic, the chord clicked off, its Play stopped — 'cp-chord-release') stops the
+  // Sequencer too. Started any other way (Play, Rig pad, Play All), it plays on.
+  let _autoStartedByChord = false
+  watch(isPlaying, v => { if (!v) _autoStartedByChord = false })
+  const _onChordRelease = () => {
+    if (_autoStartedByChord && isPlaying.value) isPlaying.value = false
+  }
+  window.addEventListener('cp-chord-release', _onChordRelease)
+
   const handleIncomingNote = (type, note, velocity, chan, inputId, sourceApp) => {
     // Every note any app plays passes here: logged only with localStorage.SY_TRACE = '1'.
     if (window.SY_LOG && traceOn()) {
@@ -969,6 +979,7 @@ function createSequencerEngine() {
             if (canAutoStart(sourceApp, inputId)) {
               dynamicMidiTranspose.value = note - sequenceRootMidi.value
               isPlaying.value = true
+              _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
             }
           } else if (isPlaying.value) {
             dynamicMidiTranspose.value = note - sequenceRootMidi.value
@@ -1055,6 +1066,7 @@ function createSequencerEngine() {
       if (type === 'on' && velocity > 0 && canAutoStart(sourceApp, inputId)) {
         dynamicMidiTranspose.value = note - sequenceRootMidi.value
         isPlaying.value = true
+        _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
       }
       return
     }
@@ -1494,6 +1506,7 @@ function createSequencerEngine() {
     midiService.isSequencerPlaying = false
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('toggle-sequencer2', handleToggle2)
+    window.removeEventListener('cp-chord-release', _onChordRelease)
     window.removeEventListener('seq-bank-select', handleBankSelect)
     window.removeEventListener('seq-bank-cue', handleBankCue)
     window.removeEventListener('seq-generate', handleRigGenerate)
