@@ -191,7 +191,7 @@ describe('rig-live Trigger sync (pads in LIVE)', () => {
       { name: 'seq-bank-cue', detail: { idx: 3 } },
       { name: 'toggle-sequencer2', detail: { play: true, sync: 4 } },
     ])
-    expect(padEvents('seq', 3, 3, 4)).toEqual([{ name: 'toggle-sequencer2', detail: { play: false, sync: 4 } }])
+    expect(padEvents('seq', 3, 3, 4)).toEqual([{ name: 'toggle-sequencer2', detail: { play: false, sync: 4, user: true } }])
   })
 
   it('describes what the press does', async () => {

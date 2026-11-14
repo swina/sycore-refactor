@@ -835,6 +835,8 @@ function createSequencerEngine() {
   const handleToggle2 = (e) => {
     const play = e.detail?.play
     const sync = e.detail?.sync
+    // a Rig pad's Stop ({ user: true }) — not Stop All / Live's Stop: held off the auto-start
+    if (play === false && e.detail?.user && isPlaying.value) _heldOff = true
     if (typeof sync === 'number') {
       if (play) {
         if (_seqStopSteps) { _seqStopSteps = 0; return } // a queued stop: un-queue it
@@ -956,7 +958,16 @@ function createSequencerEngine() {
   // panel's STOP, cp_panic, the chord clicked off, its Play stopped — 'cp-chord-release') stops the
   // Sequencer too. Started any other way (Play, Rig pad, Play All), it plays on.
   let _autoStartedByChord = false
-  watch(isPlaying, v => { if (!v) _autoStartedByChord = false })
+  // Stopped by the user (its Stop, its Rig pad): the Sequencer is the user's to start again — the
+  // notes it follows (the Chord Prog's chords, a routed keyboard) no longer auto-start it, they only
+  // transpose it once it plays. Any start (Play, a Rig pad, Play All) ends the hold.
+  let _heldOff = false
+  watch(isPlaying, v => { if (!v) _autoStartedByChord = false; else _heldOff = false })
+  /** Play / Stop by the user (the panel's button): a Stop holds it off the auto-start. */
+  function userTogglePlay() {
+    _heldOff = isPlaying.value
+    isPlaying.value = !isPlaying.value
+  }
   const _onChordRelease = () => {
     if (_autoStartedByChord && isPlaying.value) isPlaying.value = false
   }
@@ -976,7 +987,7 @@ function createSequencerEngine() {
       if (!isRecording.value && allowed) {
         if (type === 'on' && velocity > 0) {
           if (!isPlaying.value && uiStore.seqAutoStart) {
-            if (canAutoStart(sourceApp, inputId)) {
+            if (!_heldOff && canAutoStart(sourceApp, inputId)) {
               dynamicMidiTranspose.value = note - sequenceRootMidi.value
               isPlaying.value = true
               _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
@@ -1063,7 +1074,7 @@ function createSequencerEngine() {
 
     // Auto-start when panel is open but sequencer not yet running
     if (!isPlaying.value && !isRecording.value && uiStore.seqAutoStart) {
-      if (type === 'on' && velocity > 0 && canAutoStart(sourceApp, inputId)) {
+      if (type === 'on' && velocity > 0 && !_heldOff && canAutoStart(sourceApp, inputId)) {
         dynamicMidiTranspose.value = note - sequenceRootMidi.value
         isPlaying.value = true
         _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
@@ -1530,6 +1541,6 @@ function createSequencerEngine() {
     // actions
     syncLocalToBank, loadBankIntoLocal, selectBank, generateSequence, journaledGenerate, duplicateLength, reduceLength,
     updateStep, clearStep, stepMidiNote, isNoteBarActive, toggleNoteBar, setStepOctave, applyToAll,
-    randomize, getPresetValueForCC,
+    randomize, getPresetValueForCC, userTogglePlay,
   }
 }

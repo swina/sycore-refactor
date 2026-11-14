@@ -222,7 +222,8 @@ export function padEvents(id: LiveAppId, slot: number, playing: number | null, s
   if (playing === slot) {
     if (id === 'chord') return [{ name: 'cp-stop', detail: { sync } }]
     if (id === 'drum') return [{ name: 'dm-play-stop', detail: { play: false, sync } }]
-    return [{ name: 'toggle-sequencer2', detail: { play: false, sync } }]
+    // user: the Sequencer held off the auto-start by the notes it follows (core/engines/sequencer.js)
+    return [{ name: 'toggle-sequencer2', detail: { play: false, sync, user: true } }]
   }
   const select: RigEvent =
     id === 'chord' ? { name: 'cp-slot-cue', detail: { idx: slot, sync } }

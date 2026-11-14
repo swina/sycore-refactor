@@ -748,7 +748,7 @@ let generateHidden = ref(false)
       <div class="shrink-0 flex flex-wrap items-center gap-4 p-1 pl-3 border-b border-neutral-900 bg-black/70">
         <!-- Transport Controls -->
         <div class="flex items-center gap-1">
-          <button @click="isPlaying = !isPlaying"
+          <button @click="engine.userTogglePlay()"
             @contextmenu.prevent="openMenu($event, { name: 'seq_play', label: 'Sequencer: Play' })"
             :class="['flex items-center gap-2 px-4 h-9 rounded-lg font-black uppercase text-[10px] transition-all', isPlaying ? 'bg-amber-500 text-black' : 'bg-neutral-500 text-black']">
             <Square v-if="isPlaying" class="w-3.5 h-3.5 fill-current" />

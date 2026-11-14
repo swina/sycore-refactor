@@ -241,7 +241,7 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   // ── Sequencer (Step Sequencer) ──────────────────────────────────────────────────
   if (fieldName === 'seq_play') {
     const shouldPlay = fromNote ? !uiStore.isSequencerPlaying : on
-    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: shouldPlay } }))
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: shouldPlay, user: true } })) // a Stop: held off the chords' auto-start
     return
   }
   // ── Virtual Device Panel controls (lib/virtual-device.ts: vdp_cc:<device>:<cc>, vdp_slot_<n>:<device>;

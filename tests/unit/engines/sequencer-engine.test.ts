@@ -105,6 +105,44 @@ describe('Sequencer engine — no panel mounted', () => {
     expect(engine.isPlaying.value).toBe(true)
   })
 
+  it('stopped by the user (its Rig pad, its Stop): the chords no longer start it, until the user does', async () => {
+    const { engine } = setup()
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    useUiStore().seqAutoStart = true
+    ;(midiStore.sendNoteOn as any).mockRestore()
+    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.isPlaying.value).toBe(true)
+    // the Rig pad's Stop
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: false, sync: 0, user: true } }))
+    await flush()
+    expect(engine.isPlaying.value).toBe(false)
+    midiStore.sendNoteOn(60, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.isPlaying.value).toBe(false) // held off
+    // the user starts it: it follows the chords again (transposed)
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true, sync: 0 } }))
+    await flush()
+    midiStore.sendNoteOn(62, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.dynamicMidiTranspose.value).toBe(2)
+    // the panel's Stop holds it off too; Stop All does not
+    engine.userTogglePlay()
+    await flush()
+    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.isPlaying.value).toBe(false)
+    engine.userTogglePlay()
+    await flush()
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: false } }))
+    await flush()
+    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.isPlaying.value).toBe(true)
+  })
+
   it('CLK SYS: plays on the system clock (a step falls due → its notes go out)', async () => {
     const { engine, on } = setup()
     engine.systemClock.value = true
