@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export const DB_NAME = import.meta.env.VITE_DB_NAME || 's1core_db';
-export const DB_VERSION = 22;
+export const DB_VERSION = 23;
 
 /**
  * Store name → IDBKeyPath mapping.
@@ -38,6 +38,8 @@ export const STORES: Record<string, string | null> = {
   timeline_audio_cache: 'id',
   device_images: null,
   cockpit_background: null,
+  // large per-user values moved off localStorage (lib/big-storage.ts), key = their old localStorage key
+  kv_large: null,
 };
 
 // ---------------------------------------------------------------------------

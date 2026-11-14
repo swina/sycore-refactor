@@ -18,7 +18,17 @@ applyTheme(readStoredTheme())
 import App from './App.vue'
 import SynthApp from './views/SynthApp.vue'
 import HomeView from './views/HomeView.vue'
+import { reportQuota } from '@/lib/big-storage'
 import MainPageOptimized from './views/MainPageOptimized.vue'
+
+// A localStorage save that doesn't fit (the ~5 MB per site full): said on screen once
+// (StorageQuotaBanner.vue) instead of each app's save failing silently; the error goes on as before.
+{
+  const setItem = Storage.prototype.setItem
+  Storage.prototype.setItem = function (key, value) {
+    try { return setItem.call(this, key, value) } catch (e) { reportQuota(e, key); throw e }
+  }
+}
 
 // Bridge for internal service logs to reach the UI Logger Panel
 window.SY_LOG = (msg) => {

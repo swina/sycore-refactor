@@ -102,6 +102,7 @@ import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 import MidiLearnConflictDialog from '@/components/ui/MidiLearnConflictDialog.vue'
 import OpenAppsDock from '@/components/ui/OpenAppsDock.vue'
 import CountInOverlay from '@/components/CountInOverlay.vue'
+import StorageQuotaBanner from '@/components/StorageQuotaBanner.vue'
 import { IS_DEMO } from '@/lib/demo'
 
 // Stores
@@ -332,6 +333,7 @@ onMounted(() => {
     <Teleport to="body">
       <!-- Play count-in countdown (lib/count-in.ts) -->
       <CountInOverlay />
+      <StorageQuotaBanner />
       <!-- Auth Modal -->
       <div :style="focusStyle('auth')">
         <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />

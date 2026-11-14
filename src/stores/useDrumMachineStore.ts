@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
+import { bigLoad, bigSave } from '@/lib/big-storage'
 import { debounce } from '@/lib/debounce'
 import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
 import { DRUM_TRACK_LABELS } from '@/types/drum-machine'
@@ -1182,15 +1183,23 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
 
   // ── Presets ──────────────────────────────────────────────────────────────
 
-  function _loadPresets(): DrumPreset[] {
-    try { return JSON.parse(localStorage.getItem(userKey(LS_PRESETS_KEY)) || '[]') } catch { return [] }
-  }
+  // In IndexedDB (lib/big-storage.ts: 1.6 MB of presets filled localStorage, and a preset saved then
+  // was lost on reload). Loaded async; a save before the load is in waits for it, then merges.
+  const presets = ref<DrumPreset[]>([])
+  let _presetsKey: string | null = null
+  const presetsReady = (async () => {
+    const key = userKey(LS_PRESETS_KEY)
+    const saved = await bigLoad<DrumPreset[]>(key, [])
+    const list = Array.isArray(saved) ? saved : []
+    // presets saved while loading come after the stored ones
+    presets.value = [...list, ...presets.value.filter(p => !list.some(s => s.id === p.id))]
+    _presetsKey = key
+    if (presets.value.length !== list.length) bigSave(key, presets.value)
+  })()
 
   function _savePresets(list: DrumPreset[]) {
-    try { localStorage.setItem(userKey(LS_PRESETS_KEY), JSON.stringify(list)) } catch {}
+    if (_presetsKey) bigSave(_presetsKey, list)
   }
-
-  const presets = ref<DrumPreset[]>(_loadPresets())
 
   function savePreset(name: string, extra: Record<string, any> = {}): DrumPreset {
     const preset: DrumPreset = {
@@ -1512,6 +1521,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   return {
+    presetsReady,
     bpm, swing, isPlaying, currentStep, repeaterActive, repeaterDivision, fillWhen, midiOutOnly, systemClock, basslineMidiChannel,
     autofillEnabled, chainEnabled,
     sequences, activeSequence, currentPattern,
