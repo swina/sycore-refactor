@@ -101,6 +101,7 @@ import AppFooter from '@/components/AppFooter.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 import MidiLearnConflictDialog from '@/components/ui/MidiLearnConflictDialog.vue'
 import OpenAppsDock from '@/components/ui/OpenAppsDock.vue'
+import CountInOverlay from '@/components/CountInOverlay.vue'
 import { IS_DEMO } from '@/lib/demo'
 
 // Stores
@@ -329,6 +330,8 @@ onMounted(() => {
 
     <!-- Modals (Teleport to body) -->
     <Teleport to="body">
+      <!-- Play count-in countdown (lib/count-in.ts) -->
+      <CountInOverlay />
       <!-- Auth Modal -->
       <div :style="focusStyle('auth')">
         <AuthModal v-if="uiStore.isAuthModalOpen" @close="uiStore.isAuthModalOpen = false" />

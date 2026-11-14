@@ -8,6 +8,7 @@
  * The delay is calculated as: delayBeats * (60 / bpm) * 1000 ms.
  */
 import { rigTransport } from '@/lib/rig-live'
+import { countIn, startCountIn, cancelCountIn } from '@/lib/count-in'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -40,7 +41,18 @@ export function useGlobalTransportControls() {
     _pendingTimeouts.clear()
   }
 
-  function playAll() {
+  /**
+   * Play All. With a count-in set (sync panel) a Play pressed in SY.CORE counts the bars first
+   * (CountInOverlay.vue); a Play while counting calls it off. `{ countIn: false }`: start now (an
+   * external clock's Start, useExternalClockSync — the master owns the bar).
+   */
+  function playAll({ countIn: useCountIn = true } = {}) {
+    if (countIn.active) { cancelCountIn(); return }
+    if (useCountIn && startCountIn(syncStore.countInBars, arpStore.arpBpm || 120, startAll)) return
+    startAll()
+  }
+
+  function startAll() {
     transportManager.forceStopAll()
     transportManager.acquireTransport()
     clearPendingStarts()
@@ -79,6 +91,7 @@ export function useGlobalTransportControls() {
   }
 
   function stopAll() {
+    cancelCountIn()
     clearPendingStarts()
     if (syncStore.syncSequencerToTransport) {
       window.dispatchEvent(new CustomEvent('toggle-sequencer', { detail: { play: false } }))

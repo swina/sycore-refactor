@@ -55,6 +55,8 @@ import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
+import { useSyncStore } from '@/stores/useSyncStore'
+import { countIn, startCountIn, cancelCountIn } from '@/lib/count-in'
 
 const emit = defineEmits(['close'])
 const uiStore = useUiStore()
@@ -110,6 +112,7 @@ watch(() => s.clock.running, (now) => {
 })
 const midiStore = useMidiStore()
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
+const syncStore = useSyncStore()
 
 /** Mirror the real apps and clock into the rig state (LIVE). */
 function syncLive() {
@@ -328,6 +331,12 @@ function stopAtDrumEnd(stop) {
     if (!playing) stop(); else stopArm = null // called off
   })
 }
+// Play with the sync panel's Count-in (lib/count-in.ts): the bars counted on screen first, then
+// `go` (Live's Play over SY.CORE Link, or the simulated clock). Pressed again while counting: off.
+function countedPlay(go) {
+  if (cancelCountIn()) { s.display = 'Count-in cancelled'; return }
+  if (!startCountIn(syncStore.countInBars, s.clock.bpm, go)) go()
+}
 function togglePlay() {
   if (live.value) {
     if (s.clock.source === 'EXT') {
@@ -338,14 +347,14 @@ function togglePlay() {
         if (!sent) stopArm = null
         s.display = sent ? `Live: ${on ? 'Play' : 'Stop'}` : 'Live is the clock master: Play / Stop from Live (SY.CORE Link 1.5+ plays it from here)'
       }
-      if (on) { stopArm = null; send() } else stopAtDrumEnd(send)
+      if (countIn.active) { cancelCountIn(); s.display = 'Count-in cancelled'; return }
+      if (on) { stopArm = null; countedPlay(send) } else stopAtDrumEnd(send)
       return
     }
     if (s.clock.running) stopAtDrumEnd(() => { const arm = stopArm; stopAll(); if (arm) armPlaying(arm); stopArm = null }); else playAll()
     return
   }
-  if (s.clock.running) stopClock(s); else startClock(s)
-  restartTimer()
+  if (s.clock.running) { stopClock(s); restartTimer() } else countedPlay(() => { startClock(s); restartTimer() })
 }
 watch(() => s.clock.bpm, () => { if (!live.value) restartTimer() })
 watch(mode, m => {
@@ -1716,7 +1725,7 @@ provide(RIG_CONTROLS_CTX, {
                 :class="[playOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-neutral-800 border-white/15 text-neutral-200 hover:bg-neutral-700', learnedRing('rig_play')]"
                 :title="(live && s.clock.source === 'EXT' ? 'Play / Stop Ableton Live (SY.CORE Link)' : 'Play / Stop the clock') + ' — right-click: MIDI Learn'"
                 @click="togglePlay" @contextmenu="learnMenu($event, 'rig_play', 'Play / Stop')">
-          <component :is="playOn ? Square : Play" class="w-5 h-5" /> {{ playOn ? 'Stop' : 'Play' }}
+          <component :is="playOn ? Square : Play" class="w-5 h-5" /> {{ countIn.active ? `Count ${countIn.left}` : playOn ? 'Stop' : 'Play' }}
         </button>
       </div>
     </Teleport>

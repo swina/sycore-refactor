@@ -10,6 +10,7 @@ import { useExternalClockSync } from '@/composables/useExternalClockSync'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useLinkStore } from '@/stores/useLinkStore'
 import { controlMapRows as getControlMapRows } from '@/lib/control-map'
+import { countIn } from '@/lib/count-in'
 
 const { transportManager, playAll, stopAll } = useGlobalTransportControls()
 const syncStore = useSyncStore()   // still needed here for the sync-checkbox template bindings below
@@ -26,7 +27,7 @@ const linkStatus = computed(() => {
 })
 // Follow an external MIDI clock (e.g. Ableton Live on "SYC CTRL") when the
 // clock source is a MIDI input: Start/Stop/SPP drive Play All / Stop All.
-useExternalClockSync({ playAll: () => playAll(), stopAll: () => stopAll() })
+useExternalClockSync({ playAll: () => playAll({ countIn: false }), stopAll: () => stopAll() })
 const inputNames = computed(() => midiStore.inputs.map(i => i.name).filter(Boolean))
 const controlMapRows = getControlMapRows()
 const diagCopied = ref(false)
@@ -94,7 +95,7 @@ const _onTransportStopAll = () => { stopAll() }
         : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20'"
     >
       <component :is="transportManager.isRunning.value ? Square : Play" class="w-3 h-3 fill-current" />
-      <span>{{ transportManager.isRunning.value ? 'Stop All' : 'Play All' }}</span>
+      <span>{{ countIn.active ? `Count ${countIn.left}` : transportManager.isRunning.value ? 'Stop All' : 'Play All' }}</span>
     </button>
 
     <!-- Sync config gear -->
@@ -185,6 +186,17 @@ const _onTransportStopAll = () => { stopAll() }
           <p class="text-[7px] text-neutral-600 mt-3 leading-relaxed">
             Synced apps start at the next bar boundary when the transport is already running.
           </p>
+
+          <label class="mt-3 flex items-center justify-between gap-2"
+            title="Play on SY.CORE's own clock (INT): count these bars first, shown as a countdown on screen. Play again, Stop or a click on the countdown cancels it. Never with an external clock (Live).">
+            <span class="text-[11px] font-mono text-neutral-300">Count-in</span>
+            <select v-model.number="syncStore.countInBars"
+              class="bg-black border border-neutral-800 rounded px-1 py-0.5 text-[11px] font-mono text-neutral-300 outline-none">
+              <option :value="0">Off</option>
+              <option :value="1">1 bar</option>
+              <option :value="2">2 bars</option>
+            </select>
+          </label>
 
           <!-- Clock source (P1: follow an external master such as Ableton Live) -->
           <div class="mt-4 pt-3 border-t border-neutral-800 space-y-2">

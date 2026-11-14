@@ -93,11 +93,19 @@ export interface SyncFlags {
   syncChordProgManualTrigger: Ref<boolean>
   /** Per-app start delay in beats (keyed by app name). 0 = no delay. */
   appDelays: Ref<Record<string, number>>
+  /** Play count-in on SY.CORE's own clock, in bars (0 = off; never when following an external clock). */
+  countInBars: Ref<number>
 }
 
 // ── Store ───────────────────────────────────────────────────────────────────
 
 const APP_DELAYS_KEY = 'S1_SYNC_APP_DELAYS'
+const COUNT_IN_KEY = 'S1_SYNC_COUNT_IN'
+
+function readCountIn(): number {
+  const n = Number(localStorage.getItem(userKey(COUNT_IN_KEY)))
+  return Number.isFinite(n) && n > 0 ? Math.min(4, Math.round(n)) : 0
+}
 
 function readDelays(): Record<string, number> {
   try {
@@ -150,6 +158,7 @@ export const useSyncStore = defineStore('sync', () => {
   const syncChordProgManualTrigger    = ref(readBool(KEYS.syncChordProgManualTrigger))
 
   const appDelays = ref<Record<string, number>>(readDelays())
+  const countInBars = ref(readCountIn())
 
   const REFS: SyncFlags = {
     syncTrack, syncRecordAudioCapture, syncBackingTrackToLooper, syncSequencerToLooper,
@@ -163,23 +172,26 @@ export const useSyncStore = defineStore('sync', () => {
     syncRecordToTransport,
     syncChordProgManualTrigger,
     appDelays,
+    countInBars,
   }
 
   Object.entries(REFS).forEach(([name, r]) => {
-    if (name === 'appDelays') return
+    if (name === 'appDelays' || name === 'countInBars') return
     watch(r, (v: boolean) => localStorage.setItem(userKey(KEYS[name]), v ? 'true' : 'false'))
   })
 
   watch(appDelays, (v) => {
     localStorage.setItem(userKey(APP_DELAYS_KEY), JSON.stringify(v))
   }, { deep: true })
+  watch(countInBars, (v) => localStorage.setItem(userKey(COUNT_IN_KEY), String(v)))
 
   watch(uid, (newUid) => {
     Object.entries(REFS).forEach(([name, r]) => {
-      if (name === 'appDelays') return
+      if (name === 'appDelays' || name === 'countInBars') return
       r.value = newUid ? readBool(KEYS[name]) : false
     })
     appDelays.value = newUid ? readDelays() : {}
+    countInBars.value = newUid ? readCountIn() : 0
   })
 
   return REFS
