@@ -100,6 +100,10 @@ The fastest way to get a pattern is to use the algorithmic generator.
    - **Eucl** (Euclid): Density's onsets spread as evenly as possible over the steps (`k/n` shown: 4/16 = four on the floor, 3/8 = tresillo, 5/16…); **Rot** turns the pattern a step at a time.
    - **Rnd** (Random): any step, every one as likely (the generator before).
 
+   And the **Melody** — the notes (melodic mode; saved with the bank):
+   - **Line** (default): a **motif** — half a bar at 16 steps, a bar at 32+ — whose rhythm and notes repeat, the last block (and every other one) **varied** in its last notes (A A′, A A′ A A″). The line moves **mostly by step**; a leap is followed by a step back the other way; it keeps to the middle of the range; the **tonic chord's notes (1-3-5) fall on the strong steps** and the phrase **ends on the tonic**. A low range (top octave 3 or below) plays as a **bass**: on the root more, octave jumps allowed. Following the Chord Prog (Follow: Degree) moves those notes onto each chord's as it plays.
+   - **Classic**: a random note of the scale on each step, in a random octave of the range (the generator before).
+
 6. Click **Generate**. A new pattern fills the grid immediately and playback starts if the transport is already running.
 
 > Enable **Chords** mode and set **Max Polyphony** (1–4) before generating to get multi-note steps. The generator builds chord voicings from the selected scale.

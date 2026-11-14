@@ -74,7 +74,7 @@ const showAiPrompt = ref(false)
 const engine = useSequencerEngine()
 const {
   selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
-  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, arpModeForGen,
+  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, arpModeForGen,
   swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
   param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
   dynamicMidiTranspose, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
@@ -649,6 +649,17 @@ let generateHidden = ref(false)
           <div class="flex items-center gap-3 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7">
             <input v-model.number="genDensity" type="range" min="0" max="100" class="w-24 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
             <span class="text-[12px] font-mono text-synth-amber w-8 text-right">{{ genDensity }}%</span>
+          </div>
+        </div>
+
+        <!-- Generate's pitches (melodic mode): a motif and a melodic walk, or each step its own -->
+        <div v-if="selectedStyle !== 'Arpeggio' && !chordsEnabled" class="flex items-center gap-2"
+             title="Melody — Line: a motif (half a bar at 16 steps, a bar at 32+) repeated with a variant, mostly by step, the tonic chord's notes on the strong steps, ending on the tonic (following the Chord Prog moves them onto each chord). Classic: a random note of the scale on each step (as before).">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Melody</span>
+          <div class="flex rounded-lg border border-neutral-800 overflow-hidden">
+            <button v-for="m in [['line', 'Line'], ['classic', 'Classic']]" :key="m[0]"
+                    @click="melodyMode = m[0]"
+                    :class="['px-2 py-1 text-[11px] font-bold uppercase transition-colors', melodyMode === m[0] ? 'bg-synth-amber/20 text-synth-amber' : 'bg-black/40 text-neutral-500 hover:text-neutral-300']">{{ m[1] }}</button>
           </div>
         </div>
 
