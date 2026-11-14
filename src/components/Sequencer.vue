@@ -14,6 +14,7 @@ import { useStepSequencerStore, BANK_NAMES, BANK_COUNT, CHAIN_COUNT } from '@/st
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -44,6 +45,7 @@ const emit = defineEmits(['bpmChange', 'transposeChange', 'prevSlot', 'nextSlot'
 
 const midiStore = useMidiStore()
 const authStore = useAuthStore()
+const uiStore = useUiStore()
 const { openMenu } = useMidiContextMenu()
 const seqStore = useStepSequencerStore()
 
@@ -602,6 +604,17 @@ let generateHidden = ref(false)
               <option v-for="scale in Object.keys(SCALES)" :key="scale" :value="scale" class="bg-neutral-900">{{ scale }}</option>
             </select>
           <!-- </div> -->
+        </div>
+
+        <!-- How the pattern follows the chords / notes it receives (AUTO, MIDI Flow → Sequencer) -->
+        <div class="flex items-center gap-2"
+             title="Follow — how the pattern moves on the chords or notes it receives. Degree: by scale degree, stays in key (in C major, Dm moves C-E-G to D-F-A). Chromatic: by semitones from the pattern's first note (as before).">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Follow</span>
+          <div class="flex rounded-lg border border-neutral-800 overflow-hidden">
+            <button v-for="m in [['degree', 'Degree'], ['chromatic', 'Chrom']]" :key="m[0]"
+                    @click="uiStore.seqFollowMode = m[0]"
+                    :class="['px-2 py-1 text-[11px] font-bold uppercase transition-colors', uiStore.seqFollowMode === m[0] ? 'bg-synth-amber/20 text-synth-amber' : 'bg-black/40 text-neutral-500 hover:text-neutral-300']">{{ m[1] }}</button>
+          </div>
         </div>
 
         <div class="flex items-center gap-2">

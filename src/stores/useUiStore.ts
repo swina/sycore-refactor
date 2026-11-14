@@ -217,6 +217,10 @@ export const useUiStore = defineStore('ui', () => {
   const uid: ComputedRef<string | undefined> = computed(() => authStore.user?.uid)
 
   const seqAutoStart: Ref<boolean> = ref(localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false')
+  // How the Sequencer follows the chords / notes it receives: 'degree' (default: by scale degree, stays in
+  // key — seq-gen/harmony.ts) or 'chromatic' (by semitones from the pattern's first note, as before).
+  const readSeqFollow = (): 'degree' | 'chromatic' => (localStorage.getItem(userKey('SYCORE_SEQ_FOLLOW')) === 'chromatic' ? 'chromatic' : 'degree')
+  const seqFollowMode: Ref<'degree' | 'chromatic'> = ref(readSeqFollow())
 
   // ── Theme (light/dark) — applied to <html> synchronously at main.js's
   // first line, before this store even exists; this ref just mirrors that
@@ -656,6 +660,9 @@ export const useUiStore = defineStore('ui', () => {
   watch(seqAutoStart, (v) => {
     localStorage.setItem(userKey('SYCORE_SEQ_AUTOSTART'), String(v))
   })
+  watch(seqFollowMode, (v) => {
+    try { localStorage.setItem(userKey('SYCORE_SEQ_FOLLOW'), v) } catch {}
+  })
 
   watch(uid, (newUid) => {
     if (!newUid) {
@@ -664,6 +671,7 @@ export const useUiStore = defineStore('ui', () => {
     } else {
       lastPlaylistName.value = localStorage.getItem(userKey('S1_LAST_PLAYLIST')) || ''
       seqAutoStart.value = localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false'
+      seqFollowMode.value = readSeqFollow()
     }
   })
 
@@ -704,7 +712,7 @@ export const useUiStore = defineStore('ui', () => {
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
-    isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, isAudioPlaying, lastPlaylistName,
+    isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, seqFollowMode, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqGlobalTranspose, seqActiveSlot,
     globalModCC, globalTranspose,
     theme, toggleTheme,

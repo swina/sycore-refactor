@@ -72,8 +72,9 @@ describe('Sequencer engine — no panel mounted', () => {
     expect(engine.steps.value.some((s: any) => s.active)).toBe(true)
   })
 
-  it('a note from a routed input transposes the playing pattern with its panel closed', async () => {
+  it('a note from a routed input transposes the playing pattern with its panel closed (Follow: Chromatic)', async () => {
     const { engine } = setup()
+    useUiStore().seqFollowMode = 'chromatic'
     window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
     await flush()
     const midiStore = useMidiStore()
@@ -83,8 +84,40 @@ describe('Sequencer engine — no panel mounted', () => {
     // virtual notes carry no input / app: allowed (no device gate)
     expect(engine.dynamicMidiTranspose.value).toBe(2) // root 60 → 62
   })
+  it('Follow: Degree (default) — a note moves the pattern by scale degrees, the semitone transpose stays 0', async () => {
+    const { engine } = setup()
+    useUiStore().seqFollowMode = 'degree'
+    engine.selectedKey.value = 'C'
+    engine.selectedScale.value = 'Major'
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
+    window.dispatchEvent(new CustomEvent('virtual-midi-note', { detail: { type: 'on', note: 62, velocity: 100, chan: 1 } }))
+    expect(engine.dynamicMidiTranspose.value).toBe(0)
+    expect(engine.dynamicDegreeShift.value).toBe(1) // D: one degree up
+    window.dispatchEvent(new CustomEvent('virtual-midi-note', { detail: { type: 'on', note: 57, velocity: 100, chan: 1 } }))
+    expect(engine.dynamicDegreeShift.value).toBe(-2) // A: two degrees down (the nearest way)
+  })
+  it("Follow: Degree — the Chord Prog's chord moves it by its root from the name, not by each note of the voicing", async () => {
+    const { engine } = setup()
+    useUiStore().seqFollowMode = 'degree'
+    engine.selectedKey.value = 'C'
+    engine.selectedScale.value = 'Major'
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
+    ;(midiStore.sendNoteOn as any).mockRestore()
+    // Dm in first inversion (F A D): the root is D, whatever note comes last
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: 2, name: 'Dm' } }))
+    for (const n of [65, 69, 74]) midiStore.sendNoteOn(n, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.dynamicDegreeShift.value).toBe(1)
+    expect(engine.dynamicMidiTranspose.value).toBe(0)
+  })
   it("auto-started by the Chord Prog's chord: the chord's stop stops it; started by Play, it plays on", async () => {
     const { engine } = setup()
+    useUiStore().seqFollowMode = 'chromatic'
     const midiStore = useMidiStore()
     vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
     vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
@@ -107,6 +140,7 @@ describe('Sequencer engine — no panel mounted', () => {
 
   it('stopped by the user (its Rig pad, its Stop): the chords no longer start it, until the user does', async () => {
     const { engine } = setup()
+    useUiStore().seqFollowMode = 'chromatic'
     const midiStore = useMidiStore()
     vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
     vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)

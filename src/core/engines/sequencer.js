@@ -35,6 +35,7 @@ import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
 import { rigReports } from '@/lib/rig-live'
+import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
 
 export const DEFAULT_STEP = {
   active: false,
@@ -215,6 +216,27 @@ function createSequencerEngine() {
   // Refs for playback state
   const playStateRef = { current: {} }
   const dynamicMidiTranspose = ref(0)
+  // Following by scale degree (uiStore.seqFollowMode 'degree'): the degrees the pattern moves inside its
+  // scale, from the key's tonic to the chord's root (seq-gen/harmony.ts); dynamicMidiTranspose stays 0.
+  const dynamicDegreeShift = ref(0)
+  // The root of the chord the Chord Prog is about to play (its 'cp-chord-on', from the chord's name):
+  // its notes then move the pattern by that root, not by each note of the voicing.
+  let _cpRootPc = null
+  const _onChordOn = (e) => { _cpRootPc = typeof e.detail?.rootPc === 'number' ? e.detail.rootPc : null }
+  window.addEventListener('cp-chord-on', _onChordOn)
+  const keyPc = () => Math.max(0, NOTE_NAMES.indexOf(selectedKey.value))
+  const scaleNow = () => SCALES[selectedScale.value] ?? SCALES['Major']
+  /** A note received moves the pattern: by scale degree (default) or by semitones (as before). */
+  function followNote(note, sourceApp) {
+    if (uiStore.seqFollowMode === 'chromatic') {
+      dynamicDegreeShift.value = 0
+      dynamicMidiTranspose.value = note - sequenceRootMidi.value
+      return
+    }
+    const root = sourceApp === MidiSource.CHORD_PROG && _cpRootPc !== null ? _cpRootPc : ((note % 12) + 12) % 12
+    dynamicMidiTranspose.value = 0
+    dynamicDegreeShift.value = degreeShift(root, keyPc(), scaleNow())
+  }
   const sequenceRootMidi = computed(() => {
     const firstActiveStep = steps.value.find(s => s.active && s.notes && s.notes.length > 0)
     if (firstActiveStep) {
@@ -390,7 +412,7 @@ function createSequencerEngine() {
   watch([
     numSteps, steps, param1CC, param2CC, param1Variation, param2Variation,
     selectedOctave, octaveRange, () => uiStore.seqGlobalTranspose, () => midiStore.currentBpm,
-    dynamicMidiTranspose, selectedKey, selectedScale, selectedStyle,
+    dynamicMidiTranspose, dynamicDegreeShift, () => uiStore.seqFollowMode, selectedKey, selectedScale, selectedStyle,
     genDensity, chordsEnabled, maxPolyphony, chordDensity
   ], () => {
     const config = { 
@@ -431,6 +453,9 @@ function createSequencerEngine() {
       playStateRef.current.transpose = uiStore.seqGlobalTranspose || 0
       playStateRef.current.channel = channel()
       playStateRef.current.dynamicMidiTranspose = dynamicMidiTranspose.value
+      playStateRef.current.degreeShift = dynamicDegreeShift.value
+      playStateRef.current.keyPc = keyPc()
+      playStateRef.current.scale = scaleNow()
     }
   }, { deep: true })
 
@@ -988,12 +1013,12 @@ function createSequencerEngine() {
         if (type === 'on' && velocity > 0) {
           if (!isPlaying.value && uiStore.seqAutoStart) {
             if (!_heldOff && canAutoStart(sourceApp, inputId)) {
-              dynamicMidiTranspose.value = note - sequenceRootMidi.value
+              followNote(note, sourceApp)
               isPlaying.value = true
               _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
             }
           } else if (isPlaying.value) {
-            dynamicMidiTranspose.value = note - sequenceRootMidi.value
+            followNote(note, sourceApp)
           }
         }
       }
@@ -1067,7 +1092,7 @@ function createSequencerEngine() {
     // Dynamic transposition during PLAY mode (not recording)
     if (isPlaying.value && !isRecording.value) {
       if (type === 'on' && velocity > 0) {
-        dynamicMidiTranspose.value = note - sequenceRootMidi.value
+        followNote(note, sourceApp)
       }
       return
     }
@@ -1075,7 +1100,7 @@ function createSequencerEngine() {
     // Auto-start when panel is open but sequencer not yet running
     if (!isPlaying.value && !isRecording.value && uiStore.seqAutoStart) {
       if (type === 'on' && velocity > 0 && !_heldOff && canAutoStart(sourceApp, inputId)) {
-        dynamicMidiTranspose.value = note - sequenceRootMidi.value
+        followNote(note, sourceApp)
         isPlaying.value = true
         _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
       }
@@ -1259,6 +1284,7 @@ function createSequencerEngine() {
       _seqStartSteps = 0
       _seqStopSteps = 0
       dynamicMidiTranspose.value = 0
+      dynamicDegreeShift.value = 0
       transportManager.releaseTransport()
       if (repeatEventIdRef.value !== null) {
         getTransport().clear(repeatEventIdRef.value)
@@ -1430,7 +1456,8 @@ function createSequencerEngine() {
             const velocity = step.accent ? Math.min(127, Math.floor(step.velocity * 1.15)) : step.velocity
 
             step.notes.forEach(note => {
-              const clampedNote = Math.max(0, Math.min(127, note + state.transpose + (state.dynamicMidiTranspose || 0)))
+              const followed = state.degreeShift ? transposeDiatonic(note, state.degreeShift, state.keyPc ?? 0, state.scale ?? SCALES['Major']) : note
+              const clampedNote = Math.max(0, Math.min(127, followed + state.transpose + (state.dynamicMidiTranspose || 0)))
               if (tMs != null) {
                 // CLK SYS: on and off at their times, from the Worker-timed queue.
                 const noteKey = `${clampedNote}-${state.channel}`
@@ -1499,7 +1526,10 @@ function createSequencerEngine() {
       param1CC: param1CC.value !== null ? Number(param1CC.value) : null,
       param2CC: param2CC.value !== null ? Number(param2CC.value) : null,
       transpose: uiStore.seqGlobalTranspose || 0,
-      dynamicMidiTranspose: dynamicMidiTranspose.value
+      dynamicMidiTranspose: dynamicMidiTranspose.value,
+      degreeShift: dynamicDegreeShift.value,
+      keyPc: keyPc(),
+      scale: scaleNow(),
     }
   })
 
@@ -1518,6 +1548,7 @@ function createSequencerEngine() {
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
     window.removeEventListener('toggle-sequencer2', handleToggle2)
     window.removeEventListener('cp-chord-release', _onChordRelease)
+    window.removeEventListener('cp-chord-on', _onChordOn)
     window.removeEventListener('seq-bank-select', handleBankSelect)
     window.removeEventListener('seq-bank-cue', handleBankCue)
     window.removeEventListener('seq-generate', handleRigGenerate)
@@ -1536,7 +1567,7 @@ function createSequencerEngine() {
     isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, arpModeForGen,
     swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
     param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
-    dynamicMidiTranspose, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
+    dynamicMidiTranspose, dynamicDegreeShift, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
     TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
     // actions
     syncLocalToBank, loadBankIntoLocal, selectBank, generateSequence, journaledGenerate, duplicateLength, reduceLength,

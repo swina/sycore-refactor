@@ -36,6 +36,7 @@ import { externalGrid } from '@/core/midi/external-grid'
 import { chordAfter } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
+import { chordRootPc } from '@/lib/seq-gen/harmony'
 
 let engine = null
 let engineScope = null
@@ -334,6 +335,14 @@ function createChordProgEngine() {
     return ms * (externalGrid.bpm || arpStore.arpBpm || 120) / 60000
   }
 
+  /** A chord about to sound: its root (from the name — chord-follow by scale degree in the Sequencer,
+   *  seq-gen/harmony.ts), sent before its notes so a follower moves on the chord, not on each note. */
+  function announceChord(name, notes, shift = 0) {
+    const pc = chordRootPc(name, notes)
+    if (pc === null) return
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: (((pc + shift) % 12) + 12) % 12, name } }))
+  }
+
   /** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue (onBeat: its exact
    *  Live beat, see _tickBeat). */
   function _cpNoteAt(note, velocity, channel, onMs, durMs, onBeat = null) {
@@ -595,6 +604,7 @@ function createChordProgEngine() {
         if (state.chainSlotIndices && store.drumFollow) cueNextSection(state)
 
         if (state.tickCounter === 0) {
+          if (step?.active && step.velocity > 0 && step.notes?.length > 0) announceChord(step.chordName, step.notes, (state.transpose || 0) + (step.transpose || 0))
           drawAt(() => {
             store.playingChordName = step?.active && step.notes?.length ? step.chordName : ''
             store.playingChordDuration = step?.active && step.notes?.length ? step.duration : ''
@@ -872,6 +882,7 @@ function createChordProgEngine() {
     previewActiveNotes.length = 0
     const channel = midiStore.midiChannel
     const shift = (seqTranspose.value || 0) + (step.transpose || 0)
+    announceChord(step.chordName, step.notes, shift)
     step.notes.forEach(note => {
       const n = Math.max(0, Math.min(127, note + shift))
       midiStore.sendNoteOn(n, 90, channel, MidiSource.CHORD_PROG)
@@ -929,6 +940,7 @@ function createChordProgEngine() {
     const channel = midiStore.midiChannel
     const shift = (seqTranspose.value || 0) + (step.transpose || 0)
     const effectiveMode = step.stepMode ?? store.playMode
+    announceChord(step.chordName, step.notes, shift)
 
     // Stop any held chord + any preview notes
     stopHeldChord()
@@ -1024,6 +1036,7 @@ function createChordProgEngine() {
 
     const channel = midiStore.midiChannel
     const velocity = 90
+    announceChord(chord.name ?? chord.chordName, chord.notes, transpose)
     chord.notes.forEach(note => {
       const n = Math.max(0, Math.min(127, note + transpose))
       midiStore.sendNoteOn(n, velocity, channel, MidiSource.CHORD_PROG)
