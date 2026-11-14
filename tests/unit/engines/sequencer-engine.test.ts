@@ -62,6 +62,32 @@ describe('Sequencer engine — no panel mounted', () => {
     expect(off.sort()).toEqual([60, 64])
   })
 
+  it('Generate, Rhythm Weighted at Sync 0: the bar\'s 1 and the beats; Euclid: evenly spread; the style sets Density and octaves', async () => {
+    const { engine } = setup()
+    engine.chordsEnabled.value = false
+    engine.selectedStyle.value = 'Techno'
+    await flush()
+    expect(engine.genDensity.value).toBe(65)          // Techno's density
+    expect(engine.selectedOctave.value).toBe(2)       // Techno's octaves [2, 3]
+    expect(engine.octaveRange.value).toBe(1)
+    engine.numSteps.value = 16
+    engine.genDensity.value = 25
+    engine.rhythmMode.value = 'weighted'
+    engine.syncopation.value = 0
+    let onBeats = 0
+    for (let i = 0; i < 20; i++) {
+      engine.generateSequence()
+      const act = engine.steps.value.map((st: any, j: number) => (st.active ? j : -1)).filter((j: number) => j >= 0)
+      expect(act).toHaveLength(4)
+      expect(act).toContain(0)
+      onBeats += act.filter((j: number) => j % 4 === 0).length
+    }
+    expect(onBeats / 80).toBeGreaterThan(0.75)
+    engine.rhythmMode.value = 'euclid'
+    engine.euclidRotation.value = 0
+    engine.generateSequence()
+    expect(engine.steps.value.map((st: any) => (st.active ? 1 : 0))).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
+  })
   it('selects a bank and generates from the Rig with its panel closed', async () => {
     const { engine } = setup()
     const seqStore = useStepSequencerStore()

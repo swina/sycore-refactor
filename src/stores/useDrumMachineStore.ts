@@ -9,6 +9,7 @@ import { DRUM_TRACK_LABELS } from '@/types/drum-machine'
 import { parseAiDrumPattern } from '@/lib/drum-grid'
 import { IMPORTED_PATTERNS, patternToDrumSteps } from '@/data/imported-patterns'
 import { DEFAULT_ADSR } from '@/core/audio/envelope'
+import { euclid, rotate } from '@/lib/seq-gen/rhythm'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -1368,45 +1369,13 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   // ── Euclidean algorithm ────────────────────────────────────────────────
+  // Bjorklund and rotation: shared with the Sequencer (lib/seq-gen/rhythm.ts).
   function getEuclidPattern(steps: number, pulses: number): number[] {
-    const s = Math.max(1, Math.min(64, steps))
-    const p = Math.max(0, Math.min(s, pulses))
-    const cacheKey = `${s}_${p}`
-    const cache: Record<string, number[]> = {}
-    if (cache[cacheKey]) return cache[cacheKey].slice()
-
-    // Bjorklund algorithm
-    let first: number[][] = Array.from({ length: p }, () => [1])
-    let second: number[][] = Array.from({ length: s - p }, () => [0])
-
-    while (second.length > 1) {
-      const merged: number[][] = []
-      const minLen = Math.min(first.length, second.length)
-      for (let i = 0; i < minLen; i++) {
-        merged.push([...first[i], ...second[i]])
-      }
-      if (first.length > minLen) {
-        second = first.slice(minLen)
-        first = merged
-      } else if (second.length > minLen) {
-        second = second.slice(minLen)
-        first = merged
-      } else {
-        first = merged
-        second = []
-      }
-    }
-
-    const result = [...first.flat(), ...second.flat()]
-    cache[cacheKey] = result
-    return result
+    return euclid(steps, pulses)
   }
 
   function rotatePattern(pattern: number[], offset: number): number[] {
-    const len = pattern.length
-    if (len === 0) return pattern
-    const rot = ((offset % len) + len) % len
-    return [...pattern.slice(rot), ...pattern.slice(0, rot)]
+    return rotate(pattern, offset)
   }
 
   /** Generate a Euclidean rhythm pattern and apply it to selected tracks. */

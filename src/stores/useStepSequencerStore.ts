@@ -33,6 +33,12 @@ export interface SeqBank {
   selectedScale: string
   selectedStyle: string
   genDensity: number
+  /** Generate's rhythm (seq-gen/rhythm.ts): weighted (default), euclid, random (as before) */
+  rhythmMode: 'weighted' | 'euclid' | 'random'
+  /** Weighted: 0–100, the weak steps' share (most groove around the middle) */
+  syncopation: number
+  /** Euclid: the pattern turned by this many steps */
+  euclidRotation: number
   chordsEnabled: boolean
   maxPolyphony: number
   chordDensity: number
@@ -53,6 +59,9 @@ function makeBank(): SeqBank {
     selectedScale: 'Major',
     selectedStyle: 'House',
     genDensity: 75,
+    rhythmMode: 'weighted',
+    syncopation: 30,
+    euclidRotation: 0,
     chordsEnabled: false,
     maxPolyphony: 4,
     chordDensity: 4,
@@ -128,6 +137,9 @@ function migrateFromOldState(): SeqBank[] | null {
         selectedScale: old.selectedScale ?? 'Major',
         selectedStyle: old.selectedStyle ?? 'House',
         genDensity: old.genDensity ?? 75,
+        rhythmMode: old.rhythmMode ?? 'weighted',
+        syncopation: old.syncopation ?? 30,
+        euclidRotation: old.euclidRotation ?? 0,
         chordsEnabled: old.chordsEnabled ?? false,
         maxPolyphony: old.maxPolyphony ?? 4,
         chordDensity: old.chordDensity ?? 4,
@@ -295,6 +307,9 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     if (cfg.selectedScale !== undefined) bank.selectedScale = cfg.selectedScale
     if (cfg.selectedStyle !== undefined) bank.selectedStyle = cfg.selectedStyle
     if (cfg.genDensity !== undefined) bank.genDensity = cfg.genDensity
+    if (cfg.rhythmMode !== undefined) bank.rhythmMode = cfg.rhythmMode
+    if (cfg.syncopation !== undefined) bank.syncopation = cfg.syncopation
+    if (cfg.euclidRotation !== undefined) bank.euclidRotation = cfg.euclidRotation
     if (cfg.chordsEnabled !== undefined) bank.chordsEnabled = cfg.chordsEnabled
     if (cfg.maxPolyphony !== undefined) bank.maxPolyphony = cfg.maxPolyphony
     if (cfg.chordDensity !== undefined) bank.chordDensity = cfg.chordDensity

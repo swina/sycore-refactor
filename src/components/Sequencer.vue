@@ -74,7 +74,7 @@ const showAiPrompt = ref(false)
 const engine = useSequencerEngine()
 const {
   selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
-  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, arpModeForGen,
+  isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, arpModeForGen,
   swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
   param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
   dynamicMidiTranspose, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
@@ -650,6 +650,31 @@ let generateHidden = ref(false)
             <input v-model.number="genDensity" type="range" min="0" max="100" class="w-24 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
             <span class="text-[12px] font-mono text-synth-amber w-8 text-right">{{ genDensity }}%</span>
           </div>
+        </div>
+
+        <!-- Generate's rhythm (melodic mode): which steps play -->
+        <div v-if="selectedStyle !== 'Arpeggio' && !chordsEnabled" class="flex items-center gap-2"
+             title="Rhythm — which steps Generate fills. Weighted: the strong steps first (the bar's 1, the beats), the style's accents, Sync moves them to the weak steps. Euclid: Density's onsets spread evenly, Rot turns them. Random: any step (as before).">
+          <span class="text-[12px] font-mono text-neutral-500 uppercase">Rhythm</span>
+          <div class="flex rounded-lg border border-neutral-800 overflow-hidden">
+            <button v-for="m in [['weighted', 'Wgt'], ['euclid', 'Eucl'], ['random', 'Rnd']]" :key="m[0]"
+                    @click="rhythmMode = m[0]"
+                    :class="['px-2 py-1 text-[11px] font-bold uppercase transition-colors', rhythmMode === m[0] ? 'bg-synth-amber/20 text-synth-amber' : 'bg-black/40 text-neutral-500 hover:text-neutral-300']">{{ m[1] }}</button>
+          </div>
+          <template v-if="rhythmMode === 'weighted'">
+            <span class="text-[12px] font-mono text-neutral-500 uppercase">Sync</span>
+            <div class="flex items-center gap-2 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7" title="Sync 0: on the beats · 30–60: groove · 100: off the beat">
+              <input v-model.number="syncopation" type="range" min="0" max="100" class="w-16 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+              <span class="text-[12px] font-mono text-synth-amber w-7 text-right">{{ syncopation }}</span>
+            </div>
+          </template>
+          <template v-else-if="rhythmMode === 'euclid'">
+            <span class="text-[12px] font-mono text-synth-amber">{{ Math.round(numSteps * genDensity / 100) }}/{{ numSteps }}</span>
+            <span class="text-[12px] font-mono text-neutral-500 uppercase">Rot</span>
+            <button @click="euclidRotation = euclidRotation - 1" class="w-5 h-6 rounded bg-neutral-800 text-neutral-300 text-[11px]">−</button>
+            <span class="text-[12px] font-mono text-synth-amber w-5 text-center">{{ euclidRotation }}</span>
+            <button @click="euclidRotation = euclidRotation + 1" class="w-5 h-6 rounded bg-neutral-800 text-neutral-300 text-[11px]">+</button>
+          </template>
         </div>
 
         <!-- <div class="w-px h-6 bg-neutral-800 mx-2" /> -->

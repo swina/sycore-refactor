@@ -36,6 +36,7 @@ import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
 import { rigReports } from '@/lib/rig-live'
 import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
+import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 
 export const DEFAULT_STEP = {
   active: false,
@@ -184,6 +185,10 @@ function createSequencerEngine() {
     set: (v) => { syncStore.syncTrack = v },
   })
   const genDensity = ref(seqStore.activeBank.genDensity)
+  // Generate's rhythm (seq-gen/rhythm.ts), per bank; banks saved before: Weighted, Sync 30
+  const rhythmMode = ref(seqStore.activeBank.rhythmMode ?? 'weighted')
+  const syncopation = ref(seqStore.activeBank.syncopation ?? 30)
+  const euclidRotation = ref(seqStore.activeBank.euclidRotation ?? 0)
   const arpModeForGen = ref('up')
   const swingAmount = ref(0)
   const basePatternLength = ref(seqStore.activeBank.basePatternLength || seqStore.activeBank.numSteps)
@@ -279,6 +284,9 @@ function createSequencerEngine() {
     bank.selectedScale = selectedScale.value
     bank.selectedStyle = selectedStyle.value
     bank.genDensity = genDensity.value
+    bank.rhythmMode = rhythmMode.value
+    bank.syncopation = syncopation.value
+    bank.euclidRotation = euclidRotation.value
     bank.chordsEnabled = chordsEnabled.value
     bank.maxPolyphony = maxPolyphony.value
     bank.chordDensity = chordDensity.value
@@ -287,6 +295,23 @@ function createSequencerEngine() {
   function loadBankIntoLocal() {
     const bank = seqStore.activeBank
     if (!bank) return
+    _loadingBank = true
+    try { _loadBank(bank) } finally { _loadingBank = false }
+  }
+  // A style picked by the user sets its own Density and octaves (STYLES: density, octaves) — the
+  // starting point Generate works from; a bank loaded keeps the ones saved with it.
+  let _loadingBank = false
+  watch(selectedStyle, (style) => {
+    if (_loadingBank) return
+    const cfg = STYLES[style]
+    if (!cfg || style === 'Arpeggio') return
+    if (typeof cfg.density === 'number') genDensity.value = Math.round(cfg.density * 100)
+    if (Array.isArray(cfg.octaves) && cfg.octaves.length === 2) {
+      selectedOctave.value = cfg.octaves[0]
+      octaveRange.value = cfg.octaves[1] - cfg.octaves[0]
+    }
+  }, { flush: 'sync' })
+  function _loadBank(bank) {
     // LENGTH is the bank's step count: a bank written from outside (AI, Song Composer, a preset)
     // whose numSteps doesn't match its steps would play / show the wrong length
     const len = Math.max(2, Math.min(64, bank.steps?.length || bank.numSteps || 16))
@@ -309,6 +334,9 @@ function createSequencerEngine() {
     selectedScale.value = bank.selectedScale
     selectedStyle.value = bank.selectedStyle
     genDensity.value = bank.genDensity
+    rhythmMode.value = bank.rhythmMode ?? 'weighted'
+    syncopation.value = bank.syncopation ?? 30
+    euclidRotation.value = bank.euclidRotation ?? 0
     chordsEnabled.value = bank.chordsEnabled
     maxPolyphony.value = bank.maxPolyphony
     chordDensity.value = bank.chordDensity
@@ -413,7 +441,7 @@ function createSequencerEngine() {
     numSteps, steps, param1CC, param2CC, param1Variation, param2Variation,
     selectedOctave, octaveRange, () => uiStore.seqGlobalTranspose, () => midiStore.currentBpm,
     dynamicMidiTranspose, dynamicDegreeShift, () => uiStore.seqFollowMode, selectedKey, selectedScale, selectedStyle,
-    genDensity, chordsEnabled, maxPolyphony, chordDensity
+    genDensity, rhythmMode, syncopation, euclidRotation, chordsEnabled, maxPolyphony, chordDensity
   ], () => {
     const config = { 
       numSteps: numSteps.value, 
@@ -430,6 +458,9 @@ function createSequencerEngine() {
       selectedScale: selectedScale.value,
       selectedStyle: selectedStyle.value,
       genDensity: genDensity.value,
+      rhythmMode: rhythmMode.value,
+      syncopation: syncopation.value,
+      euclidRotation: euclidRotation.value,
       chordsEnabled: chordsEnabled.value,
       maxPolyphony: maxPolyphony.value,
       chordDensity: chordDensity.value
@@ -688,12 +719,13 @@ function createSequencerEngine() {
       })
     } else {
       const numActive = Math.round(numSteps.value * (genDensity.value / 100))
-      const allIndices = Array.from({ length: numSteps.value }, (_, i) => i)
-      for (let i = allIndices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [allIndices[i], allIndices[j]] = [allIndices[j], allIndices[i]];
-      }
-      const activeIndices = new Set(allIndices.slice(0, numActive))
+      // which steps play (seq-gen/rhythm.ts): Weighted — strong steps first, the style's accents, Sync —,
+      // Euclid (Density = its pulses, turned by Rot), or Random (as before)
+      const activeIndices = rhythmMode.value === 'euclid'
+        ? euclidOnsets(numSteps.value, numActive, euclidRotation.value)
+        : rhythmMode.value === 'random'
+          ? randomOnsets(numSteps.value, numActive)
+          : pickOnsets(numSteps.value, numActive, { styleGrid: styleCfg.accentGrid, sync: syncopation.value })
 
       steps.value = Array(numSteps.value).fill(null).map((_, i) => {
         const active = activeIndices.has(i)
@@ -1564,7 +1596,7 @@ function createSequencerEngine() {
   return {
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
-    isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, arpModeForGen,
+    isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, arpModeForGen,
     swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
     param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
     dynamicMidiTranspose, dynamicDegreeShift, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,

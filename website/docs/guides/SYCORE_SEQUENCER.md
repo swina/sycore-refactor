@@ -69,7 +69,7 @@ Runs as an independent MIDI FLOW app (own IN/OUT, own local pattern storage).
 
 The fastest way to get a pattern is to use the algorithmic generator.
 
-1. Choose a **Style** from the dropdown — this sets rhythmic density, octave range, velocity profile, and gate character:
+1. Choose a **Style** from the dropdown — picking one sets its **Density** and **octaves** (Base Octave, Range) as a starting point, and gives Generate its velocity profile, gate character and **accent grid** (the steps it favours in *Weighted* rhythm); a bank loaded keeps its own Density and octaves:
 
 | Style | Character | Steps | Notes |
 |-------|-----------|-------|-------|
@@ -95,7 +95,12 @@ The fastest way to get a pattern is to use the algorithmic generator.
 
 4. Adjust **Density** (0–100 %) — how many of the available steps are activated.
 
-5. Click **Generate**. A new pattern fills the grid immediately and playback starts if the transport is already running.
+5. Pick the **Rhythm** — *which* steps play (melodic mode; saved with the bank):
+   - **Wgt** (Weighted, default): the strong steps first — the bar's 1, then the half bar, the beats, the 8ths, the 16ths — plus the style's accents. **Sync** (0–100) moves the weight to the weak steps: **0** = on the beats, **30–60** = groove (the bar's 1 stays, the rest syncopates), **100** = off the beat. With Sync under 50 and Density at least 25 %, the 1 is always played.
+   - **Eucl** (Euclid): Density's onsets spread as evenly as possible over the steps (`k/n` shown: 4/16 = four on the floor, 3/8 = tresillo, 5/16…); **Rot** turns the pattern a step at a time.
+   - **Rnd** (Random): any step, every one as likely (the generator before).
+
+6. Click **Generate**. A new pattern fills the grid immediately and playback starts if the transport is already running.
 
 > Enable **Chords** mode and set **Max Polyphony** (1–4) before generating to get multi-note steps. The generator builds chord voicings from the selected scale.
 
