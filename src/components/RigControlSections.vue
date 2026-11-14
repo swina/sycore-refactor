@@ -5,15 +5,21 @@
 import { inject, ref } from 'vue'
 import { undo } from '@/lib/rig-controller'
 import { RIG_CONTROLS_CTX } from '@/lib/rig-controls-host'
+import { useUiStore } from '@/stores/useUiStore'
+import { useSessionTakesStore } from '@/stores/useSessionTakesStore'
 
 defineProps({ only: { type: String, required: true } }) // transport | template | performance | safety
 const {
   s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu,
   tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg,
-  onFill, repeaterOn, repeaterOff, toggleLatch, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, keyText, onKeyMode,
+  onFill, repeaterOn, repeaterOff, toggleLatch, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode,
   knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 } = inject(RIG_CONTROLS_CTX)
 const tplFile = ref(null)
+// the knobs' app buttons: short names (they fit the column)
+const KNOB_APP_SHORT = { drum: 'DR', chord: 'CHR', seq: 'SEQ', bass: 'BAS', arp: 'ARP' }
+const uiStore = useUiStore()
+const takes = useSessionTakesStore()
 </script>
 
 <template>
@@ -48,6 +54,10 @@ const tplFile = ref(null)
         <button :class="[btn, 'flex-1', btnIdle]" :title="`Trigger sync of ${focused.label} — click to cycle`" @click="cycleSync"
                 @contextmenu="isRigApp(focused.id) && learnMenu($event, `rig_sync_${focused.id}`, `${focused.label} Trigger sync`)">Sync: {{ SYNC_SHORT[focused.opts.triggerSync] }}</button>
       </div>
+      <!-- Live's Play starts the armed slots — off to listen back to a take in Live (lib/rig-live.ts rigFollowPlay) -->
+      <button :class="[btn, 'w-full mt-1.5', rigFollowPlay ? btnIdle : 'bg-red-600/30 border-red-500/60 text-red-200']"
+              title="On: Live's Play starts the armed slots · Off: Live's Play starts nothing (to listen back to a take) — the clock stays locked, pads still start their slots"
+              @click="toggleFollowPlay">Live Play: {{ rigFollowPlay ? 'starts slots' : 'off (listen back)' }}</button>
     </section>
   </template>
   <template v-else-if="only === 'template'">
@@ -71,14 +81,24 @@ const tplFile = ref(null)
     <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2">
       <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Performance</h3>
       <div class="grid grid-cols-2 gap-1.5">
-        <div class="flex gap-1">
+        <div class="col-span-2 flex gap-1">
           <button :class="[btn, 'flex-1', fillClass]" @click="onFill">Fill</button>
+          <!-- the Drum Machine's Autofill (a fill every N bars, set in the Drum Machine) -->
+          <button :class="[btn, drumStore.autofillEnabled ? btnOn : btnIdle]" title="Auto Fill: the Drum Machine's Autofill on / off (a fill every N bars, set in the Drum Machine)"
+                  @click="toggleAutoFill">Auto</button>
           <!-- the Drum Machine's Fill: now (to the end of this bar) or the whole next bar -->
           <button :class="[btn, drumStore.fillWhen === 'bar' ? btnOn : btnIdle]" title="Fill: Now = at once, to the end of this bar · Bar = armed, the whole next bar"
                   @click="drumStore.fillWhen = drumStore.fillWhen === 'bar' ? 'now' : 'bar'">{{ drumStore.fillWhen === 'bar' ? 'Bar' : 'Now' }}</button>
         </div>
         <button :class="[btn, s.repeater ? btnOn : btnIdle]" title="The Drum Machine's Repeat while held (its ÷2 / ÷3 / ÷4)" @pointerdown="repeaterOn" @pointerup="repeaterOff" @pointerleave="repeaterOff">Repeat (hold)</button>
         <button :class="[btn, s.latch ? btnOn : btnIdle]" @click="toggleLatch">Latch</button>
+        <!-- the apps' Chain mode: dark red off · red blinking on; taken at the end of the bar / slot / pattern -->
+        <div class="col-span-2 flex gap-1">
+          <button v-for="c in [['drum', 'Drum'], ['chord', 'Chord'], ['seq', 'Seq']]" :key="c[0]"
+                  :class="[btn, 'flex-1', chainOn(c[0]) ? 'bg-red-600 border-red-400 text-white animate-pulse' : 'bg-red-950/60 border-red-900/70 text-red-300/80 hover:bg-red-900/50', learnedRing('rig_chain_' + c[0])]"
+                  :title="c[1] + ' Chain on / off — from the end of its ' + (c[0] === 'drum' ? 'bar' : c[0] === 'chord' ? 'slot' : 'pattern') + ' (right-click: MIDI Learn)'"
+                  @click="toggleChain(c[0])" @contextmenu="learnMenu($event, 'rig_chain_' + c[0], c[1] + ' Chain')">{{ c[1] }} Chain</button>
+        </div>
       </div>
       <div class="flex items-center justify-between">
         <button :class="[btn, btnIdle, learnedRing('rig_key_down')]" @click="onKeyShift(-1)" @contextmenu="learnMenu($event, 'rig_key_down', 'Key −')">◀</button>
@@ -86,7 +106,16 @@ const tplFile = ref(null)
         <button v-if="live" :class="[btn, btnIdle]" title="Major / minor on the same tonic (Launchpad: Shift + Key)" @click="onKeyMode" @contextmenu="learnMenu($event, 'rig_key_mode', 'Key Maj/Min')">Maj/Min</button>
         <button :class="[btn, btnIdle, learnedRing('rig_key_up')]" @click="onKeyShift(1)" @contextmenu="learnMenu($event, 'rig_key_up', 'Key +')">▶</button>
       </div>
-      <div class="text-[10px] text-neutral-500">Knobs → <span class="text-amber-300">{{ focused.label }}</span></div>
+      <!-- the app the knobs act on: picked here (or by a press on one of its pads) -->
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] uppercase tracking-widest text-neutral-500">Knobs →</span>
+        <span class="text-base font-black text-amber-300">{{ focused.label }}</span>
+      </div>
+      <div class="grid grid-cols-5 gap-1">
+        <button v-for="a in s.apps" :key="a.id" :title="`Knobs on ${a.label}`"
+                :class="[btn, 'px-0', focused.id === a.id ? 'bg-amber-500 border-amber-300 text-black' : btnIdle]"
+                @click="setFocus(a.id)">{{ KNOB_APP_SHORT[a.id] ?? a.label }}</button>
+      </div>
       <div v-for="k in [['Density', 'density'], ['Swing', 'swing'], ['Gate', 'gate'], ['Intensity', 'intensity']]" :key="k[1]" class="flex items-center gap-2">
         <span class="w-14 text-[10px] text-neutral-400">{{ knobLabel(k) }}</span>
         <input v-model.number="focused[k[1]]" type="range" min="0" max="127" class="flex-1 accent-amber-400"
@@ -94,7 +123,12 @@ const tplFile = ref(null)
                @contextmenu="k[1] === 'density' && live && ['drum', 'seq', 'arp'].includes(focused.id) ? ($event.preventDefault(), densityMenu($event, focused)) : k[1] === 'intensity' && isRigApp(focused.id) ? learnMenu($event, `rig_intensity_${focused.id}`, `${knobLabel(k) === 'Rate' ? 'Arp Rate' : `${focused.label} Intensity`}`) : null" />
         <span class="w-9 text-right font-mono text-neutral-300">{{ knobValue(k[1]) }}</span>
       </div>
-      <button :class="[btn, 'w-full', s.generateMode === 'ai' ? btnOn : btnIdle]" @click="toggleGenMode">Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }}</button>
+      <div class="flex gap-1.5">
+        <button :class="[btn, 'flex-1', s.generateMode === 'ai' ? btnOn : btnIdle]" @click="toggleGenMode">Generate: {{ s.generateMode === 'ai' ? 'AI' : 'built-in' }}</button>
+        <!-- the session takes: what each Generate wrote over and made (SessionTakesPanel) -->
+        <button :class="[btn, uiStore.isSessionTakesOpen ? btnOn : btnIdle]" title="Session: the slots each Generate wrote over and what it made — load them back"
+                @click="uiStore.togglePanel('session-takes')">Session <span class="font-mono opacity-60">{{ takes.takes.length }}</span></button>
+      </div>
     </section>
   </template>
   <template v-else-if="only === 'safety'">

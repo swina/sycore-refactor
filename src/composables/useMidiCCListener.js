@@ -269,8 +269,8 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     else vd.stepChannel(device, p.kind === 'ch_next' ? 1 : -1)
     return
   }
-  if (fieldName === 'seq_time' || fieldName === 'seq_direction') {
-    const event = fieldName === 'seq_time' ? 'seq-time-set' : 'seq-direction-set'
+  if (fieldName === 'seq_time' || fieldName === 'seq_direction' || fieldName === 'seq_steps') {
+    const event = fieldName === 'seq_time' ? 'seq-time-set' : fieldName === 'seq_direction' ? 'seq-direction-set' : 'seq-steps-set'
     window.dispatchEvent(new CustomEvent(event, { detail: { value: val, fromNote } }))
     return
   }

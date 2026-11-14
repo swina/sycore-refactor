@@ -176,6 +176,8 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const playingSlotIndex = ref<number | null>(null)
   const chain = ref<number[]>(Array(CHAIN_MAX).fill(-1))
   const chainEnabled = ref(false)
+  // During chain playback: the chain position playing (0–15; -1 = none) — the play view's chain strip.
+  const playingChainPos = ref(-1)
   // Drums follow the chain: during chain playback, one bar before a slot ends the Drum Machine is
   // told to switch to the sequence with the next slot's letter (A–H), so it changes at the boundary
   // (AI Song Composer: Chord Prog conducts the song form). Remembered.
@@ -308,11 +310,13 @@ export const useChordProgStore = defineStore('chordProg', () => {
   // grid — needed so the UI can show which slot is currently playing and
   // highlight the right step within it, instead of a flattened global index
   // that only makes sense against the concatenated array itself.
-  function getChainSteps(): { steps: ChordStep[]; numSteps: number; slotIndices: number[]; localIndices: number[] } {
+  function getChainSteps(): { steps: ChordStep[]; numSteps: number; slotIndices: number[]; localIndices: number[]; positions: number[] } {
     const all: ChordStep[] = []
     const slotIndices: number[] = []
     const localIndices: number[] = []
-    for (const slotIdx of chain.value) {
+    const positions: number[] = []   // each step's position in the chain (0–15)
+    for (let pos = 0; pos < chain.value.length; pos++) {
+      const slotIdx = chain.value[pos]
       if (slotIdx < 0 || slotIdx >= SLOT_COUNT) continue
       const slot = slots.value[slotIdx]
       const count = Math.min(slot.numSteps, slot.steps.length)
@@ -326,9 +330,10 @@ export const useChordProgStore = defineStore('chordProg', () => {
         else all.push({ ...st, stepMode: slotMode, ...(slotMode === 'arp' && !st.arpRate ? { arpRate: slot.arpRate } : {}) })
         slotIndices.push(slotIdx)
         localIndices.push(i)
+        positions.push(pos)
       }
     }
-    return { steps: all, numSteps: all.length, slotIndices, localIndices }
+    return { steps: all, numSteps: all.length, slotIndices, localIndices, positions }
   }
 
   // ── Chord Capture ───────────────────────────────────────────────────────
@@ -769,7 +774,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     captureBuffer, trackCaptureNote, captureChord, removeCapturedChord, clearCaptureBuffer, importCaptureBuffer,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,
-    slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled, drumFollow, slotPresets, persistSlots, persistChain,
+    slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled, playingChainPos, drumFollow, slotPresets, persistSlots, persistChain,
     slotSave, slotLoad, copySlot, chainSet, chainInsert, chainRemove, chainClear, getChainSteps,
   }
 })

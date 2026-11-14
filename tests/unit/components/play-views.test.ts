@@ -75,4 +75,26 @@ describe('play views', () => {
     const w = mount(SeqPlayView)
     expect(w.text()).toContain('H')
   })
+
+  it('Chain on: the chain strip, the position playing in red; off: none', () => {
+    const store = useChordProgStore()
+    store.chain = [0, 2, 1, ...Array(13).fill(-1)]
+    const off = mount(ChordProgPlayView)
+    expect(off.text()).not.toContain('Chain')
+    store.chainEnabled = true
+    store.isPlaying = true
+    store.playingChainPos = 1
+    const w = mount(ChordProgPlayView)
+    expect(w.text()).toContain('Chain')
+    const cells = w.findAll('div').filter(d => d.classes().includes('w-6'))
+    expect(cells.map(c => c.text())).toEqual(['A', 'C', 'B'])
+    expect(cells[1].classes()).toContain('bg-red-600')
+  })
+
+  it('Drum Machine: the chain from its panel, empty entries as ·', () => {
+    useDrumMachineStore().chainEnabled = true
+    const w = mount(DrumPlayView, { props: { chain: ['A', null, 'B', null], chainPos: -1 } })
+    const cells = w.findAll('div').filter(d => d.classes().includes('w-6'))
+    expect(cells.map(c => c.text())).toEqual(['A', '·', 'B', '·'])
+  })
 })

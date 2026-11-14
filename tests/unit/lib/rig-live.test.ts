@@ -297,3 +297,16 @@ describe('Fill look on the Rig', () => {
     expect(fillLook({ fill: true, fillArmed: false })).toBe('playing')
   })
 })
+
+describe('rigFollowPlay', () => {
+  it('Live Play starts the armed slots by default; off is remembered', async () => {
+    const { rigFollowPlay } = await import('@/lib/rig-live')
+    const { nextTick } = await import('vue')
+    const { userKey } = await import('@/lib/userKey')
+    expect(rigFollowPlay.value).toBe(true)
+    rigFollowPlay.value = false
+    await nextTick()
+    expect(localStorage.getItem(userKey('SYCORE_RIG_FOLLOW_PLAY'))).toBe('0')
+    rigFollowPlay.value = true
+  })
+})

@@ -19,6 +19,8 @@ export const PLAY_LED_CLASS: Record<string, string> = {
   amberFlash: SLOT_CLASS.queued,
   green:      SLOT_CLASS.playing,
   red:        'bg-red-700 border-red-500 text-white',
+  redDim:     'bg-red-950/70 border-red-900/80 text-red-300/80',
+  redFlash:   'bg-red-600 border-red-400 text-white animate-pulse',
 }
 
 /** A slot's look from a rig-live snapshot ({ filled, playing, queued }). */

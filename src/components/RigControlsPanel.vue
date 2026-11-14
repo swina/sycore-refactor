@@ -35,7 +35,7 @@ onUnmounted(() => { if (rigControlsHost.value === body.value) rigControlsHost.va
     <div v-if="!shown" class="p-3 text-[10px] text-neutral-500">
       {{ uiStore.isRigControllerOpen ? 'Rig Controller in EDIT: its controls are in its panel.' : 'Open the Rig Controller: its controls show here.' }}
     </div>
-    <div ref="body" class="flex-1 min-h-0 overflow-y-auto p-2" />
+    <div ref="body" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-2 pb-2 pt-0.5" />
     <ResizeHandles :start="onResizeStart" />
   </div>
 </template>

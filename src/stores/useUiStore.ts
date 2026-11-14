@@ -84,6 +84,7 @@ export interface PanelVisibility {
   isLiveMapOpen: boolean
   isRigControlsOpen: boolean
   isChordNowOpen: boolean
+  isSessionTakesOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -187,6 +188,7 @@ export const useUiStore = defineStore('ui', () => {
   const isLiveMapOpen                 = ref(false)
   const isRigControlsOpen             = ref(false)
   const isChordNowOpen                = ref(false)
+  const isSessionTakesOpen            = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
@@ -296,6 +298,7 @@ export const useUiStore = defineStore('ui', () => {
     liveMap:               () => isLiveMapOpen.value,
     rigControls:           () => isRigControlsOpen.value,
     chordNow:              () => isChordNowOpen.value,
+    sessionTakes:          () => isSessionTakesOpen.value,
   }
 
   const openModalKeys: ComputedRef<string[]> = computed(() =>
@@ -359,6 +362,7 @@ export const useUiStore = defineStore('ui', () => {
     liveMap:               isLiveMapOpen,
     rigControls:           isRigControlsOpen,
     chordNow:              isChordNowOpen,
+    sessionTakes:          isSessionTakesOpen,
   }
 
   function cycleFocusedModal(reverse = false) {
@@ -453,6 +457,7 @@ export const useUiStore = defineStore('ui', () => {
     isLiveMapOpen.value = false
     isRigControlsOpen.value = false
     isChordNowOpen.value = false
+    isSessionTakesOpen.value = false
     isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -531,6 +536,7 @@ export const useUiStore = defineStore('ui', () => {
     'live-map': isLiveMapOpen,
     'rig-controls': isRigControlsOpen,
     'chord-now': isChordNowOpen,
+    'session-takes': isSessionTakesOpen,
   }
 
   function isPanelOpen(id: string): boolean {
@@ -693,7 +699,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isLiveInputOpen, isMidiControllerDesignerOpen,
-    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen, isRigControlsOpen, isChordNowOpen,
+    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen, isRigControlsOpen, isChordNowOpen, isSessionTakesOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,

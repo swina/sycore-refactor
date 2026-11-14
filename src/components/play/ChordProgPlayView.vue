@@ -5,16 +5,19 @@ import { computed } from 'vue'
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
 import { chordSnapshot, rigReports, rigArmed } from '@/lib/rig-live'
 import PlaySlots from './PlaySlots.vue'
+import PlayChain from './PlayChain.vue'
 
 const store = useChordProgStore()
 const snap = computed(() => chordSnapshot(store.slots, store.activeSlotIndex, store.playingSlotIndex, store.isPlaying, rigReports.queued.chord ?? rigArmed.chord))
 const steps = computed(() => store.steps.slice(0, store.numSteps))
+const chainEntries = computed(() => store.chain.map(i => (i >= 0 ? 'ABCDEFGH'[i] : null)))
 const sounding = (i) => store.isPlaying && store.activeSlotIndex === store.playingSlotIndex && i === store.currentStep
 </script>
 
 <template>
   <div class="flex flex-col gap-3 p-3 min-h-0">
     <PlaySlots :snap="snap" />
+    <PlayChain v-if="store.chainEnabled" :entries="chainEntries" :current="store.isPlaying ? store.playingChainPos : -1" />
     <div class="grid grid-cols-8 gap-1.5 content-start">
       <div v-for="(st, i) in steps" :key="i"
            class="h-14 rounded border flex flex-col items-center justify-center px-1 font-mono font-bold leading-tight min-w-0"

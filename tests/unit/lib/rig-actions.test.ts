@@ -10,6 +10,9 @@ describe('rig-actions', () => {
     expect(parseRigAction('rig_intensity_drum')).toEqual({ kind: 'intensity', app: 'drum' })
     expect(parseRigAction('rig_section_8')).toEqual({ kind: 'section', index: 7 })
     expect(parseRigAction('rig_fill')).toEqual({ kind: 'fill' })
+    expect(parseRigAction('rig_chain_chord')).toEqual({ kind: 'chain', app: 'chord' })
+    expect(parseRigAction('rig_chain_arp')).toBeNull()
+    expect(parseRigAction('rig_play')).toEqual({ kind: 'play' })
     expect(parseRigAction('rig_key_mode')).toEqual({ kind: 'key_mode' })
     expect(parseRigAction('rig_global')).toEqual({ kind: 'global' })
     expect(parseRigAction('rig_density_seq')).toEqual({ kind: 'density', app: 'seq' })
@@ -26,7 +29,7 @@ describe('rig-actions', () => {
     expect(isContinuousRigAction({ kind: 'slot', app: 'drum', slot: 0 })).toBe(false)
     expect(rigSlotParam('drum', 7)).toBe('rig_slot_drum_h')
     const cat = rigActionCatalog()
-    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 8 + 3 + 5) // + tap, tempo − / +, round, tempo knob
+    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 3 + 8 + 3 + 6) // + 3 chains, play, tap, tempo − / +, round, tempo knob
     for (const { paramName } of cat) expect(parseRigAction(paramName)).not.toBeNull()
   })
 })

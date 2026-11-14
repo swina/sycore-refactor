@@ -3,7 +3,7 @@
  * component (Scenario Workspaces, Phase 1): the working copy of the active bank, the clock
  * (Tone.js repeat or CLK SYS), the notes it holds, bank cue / chain follow, generate, the Rig and
  * Control Map events (toggle-sequencer2, seq-bank-select, seq-bank-cue, seq-generate,
- * seq-banks-reloaded, seq-time-set, seq-direction-set), MIDI inputs (transpose, auto-start,
+ * seq-banks-reloaded, seq-time-set, seq-direction-set, seq-steps-set), MIDI inputs (transpose, auto-start,
  * record) and the local autosave.
  *
  * One instance for the whole app (useSequencerEngine), created on first use in a detached
@@ -24,6 +24,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useStepSequencerStore, BANK_COUNT } from '@/stores/useStepSequencerStore'
+import { journaled } from '@/lib/session-takes'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -319,6 +320,10 @@ function createSequencerEngine() {
   // Chord Prog FOLLOW ('seq-bank-cue', one bar before a section ends): the bank of the next section
   // starts when the playing one wraps to its first step; stopped, it's selected now.
   let _pendingBank = null
+  // The chain as the playback has it (a switch of seqStore.chainEnabled is taken at a pattern's end),
+  // and the bank of the step played last.
+  let _seqChainPlaying = false
+  let _seqLastBank = null
   // Rig Controller (rig-live.ts): the queued bank, mirrored for the pads.
   function setPendingBank(v) { _pendingBank = v; rigReports.queued.seq = v }
   function handleBankCue(e) {
@@ -414,6 +419,7 @@ function createSequencerEngine() {
     // Sync live playback state immediately
     if (playStateRef.current) {
       const pb = seqStore.playbackSteps
+      _seqChainPlaying = seqStore.chainEnabled
       playStateRef.current.steps = pb.steps
       playStateRef.current.numSteps = pb.numSteps
       playStateRef.current.chainSlotIndices = pb.chainSlotIndices
@@ -544,7 +550,7 @@ function createSequencerEngine() {
     repeatEventIdRef.value = transport.scheduleRepeat(stepCallback, opt.interval, `${nextTick}i`)
   })
 
-  // MIDI Learn (useMidiCCListener.js: seq_time / seq_direction): a CC picks the value across the
+  // MIDI Learn (useMidiCCListener.js: seq_time / seq_direction / seq_steps): a CC picks the value across the
   // list (a knob sweeps it), a note steps to the next one.
   function pickFromMidi(list, current, { value, fromNote }) {
     if (fromNote) return list[(list.indexOf(current) + 1) % list.length]
@@ -561,17 +567,29 @@ function createSequencerEngine() {
   // key), otherwise Major / Minor.
   const MINOR_FAMILY = ['Minor', 'Harmonic Min', 'Pentatonic Min', 'Blues', 'Dorian', 'Phrygian', 'Locrian']
   const MAJOR_FAMILY = ['Major', 'Pentatonic Maj', 'Lydian', 'Mixolydian']
-  function handleRigGenerate(e) {
+  function handleRigGenerate(e) { journaledGenerate(() => _rigGenerate(e)) }
+  function _rigGenerate(e) {
     const { root, mode } = e?.detail ?? {}
     if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) {
       selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
       const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY
       if (!family.includes(selectedScale.value)) selectedScale.value = mode === 'minor' ? 'Minor' : 'Major'
     }
-    generateSequence()
+    _generateSequence()
   }
 
-  function generateSequence() {
+  // The bank as it is now: the working copy written into it first (its watcher syncs a tick later).
+  function bankSnapshot() {
+    syncLocalToBank()
+    return JSON.parse(JSON.stringify(seqStore.activeBank ?? null))
+  }
+  /** Journaled (lib/session-takes.ts): `fn` runs between a take of the bank before and one after. */
+  function journaledGenerate(fn) {
+    return journaled('seq', seqStore.activeBankIndex, fn, { snap: bankSnapshot })
+  }
+  function generateSequence() { journaledGenerate(_generateSequence) }
+
+  function _generateSequence() {
     const styleCfg = STYLES[selectedStyle.value]
     const keyIdx = NOTE_NAMES.indexOf(selectedKey.value)
     const scaleIntervals = SCALES[selectedScale.value] ?? SCALES['Major']
@@ -848,8 +866,14 @@ function createSequencerEngine() {
   const handleDirectionSet = (e) => {
     sequenceDirection.value = pickFromMidi(SEQ_DIRECTIONS, sequenceDirection.value, e.detail ?? {})
   }
+  // Length (seq_steps): a CC sweeps 2–16 (the panel's slider), a note steps to the next (wraps)
+  const STEP_COUNTS = Array.from({ length: 15 }, (_, i) => i + 2)
+  const handleStepsSet = (e) => {
+    numSteps.value = pickFromMidi(STEP_COUNTS, STEP_COUNTS.includes(numSteps.value) ? numSteps.value : 16, e.detail ?? {})
+  }
   window.addEventListener('seq-time-set', handleTimeSet)
   window.addEventListener('seq-direction-set', handleDirectionSet)
+  window.addEventListener('seq-steps-set', handleStepsSet)
 
   const isMidiDeviceAllowed = (chan, inputId, note) => {
     if (!inputId) return true
@@ -1303,6 +1327,28 @@ function createSequencerEngine() {
               }
             }
           }
+          // Chain switched on / off while playing (the Rig's Seq Chain, the panel): at the end of the
+          // pattern playing — on: the chain from its start; off: the bank that was playing, looped.
+          if (seqStore.chainEnabled !== _seqChainPlaying && dir !== 'random'
+              && (state.localIndices?.[stepIdx] ?? stepIdx) === 0) {
+            _seqChainPlaying = seqStore.chainEnabled
+            if (!_seqChainPlaying && _seqLastBank !== null && seqStore.activeBankIndex !== _seqLastBank) {
+              seqStore.setActiveBank(_seqLastBank)
+              loadBankIntoLocal()
+            }
+            const pb = seqStore.playbackSteps
+            state.steps = pb.steps
+            state.numSteps = pb.numSteps
+            state.chainSlotIndices = pb.chainSlotIndices
+            state.bankIndices = pb.bankIndices
+            state.localIndices = pb.localIndices
+            const n = Math.max(1, pb.steps.length)
+            stepIdx = 0
+            stepDirection = 1
+            stepCounter = dir === 'down' ? n - 1 : 1 % n
+            lastFollowedBank = -1
+          }
+          _seqLastBank = state.bankIndices?.[stepIdx] ?? null
           if (_pendingBank !== null && stepIdx === 0 && !seqStore.chainEnabled) {
             // The old bank's notes still sounding (ties) end where the new bank starts.
             if (tMs != null) {
@@ -1415,6 +1461,8 @@ function createSequencerEngine() {
     }
 
     const pb = seqStore.playbackSteps
+    _seqChainPlaying = seqStore.chainEnabled
+    _seqLastBank = null
     playStateRef.current = {
       isPlaying: playing,
       currentStep: currentStep.value,
@@ -1452,6 +1500,7 @@ function createSequencerEngine() {
     window.removeEventListener('seq-banks-reloaded', handleBanksReloaded)
     window.removeEventListener('seq-time-set', handleTimeSet)
     window.removeEventListener('seq-direction-set', handleDirectionSet)
+    window.removeEventListener('seq-steps-set', handleStepsSet)
     unsubNote?.()
     unsubAppNote?.()
     unsubCC?.()
@@ -1466,7 +1515,7 @@ function createSequencerEngine() {
     dynamicMidiTranspose, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
     TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
     // actions
-    syncLocalToBank, loadBankIntoLocal, selectBank, generateSequence, duplicateLength, reduceLength,
+    syncLocalToBank, loadBankIntoLocal, selectBank, generateSequence, journaledGenerate, duplicateLength, reduceLength,
     updateStep, clearStep, stepMidiNote, isNoteBarActive, toggleNoteBar, setStepOctave, applyToAll,
     randomize, getPresetValueForCC,
   }

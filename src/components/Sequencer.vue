@@ -82,8 +82,12 @@ const {
 } = engine
 
 async function handleAiResult(data) {
-  await seqStore.generateFromAiPrompt(data)
-  loadBankIntoLocal()
+  // journaled (lib/session-takes.ts): the bank it replaces is kept as a session take
+  await engine.journaledGenerate(async () => {
+    const ok = await seqStore.generateFromAiPrompt(data)
+    loadBankIntoLocal()
+    return ok
+  })
 }
 
 function getNoteName(midiNote) {
@@ -648,7 +652,7 @@ let generateHidden = ref(false)
       
       <div class="shrink-0 flex flex-wrap items-center gap-4 p-1 pl-4 border-b border-neutral-900 bg-neutral-900/50">
         <!-- Sequence Length -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2" @contextmenu.prevent="openMenu($event, { name: 'seq_steps', label: 'Sequencer: Steps' })">
           <span class="text-[12px] font-mono text-neutral-500 uppercase w-[40px]">Length</span>
           <div class="flex items-center bg-black border border-neutral-800 rounded-lg px-2 h-8 gap-2">
             <button @click="reduceLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="/2">

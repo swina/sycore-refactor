@@ -507,7 +507,7 @@ export function stopClock(s: RigState): void {
 // Reference): flags 12 (Copy + Clear) = steady, 8 (Clear) = flashing with
 // automatic flashing on (B0 00 28, sent by Rig mode, rig-launchpad.ts).
 
-export const LP_COLOR = { off: 12, amber: 63, amberFlash: 59, green: 60, red: 15 } as const
+export const LP_COLOR = { off: 12, amber: 63, amberFlash: 59, green: 60, red: 15, redDim: 13, redFlash: 11 } as const
 export type LpColor = keyof typeof LP_COLOR
 
 export const lpGridNote = (row: number, col: number) => 16 * row + col

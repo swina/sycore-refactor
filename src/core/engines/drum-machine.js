@@ -25,6 +25,7 @@ import { externalGrid } from '@/core/midi/external-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { journaled } from '@/lib/session-takes'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -85,6 +86,7 @@ function createDrumMachineEngine() {
   const loadingDefaultKit    = ref(false)
   const showBassline = ref(false)
   const basslineMidiCapture = ref(-1) // voice index awaiting MIDI note, or -1
+  const basslineCaptureSeq = ref(null) // its bassline sequence (null = the active one)
   const basslineRootNote = ref(24)
 
   // Quantized sequence switching — set by tab click, applied at next bar start
@@ -406,7 +408,8 @@ function createDrumMachineEngine() {
 
     // ── Bar boundary (step 0): pending sequence swap + fill auto-stop ──
     if (globalStep === 0) {
-      if (_pendingStop) {
+      // Stop@end: on this bar line — or, ending with a fill on the next bar (+Fill, Fill: Bar), the one after.
+      if (_pendingStop && --_stopBarsLeft <= 0) {
         _pendingStop = false
         drawAt(() => { drumStore.isPlaying = false; pendingStop.value = false }, time)
         return
@@ -630,6 +633,7 @@ function createDrumMachineEngine() {
       resetDrumPosition()
       chainSlotRef.value = -1
       _pendingStop = false
+      _endFillArmed = false
       pendingStop.value = false
       // Cancel any pending or active rec sync
       if (_recSyncRecording) {
@@ -761,7 +765,9 @@ function createDrumMachineEngine() {
   function _onGenerateBass(e) {
     const pc = e.detail?.root
     // into the sequence the bassline plays from (the Rig's Bass row may hold another one than the drums)
-    drumStore.generateBassline(Number.isInteger(pc) ? 24 + pc : basslineRootNote.value, drumStore.basslineSequence ?? undefined)
+    const seq = drumStore.basslineSequence ?? drumStore.activeSequence
+    // journaled (lib/session-takes.ts): the bassline it replaces is kept as a session take
+    journaled('bass', seq, () => drumStore.generateBassline(Number.isInteger(pc) ? 24 + pc : basslineRootNote.value, seq))
     drumStore.basslineEnabled = true
     showBassline.value = true
   }
@@ -892,7 +898,7 @@ function createDrumMachineEngine() {
     if (typeof note !== 'number') return
     const voiceIdx = Math.floor(basslineMidiCapture.value / 16)
     const stepIdx = basslineMidiCapture.value % 16
-    drumStore.setBasslineNote(voiceIdx, stepIdx, note)
+    drumStore.setBasslineNote(voiceIdx, stepIdx, note, basslineCaptureSeq.value)
     // Preview the note
     const padIdx = drumStore.basslineSourceSlots[voiceIdx] ?? 8
     drumEngine.triggerPadWithNote(padIdx, note, { velocity: 100, time: 0 })
@@ -1093,7 +1099,8 @@ function createDrumMachineEngine() {
 
   // ── Style generation ───────────────────────────────────────────────────────────
   function generatePattern() {
-    drumStore.generateDrumPattern(selectedStyle.value)
+    // journaled (lib/session-takes.ts): the pattern it replaces is kept as a session take
+    journaled('drum', drumStore.activeSequence, () => drumStore.generateDrumPattern(selectedStyle.value), { note: selectedStyle.value })
     if (generateAsFill.value) {
       const raw = drumStore.generateDrumPatternRaw(selectedStyle.value)
       if (raw) {
@@ -1109,6 +1116,8 @@ function createDrumMachineEngine() {
   const chain          = ref(Array(16).fill(null))
   const chainSlotRef   = ref(-1)
   let _chainSlotIdx    = -1
+  // Chain switched on while playing (the Rig's Drum Chain, the panel): from its first slot on the next bar.
+  watch(chainEnabled, on => { if (on) { _chainSlotIdx = -1; chainSlotRef.value = -1 } })
 
   function resizeChain(len) {
     const clamped = Math.max(2, Math.min(16, len))
@@ -1138,13 +1147,19 @@ function createDrumMachineEngine() {
   watch(newFillEachTime, v => { try { localStorage.setItem('S1_DM_NEW_FILL', v ? '1' : '0') } catch {} })
   const pendingStop  = ref(false)
   let   _pendingStop = false
+  let   _stopBarsLeft = 0     // bar lines until the Stop@end stop (2: a +Fill armed for the next bar)
+  let   _endFillArmed = false // that fill was armed by the stop (dropped if the stop is called off)
+  watch(pendingStop, v => { rigReports.drumStopPending = v }, { flush: 'sync' })
 
   /** A press asking to play (true) or stop (false), with Start@bar / Stop@end — or, from a Rig pad,
    *  on its Trigger sync (`sync`, sixteenths: 0 = at once, 4/8/16 = next beat / 2 beats / bar). */
   function requestPlay(play, sync) {
     const rig = typeof sync === 'number'
     if (play) {
-      if (_pendingStop || _rigStopSteps) { _pendingStop = false; _rigStopSteps = 0; pendingStop.value = false; return } // un-queue the stop
+      if (_pendingStop || _rigStopSteps) { // un-queue the stop
+        if (_endFillArmed && _fillArmed) { _fillArmed = false; fillArmed.value = false }
+        _pendingStop = false; _endFillArmed = false; _rigStopSteps = 0; pendingStop.value = false; return
+      }
       if (drumStore.isPlaying) return
       _startSteps = rig ? Math.max(0, sync) : (startAtBar.value ? 16 : 0)
       drumStore.isPlaying = true
@@ -1156,7 +1171,14 @@ function createDrumMachineEngine() {
   }
   // 'dm-play-stop' (MIDI Learn, DECK card): { play: true/false }, or a toggle like the PLAY button;
   // a Rig pad adds { sync } (its Trigger sync).
+  // { play: false, end: true } (Rig Controls' Stop): a stop with Stop@end / +Fill as the panel's STOP;
+  // `detail.deferred` says back whether it waits for the bar's end (pressed again while waiting: now).
   function _onPlayStopRequest(e) {
+    if (e.detail?.end) {
+      if (drumStore.isPlaying) handlePlayStop()
+      e.detail.deferred = _pendingStop
+      return
+    }
     const play = e.detail?.play
     if (typeof play === 'boolean') requestPlay(play, e.detail?.sync); else handlePlayStop()
   }
@@ -1167,7 +1189,17 @@ function createDrumMachineEngine() {
     if (stopAtEnd.value) {
       _pendingStop = true
       pendingStop.value = true
-      if (endWithFill.value) { generateFill(); triggerFill() }
+      _stopBarsLeft = 1
+      _endFillArmed = false
+      // +Fill: the ending is a fill — Fill: Now, the rest of this bar; Fill: Bar, the whole next bar
+      // (armed: the stop comes at the end of it). A fill already playing is the ending.
+      if (endWithFill.value && !fillActive.value) {
+        if (drumStore.fillWhen === 'bar') {
+          if (!_fillArmed) { _fillArmed = true; fillArmed.value = true; _endFillArmed = true }
+          generateFill()
+          _stopBarsLeft = 2
+        } else { generateFill(); triggerFill('now') }
+      }
     } else {
       drumStore.isPlaying = false
     }
@@ -1251,7 +1283,7 @@ function createDrumMachineEngine() {
   return {
     ready, setPlayheadPainter,
     // state the panel shows / edits
-    selectedStyle, generateAsFill, currentPresetId, loadingDefaultKit, showBassline, basslineMidiCapture,
+    selectedStyle, generateAsFill, currentPresetId, loadingDefaultKit, showBassline, basslineMidiCapture, basslineCaptureSeq,
     basslineRootNote, pendingSequence, fillActive, fillSaveFrom, fillSaveTo, fillPattern,
     recSyncArmed, recSyncActive, recSyncMultiplier, hasSolo, midiOutTargets, midiOutOnly, syncRetrig,
     chainLength, chain, chainSlotRef, autofillEvery, startAtBar, stopAtEnd, endWithFill,

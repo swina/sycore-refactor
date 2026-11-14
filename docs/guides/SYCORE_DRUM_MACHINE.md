@@ -300,8 +300,10 @@ Located next to the Play/Stop button, two checkboxes control end-of-bar stop beh
 
 | Control | Description |
 |---------|-------------|
-| **Stop@end** | When checked, pressing stop arms a pending stop that fires at the next bar boundary. The button label changes to "ENDING…" while armed. Click again to cancel |
-| **+Fill** | Only visible when Stop@end is active. When checked, a fill pattern is generated and triggered on the final bar before stopping |
+| **Stop@end** | When checked, pressing stop arms a pending stop that fires at the next bar boundary. The button label changes to "ENDING…" while armed. Pressed again: stops at once; Play (a Rig pad) calls it off |
+| **+Fill** | Only visible when Stop@end is active. The ending is a new fill, following the Fill's **Now / Bar** switch: **Now** — the fill plays the rest of this bar, then the stop; **Bar** — this bar ends as it is, the whole next bar is the fill, then the stop. A fill already playing is the ending |
+
+Also for the **Play / Stop of Rig Controls** (Rig Controller, Performance): its Stop waits for the Drum Machine's ending, then stops Live (following Live over SY.CORE Link) or SY.CORE — Live records up to the end. Pressed again while waiting: now. Live's own Stop, the Rig's pads and the Timeline stop as before (Live's Stop at once, a pad on its Trigger sync).
 
 ---
 

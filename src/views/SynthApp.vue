@@ -61,6 +61,7 @@ import RigControllerPanel from '@/components/RigControllerPanel.vue'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
+import SessionTakesPanel from '@/components/SessionTakesPanel.vue'
 import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import Welcome from '@/components/Welcome.vue'
@@ -202,6 +203,7 @@ const simpleTogglePanels = [
   { openId: 'live-map', focusKey: 'liveMap', component: LiveMapPanel, transition: null },
   { openId: 'rig-controls', focusKey: 'rigControls', component: RigControlsPanel, transition: null },
   { openId: 'chord-now', focusKey: 'chordNow', component: ChordNowPanel, transition: null },
+  { openId: 'session-takes', focusKey: 'sessionTakes', component: SessionTakesPanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {

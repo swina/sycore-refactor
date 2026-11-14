@@ -38,6 +38,8 @@ import { nextTick } from 'vue'
 import { useDrumMachineEngine, _resetDrumMachineEngine } from '@/core/engines/drum-machine'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { flushUi } from '@/lib/ui-clock'
+import { rigReports } from '@/lib/rig-live'
 
 const flush = async () => { for (let i = 0; i < 5; i++) { await nextTick(); await Promise.resolve() } }
 
@@ -121,5 +123,81 @@ describe('Drum Machine engine — no panel mounted', () => {
     now = 1100
     ticker!()
     expect(pads).toContain(0)
+  })
+
+  // Stop@end + Fill, asked by Rig Controls' Stop ({ end: true }): the stop waits, the ending is a fill.
+  const bars = (n: number) => { for (let i = 0; i < n * 16; i++) { repeats[0](0); flushUi() } }
+  async function playing() {
+    const r = await setup()
+    r.engine.stopAtEnd.value = true
+    r.engine.endWithFill.value = true
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: true } }))
+    await flush()
+    repeats[0](0); flushUi() // step 1 of bar 1
+    return r
+  }
+
+  it('Stop@end + Fill (Fill: Now): the fill plays the rest of this bar, the stop comes on the bar line', async () => {
+    const { engine, store } = await playing()
+    store.fillWhen = 'now'
+    const detail: any = { play: false, end: true }
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail }))
+    expect(detail.deferred).toBe(true)
+    expect(rigReports.drumStopPending).toBe(true)
+    expect(engine.fillActive.value).toBe(true)
+    for (let i = 0; i < 15; i++) { repeats[0](0); flushUi() }
+    expect(store.isPlaying).toBe(true)
+    repeats[0](0); flushUi() // bar line
+    expect(store.isPlaying).toBe(false)
+    await flush()
+    expect(rigReports.drumStopPending).toBe(false)
+  })
+
+  it('Stop@end + Fill (Fill: Bar): this bar ends, the whole next bar is the fill, then the stop', async () => {
+    const { engine, store } = await playing()
+    store.fillWhen = 'bar'
+    const detail: any = { play: false, end: true }
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail }))
+    expect(detail.deferred).toBe(true)
+    expect(engine.fillArmed.value).toBe(true)
+    expect(engine.fillActive.value).toBe(false)
+    bars(15 / 16) // to the end of bar 1
+    repeats[0](0); flushUi() // bar 2: the fill
+    expect(store.isPlaying).toBe(true)
+    expect(engine.fillActive.value).toBe(true)
+    bars(15 / 16)
+    expect(store.isPlaying).toBe(true)
+    repeats[0](0); flushUi() // bar 3's line: stop
+    expect(store.isPlaying).toBe(false)
+  })
+
+  it('Stop@end: pressed again while waiting stops at once; a Play calls it off (and drops the ending fill)', async () => {
+    const { engine, store } = await playing()
+    store.fillWhen = 'bar'
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: false, end: true } }))
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: true } }))
+    expect(rigReports.drumStopPending).toBe(false)
+    expect(engine.fillArmed.value).toBe(false)
+    expect(store.isPlaying).toBe(true)
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: false, end: true } }))
+    const again: any = { play: false, end: true }
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: again }))
+    expect(again.deferred).toBe(false)
+    expect(store.isPlaying).toBe(false)
+  })
+
+  it('Chain switched on while playing: the chain from its first slot on the next bar', async () => {
+    const { engine, store } = await setup()
+    engine.chain.value = ['C', 'B', null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: true } }))
+    await flush()
+    for (let i = 0; i < 20; i++) { repeats[0](0); flushUi() } // into bar 2, no chain: still A
+    expect(store.activeSequence).toBe('A')
+    store.chainEnabled = true
+    await flush()
+    for (let i = 0; i < 13; i++) { repeats[0](0); flushUi() } // bar 3's line
+    expect(store.activeSequence).toBe('C')
+    for (let i = 0; i < 16; i++) { repeats[0](0); flushUi() }
+    expect(store.activeSequence).toBe('B')
   })
 })

@@ -34,7 +34,7 @@ import {
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
 import {
-  isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, armPlaying, armedDrumLoads, fillLook, stopEvents, LIVE_APPS,
+  isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, armPlaying, armedDrumLoads, fillLook, rigFollowPlay, stopEvents, LIVE_APPS,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -42,6 +42,7 @@ import { isMidimixName, parseMidimixInput, mixLedDiff, mixLedsOff, Pickup, roleI
 import { learnToggle, matchToggle, toggleLabel, toggleShortLabel, sameToggle, loadToggle, saveToggle, RIG_TOGGLE_SLOTS } from '@/lib/rig-toggle'
 import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVelocity, RIG_INIT_MESSAGES, muteOtherSenders, unmuteOtherSenders, rigSend } from '@/lib/rig-launchpad'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { useDrumMachineEngine } from '@/core/engines/drum-machine' // one per app (SynthApp): its chain
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
 import { rigChord } from '@/lib/chord-next'
 /** The SY.CORE Rig device's rows (bridge protocol: rows 0–4). */
@@ -278,6 +279,7 @@ const followingLive = () => clockStore.source !== 'internal' && !clockStore.fall
 // gone: no bar left to finish on), armed slots are kept and the slots that were playing are armed
 // (the next Play starts them again; a press on an armed pad disarms it).
 function startArmed() {
+  if (!rigFollowPlay.value) { s.display = 'Live Play: nothing started (Live Play off)'; return }
   for (const id of SLOT_ROWS) {
     const slot = rigArmed[id]
     if (slot === null) continue
@@ -287,9 +289,14 @@ function startArmed() {
 }
 rigTransport.onPlayAll = startArmed
 watch(live, v => { rigTransport.live = v }, { immediate: true })
+/** The slots playing now, by row (what a Stop keeps armed). */
+const playingSlots = () => Object.fromEntries(SLOT_ROWS.map(id => [id, s.apps.find(x => x.id === id)?.playing]))
+// A Stop from Rig Controls: the slots playing when it was pressed — by the time Live stops, the Drum
+// Machine may have ended (Stop@end) and the others stopped, so Live's Stop would find none playing.
+let stopArm = null
 const offLiveGrid = externalGrid.on(e => {
   if (!live.value || e.type !== 'stop') return
-  armPlaying(Object.fromEntries(SLOT_ROWS.map(id => [id, s.apps.find(x => x.id === id)?.playing])))
+  armPlaying(stopArm ?? playingSlots()); stopArm = null
   for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
 })
 onUnmounted(() => {
@@ -304,15 +311,37 @@ function restartTimer() {
   timer = null
   if (!live.value && s.clock.running) timer = setInterval(() => tick(s), 60000 / s.clock.bpm / 4) // 16ths
 }
+// Stop with the Drum Machine's Stop@end (+Fill): it finishes its bar (its fill) first, then `stop`
+// (Live's Stop, or SY.CORE's). Pressed again while waiting: the Drum Machine stops now, then `stop`.
+// Called off (a pad starts the drums again): nothing stops.
+let endingStop = null
+function stopAtDrumEnd(stop) {
+  if (!endingStop) stopArm = playingSlots()
+  if (endingStop) { window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: false, end: true } })); return }
+  const detail = { play: false, end: true, deferred: false }
+  if (drumStore.isPlaying) window.dispatchEvent(new CustomEvent('dm-play-stop', { detail }))
+  if (!detail.deferred) { stop(); return }
+  s.display = 'Stop at the end of the bar (Drum Machine Stop@end) — press again: now'
+  endingStop = watch([() => drumStore.isPlaying, () => rigReports.drumStopPending], ([playing, pending]) => {
+    if (playing && pending) return
+    endingStop(); endingStop = null
+    if (!playing) stop(); else stopArm = null // called off
+  })
+}
 function togglePlay() {
   if (live.value) {
     if (s.clock.source === 'EXT') {
       // Live is the clock: Play / Stop Live itself (SY.CORE Link 1.5+); its transport report follows
       const on = !linkClient.transport.playing
-      s.display = linkClient.sendPlay(on) ? `Live: ${on ? 'Play' : 'Stop'}` : 'Live is the clock master: Play / Stop from Live (SY.CORE Link 1.5+ plays it from here)'
+      const send = () => {
+        const sent = linkClient.sendPlay(on)
+        if (!sent) stopArm = null
+        s.display = sent ? `Live: ${on ? 'Play' : 'Stop'}` : 'Live is the clock master: Play / Stop from Live (SY.CORE Link 1.5+ plays it from here)'
+      }
+      if (on) { stopArm = null; send() } else stopAtDrumEnd(send)
       return
     }
-    if (s.clock.running) stopAll(); else playAll()
+    if (s.clock.running) stopAtDrumEnd(() => { const arm = stopArm; stopAll(); if (arm) armPlaying(arm); stopArm = null }); else playAll()
     return
   }
   if (s.clock.running) stopClock(s); else startClock(s)
@@ -332,7 +361,7 @@ watch(mode, m => {
   restartTimer()
   if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq, Bass, Arp connected'; liveLoop() }
 }, { immediate: true })
-onUnmounted(() => { clearInterval(timer); endLiveLoop() })
+onUnmounted(() => { clearInterval(timer); endLiveLoop(); endingStop?.(); endingStop = null })
 
 /** LIVE: an action not connected to the apps yet. */
 const notConnected = what => { s.display = `${what}: not connected yet (SIM only)` }
@@ -569,6 +598,8 @@ function toggleLatch() { s.latch = !s.latch; s.display = `Latch ${s.latch ? 'on'
 function toggleShift() { s.shift = !s.shift }
 function toggleGenMode() { s.generateMode = s.generateMode === 'ai' ? 'builtin' : 'ai'; s.display = `Generate: ${s.generateMode === 'ai' ? 'AI' : 'built-in'}` }
 const focused = computed(() => s.apps.find(a => a.id === focusApp.value))
+/** The app the knobs act on (Rig Controls' app buttons). */
+function setFocus(id) { focusApp.value = id; s.display = `Knobs → ${focused.value?.label ?? id}` }
 const anySolo = computed(() => s.apps.some(a => a.solo))
 
 /** Cycle the focused track's Trigger sync (Launchpad top button "Sync"). */
@@ -594,6 +625,8 @@ function onRigAction(e) {
       s.display = `${app.label} Trigger sync: ${SYNC_SHORT[app.opts.triggerSync]}`
       return
     case 'fill': return onFill()
+    case 'chain': return toggleChain(a.app)
+    case 'play': return togglePlay()
     case 'section': return onSection(a.index)
     case 'key_down': return onKeyShift(-1)
     case 'key_up': return onKeyShift(1)
@@ -778,7 +811,28 @@ const queueOrder = (a, i) => { const k = a.queue.indexOf(i); return k === -1 ? n
 const sectionHasContent = i => s.apps.some(a => a.filled[i])
 const lanePageOffset = computed(() => (s.shift ? 8 : 0))
 /** The Launchpad's row 6 (Performance pads). */
-const LP_PERF_LABELS = ['Fill', 'Repeat', 'Latch']
+const LP_PERF_LABELS = ['Fill', 'Auto', 'Now/Bar', 'Repeat', 'Latch', 'Drum Chain', 'Chord Chain', 'Seq Chain']
+// Row 6, pads 6–8: the apps' Chain mode (dark red off · red blinking on), taken at the end of the bar /
+// slot / pattern playing (on: the chain from its start; off: what was playing, looped).
+const CHAIN_PADS = { 5: 'drum', 6: 'chord', 7: 'seq' }
+const CHAIN_SHORT = { drum: 'D·CHN', chord: 'C·CHN', seq: 'S·CHN' }
+const CHAIN_NAME = { drum: 'Drum', chord: 'Chord', seq: 'Seq' }
+function chainOn(id) {
+  return id === 'drum' ? drumStore.chainEnabled : id === 'chord' ? chordStore.chainEnabled : seqStore.chainEnabled
+}
+function chainEmpty(id) {
+  return id === 'drum' ? !useDrumMachineEngine().chain.value.some(Boolean)
+    : id === 'chord' ? !chordStore.chain.some(i => i >= 0)
+    : !seqStore.chain.some(i => i !== null && i >= 0)
+}
+function toggleChain(id) {
+  const on = !chainOn(id)
+  if (id === 'drum') drumStore.chainEnabled = on
+  else if (id === 'chord') chordStore.chainEnabled = on
+  else seqStore.setChainEnabled(on)
+  const when = id === 'drum' ? 'next bar' : id === 'chord' ? 'end of the slot' : 'end of the pattern'
+  s.display = `${CHAIN_NAME[id]} Chain ${on ? 'on' : 'off'}${chainEmpty(id) ? ' (no chain set: set it in its panel)' : ` — from the ${when}`}`
+}
 
 // ── Tailwind classes ──────────────────────────────────────────────────────
 const SLOT_CLASS = {
@@ -793,6 +847,8 @@ const LED_CLASS = {
   amberFlash: 'bg-amber-400 border-amber-200 text-black animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.7)]',
   green: 'bg-green-500 border-green-300 text-black shadow-[0_0_10px_rgba(34,197,94,0.7)]',
   red: 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(220,38,38,0.7)]',
+  redDim: 'bg-red-950/70 border-red-900/80 text-red-300/80',
+  redFlash: 'bg-red-600 border-red-400 text-white animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.7)]',
 }
 const btn = 'px-2 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wider transition-colors select-none'
 const btnIdle = 'bg-white/[0.04] border-white/10 text-neutral-300 hover:bg-white/10'
@@ -828,8 +884,8 @@ function lpPad(row, col) {
     const color = a.muted && st === 'playing' ? 'red' : slotColor(st)
     return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
   }
-  // Row 6: Fill (red: the Drum Machine's), Repeat (hold: the Drum Machine's Repeat), Latch (not
-  // connected in LIVE: the master keyboard's) and five free pads.
+  // Row 6: Fill (the Drum Machine's), Auto Fill (its Autofill on / off), the Fill's Now / Bar, Repeat
+  // (hold: the Drum Machine's Repeat), Latch (not connected in LIVE: the master keyboard's), Drum / Chord / Seq Chain.
   if (row === 5) {
     const label = LP_PERF_LABELS[col]
     if (!label) return { label: '—', short: '', color: 'off' }
@@ -838,7 +894,17 @@ function lpPad(row, col) {
       const look = live.value ? fillLook(rigReports) : s.fill ? 'playing' : 'idle'
       return { label, short: label, color: look === 'playing' ? 'red' : look === 'waiting' ? 'amberFlash' : 'amber' }
     }
-    if (col === 1) return { label: 'Repeat (hold)', short: label, color: s.repeater || (live.value && drumStore.repeaterActive) ? 'green' : 'amber' }
+    // the Drum Machine's Autofill (a fill every N bars): on green · off amber
+    if (col === 1) return { label: `Auto Fill ${drumStore.autofillEnabled ? 'on' : 'off'}`, short: 'AUTO', color: drumStore.autofillEnabled ? 'green' : 'amber' }
+    // the Fill's when: Now (amber) · Bar (green — armed, the whole next bar)
+    if (col === 2) return drumStore.fillWhen === 'bar'
+      ? { label: 'Fill: next bar', short: 'BAR', color: 'green' }
+      : { label: 'Fill: now', short: 'NOW', color: 'amber' }
+    if (col === 3) return { label: 'Repeat (hold)', short: label, color: s.repeater || (live.value && drumStore.repeaterActive) ? 'green' : 'amber' }
+    if (CHAIN_PADS[col]) {
+      const id = CHAIN_PADS[col], on = chainOn(id)
+      return { label: `${label} ${on ? 'on' : 'off'}`, short: CHAIN_SHORT[id], color: on ? 'redFlash' : 'redDim' }
+    }
     if (live.value) return { label: `${label} (not connected)`, short: label, color: 'off' }
     return { label, short: label, color: s.latch ? 'green' : 'amber' }
   }
@@ -876,12 +942,27 @@ function lpTopUp(i) {
   if (i === 1) holdEnd('int')
   if (i === 7) holdEnd('panic')
 }
+function toggleFollowPlay() {
+  rigFollowPlay.value = !rigFollowPlay.value
+  s.display = rigFollowPlay.value ? 'Live Play: starts the armed slots' : 'Live Play off: Live\'s Play starts nothing (listen back) — pads still start their slots'
+}
+function toggleAutoFill() {
+  drumStore.autofillEnabled = !drumStore.autofillEnabled
+  s.display = `Drum: Auto Fill ${drumStore.autofillEnabled ? 'on' : 'off'}`
+}
+function toggleFillWhen() {
+  drumStore.fillWhen = drumStore.fillWhen === 'bar' ? 'now' : 'bar'
+  s.display = `Fill: ${drumStore.fillWhen === 'bar' ? 'the whole next bar' : 'now, to the end of this bar'}`
+}
 function lpPadDown(row, col) {
   if (row < 5) return onSlotDown(s.apps[row].id, col)
   if (row === 5) {
     if (col === 0) return onFill()
-    if (col === 1) return repeaterOn()
-    if (col !== 2) return
+    if (col === 1) return toggleAutoFill()
+    if (col === 2) return toggleFillWhen()
+    if (col === 3) return repeaterOn()
+    if (CHAIN_PADS[col]) return toggleChain(CHAIN_PADS[col])
+    if (col !== 4) return
     if (live.value) return notConnected('Latch (the master keyboard\'s)')
     return toggleLatch()
   }
@@ -890,7 +971,7 @@ function lpPadDown(row, col) {
 }
 function lpPadUp(row, col) {
   if (row < 5) return onSlotUp(s.apps[row].id, col)
-  if (row === 5 && col === 1) repeaterOff()
+  if (row === 5 && col === 3) repeaterOff()
 }
 function lpSideDown(row) {
   if (row < 5) return onGenerate(s.apps[row].id)
@@ -1272,7 +1353,7 @@ const arcPath = v => {
 // The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
 // (Performance), teleported there while it is open.
 provide(RIG_CONTROLS_CTX, {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleLatch, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleLatch, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 })
 </script>
 
@@ -1522,7 +1603,7 @@ provide(RIG_CONTROLS_CTX, {
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-1 text-neutral-300">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Map</h3>
             <div>Rows 1–5 · Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes)</div>
-            <div>Row 6 · Fill · Repeat (hold) · Latch</div>
+            <div>Row 6 · Fill · Auto Fill · Now/Bar · Repeat (hold) · Latch · Drum Chain · Chord Chain · Seq Chain (dark red off · red blinking on)</div>
             <div>Row 7 · Sections 1–8</div>
             <div>Row 8 · Mute 1–5 (Drum, Chord, Seq, Bass, Arp)</div>
             <div>Side · Generate per row (Shift: Mutate) · Undo · Key − · Key +</div>
@@ -1630,11 +1711,11 @@ provide(RIG_CONTROLS_CTX, {
         <RigControlSections only="transport" />
         <RigControlSections only="performance" />
         <RigControlSections only="safety" />
-        <RigControlSections only="template" />
+        <!-- no Controller template here: set up in EDIT (the Rig layout), not while performing -->
         <button class="mt-auto shrink-0 h-14 flex items-center justify-center gap-2 rounded-lg border text-sm font-black uppercase tracking-widest select-none"
-                :class="playOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-neutral-800 border-white/15 text-neutral-200 hover:bg-neutral-700'"
-                :title="live && s.clock.source === 'EXT' ? 'Play / Stop Ableton Live (SY.CORE Link)' : 'Play / Stop the clock'"
-                @click="togglePlay">
+                :class="[playOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-neutral-800 border-white/15 text-neutral-200 hover:bg-neutral-700', learnedRing('rig_play')]"
+                :title="(live && s.clock.source === 'EXT' ? 'Play / Stop Ableton Live (SY.CORE Link)' : 'Play / Stop the clock') + ' — right-click: MIDI Learn'"
+                @click="togglePlay" @contextmenu="learnMenu($event, 'rig_play', 'Play / Stop')">
           <component :is="playOn ? Square : Play" class="w-5 h-5" /> {{ playOn ? 'Stop' : 'Play' }}
         </button>
       </div>

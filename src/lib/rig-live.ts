@@ -18,7 +18,8 @@
  * The apps keep their queued slot and (the Sequencer) their play state in
  * component locals: they report them into `rigReports`.
  */
-import { reactive } from 'vue'
+import { reactive, ref, watch } from 'vue'
+import { userKey } from '@/lib/userKey'
 import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { controlActionEvent, type ControlAction } from '@/lib/control-map'
 import type { RigAppState, RigState } from '@/lib/rig-controller'
@@ -41,6 +42,13 @@ export const SLOT_ROWS: readonly SlotRowId[] = ['chord', 'drum', 'seq', 'bass']
  *  armed in the Rig start (`onPlayAll`, called by playAll after its own starts), as Live's scenes. */
 export const rigTransport: { live: boolean; onPlayAll: (() => void) | null } = { live: false, onPlayAll: null }
 
+/** Live's Play starts the armed slots (on, as Live's scenes) — off: Live's Play starts nothing (to
+ *  listen back to a take in Live; the clock stays locked, a pad starts its slot as while playing,
+ *  the armed slots stay armed for when it is back on). Remembered per user. */
+const LS_FOLLOW_PLAY = 'SYCORE_RIG_FOLLOW_PLAY'
+export const rigFollowPlay = ref((() => { try { return localStorage.getItem(userKey(LS_FOLLOW_PLAY)) !== '0' } catch { return true } })())
+watch(rigFollowPlay, v => { try { localStorage.setItem(userKey(LS_FOLLOW_PLAY), v ? '1' : '0') } catch {} })
+
 /** Inside the Drum Machine: its drums and its bassline muted, and their velocity factors (0–1),
  *  from the rig's Drum and Bass rows (Drum: when its Mute / Intensity act on the whole app). */
 export const rigParts = reactive({ drumMuted: false, bassMuted: false, drumVelocity: 1, bassVelocity: 1 })
@@ -58,6 +66,8 @@ export const rigReports = reactive({
   fill: false,
   /** Its Fill armed for the next bar, not playing yet (Fill: Bar). */
   fillArmed: false,
+  /** The Drum Machine is finishing its bar before it stops (Stop@end, +Fill). */
+  drumStopPending: false,
 })
 
 /** The Fill's look on the Rig: dark amber idle, light amber blinking waiting (armed for the next bar),

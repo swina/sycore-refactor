@@ -13,6 +13,7 @@
  * transpose, the progression data has its own loader, the transport ticks are read by a getter.
  */
 import { chordBassNote } from '@/lib/chord-custom'
+import { journaled } from '@/lib/session-takes'
 import { ref, computed, watch, effectScope, onScopeDispose } from 'vue'
 import { getTransport, start as toneStart } from 'tone'
 import { drawAt } from '@/lib/ui-clock'
@@ -216,6 +217,7 @@ function createChordProgEngine() {
     let arpRate = store.arpRate
     let chainSlotIndices = null
     let chainLocalIndices = null
+    let chainPositions = null
 
     if (store.chainEnabled && store.chain.some(i => i >= 0)) {
       const chainSteps = store.getChainSteps()
@@ -223,6 +225,7 @@ function createChordProgEngine() {
       numSteps = chainSteps.numSteps
       chainSlotIndices = chainSteps.slotIndices
       chainLocalIndices = chainSteps.localIndices
+      chainPositions = chainSteps.positions
     }
 
     return {
@@ -239,6 +242,7 @@ function createChordProgEngine() {
       tickCounter: 0,
       chainSlotIndices,
       chainLocalIndices,
+      chainPositions,
       // Per-step-position arp pattern traversal state, keyed by stepPointer
       // (the position within `steps`, whether a single slot's 16 steps or a
       // longer flattened chain) — each position cycles its own arpMode
@@ -476,6 +480,7 @@ function createChordProgEngine() {
       store.currentStep = 0
       store.playingChordName = ''
       store.playingSlotIndex = null
+      store.playingChainPos = -1
       playStateRef.current = {}
       _captureArmed = false
       if (_captureRecording) {
@@ -601,6 +606,7 @@ function createChordProgEngine() {
             if (state.chainSlotIndices) {
               const slotIdx = state.chainSlotIndices[state.stepPointer]
               store.currentStep = state.chainLocalIndices[state.stepPointer]
+              store.playingChainPos = state.chainPositions?.[state.stepPointer] ?? -1
               store.playingSlotIndex = slotIdx
               // Follow the chain: switch the displayed/editable slot to show
               // the chords actually playing right now. Only on a slot
@@ -616,6 +622,7 @@ function createChordProgEngine() {
             } else {
               store.currentStep = state.stepPointer
               store.playingSlotIndex = store.activeSlotIndex
+              store.playingChainPos = -1
             }
           }, time)
 
@@ -742,6 +749,7 @@ function createChordProgEngine() {
           } else {
             state.stepPointer = nextPointer
           }
+          _chainSwitch(state)
         }
       }
 
@@ -756,6 +764,39 @@ function createChordProgEngine() {
       transportManager.acquireTransport()
     })
   })
+
+  // Chain switched on / off while playing (the Rig's Chord Chain, the panel): at the end of the slot
+  // playing (its next chord is its first) — on: the chain from its start; off: the slot that was
+  // playing, looped. Called after the pointer moved to the next chord.
+  function _chainSwitch(state) {
+    const want = store.chainEnabled && store.chain.some(i => i >= 0)
+    const has = !!state.chainSlotIndices
+    if (want === has) return
+    const local = has ? state.chainLocalIndices[state.stepPointer] : state.stepPointer
+    if (local !== 0) return
+    if (want) {
+      const c = store.getChainSteps()
+      state.steps = c.steps
+      state.numSteps = c.numSteps
+      state.chainSlotIndices = c.slotIndices
+      state.chainLocalIndices = c.localIndices
+      state.chainPositions = c.positions
+      _lastFollowedSlot = store.activeSlotIndex
+    } else {
+      const prev = state.stepPointer === 0 ? state.numSteps - 1 : state.stepPointer - 1
+      const slot = state.chainSlotIndices[prev]
+      if (slot != null && store.activeSlotIndex !== slot) handleSlotSelect(slot)
+      state.steps = store.steps
+      state.numSteps = store.numSteps
+      state.playMode = store.playMode
+      state.arpRate = store.arpRate
+      state.chainSlotIndices = null
+      state.chainLocalIndices = null
+      state.chainPositions = null
+    }
+    state.stepPointer = 0
+    state.arpPatternStates = new Map()
+  }
 
   // Sync live state changes into playStateRef without restarting.
   // Skipped during chain playback: state.steps there is the flattened,
@@ -984,12 +1025,15 @@ function createChordProgEngine() {
       }, 1000))
     })
   }
+  // journaled (lib/session-takes.ts): the progression it replaces is kept as a session take
   function handleGenerate() {
-    store.generateAlgorithmic(progressionData.value)
-    const dur = fillDurationRandom.value
-      ? DURATION_OPTIONS[Math.floor(Math.random() * DURATION_OPTIONS.length)]
-      : fillDuration.value
-    for (let i = 0; i < store.numSteps; i++) store.setStep(i, { duration: dur })
+    journaled('chord', store.activeSlotIndex, () => {
+      store.generateAlgorithmic(progressionData.value)
+      const dur = fillDurationRandom.value
+        ? DURATION_OPTIONS[Math.floor(Math.random() * DURATION_OPTIONS.length)]
+        : fillDuration.value
+      for (let i = 0; i < store.numSteps; i++) store.setStep(i, { duration: dur })
+    })
   }
   // A Rig pad adds { sync } (its Trigger sync, sixteenths): the start waits for that sync point of
   // Live's song grid (0 = at once), the stop lets the chords play up to it.
@@ -1014,7 +1058,7 @@ function createChordProgEngine() {
     if (e?.detail?.mode === 'ai' && !_cpGenBusy) {
       _cpGenBusy = true
       try {
-        if (await store.generateFromAiPrompt('A fresh chord progression for a live set, different from the current one, same key')) return
+        if (await journaled('chord', store.activeSlotIndex, () => store.generateFromAiPrompt('A fresh chord progression for a live set, different from the current one, same key'), { source: 'ai' })) return
       } catch {} finally { _cpGenBusy = false }
     }
     handleGenerate()

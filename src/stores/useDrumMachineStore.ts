@@ -931,13 +931,15 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     }
   }
 
-  function setBasslineStep(voiceIdx: number, stepIdx: number, patch: Partial<DrumStep>) {
-    const step = basslineSequences.value[activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
+  // `seq`: the bassline sequence to edit (the Performance play view edits the one it shows: the
+  // Rig's bass part's own, else the drums'); default the active sequence.
+  function setBasslineStep(voiceIdx: number, stepIdx: number, patch: Partial<DrumStep>, seq?: string | null) {
+    const step = basslineSequences.value[seq ?? activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
     if (step) Object.assign(step, patch)
   }
 
-  function toggleBasslineStep(voiceIdx: number, stepIdx: number) {
-    const step = basslineSequences.value[activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
+  function toggleBasslineStep(voiceIdx: number, stepIdx: number, seq?: string | null) {
+    const step = basslineSequences.value[seq ?? activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
     if (!step) return
     step.active = !step.active
     if (step.active) {
@@ -946,8 +948,8 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     }
   }
 
-  function setBasslineNote(voiceIdx: number, stepIdx: number, note: number) {
-    const step = basslineSequences.value[activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
+  function setBasslineNote(voiceIdx: number, stepIdx: number, note: number, seq?: string | null) {
+    const step = basslineSequences.value[seq ?? activeSequence.value]?.[voiceIdx]?.steps[stepIdx]
     if (step) { step.note = Math.max(24, Math.min(60, note)); step.active = true }
   }
 

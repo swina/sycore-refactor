@@ -1,6 +1,7 @@
 <script setup>
 import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
+import { journaled } from '@/lib/session-takes'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import ChordProgPlayView from '@/components/play/ChordProgPlayView.vue'
 import { usePlayView } from '@/composables/usePlayView'
@@ -82,7 +83,7 @@ const midiImportBpm = ref(120)
 async function handleAiResult(data) {
   aiLoading.value = true
   try {
-    await store.generateFromAiPrompt(data)
+    await journaled('chord', store.activeSlotIndex, () => store.generateFromAiPrompt(data), { source: 'ai' })
   } finally {
     aiLoading.value = false
   }
