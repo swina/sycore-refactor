@@ -232,6 +232,33 @@ const stepClipboard = ref(null) // full ChordStep, or null
 const stepContextMenu = ref({ visible: false, x: 0, y: 0, idx: null })
 const slotContextMenu = ref({ visible: false, x: 0, y: 0, idx: null })
 
+// ── Drag & drop a step to move its chord (the others shift) ───────────────
+const dragFromIdx = ref(null)
+const dragOverIdx = ref(null)
+
+function onStepDragStart(idx, e) {
+  if (idx >= store.numSteps) { e.preventDefault(); return }
+  dragFromIdx.value = idx
+  e.dataTransfer.effectAllowed = 'move'
+  try { e.dataTransfer.setData('text/plain', String(idx)) } catch {}
+}
+
+function onStepDragOver(idx, e) {
+  if (dragFromIdx.value === null || idx >= store.numSteps) return
+  e.dataTransfer.dropEffect = 'move'
+  dragOverIdx.value = idx
+}
+
+function onStepDrop(idx) {
+  if (dragFromIdx.value !== null && idx < store.numSteps) store.moveStep(dragFromIdx.value, idx)
+  onStepDragEnd()
+}
+
+function onStepDragEnd() {
+  dragFromIdx.value = null
+  dragOverIdx.value = null
+}
+
 function openStepContextMenu(idx, e) {
   const menuW = 160
   const menuH = 60
@@ -875,8 +902,17 @@ function velBarColor(v) {
             idx === store.selectedStepIdx && !isCurrentPlayingStep(idx) ? 'border-purple-500 bg-purple-900/20' : '',
             step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-purple-700/60 bg-purple-950/40' : '',
             !step.active && !isCurrentPlayingStep(idx) && !(idx === store.selectedStepIdx) ? 'border-neutral-800 bg-neutral-950/60' : '',
+            dragFromIdx === idx ? 'opacity-40' : '',
+            dragOverIdx === idx && dragFromIdx !== null && dragFromIdx !== idx ? 'ring-2 ring-cyan-400' : '',
           ]"
           style="height: 72px; min-width: 0;"
+          :draggable="idx < store.numSteps"
+          title="Drag to move this chord"
+          @dragstart="onStepDragStart(idx, $event)"
+          @dragover.prevent="onStepDragOver(idx, $event)"
+          @dragleave="dragOverIdx === idx && (dragOverIdx = null)"
+          @drop.prevent="onStepDrop(idx)"
+          @dragend="onStepDragEnd"
           @click="handleStepClick(idx)"
           @dblclick.prevent="handleStepDoubleClick(idx)"
           @contextmenu.prevent="openStepContextMenu(idx, $event)"
@@ -937,7 +973,21 @@ function velBarColor(v) {
 
       <!-- ── STEP DETAIL ────────────────────────────────────────────────── -->
       <div v-if="selectedStep" class="shrink-0 mx-3 mb-2 p-2 bg-black/40 border border-neutral-800 rounded-lg flex items-center gap-4 text-[12px]">
-        <div class="flex rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 justify-center items-center w-[60px]">Step {{ store.selectedStepIdx + 1 }}</div>
+        <div class="flex flex-col rounded text-neutral-400 font-mono shrink-0 bg-violet-600/40 h-full p-1 justify-center items-center w-[60px] gap-1">
+          <span>Step {{ store.selectedStepIdx + 1 }}</span>
+          <div class="flex gap-1" title="Move this chord one step left / right (or drag it in the grid)">
+            <button
+              @click="store.moveStep(store.selectedStepIdx, store.selectedStepIdx - 1)"
+              :disabled="store.selectedStepIdx <= 0"
+              class="w-5 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px] disabled:opacity-30"
+            >◀</button>
+            <button
+              @click="store.moveStep(store.selectedStepIdx, store.selectedStepIdx + 1)"
+              :disabled="store.selectedStepIdx >= store.numSteps - 1"
+              class="w-5 h-4 flex items-center justify-center rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[9px] disabled:opacity-30"
+            >▶</button>
+          </div>
+        </div>
 
         <div class="flex flex-col w-1/5">
           <!-- Active toggle -->

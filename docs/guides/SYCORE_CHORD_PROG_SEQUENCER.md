@@ -89,6 +89,8 @@ The grid shows up to 16 cells. Each cell displays:
 | **Double click** | Toggles the step **active / off** without changing its chord data. |
 | **Click duration badge** | Cycles the duration forward through all available values. |
 | **Shift+click / Right-click duration badge** | Cycles the duration in reverse. |
+| **Drag a step onto another** | **Moves** the chord (with all its settings) there; the steps in between shift by one. The target lights cyan while you drag. Only within the steps in use. |
+| **◀ ▶ under "Step N"** (Step Detail) | Moves the selected chord one step left / right; the selection follows it. |
 | **Right-click step** | Opens a context menu to **Copy** or **Paste** the step's full parameter set (chord, notes, velocity, duration, gate, transpose, mode overrides). |
 
 The **currently playing step** is highlighted in yellow. The **selected step** is highlighted in purple.

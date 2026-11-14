@@ -9,6 +9,7 @@ import { sendAiPrompt } from '@/lib/ai-service'
 import { useAiAgentStore } from './useAiAgentStore'
 import type { ArpMode } from '@/lib/arp-patterns'
 import { detectChord, noteLabel } from '@/lib/chord-detector'
+import { moveStepInList } from '@/lib/chord-step-move'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -442,6 +443,15 @@ export const useChordProgStore = defineStore('chordProg', () => {
     steps.value[idx] = { ...data, notes: [...data.notes] }
   }
 
+  // Drag & drop / ◀ ▶ in the step grid: the step moves, the others shift;
+  // the selection follows the moved step.
+  function moveStep(from: number, to: number) {
+    const moved = moveStepInList(steps.value, from, to, numSteps.value)
+    if (!moved) return
+    steps.value = moved
+    selectedStepIdx.value = Math.max(0, Math.min(numSteps.value - 1, to))
+  }
+
   function toggleStepActive(idx: number) {
     if (idx < 0 || idx >= 16) return
     steps.value[idx] = { ...steps.value[idx], active: !steps.value[idx].active }
@@ -766,7 +776,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, playingChordMs, playingChordBars, playingChordSeq, nextChord, selectedStepIdx,
     selectedKey, keyMode, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
-    setStep, replaceStep, toggleStepActive, assignChordToStep, cycleDuration,
+    setStep, replaceStep, moveStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,
     saveToLibrary, saveAllSlotsToLibrary, updateLibraryPattern, loadLibrary, deleteFromLibrary, loadFromDocument, loadAllSlotsFromDocument,
     loadFromMidiImport,
