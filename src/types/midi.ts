@@ -124,6 +124,8 @@ export enum MidiSource {
   SAMPLER = 'SAMPLER',
   CAPTURE = 'CAPTURE',
   NOTE_LATCH = 'NOTE_LATCH',
+  /** The Rig's capture clips (core/engines/rig-captures.js): records from its IN cables, plays to its OUT. */
+  LIVE_PERF = 'LIVE_PERF',
 }
 
 /** Optional note-range gate on a device→app input route (the "keyboard split" filter).

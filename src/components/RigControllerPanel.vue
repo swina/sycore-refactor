@@ -29,7 +29,7 @@ import {
   LP_TOP_LABELS, LP_SIDE_LOW_LABELS,
   PRESS_OPTIONS, MOTION_OPTIONS, TRIGGER_SYNC_OPTIONS, POSITION_SYNC_OPTIONS,
   createRigState, slotState, slotColor, slotProgress, pressSlot, releaseSlot, setTrackOption,
-  generate, undo, selectSection,
+  generate, selectSection,
   toggleMute, toggleSolo, toggleLaneMute, selectSplit, shiftKey, panic,
   toggleClockSource, tick, startClock, stopClock, lpGridNote, lpSideNote, lpTopCc,
 } from '@/lib/rig-controller'
@@ -55,6 +55,8 @@ import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
+import { useRigCaptures } from '@/core/engines/rig-captures'
+import { clipSummary } from '@/lib/rig-captures'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { countIn, startCountIn, cancelCountIn } from '@/lib/count-in'
 
@@ -90,6 +92,37 @@ const LS_MODE = 'SYCORE_RIG_MODE'
 const mode = ref(localStorage.getItem(LS_MODE) === 'sim' ? 'sim' : 'live')
 const live = computed(() => mode.value === 'live')
 const drumStore = useDrumMachineStore()
+// Row S1–S8: Sections (standard) or Captures (clips recorded live with Capt — core/engines/rig-captures.js)
+const captures = useRigCaptures()
+const LS_SMODE = 'S1_RIG_S_MODE'
+const sMode = ref((() => { try { return localStorage.getItem(LS_SMODE) === 'captures' ? 'captures' : 'sections' } catch { return 'sections' } })())
+watch(sMode, v => { try { localStorage.setItem(LS_SMODE, v) } catch {} })
+function toggleSMode() {
+  sMode.value = sMode.value === 'captures' ? 'sections' : 'captures'
+  s.display = sMode.value === 'captures'
+    ? 'Row S: Captures — Capt records, a pad plays its capture (an empty pad: picks it for the next one; Shift + pad: clears)'
+    : 'Row S: Sections'
+}
+function onCapt() {
+  s.display = captures.toggleRecording()
+}
+function onCapturePad(i) {
+  const c = captures.state
+  if (s.shift) { if (c.clips[i]) { captures.clear(i); s.display = `S${i + 1} cleared` } return }
+  if (!c.clips[i]) {
+    captures.select(i)
+    s.display = c.selected === i ? `S${i + 1} picked for the next capture` : 'Next capture: the first empty pad'
+    return
+  }
+  const was = c.play[i]
+  captures.toggleSlot(i)
+  const p = c.play[i]
+  const started = was === 'idle' && p !== 'idle'
+  s.display = `S${i + 1} (${clipSummary(c.clips[i])}): ${p === 'queued' ? 'plays from the next bar' : p === 'stopping' ? 'stops at the end of the bar' : p === 'playing' ? 'plays on' : 'called off'}`
+    + (!started ? '' : captures.hasOutCable() ? ` → ${captures.outTargets().join(', ')}`
+      : captures.staleNode() ? ' — MIDI Flow: the Live Perf node was saved as a device (no app id): reload the page, delete it and drag Live Perf in again, then cable it'
+      : ' — MIDI Flow: cable Live Perf → your device (no cable: broadcast outputs only)')
+}
 const chordStore = useChordProgStore()
 const seqStore = useStepSequencerStore()
 const arpStore = useArpStore()
@@ -918,6 +951,15 @@ function lpPad(row, col) {
     return { label, short: label, color: s.latch ? 'green' : 'amber' }
   }
   // Row 7: the sections (scenes A–H on every app).
+  if (row === 6 && sMode.value === 'captures') {
+    const c = captures.state, p = c.play[col]
+    if (!c.clips[col]) {
+      const picked = c.selected === col
+      return { label: `Capture ${col + 1}: empty${picked ? ' (next capture)' : ''}`, short: `C${col + 1}`, color: picked ? (c.recording ? 'redFlash' : 'redDim') : 'off' }
+    }
+    const color = p === 'playing' ? 'green' : p === 'queued' || p === 'stopping' ? 'amberFlash' : 'amber'
+    return { label: `Capture ${col + 1}: ${clipSummary(c.clips[col])} · ${p}`, short: `C${col + 1}`, color }
+  }
   if (row === 6) {
     const color = s.section === col ? 'green' : s.queuedSection === col ? 'amberFlash' : sectionHasContent(col) ? 'amber' : 'off'
     return { label: `Section ${col + 1}`, short: `S${col + 1}`, color }
@@ -929,13 +971,18 @@ function lpPad(row, col) {
 }
 
 function lpSide(row) {
+  // Side: GEN Drum / Chord / Seq / Bass · Key − · Key + (Shift: Maj/Min) · Capt · Row S mode
+  if (row === 4) return { label: LP_SIDE_LOW_LABELS[1], short: 'K−', color: 'amber' }
+  if (row === 5) return { label: LP_SIDE_LOW_LABELS[2], short: 'K+', color: 'amber' }
+  if (row === 6) return { label: captures.state.recording ? 'Capture: recording (press: stop)' : 'Capture (press: record)', short: 'Capt', color: captures.state.recording ? 'redFlash' : 'redDim' }
+  if (row === 7) return sMode.value === 'captures'
+    ? { label: 'Row S: Captures (press: Sections)', short: 'S·CAP', color: 'red' }
+    : { label: 'Row S: Sections (press: Captures)', short: 'S·SEC', color: 'amber' }
   if (row < 5) {
     // LIVE: Generate is connected for the Drum Machine, Chord Prog and Sequencer (no Mutate yet).
     const off = live.value && (!GEN_APPS.includes(s.apps[row].id) || s.shift)
     return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: off ? 'off' : s.shift ? 'green' : 'amber' }
   }
-  if (row === 5) return { label: LP_SIDE_LOW_LABELS[0], short: 'UNDO', color: s.undo ? 'amber' : 'off' }
-  return { label: LP_SIDE_LOW_LABELS[row - 5], short: row === 6 ? 'K−' : 'K+', color: 'amber' }
 }
 
 function lpTopDown(i) {
@@ -975,7 +1022,7 @@ function lpPadDown(row, col) {
     if (live.value) return notConnected('Latch (the master keyboard\'s)')
     return toggleLatch()
   }
-  if (row === 6) return onSection(col)
+  if (row === 6) return sMode.value === 'captures' ? onCapturePad(col) : onSection(col)
   if (s.apps[col]) toggleMute(s, s.apps[col].id)
 }
 function lpPadUp(row, col) {
@@ -983,10 +1030,11 @@ function lpPadUp(row, col) {
   if (row === 5 && col === 3) repeaterOff()
 }
 function lpSideDown(row) {
-  if (row < 5) return onGenerate(s.apps[row].id)
-  if (row === 5) return live.value ? notConnected('Undo') : undo(s)
+  if (row < 4) return onGenerate(s.apps[row].id)
+  if (row === 6) return onCapt()
+  if (row === 7) return toggleSMode()
   if (s.shift && live.value) return onKeyMode()
-  onKeyShift(row === 6 ? -1 : 1)
+  onKeyShift(row === 4 ? -1 : 1)
 }
 
 // ── Key (LIVE: the Chord Prog's key, root + mode — chord-key.ts) ──────────
@@ -1613,9 +1661,9 @@ provide(RIG_CONTROLS_CTX, {
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Map</h3>
             <div>Rows 1–5 · Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes)</div>
             <div>Row 6 · Fill · Auto Fill · Now/Bar · Repeat (hold) · Latch · Drum Chain · Chord Chain · Seq Chain (dark red off · red blinking on)</div>
-            <div>Row 7 · Sections 1–8</div>
+            <div>Row 7 · Sections 1–8 — or Captures 1–8 (side S·SEC / S·CAP)</div>
             <div>Row 8 · Mute 1–5 (Drum, Chord, Seq, Bass, Arp)</div>
-            <div>Side · Generate per row (Shift: Mutate) · Undo · Key − · Key +</div>
+            <div>Side · Generate Drum, Chord, Seq, Bass (Shift: Mutate) · Key − · Key + (Shift: Maj/Min) · Capt (record a capture) · Row S: Sections / Captures</div>
             <div>Top · Beat/Tap · EXT/INT (hold) · Shift · Gen AI · Sync (cycles the focused track's Trigger sync) · Rig · — · Panic (hold)</div>
             <div class="text-[10px] text-neutral-500">Slot pads follow each track's Press mode: hold modes react on release too.</div>
           </section>

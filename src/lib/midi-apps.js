@@ -4,7 +4,7 @@
  * the Instrument Cockpit (InstrumentCockpitPanel.vue). Single source of
  * truth so both stay in sync if an app is ever added/renamed.
  */
-import { ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Disc3, Grid3X3, Lock, Rows3 } from 'lucide-vue-next'
+import { ListMusic, Music2, Keyboard as KeyboardIcon, Music, Zap, Layers, Drum, Disc3, Grid3X3, Lock, Rows3, Clapperboard } from 'lucide-vue-next'
 import { MidiSource } from '@/core/midi/midi-service'
 
 export const MIDI_APPS = [
@@ -19,6 +19,8 @@ export const MIDI_APPS = [
   { name: 'Sampler',           sourceId: MidiSource.SAMPLER,    icon: Disc3,        hasIn: true },
   { name: 'Piano Roll',        sourceId: MidiSource.CAPTURE,    icon: Grid3X3   },
   { name: 'Note Latch',        sourceId: MidiSource.NOTE_LATCH, icon: Lock,   hasIn: true },
+  // the Rig's captures (Launchpad Capt / row S in Captures): IN = what it records, OUT = where it plays
+  { name: 'Live Perf',         sourceId: MidiSource.LIVE_PERF,  icon: Clapperboard, hasIn: true },
 ]
 
 // Maps a MIDI_APPS sourceId to the uiStore panel id it opens (Transport/Clock
@@ -34,6 +36,7 @@ export const APP_PANEL_ID = {
   [MidiSource.SAMPLER]:      'sampler',
   [MidiSource.CAPTURE]:      'capture',
   [MidiSource.NOTE_LATCH]:   'note-latch',
+  [MidiSource.LIVE_PERF]:    'rig-controller',
 }
 
 const NOTE_LATCH_BASE = MidiSource.NOTE_LATCH

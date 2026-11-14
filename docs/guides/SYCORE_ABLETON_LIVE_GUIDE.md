@@ -324,10 +324,21 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 |---|---|
 | **Rows 1–5** | Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes) |
 | **Row 6** | **Fill** (dark amber / light amber waiting / red playing) · **Auto Fill** (the Drum Machine's Autofill: on green, off amber) · **Now / Bar** (the Fill's when: NOW amber, BAR green) · **Repeat** (hold) · Latch (not connected in LIVE) · **Drum Chain** · **Chord Chain** · **Seq Chain** (dark red off, red blinking on) |
-| **Row 7** | Sections 1–8 |
+| **Row 7** | **Sections 1–8** — or **Captures 1–8** (side **S·SEC / S·CAP**, below) |
 | **Row 8** | **Mute 1–5** = Drum, Chord, Seq, Bass, Arp (red while muted) · three free pads |
-| **Side** | **GEN** per row (Shift: Mutate) · Undo · **Key −** · **Key +** (Shift: Maj/Min) |
+| **Side** | **GEN** Drum, Chord, Seq, Bass (Shift: Mutate) · **Key −** · **Key +** (Shift: Maj/Min) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
 | **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Sync** · Rig · — · Panic (hold) |
+
+### Captures (row 7 in Captures mode)
+
+Record a phrase live and loop it as a MIDI clip, like a clip launcher row:
+
+1. **S·SEC / S·CAP** (side, last button) switches row 7 to **Captures** (side button red; amber = Sections). The choice is remembered.
+2. Optional: press an **empty** pad to pick it for the next capture (dark red); a second press un-picks it. With none picked the capture goes to the first empty pad.
+3. **Capt** (side) starts recording (blinking red): play on any MIDI input (keyboard, pads — not the Rig's own controllers). **Capt** again stops it: the phrase goes to the pad, which turns **amber** (waiting).
+4. Press the amber pad: it plays from the **next bar** (blinking while it waits), green while playing, **looped**. Press again: it ends at the end of the bar.
+
+The recording is placed on the song grid (Live's when following it, SY.CORE's transport otherwise, or from the first note when nothing plays): it starts on the bar line of the first note (a note just ahead of it counts as on it), its length is rounded to the bar nearest the Capt press, and the notes are **quantized to 1/16** automatically. Routing is the MIDI Flow app **Live Perf**: **IN** — cable the devices (or apps, e.g. Chord Sequencer) whose notes Capt records (nothing cabled: every input); **OUT** — cable Live Perf to the device that plays the clips and set the cable's **OUT ch**: a capture has no channel of its own (it goes out on ch 1, remapped by the cable or the device's OUT ch); a pitch arriving on several channels at once (a layered / multi-part keyboard) is kept once. An IN cable's channel filter records only those channels. Note: the MIDI Monitor shows Live Perf's notes on ch 1 and ~200 ms early (when they are scheduled), before the cable's remap. Without an OUT cable the clips reach only the broadcast outputs, which skip the devices you also play from: cable it (the display reminds you when a pad starts). Several captures can play together. Live's or SY.CORE's Stop stops them (they stay on their pads). **Shift + pad** clears a capture. Captures are saved per user.
 
 - **Rig keys**: learn a hardware button to switch Rig mode on and off. **All** covers both controllers, **LP** only the Launchpad, **Mix** only the MIDImix.
 
@@ -420,6 +431,6 @@ Unknown controls and out-of-range values are skipped and reported after the impo
 
 - The sync grid counts bars in **4/4**.
 - The **first note after Play** may be a few tens of ms late: use a 1-bar Count-In when recording.
-- In LIVE, **splits, lane mutes, Undo and Mutate** are simulation-only, **Latch** isn't connected. GEN and Fill aren't connected on the Arp row.
+- In LIVE, **splits, lane mutes and Mutate** are simulation-only (Undo is no longer on the Launchpad), **Latch** isn't connected. GEN and Fill aren't connected on the Arp row.
 - **Trigger sync** applies to the Rig Controller's pads. The apps' own buttons (e.g. the Drum Machine's PLAY with *Start@bar*), Live's Start and the Control Map keep their own behaviour.
 - With SY.CORE on its own clock (not following Live), pads act at once.
