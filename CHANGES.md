@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-13
 
+- **MIDI Capture: Tema — record a theme in time, extract chords and melody** — **Tema** arms the capture: the first note played starts the transport (Play All, no count-in: the groove / Drum Machine) on its bar's 1; Stop (the panel's or the transport's) ends both. In review, **Tema →**: Split (Auto: 3+ notes together = chords; or a split note, two hands), **Chords → Chord Prog** (active slot: a chord per bar, two at half bar when it changes, named from the notes, merged into 2/4/8 bars, up to 16 steps) and **Melody → Sequencer** (a bar per bank from the active one at 1/16, tied long notes; chain set to the banks), each a Session take. `lib/theme-extract.ts` (new), `lib/theme-apply.ts` (new), `MidiCapture.vue`; docs: `SYCORE_MIDI_CAPTURE.md`; tests: `theme-extract.test.ts`. Branch: `feat/scenario-workspaces`
 
 - **Chord Prog: Generate (and the progression library) names the chords right** — the key files' chord names are wrong (A–C–E named `A`, F–A–C `F#`, C–E–G `C#`, D–F–A `D`…): Generate in A minor showed `A` for an A minor. Now each library chord is named from its notes (`detectChord`: `Am`, `F`, `C`, `Dm`…); the file's name only for the few the detector doesn't know (power chords, 9ths: 125 of 7972). Progressions already generated keep their old labels until generated / loaded again. `composables/useProgressionLoader.js` (`normalizeChord`); tests: `progression-loader.test.ts`. Branch: `feat/scenario-workspaces`
 

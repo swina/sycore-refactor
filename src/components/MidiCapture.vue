@@ -8,6 +8,10 @@ import { useCaptureStore } from '@/stores/useCaptureStore'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
+import { splitTheme, extractChords, extractMelody, themeBars } from '@/lib/theme-extract'
+import { applyThemeChords, applyThemeMelody } from '@/lib/theme-apply'
+import { noteLabel } from '@/lib/chord-detector'
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
   storageKey: 'SYCORE_POS_MIDI_CAPTURE',
@@ -30,6 +34,17 @@ const emit = defineEmits(['close', 'reset', 'update:captureEnabled', 'sendToSequ
 
 const midiStore = useMidiStore()
 const captureStore = useCaptureStore()
+const { transportManager, playAll, stopAll } = useGlobalTransportControls()
+
+// ── Theme (Tema): armed, the first note played starts the transport (Play All, no count-in) and is
+// the bar's "1"; Stop (here or the transport's) ends it. Then chords → Chord Prog, melody → Sequencer
+// (lib/theme-extract.ts, lib/theme-apply.ts). ─────────────────────────────────────────────────
+const themeArmed = ref(false)   // waiting for the first note
+const themeRec = ref(false)     // recording, the transport started by the first note
+/** Split note between chords (below) and melody (from it up); null = automatic. */
+const themeSplit = ref(null)
+const themeMsg = ref('')
+const SPLIT_CHOICES = [null, 48, 52, 55, 57, 60, 62, 64, 65, 67, 72]
 
 // ── Persistent state (survives panel close — cleared only by user reset) ──────
 const { frozenNotes, phase, rangeStartMs, rangeEndMs } = storeToRefs(captureStore)
@@ -153,7 +168,11 @@ function startCaptureListener() {
       recentNoteTs.set(`${inputId}:${chan}:${note}`, now)
 
       // Sync start time to first note so there is no leading silence
-      if (!recordingStartTs) recordingStartTs = now
+      if (!recordingStartTs) {
+        recordingStartTs = now
+        // Theme: the first note starts the transport, on its "1"
+        if (themeArmed.value) { themeArmed.value = false; themeRec.value = true; playAll({ countIn: false }) }
+      }
 
       // Expand live pitch range if needed (only grows, never shrinks — keeps canvas height stable)
       if (note < livePMin) livePMin = Math.max(0,   note - 3)
@@ -953,6 +972,10 @@ function onCanvasContextMenu(event) {
 function toggleCapture() {
   if (phase.value === 'capturing') {
     // STOP → freeze the independently captured notes
+    const wasTheme = themeRec.value
+    themeArmed.value = false
+    themeRec.value = false
+    if (wasTheme && transportManager.isRunning.value) stopAll()
     stopCaptureListener()
     emit('update:captureEnabled', false)
     frozenNotes.value = localNotes
@@ -979,6 +1002,45 @@ function toggleCapture() {
     phase.value = 'capturing'
     animFrameId = requestAnimationFrame(drawLivePianoRoll)
   }
+}
+
+/** Arm a theme: capture starts, the transport waits for the first note. */
+function armTheme() {
+  if (phase.value === 'capturing') return
+  themeMsg.value = ''
+  themeArmed.value = true
+  toggleCapture()
+}
+// The transport's Stop (toolbar, Rig, MIDI) ends the theme too
+watch(() => transportManager.isRunning.value, running => {
+  if (!running && themeRec.value && phase.value === 'capturing') toggleCapture()
+})
+
+function themeSource() {
+  const notes = croppedNotes.value
+  const t = t0.value + rangeStartMs.value
+  return { notes, t, bars: themeBars(notes, t, props.bpm) }
+}
+const themeParts = computed(() => {
+  const { notes } = themeSource()
+  const { chord, melody } = splitTheme(notes, { split: themeSplit.value })
+  return { chord, melody }
+})
+function themeToChordProg() {
+  const { t, bars } = themeSource()
+  const chords = extractChords(themeParts.value.chord, { t0: t, bpm: props.bpm, bars })
+  if (!chords.some(c => c.name)) { themeMsg.value = 'No chords found (3+ notes together, or below the split)'; return }
+  const r = applyThemeChords(chords)
+  themeMsg.value = `Chord Prog: ${r.steps} steps — ${chords.slice(0, 16).map(c => c.name || '–').join(' ')}`
+    + (r.dropped ? ` (${r.dropped} more dropped: 16 max)` : '')
+}
+function themeToSequencer() {
+  const { t, bars } = themeSource()
+  if (!themeParts.value.melody.length) { themeMsg.value = 'No melody found (single notes, or from the split up)'; return }
+  const r = applyThemeMelody(extractMelody(themeParts.value.melody, { t0: t, bpm: props.bpm, bars }))
+  const names = 'ABCDEFGH'
+  themeMsg.value = `Sequencer: bank${r.banks.length > 1 ? 's' : ''} ${r.banks.map(i => names[i]).join(' ')}`
+    + (r.banks.length > 1 ? ' (chain set)' : '') + (r.dropped ? ` — ${r.dropped} bars dropped (8 banks max)` : '')
 }
 
 function cropToRange() {
@@ -1224,6 +1286,8 @@ onUnmounted(() => {
   stopPlayback()
   stopTimelineLoop()
   stopCaptureListener()
+  themeArmed.value = false
+  themeRec.value = false
 })
 </script>
 
@@ -1273,6 +1337,17 @@ onUnmounted(() => {
             <Play v-else class="w-3 h-3" />
             {{ phase === 'capturing' ? 'Stop' : 'Capture' }}
           </button>
+          <!-- Theme: the first note starts the transport -->
+          <button
+            v-if="phase !== 'capturing'"
+            @click="armTheme"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest transition-all shrink-0 bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25"
+            title="Theme: armed, the first note you play starts the transport (Play All: groove / Drum Machine) on its bar's 1 and the recording; Stop (here or the transport's) ends it. Then extract the chords and the melody."
+          >Tema</button>
+          <span v-else-if="themeArmed || themeRec" class="shrink-0 text-[10px] font-black uppercase tracking-widest"
+            :class="themeArmed ? 'text-amber-300 animate-pulse' : 'text-amber-400'">
+            {{ themeArmed ? 'Tema: play to start' : 'Tema: rec' }}
+          </span>
 
           <!-- 4-bar timeline -->
           <div class="flex-1 flex flex-col justify-center min-w-0">
@@ -1317,6 +1392,26 @@ onUnmounted(() => {
         <!-- Channel / info row (review only) — output routing is handled by
              MIDI FLOW: cable "Piano Roll" to a device there, or leave it
              unwired to broadcast to every enabled output. -->
+        <!-- Theme: chords → Chord Prog, melody → Sequencer (from the range IN, its bar 1) -->
+        <div v-if="phase === 'review' && croppedNotes.length" class="px-5 py-2 border-b border-neutral-900 bg-amber-950/10 flex items-center gap-3 flex-shrink-0 flex-wrap">
+          <span class="text-[9px] font-black uppercase tracking-widest text-amber-400">Tema →</span>
+          <label class="flex items-center gap-1.5 text-[9px] font-black uppercase text-neutral-500 tracking-wider"
+            title="Auto: notes struck together (3 or more) are chords, the rest melody. A split note: below it chords, from it up melody (two hands).">
+            Split
+            <select v-model="themeSplit" class="bg-black border border-neutral-800 text-neutral-300 text-[10px] font-mono rounded px-1.5 py-0.5 outline-none">
+              <option v-for="n in SPLIT_CHOICES" :key="String(n)" :value="n">{{ n === null ? 'Auto' : noteLabel(n) }}</option>
+            </select>
+          </label>
+          <span class="text-[10px] font-mono text-neutral-500">{{ themeParts.chord.length }} chord notes · {{ themeParts.melody.length }} melody</span>
+          <button @click="themeToChordProg" :disabled="!themeParts.chord.length"
+            class="px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="The chords into the Chord Prog's active slot: one per bar, two when it changes at half bar (a Session take: the slot can be restored)">Chords → Chord Prog</button>
+          <button @click="themeToSequencer" :disabled="!themeParts.melody.length"
+            class="px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="The melody into the Sequencer: a bar per bank from the active one, at 1/16 (Session takes: the banks can be restored)">Melody → Sequencer</button>
+          <span v-if="themeMsg" class="text-[10px] font-mono text-amber-200/80 truncate min-w-0">{{ themeMsg }}</span>
+        </div>
+
         <div v-if="phase === 'review'" class="px-5 py-2 border-b border-neutral-900 bg-neutral-900/20 flex items-center gap-3 flex-shrink-0">
           <Music class="w-3 h-3 text-neutral-500 shrink-0" />
           <!-- Channel -->
