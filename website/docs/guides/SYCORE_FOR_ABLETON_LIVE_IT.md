@@ -108,6 +108,8 @@ I device hanno lo stile di SY.CORE e ti dicono a colpo d'occhio cosa succede: il
 
 - **Suoni, non premi Play e aspetti.** Scegli la progressione, lanci gli accordi uno alla volta, apri e chiudi la batteria, chiudi la frase con un fill.
 - **Usa i controller che hai.** Il Launchpad diventa il pannello del Rig, gli encoder di un controller qualsiasi pilotano Density e Intensity, e il resto del tuo setup resta mappato su Live come prima.
+- **Uno schermo da palco.** Il workspace **Performance** mette affiancati i player, i controlli del Rig e la griglia del Launchpad, senza finestre una sopra l'altra; i pannelli si ridimensionano col dito e i parametri degli strumenti di Live diventano fader verticali.
+- **Trasporto e tempo di Live dal Rig.** Play / Stop avvia e ferma Live; TAP, − / + e la manopola del tempo impostano il tempo di Live.
 - **Niente installazioni.** SY.CORE si apre da un indirizzo nel browser: niente driver e niente plugin da aggiornare.
 
 ---

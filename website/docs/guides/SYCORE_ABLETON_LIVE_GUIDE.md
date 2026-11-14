@@ -13,7 +13,7 @@
 3. [Install the SY.CORE Link devices](#3-install-the-sycore-link-devices)
 4. [Connect SY.CORE](#4-connect-sycore)
 5. [Track layout: playing and recording](#5-track-layout-playing-and-recording)
-6. [The Rig Controller](#6-the-rig-controller)
+6. [The Rig Controller](#6-the-rig-controller) (and the [Performance workspace](#the-performance-workspace))
 7. [Launching slots: Trigger sync, arming, stopping](#7-launching-slots-trigger-sync-arming-stopping)
 8. [Shaping the performance: Mute, Solo, Intensity, Density, Fill](#8-shaping-the-performance)
 9. [Generating live: GEN and the key](#9-generating-live-gen-and-the-key)
@@ -57,7 +57,7 @@ SY.CORE (browser)                          Ableton Live
 
 ## 3. Install the SY.CORE Link devices
 
-1. **Put the device folder in place.** The bridge looks for its script at a fixed path, `C:\Users\<you>\Documents\sycore-link\sycore-link.js`. Copy the whole `sycore-link` folder there, including `node_modules`.
+1. **Put the device folder in place.** The bridge looks for its script at a fixed path, `C:\Users\<you>\Documents\sycore-link\sycore-link.js`. Copy the whole `sycore-link` folder there, including `node_modules`. **Updating** the bridge: copy the new `sycore-link.js` and `sycore-link.amxd` over the old ones (not `node_modules`: Max's Node keeps it locked), then delete the device from its track and drag it in again, and reload SY.CORE. Play / Stop of Live from SY.CORE needs bridge **1.5** or later, its tempo **1.6** or later.
 2. **Add the bridge.** Drag `sycore-link.amxd` onto a MIDI track. Only one per set; a dedicated track such as "SY.CORE Control" is a good home.
 3. **Check it started.** The device panel shows:
    - **status LED**: amber = waiting for SY.CORE, green = connected, red = error (e.g. port 9400 already in use);
@@ -83,6 +83,8 @@ SY.CORE (browser)                          Ableton Live
 | Sequencer | 2 | Receive ch 2 → instrument |
 
 From now on, pressing **Play in Live** starts the apps that are in *Sync Apps to Transport*, and Live's **Stop** stops them.
+
+**Live's transport and tempo from SY.CORE** (bridge 1.5 / 1.6): the Rig Controller's **Play** (Rig Controls in the Performance workspace, the Rig's mode bar) starts and stops **Live** itself (with the Drum Machine's *Stop@end* on, the Stop waits for its bar to end — with *+Fill*, a fill as the ending — then stops Live); **TAP**, **− / +** and the tempo knob set **Live's tempo** (SY.CORE follows it, Live playing or stopped). See [Transport and tempo](#transport-and-tempo).
 
 ---
 
@@ -128,12 +130,12 @@ Drop **`sycore-rig.amxd`** on any track (more than one if you like): it shows th
 | **Live** (default) | The **Chord**, **Drum**, **Seq**, **Bass** and **Arp** rows drive the real Chord Prog, Drum Machine, Sequencer, the Drum Machine's bassline and the Arpeggiator, on the real clock. |
 | **Sim** | A simulated rig and clock: try every option without sound. |
 
-Rows are ordered **Chord, Drum, Seq, Bass, Arp**. Two rows work differently from the others:
+Rows are ordered **Drum, Chord, Seq, Bass, Arp** (top to bottom: the panel, the Launchpad's rows 1–5, the MIDImix's strips 1–5). The SY.CORE Rig device in Live keeps its own order (Chord, Drum, Seq, Bass, Arp). Two rows work differently from the others:
 
-- **Bass** is the Drum Machine's **bassline**, played as a **part of its own**: the Drum row launches the drums and the Bass row the bassline, independently — drums + bass, drums only, bass only. A Bass pad turns the bassline on from that sequence (it may be another one than the drums': drums on A, bass on C), the slot playing turns it off and the drums go on; the same for the Drum row. Both off, the Drum Machine stops; a pad on a stopped Drum Machine starts it with that part only. Trigger sync, arming with Live stopped and sections work per row. Its **Mute / Solo / Intensity** act on the bassline only, and the Drum row's (on the whole app) on the drums only. Intensity as **CC 7** needs the bassline on its own MIDI channel (Drum Machine › bassline › MIDI CH, with MIDI OUT ONLY); otherwise it scales velocity. **GEN** makes a new bassline in the sequence the bass plays, on the Chord Prog's key when it is exact, and switches the bassline on.
+- **Bass** is the Drum Machine's **bassline**, played as a **part of its own**: the Drum row launches the drums and the Bass row the bassline, independently — drums + bass, drums only, bass only. A Bass pad turns the bassline on from that sequence (it may be another one than the drums': drums on A, bass on C), the slot playing turns it off and the drums go on; the same for the Drum row. Both off, the Drum Machine stops; a pad on a stopped Drum Machine starts it with that part only. Trigger sync, arming with Live stopped and sections work per row; with Live stopped an armed Drum or Bass slot is **loaded at once** (the Drum Machine shows that sequence; the bassline is pinned to its own armed slot, so the drums' switch doesn't move it). The bassline plays on the Drum Machine's **bassline source pads** (the last three: Rim Shot, Cowbell, Tambourine by default): while no bassline is in use those pads play their **drum** steps like the others; with the Bass part on (or a Bass slot armed) they are its voices, shown as **BASS 1–3** in purple in the Drum Machine's play view. Its **Mute / Solo / Intensity** act on the bassline only, and the Drum row's (on the whole app) on the drums only. Intensity as **CC 7** needs the bassline on its own MIDI channel (Drum Machine › bassline › MIDI CH, with MIDI OUT ONLY); otherwise it scales velocity. **GEN** makes a new bassline in the sequence the bass plays, on the Chord Prog's key when it is exact, and switches the bassline on.
 - **Arp** has no slots: pads **A–H pick an arp mode** (up, down, up-down, down-up, converge, diverge, pinky-up, random) and switch the Arpeggiator on; the mode playing, pressed again, switches it off. Its **Density** sets the Arpeggiator's **octave range** (−3…+3) and its **Intensity** the **rate** (the Arpeggiator's own rates, 1/1d … 1/64t, as its Rate slider); both follow the Arpeggiator's panel and can be MIDI-learned (*Arp Octave*, *Arp Rate*). Mute / Solo act on the Arpeggiator's output (no volume Intensity, and Global doesn't touch it). The Arpeggiator runs on its own rate: Trigger sync and Live's Stop don't apply to it.
 
-Splits, repeat, latch, lane mutes and Undo are still simulation-only in LIVE; the panel says *not connected yet (SIM only)* when you press them.
+In LIVE, **Repeat** (hold) is the Drum Machine's Repeat; **Latch** isn't connected (the panel says *not connected*: play it from your keyboard's Note Latch); splits, lane mutes and Undo are simulation-only (the splits and lane mutes are no longer on the Launchpad).
 
 ### Three views of the same state
 
@@ -151,6 +153,32 @@ Splits, repeat, latch, lane mutes and Undo are still simulation-only in LIVE; th
 | dark | empty slot |
 
 The **display** (green text on black) always says what the last action did, e.g. `Chord A starts on the next bar`, `Drum B armed: starts on Live's Play`, `Chord A stops now`.
+
+### Transport and tempo
+
+The **Transport / Clock** box (Rig layout, Rig Controls):
+
+| Control | With Live (EXT over SY.CORE Link) | SY.CORE's own clock (INT) |
+|---|---|---|
+| **Play / Stop** | starts / stops **Live** (bridge 1.5+); the button shows Live's transport | starts the armed slots / stops all |
+| **Live Play** | **starts slots** (default): Live's Play starts the armed slots · **off (listen back)**: Live's Play starts nothing — to play back a take recorded in Live; the clock stays locked, a pad still starts its slot, the armed slots stay armed. Remembered | — |
+| **TAP** | sets **Live's tempo**, in whole BPM (bridge 1.6+) | sets SY.CORE's tempo |
+| **−** / **+** | Live's tempo ± 1 BPM (**Shift**: ± 0.1) | SY.CORE's tempo (whole BPM) |
+| **Round** | Live's tempo to the nearest whole BPM | — |
+| the **BPM number** | a knob: drag it up / down (mouse or touch), 0.1 BPM per 2 px | the same |
+
+With a MIDI clock master (EXT over a MIDI port) the tempo is the master's: the display says so. All of them can be MIDI-learned (right-click): *Rig Tap tempo*, *Rig Tempo −*, *Rig Tempo +*, *Rig Tempo round*, *Rig Tempo (knob)* — the knob is **relative** (0.5 BPM per step it moves), so a knob picked up anywhere never jumps the tempo.
+
+### The Performance workspace
+
+The footer's workspace switch (**Classic | Performance**) lays out a stage screen: the panels side by side, no overlap, the others closed, lighter visual effects; what plays keeps playing.
+
+- **Left**: Drum Machine, Chord Prog and Sequencer as **play views** (what plays, the settings folded away; **EDIT** in the header opens the full panel, **Play view** goes back), and **Now / Next** — the chord sounding and the next one with their lengths (`1/1` = a bar) and a bar filling over the chord.
+- **Middle**: **Rig Controls** — the Rig Controller's Transport / Clock, Performance (Fill with its *Now / Bar* switch, Repeat, Latch, key, knobs, Generate mode), Safety, and a big **Play** (the Controller template is in the Rig's EDIT layout).
+- **Right**: the Rig Controller (its Launchpad layout, labels on) and, with Live set up in MIDI Flow ("Live (M4L)"), **Map · Live Instruments** under it.
+- The headers: name, **EDIT**, window buttons; the Drum Machine's and the Sequencer's carry their **style** menu (what GEN writes). The Chord Prog's pads show each chord with its length.
+- Every panel resizes from any edge or corner, by mouse or touch, and can be made smaller than in Classic; a panel moved or resized stays there in Performance (**↺** puts them back on their tiles).
+- **Map · Live Instruments**: **TILES** (drag a slot up / down) or **SLIDERS** (two rows of eight vertical faders: a finger on a fader sets the value there) — for touch screens; a value moved on the screen goes straight to Live (no pickup).
 
 ---
 
@@ -181,7 +209,7 @@ Sync points are on **Live's song grid**: a drum pattern launched on beat 2 with 
 
 While SY.CORE follows Live and Live is **stopped**:
 
-- a pad **arms** its slot: it is selected at once and blinks;
+- a pad **arms** its slot: it is selected (loaded) at once and blinks — the Drum Machine's sequence and the bassline's too;
 - press **Play in Live**, and every armed app **starts from its slot on the first downbeat**, together;
 - an app with **no armed slot stays stopped**, even when it is in *Sync Apps to Transport*: with the Rig Controller in LIVE, Play starts Chord Prog, Drum Machine and Sequencer only from the Rig (Live's scenes: nothing plays that you didn't launch);
 - the armed pad again **disarms** it; another pad of the same row moves the arm.
@@ -194,7 +222,7 @@ You can walk on stage with a progression and a drum pattern armed, and start the
 
 ### Sections
 
-**Sections 1–8** (the panel's *Sections* box, the Launchpad's **row 6**) work like a scene in Session View: every connected app that has that slot filled goes to it, as if you pressed its pad — on its track's **Trigger sync** (the Sequencer at the end of its pattern), and a stopped app starts. With Live stopped, the section **arms** those slots: they start on Live's Play. An app already on that slot is left alone (a section never stops anything). Bass follows the Drum Machine; Arp is left out. The section button is lit while its apps play it and blinks while one is still waiting.
+**Sections 1–8** (the panel's *Sections* box, the Launchpad's **row 7**) work like a scene in Session View: every connected app that has that slot filled goes to it, as if you pressed its pad — on its track's **Trigger sync** (the Sequencer at the end of its pattern), and a stopped app starts. With Live stopped, the section **arms** those slots: they start on Live's Play. An app already on that slot is left alone (a section never stops anything). Bass follows the Drum Machine; Arp is left out. The section button is lit while its apps play it and blinks while one is still waiting.
 
 ---
 
@@ -234,10 +262,23 @@ The weakest steps go first, and an accented step holds one level longer. It isn'
 
 ### Fill
 
-**Fill** (rig layout row button, Launchpad row 7) plays a Drum Machine fill **on the next bar**.
+**Fill** (rig layout row button, Rig Controls, Launchpad row 6) plays a Drum Machine fill. **Auto** (Rig Controls, next to Fill; Launchpad row 6, the pad after Fill) turns the Drum Machine's **Autofill** on / off — a fill every N bars, N set in the Drum Machine. Its switch (next to Fill, in the Drum Machine and in Rig Controls; on the Launchpad the pad after Auto Fill) says when:
+
+| Fill | Plays |
+|---|---|
+| **Now** | at once, to the end of this bar (pressed late in a bar: only a few steps) |
+| **Bar** | armed, then the **whole next bar**; pressed again while armed, cancelled |
+
+The Fill pad / button: **dark amber** off, **light amber blinking** waiting for its bar, **red** while the fill plays.
 
 - With no fill yet, the first Fill generates one. The **same fill** then plays on each Fill until you press **Gen** in the Drum Machine.
 - **New** (next to Gen in the Drum Machine) generates a **new fill every time**.
+
+### Repeat
+
+**Drum Chain · Chord Chain · Seq Chain** (Rig Controls, Launchpad row 6, pads 6–8; MIDI Learn `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`) turn each app's **Chain** mode on / off, also while playing — the chain itself is set in the app's panel. The switch is taken at the end of what is playing: the Drum Machine on the next bar, the Chord Prog at the end of its slot, the Sequencer at the end of its pattern. On: the chain from its first slot; off: the slot / bank that was playing goes on looping. Dark red: off · red blinking: on.
+
+**Repeat (hold)** (Rig Controls, Launchpad row 6) turns on the Drum Machine's **Repeat** while held: every drum step plays as a roll of 2, 3 or 4 hits (the Drum Machine's **÷2 / ÷3 / ÷4**); released, it goes back as it was.
 
 ---
 
@@ -281,16 +322,29 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 
 | Area | Function |
 |---|---|
-| **Rows 1–5** | Chord, Drum, Seq, Bass, Arp × slots A–H (Arp: modes) |
-| **Row 6** | Sections 1–8 |
-| **Row 7** | Split 1–4 · **Fill** · Repeat (hold) · Latch · Release all |
-| **Row 8** | Lane mute 1–8 (Shift: 9–16) |
-| **Side** | **GEN** per row (Shift: Mutate) · Undo · **Key −** · **Key +** (Shift: Maj/Min) |
+| **Rows 1–5** | Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes) |
+| **Row 6** | **Fill** (dark amber / light amber waiting / red playing) · **Auto Fill** (the Drum Machine's Autofill: on green, off amber) · **Now / Bar** (the Fill's when: NOW amber, BAR green) · **Repeat** (hold) · Latch (not connected in LIVE) · **Drum Chain** · **Chord Chain** · **Seq Chain** (dark red off, red blinking on) |
+| **Row 7** | **Sections 1–8** — or **Captures 1–8** (side **S·SEC / S·CAP**, below) |
+| **Row 8** | **Mute 1–5** = Drum, Chord, Seq, Bass, Arp (red while muted) · three free pads |
+| **Side** | **GEN** Drum, Chord, Seq, Bass (Shift: Mutate) · **Key −** · **Key +** (Shift: Maj/Min) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
 | **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Sync** · Rig · — · Panic (hold) |
+
+### Captures (row 7 in Captures mode)
+
+Record a phrase live and loop it as a MIDI clip, like a clip launcher row:
+
+1. **S·SEC / S·CAP** (side, last button) switches row 7 to **Captures** (side button red; amber = Sections). The choice is remembered.
+2. Optional: press an **empty** pad to pick it for the next capture (dark red); a second press un-picks it. With none picked the capture goes to the first empty pad.
+3. **Capt** (side) starts recording (blinking red): play on any MIDI input (keyboard, pads — not the Rig's own controllers). **Capt** again stops it: the phrase goes to the pad, which turns **amber** (waiting). **While recording**, a press on any pad picks where the capture goes — a **full** pad blinks red and is **recorded over** (its old clip is kept in Session takes).
+4. Press the amber pad: with Live / SY.CORE playing it starts on the **next bar**; with nothing playing it **waits for Play** and starts on its 1, in sync (blinking while it waits). Green while playing, **looped**. Press again: it ends at the end of the bar (waiting: called off).
+
+The recording is placed on the song grid (Live's when following it, SY.CORE's transport otherwise, or from the first note when nothing plays): it starts on the bar line of the first note (a note just ahead of it counts as on it), its length is rounded to the bar nearest the Capt press, and the notes are **quantized to 1/16** automatically. Routing is the MIDI Flow app **Live Perf**: **IN** — cable the devices (or apps, e.g. Chord Sequencer) whose notes Capt records (nothing cabled: every input); **OUT** — cable Live Perf to the device that plays the clips and set the cable's **OUT ch**: a capture has no channel of its own (it goes out on ch 1, remapped by the cable or the device's OUT ch); a pitch arriving on several channels at once (a layered / multi-part keyboard) is kept once. An IN cable's channel filter records only those channels. Note: the MIDI Monitor shows Live Perf's notes on ch 1 and ~200 ms early (when they are scheduled), before the cable's remap. Without an OUT cable the clips reach only the broadcast outputs, which skip the devices you also play from: cable it (the display reminds you when a pad starts). Several captures can play together. Live's or SY.CORE's Stop stops them (they stay on their pads). **Shift + pad** clears a capture. Captures are saved per user.
+
+**Keeping captures.** Every capture recorded, recorded over, cleared or loaded is journaled in **Session takes** (app **Capt**, targets Pad S1–S8): a clip lost can be loaded back onto any pad. **Sets**: the Rig layout's **Captures (Live Perf)** box saves the 8 pads under a name (Save; the same name updates it) and loads a set back onto the pads (Load: the pads stop; their clips before go to Session takes) — kept in the browser's IndexedDB, per user. The box also has the 8 pads (Shift-click: clear) and Capt.
 
 - **Rig keys**: learn a hardware button to switch Rig mode on and off. **All** covers both controllers, **LP** only the Launchpad, **Mix** only the MIDImix.
 
-> **Important:** in Live's *Settings › Link, Tempo & MIDI*, set the Launchpad's **Control Surface to None** and turn off its **Track** and **Remote** inputs. Otherwise Live receives the pads too and launches or records its own clips alongside SY.CORE.
+> **Important:** in Live's *Settings › Link, Tempo & MIDI*, set the Launchpad's **Control Surface to None** and turn off its **Track** and **Remote** inputs. Otherwise Live receives the pads too and launches or records its own clips alongside SY.CORE. The Control Surface is what matters: with it set to *Launchpad*, Live's script reads the pads even with all the port's Track / Sync / Remote off (a pad in column 1, row 4 records a clip on track 1, slot 4). The Launchpad stays in Live's port list — a connected device always does; that's fine. Live saves these settings only when it quits cleanly (*File › Quit*): after a crash it may bring the Launchpad surface back, so check it again.
 
 ---
 
@@ -309,6 +363,8 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 | a **section** button | Section 1–8 | button |
 | **Sync** (Track options) | cycles that track's Trigger sync | button |
 | **Key ◀ ▶**, **Maj/Min** | key down / up, major ↔ minor | button |
+| **Tap**, **−**, **+**, **Round** (Transport) | tap tempo, tempo − / +, round to whole BPM | button |
+| the **BPM number** (Transport) | tempo knob (relative: 0.5 BPM per step) | knob |
 | **Intensity**, **Density** (Track options) | that app's value | knob / fader |
 | **Global** fader | global intensity | knob / fader |
 
@@ -316,7 +372,7 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 - **LED feedback**: SY.CORE sends the same note or CC back to the controller. On a **Launchpad Mini MK1** the colours match its Rig mode: a slot that holds something amber, playing green, queued or armed blinking green, Mute red. On other controllers a pad is lit (127) while it plays, blinks while queued or armed, and is dark otherwise; Mute and Solo are lit while on. This works on controllers that light a pad when they receive its own note / CC; other colours and LED protocols need a controller template.
 - The panel and the controller drive the same values: move either one and the other follows.
 - The same actions are listed under **Rig Controller** in the **Controller Designer**, to build an on-screen layout of your controller.
-- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode` (`<app>` = chord, drum, seq, bass, arp).
+- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`, `rig_play` (Rig Controls' Play / Stop), `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode`, `rig_tap`, `rig_tempo_down`, `rig_tempo_up`, `rig_tempo_round`, `rig_tempo` (`<app>` = chord, drum, seq, bass, arp).
 
 Controllers you keep for Live (e.g. a MIDImix mapped to Live's mixer) are unaffected.
 
@@ -368,6 +424,7 @@ Unknown controls and out-of-range values are skipped and reported after the impo
 | Launchpad pads record clips in Live | Remove the Launchpad as Control Surface in Live (see [section 10](#10-the-launchpad-in-rig-mode)). |
 | A pad doesn't start the app | Read the display: an empty slot, or the app armed for Live's Play. |
 | Notes doubled, or parts you didn't launch | Clips already in the Arrangement play along with SY.CORE: play live in **Session View** (Arrangement for recording only), or delete the old takes. |
+| Rig's Play / TAP don't move Live | The bridge is older than 1.5 (Play) / 1.6 (tempo): copy the new `sycore-link.js` and `.amxd`, drag the device in again, reload SY.CORE. The display says which version is needed. |
 | Timing drifts | Test on a production build rather than a development server; dev tools slow the page down. |
 
 ---
@@ -376,6 +433,6 @@ Unknown controls and out-of-range values are skipped and reported after the impo
 
 - The sync grid counts bars in **4/4**.
 - The **first note after Play** may be a few tens of ms late: use a 1-bar Count-In when recording.
-- In LIVE, **splits, repeat, latch, lane mutes, Undo and Mutate** are simulation-only. GEN and Fill aren't connected on the Arp row.
+- In LIVE, **splits, lane mutes and Mutate** are simulation-only (Undo is no longer on the Launchpad), **Latch** isn't connected. GEN and Fill aren't connected on the Arp row.
 - **Trigger sync** applies to the Rig Controller's pads. The apps' own buttons (e.g. the Drum Machine's PLAY with *Start@bar*), Live's Start and the Control Map keep their own behaviour.
 - With SY.CORE on its own clock (not following Live), pads act at once.

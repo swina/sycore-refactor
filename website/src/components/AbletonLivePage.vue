@@ -5,7 +5,7 @@ import AbletonModesDiagram from './AbletonModesDiagram.vue'
 import {
   Play, BookOpen, ArrowLeft, Zap, Cable, Clock, Grid3x3, SlidersHorizontal, Sparkles,
   Music, Drum, Timer, CircleDot, Square, KeyRound, Layers, Check, Ban, Globe, ShieldCheck, RefreshCw, Cpu,
-  Crosshair, Shuffle, Hand, Table2,
+  Crosshair, Shuffle, Hand, Table2, Mic, Repeat, LayoutDashboard, Gauge,
 } from 'lucide-vue-next'
 
 const props = defineProps({ appUrl: { type: String, required: true } })
@@ -29,6 +29,8 @@ const liveTerms = [
   ['Pressing a playing clip to stop it', 'The playing slot\'s pad stops the app, in time'],
   ['Launching a clip with the transport stopped', 'The pad arms the slot: it starts with Live\'s Play'],
   ['The transport\'s Stop', 'Live\'s Stop stops every SY.CORE app'],
+  ['Session record into an empty slot', 'Capt records the phrase you play onto a pad (S1–S8): it loops from the next bar'],
+  ['Live\'s Play button and Tap Tempo', 'SY.CORE\'s Play, TAP and tempo knob start Live and set its tempo — with a count-in'],
   ['A Macro on a Rack', 'Density, Intensity, Mute and Solo per track, on any controller via MIDI Learn'],
 ]
 
@@ -41,6 +43,10 @@ const features = [
   { icon: Sparkles, title: 'GEN', text: 'New drums, chords or sequences into the playing slot. Chords built-in or with AI; the Sequencer follows the chords\' key.' },
   { icon: KeyRound, title: 'Exact key', text: 'Cm, Bb, F#m: move the key and switch major/minor from the Launchpad, then generate in it.' },
   { icon: Grid3x3, title: 'Launchpad Rig mode', text: 'The Launchpad becomes the rig: slots, sections, fill, GEN, key and transport, with LEDs that follow the music.' },
+  { icon: Mic, title: 'Captures', text: 'Press Capt and play: the phrase lands on a pad, quantized, a whole number of bars. Press the pad and it loops from the next bar, in sync.' },
+  { icon: Repeat, title: 'Takes and sets', text: 'Record over a pad, clear it, load it back: every clip is kept in Session takes. Save the 8 pads as a named set for the next gig.' },
+  { icon: Gauge, title: 'Live\'s transport', text: 'Play, Stop, TAP and the tempo knob in SY.CORE drive Live itself, with a 1- or 2-bar count-in on screen.' },
+  { icon: LayoutDashboard, title: 'Performance workspace', text: 'One stage screen: Drum, Chords and Sequencer as play views, Now / Next chord, Rig Controls with a big Play, and the Live Map.' },
 ]
 
 // SY.CORE Map: map a controller once, play every instrument
@@ -76,6 +82,7 @@ const demo = [
   'Live is stopped. From the Launchpad, arm progression B and drum pattern A.',
   'Press Play in Live: chords and drums start together on the first downbeat.',
   'Change chords on the bar, then launch a Fill.',
+  'Press Capt, play a riff on your keyboard, Capt again: press its pad and it loops from the next bar.',
   'Pull Density down for the break, open it again for the drop.',
   'GEN a new progression in Cm and play it straight away.',
   'Stop Live: everything stops. Recording? Arrangement View holds it all, as ordinary MIDI clips.',
@@ -262,6 +269,21 @@ const demo = [
             <p class="mt-2 text-sm text-neutral-400">{{ f.text }}</p>
           </div>
         </div>
+
+        <!-- The Performance workspace, a real session -->
+        <figure class="mt-12">
+          <a href="/help/guides/sycore-performance-session.png" target="_blank" rel="noopener" title="Open full size">
+            <img
+              src="/help/guides/sycore-performance-session.png"
+              alt="SY.CORE's Performance workspace during a session with Live: Drum Machine, Chord Prog and Map · Live Instruments on the left, Rig Controls in the middle, the Rig Controller and the Sequencer on the right"
+              width="1920" height="994" loading="lazy"
+              class="w-full rounded-xl border border-neutral-800 shadow-2xl"
+            />
+          </a>
+          <figcaption class="mt-3 text-center font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+            The Performance workspace, following Live (EXT) · Drum, Chords and Live Map · Rig Controls · the Rig and the Sequencer
+          </figcaption>
+        </figure>
       </div>
     </section>
 
@@ -314,7 +336,7 @@ const demo = [
           <ul class="mt-6 space-y-3 text-sm text-neutral-300">
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Ableton Live with Max for Live (Suite, or Standard + Max for Live)</li>
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Chrome or Edge (Web MIDI)</li>
-            <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Optional: a Launchpad Mini for Rig mode, any controller for Density and Intensity</li>
+            <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> Optional: a Launchpad Mini for Rig mode (in Live: Control Surface None, its ports off), any controller for Density and Intensity</li>
             <li class="flex gap-2"><Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> SY.CORE Map: any controller with knobs or encoders (MIDImix, Launchkey…), enabled in SY.CORE only</li>
             <li class="flex gap-2 text-neutral-500"><Zap class="mt-0.5 h-4 w-4 shrink-0" /> Perform in Session View, record in Arrangement View (its clips play along on Play)</li>
             <li class="flex gap-2 text-neutral-500"><Zap class="mt-0.5 h-4 w-4 shrink-0" /> Sync grid in 4/4 · use a 1-bar Count-In when recording</li>

@@ -344,7 +344,7 @@ The recording is placed on the song grid (Live's when following it, SY.CORE's tr
 
 - **Rig keys**: learn a hardware button to switch Rig mode on and off. **All** covers both controllers, **LP** only the Launchpad, **Mix** only the MIDImix.
 
-> **Important:** in Live's *Settings › Link, Tempo & MIDI*, set the Launchpad's **Control Surface to None** and turn off its **Track** and **Remote** inputs. Otherwise Live receives the pads too and launches or records its own clips alongside SY.CORE.
+> **Important:** in Live's *Settings › Link, Tempo & MIDI*, set the Launchpad's **Control Surface to None** and turn off its **Track** and **Remote** inputs. Otherwise Live receives the pads too and launches or records its own clips alongside SY.CORE. The Control Surface is what matters: with it set to *Launchpad*, Live's script reads the pads even with all the port's Track / Sync / Remote off (a pad in column 1, row 4 records a clip on track 1, slot 4). The Launchpad stays in Live's port list — a connected device always does; that's fine. Live saves these settings only when it quits cleanly (*File › Quit*): after a crash it may bring the Launchpad surface back, so check it again.
 
 ---
 

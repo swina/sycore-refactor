@@ -171,6 +171,23 @@ The resulting payload is ready for the Step Sequencer to load directly.
 
 ---
 
+## Tema (theme) — from a jam to patterns
+
+A theme is the idea a piece starts from: chords and melody played over a groove. The **Tema** button (next to Capture) records it in time:
+
+1. Set the tempo and the groove: a Drum Machine pattern (or any app) synced to the transport (sync panel).
+2. Press **Tema**: the capture is armed (`Tema: play to start`, blinking).
+3. Play: the **first note starts the transport** (Play All, no count-in) and is the "1" of bar 1, so the recording lines up with the bars.
+4. Play the theme, then **Stop** (here, or the transport's Stop: toolbar, Rig, MIDI): capture and transport stop together.
+
+In review the **Tema →** row extracts the patterns from the range (IN is bar 1):
+
+- **Split** — **Auto**: notes struck together (3 or more within 50 ms) are chords, the rest is melody (a top note struck with the chord counts as the chord's). A **split note** (C3…C5): below it chords, from it up melody — for two hands.
+- **Chords → Chord Prog** — into the active slot: one chord per bar, two (½ bar each) when the harmony changes inside the bar; named from the notes (`Am`, `F`…), the voicing as played; the same chord on consecutive steps merged into 2 / 4 / 8 bars; a bar with no chord holds the one before (rests before the first chord). Up to 16 steps.
+- **Melody → Sequencer** — a bar per bank from the active one, at 1/16, the highest note on a step, long notes tied; with more than one bar the Sequencer's chain is set to those banks (Chain on / off left as it is). Up to bank H.
+
+Each extraction is a Session take: the slot / banks replaced can be restored. Quantize, crop and the note editor work before extracting.
+
 ## MIDI Export
 
 Exports the cropped range as a standard MIDI file (`.mid`) via `buildMidiFile()` from `@/lib/midi-file`. Notes are time-normalized so the first note starts at tick 0. The file uses the current BPM as the tempo header.

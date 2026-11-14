@@ -60,6 +60,10 @@ When **Stop All** is pressed:
 
 When the transport is already running and a synced sequencer starts playing independently, it schedules its first event at the next whole-bar boundary using `getNextBarPosition()` rather than immediately. This prevents timing drift and keeps all synced sequencers phase-aligned.
 
+### Count-in
+
+**Count-in** (sync panel, gear next to Play All): **Off / 1 bar / 2 bars**, remembered per user (`S1_SYNC_COUNT_IN`). A Play pressed in SY.CORE — Play All, its MIDI Learn, the Instrument Cockpit, Rig Controls' Play — first counts the bars (4/4, at the global BPM) as a full-screen countdown: the number of beats left, the downbeat in neon, one dot per beat. Then the apps start as usual. While counting, Play All reads `Count N`; Play again, Stop, or a click on the countdown cancels it and nothing starts. Visual only (no click sound). A Start from an external clock (Live's Play, a MIDI input's Start) start at once: the master owns the bar. Rig Controls' Play (Performance) counts in too when it plays Live (EXT, SY.CORE Link): the countdown at Live's tempo, then Live's Play is sent; the toolbar's Stop or a second press cancels it. `lib/count-in.ts`, `CountInOverlay.vue`.
+
 ### Sync Configuration
 
 Sync preferences are persisted in localStorage under keys:
