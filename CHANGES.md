@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-11-16
+
+- **Ableton Live guide: install from the Live Pack, Seq Free** — §3 still said the bridge loads its script from a fixed path (`Documents\sycore-link\`), but since 1.6 / 1.7 the devices find their scripts by name next to them, and they ship as a Live Pack or a zip; §6 still said Latch isn't connected, but Seq Free took its place. Now §2–3 point to the 1.7.0 release (Live Pack: unpack where Live asks, *Places › Add Folder…*; zip: keep the files together) with the update steps, and §6 lists Seq Free. Also in sycore-ableton (7237fec): the *SY.CORE Live* paper (EN, IT) and the README brought up to date. docs: `SYCORE_ABLETON_LIVE_GUIDE.md`. Branch: `master`
+
 ## 2026-11-15
 
 - **Performance Sequencer: steps by velocity, click to turn on / off** — the play view's steps were tall squares showing only the note, every active step alike, and nothing to do on them (EDIT for that). Now they are lower rectangles, each active step's background is its **velocity** (green low < 70, orange medium 70–104, red high ≥ 105, translucent), and a **click** turns a step on / off (its notes kept, saved in the bank; an off step shows its note dimmed). `components/play/SeqPlayView.vue`, `lib/play-colors.ts` (`velLevel`, `VEL_CLASS`); docs: `SYCORE_WORKSPACES.md`; tests: `play-views.test.ts`. Branch: `master`
