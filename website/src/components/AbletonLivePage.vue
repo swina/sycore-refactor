@@ -5,8 +5,15 @@ import AbletonModesDiagram from './AbletonModesDiagram.vue'
 import {
   Play, BookOpen, ArrowLeft, Zap, Cable, Clock, Grid3x3, SlidersHorizontal, Sparkles,
   Music, Drum, Timer, CircleDot, Square, KeyRound, Layers, Check, Ban, Globe, ShieldCheck, RefreshCw, Cpu,
-  Crosshair, Shuffle, Hand, Table2, Mic, Repeat, LayoutDashboard, Gauge,
+  Crosshair, Shuffle, Hand, Table2, Mic, Repeat, LayoutDashboard, Gauge, Download, Package, Github,
 } from 'lucide-vue-next'
+
+// The Max for Live devices: a GitHub Release of swina/sycore-ableton (zip + Live Pack, GPL-3.0).
+const DEVICES_VERSION = '1.7.0'
+const RELEASE = `https://github.com/swina/sycore-ableton/releases/tag/link-v${DEVICES_VERSION}`
+const asset = (ext) => `https://github.com/swina/sycore-ableton/releases/download/link-v${DEVICES_VERSION}/SYCORE-Live-Devices-${DEVICES_VERSION}.${ext}`
+const DEVICES_ZIP = asset('zip')
+const DEVICES_ALP = asset('alp')
 
 const props = defineProps({ appUrl: { type: String, required: true } })
 const emit = defineEmits(['open-guide'])
@@ -138,6 +145,9 @@ const demo = [
         <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <a :href="props.appUrl" class="flex items-center gap-2 rounded-lg bg-synth-neon px-6 py-3 font-mono text-xs font-black uppercase tracking-[0.2em] text-black transition-all hover:bg-white">
             <Play class="h-4 w-4 fill-current" /> Launch SY.CORE
+          </a>
+          <a href="#download" class="flex items-center gap-2 rounded-lg border border-neutral-700 px-6 py-3 font-mono text-xs font-black uppercase tracking-[0.2em] text-neutral-200 transition-colors hover:border-synth-neon hover:text-synth-neon">
+            <Download class="h-4 w-4" /> Live devices
           </a>
           <button @click="emit('open-guide')" class="flex items-center gap-2 rounded-lg border border-neutral-700 px-6 py-3 font-mono text-xs font-black uppercase tracking-[0.2em] text-neutral-200 transition-colors hover:border-synth-neon hover:text-synth-neon">
             <BookOpen class="h-4 w-4" /> Read the guide
@@ -326,6 +336,44 @@ const demo = [
           <span class="text-sm text-neutral-300">{{ d }}</span>
         </li>
       </ol>
+    </section>
+
+    <!-- Download: the Max for Live devices -->
+    <section id="download" class="scroll-mt-20 border-t border-neutral-800/60">
+      <div class="mx-auto max-w-6xl px-5 py-20">
+        <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">Download</p>
+        <h2 class="mt-3 max-w-3xl text-3xl font-extrabold md:text-4xl">
+          The devices for Live. <span class="text-synth-neon">Free, open source.</span>
+        </h2>
+        <p class="mt-4 max-w-3xl text-sm text-neutral-400">
+          SY.CORE Link (the bridge, one per set), Link Receive (one per track that plays SY.CORE), SY.CORE Rig and SY.CORE Map —
+          version {{ DEVICES_VERSION }}, Windows and macOS (macOS not tested yet), GPL-3.0.
+        </p>
+        <div class="mt-8 grid gap-4 md:grid-cols-2">
+          <a :href="DEVICES_ALP" class="group flex flex-col gap-2 rounded-xl border border-neutral-800 p-6 transition-colors hover:border-synth-neon">
+            <span class="flex items-center gap-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">
+              <Package class="h-5 w-5" /> Live Pack (.alp)
+            </span>
+            <span class="text-sm text-neutral-300">Double-click it: Live asks where to unpack it. Then add that folder to Live's browser (<em>Places › Add Folder…</em>).</span>
+          </a>
+          <a :href="DEVICES_ZIP" class="group flex flex-col gap-2 rounded-xl border border-neutral-800 p-6 transition-colors hover:border-synth-neon">
+            <span class="flex items-center gap-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">
+              <Download class="h-5 w-5" /> Zip
+            </span>
+            <span class="text-sm text-neutral-300">Unzip the folder and keep its files together (the devices load the scripts next to them), e.g. in your User Library, or add it under Places.</span>
+          </a>
+        </div>
+        <ol class="mt-8 grid gap-3 text-sm text-neutral-300 md:grid-cols-3">
+          <li class="rounded-xl border border-neutral-800 p-4"><span class="font-mono font-black text-synth-neon">01</span> Drop <strong>sycore-link.amxd</strong> on a MIDI track: amber LED, then green once SY.CORE connects.</li>
+          <li class="rounded-xl border border-neutral-800 p-4"><span class="font-mono font-black text-synth-neon">02</span> <strong>sycore-link-receive.amxd</strong> on each track that plays an app, on its channel (Drums 10, Chords 1…).</li>
+          <li class="rounded-xl border border-neutral-800 p-4"><span class="font-mono font-black text-synth-neon">03</span> In SY.CORE: clock <strong>EXT · Live (M4L)</strong>, and in MIDI Flow each app to <strong>Live (M4L)</strong>.</li>
+        </ol>
+        <div class="mt-6 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-widest text-neutral-500">
+          <a :href="RELEASE" class="flex items-center gap-1.5 hover:text-synth-neon"><Github class="h-3.5 w-3.5" /> Release notes</a>
+          <a href="https://github.com/swina/sycore-ableton" class="flex items-center gap-1.5 hover:text-synth-neon"><Github class="h-3.5 w-3.5" /> Source</a>
+          <button @click="emit('open-guide')" class="flex items-center gap-1.5 uppercase hover:text-synth-neon"><BookOpen class="h-3.5 w-3.5" /> Full setup guide</button>
+        </div>
+      </div>
     </section>
 
     <!-- Requirements + CTA -->
