@@ -174,7 +174,7 @@ With a MIDI clock master (EXT over a MIDI port) the tempo is the master's: the d
 The footer's workspace switch (**Classic | Performance**) lays out a stage screen: the panels side by side, no overlap, the others closed, lighter visual effects; what plays keeps playing.
 
 - **Left**: Drum Machine, Chord Prog and Sequencer as **play views** (what plays, the settings folded away; **EDIT** in the header opens the full panel, **Play view** goes back), and **Now / Next** — the chord sounding and the next one with their lengths (`1/1` = a bar) and a bar filling over the chord.
-- **Middle**: **Rig Controls** — the Rig Controller's Transport / Clock, Performance (Fill with its *Now / Bar* switch, Repeat, Latch, key, knobs, Generate mode), Safety, and a big **Play** (the Controller template is in the Rig's EDIT layout).
+- **Middle**: **Rig Controls** — the Rig Controller's Transport / Clock, Performance (Fill with its *Now / Bar* switch, Repeat, Seq Free, key, knobs, Generate mode), Safety, and a big **Play** (the Controller template is in the Rig's EDIT layout).
 - **Right**: the Rig Controller (its Launchpad layout, labels on) and, with Live set up in MIDI Flow ("Live (M4L)"), **Map · Live Instruments** under it.
 - The headers: name, **EDIT**, window buttons; the Drum Machine's and the Sequencer's carry their **style** menu (what GEN writes). The Chord Prog's pads show each chord with its length.
 - Every panel resizes from any edge or corner, by mouse or touch, and can be made smaller than in Classic; a panel moved or resized stays there in Performance (**↺** puts them back on their tiles).
@@ -276,6 +276,8 @@ The Fill pad / button: **dark amber** off, **light amber blinking** waiting for 
 
 ### Repeat
 
+**Seq Free** (Rig Controls, Launchpad row 6, pad 5; MIDI Learn `rig_seq_free`) decouples the Sequencer from the Chord Prog for now: its chords no longer transpose, start, stop or switch the bank of the Sequencer, which plays on as it is (started by a chord, it's now yours to stop). Off: the Sequencer moves at once to the chord the Chord Prog is holding. Panic turns it off; it isn't saved. Amber: off · green: on.
+
 **Drum Chain · Chord Chain · Seq Chain** (Rig Controls, Launchpad row 6, pads 6–8; MIDI Learn `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`) turn each app's **Chain** mode on / off, also while playing — the chain itself is set in the app's panel. The switch is taken at the end of what is playing: the Drum Machine on the next bar, the Chord Prog at the end of its slot, the Sequencer at the end of its pattern. On: the chain from its first slot; off: the slot / bank that was playing goes on looping. Dark red: off · red blinking: on.
 
 **Repeat (hold)** (Rig Controls, Launchpad row 6) turns on the Drum Machine's **Repeat** while held: every drum step plays as a roll of 2, 3 or 4 hits (the Drum Machine's **÷2 / ÷3 / ÷4**); released, it goes back as it was.
@@ -323,7 +325,7 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 | Area | Function |
 |---|---|
 | **Rows 1–5** | Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes) |
-| **Row 6** | **Fill** (dark amber / light amber waiting / red playing) · **Auto Fill** (the Drum Machine's Autofill: on green, off amber) · **Now / Bar** (the Fill's when: NOW amber, BAR green) · **Repeat** (hold) · Latch (not connected in LIVE) · **Drum Chain** · **Chord Chain** · **Seq Chain** (dark red off, red blinking on) |
+| **Row 6** | **Fill** (dark amber / light amber waiting / red playing) · **Auto Fill** (the Drum Machine's Autofill: on green, off amber) · **Now / Bar** (the Fill's when: NOW amber, BAR green) · **Repeat** (hold) · **Seq Free** (the Sequencer decoupled from the Chord Prog: on green, off amber) · **Drum Chain** · **Chord Chain** · **Seq Chain** (dark red off, red blinking on) |
 | **Row 7** | **Sections 1–8** — or **Captures 1–8** (side **S·SEC / S·CAP**, below) |
 | **Row 8** | **Mute 1–5** = Drum, Chord, Seq, Bass, Arp (red while muted) · three free pads |
 | **Side** | **GEN** Drum, Chord, Seq, Bass (Shift: Mutate) · **Key −** · **Key +** (Shift: Maj/Min) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
@@ -372,7 +374,7 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 - **LED feedback**: SY.CORE sends the same note or CC back to the controller. On a **Launchpad Mini MK1** the colours match its Rig mode: a slot that holds something amber, playing green, queued or armed blinking green, Mute red. On other controllers a pad is lit (127) while it plays, blinks while queued or armed, and is dark otherwise; Mute and Solo are lit while on. This works on controllers that light a pad when they receive its own note / CC; other colours and LED protocols need a controller template.
 - The panel and the controller drive the same values: move either one and the other follows.
 - The same actions are listed under **Rig Controller** in the **Controller Designer**, to build an on-screen layout of your controller.
-- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`, `rig_play` (Rig Controls' Play / Stop), `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode`, `rig_tap`, `rig_tempo_down`, `rig_tempo_up`, `rig_tempo_round`, `rig_tempo` (`<app>` = chord, drum, seq, bass, arp).
+- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_seq_free`, `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`, `rig_play` (Rig Controls' Play / Stop), `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode`, `rig_tap`, `rig_tempo_down`, `rig_tempo_up`, `rig_tempo_round`, `rig_tempo` (`<app>` = chord, drum, seq, bass, arp).
 
 Controllers you keep for Live (e.g. a MIDImix mapped to Live's mixer) are unaffected.
 
@@ -433,6 +435,6 @@ Unknown controls and out-of-range values are skipped and reported after the impo
 
 - The sync grid counts bars in **4/4**.
 - The **first note after Play** may be a few tens of ms late: use a 1-bar Count-In when recording.
-- In LIVE, **splits, lane mutes and Mutate** (except the Sequencer's) are simulation-only (Undo is no longer on the Launchpad), **Latch** isn't connected. GEN and Fill aren't connected on the Arp row.
+- In LIVE, **splits, lane mutes and Mutate** (except the Sequencer's) are simulation-only (Undo is no longer on the Launchpad). GEN and Fill aren't connected on the Arp row.
 - **Trigger sync** applies to the Rig Controller's pads. The apps' own buttons (e.g. the Drum Machine's PLAY with *Start@bar*), Live's Start and the Control Map keep their own behaviour.
 - With SY.CORE on its own clock (not following Live), pads act at once.

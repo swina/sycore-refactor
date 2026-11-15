@@ -143,6 +143,8 @@ Each slider has two quick-action buttons:
 
 Parameter locks let each step send a different CC value — the classic "per-step automation" technique. By default P1 is mapped to **Cutoff (CC 74)** and P2 to **Resonance (CC 71)**. Both can be reassigned to any of the 36 Roland S-1 parameters via the dropdowns in the generation row.
 
+**Generated values:** Generate writes P1 / P2 on every step it makes, in every mode (melodic, chords, Arpeggio): the instrument preset's value for that CC, moved at random by **RND%** — positive up to that share of the way to 127, negative down to that share of the way to 0 (RND 0 = the preset's value on every step). RND% is also in the Play View.
+
 **Setting a lock on a specific step:**
 
 1. Select the step.

@@ -29,7 +29,7 @@ describe('rig-actions', () => {
     expect(isContinuousRigAction({ kind: 'slot', app: 'drum', slot: 0 })).toBe(false)
     expect(rigSlotParam('drum', 7)).toBe('rig_slot_drum_h')
     const cat = rigActionCatalog()
-    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 3 + 8 + 3 + 6) // + 3 chains, play, tap, tempo − / +, round, tempo knob
+    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 1 + 3 + 8 + 3 + 6) // + Seq Free, 3 chains, play, tap, tempo − / +, round, tempo knob
     for (const { paramName } of cat) expect(parseRigAction(paramName)).not.toBeNull()
   })
 })
@@ -67,6 +67,7 @@ describe('rig tempo actions', () => {
     expect(parseRigAction('rig_tap')).toEqual({ kind: 'tap' })
     expect(parseRigAction('rig_tempo_down')).toEqual({ kind: 'tempo_down' })
     expect(parseRigAction('rig_tempo_up')).toEqual({ kind: 'tempo_up' })
+    expect(parseRigAction('rig_seq_free')).toEqual({ kind: 'seq_free' })
     expect(isContinuousRigAction(parseRigAction('rig_tempo')!)).toBe(true)
     expect(isContinuousRigAction(parseRigAction('rig_tap')!)).toBe(false)
     const names = rigActionCatalog().map(a => a.paramName)

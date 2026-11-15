@@ -12,7 +12,7 @@ defineProps({ only: { type: String, required: true } }) // transport | template 
 const {
   s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu,
   tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg,
-  onFill, repeaterOn, repeaterOff, toggleLatch, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode,
+  onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode,
   knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 } = inject(RIG_CONTROLS_CTX)
 const tplFile = ref(null)
@@ -91,7 +91,9 @@ const takes = useSessionTakesStore()
                   @click="drumStore.fillWhen = drumStore.fillWhen === 'bar' ? 'now' : 'bar'">{{ drumStore.fillWhen === 'bar' ? 'Bar' : 'Now' }}</button>
         </div>
         <button :class="[btn, s.repeater ? btnOn : btnIdle]" title="The Drum Machine's Repeat while held (its ÷2 / ÷3 / ÷4)" @pointerdown="repeaterOn" @pointerup="repeaterOff" @pointerleave="repeaterOff">Repeat (hold)</button>
-        <button :class="[btn, s.latch ? btnOn : btnIdle]" @click="toggleLatch">Latch</button>
+        <button :class="[btn, uiStore.seqDecoupled ? btnOn : btnIdle, learnedRing('rig_seq_free')]"
+                title="Seq Free: the Sequencer decoupled from the Chord Prog for now — its chords no longer move, start, stop or switch its bank; off = it follows the held chord again (right-click: MIDI Learn)"
+                @click="toggleSeqFree" @contextmenu="learnMenu($event, 'rig_seq_free', 'Seq Free')">Seq Free</button>
         <!-- the apps' Chain mode: dark red off · red blinking on; taken at the end of the bar / slot / pattern -->
         <div class="col-span-2 flex gap-1">
           <button v-for="c in [['drum', 'Drum'], ['chord', 'Chord'], ['seq', 'Seq']]" :key="c[0]"

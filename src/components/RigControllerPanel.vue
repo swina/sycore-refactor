@@ -518,7 +518,7 @@ function holdEnd(key) {
   if (holding[key]) s.display = 'Hold to confirm'
   holding[key] = false
 }
-const doPanic = () => { panic(s); if (live.value) midiStore.panic() }
+const doPanic = () => { panic(s); uiStore.seqDecoupled = false; if (live.value) midiStore.panic() }
 const doInt = () => { if (live.value) return notConnected('EXT/INT (use Clock › Source in the transport)'); toggleClockSource(s) }
 
 // ── Actions shared by the three views ─────────────────────────────────────
@@ -671,7 +671,12 @@ function repeaterOff() {
   if (live.value) drumStore.repeaterActive = repeatWasOn
   s.display = 'Repeater off'
 }
-function toggleLatch() { s.latch = !s.latch; s.display = `Latch ${s.latch ? 'on' : 'off'}` }
+// Seq Free (the Latch pad before): the Sequencer decoupled from the Chord Prog for now — its chords no
+// longer move, start, stop or switch the bank of the Sequencer; off = it follows the held chord again.
+function toggleSeqFree() {
+  uiStore.seqDecoupled = !uiStore.seqDecoupled
+  s.display = uiStore.seqDecoupled ? 'Seq Free: the Sequencer plays on its own' : 'Seq Free off: the Sequencer follows the Chord Prog'
+}
 function toggleShift() { s.shift = !s.shift }
 function toggleGenMode() { s.generateMode = s.generateMode === 'ai' ? 'builtin' : 'ai'; s.display = `Generate: ${s.generateMode === 'ai' ? 'AI' : 'built-in'}` }
 const focused = computed(() => s.apps.find(a => a.id === focusApp.value))
@@ -702,6 +707,7 @@ function onRigAction(e) {
       s.display = `${app.label} Trigger sync: ${SYNC_SHORT[app.opts.triggerSync]}`
       return
     case 'fill': return onFill()
+    case 'seq_free': return toggleSeqFree()
     case 'chain': return toggleChain(a.app)
     case 'play': return togglePlay()
     case 'section': return onSection(a.index)
@@ -883,7 +889,7 @@ const queueOrder = (a, i) => { const k = a.queue.indexOf(i); return k === -1 ? n
 const sectionHasContent = i => s.apps.some(a => a.filled[i])
 const lanePageOffset = computed(() => (s.shift ? 8 : 0))
 /** The Launchpad's row 6 (Performance pads). */
-const LP_PERF_LABELS = ['Fill', 'Auto', 'Now/Bar', 'Repeat', 'Latch', 'Drum Chain', 'Chord Chain', 'Seq Chain']
+const LP_PERF_LABELS = ['Fill', 'Auto', 'Now/Bar', 'Repeat', 'Seq Free', 'Drum Chain', 'Chord Chain', 'Seq Chain']
 // Row 6, pads 6–8: the apps' Chain mode (dark red off · red blinking on), taken at the end of the bar /
 // slot / pattern playing (on: the chain from its start; off: what was playing, looped).
 const CHAIN_PADS = { 5: 'drum', 6: 'chord', 7: 'seq' }
@@ -957,7 +963,7 @@ function lpPad(row, col) {
     return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
   }
   // Row 6: Fill (the Drum Machine's), Auto Fill (its Autofill on / off), the Fill's Now / Bar, Repeat
-  // (hold: the Drum Machine's Repeat), Latch (not connected in LIVE: the master keyboard's), Drum / Chord / Seq Chain.
+  // (hold: the Drum Machine's Repeat), Seq Free (the Sequencer decoupled from the Chord Prog), Drum / Chord / Seq Chain.
   if (row === 5) {
     const label = LP_PERF_LABELS[col]
     if (!label) return { label: '—', short: '', color: 'off' }
@@ -977,8 +983,9 @@ function lpPad(row, col) {
       const id = CHAIN_PADS[col], on = chainOn(id)
       return { label: `${label} ${on ? 'on' : 'off'}`, short: CHAIN_SHORT[id], color: on ? 'redFlash' : 'redDim' }
     }
-    if (live.value) return { label: `${label} (not connected)`, short: label, color: 'off' }
-    return { label, short: label, color: s.latch ? 'green' : 'amber' }
+    return uiStore.seqDecoupled
+      ? { label: 'Seq Free on: the Sequencer ignores the Chord Prog', short: 'FREE', color: 'green' }
+      : { label: 'Seq Free off: the Sequencer follows the Chord Prog', short: 'FREE', color: 'amber' }
   }
   // Row 7: the sections (scenes A–H on every app).
   if (row === 6 && sMode.value === 'captures') {
@@ -1049,9 +1056,8 @@ function lpPadDown(row, col) {
     if (col === 2) return toggleFillWhen()
     if (col === 3) return repeaterOn()
     if (CHAIN_PADS[col]) return toggleChain(CHAIN_PADS[col])
-    if (col !== 4) return
-    if (live.value) return notConnected('Latch (the master keyboard\'s)')
-    return toggleLatch()
+    if (col === 4) return toggleSeqFree()
+    return
   }
   if (row === 6) return sMode.value === 'captures' ? onCapturePad(col) : onSection(col)
   if (s.apps[col]) toggleMute(s, s.apps[col].id)
@@ -1463,7 +1469,7 @@ const arcPath = v => {
 // The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
 // (Performance), teleported there while it is open.
 provide(RIG_CONTROLS_CTX, {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleLatch, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 })
 </script>
 

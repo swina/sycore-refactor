@@ -39,6 +39,7 @@ import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
 import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
 import { mixSteps, mutateAmount, varyFromMidi } from '@/lib/seq-gen/mutate'
+import { paramValue } from '@/lib/seq-gen/params'
 
 export const DEFAULT_STEP = {
   active: false,
@@ -395,6 +396,7 @@ function createSequencerEngine() {
   function handleBankCue(e) {
     const idx = e.detail?.idx
     if (idx == null || idx < 0 || idx >= BANK_COUNT) return
+    if (e.detail?.fromChordProg && uiStore.seqDecoupled) return
     if (!isPlaying.value) { setPendingBank(null); selectBank(idx); return }
     setPendingBank(idx === seqStore.activeBankIndex ? null : idx)
   }
@@ -688,6 +690,10 @@ function createSequencerEngine() {
     const octMax = octaveRange.value >= 0 ? selectedOctave.value + octaveRange.value : selectedOctave.value
     const finalOctMin = Math.max(0, Math.min(8, octMin))
     const finalOctMax = Math.max(0, Math.min(8, octMax))
+    // P1 / P2 of a generated step, in every mode: the preset's value for the CC, moved by RND% (seq-gen/params.ts)
+    const p1Base = getPresetValueForCC(param1CC.value)
+    const p2Base = getPresetValueForCC(param2CC.value)
+    const genParams = () => ({ param1Value: paramValue(p1Base, param1Variation.value), param2Value: paramValue(p2Base, param2Variation.value) })
 
     if (selectedStyle.value === 'Arpeggio') {
       const arpMode = arpModeForGen.value
@@ -717,6 +723,7 @@ function createSequencerEngine() {
         octave: finalOctMin,
         velocity: styleCfg.velMin + Math.floor(Math.random() * (styleCfg.velMax - styleCfg.velMin + 1)),
         gate: 75,
+        ...genParams(),
         edited: true,
       }))
       basePatternLength.value = numSteps.value
@@ -751,7 +758,7 @@ function createSequencerEngine() {
         const sustainSteps = Math.round(thisSpan * avgGateFactor)
         const tieSteps = Math.max(0, sustainSteps + (Math.floor(Math.random() * 3) - 1) - 1)
 
-        return { ...DEFAULT_STEP, active: true, notes, octave, velocity, gate: 90, tieSteps, param1Value: Math.floor(Math.random() * 128), param2Value: Math.floor(Math.random() * 128), edited: true }
+        return { ...DEFAULT_STEP, active: true, notes, octave, velocity, gate: 90, tieSteps, ...genParams(), edited: true }
       })
     } else {
       const numActive = Math.round(numSteps.value * (genDensity.value / 100))
@@ -795,17 +802,7 @@ function createSequencerEngine() {
         const gate = active ? styleCfg.gateMin + Math.floor(Math.random() * (gateRange + 1)) : 0
         const tieSteps = active && styleCfg.slideProbability && Math.random() < styleCfg.slideProbability ? 1 : 0
       
-        const p1BaseVal = getPresetValueForCC(param1CC.value)
-        const p1VarFactor = param1Variation.value / 100
-        const p1Variation = Math.random() * p1VarFactor
-        const param1Value = Math.max(0, Math.min(127, Math.round(p1BaseVal + (p1BaseVal * p1Variation))))
-
-        const p2BaseVal = getPresetValueForCC(param2CC.value)
-        const p2VarFactor = param2Variation.value / 100
-        const p2Variation = Math.random() * p2VarFactor
-        const param2Value = Math.max(0, Math.min(127, Math.round(p2BaseVal + (p2BaseVal * p2Variation))))
-
-        return { ...DEFAULT_STEP, active, notes, octave, velocity, gate, tieSteps, param1Value, param2Value, edited: active }
+        return { ...DEFAULT_STEP, active, notes, octave, velocity, gate, tieSteps, ...genParams(), edited: active }
       })
     }
     basePatternLength.value = numSteps.value
@@ -1075,7 +1072,17 @@ function createSequencerEngine() {
     _heldOff = isPlaying.value
     isPlaying.value = !isPlaying.value
   }
+  // Decoupled from the Chord Prog (uiStore.seqDecoupled, the Rig's Seq Free pad): its notes, its stop
+  // and its section cues are ignored, the Sequencer plays on as it is (started by a chord, it's now the
+  // user's to stop). Coupled again: it moves at once to the chord the Chord Prog is holding.
+  let _lastCpNote = null
+  watch(() => uiStore.seqDecoupled, d => {
+    if (d) { _autoStartedByChord = false; return }
+    if (isPlaying.value && !isRecording.value && _lastCpNote !== null) followNote(_lastCpNote, MidiSource.CHORD_PROG)
+  })
   const _onChordRelease = () => {
+    _lastCpNote = null
+    if (uiStore.seqDecoupled) return
     if (_autoStartedByChord && isPlaying.value) isPlaying.value = false
   }
   window.addEventListener('cp-chord-release', _onChordRelease)
@@ -1084,6 +1091,10 @@ function createSequencerEngine() {
     // Every note any app plays passes here: logged only with localStorage.SY_TRACE = '1'.
     if (window.SY_LOG && traceOn()) {
       window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, sourceApp=${sourceApp || 'null'}, isOpen=${uiStore.isSequencer2Open}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
+    }
+    if (sourceApp === MidiSource.CHORD_PROG) {
+      if (type === 'on' && velocity > 0) _lastCpNote = note
+      if (uiStore.seqDecoupled) return
     }
     const allowed = sourceApp ? isAppSourceAllowed(sourceApp, note) : isMidiDeviceAllowed(chan, inputId, note)
 

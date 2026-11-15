@@ -39,7 +39,7 @@ export interface SyCoreEventMap {
   'cp-generate': { mode?: 'ai' | 'builtin' };
   // Rig Controller GEN: a new sequence, in the Chord Prog's key when given
   'seq-generate': { root?: number; mode?: 'major' | 'minor' };
-  'seq-bank-cue': { idx: number };
+  'seq-bank-cue': { idx: number; fromChordProg?: boolean };
   'seq-banks-reloaded': void;
   'dm-pad-trigger': { trackIdx: number; velocity: number };
 

@@ -22,7 +22,7 @@ Switching never stops the music: the Drum Machine, Chord Prog and Sequencer play
 | Column | Panels |
 |---|---|
 | **Left** | **Drum Machine**, **Chord Prog**, **Sequencer** (play views) and **Now / Next** |
-| **Middle** | **Rig Controls** — Transport / Clock (Play / Stop, TAP, − / +, Round, the tempo knob), Performance (Fill with *Now / Bar*, Repeat, Latch, key, the focused track's knobs, Generate mode), Safety (Panic, → INT, Undo, Shift), a big **Play** (the Controller template: in the Rig's EDIT) |
+| **Middle** | **Rig Controls** — Transport / Clock (Play / Stop, TAP, − / +, Round, the tempo knob), Performance (Fill with *Now / Bar*, Repeat, Seq Free, key, the focused track's knobs, Generate mode), Safety (Panic, → INT, Undo, Shift), a big **Play** (the Controller template: in the Rig's EDIT) |
 | **Right** | the **Rig Controller** (its Launchpad layout, labels on) and — with Ableton Live set up in MIDI Flow ("Live (M4L)") — **Map · Live Instruments** under it |
 
 A panel moved or resized by hand stays there in Performance (remembered per user); **↺** puts them back on their tiles. Every panel resizes from any edge or corner, by mouse or touch, and can be made smaller than in Classic.

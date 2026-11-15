@@ -281,7 +281,7 @@ function createChordProgEngine() {
     if (!state.sectionCued) {
       state.sectionCued = true
       window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq: 'ABCDEFGH'[next] } }))
-      window.dispatchEvent(new CustomEvent('seq-bank-cue', { detail: { idx: next } }))
+      window.dispatchEvent(new CustomEvent('seq-bank-cue', { detail: { idx: next, fromChordProg: true } }))
     }
     if (!state.sectionPcCued && left <= SECTION_PC_TICKS) {
       state.sectionPcCued = true

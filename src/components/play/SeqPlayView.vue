@@ -1,17 +1,29 @@
 <script setup>
 // The Sequencer's play view (Performance): its banks and the pattern on one row (each active step's
 // note), the step sounding lit; Steps, Time and Direction can be set here (right-click: MIDI Learn,
-// same targets as the edit panel: seq_steps, seq_time, seq_direction). Otherwise the Rig plays it.
+// same targets as the edit panel: seq_steps, seq_time, seq_direction), and Generate with its settings
+// (Style, Oct / Range, Arp notes, Density, Melody, Rhythm with Sync / Rot, Vary, P1 / P2 RND% — the edit panel's, saved
+// per bank; P1 / P2's CC is chosen in EDIT).
+// Otherwise the Rig plays it.
 import { computed } from 'vue'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { seqSnapshot, rigReports, rigArmed } from '@/lib/rig-live'
-import { useSequencerEngine, NOTE_NAMES } from '@/core/engines/sequencer'
+import { useSequencerEngine, NOTE_NAMES, STYLES } from '@/core/engines/sequencer'
+import { ARP_MODES } from '@/lib/arp-patterns'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import PlaySlots from './PlaySlots.vue'
 import PlayChain from './PlayChain.vue'
 
 const seqStore = useStepSequencerStore()
-const { steps, gridCurrentStep, isPlaying, numSteps, tempoMultiplier, sequenceDirection, TEMPO_MULTIPLIERS, SEQ_DIRECTIONS } = useSequencerEngine()
+const {
+  steps, gridCurrentStep, isPlaying, numSteps, tempoMultiplier, sequenceDirection, TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
+  selectedStyle, chordsEnabled, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
+  param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange,
+  generateSequence,
+} = useSequencerEngine()
+const seg = (on) => ['px-1.5 font-bold', on ? 'bg-amber-600 text-black' : 'text-neutral-500 hover:text-neutral-300']
+const isArp = computed(() => selectedStyle.value === 'Arpeggio')
+const melodic = computed(() => !isArp.value && !chordsEnabled.value)
 const { openMenu } = useMidiContextMenu()
 const DIR_ICON = { up: '↑', down: '↓', 'up-down': '↕', random: 'R' }
 const snap = computed(() => seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
@@ -51,6 +63,87 @@ const label = (s) => {
                   class="px-1.5 rounded font-bold"
                   :class="sequenceDirection === dir ? 'bg-amber-600 text-black' : 'text-neutral-500 hover:text-neutral-300'">{{ DIR_ICON[dir] }}</button>
         </div>
+      </div>
+    </div>
+    <!-- Generate and its settings (the edit panel's, saved per bank) -->
+    <div class="flex flex-wrap items-center gap-3 text-[10px] font-mono">
+      <button title="Generate: a new pattern by these settings (Vary: the share replaced) — the bank before is kept as a session take"
+              class="px-2 py-0.5 rounded bg-amber-500 text-black font-black uppercase hover:bg-amber-300"
+              @click="generateSequence">Gen</button>
+      <div class="flex items-center gap-1.5" title="Style: what Generate writes (it sets Density and octaves)">
+        <span class="text-neutral-500 uppercase">Style</span>
+        <select v-model="selectedStyle"
+                class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
+          <option v-for="st in Object.keys(STYLES)" :key="st" :value="st">{{ st }}</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-1.5" title="Octave: where Generate writes the pattern · Range: the octaves it spans from there (− below, + above)">
+        <span class="text-neutral-500 uppercase">Oct</span>
+        <select v-model="selectedOctave"
+                class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
+          <option v-for="o in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="o" :value="o">{{ o }}</option>
+        </select>
+        <select v-model="octaveRange"
+                class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
+          <option v-for="r in [-3, -2, -1, 0, 1, 2, 3]" :key="r" :value="r">{{ r >= 0 ? '+' + r : r }}</option>
+        </select>
+      </div>
+      <template v-if="isArp">
+        <div class="flex items-center gap-1.5" title="Arpeggio: its order, and its notes — 1-3-5 / +7: the key's chord (moved onto each chord when following the Chord Prog) · Scale: every note of the scale">
+          <span class="text-neutral-500 uppercase">Arp</span>
+          <select v-model="arpModeForGen"
+                  class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
+            <option v-for="m in ARP_MODES" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+            <button v-for="m in [['chord', '1-3-5'], ['chord7', '+7'], ['scale', 'Scl']]" :key="m[0]" :class="seg(arpNotes === m[0])" @click="arpNotes = m[0]">{{ m[1] }}</button>
+          </div>
+        </div>
+      </template>
+      <div v-else class="flex items-center gap-1.5" title="Density: the share of steps Generate fills">
+        <span class="text-neutral-500 uppercase">Dens</span>
+        <input v-model.number="genDensity" type="range" min="0" max="100"
+               class="w-16 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+        <span class="w-7 text-right font-bold text-amber-400">{{ genDensity }}%</span>
+      </div>
+      <div v-if="melodic" class="flex items-center gap-1.5" title="Melody — Line: a motif repeated with a variant, mostly by step, the tonic chord on the strong steps · Classic: a random note of the scale on each step">
+        <span class="text-neutral-500 uppercase">Mel</span>
+        <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+          <button v-for="m in [['line', 'Line'], ['classic', 'Cls']]" :key="m[0]" :class="seg(melodyMode === m[0])" @click="melodyMode = m[0]">{{ m[1] }}</button>
+        </div>
+      </div>
+      <div v-if="melodic" class="flex items-center gap-1.5" title="Rhythm — Weighted: the strong steps first, Sync moves them to the weak steps · Euclid: Density's onsets spread evenly, Rot turns them · Random: any step">
+        <span class="text-neutral-500 uppercase">Rhy</span>
+        <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+          <button v-for="m in [['weighted', 'Wgt'], ['euclid', 'Eucl'], ['random', 'Rnd']]" :key="m[0]" :class="seg(rhythmMode === m[0])" @click="rhythmMode = m[0]">{{ m[1] }}</button>
+        </div>
+        <template v-if="rhythmMode === 'weighted'">
+          <span class="text-neutral-500 uppercase">Sync</span>
+          <input v-model.number="syncopation" type="range" min="0" max="100"
+                 class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+          <span class="w-5 text-right font-bold text-amber-400">{{ syncopation }}</span>
+        </template>
+        <template v-else-if="rhythmMode === 'euclid'">
+          <span class="text-neutral-500 uppercase">Rot</span>
+          <button class="w-4 rounded bg-neutral-800 text-neutral-300" @click="euclidRotation = euclidRotation - 1">−</button>
+          <span class="w-4 text-center font-bold text-amber-400">{{ euclidRotation }}</span>
+          <button class="w-4 rounded bg-neutral-800 text-neutral-300" @click="euclidRotation = euclidRotation + 1">+</button>
+        </template>
+      </div>
+      <div class="flex items-center gap-1.5" title="Vary: the share of the pattern Generate replaces (100 = all new); the Rig's Shift + GEN uses it (right-click: MIDI Learn)"
+           @contextmenu.prevent="openMenu($event, { name: 'seq_vary', label: 'Sequencer: Vary' })">
+        <span class="text-neutral-500 uppercase">Vary</span>
+        <input v-model.number="varyAmount" type="range" min="0" max="100" step="5"
+               class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+        <span class="w-7 text-right font-bold text-amber-400">{{ varyAmount }}%</span>
+      </div>
+      <div v-for="p in [{ n: 1, cc: param1CC, v: param1Variation }, { n: 2, cc: param2CC, v: param2Variation }]" :key="p.n"
+           class="flex items-center gap-1.5"
+           :title="`P${p.n} (CC ${p.cc.value}, chosen in EDIT): Generate takes the preset's value, moved at random by RND% — + up toward 127, − down toward 0`">
+        <span class="text-neutral-500 uppercase">P{{ p.n }}</span>
+        <input v-model.number="p.v.value" type="range" min="-100" max="100"
+               class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+        <span class="w-7 text-right font-bold text-amber-400">{{ p.v.value > 0 ? '+' : '' }}{{ p.v.value }}</span>
       </div>
     </div>
     <div class="grid gap-1 content-start" :style="{ gridTemplateColumns: `repeat(${Math.min(steps.length, 16)}, minmax(0, 1fr))` }">

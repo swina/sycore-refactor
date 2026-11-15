@@ -25,6 +25,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { MidiSource } from '@/types/midi'
+import { rigReports } from '@/lib/rig-live'
 
 // The Sequencer's playback without its panel (Scenario Workspaces, Phase 1).
 function setup() {
@@ -105,11 +106,17 @@ describe('Sequencer engine — no panel mounted', () => {
     }
     expect(kept / 160).toBeGreaterThan(0.6)
     // the Rig's Shift + GEN (Mutate) at Vary 100: a quarter
+    // (averaged: one Mutate takes each of the motif's 8 positions at 1/4, both repeats with it — a
+    // single draw can change half the steps)
     engine.varyAmount.value = 100
-    const before = sig()
-    window.dispatchEvent(new CustomEvent('seq-generate', { detail: { mutate: true } }))
-    await flush()
-    expect(sig().filter((x: string, j: number) => x === before[j]).length).toBeGreaterThan(8)
+    let keptMut = 0
+    for (let i = 0; i < 10; i++) {
+      const before = sig()
+      window.dispatchEvent(new CustomEvent('seq-generate', { detail: { mutate: true } }))
+      await flush()
+      keptMut += sig().filter((x: string, j: number) => x === before[j]).length
+    }
+    expect(keptMut / 160).toBeGreaterThan(0.6)
     // MIDI Learn seq_vary: 0–127 → 0–100
     window.dispatchEvent(new CustomEvent('seq-vary-set', { detail: { value: 127 } }))
     expect(engine.varyAmount.value).toBe(100)
@@ -243,6 +250,47 @@ describe('Sequencer engine — no panel mounted', () => {
     midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
     await flush()
     expect(engine.isPlaying.value).toBe(true)
+  })
+
+  it("Seq Free (decoupled): the Chord Prog's chords, stop and section cues are ignored; coupled again, it moves to the held chord", async () => {
+    const { engine } = setup()
+    const ui = useUiStore()
+    ui.seqFollowMode = 'chromatic'
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    ui.seqAutoStart = true
+    ;(midiStore.sendNoteOn as any).mockRestore()
+    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.isPlaying.value).toBe(true)
+    expect(engine.dynamicMidiTranspose.value).toBe(-3)
+    ui.seqDecoupled = true
+    await flush()
+    midiStore.sendNoteOn(62, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.dynamicMidiTranspose.value).toBe(-3) // not moved
+    window.dispatchEvent(new CustomEvent('seq-bank-cue', { detail: { idx: 3, fromChordProg: true } }))
+    await flush()
+    expect(rigReports.queued.seq ?? null).toBe(null) // the Chord Prog's section cue: ignored
+    window.dispatchEvent(new CustomEvent('seq-bank-cue', { detail: { idx: 3 } }))
+    await flush()
+    expect(rigReports.queued.seq).toBe(3) // a cue of the user's own (Rig pad, Control Map): taken
+    // coupled again: at once onto the chord the Chord Prog holds (D)
+    ui.seqDecoupled = false
+    await flush()
+    expect(engine.dynamicMidiTranspose.value).toBe(2)
+    // started by a chord, but decoupled meanwhile: the chord's stop no longer stops it
+    window.dispatchEvent(new CustomEvent('cp-chord-release'))
+    await flush()
+    expect(engine.isPlaying.value).toBe(true)
+    // decoupled and stopped: the chords don't start it
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: false } }))
+    ui.seqDecoupled = true
+    await flush()
+    midiStore.sendNoteOn(60, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.isPlaying.value).toBe(false)
   })
 
   it('CLK SYS: plays on the system clock (a step falls due → its notes go out)', async () => {

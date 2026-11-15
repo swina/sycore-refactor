@@ -221,6 +221,9 @@ export const useUiStore = defineStore('ui', () => {
   // key — seq-gen/harmony.ts) or 'chromatic' (by semitones from the pattern's first note, as before).
   const readSeqFollow = (): 'degree' | 'chromatic' => (localStorage.getItem(userKey('SYCORE_SEQ_FOLLOW')) === 'chromatic' ? 'chromatic' : 'degree')
   const seqFollowMode: Ref<'degree' | 'chromatic'> = ref(readSeqFollow())
+  // Sequencer decoupled from the Chord Prog for now (the Rig's Seq Free pad): its chords no longer move,
+  // start, stop or switch the bank of the Sequencer, which plays on as it is. Temporary: not saved.
+  const seqDecoupled: Ref<boolean> = ref(false)
 
   // ── Theme (light/dark) — applied to <html> synchronously at main.js's
   // first line, before this store even exists; this ref just mirrors that
@@ -712,7 +715,7 @@ export const useUiStore = defineStore('ui', () => {
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
-    isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, seqFollowMode, isAudioPlaying, lastPlaylistName,
+    isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, seqFollowMode, seqDecoupled, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqGlobalTranspose, seqActiveSlot,
     globalModCC, globalTranspose,
     theme, toggleTheme,
