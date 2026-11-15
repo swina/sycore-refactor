@@ -173,7 +173,7 @@ With a MIDI clock master (EXT over a MIDI port) the tempo is the master's: the d
 
 The footer's workspace switch (**Classic | Performance**) lays out a stage screen: the panels side by side, no overlap, the others closed, lighter visual effects; what plays keeps playing.
 
-- **Left**: Drum Machine, Chord Prog and Sequencer as **play views** (what plays, the settings folded away; **EDIT** in the header opens the full panel, **Play view** goes back), and **Now / Next** — the chord sounding and the next one with their lengths (`1/1` = a bar) and a bar filling over the chord.
+- **Left**: Drum Machine, Chord Prog and Sequencer as **play views** (what plays, the settings folded away; **EDIT** in the header opens the full panel, **Play view** goes back). **Now / Next** — the chord sounding and the next one with their lengths (`1/1` = a bar) and a bar filling over the chord — is in the middle column (Rig Controls), right above **Play**.
 - **Middle**: **Rig Controls** — the Rig Controller's Transport / Clock, Performance (Fill with its *Now / Bar* switch, Repeat, Seq Free, key, knobs, Generate mode), Safety, and a big **Play** (the Controller template is in the Rig's EDIT layout).
 - **Right**: the Rig Controller (its Launchpad layout, labels on) and, with Live set up in MIDI Flow ("Live (M4L)"), **Map · Live Instruments** under it.
 - The headers: name, **EDIT**, window buttons; the Drum Machine's and the Sequencer's carry their **style** menu (what GEN writes). The Chord Prog's pads show each chord with its length.

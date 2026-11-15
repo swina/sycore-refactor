@@ -972,8 +972,8 @@ function createSequencerEngine() {
   const handleDirectionSet = (e) => {
     sequenceDirection.value = pickFromMidi(SEQ_DIRECTIONS, sequenceDirection.value, e.detail ?? {})
   }
-  // Length (seq_steps): a CC sweeps 2–16 (the panel's slider), a note steps to the next (wraps)
-  const STEP_COUNTS = Array.from({ length: 15 }, (_, i) => i + 2)
+  // Length (seq_steps): a CC sweeps 2–64 (the panel's slider), a note steps to the next (wraps)
+  const STEP_COUNTS = Array.from({ length: 63 }, (_, i) => i + 2)
   const handleStepsSet = (e) => {
     numSteps.value = pickFromMidi(STEP_COUNTS, STEP_COUNTS.includes(numSteps.value) ? numSteps.value : 16, e.detail ?? {})
   }

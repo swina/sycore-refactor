@@ -13,23 +13,30 @@ import { ARP_MODES } from '@/lib/arp-patterns'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import PlaySlots from './PlaySlots.vue'
 import PlayChain from './PlayChain.vue'
+import { VEL_CLASS, velLevel } from '@/lib/play-colors'
 
 const seqStore = useStepSequencerStore()
 const {
   steps, gridCurrentStep, isPlaying, numSteps, tempoMultiplier, sequenceDirection, TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
   selectedStyle, chordsEnabled, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
   param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange,
-  generateSequence,
+  generateSequence, updateStep,
 } = useSequencerEngine()
 const seg = (on) => ['px-1.5 font-bold', on ? 'bg-amber-600 text-black' : 'text-neutral-500 hover:text-neutral-300']
 const isArp = computed(() => selectedStyle.value === 'Arpeggio')
 const melodic = computed(() => !isArp.value && !chordsEnabled.value)
 const { openMenu } = useMidiContextMenu()
+const toggleStep = (i) => updateStep(i, { active: !steps.value[i]?.active })
+const stepClass = (s, i) => isPlaying.value && gridCurrentStep.value === i ? 'bg-amber-400 border-amber-200 text-black'
+  : s.active && s.notes?.length ? VEL_CLASS[velLevel(s.velocity ?? 100)]
+  : s.active ? 'bg-neutral-900 border-neutral-700 text-neutral-200'
+  : 'bg-neutral-950 border-neutral-900 text-neutral-700'
+const stepTitle = (s, i) => `Step ${i + 1}: ${s.active ? 'on' : 'off'}${s.active && s.notes?.length ? ` · velocity ${s.velocity ?? 100}` : ''} — click: ${s.active ? 'off' : 'on'}`
 const DIR_ICON = { up: '↑', down: '↓', 'up-down': '↕', random: 'R' }
 const snap = computed(() => seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
 const chainEntries = computed(() => seqStore.chain.map(i => (i !== null && i >= 0 ? 'ABCDEFGH'[i] : null)))
 const label = (s) => {
-  if (!s?.active || !s.notes?.length) return ''
+  if (!s?.notes?.length) return ''
   const n = Math.min(...s.notes)
   return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1) + (s.notes.length > 1 ? `+${s.notes.length - 1}` : '')
 }
@@ -43,7 +50,7 @@ const label = (s) => {
       <div class="flex items-center gap-1.5" title="Steps (right-click: MIDI Learn)"
            @contextmenu.prevent="openMenu($event, { name: 'seq_steps', label: 'Sequencer: Steps' })">
         <span class="text-neutral-500 uppercase">Steps</span>
-        <input v-model.number="numSteps" type="range" min="2" max="16"
+        <input v-model.number="numSteps" type="range" min="2" max="64"
                class="w-20 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
         <span class="w-5 text-right font-bold text-amber-400">{{ numSteps }}</span>
       </div>
@@ -146,13 +153,13 @@ const label = (s) => {
         <span class="w-7 text-right font-bold text-amber-400">{{ p.v.value > 0 ? '+' : '' }}{{ p.v.value }}</span>
       </div>
     </div>
+    <!-- the pattern: a click turns a step on / off (its notes kept); the background is its velocity -->
     <div class="grid gap-1 content-start" :style="{ gridTemplateColumns: `repeat(${Math.min(steps.length, 16)}, minmax(0, 1fr))` }">
-      <div v-for="(s, i) in steps" :key="i"
-           class="h-10 rounded border flex items-center justify-center text-[10px] font-mono font-bold truncate"
-           :class="isPlaying && gridCurrentStep === i ? 'bg-amber-400 border-amber-200 text-black'
-             : s.active ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-neutral-950 border-neutral-900 text-neutral-700'">
+      <button v-for="(s, i) in steps" :key="i" type="button"
+           class="h-6 rounded border flex items-center justify-center text-[10px] font-mono font-bold truncate cursor-pointer hover:brightness-125"
+           :class="stepClass(s, i)" :title="stepTitle(s, i)" @click="toggleStep(i)">
         {{ label(s) }}
-      </div>
+      </button>
     </div>
   </div>
 </template>

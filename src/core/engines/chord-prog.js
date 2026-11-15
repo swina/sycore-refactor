@@ -111,12 +111,15 @@ function createChordProgEngine() {
   const bassDevice = ref(localStorage.getItem(userKey('S1_CP_BASS_DEVICE')) || '')
   const bassChannel = ref(parseInt(localStorage.getItem(userKey('S1_CP_BASS_CHANNEL')) ?? '2', 10))
   // Reactive (midiStore.outputs, refreshed on connect / hot-plug): midiService.getOutputs() read
-  // once at mount — before Web MIDI was ready — left the list empty. Plus the virtual instruments.
+  // once at mount — before Web MIDI was ready — left the list empty. Plus the virtual instruments and
+  // the panel outputs (Live (M4L) while SY.CORE Link is connected — the bass on Live's beat to the
+  // Link Receive on its channel —, the FM-1 Emulator while its panel is open).
   const midiOutputs = computed(() => {
     const names = new Set()
     const list = []
     for (const o of midiStore.outputs) if (o?.name && !names.has(o.name)) { names.add(o.name); list.push({ name: o.name }) }
     for (const v of midiStore.virtualInstruments) if (v?.name && !names.has(v.name)) { names.add(v.name); list.push({ name: v.name }) }
+    for (const name of midiStore.panelOutputs) if (name && !names.has(name)) { names.add(name); list.push({ name }) }
     return list
   })
 

@@ -6,7 +6,16 @@ import { useAiAgentStore } from './useAiAgentStore'
 
 export const BANK_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 export const BANK_COUNT = 8
-export const CHAIN_COUNT = 8
+export const CHAIN_COUNT = 16
+
+/** A chain at CHAIN_COUNT slots: a saved one of 8 (before 16) keeps its slots, the rest empty. */
+export function normalizeChain(c: unknown): (number | null)[] {
+  const src = Array.isArray(c) ? c : []
+  return Array.from({ length: CHAIN_COUNT }, (_, i) => {
+    const v = src[i]
+    return typeof v === 'number' && v >= 0 && v < BANK_COUNT ? v : null
+  })
+}
 
 export const DEFAULT_STEP = {
   active: false,
@@ -172,7 +181,7 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
   const activeBankIndex = ref(0)
 
   const chain = ref<(number | null)[]>(
-    savedChain?.chain ?? Array(CHAIN_COUNT).fill(null)
+    normalizeChain(savedChain?.chain)
   )
   const chainEnabled = ref(savedChain?.chainEnabled ?? false)
   const playingChainIndex = ref<number | null>(null)
@@ -276,7 +285,7 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
 
   function restoreChainFromPreset(cfg: { chain: (number | null)[]; chainEnabled: boolean } | null) {
     if (!cfg) return
-    chain.value = cfg.chain?.length === CHAIN_COUNT ? [...cfg.chain] : Array(CHAIN_COUNT).fill(null)
+    chain.value = normalizeChain(cfg.chain)
     chainEnabled.value = cfg.chainEnabled ?? false
   }
 

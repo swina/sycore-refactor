@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useChordProgEngine, _resetChordProgEngine } from '@/core/engines/chord-prog'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { midiService } from '@/core/midi/midi-service'
 
 // The Chord Prog's playback without its panel (Scenario Workspaces, Phase 1): a chord clicked
 // plays, a second click stops it — every note-on gets its note-off.
@@ -46,6 +47,20 @@ describe('Chord Prog engine — chords clicked', () => {
     vi.advanceTimersByTime(1000)
     expect(on).toContain(65)
     expect(off.filter(n => [65, 69, 72].includes(n))).toEqual([])
+  })
+
+  it('Bass: Live (M4L) is in its outputs while SY.CORE Link is connected, and the bass goes there', () => {
+    const { engine } = setup()
+    const midiStore = useMidiStore()
+    const sent: number[][] = []
+    midiStore.registerPanelOutput('Live (M4L)', (data) => { sent.push(data) }, undefined, { bridge: true })
+    expect(engine.midiOutputs.value.map((o: { name: string }) => o.name)).toContain('Live (M4L)')
+    engine.bassEnabled.value = true
+    engine.bassDevice.value = 'Live (M4L)'
+    engine.bassChannel.value = 3
+    engine.triggerChordStep(0)
+    expect(sent.some(d => d[0] === 0x92 && d[2] > 0)).toBe(true) // a note-on on channel 3
+    midiService.unregisterVirtualOutput('Live (M4L)')
   })
 
   it('works with no panel at all (no component mounted)', () => {

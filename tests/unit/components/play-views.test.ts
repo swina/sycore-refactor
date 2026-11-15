@@ -9,10 +9,13 @@ import ChordProgPlayView from '@/components/play/ChordProgPlayView.vue'
 import DrumPlayView from '@/components/play/DrumPlayView.vue'
 import SeqPlayView from '@/components/play/SeqPlayView.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
+import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { SLOT_CLASS } from '@/lib/play-colors'
 import { rigArmed } from '@/lib/rig-live'
+import { useSequencerEngine } from '@/core/engines/sequencer'
+import { velLevel } from '@/lib/play-colors'
 
 // Performance play views: display only, in the amber scheme.
 describe('play views', () => {
@@ -71,9 +74,44 @@ describe('play views', () => {
     expect(w.find('.chord-now-fill').attributes('style')).toContain('2000ms')
   })
 
+  it('Now / Next stacked (Rig Controls, above Play): Now over Next, the fill bar', () => {
+    const store = useChordProgStore()
+    store.isPlaying = true
+    store.playingChordName = 'Bb'
+    store.playingChordDuration = '1m'
+    store.playingChordMs = 2000
+    store.nextChord = { name: 'Ebm', duration: '1m', wraps: false }
+    const w = mount(ChordNowDisplay, { props: { stacked: true } })
+    expect(w.text()).toMatch(/Now\s*Bb\s*1\/1\s*Next\s*Ebm/)
+    expect(w.find('.chord-now-fill').attributes('style')).toContain('2000ms')
+  })
+
+  it('velocity levels: <70 low, 70–104 mid, ≥105 high', () => {
+    expect([0, 69, 70, 104, 105, 127].map(velLevel)).toEqual(['low', 'low', 'mid', 'mid', 'high', 'high'])
+  })
+
   it('Sequencer: its banks and the pattern on one row', () => {
     const w = mount(SeqPlayView)
     expect(w.text()).toContain('H')
+  })
+
+  it('Sequencer: steps coloured by velocity (low green, mid orange, high red); a click turns one on / off', async () => {
+    const w = mount(SeqPlayView)
+    const eng = useSequencerEngine()
+    eng.updateStep(0, { active: true, notes: [60], velocity: 40 })
+    eng.updateStep(1, { active: true, notes: [62], velocity: 90 })
+    eng.updateStep(2, { active: true, notes: [64], velocity: 120 })
+    await w.vm.$nextTick()
+    const cells = () => w.findAll('button[title^="Step "]')
+    expect(cells()[0].classes()).toContain('bg-emerald-500/25')
+    expect(cells()[1].classes()).toContain('bg-orange-500/30')
+    expect(cells()[2].classes()).toContain('bg-red-500/30')
+    expect(cells()[0].classes()).toContain('h-6')
+    await cells()[0].trigger('click')
+    expect(eng.steps.value[0].active).toBe(false)
+    expect(eng.steps.value[0].notes).toEqual([60]) // the notes kept
+    await cells()[0].trigger('click')
+    expect(eng.steps.value[0].active).toBe(true)
   })
 
   it('Chain on: the chain strip, the position playing in red; off: none', () => {

@@ -170,7 +170,9 @@ With **Bass** on (its device and channel in the Chord Prog's settings), each ste
 
 The step's and the global transpose apply to it as to the chord.
 
-> **Performance workspace**: the Chord Prog's play view shows the slots and the chords, each pad with its length (`1/1` = a bar, `1/4`…), the chord sounding lit; **Now / Next** (under the Sequencer) shows the chord sounding and the next one. **EDIT** opens the full panel, **Play view** goes back.
+**To Ableton Live:** with SY.CORE Link connected, the Bass device list also has **Live (M4L)** — the bass goes to Live on its beat, to the **SY.CORE Link Receive** set to the Bass channel (e.g. CH 2 on the bass track). The FM-1 Emulator is in the list too while its panel is open.
+
+> **Performance workspace**: the Chord Prog's play view shows the slots and the chords, each pad with its length (`1/1` = a bar, `1/4`…), the chord sounding lit; **Now / Next** (in Rig Controls, above Play) shows the chord sounding and the next one. **EDIT** opens the full panel, **Play view** goes back.
 
 ---
 

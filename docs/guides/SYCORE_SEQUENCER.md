@@ -18,7 +18,7 @@ At the heart of the sequencer is its style- and scale-based generation engine, w
 - **Scale & Key Engine**: Forces all generated notes within a selected musical scale (Major, Minor, Pentatonic, Dorian, Phrygian, Lydian, Mixolydian, etc.) and in a specific key.
 
 ## 2. Sequencer Architecture
-- **16th Note Resolution**: Each pattern can extend up to 16 steps.
+- **16th Note Resolution**: Each pattern can extend up to 64 steps (the Length slider, or ×2 from 16 → 32 → 64).
 - **Native Polyphony**: Each step can contain multiple notes simultaneously, allowing for the creation of chords or melodic layering.
 - **Parameter Locks (P1 & P2)**: Each step stores the value of two assignable MIDI CCs. This allows you to automate parameters like Cutoff, Resonance, or effect intensity on a per-step basis.
 - **Gate & Tie (Slide)**:
@@ -198,15 +198,15 @@ Parameter locks let each step send a different CC value — the classic "per-ste
 
 ### 5.8 Chain Mode
 
-Chain mode lets you sequence up to 8 pattern slots in order for continuous playback.
+Chain mode lets you sequence up to 16 pattern slots in order for continuous playback (each slot one of the banks A–H: a bank can appear more than once).
 
-Enable chain mode by clicking the **Chain** toggle in the transport bar. When active, a chain editor row appears below the transport bar showing 8 clickable slots.
+Enable chain mode by clicking the **Chain** toggle in the transport bar. When active, a chain editor row appears below the transport bar showing 16 clickable slots (a chain saved with 8 keeps them, the other 8 empty).
 
 | Action | Result |
 |--------|--------|
 | **Click a slot** | Cycles through `null → A → B → C → D → E → F → null` |
 | **Right-click a slot** | Clears the slot to null |
-| **Clear all button** | Empties all 8 slots |
+| **Clear all button** | Empties all 16 slots |
 
 While chain mode is active and the sequencer is playing, each slot is played for one bar before advancing to the next filled slot. Empty slots are skipped. A blue highlight on the slot indicates the currently playing position.
 

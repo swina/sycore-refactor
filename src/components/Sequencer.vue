@@ -725,7 +725,7 @@ let generateHidden = ref(false)
               <ChevronDown class="w-3.5 h-3.5" />
             </button>
             <!--//seqStepsLimit" -->
-            <input v-model.number="numSteps" type="range" min="2" max="16" 
+            <input v-model.number="numSteps" type="range" min="2" max="64" 
               class="w-20 h-1 accent-orange-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
             <button @click="duplicateLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="x2">
               <ChevronUp class="w-3.5 h-3.5" />

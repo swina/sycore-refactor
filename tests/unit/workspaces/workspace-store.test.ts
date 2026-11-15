@@ -36,7 +36,8 @@ describe('workspaces', () => {
     ui.openPanel('midi-flow')
     const ws = useWorkspaceStore()
     ws.switchTo('performance')
-    for (const id of ['rig-controller', 'rig-controls', 'chord-prog', 'drum-machine', 'sequencer2', 'chord-now']) expect(ui.isPanelOpen(id)).toBe(true)
+    for (const id of ['rig-controller', 'rig-controls', 'chord-prog', 'drum-machine', 'sequencer2']) expect(ui.isPanelOpen(id)).toBe(true)
+    expect(ui.isPanelOpen('chord-now')).toBe(false) // Now / Next is in Rig Controls, above Play
     expect(ui.isPanelOpen('midi-flow')).toBe(false)
     // panels not mounted: their place written where they read it at mount
     const saved = JSON.parse(localStorage.getItem(userKey('SYCORE_POS_CHORD_PROG'))!)

@@ -29,3 +29,12 @@ export function slotLook(snap: { filled: boolean[]; playing: number | null; queu
   if (snap.playing === i) return 'playing'
   return snap.filled[i] ? 'filled' : 'empty'
 }
+
+/** A Sequencer step's velocity as its background (play view): low green, medium orange, high red. */
+export type VelLevel = 'low' | 'mid' | 'high'
+export const velLevel = (v: number): VelLevel => (v >= 105 ? 'high' : v >= 70 ? 'mid' : 'low')
+export const VEL_CLASS: Record<VelLevel, string> = {
+  low:  'bg-emerald-500/25 border-emerald-500/40 text-emerald-100',
+  mid:  'bg-orange-500/30 border-orange-500/45 text-orange-100',
+  high: 'bg-red-500/30 border-red-500/50 text-red-100',
+}

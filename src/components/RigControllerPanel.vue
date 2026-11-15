@@ -2,6 +2,7 @@
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import RigControlSections from '@/components/RigControlSections.vue'
+import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 import { rigControlsHost, RIG_CONTROLS_CTX } from '@/lib/rig-controls-host'
 import { usePlayView } from '@/composables/usePlayView'
 import { PLAY_LED_CLASS } from '@/lib/play-colors'
@@ -1856,7 +1857,9 @@ provide(RIG_CONTROLS_CTX, {
         <RigControlSections only="performance" />
         <RigControlSections only="safety" />
         <!-- no Controller template here: set up in EDIT (the Rig layout), not while performing -->
-        <button class="mt-auto shrink-0 h-14 flex items-center justify-center gap-2 rounded-lg border text-sm font-black uppercase tracking-widest select-none"
+        <!-- Now / Next (the Chord Prog's chords) right above Play -->
+        <ChordNowDisplay stacked class="mt-auto" />
+        <button class="shrink-0 h-14 flex items-center justify-center gap-2 rounded-lg border text-sm font-black uppercase tracking-widest select-none"
                 :class="[playOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-neutral-800 border-white/15 text-neutral-200 hover:bg-neutral-700', learnedRing('rig_play')]"
                 :title="(live && s.clock.source === 'EXT' ? 'Play / Stop Ableton Live (SY.CORE Link)' : 'Play / Stop the clock') + ' — right-click: MIDI Learn'"
                 @click="togglePlay" @contextmenu="learnMenu($event, 'rig_play', 'Play / Stop')">

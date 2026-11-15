@@ -25,14 +25,13 @@ export const WORKSPACES: WorkspaceManifest[] = [
   {
     id: 'performance',
     label: 'Performance',
-    // Left: the players stacked (Drum, Chord Prog, Sequencer) over Now / Next; middle: the Rig's
-    // controls; right: the Rig (its Launchpad layout), with Live the Map below it.
-    panels: ['drum-machine', 'chord-prog', 'sequencer2', 'chord-now', 'rig-controls', 'rig-controller'],
+    // Left: the players stacked (Drum, Chord Prog, Sequencer); middle: the Rig's controls, Now / Next
+    // above Play; right: the Rig (its Launchpad layout), with Live the Map below it.
+    panels: ['drum-machine', 'chord-prog', 'sequencer2', 'rig-controls', 'rig-controller'],
     tiles: {
       'drum-machine':   { x: 0, y: 0, w: 0.475, h: 0.525 },
       'chord-prog':     { x: 0, y: 0.525, w: 0.475, h: 0.21 },
-      'sequencer2':     { x: 0, y: 0.735, w: 0.475, h: 0.185 },
-      'chord-now':      { x: 0, y: 0.92, w: 0.475, h: 0.08 },
+      'sequencer2':     { x: 0, y: 0.735, w: 0.475, h: 0.265 },
       'rig-controls':   { x: 0.475, y: 0, w: 0.155, h: 1 },
       'rig-controller': { x: 0.63, y: 0, w: 0.37, h: 1 },
     },
@@ -42,8 +41,7 @@ export const WORKSPACES: WorkspaceManifest[] = [
       tiles: {
         'drum-machine':   { x: 0, y: 0, w: 0.475, h: 0.525 },
         'chord-prog':     { x: 0, y: 0.525, w: 0.475, h: 0.21 },
-        'sequencer2':     { x: 0, y: 0.735, w: 0.475, h: 0.185 },
-        'chord-now':      { x: 0, y: 0.92, w: 0.475, h: 0.08 },
+        'sequencer2':     { x: 0, y: 0.735, w: 0.475, h: 0.265 },
         'rig-controls':   { x: 0.475, y: 0, w: 0.155, h: 1 },
         'rig-controller': { x: 0.63, y: 0, w: 0.37, h: 0.73 },
         'live-map':       { x: 0.63, y: 0.73, w: 0.37, h: 0.27 },
