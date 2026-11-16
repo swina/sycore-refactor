@@ -51,7 +51,7 @@ SY.CORE (browser)                          Ableton Live
 | **Ableton Live** | Live with Max for Live (Suite, or Standard + Max for Live). Tested with Live 12. |
 | **Browser** | Chrome or Edge (Web MIDI). |
 | **Network permission** | The browser must be allowed to reach `127.0.0.1` (Chrome may ask about *local network access*: allow it). |
-| **Files** | **SY.CORE Live Devices** (1.7.0): a Live Pack (`.alp`) or a zip from the [GitHub release](https://github.com/swina/sycore-ableton/releases/tag/link-v1.7.0), or the *Ableton Live* page of the SY.CORE website. The four devices, their scripts and `node_modules`, in one folder. |
+| **Files** | **SY.CORE Live Devices** (1.8.0): a Live Pack (`.alp`) or a zip from the [GitHub release](https://github.com/swina/sycore-ableton/releases/tag/link-v1.8.0), or the *Ableton Live* page of the SY.CORE website. The four devices, their scripts and `node_modules`, in one folder. |
 
 ---
 

@@ -9,7 +9,7 @@ import {
 } from 'lucide-vue-next'
 
 // The Max for Live devices: a GitHub Release of swina/sycore-ableton (zip + Live Pack, GPL-3.0).
-const DEVICES_VERSION = '1.7.0'
+const DEVICES_VERSION = '1.8.0'
 const RELEASE = `https://github.com/swina/sycore-ableton/releases/tag/link-v${DEVICES_VERSION}`
 const asset = (ext) => `https://github.com/swina/sycore-ableton/releases/download/link-v${DEVICES_VERSION}/SYCORE-Live-Devices-${DEVICES_VERSION}.${ext}`
 const DEVICES_ZIP = asset('zip')
