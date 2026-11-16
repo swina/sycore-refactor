@@ -114,6 +114,25 @@ describe('play views', () => {
     expect(eng.steps.value[0].active).toBe(true)
   })
 
+  it('Sequencer: P1 / P2 RND% move, also while playing; ↻ regenerates P1 alone', async () => {
+    const w = mount(SeqPlayView)
+    const eng = useSequencerEngine()
+    eng.isPlaying.value = true
+    await w.vm.$nextTick()
+    const rnd = w.findAll('input[type="range"][min="-100"]')
+    expect(rnd).toHaveLength(2)
+    expect(rnd[0].attributes('disabled')).toBeUndefined()
+    await rnd[0].setValue('80')
+    await rnd[1].setValue('-40')
+    expect(eng.param1Variation.value).toBe(80)
+    expect(eng.param2Variation.value).toBe(-40)
+    expect(w.text()).toContain('+80')
+    const p2 = eng.steps.value.map((s: any) => s.param2Value)
+    await w.find('button[title^="Regenerate P1"]').trigger('click')
+    expect(eng.steps.value.map((s: any) => s.param2Value)).toEqual(p2)
+    eng.isPlaying.value = false
+  })
+
   it('Chain on: the chain strip, the position playing in red; off: none', () => {
     const store = useChordProgStore()
     store.chain = [0, 2, 1, ...Array(13).fill(-1)]

@@ -22,4 +22,28 @@ describe('Sequencer chain: 16 slots', () => {
     expect(s.chain[15]).toBe(0)
     expect(s.playbackSteps.chainSlotIndices).toContain(15)
   })
+  it('Save → All Slots: the 8 banks, the chain and the active bank round-trip (an older entry padded)', () => {
+    const s = useStepSequencerStore()
+    s.banks[2].selectedStyle = 'Acid'
+    s.banks[2].steps[0] = { ...s.banks[2].steps[0], active: true, notes: [48] }
+    s.restoreChainFromPreset({ chain: [2, 0], chainEnabled: true })
+    s.setActiveBank(2)
+    const snap = JSON.parse(JSON.stringify(s.captureAllBanks()))
+    expect(snap.banks).toHaveLength(8)
+
+    setActivePinia(createPinia()); localStorage.clear()
+    const t = useStepSequencerStore()
+    t.restoreAllBanks(snap)
+    expect(t.activeBankIndex).toBe(2)
+    expect(t.banks[2].selectedStyle).toBe('Acid')
+    expect(t.banks[2].steps[0].notes).toEqual([48])
+    expect(t.chain.slice(0, 2)).toEqual([2, 0])
+    expect(t.chainEnabled).toBe(true)
+
+    t.restoreAllBanks({ banks: [{ selectedStyle: 'Jazz' }], activeBankIndex: 9 })
+    expect(t.banks).toHaveLength(8)
+    expect(t.banks[0].selectedStyle).toBe('Jazz')
+    expect(t.banks[0].steps).toHaveLength(16)
+    expect(t.activeBankIndex).toBe(0)
+  })
 })

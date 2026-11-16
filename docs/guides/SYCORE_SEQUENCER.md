@@ -28,7 +28,7 @@ At the heart of the sequencer is its style- and scale-based generation engine, w
 ## 3. Workflow & Performance
 - **Real-time Recording**: Record notes in real-time from external MIDI keyboards or the integrated virtual keyboard directly into the steps.
 - **Global Transpose**: Transpose the entire sequence in real-time without stopping playback.
-- **Follows the Chord Prog**: with MIDI Flow cabling Chord Prog → Sequencer and AUTO on, a chord starts the Sequencer and its root transposes the pattern. Started this way, it **stops with the chord**: the Chord Prog's STOP (or MIDI `cp_panic`), a click on the chord sounding, or the Chord Prog's own Stop. Started by Play, Play All or a Rig pad, it plays on. **Stopped by you** (its Stop button, its Rig pad, or a MIDI-learned `seq_play`) the chords no longer start it: it stays off until you start it again (Play, a pad, Play All) — then it follows the chords' key again. So the Sequencer comes in and out when you choose; Stop All and Live's Stop don't hold it off. To never auto-start it, turn AUTO off.
+- **Follows the Chord Prog**: with MIDI Flow cabling Chord Prog → Sequencer, while the Sequencer plays the chord's root transposes the pattern (and with *Drums + Sequencer follow* the Chord Prog's sections switch its bank). **Play / Stop stay independent**: a Chord Prog chord or slot never starts the Sequencer, and the Chord Prog's stop never stops it — start it with its Play, its Rig pad or Play All. With AUTO on, a routed **keyboard** still starts it; **stopped by you** (its Stop button, its Rig pad, or a MIDI-learned `seq_play`) it stays off until you start it again. Stop All and Live's Stop don't hold it off.
 - **Follow: Degree / Chrom** (the generation row, remembered per user) — how the pattern moves on the chords or notes it receives. **Degree** (default): by **scale degree**, inside the Sequencer's Key / Scale, so it stays in key — in C major, a Dm moves C-E-G to D-F-A (a chromatic shift would give D-F♯-A), an Am moves it two degrees down (the nearest way, the line keeps its register). The Chord Prog's chord moves it by its **root, read from the chord's name** (an inversion such as F-A-D is still D), not by each note of the voicing. Set the Sequencer's Key / Scale to the chords' key (the Rig's GEN does it from the Chord Prog's key). **Chrom**: by semitones from the pattern's first note, as before.
 - **Backing Track Sync**: Automatic synchronization with the Backing Track Player to start/stop sequences in sync with the backing tracks.
 - **MIDI Export**: Export your patterns as standard MIDI files (.mid) for use in your favorite DAW.
@@ -145,6 +145,10 @@ Parameter locks let each step send a different CC value — the classic "per-ste
 
 **Generated values:** Generate writes P1 / P2 on every step it makes, in every mode (melodic, chords, Arpeggio): the instrument preset's value for that CC, moved at random by **RND%** — positive up to that share of the way to 127, negative down to that share of the way to 0 (RND 0 = the preset's value on every step). RND% is also in the Play View.
 
+**Regenerating P1 / P2 alone:** **↻ P1**, **↻ P2** and **↻ P1+P2** (next to the RND% sliders; **↻** by each P in the Play View) write new P1 / P2 values on every step the same way, without touching the notes, the rhythm or the other parameter — to try a new movement on a pattern you keep. Undo it from the session journal like a Generate. RND% and the ↻ buttons work while the Sequencer plays, so P1 / P2 can be regenerated on the fly.
+
+**In Ableton Live — P1 / P2 → Map:** Live can't MIDI-map the CCs that arrive in a track's own MIDI, so P1 / P2 can't move a Live parameter directly. With SY.CORE Link connected the row shows **→ Map** (also the **→ MAP** badge in the Play View): a click opens the routing table, **a row per track** in Live — *target track → P1 → Map slot → P2 → Map slot* (**+ Track** adds one, ✕ removes it; the Sequencer can feed several tracks, each instrument with its own slots). The slot names show once the Map has seen that track's instrument. Each step's value then also moves those slots; the CC still goes out, for other devices. With **SY.CORE Link 1.8** every row is sent wherever the Map is (FOLLOW stays free); with an older bridge only the row of the track the Map drives. When nothing is sent an amber line says why (the Map on a track without a row with an older bridge, an empty slot on the instrument in focus, no Map device) — in EDIT and in the Play View (green while sending, amber ⚠ when not). The same value isn't resent; on the instrument in focus an encoder on that slot picks the new value up again (pickup).
+
 **Setting a lock on a specific step:**
 
 1. Select the step.
@@ -211,6 +215,8 @@ Enable chain mode by clicking the **Chain** toggle in the transport bar. When ac
 While chain mode is active and the sequencer is playing, each slot is played for one bar before advancing to the next filled slot. Empty slots are skipped. A blue highlight on the slot indicates the currently playing position.
 
 Chain configuration (slots and autofill settings) is saved and restored with presets.
+
+**Save to Library → All Slots:** in the Save dialog (header's save icon), tick **All Slots** to store the 8 banks A–H with the chain and the active bank in one library entry (as the Chord Prog's). Unticked it saves the active bank's pattern, as before. In the Load dialog an all-slots entry is tagged **ALL SLOTS** and replaces every bank and the chain.
 
 ---
 

@@ -33,7 +33,7 @@ import { sendPartPresets } from '@/lib/song-composer'
 import { nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
-import { chordAfter } from '@/lib/chord-next'
+import { chordAfter, latchIndex } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { chordRootPc } from '@/lib/seq-gen/harmony'
@@ -513,6 +513,8 @@ function createChordProgEngine() {
     _activeNoteKeys.clear()
     _cpVoices.clear()
     playStateRef.current = buildPlayState()
+    // Latched before Play: start on that chord
+    { const li = _latch(playStateRef.current); if (li >= 0) playStateRef.current.stepPointer = li }
 
     toneStart().then(() => {
       getTransport().bpm.value = arpStore.arpBpm || 120
@@ -615,7 +617,8 @@ function createChordProgEngine() {
             store.playingChordMs = Math.round(ticksNeeded * 60000 / (state.bpm * 96))
             store.playingChordBars = ticksNeeded / 384
             store.playingChordSeq++
-            const nx = chordAfter(state.steps, state.numSteps, state.stepPointer, state.loop)
+            const li = _latch(state)
+            const nx = li >= 0 ? { step: state.steps[li], wraps: false } : chordAfter(state.steps, state.numSteps, state.stepPointer, state.loop)
             store.nextChord = nx ? { name: nx.step.chordName, duration: nx.step.duration, wraps: nx.wraps } : null
             if (state.chainSlotIndices) {
               const slotIdx = state.chainSlotIndices[state.stepPointer]
@@ -754,16 +757,21 @@ function createChordProgEngine() {
         state.tickCounter++
         if (state.tickCounter >= ticksNeeded) {
           state.tickCounter = 0
-          const nextPointer = state.stepPointer + 1
-          if (nextPointer >= activeCount) {
-            if (!state.loop) {
-              drawAt(() => { store.isPlaying = false }, time)
+          // Latch: the latched chord again (or now, from the chord that was sounding), no advance
+          const li = _latch(state)
+          if (li >= 0) state.stepPointer = li
+          else {
+            const nextPointer = state.stepPointer + 1
+            if (nextPointer >= activeCount) {
+              if (!state.loop) {
+                drawAt(() => { store.isPlaying = false }, time)
+              }
+              state.stepPointer = 0
+            } else {
+              state.stepPointer = nextPointer
             }
-            state.stepPointer = 0
-          } else {
-            state.stepPointer = nextPointer
+            _chainSwitch(state)
           }
-          _chainSwitch(state)
         }
       }
 
@@ -778,6 +786,13 @@ function createChordProgEngine() {
       transportManager.acquireTransport()
     })
   })
+
+  // Latch (store.latchStep, the Rig's row 8): the position of the latched chord of the slot playing
+  // (-1: none — the progression goes on).
+  function _latch(state) {
+    return latchIndex(state.steps, state.numSteps, state.stepPointer, store.latchStep,
+      state.chainSlotIndices ? { localIndices: state.chainLocalIndices, positions: state.chainPositions, slotIndices: state.chainSlotIndices } : null)
+  }
 
   // Chain switched on / off while playing (the Rig's Chord Chain, the panel): at the end of the slot
   // playing (its next chord is its first) — on: the chain from its start; off: the slot that was

@@ -5,16 +5,17 @@
  * and (compact) in the DECK. Right-click a control: MIDI Learn — map_slot_<n> (encoder n drives slot n
  * of whatever instrument is in focus), map_track_prev / next / follow, map_track (knob), variations.
  * The encoders work with this view closed too (useLiveMapStore).
+ * The track / FOLLOW / Pickup / view controls: LiveMapControls (here, or in the panel's header).
  * On the screen (mouse, touch): drag a slot up / down, or switch to vertical sliders (a finger on a
- * slider sets the value there) — the choice remembered per user.
+ * slider sets the value there) or to Live-style encoders (drag up / down) — the choice remembered per user.
  */
-import { computed, ref, watch } from 'vue'
-import { userKey } from '@/lib/userKey'
+import { computed } from 'vue'
+import LiveMapControls from '@/components/LiveMapControls.vue'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { useLinkStore } from '@/stores/useLinkStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { mapSlotParam, MAP_VARIATION_BUTTONS, MAP_TRACK_KNOB } from '@/lib/live-map'
+import { mapSlotParam, MAP_VARIATION_BUTTONS } from '@/lib/live-map'
 
 const props = defineProps({
   /** the DECK's summary: smaller, no hints */
@@ -23,13 +24,53 @@ const props = defineProps({
   title: { type: Boolean, default: true },
   /** the hint line under the slots */
   hints: { type: Boolean, default: true },
+  /** the track / FOLLOW / Pickup / view controls (off when the panel's header carries them) */
+  controls: { type: Boolean, default: true },
 })
 
-// Slots as tiles (standard) or vertical sliders (touch screens); not in the DECK's summary.
-const LS_SLIDERS = 'SYCORE_LIVE_MAP_SLIDERS'
-const sliders = ref((() => { try { return localStorage.getItem(userKey(LS_SLIDERS)) === '1' } catch { return false } })())
-watch(sliders, v => { try { localStorage.setItem(userKey(LS_SLIDERS), v ? '1' : '0') } catch {} })
-const showSliders = computed(() => sliders.value && !props.compact)
+// Slots as tiles, vertical sliders or Live-style encoders (map.view, switched in LiveMapControls);
+// the DECK's summary: tiles only.
+const shown = computed(() => (props.compact ? 'tiles' : map.view))
+const showSliders = computed(() => shown.value === 'sliders')
+const showKnobs = computed(() => shown.value === 'knobs')
+const fills = computed(() => showSliders.value || showKnobs.value)
+
+// Encoders as in Live: a 270° arc (7:30 to 4:30), the value arc from its start, or from 12 o'clock for
+// bipolar parameters (pan, detune, fine, transpose…), and a needle to the value.
+const KNOB_SWEEP = 270
+const KNOB_R = 15
+const knobAngle = v => -KNOB_SWEEP / 2 + Math.max(0, Math.min(1, v ?? 0)) * KNOB_SWEEP
+const knobPt = (a, r = KNOB_R) => {
+  const t = (a * Math.PI) / 180
+  return [20 + r * Math.sin(t), 20 - r * Math.cos(t)]
+}
+function knobArc(a1, a2) {
+  if (Math.abs(a2 - a1) < 0.01) return ''
+  const [lo, hi] = a1 < a2 ? [a1, a2] : [a2, a1]
+  const [x1, y1] = knobPt(lo)
+  const [x2, y2] = knobPt(hi)
+  return `M${x1.toFixed(2)} ${y1.toFixed(2)}A${KNOB_R} ${KNOB_R} 0 ${hi - lo > 180 ? 1 : 0} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`
+}
+const BIPOLAR = /\bpan\b|balance|detune|\bfine\b|transp|semi|spread/i
+const isBipolar = s => !!s && BIPOLAR.test(`${s.name} ${s.param}`)
+const KNOB_TRACK = knobArc(-KNOB_SWEEP / 2, KNOB_SWEEP / 2)
+const knobValueArc = (s, v) => knobArc(isBipolar(s) ? 0 : -KNOB_SWEEP / 2, knobAngle(v))
+const knobNeedle = v => {
+  const a = knobAngle(v)
+  const [x1, y1] = knobPt(a, 6)
+  const [x2, y2] = knobPt(a, KNOB_R - 1)
+  return { x1, y1, x2, y2 }
+}
+const knobMark = v => {
+  const a = knobAngle(v)
+  const [x1, y1] = knobPt(a, KNOB_R - 3.5)
+  const [x2, y2] = knobPt(a, KNOB_R + 3.5)
+  return { x1, y1, x2, y2 }
+}
+const knobText = (s, v) => {
+  if (!s || v === null || v === undefined) return ''
+  return isBipolar(s) ? String(Math.round((v - 0.5) * 100)) : String(Math.round(v * 100))
+}
 const slots = computed(() => info.value?.slots ?? Array(16).fill(null))
 
 // One send per frame while a slot moves (a pointer stream can run at 120+ events a second).
@@ -98,15 +139,10 @@ const tag = computed(() => {
   const macros = i.slots.filter(s => s && /^Macro \d+$/.test(s.param)).length
   return i.mode === 'auto' ? `Auto · ${i.device.cls}` : i.mode === 'macros' ? 'Rack Macros' : i.mode === 'mixed' ? `${macros} Macros + ${i.device.cls}` : i.mode === 'table' ? i.device.cls : `No table · ${i.device.cls}`
 })
-const targetValue = computed({
-  get: () => (map.target === 'follow' ? 'follow' : String(map.target)),
-  set: v => map.setTarget(v === 'follow' ? 'follow' : Number(v)),
-})
 // Macro Variations of the Rack in focus: up to 8 buttons (more: ◀ ▶ reach them)
 const vars = computed(() => info.value?.variations ?? null)
 const varButtons = computed(() => Array.from({ length: Math.min(MAP_VARIATION_BUTTONS, vars.value?.count ?? 0) }, (_, i) => i))
 const btn = 'px-2 py-0.5 rounded border text-[10px] font-bold'
-const following = computed(() => map.target === 'follow')
 function confirmDelete() {
   const v = vars.value
   if (v && v.selected >= 0 && window.confirm(`Delete variation ${v.selected + 1} of ${info.value?.device?.rack ?? 'this Rack'}? (Live's Undo brings it back)`)) map.variation('delete')
@@ -115,53 +151,36 @@ const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.na
 </script>
 
 <template>
-  <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2" :class="showSliders ? 'h-full flex flex-col' : ''">
-    <div class="flex items-center justify-between gap-2">
-      <h3 v-if="!compact && title" class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Map · Live instruments</h3>
-      <div class="flex items-center gap-1">
-        <!-- the track: ◀ ▶ and FOLLOW as buttons, the menu as a knob (right-click: MIDI Learn) -->
-        <button :class="[btn, 'border-white/10 text-neutral-300', learnedRing('map_track_prev')]" title="Previous track · right-click: MIDI Learn"
-                @click="map.trackStep(-1)" @contextmenu="learnMenu($event, 'map_track_prev', 'Map Track ◀')">◀</button>
-        <select v-model="targetValue" class="bg-neutral-900 border border-white/10 rounded text-[10px] text-neutral-300 px-1 py-0.5 max-w-40"
-                :class="learnedRing(MAP_TRACK_KNOB)"
-                title="The track whose instrument the encoders drive · right-click: MIDI Learn a knob that picks the track"
-                @contextmenu="learnMenu($event, MAP_TRACK_KNOB, 'Map Track (knob)')">
-          <option value="follow">Follow selected track</option>
-          <option v-for="t in map.instrumentTracks" :key="t.index" :value="String(t.index)">{{ t.name }} · {{ t.instrument }}</option>
-        </select>
-        <button :class="[btn, 'border-white/10 text-neutral-300', learnedRing('map_track_next')]" title="Next track · right-click: MIDI Learn"
-                @click="map.trackStep(1)" @contextmenu="learnMenu($event, 'map_track_next', 'Map Track ▶')">▶</button>
-        <button :class="[btn, following ? 'bg-emerald-500 border-emerald-300 text-black' : 'border-white/10 text-neutral-400', learnedRing('map_track_follow')]"
-                title="Follow Live's selected track (off: stay on this track) · right-click: MIDI Learn"
-                @click="map.toggleFollow()" @contextmenu="learnMenu($event, 'map_track_follow', 'Map Follow selected track')">FOLLOW</button>
-        <label class="flex items-center gap-1 text-[10px] text-neutral-400" title="Absolute knobs take over only once they reach the parameter's value (no jumps)">
-          <input v-model="map.pickup" type="checkbox" class="accent-emerald-500"> Pickup
-        </label>
-        <button v-if="!compact" :class="[btn, sliders ? 'bg-emerald-500 border-emerald-300 text-black' : 'border-white/10 text-neutral-400']"
-                title="The slots as vertical sliders (touch screens) or as tiles (drag up / down)"
-                @click="sliders = !sliders">{{ sliders ? 'SLIDERS' : 'TILES' }}</button>
+  <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-2" :class="fills ? 'h-full flex flex-col' : ''">
+    <!-- the controls (unless the panel's header has them), the track and its instrument; the track's
+         number in Live top right -->
+    <div class="flex items-start gap-2">
+      <div class="flex-1 min-w-0 space-y-2">
+        <div v-if="(!compact && title) || controls" class="flex items-center gap-2">
+          <h3 v-if="!compact && title" class="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Map · Live instruments</h3>
+          <LiveMapControls v-if="controls" :view-switch="!compact" />
+        </div>
+        <!-- the track's name large, the instrument after it -->
+        <div v-if="!compact && info?.device" class="flex items-center justify-between gap-2">
+          <div class="min-w-0 flex items-baseline gap-2 truncate">
+            <span class="text-lg font-black text-white leading-tight">{{ info.track?.name ?? '' }}</span>
+            <span class="text-sm font-bold text-emerald-300 leading-tight truncate">› {{ deviceLine }}</span>
+          </div>
+          <span class="text-[10px] font-mono shrink-0" :class="info?.mode === 'none' ? 'text-amber-400' : 'text-neutral-500'">{{ tag }}</span>
+        </div>
+        <div v-else class="flex items-center justify-between text-[11px]">
+          <span class="font-bold truncate" :class="info?.device ? 'text-neutral-200' : 'text-neutral-500'">{{ head }}</span>
+          <span class="text-[10px] font-mono shrink-0 ml-2" :class="info?.mode === 'none' ? 'text-amber-400' : 'text-neutral-500'">{{ tag }}</span>
+        </div>
       </div>
-      <!-- the track's number in Live, top right -->
-      <div v-if="!compact" class="ml-auto shrink-0 min-w-12 h-10 px-2 rounded-md flex flex-col items-center justify-center border"
+      <div v-if="!compact" class="shrink-0 min-w-12 h-10 px-2 rounded-md flex flex-col items-center justify-center border"
            :class="trackNo ? 'bg-amber-500 border-amber-300 text-black' : 'bg-neutral-900 border-white/10 text-neutral-600'"
            :title="trackNo ? `Live track ${trackNo}` : 'No track'">
         <span class="text-[8px] font-bold uppercase leading-none tracking-widest opacity-70">Track</span>
         <span class="text-xl font-black font-mono leading-none">{{ trackNo ?? '–' }}</span>
       </div>
     </div>
-    <!-- the track's name large, the instrument under it -->
-    <div v-if="!compact && info?.device" class="flex items-center justify-between gap-2">
-      <div class="min-w-0 flex items-baseline gap-2 truncate">
-        <span class="text-lg font-black text-white leading-tight">{{ info.track?.name ?? '' }}</span>
-        <span class="text-sm font-bold text-emerald-300 leading-tight truncate">› {{ deviceLine }}</span>
-      </div>
-      <span class="text-[10px] font-mono shrink-0" :class="info?.mode === 'none' ? 'text-amber-400' : 'text-neutral-500'">{{ tag }}</span>
-    </div>
-    <div v-else class="flex items-center justify-between text-[11px]">
-      <span class="font-bold truncate" :class="info?.device ? 'text-neutral-200' : 'text-neutral-500'">{{ head }}</span>
-      <span class="text-[10px] font-mono shrink-0 ml-2" :class="info?.mode === 'none' ? 'text-amber-400' : 'text-neutral-500'">{{ tag }}</span>
-    </div>
-    <div v-if="!showSliders" class="grid grid-cols-8 gap-1">
+    <div v-if="!fills" class="grid grid-cols-8 gap-1">
       <button v-for="(s, i) in slots" :key="i"
               class="relative rounded border border-white/10 bg-white/[0.04] px-1 pt-0.5 text-left overflow-hidden touch-none"
               :class="[compact ? 'h-10' : 'h-12', learnedRing(mapSlotParam(i)), s ? '' : 'opacity-40']"
@@ -179,7 +198,7 @@ const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.na
       </button>
     </div>
     <!-- vertical sliders: two rows of eight, filling the panel -->
-    <div v-else class="flex-1 min-h-0 grid grid-cols-8 grid-rows-2 gap-1">
+    <div v-else-if="showSliders" class="flex-1 min-h-0 grid grid-cols-8 grid-rows-2 gap-1">
       <div v-for="(s, i) in slots" :key="i" class="min-h-0 flex flex-col items-stretch rounded border border-white/10 bg-white/[0.03] px-1 py-0.5"
            :class="[learnedRing(mapSlotParam(i)), s ? '' : 'opacity-40']" :title="slotTitle(i, s)"
            @contextmenu="learnMenu($event, mapSlotParam(i), `Map slot ${i + 1}`)">
@@ -191,6 +210,23 @@ const slotTitle = (i, s) => `Slot ${i + 1}${s ? ` · ${s.name}${s.param !== s.na
                class="absolute left-0 right-0 h-0.5 bg-amber-400" :style="{ bottom: `${map.pick[i].knob * 100}%` }" />
         </div>
         <span class="text-center text-[9px] font-mono text-neutral-500">{{ s && map.values[i] !== null ? Math.round(map.values[i] * 100) : '' }}</span>
+      </div>
+    </div>
+    <!-- encoders as in Live: two rows of eight, filling the panel; drag up / down -->
+    <div v-else class="flex-1 min-h-0 grid grid-cols-8 grid-rows-2 gap-1">
+      <div v-for="(s, i) in slots" :key="i" class="min-h-0 flex flex-col items-center rounded border border-white/10 bg-white/[0.03] px-1 py-0.5"
+           :class="[learnedRing(mapSlotParam(i)), s ? '' : 'opacity-40']" :title="slotTitle(i, s)"
+           @contextmenu="learnMenu($event, mapSlotParam(i), `Map slot ${i + 1}`)">
+        <span class="self-stretch text-center text-[9px] leading-tight text-neutral-300 truncate"><b class="text-neutral-600">{{ i + 1 }}</b> {{ s?.name ?? '—' }}</span>
+        <svg viewBox="0 0 40 40" class="flex-1 min-h-6 w-full touch-none cursor-ns-resize" preserveAspectRatio="xMidYMid meet"
+             @pointerdown="tileDrag($event, i)">
+          <path :d="KNOB_TRACK" fill="none" stroke="currentColor" class="text-white/15" stroke-width="3" stroke-linecap="butt" />
+          <path v-if="s" :d="knobValueArc(s, map.values[i])" fill="none" stroke="currentColor" class="text-emerald-400" stroke-width="3" stroke-linecap="butt" />
+          <line v-if="s" v-bind="knobNeedle(map.values[i])" stroke="currentColor" class="text-neutral-200" stroke-width="2" stroke-linecap="round" />
+          <line v-if="s && map.pickup && !map.pick[i].caught && map.pick[i].knob !== null" v-bind="knobMark(map.pick[i].knob)"
+                stroke="currentColor" class="text-amber-400" stroke-width="1.5" />
+        </svg>
+        <span class="text-center text-[9px] font-mono text-neutral-500">{{ knobText(s, map.values[i]) }}</span>
       </div>
     </div>
     <!-- Macro Variations (Racks): recall, ◀ ▶, randomize; right-click: MIDI Learn -->

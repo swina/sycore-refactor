@@ -62,6 +62,8 @@ export type LinkEvent =
   | { type: 'map-value'; slot: number; value: number }
   /** the set's tracks; instrument: its first instrument's name ('' = none) */
   | { type: 'map-tracks'; tracks: { index: number; name: string; instrument?: string }[] }
+  /** the slot names of a track's instrument (asked with requestMapTrackSlots, bridge 1.8) */
+  | { type: 'map-track-slots'; track: number; device: string; slots: (string | null)[] }
   /** every parameter of an instrument (asked with requestMapParams), for the table editor */
   | { type: 'map-params'; cls: string; name: string; params: LinkMapParam[] }
 
@@ -176,7 +178,7 @@ export class LinkClient {
   /** Diagnostics: a note sent with its exact beat, and how far (ms) its converted time was. */
   onExactBeat: ((ms: number) => void) | null = null
   transport: LinkTransport = { playing: false, beat: 0, tempo: 120, num: 4, den: 4, at: 0 }
-  device: { name: string; version: string; track: string; sim: boolean; ports: boolean; play: boolean; tempo: boolean } | null = null
+  device: { name: string; version: string; track: string; sim: boolean; ports: boolean; play: boolean; tempo: boolean; mapTrack: boolean } | null = null
   /** Mean of the last round trips, ms (null until measured). */
   rttMs: number | null = null
   private rtts: number[] = []
@@ -305,7 +307,7 @@ export class LinkClient {
     const now = this.now()
     switch (m.type) {
       case 'hello':
-        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports, play: !!m.play, tempo: !!m.tempo }
+        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports, play: !!m.play, tempo: !!m.tempo, mapTrack: !!m.mapTrack }
         this.emit({ type: 'hello', device: this.device.name, version: this.device.version, track: this.device.track, sim: this.device.sim })
         break
       case 'transport': {
@@ -364,6 +366,9 @@ export class LinkClient {
         break
       case 'map-tracks':
         if (Array.isArray(m.tracks)) this.emit({ type: 'map-tracks', tracks: m.tracks })
+        break
+      case 'map-track-slots':
+        if (Number.isInteger(m.track) && Array.isArray(m.slots)) this.emit({ type: 'map-track-slots', track: m.track, device: String(m.device ?? ''), slots: m.slots.map((x: unknown) => (typeof x === 'string' && x ? x : null)) })
         break
       case 'map-params':
         if (Array.isArray(m.params)) this.emit({ type: 'map-params', cls: String(m.cls ?? ''), name: String(m.name ?? ''), params: m.params })
@@ -498,6 +503,15 @@ export class LinkClient {
   /** Slot 0–15 to 0–1 (an encoder moved). */
   sendMap(slot: number, value: number): boolean {
     return this.sendRaw({ type: 'map', slot, value: Math.max(0, Math.min(1, value)) })
+  }
+  /** Slot 0–15 of the instrument on a track (index) to 0–1, the Map's target unchanged (bridge 1.8,
+   *  hello `mapTrack`): the Sequencer's P1 / P2. */
+  sendMapTrack(track: number, slot: number, value: number): boolean {
+    return this.sendRaw({ type: 'map-track', track, slot, value: Math.max(0, Math.min(1, value)) })
+  }
+  /** Ask for the slot names of the instrument on a track (index); answered by 'map-track-slots' (bridge 1.8). */
+  requestMapTrackSlots(track: number): boolean {
+    return this.sendRaw({ type: 'map-track-slots', track })
   }
   /** Follow Live's selected track, or one track (index). */
   sendMapTarget(target: 'follow' | number): boolean {

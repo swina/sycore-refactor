@@ -43,3 +43,22 @@ export function rigChord(
     ms: now.name ? now.ms ?? 0 : 0, bars: now.bars ?? 0, seq: now.seq ?? 0,
   }
 }
+
+/**
+ * Latch (the Rig's row 8, LATCH 1–8): the position in `steps` of chord `latch` (0-based) of the slot
+ * playing — in a flattened chain, the same slot instance as `pointer`. -1: no latch, past the slot's
+ * length, or a rest there (the progression goes on).
+ */
+export function latchIndex<T extends ChordStepLike>(
+  steps: T[], numSteps: number, pointer: number, latch: number | null | undefined,
+  chain?: { localIndices: number[]; positions?: number[] | null; slotIndices: number[] } | null,
+): number {
+  if (latch == null || latch < 0) return -1
+  const n = Math.min(numSteps, steps.length)
+  let idx = -1
+  if (chain) {
+    const same = (i: number) => (chain.positions ? chain.positions[i] === chain.positions[pointer] : chain.slotIndices[i] === chain.slotIndices[pointer])
+    for (let i = 0; i < n; i++) if (chain.localIndices[i] === latch && same(i)) { idx = i; break }
+  } else if (latch < n) idx = latch
+  return idx >= 0 && isChord(steps[idx]) ? idx : -1
+}

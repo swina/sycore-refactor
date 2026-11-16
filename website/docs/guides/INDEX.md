@@ -68,6 +68,7 @@
 | [Drum Machine](./SYCORE_DRUM_MACHINE.md) | 11-track 16-step pattern sequencer with A–H sequence banks, Fill, Repeater, style generation, REC SYNC, Patterns DB, Euclidean Pattern Generator, Bassline generator (uses 3 tracks) |
 | [Chord Progression Sequencer](./SYCORE_CHORD_PROG_SEQUENCER.md) | Step-based harmonic sequencer — 8 slots (A–H) chainable, chord library, chord suggestion modal with favorites, custom chord assignment via MIDI capture, per-step arp rate override, step copy/paste, save/load all 8 slots, chord-prog timeline markers, import standard MIDI files |
 | [Sequencer](./SYCORE_SEQUENCER.md) | Chromatic piano-roll-style step sequencer — 12-note vertical bars per step (C–B), per-step octave/accent/probability, independent MIDI Flow app with own IN/OUT and pattern storage |
+| [Sequencer — Generate](./SYCORE_SEQUENCER_GENERATE.md) | Generate options at a glance — Style, Key / Scale, octaves, Density, Rhythm (Wgt / Eucl / Rnd), Melody (Line / Classic), Chords, Arpeggio, P1 / P2 RND%, Follow; Vary / Mutate (lock); links with Chord Prog, Rig and Map |
 | [Step Sequencer](./SYCORE_STEP_SEQUENCER.md) | Algorithmic composition engine with style-based generation — 8 pattern slots (A–H) |
 | [Arpeggiator](./SYCORE_ARPEGGIATOR.md) | Generates note patterns from held chords — now a routable MIDI Flow app with its own IN port and per-cable note-range filters |
 | [Note Latch](./SYCORE_NOTE_LATCH.md) | Independent MIDI IN/OUT app that holds incoming notes after key release — configurable Max Notes, FIFO/BLOCK mode, cable-able on the MIDI Flow canvas |

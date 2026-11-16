@@ -46,6 +46,7 @@ import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVeloc
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useDrumMachineEngine } from '@/core/engines/drum-machine' // one per app (SynthApp): its chain
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
+import { isChord } from '@/lib/chord-next'
 import { rigChord } from '@/lib/chord-next'
 /** The SY.CORE Rig device's rows (bridge protocol: rows 0–4). */
 const RIG_LINK_ORDER = ['chord', 'drum', 'seq', 'bass', 'arp']
@@ -519,7 +520,7 @@ function holdEnd(key) {
   if (holding[key]) s.display = 'Hold to confirm'
   holding[key] = false
 }
-const doPanic = () => { panic(s); uiStore.seqDecoupled = false; if (live.value) midiStore.panic() }
+const doPanic = () => { panic(s); chordStore.latchStep = null; uiStore.seqDecoupled = false; if (live.value) midiStore.panic() }
 const doInt = () => { if (live.value) return notConnected('EXT/INT (use Clock › Source in the transport)'); toggleClockSource(s) }
 
 // ── Actions shared by the three views ─────────────────────────────────────
@@ -1003,10 +1004,32 @@ function lpPad(row, col) {
     const color = s.section === col ? 'green' : s.queuedSection === col ? 'amberFlash' : sectionHasContent(col) ? 'amber' : 'off'
     return { label: `Section ${col + 1}`, short: `S${col + 1}`, color }
   }
-  // Row 8: Mute 1–5 = the app rows (Drums, Chords, Sequencer, Bassline, Arp), as the MIDImix's Mute; 6–8 free.
-  const a = s.apps[col]
-  if (!a) return { label: `Mute ${col + 1} (free)`, short: '', color: 'off' }
-  return { label: `Mute ${col + 1} · ${a.label}`, short: `Mute ${col + 1}`, color: a.muted ? 'red' : 'amber' }
+  // Row 8: Latch 1–8 = the Chord Prog stays on chord 1–8 of the slot playing (no advance); off: the
+  // progression goes on. (Muting an app: its slot pads stop it, the MIDImix's Mute, the panel's M.)
+  return latchPad(col)
+}
+
+// Latch 1–8: green while that chord holds, blinking while it waits for the chord sounding to end;
+// amber = a chord there; off = past the slot's length or a rest.
+function latchPad(col) {
+  const st = chordStore.steps[col]
+  const has = col < chordStore.numSteps && isChord(st)
+  const name = has ? st.chordName || `chord ${col + 1}` : ''
+  if (chordStore.latchStep === col) {
+    const holding = !chordStore.isPlaying || chordStore.currentStep === col
+    return { label: `Latch ${col + 1} · ${name || 'no chord'} · on (press: back to the progression)`, short: `L${col + 1}`, color: holding ? 'green' : 'amberFlash' }
+  }
+  return { label: has ? `Latch ${col + 1} · stay on ${name}` : `Latch ${col + 1} (no chord ${col + 1})`, short: `L${col + 1}`, color: has ? 'amber' : 'off' }
+}
+function toggleLatch(col) {
+  if (chordStore.latchStep === col) {
+    chordStore.latchStep = null
+    s.display = 'Chord Latch off: the progression goes on'
+    return
+  }
+  if (!(col < chordStore.numSteps && isChord(chordStore.steps[col]))) { s.display = `Latch ${col + 1}: no chord ${col + 1} in this slot`; return }
+  chordStore.latchStep = col
+  s.display = `Chord Latch ${col + 1}: stays on ${chordStore.steps[col].chordName || `chord ${col + 1}`}`
 }
 
 function lpSide(row) {
@@ -1061,7 +1084,7 @@ function lpPadDown(row, col) {
     return
   }
   if (row === 6) return sMode.value === 'captures' ? onCapturePad(col) : onSection(col)
-  if (s.apps[col]) toggleMute(s, s.apps[col].id)
+  toggleLatch(col)
 }
 function lpPadUp(row, col) {
   if (row < 5) return onSlotUp(s.apps[row].id, col)
@@ -1750,7 +1773,7 @@ provide(RIG_CONTROLS_CTX, {
             <div>Rows 1–5 · Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes)</div>
             <div>Row 6 · Fill · Auto Fill · Now/Bar · Repeat (hold) · Latch · Drum Chain · Chord Chain · Seq Chain (dark red off · red blinking on)</div>
             <div>Row 7 · Sections 1–8 — or Captures 1–8 (side S·SEC / S·CAP)</div>
-            <div>Row 8 · Mute 1–5 (Drum, Chord, Seq, Bass, Arp)</div>
+            <div>Row 8 · Latch 1–8: the Chord Prog stays on chord 1–8 (green; blinking until the chord sounding ends) — press again: the progression goes on</div>
             <div>Side · Generate Drum, Chord, Seq, Bass (Shift: Mutate) · Key − · Key + (Shift: Maj/Min) · Capt (record a capture) · Row S: Sections / Captures</div>
             <div>Top · Beat/Tap · EXT/INT (hold) · Shift · Gen AI · Sync (cycles the focused track's Trigger sync) · Rig · — · Panic (hold)</div>
             <div class="text-[10px] text-neutral-500">Slot pads follow each track's Press mode: hold modes react on release too.</div>

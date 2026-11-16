@@ -15,6 +15,9 @@ import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
+import SeqMapModal from '@/components/SeqMapModal.vue'
+import { useLiveMapStore } from '@/stores/useLiveMapStore'
+import { useLinkStore } from '@/stores/useLinkStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
@@ -65,6 +68,8 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 const showSaveLibraryModal = ref(false)
 const showLoadLibraryModal = ref(false)
 const libraryPatternName = ref('')
+// Save → All Slots (as the Chord Prog's): the 8 banks A–H + the chain in one library entry
+const saveAllSlots = ref(false)
 const libraryPatterns = ref([])
 const loadingLibrary = ref(false)
 const showAiPrompt = ref(false)
@@ -79,7 +84,7 @@ const {
   param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
   dynamicMidiTranspose, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
   TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
-  loadBankIntoLocal, selectBank, generateSequence, duplicateLength, reduceLength,
+  syncLocalToBank, loadBankIntoLocal, selectBank, generateSequence, regenerateParams, duplicateLength, reduceLength,
   updateStep, clearStep, isNoteBarActive, toggleNoteBar, setStepOctave, applyToAll, randomize,
 } = engine
 
@@ -150,6 +155,29 @@ async function savePatternToLibrary() {
     octaveRange: octaveRange.value,
   }
 
+  if (saveAllSlots.value) {
+    syncLocalToBank()
+    const all = seqStore.captureAllBanks()
+    const active = all.banks[all.activeBankIndex] ?? {}
+    try {
+      await setDoc(docRef, {
+        id: patternId,
+        name: patternName,
+        type: 'all',
+        ...all,
+        key: active.selectedKey,
+        scale: active.selectedScale,
+        style: active.selectedStyle,
+        createdAt: new Date().toISOString(),
+      })
+      showSaveLibraryModal.value = false
+      saveAllSlots.value = false
+    } catch (err) {
+      console.error('Failed to save all banks to library:', err)
+    }
+    return
+  }
+
   const data = {
     id: patternId,
     name: patternName,
@@ -192,6 +220,12 @@ async function fetchLibraryPatterns() {
 }
 
 function loadPatternFromLibrary(pattern) {
+  if (pattern.type === 'all') {
+    seqStore.restoreAllBanks(pattern)
+    loadBankIntoLocal()
+    showLoadLibraryModal.value = false
+    return
+  }
   const cfg = pattern.config
   if (cfg) {
     if (cfg.numSteps !== undefined) numSteps.value = cfg.numSteps
@@ -354,6 +388,14 @@ function writeVLQ(value, array) {
     else break
   }
 }
+
+// P1 / P2 → Map · Live Instruments slots, a route per track in Live (Live can't MIDI-map the CCs of a
+// track's own MIDI): set in SeqMapModal (useLiveMapStore.seqRoutes).
+const liveMap = useLiveMapStore()
+const linkStore = useLinkStore()
+const showSeqMap = computed(() => linkStore.connected || liveMap.seqRoutes.length > 0)
+const seqMapOpen = ref(false)
+const seqMapCount = computed(() => liveMap.seqRoutes.filter(r => r.p1 !== null || r.p2 !== null).length)
 
 const allS1Params = computed(() => {
   return Object.entries(S1_CC_MAP)
@@ -783,9 +825,11 @@ let generateHidden = ref(false)
             </div>
             <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
               <span class="text-[8px] font-mono text-neutral-500" title="Variazione P1 RND">RND%</span>
-              <input v-model.number="param1Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
-              <span class="text-[9px] font-mono text-synth-amber w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param1Variation > 0 ? '+' : '' }}{{ param1Variation }}</span>
+              <input v-model.number="param1Variation" type="range" min="-100" max="100" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+              <span class="text-[9px] font-mono text-synth-amber w-7 text-right">{{ param1Variation > 0 ? '+' : '' }}{{ param1Variation }}</span>
             </div>
+            <button type="button" @click="regenerateParams('p1')" class="px-1.5 h-6 rounded border border-synth-amber/50 text-synth-amber text-[9px] font-mono font-bold hover:bg-synth-amber/10"
+                    title="Regenerate P1 only: a new value on every step (the preset's value, moved by RND%) — the notes and the rhythm stay">↻ P1</button>
           </div>
           
           <div class="w-px h-5 bg-neutral-800 mx-1" />
@@ -801,11 +845,25 @@ let generateHidden = ref(false)
             </div>
             <div class="flex items-center gap-1 bg-black/40 border border-neutral-800 rounded px-1.5 h-6 ml-1">
               <span class="text-[8px] font-mono text-neutral-500" title="Variazione P2 RND">RND%</span>
-              <input v-model.number="param2Variation" type="range" min="-100" max="100" :disabled="midiStore.isTransportPlaying" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
-              <span class="text-[9px] font-mono text-synth-amber w-7 text-right" :class="{'opacity-50': midiStore.isTransportPlaying}">{{ param2Variation > 0 ? '+' : '' }}{{ param2Variation }}</span>
+              <input v-model.number="param2Variation" type="range" min="-100" max="100" class="w-12 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+              <span class="text-[9px] font-mono text-synth-amber w-7 text-right">{{ param2Variation > 0 ? '+' : '' }}{{ param2Variation }}</span>
             </div>
+            <button type="button" @click="regenerateParams('p2')" class="px-1.5 h-6 rounded border border-synth-amber/50 text-synth-amber text-[9px] font-mono font-bold hover:bg-synth-amber/10"
+                    title="Regenerate P2 only: a new value on every step (the preset's value, moved by RND%) — the notes and the rhythm stay">↻ P2</button>
           </div>
+          <button type="button" @click="regenerateParams('both')" class="px-1.5 h-6 rounded border border-synth-amber/50 text-synth-amber text-[9px] font-mono font-bold hover:bg-synth-amber/10"
+                  title="Regenerate P1 and P2 only: new values on every step — the notes and the rhythm stay">↻ P1+P2</button>
         </div>
+        <!-- P1 / P2 → Map · Live Instruments (in Live the CCs of the track's MIDI can't be MIDI-mapped): the routes in a modal -->
+        <template v-if="showSeqMap">
+          <div class="w-px h-5 bg-neutral-800 mx-1" />
+          <button type="button" class="px-1.5 h-6 rounded border text-[10px] font-mono uppercase"
+                  :class="liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? 'border-amber-500/60 text-amber-400' : seqMapCount ? 'border-emerald-500/50 text-emerald-300' : 'border-neutral-800 text-neutral-400 hover:text-white'"
+                  :title="liveMap.seqParamsHint || 'P1 / P2 → Map slots, a route per track in Live'"
+                  @click="seqMapOpen = true">→ Map{{ seqMapCount ? ` · ${seqMapCount}` : '' }}{{ liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? ' ⚠' : '' }}</button>
+          <span v-if="liveMap.seqParamsHint" class="w-full text-[10px] text-amber-400">{{ liveMap.seqParamsHint }}</span>
+          <SeqMapModal v-if="seqMapOpen" @close="seqMapOpen = false" />
+        </template>
       </div>
 
       
@@ -1154,6 +1212,11 @@ let generateHidden = ref(false)
                 class="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-center text-white text-sm focus:outline-none focus:border-synth-neon transition-colors font-mono uppercase"
                 @keyup.enter="savePatternToLibrary"
               />
+              <label class="flex items-center justify-center gap-2 mt-2 text-[10px] font-mono uppercase text-neutral-400 cursor-pointer">
+                <input type="checkbox" v-model="saveAllSlots" class="accent-emerald-500" />
+                All Slots
+              </label>
+              <div v-if="saveAllSlots" class="text-[9px] text-cyan-400 font-mono">Saves all 8 banks (A–H) + chain configuration</div>
             </div>
 
             <div class="flex items-center gap-3 w-full mt-2 font-mono">
@@ -1218,9 +1281,11 @@ let generateHidden = ref(false)
                   <div class="flex items-center gap-2">
                     <span class="text-xs font-bold text-white group-hover:text-synth-neon transition-colors uppercase font-mono truncate">{{ pattern.name }}</span>
                     <span class="text-[8px] font-mono bg-neutral-800 text-neutral-400 px-1 rounded uppercase">{{ pattern.style }}</span>
+                    <span v-if="pattern.type === 'all'" class="text-[8px] font-mono bg-cyan-900/60 text-cyan-300 px-1 rounded uppercase">All slots</span>
                   </div>
                   <div class="flex items-center gap-3 text-[8px] font-mono text-neutral-500 uppercase tracking-wider mt-1">
-                    <span>Steps: <strong class="text-neutral-300">{{ pattern.config?.numSteps || 16 }}</strong></span>
+                    <span v-if="pattern.type === 'all'">Banks: <strong class="text-neutral-300">{{ pattern.banks?.length || 8 }}</strong><template v-if="pattern.chainEnabled"> · chain</template></span>
+                    <span v-else>Steps: <strong class="text-neutral-300">{{ pattern.config?.numSteps || 16 }}</strong></span>
                     <span>Key: <strong class="text-neutral-300">{{ pattern.key || 'C' }} {{ pattern.scale || 'Major' }}</strong></span>
                     <span class="hidden sm:inline">Saved: <strong class="text-neutral-400">{{ new Date(pattern.createdAt).toLocaleDateString() }}</strong></span>
                   </div>

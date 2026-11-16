@@ -145,6 +145,9 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const playingChordBars = ref(0)
   const playingChordSeq = ref(0)
   const nextChord = ref<{ name: string; duration: string; wraps: boolean } | null>(null)
+  // Latch (the Rig's row 8): chord 0–7 of the slot playing repeats instead of the progression going
+  // on — from the end of the chord sounding; null = the progression (it goes on after the latched chord).
+  const latchStep = ref<number | null>(null)
   const selectedStepIdx = ref(0)
   const selectedKey = ref(saved?.selectedKey ?? 0)
   // The key's mode for generating (chord-key.ts): 'major' / 'minor' = exactly that key of the
@@ -773,7 +776,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   })
 
   return {
-    steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, playingChordMs, playingChordBars, playingChordSeq, nextChord, selectedStepIdx,
+    steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, playingChordMs, playingChordBars, playingChordSeq, nextChord, latchStep, selectedStepIdx,
     selectedKey, keyMode, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, moveStep, toggleStepActive, assignChordToStep, cycleDuration,

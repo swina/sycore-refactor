@@ -42,7 +42,7 @@ With an app's **Chain** on (its panel, or the Rig's Drum / Chord / Seq Chain), i
 
 ### Map · Live Instruments
 
-A slim header (as the players). Its 16 slots: **TILES** (drag a slot up / down) or **SLIDERS** (two rows of eight vertical faders filling the panel — a finger on a fader sets the value there), switched in its bar and remembered. A value moved on the screen goes straight to Live (no pickup); an encoder picks the new value up again.
+A slim header (as the players). Its 16 slots: **TILES** (drag a slot up / down), **SLIDERS** (two rows of eight vertical faders filling the panel — a finger on a fader sets the value there) or **KNOBS** (two rows of eight encoders drawn like Live's — bipolar ones such as Pan from 12 o'clock — dragged up / down), cycled in its header and remembered; the track (◀ menu ▶), FOLLOW and Pickup are in the header too. A value moved on the screen goes straight to Live (no pickup); an encoder picks the new value up again.
 
 ## Session — nothing Generate replaces is lost
 

@@ -5,23 +5,31 @@
 // (Style, Oct / Range, Arp notes, Density, Melody, Rhythm with Sync / Rot, Vary, P1 / P2 RND% — the edit panel's, saved
 // per bank; P1 / P2's CC is chosen in EDIT).
 // Otherwise the Rig plays it.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
+import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { seqSnapshot, rigReports, rigArmed } from '@/lib/rig-live'
 import { useSequencerEngine, NOTE_NAMES, STYLES } from '@/core/engines/sequencer'
 import { ARP_MODES } from '@/lib/arp-patterns'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import PlaySlots from './PlaySlots.vue'
+import SeqMapModal from '@/components/SeqMapModal.vue'
 import PlayChain from './PlayChain.vue'
 import { VEL_CLASS, velLevel } from '@/lib/play-colors'
 
 const seqStore = useStepSequencerStore()
+// P1 / P2 → Map · Live Instruments: sending (green) or why not (amber); a click opens the routes
+const liveMap = useLiveMapStore()
+const seqMapOpen = ref(false)
 const {
   steps, gridCurrentStep, isPlaying, numSteps, tempoMultiplier, sequenceDirection, TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
   selectedStyle, chordsEnabled, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
   param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange,
-  generateSequence, updateStep,
+  generateSequence, regenerateParams, updateStep,
 } = useSequencerEngine()
+// P1 / P2 rows: the refs themselves (in the template a top-level ref is unwrapped to its number, and
+// `p.v.value = …` from the slider then failed — the sliders never moved)
+const P_ROWS = [{ n: 1, cc: param1CC, v: param1Variation }, { n: 2, cc: param2CC, v: param2Variation }]
 const seg = (on) => ['px-1.5 font-bold', on ? 'bg-amber-600 text-black' : 'text-neutral-500 hover:text-neutral-300']
 const isArp = computed(() => selectedStyle.value === 'Arpeggio')
 const melodic = computed(() => !isArp.value && !chordsEnabled.value)
@@ -144,14 +152,23 @@ const label = (s) => {
                class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
         <span class="w-7 text-right font-bold text-amber-400">{{ varyAmount }}%</span>
       </div>
-      <div v-for="p in [{ n: 1, cc: param1CC, v: param1Variation }, { n: 2, cc: param2CC, v: param2Variation }]" :key="p.n"
+      <div v-for="p in P_ROWS" :key="p.n"
            class="flex items-center gap-1.5"
            :title="`P${p.n} (CC ${p.cc.value}, chosen in EDIT): Generate takes the preset's value, moved at random by RND% — + up toward 127, − down toward 0`">
         <span class="text-neutral-500 uppercase">P{{ p.n }}</span>
         <input v-model.number="p.v.value" type="range" min="-100" max="100"
                class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
         <span class="w-7 text-right font-bold text-amber-400">{{ p.v.value > 0 ? '+' : '' }}{{ p.v.value }}</span>
+        <button type="button" class="px-1 rounded border border-amber-500/50 text-amber-400 font-bold hover:bg-amber-500/10"
+                :title="`Regenerate P${p.n} only — the notes and the rhythm stay`" @click.stop="regenerateParams(`p${p.n}`)">↻</button>
       </div>
+      <button v-if="liveMap.seqParamsBlock !== 'off'" type="button" class="px-1.5 rounded border font-bold" @click="seqMapOpen = true"
+            :class="liveMap.seqParamsBlock ? 'border-amber-500/60 text-amber-400' : 'border-emerald-500/50 text-emerald-300'"
+            :title="liveMap.seqParamsHint || `P1 / P2 → Map slots: ${liveMap.seqRoutes.length} track(s) — click to edit`">
+        → MAP{{ liveMap.seqParamsBlock ? ' ⚠' : '' }}
+      </button>
+      <SeqMapModal v-if="seqMapOpen" @close="seqMapOpen = false" />
+      <span v-if="liveMap.seqParamsHint" class="basis-full text-amber-400">{{ liveMap.seqParamsHint }}</span>
     </div>
     <!-- the pattern: a click turns a step on / off (its notes kept); the background is its velocity -->
     <div class="grid gap-1 content-start" :style="{ gridTemplateColumns: `repeat(${Math.min(steps.length, 16)}, minmax(0, 1fr))` }">

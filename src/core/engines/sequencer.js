@@ -24,6 +24,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useStepSequencerStore, BANK_COUNT } from '@/stores/useStepSequencerStore'
+import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { journaled } from '@/lib/session-takes'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { S1_CC_MAP } from '@/constants/s1-config'
@@ -165,6 +166,7 @@ function createSequencerEngine() {
   const uiStore = useUiStore()
   const syncStore = useSyncStore()
   const seqStore = useStepSequencerStore()
+  const liveMap = useLiveMapStore()
   const transportManager = useTransportManager()
   const bpm = () => midiStore.currentBpm || 120
   const channel = () => midiStore.midiChannel
@@ -396,7 +398,9 @@ function createSequencerEngine() {
   function handleBankCue(e) {
     const idx = e.detail?.idx
     if (idx == null || idx < 0 || idx >= BANK_COUNT) return
-    if (e.detail?.fromChordProg && uiStore.seqDecoupled) return
+    // the Chord Prog's section cue (Drums + Sequencer follow): only while the Sequencer plays — it
+    // doesn't pick its slot while stopped
+    if (e.detail?.fromChordProg && (uiStore.seqDecoupled || !isPlaying.value)) return
     if (!isPlaying.value) { setPendingBank(null); selectBank(idx); return }
     setPendingBank(idx === seqStore.activeBankIndex ? null : idx)
   }
@@ -666,6 +670,25 @@ function createSequencerEngine() {
     return journaled('seq', seqStore.activeBankIndex, fn, { snap: bankSnapshot })
   }
   function generateSequence() { journaledGenerate(_generateSequence) }
+
+  /**
+   * P1 / P2 only: new values on every step as Generate makes them (the preset's value for the CC, moved by
+   * RND%, seq-gen/params.ts), notes, rhythm and the rest of the pattern untouched. `which`: 'p1' | 'p2' | 'both'.
+   */
+  function regenerateParams(which = 'both') {
+    const p1 = which === 'p1' || which === 'both'
+    const p2 = which === 'p2' || which === 'both'
+    if (!p1 && !p2) return
+    journaledGenerate(() => {
+      const p1Base = getPresetValueForCC(param1CC.value)
+      const p2Base = getPresetValueForCC(param2CC.value)
+      steps.value = steps.value.map(s => ({
+        ...s,
+        ...(p1 ? { param1Value: paramValue(p1Base, param1Variation.value) } : {}),
+        ...(p2 ? { param2Value: paramValue(p2Base, param2Variation.value) } : {}),
+      }))
+    })
+  }
 
   /**
    * Generate: a new pattern by the rules (_generateFresh), of which only `amount` % of the positions
@@ -1058,15 +1081,13 @@ function createSequencerEngine() {
     return !!sourceKey && midiStore.hasExplicitInputRouting(sourceKey)
   }
 
-  // Auto-started by the Chord Prog's notes (MIDI Flow Chord Prog → Sequencer): its chord stopped (the
-  // panel's STOP, cp_panic, the chord clicked off, its Play stopped — 'cp-chord-release') stops the
-  // Sequencer too. Started any other way (Play, Rig pad, Play All), it plays on.
-  let _autoStartedByChord = false
-  // Stopped by the user (its Stop, its Rig pad): the Sequencer is the user's to start again — the
-  // notes it follows (the Chord Prog's chords, a routed keyboard) no longer auto-start it, they only
+  // Play / Stop are the Sequencer's own: the Chord Prog's notes never start it, its chord's stop
+  // never stops it (2026-11-16 — the two are switched on / off independently); they only transpose it
+  // while it plays (and its section cues switch the bank then). A routed keyboard still auto-starts it.
+  // Stopped by the user (its Stop, its Rig pad): the notes it follows no longer auto-start it, they only
   // transpose it once it plays. Any start (Play, a Rig pad, Play All) ends the hold.
   let _heldOff = false
-  watch(isPlaying, v => { if (!v) _autoStartedByChord = false; else _heldOff = false })
+  watch(isPlaying, v => { if (v) _heldOff = false })
   /** Play / Stop by the user (the panel's button): a Stop holds it off the auto-start. */
   function userTogglePlay() {
     _heldOff = isPlaying.value
@@ -1077,14 +1098,10 @@ function createSequencerEngine() {
   // user's to stop). Coupled again: it moves at once to the chord the Chord Prog is holding.
   let _lastCpNote = null
   watch(() => uiStore.seqDecoupled, d => {
-    if (d) { _autoStartedByChord = false; return }
+    if (d) return
     if (isPlaying.value && !isRecording.value && _lastCpNote !== null) followNote(_lastCpNote, MidiSource.CHORD_PROG)
   })
-  const _onChordRelease = () => {
-    _lastCpNote = null
-    if (uiStore.seqDecoupled) return
-    if (_autoStartedByChord && isPlaying.value) isPlaying.value = false
-  }
+  const _onChordRelease = () => { _lastCpNote = null }
   window.addEventListener('cp-chord-release', _onChordRelease)
 
   const handleIncomingNote = (type, note, velocity, chan, inputId, sourceApp) => {
@@ -1105,10 +1122,9 @@ function createSequencerEngine() {
       if (!isRecording.value && allowed) {
         if (type === 'on' && velocity > 0) {
           if (!isPlaying.value && uiStore.seqAutoStart) {
-            if (!_heldOff && canAutoStart(sourceApp, inputId)) {
+            if (!_heldOff && sourceApp !== MidiSource.CHORD_PROG && canAutoStart(sourceApp, inputId)) {
               followNote(note, sourceApp)
               isPlaying.value = true
-              _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
             }
           } else if (isPlaying.value) {
             followNote(note, sourceApp)
@@ -1192,10 +1208,9 @@ function createSequencerEngine() {
 
     // Auto-start when panel is open but sequencer not yet running
     if (!isPlaying.value && !isRecording.value && uiStore.seqAutoStart) {
-      if (type === 'on' && velocity > 0 && !_heldOff && canAutoStart(sourceApp, inputId)) {
+      if (type === 'on' && velocity > 0 && !_heldOff && sourceApp !== MidiSource.CHORD_PROG && canAutoStart(sourceApp, inputId)) {
         followNote(note, sourceApp)
         isPlaying.value = true
-        _autoStartedByChord = sourceApp === MidiSource.CHORD_PROG
       }
       return
     }
@@ -1537,6 +1552,10 @@ function createSequencerEngine() {
           if (step.active && probabilityHit && (!late || chase)) {
             if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel, MidiSource.SEQUENCER2)
             if (state.param2CC !== null) midiStore.sendCC(state.param2CC, step.param2Value, state.channel, MidiSource.SEQUENCER2)
+            // …and to Map · Live Instruments slots (Live can't MIDI-map a track's own CCs), a route per
+            // track (useLiveMapStore.seqRoutes)
+            if (state.param1CC !== null) liveMap.seqParam(1, step.param1Value)
+            if (state.param2CC !== null) liveMap.seqParam(2, step.param2Value)
 
             const stepDurationMs = 60000 / (state.bpm * 4) * (tempoMultiplier.value.beatsPerStep * 4)
             let noteDurationMs = stepDurationMs * (step.gate / 100)
@@ -1664,7 +1683,7 @@ function createSequencerEngine() {
     dynamicMidiTranspose, dynamicDegreeShift, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,
     TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
     // actions
-    syncLocalToBank, loadBankIntoLocal, selectBank, generateSequence, journaledGenerate, duplicateLength, reduceLength,
+    syncLocalToBank, loadBankIntoLocal, selectBank, generateSequence, regenerateParams, journaledGenerate, duplicateLength, reduceLength,
     updateStep, clearStep, stepMidiNote, isNoteBarActive, toggleNoteBar, setStepOctave, applyToAll,
     randomize, getPresetValueForCC, userTogglePlay,
   }

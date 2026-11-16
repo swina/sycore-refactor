@@ -289,6 +289,32 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     chainEnabled.value = cfg.chainEnabled ?? false
   }
 
+  /** Save → All Slots: the 8 banks, the chain and the active bank (the library's `type: 'all'` document). */
+  function captureAllBanks() {
+    return {
+      banks: JSON.parse(JSON.stringify(banks.value)),
+      chain: [...chain.value],
+      chainEnabled: chainEnabled.value,
+      activeBankIndex: activeBankIndex.value,
+    }
+  }
+
+  /** Load an All Slots document: every bank (missing fields from an empty bank), the chain, the bank active then. */
+  function restoreAllBanks(snap: { banks?: any[]; chain?: unknown; chainEnabled?: boolean; activeBankIndex?: number } | null) {
+    if (!snap || !Array.isArray(snap.banks)) return
+    const next = snap.banks.slice(0, BANK_COUNT).map((b: any) => ({
+      ...makeBank(),
+      ...b,
+      steps: Array.isArray(b?.steps) ? b.steps.map((st: any) => ({ ...DEFAULT_STEP, ...st })) : makeBank().steps,
+    }))
+    while (next.length < BANK_COUNT) next.push(makeBank())
+    banks.value = next
+    if (snap.chain !== undefined) chain.value = normalizeChain(snap.chain)
+    if (snap.chainEnabled !== undefined) chainEnabled.value = !!snap.chainEnabled
+    const idx = Number(snap.activeBankIndex)
+    activeBankIndex.value = Number.isInteger(idx) && idx >= 0 && idx < BANK_COUNT ? idx : 0
+  }
+
   function captureActiveBankForLink() {
     const bank = activeBank.value
     return {
@@ -422,6 +448,8 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     setChainEnabled,
     captureChainForPreset,
     restoreChainFromPreset,
+    captureAllBanks,
+    restoreAllBanks,
     captureActiveBankForLink,
     restoreLinkedBank,
     generateFromAiPrompt,

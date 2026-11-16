@@ -121,6 +121,33 @@ describe('Sequencer engine — no panel mounted', () => {
     window.dispatchEvent(new CustomEvent('seq-vary-set', { detail: { value: 127 } }))
     expect(engine.varyAmount.value).toBe(100)
   })
+  it('regenerates P1 / P2 alone: the notes, rhythm and the other parameter stay', async () => {
+    const { engine } = setup()
+    engine.chordsEnabled.value = false
+    engine.numSteps.value = 16
+    engine.genDensity.value = 75
+    engine.varyAmount.value = 100
+    engine.param1Variation.value = 100
+    engine.param2Variation.value = 100
+    engine.generateSequence()
+    const pattern = () => engine.steps.value.map((st: any) => `${st.active ? 1 : 0}:${st.notes.join('.')}:${st.velocity}:${st.gate}`)
+    const p = (k: string) => engine.steps.value.map((st: any) => st[k])
+    const before = pattern()
+    const p1 = p('param1Value'), p2 = p('param2Value')
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
+    engine.regenerateParams('p1')
+    expect(pattern()).toEqual(before)
+    expect(p('param2Value')).toEqual(p2)
+    expect(p('param1Value')).not.toEqual(p1)
+    const p1b = p('param1Value')
+    engine.regenerateParams('p2')
+    expect(p('param1Value')).toEqual(p1b)
+    expect(p('param2Value').every((v: number) => v >= 126)).toBe(true) // +100 % at ~1: to 127
+    engine.param1Variation.value = 0
+    engine.regenerateParams('both')
+    expect(new Set(p('param1Value')).size).toBe(1)                     // RND 0: the preset's value
+    expect(pattern()).toEqual(before)
+  })
   it('Arpeggio: the tonic chord by default (C major: C E G only), the scale as an option', async () => {
     const { engine } = setup()
     engine.selectedKey.value = 'C'
@@ -190,7 +217,7 @@ describe('Sequencer engine — no panel mounted', () => {
     expect(engine.dynamicDegreeShift.value).toBe(1)
     expect(engine.dynamicMidiTranspose.value).toBe(0)
   })
-  it("auto-started by the Chord Prog's chord: the chord's stop stops it; started by Play, it plays on", async () => {
+  it("Play / Stop independent of the Chord Prog: its chords don't start it, its stop doesn't stop it; playing, they transpose it", async () => {
     const { engine } = setup()
     useUiStore().seqFollowMode = 'chromatic'
     const midiStore = useMidiStore()
@@ -200,20 +227,21 @@ describe('Sequencer engine — no panel mounted', () => {
     ;(midiStore.sendNoteOn as any).mockRestore() // the Chord Prog's real note: it reaches the app listeners
     midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
     await flush()
-    expect(engine.isPlaying.value).toBe(true)
-    expect(engine.dynamicMidiTranspose.value).toBe(-3) // root 60 → A 57
-    window.dispatchEvent(new CustomEvent('cp-chord-release'))
-    await flush()
     expect(engine.isPlaying.value).toBe(false)
-    // started by Play (not by the chords): a chord's stop leaves it playing
+    window.dispatchEvent(new CustomEvent('seq-bank-cue', { detail: { idx: 3, fromChordProg: true } }))
+    await flush()
+    expect(useStepSequencerStore().activeBankIndex).toBe(0) // the Chord Prog's section cue: not while stopped
     window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
     await flush()
+    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.dynamicMidiTranspose.value).toBe(-3) // root 60 → A 57
     window.dispatchEvent(new CustomEvent('cp-chord-release'))
     await flush()
     expect(engine.isPlaying.value).toBe(true)
   })
 
-  it('stopped by the user (its Rig pad, its Stop): the chords no longer start it, until the user does', async () => {
+  it('a routed keyboard still auto-starts it; stopped by the user it is held off until started again', async () => {
     const { engine } = setup()
     useUiStore().seqFollowMode = 'chromatic'
     const midiStore = useMidiStore()
@@ -221,35 +249,15 @@ describe('Sequencer engine — no panel mounted', () => {
     vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
     useUiStore().seqAutoStart = true
     ;(midiStore.sendNoteOn as any).mockRestore()
-    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
+    const key = (note: number) => midiStore.sendNoteOn(note, 100, 1, MidiSource.KEYBOARD)
+    key(57)
     await flush()
     expect(engine.isPlaying.value).toBe(true)
-    // the Rig pad's Stop
     window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: false, sync: 0, user: true } }))
     await flush()
-    expect(engine.isPlaying.value).toBe(false)
-    midiStore.sendNoteOn(60, 100, 1, MidiSource.CHORD_PROG)
+    key(60)
     await flush()
     expect(engine.isPlaying.value).toBe(false) // held off
-    // the user starts it: it follows the chords again (transposed)
-    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true, sync: 0 } }))
-    await flush()
-    midiStore.sendNoteOn(62, 100, 1, MidiSource.CHORD_PROG)
-    await flush()
-    expect(engine.dynamicMidiTranspose.value).toBe(2)
-    // the panel's Stop holds it off too; Stop All does not
-    engine.userTogglePlay()
-    await flush()
-    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
-    await flush()
-    expect(engine.isPlaying.value).toBe(false)
-    engine.userTogglePlay()
-    await flush()
-    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: false } }))
-    await flush()
-    midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
-    await flush()
-    expect(engine.isPlaying.value).toBe(true)
   })
 
   it("Seq Free (decoupled): the Chord Prog's chords, stop and section cues are ignored; coupled again, it moves to the held chord", async () => {
@@ -261,9 +269,10 @@ describe('Sequencer engine — no panel mounted', () => {
     vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
     ui.seqAutoStart = true
     ;(midiStore.sendNoteOn as any).mockRestore()
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
     midiStore.sendNoteOn(57, 100, 1, MidiSource.CHORD_PROG)
     await flush()
-    expect(engine.isPlaying.value).toBe(true)
     expect(engine.dynamicMidiTranspose.value).toBe(-3)
     ui.seqDecoupled = true
     await flush()
@@ -280,7 +289,6 @@ describe('Sequencer engine — no panel mounted', () => {
     ui.seqDecoupled = false
     await flush()
     expect(engine.dynamicMidiTranspose.value).toBe(2)
-    // started by a chord, but decoupled meanwhile: the chord's stop no longer stops it
     window.dispatchEvent(new CustomEvent('cp-chord-release'))
     await flush()
     expect(engine.isPlaying.value).toBe(true)
