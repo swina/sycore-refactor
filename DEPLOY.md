@@ -5,7 +5,7 @@ This project has **two separate Vercel deployments**:
 | Target | Vercel Project | Source | Output |
 |--------|---------------|--------|--------|
 | App (PWA) | `sycore-gen-app` | root repo | `dist/` |
-| Website | `sycore-website` | `dist-site/` | `dist-site/` |
+| Website | `sycore-website` | `website/` | built by Vercel (`website/dist`) |
 
 ---
 
@@ -45,11 +45,21 @@ vercel deploy
 
 ## Website Deploy
 
-The website is a static marketing build with a separate entry point (`website.html`). It builds to `dist-site/` and injects its own `vercel.json` (no framework, no install/build step) so Vercel treats it as a static upload.
+The live website (`sycore-website`, with the `/ableton-live` page and the Guides) is the **`website/` project**: its own Vite app (`website/src/App.vue`), built by Vercel from that folder (`website/vercel.json`, `website/.vercel/project.json`).
+
+```bash
+npm run deploy:website   # = cd website && vercel deploy --prod --yes
+```
+
+### Legacy website (`website.html`)
+
+**Do not deploy it to `sycore-website`**: it replaces the live site (no Ableton Live page). It is kept for the GitHub Pages workflow; `npm run deploy:website-legacy` is the old command.
+
+The legacy website is a static marketing build with a separate entry point (`website.html`). It builds to `dist-site/` and injects its own `vercel.json` (no framework, no install/build step) so Vercel treats it as a static upload.
 
 **Build then deploy:**
 ```bash
-npm run deploy:website
+npm run deploy:website-legacy
 # expands to:
 npm run build:website
 vercel link --cwd dist-site --project sycore-website --yes

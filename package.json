@@ -16,7 +16,8 @@
     "build:website": "vite build --mode website",
     "preview:website": "vite preview --mode website --outDir dist-site",
     "deploy:app": "vercel deploy --prod",
-    "deploy:website": "npm run build:website && vercel link --cwd dist-site --project sycore-website --yes && vercel deploy --cwd dist-site --prod",
+    "deploy:website": "cd website && vercel deploy --prod --yes",
+    "deploy:website-legacy": "npm run build:website && vercel link --cwd dist-site --project sycore-website --yes && vercel deploy --cwd dist-site --prod",
     "test": "vitest run",
     "test:watch": "vitest"
   },

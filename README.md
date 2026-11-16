@@ -79,7 +79,7 @@ npm run dev          # http://localhost:4100 (VITE_DEV_PORT to change it)
 | `npm test` | Vitest unit and component tests |
 | `npm run build` / `npm run preview` | Production build in `dist/` and its preview (use it for timing tests with Live) |
 | `npm run deploy:app` | The app on Vercel |
-| `npm run deploy:website` | The website (`website/`, built with `--mode website`) on Vercel |
+| `npm run deploy:website` | The website (the `website/` project, built by Vercel) |
 
 Deploy details: [DEPLOY.md](./DEPLOY.md).
 
