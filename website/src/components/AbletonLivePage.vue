@@ -5,15 +5,14 @@ import AbletonModesDiagram from './AbletonModesDiagram.vue'
 import {
   Play, BookOpen, ArrowLeft, Zap, Cable, Clock, Grid3x3, SlidersHorizontal, Sparkles,
   Music, Drum, Timer, CircleDot, Square, KeyRound, Layers, Check, Ban, Globe, ShieldCheck, RefreshCw, Cpu,
-  Crosshair, Shuffle, Hand, Table2, Mic, Repeat, LayoutDashboard, Gauge, Download, Package, Github,
+  Crosshair, Shuffle, Hand, Table2, Mic, Repeat, LayoutDashboard, Gauge, Download, Github,
 } from 'lucide-vue-next'
 
-// The Max for Live devices: a GitHub Release of swina/sycore-ableton (zip + Live Pack, GPL-3.0).
+// The Max for Live devices: a GitHub Release of swina/sycore-ableton (a zip, GPL-3.0).
 const DEVICES_VERSION = '1.8.0'
 const RELEASE = `https://github.com/swina/sycore-ableton/releases/tag/link-v${DEVICES_VERSION}`
 const asset = (ext) => `https://github.com/swina/sycore-ableton/releases/download/link-v${DEVICES_VERSION}/SYCORE-Live-Devices-${DEVICES_VERSION}.${ext}`
 const DEVICES_ZIP = asset('zip')
-const DEVICES_ALP = asset('alp')
 
 const props = defineProps({ appUrl: { type: String, required: true } })
 const emit = defineEmits(['open-guide'])
@@ -350,15 +349,9 @@ const demo = [
           version {{ DEVICES_VERSION }}, Windows and macOS (macOS not tested yet), GPL-3.0.
         </p>
         <div class="mt-8 grid gap-4 md:grid-cols-2">
-          <a :href="DEVICES_ALP" class="group flex flex-col gap-2 rounded-xl border border-neutral-800 p-6 transition-colors hover:border-synth-neon">
-            <span class="flex items-center gap-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">
-              <Package class="h-5 w-5" /> Live Pack (.alp)
-            </span>
-            <span class="text-sm text-neutral-300">Double-click it: Live asks where to unpack it. Then add that folder to Live's browser (<em>Places › Add Folder…</em>).</span>
-          </a>
           <a :href="DEVICES_ZIP" class="group flex flex-col gap-2 rounded-xl border border-neutral-800 p-6 transition-colors hover:border-synth-neon">
             <span class="flex items-center gap-2 font-mono text-sm font-black uppercase tracking-widest text-synth-neon">
-              <Download class="h-5 w-5" /> Zip
+              <Download class="h-5 w-5" /> Download (.zip)
             </span>
             <span class="text-sm text-neutral-300">Unzip the folder and keep its files together (the devices load the scripts next to them), e.g. in your User Library, or add it under Places.</span>
           </a>

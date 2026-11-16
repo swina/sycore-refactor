@@ -51,15 +51,13 @@ SY.CORE (browser)                          Ableton Live
 | **Ableton Live** | Live with Max for Live (Suite, or Standard + Max for Live). Tested with Live 12. |
 | **Browser** | Chrome or Edge (Web MIDI). |
 | **Network permission** | The browser must be allowed to reach `127.0.0.1` (Chrome may ask about *local network access*: allow it). |
-| **Files** | **SY.CORE Live Devices** (1.8.0): a Live Pack (`.alp`) or a zip from the [GitHub release](https://github.com/swina/sycore-ableton/releases/tag/link-v1.8.0), or the *Ableton Live* page of the SY.CORE website. The four devices, their scripts and `node_modules`, in one folder. |
+| **Files** | **SY.CORE Live Devices** (1.8.0): a zip from the [GitHub release](https://github.com/swina/sycore-ableton/releases/tag/link-v1.8.0), or the *Ableton Live* page of the SY.CORE website. The four devices, their scripts and `node_modules`, in one folder. |
 
 ---
 
 ## 3. Install the SY.CORE Link devices
 
-1. **Put the devices where Live sees them.**
-   - **Live Pack**: double-click `SYCORE-Live-Devices-<version>.alp`. Live asks where to unpack it and makes a folder (a Live project) with the devices; add that folder to Live's browser (*Places › Add Folder…*).
-   - **Zip**: unzip `SYCORE-Live-Devices-<version>` and keep its files together (the devices load the scripts and `node_modules` next to them, by name). Put the folder in your User Library (e.g. `Presets\MIDI Effects\Max MIDI Effect\`) or add it under Places.
+1. **Put the devices where Live sees them.** Unzip `SYCORE-Live-Devices-<version>` and keep its files together (the devices load the scripts and `node_modules` next to them, by name). Put the folder in your User Library (e.g. `Presets\MIDI Effects\Max MIDI Effect\`) or add it under Places.
 
    **Updating**: quit Live, replace the folder's files with the new version's (with Live open, `node_modules` may be locked), open Live again and reload SY.CORE. Play / Stop of Live from SY.CORE needs bridge **1.5** or later, its tempo **1.6**, the Launchpad layout in SY.CORE Rig **1.7**.
 2. **Add the bridge.** Drag `sycore-link.amxd` onto a MIDI track. Only one per set; a dedicated track such as "SY.CORE Control" is a good home.
