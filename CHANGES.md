@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-16
 
+- **Website /ableton-live: video** — "See it play" after the hero: the YouTube video of SY.CORE inside a Live set (privacy-enhanced embed). The GitHub Pages workflow (legacy `website.html`) is disabled. `website/src/components/AbletonLivePage.vue`. Branch: `master`
+
 - **Fix: `npm run deploy:website` published the legacy site** — it built `website.html` (the old marketing page, no `/ableton-live`) into `dist-site/` and replaced the live `sycore-website`. It now deploys the `website/` project (`cd website && vercel deploy --prod`); the old command is `deploy:website-legacy`, documented as not for `sycore-website`. Site redeployed from `website/`. `package.json`, `DEPLOY.md`, `README.md`. Branch: `master`
 
 - **README rewritten** — the app and website links (Vercel; the GitHub Pages site was last updated Oct 31), Generate and play (Chord Prog, Sequencer, Drum Machine), Performance (Workspaces, Rig Controller), Ableton Live with the four SY.CORE Link devices, MIDI and audio tools condensed, Node 20.19+ / 22.12+ (Vite 8), commands table, tech stack and architecture brought up to date. `README.md`. Branch: `master`

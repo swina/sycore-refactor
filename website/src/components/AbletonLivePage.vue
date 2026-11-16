@@ -155,6 +155,28 @@ const demo = [
       </div>
     </section>
 
+    <!-- Video: SY.CORE playing inside Live -->
+    <section class="mx-auto max-w-6xl px-5 pt-20">
+      <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">See it play</p>
+      <h2 class="mt-3 max-w-3xl text-3xl font-extrabold md:text-4xl">
+        SY.CORE inside a Live set, <span class="text-synth-neon">in time with Live.</span>
+      </h2>
+      <div class="mt-8 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/40">
+        <div class="aspect-video w-full">
+          <iframe
+            class="h-full w-full"
+            src="https://www.youtube-nocookie.com/embed/MOEN80PiBv8"
+            title="SY.CORE with Ableton Live"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allowfullscreen
+            loading="lazy"
+          ></iframe>
+        </div>
+      </div>
+    </section>
+
     <!-- The problem -->
     <section class="mx-auto max-w-6xl px-5 py-20">
       <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">The problem</p>
