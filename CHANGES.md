@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-16
 
+- **README rewritten** — the app and website links (Vercel; the GitHub Pages site was last updated Oct 31), Generate and play (Chord Prog, Sequencer, Drum Machine), Performance (Workspaces, Rig Controller), Ableton Live with the four SY.CORE Link devices, MIDI and audio tools condensed, Node 20.19+ / 22.12+ (Vite 8), commands table, tech stack and architecture brought up to date. `README.md`. Branch: `master`
+
 - **SY.CORE Live Devices 1.8.0** — the release of the bridge with `map-track` / `map-track-slots` (the Sequencer's P1 / P2 on Map slots of any track, the slot names of any track's instrument): the website's Ableton Live page downloads 1.8.0 (`DEVICES_VERSION`) as a zip only — no more Live Pack (`.alp`): the same devices, installed the same way (a folder added with *Places › Add Folder…*), the Ableton Live guide points to the 1.8.0 release; the website's copy of the guide synced with the app's. `website/src/components/AbletonLivePage.vue`, `docs/guides/SYCORE_ABLETON_LIVE_GUIDE.md` (app and website). Branch: `master`
 
 - **Fix: Play View P1 / P2 RND% sliders didn't move** — the template unwrapped the refs to numbers, so the slider's write failed (`Cannot create property 'value' on number`) — playing or not; the CC in their tooltip was empty too. The rows now hold the refs (`P_ROWS`). `components/play/SeqPlayView.vue`; tests: `play-views.test.ts`. Branch: `master`

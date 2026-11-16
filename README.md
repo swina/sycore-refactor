@@ -2,217 +2,137 @@
 
 ![SY.CORE main page](./public/help/guides/sycore-refactor-mainpage.png)
 
-> A browser-based performance tools & sound design ecosystem for electronic musicians.
+> Chords, patterns and grooves generated while you play — in the browser, in time with your hardware rig and with Ableton Live.
 
-🌐 **[Website](https://swina.github.io/sycore-refactor/)**
+**[Open the app](https://sycoreapp.vercel.app)** · **[Website](https://sycore-website.vercel.app)** · **[Ableton Live devices](https://github.com/swina/sycore-ableton/releases/latest)** · [Changelog](./CHANGES.md)
 
-SY.CORE is a professional-grade, local-first web application that serves as a centralized hub for MIDI orchestration, sound design, audio processing, and live performance — all running in your browser with no installation required.
-
----
-
-## Features
-
-### Sound Engine
-- **Roland S-1 Adaptive Generator** — preset identity management, real-time parameter control, modulation, and performance integration with the Roland S-1 Tweak Synth.
-- **Generative Patch Creation** — create new sounds instantly based on musical parameters.
-- **Unlimited Preset Library** — store, categorize, and recall thousands of sounds beyond the hardware's 64-pattern limit.
-
-### Audio Tools
-- **Audio Capture** — record audio directly within SY.CORE via the mic toolbar panel.
-- **Audio Looper** *(Beta)* — sample-accurate 8-track looper for live instrumental and digital performance.
-- **Samples Machine** — 24-pad simultaneous loop player with sync-quantized starts, mixer, Performance Sets, and Capture integration.
-- **Sampler** *(Beta)* — 7-pad multi-bank sampler with MIDI velocity, chromatic pitch-shifting, ADSR envelopes, lo-fi modes, and granular synthesis.
-- **Backing Track Player** — dual-slot playback engine with crossfade, playlist, and MIDI sync.
-- **Freesound Browser** — search, preview, and inject sounds from [freesound.org](https://freesound.org) into playlists, loop pads, or Audio Capture.
-
-### MIDI Tools
-- **Devices** — auto-discover and register your MIDI hardware, plus Virtual Instruments (software synths reachable through a virtual MIDI cable) with a bindable real output port.
-- **Flow** — visual drag-and-drop MIDI routing canvas for connecting virtual apps and hardware devices. Supports device→app and app→app routing with per-connection note-range filters (keyboard splits) and channel filters, multi-channel fanout for multi-timbral virtual instruments (e.g. duplicate one part onto CH 1, 2 and 4), one-click shortcuts to open a routed app or a device's Program Change panel straight from its canvas node, and named saved canvas configurations that auto-restore on reopen.
-- **Note Latch** — independent MIDI IN/OUT app that holds notes after key release with configurable Max Notes (1–16) and FIFO/BLOCK mode. Cable it into the MIDI Flow canvas to apply latching to one or more instruments at once, with a single OFF switch to release every held note.
-- **Controller Designer** — visual canvas for designing custom MIDI controller layouts with draggable controls and preset management.
-- **Monitor** — real-time MIDI event monitoring and logging, one click away from the MIDI Flow canvas footer for checking messages while you wire up routing.
-- **MIDI Manager** — unified MIDI control center for routing, mapping, and device management.
-- **Mapping** — MIDI CC to application parameter binding.
-- **Actions** — per-device app action binding (MIDI CC/Note → high-level actions: start sequencer, toggle looper, change preset).
-- **Sync** — cross-subsystem transport synchronization matrix, backed by a single global BPM control that keeps Tone.js playback and outgoing MIDI clock to hardware in lockstep across every synced app.
-- **MIDI Capture** — record, view, and export MIDI events in real time.
-- **Multi Sound / Program Change Browser** — browse and send Program Change messages to connected devices, organize sounds into custom named banks per device, and import external preset listings (like E-MU Emulator X3 exports, Arturia MicroFreak, Arturia Pigments or SQLite based bank database, Yamaha SEQTrak, GForce Basstation, OsTirus syx import ).
-
-### Live Performance
-- **Live Performance Pad** — pad-based performance panel for triggering sounds and sequences on stage.
-- **Solo Performance Sets** — 8 assignable pads (A–H) in the Device PC panel for instant Program Change recall during performance. Each pad stores a device name, MSB/LSB, PC number, and patch name. Two modes: Assign (pick a patch from the browser) and Recall (click to send PC). MIDI Learn per slot. Named sets save/recall all 8 pads; the Deck summary card shows device+patch with instant recall.
-- **Live Timeline** — visual arrangement timeline with segments, MIDI markers, and transport control. Position displayed in bars:beats format with bar-number rulers, driven by an editable per-session BPM. Tempo markers change the effective BPM mid-playback.
-- **Sequencer** — chromatic piano-roll-style step sequencer with 12-note vertical bars per step (C–B), per-step octave, accent, and probability controls. Runs as an independent MIDI Flow app with its own IN/OUT and local pattern storage.
-- **Step Sequencer** — algorithmic composition and MIDI sequencing engine with style-based generation. 8 pattern slots (A–H).
-- **Chord Progression Sequencer** — step-based harmonic sequencer with built-in chord library, algorithmic generation, and 8 independent progression slots (A–H) chainable into a longer arrangement. Chord/Arp play mode, chord-strum direction, and arpeggio pattern can all be overridden per step, so a single progression can mix strummed chords and arpeggios freely.
-- **Drum Machine** — 8-track 16-step pattern sequencer with A–H sequence banks, Fill, Repeater, style generation, and REC SYNC.
-
-### Platform
-- **Module Manager** — enable or disable individual app modules to keep the workspace focused on what you actually use; disabled modules are hidden from every toolbar, dock, and quick-launcher.
+SY.CORE is a local-first web app for electronic musicians: generative instruments (Chord Prog, Sequencer, Drum Machine, Arpeggiator), MIDI routing and mapping for a hardware rig, audio tools, and a performance layer driven from a Launchpad and a MIDImix. It runs in Chrome or Edge with no installation; with **SY.CORE Link** it plays inside an Ableton Live set, on Live's clock.
 
 ---
 
-## Tech Stack
+## Generate and play
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | [Vue 3](https://vuejs.org/) (Composition API + `<script setup>`) |
-| Language | [TypeScript](https://www.typescriptlang.org/) |
-| State | [Pinia](https://pinia.vuejs.org/) |
-| Routing | [vue-router](https://router.vuejs.org/) |
-| Build | [Vite](https://vitejs.dev/) |
-| Styles | [Tailwind CSS](https://tailwindcss.com/) |
-| Icons | [Lucide](https://lucide.dev/) |
-| Audio Engine | [Tone.js](https://tonejs.github.io/) / [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) |
-| MIDI | [Web MIDI API](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) / [webmidi.js](https://webmidijs.org/) |
-| Audio Export | [lamejs](https://github.com/zhuker/lamejs) (MP3 encoder) |
-| Persistence | IndexedDB / LocalStorage |
-| PWA | [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) |
-| Backend / Data | [Upstash Redis](https://upstash.com/) / [Vercel KV](https://vercel.com/docs/storage/vercel-kv) |
+The four generative apps share one idea: generate, launch and reshape the music while it plays — not prepare clips beforehand.
+
+- **Chord Prog** — harmonic sequencer with 8 slots (A–H) chainable into an arrangement, chord library and suggestions, Chord / Arp per step, MIDI file import, Now / Next display. It drives the key of the other apps.
+- **Sequencer** — 8 banks (A–H), up to 64 steps, chain of 16. **Generate** by Style (16 styles), Key / Scale, octaves, Density, Rhythm (Weighted / Euclid / Random) and Melody (Line: a motif and its variation / Classic); Chords and Arpeggio modes; **Vary** changes only part of the pattern (a Turing-machine lock). P1 / P2 per step, generated with RND% and regenerable on their own. Save one bank or all of them. See [Sequencer — Generate](./docs/guides/SYCORE_SEQUENCER_GENERATE.md).
+- **Drum Machine** — 11 tracks × 16 steps, A–H banks, Fill, Repeater, style generation, Euclidean generator, Patterns DB, a bassline generator.
+- **Arpeggiator** and **Note Latch** — independent MIDI apps, cabled in MIDI Flow.
+- **Step Sequencer** — the earlier algorithmic sequencer, 8 pattern slots.
+
+Every Generate is kept as a session take, so nothing it replaces is lost.
+
+## Performance
+
+- **Workspaces** — *Classic* (free panels) or *Performance*: a play view per app (banks, the pattern on one row, Now / Next), with EDIT one click away. See [Workspaces](./docs/guides/SYCORE_WORKSPACES.md).
+- **Rig Controller** — one panel, rows Drum · Chord · Seq · Bass · Arp: Trigger sync, arming, Mute / Solo, Intensity, Density, Fill, GEN and Mutate during playback, sections, Seq Free, Latch. Mapped to a Launchpad Mini MK1 and an AKAI MIDImix, or any controller through MIDI Learn and templates.
+- **Live Timeline**, **Live Set** pads, **Samples Machine** (24 synced loop pads), **Deck** with Solo Performance Sets (Program Change recall A–H).
+
+## Ableton Live — SY.CORE Link
+
+Four Max for Live devices ([sycore-ableton](https://github.com/swina/sycore-ableton), GPL-3.0, a zip from the latest release):
+
+| Device | What it does |
+| --- | --- |
+| **SY.CORE Link** | The bridge (one per set): SY.CORE follows Live's clock, tempo and position; Play / Stop and tempo of Live from SY.CORE; MIDI ports played on Live's beat |
+| **Link Receive** | On each track that plays a SY.CORE app, on its channel |
+| **SY.CORE Rig** | The Rig Controller's Launchpad layout inside Live |
+| **SY.CORE Map** | Live instruments' parameters on 16 slots (tables for Drift, Analog, Simpler, Racks), moved from SY.CORE — including the Sequencer's P1 / P2 on any track (1.8) |
+
+Setup and recording in Live: [SY.CORE with Ableton Live](./docs/guides/SYCORE_ABLETON_LIVE_GUIDE.md) · for musicians: [SY.CORE for Ableton Live](./docs/guides/SYCORE_FOR_ABLETON_LIVE.md) ([italiano](./docs/guides/SYCORE_FOR_ABLETON_LIVE_IT.md)).
+
+## MIDI tools
+
+- **Devices** — hardware auto-discovery, Virtual Instruments bound to a real port.
+- **MIDI Flow** — drag-and-drop routing canvas: device → app and app → app, note-range splits, channel filters, multi-channel fan-out, saved configurations; cables "via SY.CORE Link" to play a port on Live's beat.
+- **Mapping**, **Actions**, **Controller Designer**, **Monitor**, **MIDI Capture** (piano roll, export).
+- **Sync** — one global BPM for every app and the outgoing MIDI clock.
+- **Program Change browser** — custom banks per device; imports from E-MU Emulator X3, MicroFreak, Pigments, SEQTrak, Bass Station, OsTirus and SQLite bank databases.
+
+## Audio and sound
+
+- **Sound Engine** — Roland S-1 preset generation and management, beyond the hardware's 64 slots.
+- **Audio Capture**, **Audio Looper** *(beta)*, **Sampler** *(beta)*, **Backing Track Player**, **Freesound browser**.
+
+## Platform
+
+- **Module Manager** — turn off any app you don't use; it disappears from every toolbar and launcher.
+- **Local-first** — sessions, banks and libraries live in IndexedDB / localStorage, saved as you go; nothing needs the network during a set.
+- **In-app Guides** — the same pages as [`docs/guides/`](./docs/guides/INDEX.md), also on the website.
 
 ---
 
-## Hardware Integration
+## Getting started
 
-SY.CORE is pre-calibrated for low-latency performance with professional gear:
-
-- **Roland AIRA Series** (S-1 Tweak Synth, T-8 Beat Machine, J-6 Chord Synth) — deep integration with preset management, parameter control, and Program Change automation.
-- **Arturia MicroFreak** *(coming soon via SY.CORE LAB)* — unlimited preset management and deep editing.
-- **Any USB-MIDI device** — auto-detection, routing, and mapping.
-
-SY.CORE connects over Web MIDI — plug in your hardware and it's recognized immediately with no drivers or installation.
-
----
-
-## Why SY.CORE — Benefits & Workflow Scenarios
-
-SY.CORE isn't a single instrument or a single tool — it's the layer that sits between your gear, your DAW-less ideas, and the performance itself. A few concrete scenarios where that pays off:
-
-- **One visual hub for a multi-device rig.** Instead of hunting through each synth's own MIDI settings, drag devices and apps onto the MIDI Flow canvas and draw cables between them. Split one keyboard across a Roland S-1, a soft-synth, and a drum machine using note-range filters — or fan one part out to CH 1, 2, and 4 on a multi-timbral virtual rack — all visually, all applied live as you connect.
-- **Compose harmony first, arrangement second.** The Chord Progression Sequencer's 8 independent slots (A–H) let you sketch a verse, chorus, and bridge as separate progressions, then chain them into a full arrangement without losing the ability to edit each section independently. Per-step Chord/Arp overrides mean a single progression can strum some chords and arpeggiate others — no need to bounce between a chord tool and an arpeggiator.
-- **A rig that stays in tempo without babysitting.** One global BPM control keeps every synced app — sequencers, the drum machine, outgoing MIDI clock to hardware — locked together. Change tempo from a MIDI CC knob mid-performance and everything follows, instead of hunting down three separate tempo fields.
-- **Beyond the hardware's onboard memory.** The Roland S-1 (and other supported gear) ships with a fixed pattern/patch limit — SY.CORE's unlimited preset library and per-device Program Change banks (including imports from external listing formats) mean your sound library isn't capped by what fits on the device itself.
-- **Use it as one tool, or all of them.** SY.CORE isn't a bundle you take whole. Module Manager lets you turn off anything you're not using — want it as just a MIDI orchestrator for your rig? Turn off the Drum Machine, the Chord Progression Sequencer, and the Sound Engine, and you're left with routing, mapping, and sync. Want just a Chord Progression Sequencer to sketch changes and send them out over MIDI? Turn off everything else. Every disabled module disappears from every toolbar, dock, and launcher — the workspace only ever shows the instrument you actually asked for.
-- **No install, no drivers, no lock-in.** Everything above runs directly in the browser over the Web MIDI and Web Audio APIs — no ASIO drivers, no installer, always the latest version, and your session state persists locally so closing the tab mid-set is safe. See [SY.CORE Advantages](./docs/guides/SYCORE_ADVANTEGES.md) for the deeper technical case.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Node.js** >= 20
-- **npm** >= 9
-- A browser with **Web MIDI API** support (Chrome, Edge, Opera recommended)
-
-### Install
+Requirements: **Node.js** 20.19+ or 22.12+, npm, and Chrome or Edge (Web MIDI).
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/swina/sycore-refactor.git
 cd sycore-refactor
 npm install
+npm run dev          # http://localhost:4100 (VITE_DEV_PORT to change it)
 ```
 
-### Run (Development)
+| Command | What it does |
+| --- | --- |
+| `npm run dev:refactor` | A second instance side by side: port 3999, its own IndexedDB (`sycore_2`) |
+| `npm test` | Vitest unit and component tests |
+| `npm run build` / `npm run preview` | Production build in `dist/` and its preview (use it for timing tests with Live) |
+| `npm run deploy:app` | The app on Vercel |
+| `npm run deploy:website` | The website (`website/`, built with `--mode website`) on Vercel |
 
-```bash
-npm run dev
-```
+Deploy details: [DEPLOY.md](./DEPLOY.md).
 
-Starts on port `4100` (or `VITE_DEV_PORT` if set) using the default IndexedDB database. This is the standard way to run the app.
+### Environment variables
 
-`npm run dev:refactor` is also available if you need to run this checkout side-by-side with another SY.CORE instance — it uses a different port (`3999`) and a separate IndexedDB database (`sycore_2`) so neither instance clobbers the other's local data.
-
-### Build for Production
-
-```bash
-npm run build
-```
-
-Output in `dist/`. Deployable to any static host or Vercel.
-
-### Preview Production Build
-
-```bash
-npm run preview
-```
-
-### Run Tests
-
-```bash
-npm test
-```
-
-### Deploy
-
-```bash
-npm run deploy:app
-```
-
-Deploys the app to Vercel.
+| Variable | Description |
+| --- | --- |
+| `VITE_DEV_PORT` | Dev server port |
+| `VITE_DB_NAME` | IndexedDB database name |
+| `VITE_WEBSITE_URL` | The website link in the top bar |
 
 ---
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| UI | [Vue 3](https://vuejs.org/) (`<script setup>`), [Tailwind CSS](https://tailwindcss.com/), [Lucide](https://lucide.dev/) |
+| Language | JavaScript and [TypeScript](https://www.typescriptlang.org/) |
+| State | [Pinia](https://pinia.vuejs.org/), [vue-router](https://router.vuejs.org/) |
+| Build / tests | [Vite](https://vitejs.dev/), [Vitest](https://vitest.dev/) + Vue Test Utils |
+| Audio / timing | [Tone.js](https://tonejs.github.io/), Web Audio API |
+| MIDI | Web MIDI API, [webmidi.js](https://webmidijs.org/) |
+| Ableton Live | Max for Live + Node for Max bridge over WebSocket ([protocol](https://github.com/swina/sycore-ableton/blob/main/docs/link-protocol-v1.md)) |
+| Persistence | IndexedDB, localStorage, [sql.js](https://sql.js.org/) for bank imports |
+| PWA / backend | [vite-plugin-pwa](https://vite-pwa-org.netlify.app/); Vercel functions + Upstash Redis for Web Push |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              Layer 1: User Interface (Vue 3)        │
-│  MainPage  │  SynthApp  │  All Panels / Modals      │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│           Layer 2: State Management (Pinia)         │
-│  useUiStore  │  useMidiStore  │  usePresetStore     │
-│  useMappingStore │ useAuthStore │ useConfigStore    │
-│  useLivePadStore │ useArpStore │ useLfoStore        │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│           Layer 3: Core Engines (JS / Web Audio)    │
-│  MidiService  │  LooperEngine  │  AudioContext      │
-│  useMidiInit  │  useMidiCCListener                  │
-│  useControllerManager │  MidiRouting                │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│           Layer 4: Data & Persistence               │
-│  IndexedDB           │  LocalStorage                │
-└─────────────────────────────────────────────────────┘
+UI (Vue panels, play views, workspaces)
+  │  read / write
+Stores (Pinia: MIDI, UI, Chord Prog, Sequencer, Drum, Live Map, Rig…)
+  │
+Engines (src/core/engines: chord-prog, sequencer, drum… — run with their panel closed)
+  │  notes / CC                      │  clock, tempo, map
+Web MIDI ports                    SY.CORE Link (WebSocket) → Ableton Live
+  │
+Persistence (IndexedDB, localStorage)
 ```
 
-### Key Design Decisions
-
-- **Offline-First** — everything runs locally in the browser. IndexedDB stores your sound library, playlists, and session state. No internet required during performance.
-- **Event-Driven Communication** — components use a custom global event system (`window.dispatchEvent`) for cross-cutting communication without expensive re-renders.
-- **Lazy-Loaded Panels** — all panels (Sampler, Sequencer, Drum Machine, etc.) are lazy-loaded and shown/hidden via the UI store, keeping the initial bundle lean.
-- **Session Persistence** — every change is saved in real-time. Close the tab and come back exactly where you left off.
+- Engines are independent of their panels: the Rig Controller and Live drive them with the panels closed.
+- Cross-app messages go through window events (`seq-generate`, `seq-bank-cue`, …) rather than shared component state.
+- Panels are lazy-loaded; every change is persisted as it happens.
 
 ---
 
 ## Documentation
 
-Detailed guides are available in [`docs/guides/`](./docs/guides/):
-
+- [Guides index](./docs/guides/INDEX.md) — every app, MIDI tool and the Ableton Live setup
 - [Manifesto](./docs/MANIFESTO.md) — why SY.CORE exists
-- [Guides Index](./docs/guides/INDEX.md) — complete list of all guides
-- Sound Engine, Audio, MIDI, and Live Performance guides
-- Product overview and advantages
-
-See [`CHANGES.md`](./CHANGES.md) for a running log of new features.
-
----
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_WEBSITE_URL` | URL for the external website link in the top bar |
-| `VITE_DEV_PORT` | Dev server port (used by `dev:refactor` script) |
-| `VITE_DB_NAME` | IndexedDB database name override |
-
----
+- [CHANGES.md](./CHANGES.md) — what changed, newest first
 
 ## License
 
-MIT
+MIT. The Ableton Live devices ([sycore-ableton](https://github.com/swina/sycore-ableton)) are GPL-3.0.
