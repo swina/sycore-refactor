@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-17
 
+- **Website Ableton Live guide: diagram arrow aligned** — the Drum Machine → sycore-link arrow of the overview diagram; the devices screenshot added (`website/public/help/guides/sycore-ableton-devices.png`). `website/docs/guides/SYCORE_ABLETON_LIVE_GUIDE.md`. Branch: `master`
+
 - **Performance › Sequencer: Gen in the Chord Prog's key (Key: CP)** — a CP / Own switch next to Gen: on CP, Gen detects the key the Chord Prog's chords sit in (the slot's active steps, or the chain when on; step transpose counted) and writes the pattern in it — the scale family is kept (e.g. Pentatonic Min in a minor key), otherwise Major / Minor; the detected key is shown before the click. Detection scores the 24 major / minor keys (chord notes in or out of the scale, roots on degrees, the tonic chord and starting / ending on it; harmonic minor's V allowed), the Chord Prog's own key file tipping a close call. The Rig's GEN uses it too when the Chord Prog has no exact key mode. Saved per user. `lib/chord-key.ts` (`detectKey`), `core/engines/sequencer.js`, `stores/useUiStore.ts`, `components/play/SeqPlayView.vue`; tests: `chord-key.test.ts`. Branch: `master`
 
 ## 2026-11-16

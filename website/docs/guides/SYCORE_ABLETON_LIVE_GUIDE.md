@@ -29,7 +29,7 @@
 ```
 SY.CORE (browser)                          Ableton Live
 ┌──────────────────────┐   WebSocket   ┌───────────────────────────────┐
-│ Drum Machine  ch 10  │ ───────────▶  │ sycore-link        (bridge)    │
+│ Drum Machine  ch 10  │ ──────────▶   │ sycore-link        (bridge)    │
 │ Chord Prog    ch 1   │  127.0.0.1    │   ├─▶ SYC Drums  Receive ch 10 │──▶ Drums  (Drum Rack)
 │ Sequencer     ch 2   │    :9400      │   ├─▶ SYC Chords Receive ch 1  │──▶ Chords (synth)
 │ Rig Controller       │ ◀───────────  │   └─▶ …                        │──▶ …
