@@ -41,3 +41,34 @@ describe('chord-key', () => {
     expect(generateMajor(10, 4, () => 0.99).every(c => /^(Bb|Eb|F|Gm|Cm|Dm|Adim)/.test(c.chordName))).toBe(true)
   })
 })
+
+describe('detectKey', () => {
+  const c = (chordName: string, notes: number[] = [], transpose = 0) => ({ chordName, notes, transpose })
+  it('C major from I–V–vi–IV', async () => {
+    const { detectKey } = await import('@/lib/chord-key')
+    expect(detectKey([c('C', [60, 64, 67]), c('G', [55, 59, 62]), c('Am', [57, 60, 64]), c('F', [53, 57, 60])])?.label).toBe('C')
+  })
+  it('A minor from i–bVII–bVI–V (harmonic V)', async () => {
+    const { detectKey } = await import('@/lib/chord-key')
+    expect(detectKey([c('Am', [57, 60, 64]), c('G', [55, 59, 62]), c('F', [53, 57, 60]), c('E', [52, 56, 59])])?.label).toBe('Am')
+  })
+  it('a step transpose moves the key', async () => {
+    const { detectKey } = await import('@/lib/chord-key')
+    expect(detectKey([c('C', [60, 64, 67], 2), c('F', [53, 57, 60], 2), c('G', [55, 59, 62], 2), c('C', [60, 64, 67], 2)])?.label).toBe('D')
+  })
+  it('the hint breaks a tie between relatives', async () => {
+    const { detectKey } = await import('@/lib/chord-key')
+    const prog = [c('Dm', [62, 65, 69]), c('G', [55, 59, 62])]
+    expect(detectKey(prog, { selectedKey: 0, keyMode: 'minor' })?.label).toBe('Am')
+    expect(detectKey(prog, { selectedKey: 0, keyMode: 'major' })?.label).toBe('C')
+  })
+  it('an outside note outweighs starting on a chord', async () => {
+    const { detectKey } = await import('@/lib/chord-key')
+    // F–G: the B of G rules F major out
+    expect(detectKey([c('F', [53, 57, 60]), c('G', [55, 59, 62])], { selectedKey: 0, keyMode: 'major' })?.label).toBe('C')
+  })
+  it('null without chords', async () => {
+    const { detectKey } = await import('@/lib/chord-key')
+    expect(detectKey([c('—')])).toBeNull()
+  })
+})

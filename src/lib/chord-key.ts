@@ -101,3 +101,67 @@ export function generateMajor(root: number, length: number, rnd: () => number = 
   }
   return out
 }
+
+// ── The key of a progression, from its chords (the Sequencer's Gen "Key: CP") ──────────────────
+
+export interface KeyChord { chordName?: string | null; notes?: readonly number[]; transpose?: number }
+export interface DetectedKey { root: number; mode: 'major' | 'minor'; label: string }
+
+const LETTER_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+const MAJOR_SET = new Set([0, 2, 4, 5, 7, 9, 11])
+// natural minor plus the raised 7th (the harmonic minor's major V)
+const MINOR_SET = new Set([0, 2, 3, 5, 7, 8, 10, 11])
+const m12 = (n: number) => ((n % 12) + 12) % 12
+
+function rootOf(c: KeyChord): number | null {
+  const m = /^\s*([A-Ga-g])([#♯b♭]?)/.exec(String(c.chordName ?? ''))
+  if (m) {
+    let pc = LETTER_PC[m[1].toUpperCase()]
+    if (m[2] === '#' || m[2] === '♯') pc += 1
+    else if (m[2] === 'b' || m[2] === '♭') pc -= 1
+    return m12(pc + (c.transpose ?? 0))
+  }
+  return c.notes?.length ? m12(Math.min(...c.notes) + (c.transpose ?? 0)) : null
+}
+
+/**
+ * The key (tonic + major / minor) the chords sit in best: each key of 24 scores its chords' notes in
+ * its scale (+1) or not (−2: an outside note weighs), the roots on its degrees, the tonic chord — of the key's quality — and a
+ * progression starting / ending on it. `hint` (the Chord Prog's own key file and mode) tips a close call.
+ * null when there are no chords.
+ */
+export function detectKey(chords: readonly KeyChord[], hint?: { selectedKey: number; keyMode: KeyMode }): DetectedKey | null {
+  const parsed = chords
+    .map(c => {
+      const root = rootOf(c)
+      const pcs = new Set((c.notes ?? []).map(n => m12(n + (c.transpose ?? 0))))
+      if (root !== null) pcs.add(root)
+      return root === null ? null : { root, pcs }
+    })
+    .filter((c): c is { root: number; pcs: Set<number> } => c !== null)
+  if (!parsed.length) return null
+  const hintRoot = hint && hint.keyMode ? keyRoot(hint.selectedKey, hint.keyMode) : null
+  let best: (DetectedKey & { score: number }) | null = null
+  for (const mode of ['major', 'minor'] as const) {
+    const set = mode === 'major' ? MAJOR_SET : MINOR_SET
+    for (let tonic = 0; tonic < 12; tonic++) {
+      let score = 0
+      parsed.forEach((c, i) => {
+        for (const pc of c.pcs) score += set.has(m12(pc - tonic)) ? 1 : -2
+        if (set.has(m12(c.root - tonic))) score += 1
+        if (c.root === tonic) {
+          const third = c.pcs.has(m12(tonic + (mode === 'major' ? 4 : 3)))
+          score += third ? 2 : 1
+          if (i === 0) score += 2
+          if (i === parsed.length - 1) score += 1.5
+        }
+      })
+      if (hint && hint.selectedKey >= 0 && hint.selectedKey < 12) {
+        if (hintRoot === tonic && hint.keyMode === mode) score += 1.5
+        else if (!hint.keyMode && keyFile(tonic, mode) === hint.selectedKey) score += 0.75
+      }
+      if (!best || score > best.score) best = { root: tonic, mode, score, label: NOTE_NAMES[tonic] + (mode === 'minor' ? 'm' : '') }
+    }
+  }
+  return best ? { root: best.root, mode: best.mode, label: best.label } : null
+}

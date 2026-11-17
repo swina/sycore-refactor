@@ -221,6 +221,9 @@ export const useUiStore = defineStore('ui', () => {
   // key — seq-gen/harmony.ts) or 'chromatic' (by semitones from the pattern's first note, as before).
   const readSeqFollow = (): 'degree' | 'chromatic' => (localStorage.getItem(userKey('SYCORE_SEQ_FOLLOW')) === 'chromatic' ? 'chromatic' : 'degree')
   const seqFollowMode: Ref<'degree' | 'chromatic'> = ref(readSeqFollow())
+  // The Sequencer's Gen in the key of the Chord Prog's chords (chord-key.ts detectKey) — Performance's "Key: CP".
+  const readSeqGenKeyFromProg = (): boolean => { try { return localStorage.getItem(userKey('SYCORE_SEQ_GEN_KEY_CP')) === '1' } catch { return false } }
+  const seqGenKeyFromProg: Ref<boolean> = ref(readSeqGenKeyFromProg())
   // Sequencer decoupled from the Chord Prog for now (the Rig's Seq Free pad): its chords no longer move,
   // start, stop or switch the bank of the Sequencer, which plays on as it is. Temporary: not saved.
   const seqDecoupled: Ref<boolean> = ref(false)
@@ -666,6 +669,9 @@ export const useUiStore = defineStore('ui', () => {
   watch(seqFollowMode, (v) => {
     try { localStorage.setItem(userKey('SYCORE_SEQ_FOLLOW'), v) } catch {}
   })
+  watch(seqGenKeyFromProg, (v) => {
+    try { localStorage.setItem(userKey('SYCORE_SEQ_GEN_KEY_CP'), v ? '1' : '0') } catch {}
+  })
 
   watch(uid, (newUid) => {
     if (!newUid) {
@@ -675,6 +681,7 @@ export const useUiStore = defineStore('ui', () => {
       lastPlaylistName.value = localStorage.getItem(userKey('S1_LAST_PLAYLIST')) || ''
       seqAutoStart.value = localStorage.getItem(userKey('SYCORE_SEQ_AUTOSTART')) !== 'false'
       seqFollowMode.value = readSeqFollow()
+      seqGenKeyFromProg.value = readSeqGenKeyFromProg()
     }
   })
 
@@ -715,7 +722,7 @@ export const useUiStore = defineStore('ui', () => {
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
-    isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, seqFollowMode, seqDecoupled, isAudioPlaying, lastPlaylistName,
+    isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, seqFollowMode, seqGenKeyFromProg, seqDecoupled, isAudioPlaying, lastPlaylistName,
     activeVisualizerCategory, seqCurrentConfig, seqCurrentConfig2, seqGlobalTranspose, seqActiveSlot,
     globalModCC, globalTranspose,
     theme, toggleTheme,

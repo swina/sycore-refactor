@@ -41,6 +41,8 @@ import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
 import { mixSteps, mutateAmount, varyFromMidi } from '@/lib/seq-gen/mutate'
 import { paramValue } from '@/lib/seq-gen/params'
+import { detectKey } from '@/lib/chord-key'
+import { useChordProgStore } from '@/stores/useChordProgStore'
 
 export const DEFAULT_STEP = {
   active: false,
@@ -649,13 +651,28 @@ function createSequencerEngine() {
   const MINOR_FAMILY = ['Minor', 'Harmonic Min', 'Pentatonic Min', 'Blues', 'Dorian', 'Phrygian', 'Locrian']
   const MAJOR_FAMILY = ['Major', 'Pentatonic Maj', 'Lydian', 'Mixolydian']
   function handleRigGenerate(e) { journaledGenerate(() => _rigGenerate(e)) }
+  function applyKey(root, mode) {
+    selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
+    const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY
+    if (!family.includes(selectedScale.value)) selectedScale.value = mode === 'minor' ? 'Minor' : 'Major'
+  }
+  // Gen "Key: CP" (uiStore.seqGenKeyFromProg): the key the Chord Prog's chords sit in (chord-key.ts
+  // detectKey — the chain when it is on, else the slot's active steps; its own key file as the hint).
+  function progKey() {
+    const cp = useChordProgStore()
+    const src = cp.chainEnabled ? cp.getChainSteps().steps : cp.steps.slice(0, cp.numSteps)
+    const chords = src.filter(st => st?.active && st.notes?.length)
+    return detectKey(chords, { selectedKey: cp.selectedKey, keyMode: cp.keyMode })
+  }
+  function applyProgKey() {
+    if (!uiStore.seqGenKeyFromProg) return
+    const k = progKey()
+    if (k) applyKey(k.root, k.mode)
+  }
   function _rigGenerate(e) {
     const { root, mode, mutate } = e?.detail ?? {}
-    if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) {
-      selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
-      const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY
-      if (!family.includes(selectedScale.value)) selectedScale.value = mode === 'minor' ? 'Minor' : 'Major'
-    }
+    if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) applyKey(root, mode)
+    else applyProgKey()
     // the Rig's Mutate (Shift + GEN): a part of the pattern, Vary's amount or a quarter
     _generateSequence(mutate ? mutateAmount(varyAmount.value) : varyAmount.value)
   }
@@ -669,7 +686,7 @@ function createSequencerEngine() {
   function journaledGenerate(fn) {
     return journaled('seq', seqStore.activeBankIndex, fn, { snap: bankSnapshot })
   }
-  function generateSequence() { journaledGenerate(_generateSequence) }
+  function generateSequence() { journaledGenerate(() => { applyProgKey(); _generateSequence() }) }
 
   /**
    * P1 / P2 only: new values on every step as Generate makes them (the preset's value for the CC, moved by
@@ -1676,7 +1693,7 @@ function createSequencerEngine() {
 
   return {
     // pattern (working copy of the active bank) and settings the panel shows / edits
-    selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
+    selectedStyle, selectedKey, selectedScale, progKey, chordsEnabled, maxPolyphony, chordDensity,
     isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
     swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
     param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,

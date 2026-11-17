@@ -8,6 +8,7 @@
 import { computed, ref } from 'vue'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { seqSnapshot, rigReports, rigArmed } from '@/lib/rig-live'
 import { useSequencerEngine, NOTE_NAMES, STYLES } from '@/core/engines/sequencer'
 import { ARP_MODES } from '@/lib/arp-patterns'
@@ -25,8 +26,11 @@ const {
   steps, gridCurrentStep, isPlaying, numSteps, tempoMultiplier, sequenceDirection, TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
   selectedStyle, chordsEnabled, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
   param1CC, param2CC, param1Variation, param2Variation, selectedOctave, octaveRange,
-  generateSequence, regenerateParams, updateStep,
+  generateSequence, regenerateParams, updateStep, selectedKey, selectedScale, progKey,
 } = useSequencerEngine()
+// Key: CP — Gen writes in the key of the Chord Prog's chords (detected; shown before the click)
+const uiStore = useUiStore()
+const cpKey = computed(() => (uiStore.seqGenKeyFromProg ? progKey() : null))
 // P1 / P2 rows: the refs themselves (in the template a top-level ref is unwrapped to its number, and
 // `p.v.value = …` from the slider then failed — the sliders never moved)
 const P_ROWS = [{ n: 1, cc: param1CC, v: param1Variation }, { n: 2, cc: param2CC, v: param2Variation }]
@@ -85,6 +89,15 @@ const label = (s) => {
       <button title="Generate: a new pattern by these settings (Vary: the share replaced) — the bank before is kept as a session take"
               class="px-2 py-0.5 rounded bg-amber-500 text-black font-black uppercase hover:bg-amber-300"
               @click="generateSequence">Gen</button>
+      <div class="flex items-center gap-1.5"
+           :title="`Key — CP: Gen writes in the key of the Chord Prog's chords (detected from the slot, or the chain when on${cpKey ? ': ' + cpKey.label : ''}) · Own: the Sequencer's key (${selectedKey} ${selectedScale})`">
+        <span class="text-neutral-500 uppercase">Key</span>
+        <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+          <button :class="seg(uiStore.seqGenKeyFromProg)" @click="uiStore.seqGenKeyFromProg = true">CP</button>
+          <button :class="seg(!uiStore.seqGenKeyFromProg)" @click="uiStore.seqGenKeyFromProg = false">Own</button>
+        </div>
+        <span class="font-bold text-amber-400">{{ uiStore.seqGenKeyFromProg ? (cpKey ? cpKey.label : '—') : `${selectedKey} ${selectedScale}` }}</span>
+      </div>
       <div class="flex items-center gap-1.5" title="Style: what Generate writes (it sets Density and octaves)">
         <span class="text-neutral-500 uppercase">Style</span>
         <select v-model="selectedStyle"
