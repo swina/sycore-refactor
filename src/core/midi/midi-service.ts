@@ -604,6 +604,10 @@ export class MidiService {
   private _monitorSeq = 0;
 
   constructor() {
+    // The page going away (reload — a dev rebuild reloads the whole page, see the end of this file —,
+    // close, navigation) with notes sounding: their note-offs (Worker queue, timers) die with it and the
+    // instruments keep the notes (a sampler streaming from disk: voices never freed). Release everything.
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', () => this.releaseAllOnUnload());
     // Build context objects for sub-modules (inject the facade's state)
     const getMidiAccess = () => this.midiAccess;
     const getRoutingConfig = () => this.routingConfig;
@@ -1218,6 +1222,31 @@ export class MidiService {
         this.sendToVirtualOutput(virtName, panicMsg(ch));
         this.sendToVirtualOutput(virtName, resetMsg(ch));
         this.sendToVirtualOutput(virtName, sustainMsg(ch));
+      }
+    });
+  }
+
+  /**
+   * The page unloading: what is queued with a future timestamp is dropped (a note-on would sound after
+   * the release), then All Notes Off + All Sound Off + Sustain off on every channel of every output.
+   */
+  releaseAllOnUnload(): void {
+    try { this.linkPort?.clear(); } catch {} // SY.CORE Link: drop what is pending there first
+    if (this.midiAccess) {
+      Array.from(this.midiAccess.outputs.values()).forEach((out: any) => {
+        try { out.clear?.(); } catch {}
+        for (let ch = 0; ch < 16; ch++) {
+          try { out.send([0xb0 + ch, 123, 0]); out.send([0xb0 + ch, 120, 0]); out.send([0xb0 + ch, 64, 0]); } catch {}
+        }
+      });
+    }
+    this.virtualOutputs.forEach((_, virtName) => {
+      for (let ch = 0; ch < 16; ch++) {
+        try {
+          this.sendToVirtualOutput(virtName, [0xb0 + ch, 123, 0])
+          this.sendToVirtualOutput(virtName, [0xb0 + ch, 120, 0])
+          this.sendToVirtualOutput(virtName, [0xb0 + ch, 64, 0])
+        } catch {}
       }
     });
   }

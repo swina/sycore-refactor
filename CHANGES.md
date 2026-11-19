@@ -2,6 +2,10 @@
  
 A running log of new features added to SY.CORE, newest first.
 
+## 2026-11-20
+
+- **MIDI: every note released when the page reloads or closes** — a dev rebuild reloads the whole page (`midi-service.ts` declines hot updates), and a reload or close while playing used to lose the queued note-offs. The instrument then kept the notes: with the Emulator X3, voices streaming from disk never freed (DISK in the red, polyphony stuck until a restart). Now `pagehide` drops what is queued on each output and on SY.CORE Link, then sends All Notes Off, All Sound Off and Sustain off on all 16 channels of every output (real and virtual). `core/midi/midi-service.ts`; tests: `midi-unload-release.test.ts`. Branch: `feat/sequencer-lanes`
+
 ## 2026-11-19
 
 - **Sequencer lanes, phases 2–4: MIDI Flow, bass styles, the lanes in the panel** (plan: `docs/plans/sequencer-lanes.md`).
