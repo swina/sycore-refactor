@@ -4,6 +4,20 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-19
 
+- **Sequencer lanes, phases 2–4: MIDI Flow, bass styles, the lanes in the panel** (plan: `docs/plans/sequencer-lanes.md`).
+  - **MIDI Flow**: **Seq Bass** and **Seq Arp** are app nodes. Cable their OUT to the instruments or Live tracks; their IN is optional, since a lane also follows notes routed to the Sequencer's IN.
+  - **Bass styles** (`seq-gen/bass.ts`, in the Style menu of every lane), in scale degrees with chord tones on the strong steps, so following the Chord Prog moves the line onto each chord:
+    - **Root-5-Oct**: root on the beats, with the 5th and octave between.
+    - **Offbeat**: house bass on every "and", short notes.
+    - **Acid Slide**: a busy 1/16 line with accents and slides.
+    - **Walking**: quarter notes, root on the 1, an approach note into the next bar.
+    - Berlin School also works as a pedal bass.
+
+    New Bass banks start on Acid at Oct 2; Arp banks start on Arpeggio at Oct 4 +1. The Arp's order (up, down, …) is now saved with each bank.
+  - **The panel shows one lane at a time**. A strip at the top, in both Performance and EDIT, shows the three lanes. For each one: the name (click to show it), its bank, ▶/■, **M** (mute: it plays on silently), its **MIDI channel** (G = global, 1–16) and its first 16 steps with the playhead. The panel is remounted per lane, so EDIT, Performance, Generate, AI, Library and MIDI Learn work on the lane shown. MIDI Learn uses `seqbass_…` / `seqarp_…`, plus `seq_mute` / `seqbass_mute` / `seqarp_mute`. Library entries record their lane but load into any lane. P1/P2 → Map stays on Main.
+
+  Files: `SeqLanesStrip.vue`, `Sequencer.vue`, `SeqPlayView.vue`, `SeqViewSelect.vue`, `SynthApp.vue`, `midi-apps.js`, `seq-gen/bass.ts`; tests: `seq-gen-bass.test.ts`, `seq-lanes-strip.test.ts`, `sequencer-lanes.test.ts`. Branch: `feat/sequencer-lanes`
+
 - **Sequencer lanes, phase 1: an engine per lane (Main / Bass / Arp)** — the groundwork for replacing the Drum Machine's bassline (plan: `docs/plans/sequencer-lanes.md`). `useSequencerEngine(lane)` and `useSeqLaneStore(lane)` give each lane its own engine and banks (independent active bank, chain, pattern). Main keeps every id it had: store, saved keys, events (`seq-…`, `toggle-sequencer2`), MIDI Learn `seq_…`, source `SEQUENCER2`. Bass and Arp get their own:
   - store `stepSequencer-bass` / `-arp`, keys `…_BASS` / `…_ARP`
   - events `seq-bass-…` / `seq-arp-…`, `toggle-seq-bass` / `toggle-seq-arp`

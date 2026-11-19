@@ -4,7 +4,8 @@
 import { useSequencerEngine } from '@/core/engines/sequencer'
 import { seqPlayView, setSeqPlayView } from '@/lib/seq-play-view'
 
-const { numSteps } = useSequencerEngine()
+const props = defineProps({ lane: { type: String, default: 'main' } })
+const { numSteps } = useSequencerEngine(props.lane)
 const OPTS = [['notes', 'Notes'], [4, '4'], [8, '8'], [16, '16']]
 function pick(v) {
   if (v === 'notes') { setSeqPlayView('notes'); return }

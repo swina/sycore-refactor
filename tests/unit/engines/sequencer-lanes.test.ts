@@ -118,4 +118,24 @@ describe('Sequencer lanes (Main / Bass / Arp)', () => {
     expect(bass.isPlaying.value).toBe(true)
     expect(main.isPlaying.value).toBe(false)
   })
+
+  it('Bass styles generate on the lane; the Arp mode is saved with the bank', async () => {
+    const { bass } = setup()
+    bass.selectedStyle.value = 'Offbeat'
+    await flush()
+    expect(bass.selectedOctave.value).toBe(2)
+    bass.selectedKey.value = 'A'
+    bass.selectedScale.value = 'Minor'
+    bass.numSteps.value = 16
+    bass.generateSequence()
+    const act = bass.steps.value.map((st: any, j: number) => (st.active ? j : -1)).filter((j: number) => j >= 0)
+    expect(act).toEqual(expect.arrayContaining([2, 6, 10, 14]))
+    expect(bass.steps.value[2].notes[0] % 12).toBe(9)
+    bass.arpModeForGen.value = 'down'
+    await flush()
+    bass.selectBank(1)
+    expect(bass.arpModeForGen.value).toBe('up')
+    bass.selectBank(0)
+    expect(bass.arpModeForGen.value).toBe('down')
+  })
 })

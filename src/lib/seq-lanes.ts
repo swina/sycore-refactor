@@ -6,7 +6,7 @@
  * Main keeps every id it had (store `stepSequencer`, keys, events `seq-…` / `toggle-sequencer2`,
  * MIDI Learn `seq_…`, source SEQUENCER2); Bass and Arp get their own, suffixed.
  */
-import { reactive } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { MidiSource } from '@/types/midi'
 
 export type SeqLane = 'main' | 'bass' | 'arp'
@@ -74,3 +74,17 @@ export const clampLaneChannel = (v: unknown): number => {
   const n = Math.round(Number(v))
   return Number.isFinite(n) ? Math.max(0, Math.min(16, n)) : 0
 }
+
+/** MIDI Learn names and labels of a lane: learnName('bass', 'steps') → 'seqbass_steps'; 'Seq Bass: Steps'. */
+export const learnName = (lane: SeqLane, name: string) => `${SEQ_LANE_CFG[lane].learn}_${name}`
+export const learnLabel = (lane: SeqLane, label: string) => `${lane === 'main' ? 'Sequencer' : `Seq ${SEQ_LANE_CFG[lane].label}`}: ${label}`
+
+// The lane the Sequencer panel shows (its tabs), saved per browser.
+const ACTIVE_KEY = 'SYCORE_SEQ_ACTIVE_LANE'
+const readActive = (): SeqLane => {
+  try { const v = localStorage.getItem(ACTIVE_KEY); return (SEQ_LANES as readonly string[]).includes(v ?? '') ? (v as SeqLane) : 'main' } catch { return 'main' }
+}
+export const seqActiveLane = ref<SeqLane>(readActive())
+watch(seqActiveLane, v => { try { localStorage.setItem(ACTIVE_KEY, v) } catch {} })
+/** Tests: re-read from storage. */
+export function reloadSeqActiveLane() { seqActiveLane.value = readActive() }

@@ -253,6 +253,13 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   }
   // ── Sequencer lanes Bass / Arp (lib/seq-lanes.ts): seqbass_… / seqarp_…, as the Main's seq_… ──
   const laneLearn = parseLaneLearn(fieldName)
+  // M (every lane, Main too: seq_mute): each press toggles it (a CC button: momentary or toggle, auto-detected)
+  if (laneLearn?.rest === 'mute') {
+    if (buttonEdges.fires(fieldName, val, fromNote, performance.now())) {
+      window.dispatchEvent(new CustomEvent(laneEvent(laneLearn.lane, 'mute-set'), { detail: { fromNote: true } }))
+    }
+    return
+  }
   if (laneLearn && laneLearn.lane !== 'main') {
     const { lane, rest } = laneLearn
     const fire = (name, detail) => window.dispatchEvent(new CustomEvent(laneEvent(lane, name), { detail }))

@@ -43,6 +43,7 @@ import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
 import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
 import { berlinLine, sweepShape } from '@/lib/seq-gen/berlin'
+import { bassLine, BASS_STYLES } from '@/lib/seq-gen/bass'
 import { mixSteps, mutateAmount, varyFromMidi } from '@/lib/seq-gen/mutate'
 import { paramValue } from '@/lib/seq-gen/params'
 import { detectKey } from '@/lib/chord-key'
@@ -90,9 +91,15 @@ export const STYLES = {
   Arpeggio: { steps: 16, density: 1, octaves: [4, 5], velMin: 90, velMax: 110, gateMin: 60, gateMax: 80 },
   // every step, short notes, a root pedal under a repeated cell (seq-gen/berlin.ts)
   'Berlin School': { steps: 16, density: 1, octaves: [2, 3], velMin: 88, velMax: 102, gateMin: 35, gateMax: 50 },
+  // bass lines (seq-gen/bass.ts; the Bass lane's styles): chord tones on the strong steps
+  'Root-5-Oct': { steps: 16, density: 1, octaves: [2, 2], velMin: 90, velMax: 116, gateMin: 50, gateMax: 70 },
+  Offbeat: { steps: 16, density: 1, octaves: [2, 2], velMin: 90, velMax: 116, gateMin: 35, gateMax: 45 },
+  'Acid Slide': { steps: 16, density: 1, octaves: [2, 2], velMin: 78, velMax: 127, gateMin: 50, gateMax: 60 },
+  Walking: { steps: 16, density: 1, octaves: [2, 2], velMin: 84, velMax: 112, gateMin: 80, gateMax: 90 },
 }
+export { BASS_STYLES }
 /** Styles with their own generator: Density, Melody, Rhythm and chords don't apply. */
-export const OWN_GEN_STYLES = ['Arpeggio', 'Berlin School']
+export const OWN_GEN_STYLES = ['Arpeggio', 'Berlin School', ...BASS_STYLES]
 
 export const SCALES = {
   'Major': [0, 2, 4, 5, 7, 9, 11],
@@ -194,6 +201,9 @@ function createSequencerEngine(lane = 'main') {
   const channel = () => (seqStore.midiChannel >= 1 ? seqStore.midiChannel : midiStore.midiChannel)
   const chOpts = (o) => (seqStore.midiChannel >= 1 ? { ...(o ?? {}), exactChannel: true } : o)
   const laneChannel = computed({ get: () => seqStore.midiChannel, set: (v) => { seqStore.midiChannel = v } })
+  // M (the lane's mute): its notes and P1 / P2 don't go out; it plays on
+  const laneMuted = computed({ get: () => seqStore.muted, set: (v) => { seqStore.muted = !!v } })
+  const _onMuteSet = (e) => { const d = e.detail ?? {}; laneMuted.value = d.fromNote || d.value == null ? !laneMuted.value : d.value >= 64 }
 
   // Local state — active bank working copy
   const { state: seqStateStorage } = useLocalStorage('S1_SEQUENCER2_STATE' + cfg.keySuffix, {})
@@ -226,7 +236,8 @@ function createSequencerEngine(lane = 'main') {
   const arpNotes = ref(seqStore.activeBank.arpNotes ?? 'chord')
   const _onVarySet = (e) => { varyAmount.value = varyFromMidi(e.detail?.value ?? 0) }
   window.addEventListener(ev('vary-set'), _onVarySet)
-  const arpModeForGen = ref('up')
+  // the Arpeggio style's order (arp-patterns.ts), per bank
+  const arpModeForGen = ref(seqStore.activeBank.arpMode ?? 'up')
   const swingAmount = ref(0)
   const basePatternLength = ref(seqStore.activeBank.basePatternLength || seqStore.activeBank.numSteps)
   const selectedOctave = ref(seqStore.activeBank.selectedOctave)
@@ -341,6 +352,7 @@ function createSequencerEngine(lane = 'main') {
     bank.melodyMode = melodyMode.value
     bank.varyAmount = varyAmount.value
     bank.arpNotes = arpNotes.value
+    bank.arpMode = arpModeForGen.value
     bank.chordsEnabled = chordsEnabled.value
     bank.maxPolyphony = maxPolyphony.value
     bank.chordDensity = chordDensity.value
@@ -394,6 +406,7 @@ function createSequencerEngine(lane = 'main') {
     melodyMode.value = bank.melodyMode ?? 'line'
     varyAmount.value = bank.varyAmount ?? 100
     arpNotes.value = bank.arpNotes ?? 'chord'
+    arpModeForGen.value = bank.arpMode ?? 'up'
     chordsEnabled.value = bank.chordsEnabled
     maxPolyphony.value = bank.maxPolyphony
     chordDensity.value = bank.chordDensity
@@ -501,7 +514,7 @@ function createSequencerEngine(lane = 'main') {
     numSteps, steps, param1CC, param2CC, param1Variation, param2Variation,
     selectedOctave, octaveRange, () => uiStore.seqGlobalTranspose, () => midiStore.currentBpm,
     dynamicMidiTranspose, dynamicDegreeShift, () => uiStore.seqFollowMode, selectedKey, selectedScale, selectedStyle,
-    genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, chordsEnabled, maxPolyphony, chordDensity
+    genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen, chordsEnabled, maxPolyphony, chordDensity
   ], () => {
     const config = { 
       numSteps: numSteps.value, 
@@ -831,6 +844,16 @@ function createSequencerEngine(lane = 'main') {
       return
     }
 
+    if (BASS_STYLES.includes(selectedStyle.value)) {
+      const line = bassLine({ style: selectedStyle.value, steps: numSteps.value, keyPc: Math.max(0, keyIdx), scale: scaleIntervals, oct: finalOctMin })
+      steps.value = line.map(b => b.active
+        ? { ...DEFAULT_STEP, active: true, notes: [b.note], octave: Math.floor(b.note / 12) - 1, velocity: b.velocity, gate: b.gate,
+            tieSteps: b.tie ? 1 : 0, accent: b.accent, ...genParams(), edited: true }
+        : { ...DEFAULT_STEP, active: false, notes: [b.note], octave: Math.floor(b.note / 12) - 1, ...genParams() })
+      basePatternLength.value = numSteps.value
+      return
+    }
+
     if (chordsEnabled.value) {
       const progressions = STYLE_PROGRESSIONS[selectedStyle.value] ?? [[0, 3, 4, 0]]
       const baseProgression = progressions[Math.floor(Math.random() * progressions.length)]
@@ -1079,6 +1102,7 @@ function createSequencerEngine(lane = 'main') {
     numSteps.value = pickFromMidi(STEP_COUNTS, STEP_COUNTS.includes(numSteps.value) ? numSteps.value : 16, e.detail ?? {})
   }
   window.addEventListener(ev('time-set'), handleTimeSet)
+  window.addEventListener(ev('mute-set'), _onMuteSet)
   window.addEventListener(ev('direction-set'), handleDirectionSet)
   window.addEventListener(ev('steps-set'), handleStepsSet)
 
@@ -1634,7 +1658,7 @@ function createSequencerEngine(lane = 'main') {
             chase = chaseNote(tMs, Math.max(durMs, 10), performance.now(), true)
           }
 
-          if (step.active && probabilityHit && (!late || chase)) {
+          if (step.active && probabilityHit && (!late || chase) && !seqStore.muted) {
             if (state.param1CC !== null) sendParam(1, state.param1CC, step.param1Value, state.channel)
             if (state.param2CC !== null) sendParam(2, state.param2CC, step.param2Value, state.channel)
             // …and to Map · Live Instruments slots (Live can't MIDI-map a track's own CCs), a route per
@@ -1752,6 +1776,7 @@ function createSequencerEngine(lane = 'main') {
     window.removeEventListener(ev('generate'), handleRigGenerate)
     window.removeEventListener(ev('banks-reloaded'), handleBanksReloaded)
     window.removeEventListener(ev('time-set'), handleTimeSet)
+    window.removeEventListener(ev('mute-set'), _onMuteSet)
     window.removeEventListener(ev('direction-set'), handleDirectionSet)
     window.removeEventListener(ev('steps-set'), handleStepsSet)
     unsubNote?.()
@@ -1761,7 +1786,7 @@ function createSequencerEngine(lane = 'main') {
 
   return {
     // the lane (lib/seq-lanes.ts) and its MIDI channel (0 = global, 1–16)
-    lane, laneChannel,
+    lane, laneChannel, laneMuted,
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, progKey, chordsEnabled, maxPolyphony, chordDensity,
     isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,

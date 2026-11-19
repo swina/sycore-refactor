@@ -6,7 +6,8 @@
 // per bank; P1 / P2's CC is chosen in EDIT).
 // Otherwise the Rig plays it.
 import { computed, ref, watch } from 'vue'
-import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
+import { useSeqLaneStore } from '@/stores/useStepSequencerStore'
+import { SEQ_LANE_CFG, learnName, learnLabel } from '@/lib/seq-lanes'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSeqDeviceParamsStore } from '@/stores/useSeqDeviceParamsStore'
@@ -21,7 +22,13 @@ import PlayChain from './PlayChain.vue'
 import { VEL_CLASS, velLevel } from '@/lib/play-colors'
 import { seqPlayView } from '@/lib/seq-play-view'
 
-const seqStore = useStepSequencerStore()
+// the lane shown (lib/seq-lanes.ts; the panel mounts this per lane)
+const props = defineProps({ lane: { type: String, default: 'main' } })
+const lane = SEQ_LANE_CFG[props.lane] ? props.lane : 'main'
+const isMain = lane === 'main'
+const L = (name) => learnName(lane, name)
+const LL = (label) => learnLabel(lane, label)
+const seqStore = useSeqLaneStore(lane)
 // P1 / P2 → Map · Live Instruments: sending (green) or why not (amber); a click opens the routes
 const liveMap = useLiveMapStore()
 const seqMapOpen = ref(false)
@@ -31,7 +38,7 @@ const {
   selectedStyle, chordsEnabled, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
   param1CC, param2CC, param1Variation, param2Variation,
   generateSequence, regenerateParams, updateStep, selectedKey, selectedScale, progKey,
-} = useSequencerEngine()
+} = useSequencerEngine(lane)
 // Key: CP — Gen writes in the key of the Chord Prog's chords (detected; shown before the click)
 const uiStore = useUiStore()
 const cpKey = computed(() => (uiStore.seqGenKeyFromProg ? progKey() : null))
@@ -50,7 +57,10 @@ const stepClass = (s, i) => isPlaying.value && gridCurrentStep.value === i ? 'bg
   : 'bg-neutral-950 border-neutral-900 text-neutral-700'
 const stepTitle = (s, i) => `Step ${i + 1}: ${s.active ? 'on' : 'off'}${s.active && s.notes?.length ? ` · velocity ${s.velocity ?? 100}` : ''} — click: ${s.active ? 'off' : 'on'}`
 const DIR_ICON = { up: '↑', down: '↓', 'up-down': '↕', random: 'R' }
-const snap = computed(() => seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
+// the Rig's reports are the Main lane's (Bass / Arp: their own playing state, nothing queued)
+const snap = computed(() => isMain
+  ? seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq)
+  : seqSnapshot(seqStore.banks, seqStore.activeBankIndex, isPlaying.value, null))
 const chainEntries = computed(() => seqStore.chain.map(i => (i !== null && i >= 0 ? 'ABCDEFGH'[i] : null)))
 // Step view (seq-play-view.ts; the selector, SeqViewSelect, sits in the panel's header) — 'notes': every
 // step with its note name · 'lanes': one row of up to 16 cells, each note a bar at its pitch, the note's
@@ -125,14 +135,14 @@ const label = (s) => {
     <PlayChain v-if="seqStore.chainEnabled" :entries="chainEntries" :current="isPlaying ? (seqStore.playingChainIndex ?? -1) : -1" />
     <div class="flex flex-wrap items-center gap-3 text-[10px] font-mono">
       <div class="flex items-center gap-1.5" title="Steps (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: 'seq_steps', label: 'Sequencer: Steps' })">
+           @contextmenu.prevent="openMenu($event, { name: L('steps'), label: LL('Steps') })">
         <span class="text-neutral-500 uppercase">Steps</span>
         <input v-model.number="numSteps" type="range" min="2" :max="stepsMax"
                class="w-20 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
         <span class="w-5 text-right font-bold text-amber-400">{{ numSteps }}</span>
       </div>
       <div class="flex items-center gap-1.5" title="Time: steps per beat (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: 'seq_time', label: 'Sequencer: Time' })">
+           @contextmenu.prevent="openMenu($event, { name: L('time'), label: LL('Time') })">
         <span class="text-neutral-500 uppercase">Time</span>
         <select v-model="tempoMultiplier"
                 class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
@@ -140,7 +150,7 @@ const label = (s) => {
         </select>
       </div>
       <div class="flex items-center gap-1.5" title="Direction (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: 'seq_direction', label: 'Sequencer: Direction' })">
+           @contextmenu.prevent="openMenu($event, { name: L('direction'), label: LL('Direction') })">
         <span class="text-neutral-500 uppercase">Dir</span>
         <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
           <button v-for="dir in SEQ_DIRECTIONS" :key="dir" :title="`Direction: ${dir}`" @click="sequenceDirection = dir"
@@ -206,7 +216,7 @@ const label = (s) => {
         </template>
       </div>
       <div class="flex items-center gap-1.5" title="Vary: the share of the pattern Generate replaces (100 = all new); the Rig's Shift + GEN uses it (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: 'seq_vary', label: 'Sequencer: Vary' })">
+           @contextmenu.prevent="openMenu($event, { name: L('vary'), label: LL('Vary') })">
         <span class="text-neutral-500 uppercase">Vary</span>
         <input v-model.number="varyAmount" type="range" min="0" max="100" step="5"
                class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
@@ -222,7 +232,7 @@ const label = (s) => {
         <button type="button" class="px-1 rounded border border-amber-500/50 text-amber-400 font-bold hover:bg-amber-500/10"
                 :title="`Regenerate P${p.n} only — the notes and the rhythm stay`" @click.stop="regenerateParams(`p${p.n}`)">↻</button>
       </div>
-      <button type="button" class="px-1.5 rounded border font-bold" @click="seqMapOpen = true"
+      <button v-if="isMain" type="button" class="px-1.5 rounded border font-bold" @click="seqMapOpen = true"
             :class="liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? 'border-amber-500/60 text-amber-400' : liveMap.seqParamsBlock !== 'off' || devParams.count ? 'border-emerald-500/50 text-emerald-300' : 'border-neutral-800 text-neutral-400 hover:text-white'"
             :title="liveMap.seqParamsHint || `P1 / P2 → Map slots: ${liveMap.seqRoutes.length} track(s) · MIDI Flow devices with their own CC: ${devParams.count} — click to edit`">
         → MAP{{ devParams.count ? ` · ${devParams.count} dev` : '' }}{{ liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? ' ⚠' : '' }}

@@ -4,6 +4,8 @@ import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import SeqPlayView from '@/components/play/SeqPlayView.vue'
 import SeqViewSelect from '@/components/play/SeqViewSelect.vue'
+import SeqLanesStrip from '@/components/play/SeqLanesStrip.vue'
+import { SEQ_LANE_CFG, learnName, learnLabel } from '@/lib/seq-lanes'
 import { usePlayView } from '@/composables/usePlayView'
 // Performance: a play view (banks, pattern) instead of the panel; EDIT: the panel.
 const { play } = usePlayView('sequencer2')
@@ -11,7 +13,7 @@ import { ref, computed, watch, onUnmounted, toRef } from 'vue'
 import { X, Play, Square, Settings, Plus, Trash2, ChevronUp, Zap, ChevronDown, ChevronLeft, ChevronRight, Save, Download, Keyboard, Piano, Circle, FolderOpen, FolderPlus, Layers, Sparkles } from 'lucide-vue-next'
 import { getTransport } from 'tone'
 import { useMidiStore } from '@/stores/useMidiStore'
-import { useStepSequencerStore, BANK_NAMES, BANK_COUNT, CHAIN_COUNT } from '@/stores/useStepSequencerStore'
+import { useSeqLaneStore, BANK_NAMES, BANK_COUNT, CHAIN_COUNT } from '@/stores/useStepSequencerStore'
 import { S1_CC_MAP } from '@/constants/s1-config'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -29,6 +31,8 @@ import { useSequencerEngine, DEFAULT_STEP, NOTE_NAMES, GRID_SEMITONES, STYLES, S
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps({
+  /** the lane shown (lib/seq-lanes.ts): main (the Sequencer as always), bass, arp — mounted per lane (:key) */
+  lane: { type: String, default: 'main' },
   isOpen: Boolean,
   bpm: Number,
   channel: Number,
@@ -52,7 +56,12 @@ const midiStore = useMidiStore()
 const authStore = useAuthStore()
 const uiStore = useUiStore()
 const { openMenu } = useMidiContextMenu()
-const seqStore = useStepSequencerStore()
+const lane = SEQ_LANE_CFG[props.lane] ? props.lane : 'main'
+const isMain = lane === 'main'
+const seqStore = useSeqLaneStore(lane)
+const panelTitle = isMain ? 'Sequencer' : `Sequencer · ${SEQ_LANE_CFG[lane].label}`
+const L = (name) => learnName(lane, name)
+const LL = (label) => learnLabel(lane, label)
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
@@ -78,7 +87,7 @@ const showAiPrompt = ref(false)
 
 // Playback and pattern state live in the engine (core/engines/sequencer.js): the Sequencer plays
 // on with this panel closed or unmounted (Scenario Workspaces, Phase 1).
-const engine = useSequencerEngine()
+const engine = useSequencerEngine(lane)
 const {
   selectedStyle, selectedKey, selectedScale, chordsEnabled, maxPolyphony, chordDensity,
   isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
@@ -167,6 +176,7 @@ async function savePatternToLibrary() {
         id: patternId,
         name: patternName,
         type: 'all',
+        lane, // the lane it was saved from (loads into any lane)
         ...all,
         key: active.selectedKey,
         scale: active.selectedScale,
@@ -187,6 +197,7 @@ async function savePatternToLibrary() {
     key: selectedKey.value,
     scale: selectedScale.value,
     style: selectedStyle.value,
+    lane, // the lane it was saved from (loads into any lane)
     config,
     createdAt: new Date().toISOString()
   }
@@ -396,7 +407,7 @@ function writeVLQ(value, array) {
 // track's own MIDI): set in SeqMapModal (useLiveMapStore.seqRoutes).
 const liveMap = useLiveMapStore()
 const linkStore = useLinkStore()
-const showSeqMap = computed(() => linkStore.connected || liveMap.seqRoutes.length > 0)
+const showSeqMap = computed(() => isMain && (linkStore.connected || liveMap.seqRoutes.length > 0)) // P1 / P2 → Map: the Main lane's
 const seqMapOpen = ref(false)
 const seqDevParams = useSeqDeviceParamsStore()
 const seqMapCount = computed(() => liveMap.seqRoutes.filter(r => r.p1 !== null || r.p2 !== null).length + seqDevParams.count)
@@ -516,7 +527,7 @@ let generateHidden = ref(false)
         <div class="w-5 h-5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
           <svg class="w-3 h-3 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 4v2M16 4v2"/></svg>
         </div>
-        <span class="text-[11px] font-black uppercase tracking-widest text-white">Sequencer</span>
+        <span class="text-[11px] font-black uppercase tracking-widest text-white">{{ panelTitle }}</span>
       </div>
       <!-- Performance, in EDIT: back to the play view -->
       <PlayEditToggle panel-id="sequencer2" />
@@ -534,11 +545,13 @@ let generateHidden = ref(false)
     </div>
 
     <div class="w-full m-auto h-full flex flex-col bg-neutral-900 shadow-2xl relative">
+      <!-- the lanes: Main / Bass / Arp (a click on a name shows it here) -->
+      <SeqLanesStrip class="shrink-0 px-4 py-1.5 border-b border-neutral-800 bg-black/30" />
       
       <!-- ── HEADER: Compact & Responsive ── -->
       <div class="shrink-0 px-4 py-2 border-b border-neutral-800 bg-black/40 flex flex-col sm:flex-row items-center gap-3 justify-between">
         <div class="flex items-center gap-4 w-full sm:w-auto">
-          <h2 class="text-base font-black uppercase tracking-tight text-synth-amber shrink-0">Sequencer</h2>
+          <h2 class="text-base font-black uppercase tracking-tight text-synth-amber shrink-0">{{ isMain ? 'Sequencer' : SEQ_LANE_CFG[lane].label }}</h2>
           
           <div class="flex items-center bg-black/60 border border-neutral-800 rounded-lg px-2 py-1 gap-3">
             <div class="flex items-center gap-1.5">
@@ -606,7 +619,7 @@ let generateHidden = ref(false)
             <button
               v-for="(name, i) in BANK_NAMES" :key="name"
               @click="selectBank(i)"
-              @contextmenu.prevent="openMenu($event, { name: 'seq_bank_' + i, label: 'Sequencer: Pattern ' + name })"
+              @contextmenu.prevent="openMenu($event, { name: L('bank_' + i), label: LL('Pattern ' + name) })"
               :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', seqStore.activeBankIndex === i ? 'bg-synth-amber text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
             >
               {{ name }}
@@ -748,7 +761,7 @@ let generateHidden = ref(false)
         <!-- Lock / Vary: the share of the pattern Generate replaces (right-click: MIDI Learn seq_vary) -->
         <div class="ml-auto flex items-center gap-2"
              title="Vary — the share of the pattern Generate replaces: 100 = a new pattern (as before), 25 = a quarter of it, the rest kept (the motif's repeats change together). The Rig's Shift + GEN (Mutate) uses it, or 25 at 100. Right-click: MIDI Learn."
-             @contextmenu.prevent="openMenu($event, { name: 'seq_vary', label: 'Sequencer: Vary' })">
+             @contextmenu.prevent="openMenu($event, { name: L('vary'), label: LL('Vary') })">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Vary</span>
           <div class="flex items-center gap-2 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7">
             <input v-model.number="varyAmount" type="range" min="0" max="100" step="5" class="w-16 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
@@ -764,7 +777,7 @@ let generateHidden = ref(false)
       
       <div class="shrink-0 flex flex-wrap items-center gap-4 p-1 pl-4 border-b border-neutral-900 bg-neutral-900/50">
         <!-- Sequence Length -->
-        <div class="flex items-center gap-2" @contextmenu.prevent="openMenu($event, { name: 'seq_steps', label: 'Sequencer: Steps' })">
+        <div class="flex items-center gap-2" @contextmenu.prevent="openMenu($event, { name: L('steps'), label: LL('Steps') })">
           <span class="text-[12px] font-mono text-neutral-500 uppercase w-[40px]">Length</span>
           <div class="flex items-center bg-black border border-neutral-800 rounded-lg px-2 h-8 gap-2">
             <button @click="reduceLength" class="p-1 text-neutral-500 hover:text-orange-500 transition-colors" title="/2">
@@ -877,7 +890,7 @@ let generateHidden = ref(false)
         <!-- Transport Controls -->
         <div class="flex items-center gap-1">
           <button @click="engine.userTogglePlay()"
-            @contextmenu.prevent="openMenu($event, { name: 'seq_play', label: 'Sequencer: Play' })"
+            @contextmenu.prevent="openMenu($event, { name: L('play'), label: LL('Play') })"
             :class="['flex items-center gap-2 px-4 h-9 rounded-lg font-black uppercase text-[10px] transition-all', isPlaying ? 'bg-amber-500 text-black' : 'bg-neutral-500 text-black']">
             <Square v-if="isPlaying" class="w-3.5 h-3.5 fill-current" />
             <Play v-else class="w-3.5 h-3.5 fill-current" />
@@ -890,7 +903,7 @@ let generateHidden = ref(false)
         </div>
 
         <!-- Tempo Multiplier -->
-          <div class="flex items-center gap-1" @contextmenu.prevent="openMenu($event, { name: 'seq_time', label: 'Sequencer: Time' })">
+          <div class="flex items-center gap-1" @contextmenu.prevent="openMenu($event, { name: L('time'), label: LL('Time') })">
             <span class="text-[12px] text-neutral-500 font-mono">Time</span>
             <select
               v-model="tempoMultiplier"
@@ -921,7 +934,7 @@ let generateHidden = ref(false)
 
           <!-- Direction -->
           <span class="text-[12px] text-neutral-500 font-mono">Direction</span>  
-          <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5" @contextmenu.prevent="openMenu($event, { name: 'seq_direction', label: 'Sequencer: Direction' })">
+          <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5" @contextmenu.prevent="openMenu($event, { name: L('direction'), label: LL('Direction') })">
             <button
               v-for="dir in SEQ_DIRECTIONS"
               :key="dir"
@@ -1199,7 +1212,7 @@ let generateHidden = ref(false)
     </template>
     <!-- Performance: the play view (display only; the Rig plays it) -->
     <template v-else>
-      <PlayPanelHeader title="Sequencer" panel-id="sequencer2" @pointerdown.stop="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
+      <PlayPanelHeader :title="panelTitle" panel-id="sequencer2" @pointerdown.stop="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
         <!-- the active bank's style: what Generate (and the Rig's GEN on the Seq row) writes -->
         <select v-model="selectedStyle" title="Sequencer style (this bank): what Generate (and the Rig's GEN) writes"
                 class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-200 max-w-36 cursor-pointer [color-scheme:dark]"
@@ -1219,7 +1232,7 @@ let generateHidden = ref(false)
             <option v-for="r in [-3, -2, -1, 0, 1, 2, 3]" :key="r" :value="r">{{ r >= 0 ? '+' + r : r }}</option>
           </select>
         </div>
-        <SeqViewSelect />
+        <SeqViewSelect :lane="lane" />
         <button v-if="authStore.user" type="button" @click="openLoadLibraryModal" @pointerdown.stop @mousedown.stop
                 class="p-1 rounded border border-neutral-700 text-amber-300 hover:text-white" title="Load from Library">
           <FolderOpen class="w-3.5 h-3.5" />
@@ -1229,7 +1242,8 @@ let generateHidden = ref(false)
           <FolderPlus class="w-3.5 h-3.5" />
         </button>
       </PlayPanelHeader>
-      <SeqPlayView class="flex-1 overflow-hidden" />
+      <SeqLanesStrip class="shrink-0 px-3 pt-2" />
+      <SeqPlayView :lane="lane" class="flex-1 overflow-hidden" />
     </template>
 
     <!-- the library's modals: on the page, centred on the screen (inside the panel they followed it, and
@@ -1326,6 +1340,7 @@ let generateHidden = ref(false)
                     <span class="text-xs font-bold text-white group-hover:text-synth-neon transition-colors uppercase font-mono truncate">{{ pattern.name }}</span>
                     <span class="text-[8px] font-mono bg-neutral-800 text-neutral-400 px-1 rounded uppercase">{{ pattern.style }}</span>
                     <span v-if="pattern.type === 'all'" class="text-[8px] font-mono bg-cyan-900/60 text-cyan-300 px-1 rounded uppercase">All slots</span>
+                    <span v-if="pattern.lane && pattern.lane !== 'main'" class="text-[8px] font-mono bg-purple-900/60 text-purple-300 px-1 rounded uppercase">{{ pattern.lane }}</span>
                   </div>
                   <div class="flex items-center gap-3 text-[8px] font-mono text-neutral-500 uppercase tracking-wider mt-1">
                     <span v-if="pattern.type === 'all'">Banks: <strong class="text-neutral-300">{{ pattern.banks?.length || 8 }}</strong><template v-if="pattern.chainEnabled"> · chain</template></span>

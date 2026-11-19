@@ -55,6 +55,8 @@ export interface SeqBank {
   varyAmount: number
   /** the Arpeggio style's notes (seq-gen/melody.ts arpDegrees): chord (default), chord7, scale (as before) */
   arpNotes: 'chord' | 'chord7' | 'scale'
+  /** the Arpeggio style's order (arp-patterns.ts ARP_MODES) */
+  arpMode: string
   chordsEnabled: boolean
   maxPolyphony: number
   chordDensity: number
@@ -82,6 +84,7 @@ function makeBank(lane: SeqLane = 'main'): SeqBank {
     melodyMode: 'line',
     varyAmount: 100,
     arpNotes: 'chord',
+    arpMode: 'up',
     chordsEnabled: false,
     maxPolyphony: 4,
     chordDensity: 4,
@@ -166,6 +169,7 @@ function migrateFromOldState(): SeqBank[] | null {
         melodyMode: old.melodyMode ?? 'line',
         varyAmount: old.varyAmount ?? 100,
         arpNotes: old.arpNotes ?? 'chord',
+        arpMode: old.arpMode ?? 'up',
         chordsEnabled: old.chordsEnabled ?? false,
         maxPolyphony: old.maxPolyphony ?? 4,
         chordDensity: old.chordDensity ?? 4,
@@ -192,6 +196,8 @@ const laneSetup = (lane: SeqLane) => () => {
   )
   /** the lane's MIDI channel: 0 = the global one (MIDI Flow's remaps apply), 1–16 = that channel as is */
   const midiChannel = ref(loadChannel(lane))
+  /** the lane muted (M): it plays on (its playhead, follow, bank switches), its notes don't go out — not saved */
+  const muted = ref(false)
   watch(midiChannel, v => {
     const c = clampLaneChannel(v)
     if (c !== v) { midiChannel.value = c; return }
@@ -379,6 +385,7 @@ const laneSetup = (lane: SeqLane) => () => {
     if (cfg.melodyMode !== undefined) bank.melodyMode = cfg.melodyMode
     if (cfg.varyAmount !== undefined) bank.varyAmount = cfg.varyAmount
     if (cfg.arpNotes !== undefined) bank.arpNotes = cfg.arpNotes
+    if (cfg.arpMode !== undefined) bank.arpMode = cfg.arpMode
     if (cfg.chordsEnabled !== undefined) bank.chordsEnabled = cfg.chordsEnabled
     if (cfg.maxPolyphony !== undefined) bank.maxPolyphony = cfg.maxPolyphony
     if (cfg.chordDensity !== undefined) bank.chordDensity = cfg.chordDensity
@@ -454,6 +461,7 @@ const laneSetup = (lane: SeqLane) => () => {
   return {
     lane,
     midiChannel,
+    muted,
     banks,
     activeBankIndex,
     activeBank,

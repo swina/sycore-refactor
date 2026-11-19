@@ -10,6 +10,9 @@ import { MidiSource } from '@/core/midi/midi-service'
 export const MIDI_APPS = [
   { name: 'Step Sequencer',    sourceId: MidiSource.SEQUENCER,  icon: ListMusic,    hasIn: true },
   { name: 'Sequencer',         sourceId: MidiSource.SEQUENCER2, icon: Rows3,        hasIn: true },
+  // the Sequencer's Bass / Arp lanes (lib/seq-lanes.ts): their own OUT; IN — a lane also follows the Sequencer's IN
+  { name: 'Seq Bass',          sourceId: MidiSource.SEQ_BASS,   icon: Rows3,        hasIn: true },
+  { name: 'Seq Arp',           sourceId: MidiSource.SEQ_ARP,    icon: Rows3,        hasIn: true },
   { name: 'Chord Sequencer',   sourceId: MidiSource.CHORD_PROG, icon: Music2,       hasIn: true },
   { name: 'Virtual Keyboard',  sourceId: MidiSource.KEYBOARD,   icon: KeyboardIcon, hasIn: true },
   { name: 'Arpeggiator',       sourceId: MidiSource.ARP,        icon: Music,        hasIn: true },
@@ -28,6 +31,8 @@ export const MIDI_APPS = [
 export const APP_PANEL_ID = {
   [MidiSource.SEQUENCER]:    'sequencer',
   [MidiSource.SEQUENCER2]:   'sequencer2',
+  [MidiSource.SEQ_BASS]:     'sequencer2',
+  [MidiSource.SEQ_ARP]:      'sequencer2',
   [MidiSource.CHORD_PROG]:   'chord-prog',
   [MidiSource.KEYBOARD]:     'keyboard',
   [MidiSource.ARP]:          'arp',

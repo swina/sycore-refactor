@@ -51,6 +51,7 @@ import AudioVisualizer from '@/components/AudioVisualizer.vue'
 import StepSequencer from '@/components/StepSequencer.vue'
 import { STEP_SEQUENCER_ENABLED } from '@/constants/features'
 import Sequencer from '@/components/Sequencer.vue'
+import { seqActiveLane } from '@/lib/seq-lanes'
 import ChordProgSequencer from '@/components/ChordProgSequencer.vue'
 import PresetHistoryPanel from '@/components/PresetHistoryPanel.vue'
 import MidiLoggerPanel from '@/components/MidiLoggerPanel.vue'
@@ -551,8 +552,11 @@ onMounted(() => {
            it persists purely via its own local autosave + Save/Load Library. -->
       <div :style="focusStyle('sequencer2')">
         <!-- Mounted only while open: its engine (core/engines/sequencer.js) plays without it -->
+        <!-- one lane at a time (lib/seq-lanes.ts: Main / Bass / Arp), mounted per lane -->
         <Sequencer
           v-if="uiStore.isSequencer2Open"
+          :key="seqActiveLane"
+          :lane="seqActiveLane"
           :isOpen="uiStore.isSequencer2Open"
           :bpm="midiStore.currentBpm || 120"
           :channel="midiStore.midiChannel"
