@@ -1,8 +1,9 @@
 <script setup>
 // The Sequencer's three lanes at a glance (lib/seq-lanes.ts), over its play view: each lane's name (a
 // click shows it in the panel), its bank, Play / Stop, M (mute: it plays on silent), its MIDI channel
-// (G = the global one, with MIDI Flow's remaps; 1–16 = that channel as is) and its first 16 steps with
-// the one sounding lit. Right-click: MIDI Learn (play, mute).
+// (G = the global one, with MIDI Flow's remaps; 1–16 = that channel as is), S (SYNC: a start waits for the
+// next bar — ▶ blinks while it waits; off: now) and its first 16 steps with the one sounding lit.
+// Right-click: MIDI Learn (play, mute).
 import { computed } from 'vue'
 import { useSequencerEngine } from '@/core/engines/sequencer'
 import { useSeqLaneStore } from '@/stores/useStepSequencerStore'
@@ -35,7 +36,7 @@ const active = computed(() => seqActiveLane.value)
         <span class="text-neutral-400 font-bold" :title="`${r.cfg.label}: bank ${bank(r)}`">{{ bank(r) }}</span>
         <span class="flex-1" />
         <button type="button" data-lane-play class="w-5 h-5 rounded border text-[9px] leading-none"
-                :class="r.eng.isPlaying.value ? `${r.c.on} text-black border-transparent` : 'border-neutral-700 text-neutral-400 hover:text-white'"
+                :class="[r.eng.isPlaying.value ? `${r.c.on} text-black border-transparent` : 'border-neutral-700 text-neutral-400 hover:text-white', r.eng.startPending.value ? 'animate-pulse' : '']"
                 :title="`${r.cfg.label}: ${r.eng.isPlaying.value ? 'Stop' : 'Play'} · right-click: MIDI Learn`"
                 @click="togglePlay(r)"
                 @contextmenu.prevent="openMenu($event, { name: learnName(r.lane, 'play'), label: learnLabel(r.lane, 'Play') })">{{ r.eng.isPlaying.value ? '■' : '▶' }}</button>
@@ -44,6 +45,10 @@ const active = computed(() => seqActiveLane.value)
                 :title="`${r.cfg.label}: Mute (it plays on, silent) · right-click: MIDI Learn`"
                 @click="r.eng.laneMuted.value = !r.eng.laneMuted.value"
                 @contextmenu.prevent="openMenu($event, { name: learnName(r.lane, 'mute'), label: learnLabel(r.lane, 'Mute') })">M</button>
+        <button type="button" data-lane-sync class="w-5 h-5 rounded border text-[9px] font-black leading-none"
+                :class="r.eng.laneSync.value ? 'border-emerald-500/60 text-emerald-300 bg-emerald-500/10' : 'border-neutral-700 text-neutral-500 hover:text-white'"
+                :title="`${r.cfg.label}: SYNC ${r.eng.laneSync.value ? 'ON — a start waits for the next bar (▶ blinks)' : 'OFF — a start plays now'} · a Rig pad keeps its Trigger sync`"
+                @click="r.eng.laneSync.value = !r.eng.laneSync.value">S</button>
         <select data-lane-ch :value="r.eng.laneChannel.value"
                 class="bg-neutral-900 border border-neutral-700 rounded px-0.5 h-5 text-[9px] text-neutral-300 cursor-pointer [color-scheme:dark]"
                 :title="`${r.cfg.label}: MIDI channel — G: the global one (MIDI Flow's remaps apply) · 1–16: sent on that channel as is`"

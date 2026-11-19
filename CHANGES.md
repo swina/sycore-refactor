@@ -4,6 +4,17 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-20
 
+- **Sequencer lanes: SYNC per lane; Stop stops Bass and Arp** —
+  - **Stop** (the transport's Stop All, the Rig's Stop) now also stops the Bass and Arp lanes. Before, it only stopped Chord, Drum and Main.
+  - **SYNC**: new **S** button per lane (Main, Bass, Arp) in the lanes strip, saved per lane, on by default.
+    - **On**: a start (▶, the panel's Play, MIDI Learn) waits for the next bar line, Live's when following it or the transport's when it runs, and ▶ blinks while it waits.
+    - **Off**: it starts now; with Live following, in phase with the bar playing.
+    - A Rig pad keeps its own Trigger sync.
+    - Play All (Live's Start) starts the Sequencer in phase, without waiting a bar.
+  - **Drum Machine**: its existing **Start@bar** (the same option) now also works on the internal clock, at the transport's next bar when it runs. Before, it only waited on Live's grid.
+
+  Files: `core/engines/sequencer.js`, `drum-machine.js`, `stores/useStepSequencerStore.ts`, `SeqLanesStrip.vue`, `useGlobalTransportControls.js`; tests: `sequencer-lanes.test.ts`. Branch: `feat/sequencer-lanes`
+
 - **Sequencer lanes, phase 5: the Rig's Bass and Arp rows drive the Bass / Arp lanes** (plan: `docs/plans/sequencer-lanes.md`). They work like the Seq row:
   - pads A–H are the lane's banks, switching at the end of the pattern;
   - armed with Live stopped, they start on Live's Play; Live's Stop stops them and keeps them armed;

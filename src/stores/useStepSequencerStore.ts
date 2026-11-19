@@ -96,6 +96,8 @@ const BANKS_KEY = 'SYCORE_STEP_SEQ_BANKS'
 const CHAIN_KEY = 'SYCORE_STEP_SEQ_CHAIN'
 /** the lane's MIDI channel (0 = global, 1–16): per lane, not per bank — a lane is an instrument */
 const CHANNEL_KEY = 'SYCORE_STEP_SEQ_CHANNEL'
+/** SYNC: a start waits for the next bar (on) or plays now (off) — per lane */
+const SYNC_KEY = 'SYCORE_STEP_SEQ_SYNC'
 
 function loadString(key: string): string | null {
   try {
@@ -196,6 +198,10 @@ const laneSetup = (lane: SeqLane) => () => {
   )
   /** the lane's MIDI channel: 0 = the global one (MIDI Flow's remaps apply), 1–16 = that channel as is */
   const midiChannel = ref(loadChannel(lane))
+  /** SYNC (on by default): a start (Play, ▶, Play All…) waits for the next bar line — Live's (CLK SYS following
+   *  it) or the transport's when it runs; off: it starts now. A Rig pad keeps its own Trigger sync. */
+  const syncStart = ref((() => { const r = loadString(SYNC_KEY + sfx); return r === null ? true : r !== 'false' })())
+  watch(syncStart, v => saveString(SYNC_KEY + sfx, !!v))
   /** the lane muted (M): it plays on (its playhead, follow, bank switches), its notes don't go out — not saved */
   const muted = ref(false)
   watch(midiChannel, v => {
@@ -461,6 +467,7 @@ const laneSetup = (lane: SeqLane) => () => {
   return {
     lane,
     midiChannel,
+    syncStart,
     muted,
     banks,
     activeBankIndex,

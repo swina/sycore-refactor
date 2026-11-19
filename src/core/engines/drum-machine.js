@@ -345,10 +345,11 @@ function createDrumMachineEngine() {
       _startSteps = 0
       const t = bar != null ? externalGrid.timeOf(bar) : null
       if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
-    } else if (transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value) {
-      // INT, with other apps on the Tone.js transport: their next bar line.
+    } else if (transportManager.isRunning.value && (syncStore.syncDrumMachineToTransport.value || _startSteps >= 16)) {
+      // INT, with other apps on the Tone.js transport: their next bar line (synced to it, or Start@bar).
       startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
     }
+    _startSteps = 0
     _sysSched = new StepScheduler((_step, t, late) => {
       _silentStep = late
       try { _scheduleCallback(perfMsToAudioTime(t)) } finally { _silentStep = false }
@@ -672,7 +673,9 @@ function createDrumMachineEngine() {
       getTransport().bpm.value = drumStore.bpm
       playStateRef.current = buildPlayState()
 
-      repeatEventIdRef = getTransport().scheduleRepeat(_scheduleCallback, '16n', transportManager.isRunning.value && syncStore.syncDrumMachineToTransport.value ? transportManager.getNextBarPosition() : undefined)
+      const atBar = transportManager.isRunning.value && (syncStore.syncDrumMachineToTransport.value || _startSteps >= 16)
+      _startSteps = 0
+      repeatEventIdRef = getTransport().scheduleRepeat(_scheduleCallback, '16n', atBar ? transportManager.getNextBarPosition() : undefined)
       transportManager.acquireTransport()
     })
   })

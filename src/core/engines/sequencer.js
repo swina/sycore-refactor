@@ -202,6 +202,9 @@ function createSequencerEngine(lane = 'main') {
   const channel = () => (seqStore.midiChannel >= 1 ? seqStore.midiChannel : midiStore.midiChannel)
   const chOpts = (o) => (seqStore.midiChannel >= 1 ? { ...(o ?? {}), exactChannel: true } : o)
   const laneChannel = computed({ get: () => seqStore.midiChannel, set: (v) => { seqStore.midiChannel = v } })
+  // SYNC (seqStore.syncStart): a start waits for the next bar; startPending: started, its first step not yet played
+  const laneSync = computed({ get: () => seqStore.syncStart, set: (v) => { seqStore.syncStart = !!v } })
+  const startPending = ref(false)
   // M (the lane's mute): its notes and P1 / P2 don't go out; it plays on
   const laneMuted = computed({ get: () => seqStore.muted, set: (v) => { seqStore.muted = !!v } })
   const _onMuteSet = (e) => { const d = e.detail ?? {}; laneMuted.value = d.fromNote || d.value == null ? !laneMuted.value : d.value >= 64 }
@@ -615,7 +618,8 @@ function createSequencerEngine(lane = 'main') {
       }
       const t = bar != null ? externalGrid.timeOf(bar) : null
       if (t != null) { startMs = t; startBpm = externalGrid.bpm || startBpm; _sysStartSixteenth = bar }
-    } else if (transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value) {
+    } else if (transportManager.isRunning.value && ((isMain && syncStore.syncSequencer2ToTransport.value) || _seqStartSteps >= 16)) {
+      // INT, with other apps on the Tone.js transport: their next bar line (SYNC on, or synced to the transport)
       startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
     }
     _seqStartSteps = 0
@@ -1078,8 +1082,12 @@ function createSequencerEngine(lane = 'main') {
       }
       return
     }
-    isPlaying.value = play === undefined ? !isPlaying.value : play
+    const next = play === undefined ? !isPlaying.value : play
+    if (next && !isPlaying.value) _armStartSync()
+    isPlaying.value = next
   }
+  /** A start not from a Rig pad: SYNC on — from the next bar line; off — now. */
+  function _armStartSync() { _seqStartSteps = seqStore.syncStart ? 16 : 0 }
   window.addEventListener(cfg.toggle, handleToggle2)
 
   const handleBankSelect = (e) => {
@@ -1199,6 +1207,7 @@ function createSequencerEngine(lane = 'main') {
   /** Play / Stop by the user (the panel's button): a Stop holds it off the auto-start. */
   function userTogglePlay() {
     _heldOff = isPlaying.value
+    if (!isPlaying.value) _armStartSync()
     isPlaying.value = !isPlaying.value
   }
   // Decoupled from the Chord Prog (uiStore.seqDecoupled, the Rig's Seq Free pad): its notes, its stop
@@ -1497,6 +1506,7 @@ function createSequencerEngine(lane = 'main') {
       }
     }
 
+    startPending.value = playing
     if (!playing) {
       _stopSystemClock()
       _seqStartSteps = 0
@@ -1559,6 +1569,7 @@ function createSequencerEngine(lane = 'main') {
         stepCallback = (time, tMs, late = false) => {
           const state = playStateRef.current
           if (!state.isPlaying) return
+          if (startPending.value) startPending.value = false // once per start: the first step is here
           // A Rig pad's stop: on its sync point of the song grid; the notes still sounding end there.
           if (_seqStopSteps && tMs != null) {
             const songPos = _sysStartSixteenth + _sysStep * (tempoMultiplier.value?.beatsPerStep ?? 0.25) * 4
@@ -1726,7 +1737,9 @@ function createSequencerEngine(lane = 'main') {
           transportManager.acquireTransport()
           return
         }
-        repeatEventIdRef.value = getTransport().scheduleRepeat(stepCallback, tempoMultiplier.value.interval, transportManager.isRunning.value && syncStore.syncSequencer2ToTransport.value ? transportManager.getNextBarPosition() : undefined)
+        const atBar = transportManager.isRunning.value && ((isMain && syncStore.syncSequencer2ToTransport.value) || _seqStartSteps >= 16)
+        _seqStartSteps = 0
+        repeatEventIdRef.value = getTransport().scheduleRepeat(stepCallback, tempoMultiplier.value.interval, atBar ? transportManager.getNextBarPosition() : undefined)
 
         transportManager.acquireTransport()
       })
@@ -1787,7 +1800,7 @@ function createSequencerEngine(lane = 'main') {
 
   return {
     // the lane (lib/seq-lanes.ts) and its MIDI channel (0 = global, 1–16)
-    lane, laneChannel, laneMuted,
+    lane, laneChannel, laneMuted, laneSync, startPending,
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, progKey, chordsEnabled, maxPolyphony, chordDensity,
     isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,

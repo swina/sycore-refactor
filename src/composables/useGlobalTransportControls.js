@@ -7,7 +7,8 @@
  * Per-app start delays (in beats) are read from syncStore.appDelays.
  * The delay is calculated as: delayBeats * (60 / bpm) * 1000 ms.
  */
-import { rigTransport, LIVE_APPS, stopEvents, dispatchRig } from '@/lib/rig-live'
+import { rigTransport, stopRows, stopEvents, dispatchRig } from '@/lib/rig-live'
+import { SEQ_LANE_CFG } from '@/lib/seq-lanes'
 import { countIn, startCountIn, cancelCountIn } from '@/lib/count-in'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -65,7 +66,8 @@ export function useGlobalTransportControls() {
     const rig = rigTransport.live
     if (syncStore.syncSequencer2ToTransport && !rig) {
       scheduleStart(syncStore.appDelays['Sequencer'] ?? 0, () =>
-        window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } })))
+        // sync 0: on the transport's start, in phase with the bar playing (its SYNC is for a start on its own)
+        window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true, sync: 0 } })))
     }
     if (syncStore.syncChordProgToTransport && !rig) {
       scheduleStart(syncStore.appDelays['Chord Prog'] ?? 0, () =>
@@ -116,7 +118,9 @@ export function useGlobalTransportControls() {
     }
     // Rig Controller in LIVE: its armed slots started Chord Prog, Drum Machine and Sequencer
     // whatever their sync flag (startAll skips them) — Stop All stops them too.
-    if (rigTransport.live) for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
+    if (rigTransport.live) for (const id of stopRows()) for (const ev of stopEvents(id)) dispatchRig(ev)
+    // the Sequencer's Bass / Arp lanes: no transport sync of their own — a Stop All stops them
+    for (const lane of ['bass', 'arp']) window.dispatchEvent(new CustomEvent(SEQ_LANE_CFG[lane].toggle, { detail: { play: false } }))
     transportManager.forceStopAll()
   }
 

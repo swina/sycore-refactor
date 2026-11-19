@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 // Tone.js without an AudioContext: a transport whose repeats we fire by hand.
 const repeats: Array<(time: number) => void> = []
+const starts: Array<string | undefined> = [] // each repeat's start position (undefined: now)
 vi.mock('tone', () => {
   const transport = {
     bpm: { value: 120 }, swing: 0, swingSubdivision: '16n', ticks: 0, position: '0:0:0',
-    scheduleRepeat: (cb: (t: number) => void) => { repeats.push(cb); return repeats.length },
+    scheduleRepeat: (cb: (t: number) => void, _i: string, at?: string) => { repeats.push(cb); starts.push(at); return repeats.length },
     clear: () => {}, toTicks: () => 48, nextSubdivision: () => 0, start: () => {}, stop: () => {}, pause: () => {}, cancel: () => {}, state: 'stopped',
   }
   return { getTransport: () => transport, start: () => Promise.resolve(), getContext: () => ({ currentTime: 0 }) }
@@ -22,6 +23,8 @@ import { seqLanePlaying, seqLaneQueued, parseLaneLearn, laneEvent } from '@/lib/
 import { rigLaneRows } from '@/lib/rig-live'
 import { rigDensity } from '@/lib/rig-density'
 import { applyParamValue } from '@/composables/useMidiCCListener'
+import { useTransportManager } from '@/composables/useTransportManager'
+import { useGlobalTransportControls } from '@/composables/useGlobalTransportControls'
 
 type Sent = { note: number; ch: number | null; src: string; opts: any }
 function setup() {
@@ -45,7 +48,7 @@ const stubs = () => ({ lfoStore: {}, mappingStore: {}, uiStore: {}, presetStore:
 const flush = async () => { await nextTick(); await Promise.resolve(); await Promise.resolve() }
 
 describe('Sequencer lanes (Main / Bass / Arp)', () => {
-  beforeEach(() => { localStorage.clear(); repeats.length = 0; vi.useFakeTimers() })
+  beforeEach(() => { localStorage.clear(); repeats.length = 0; starts.length = 0; vi.useFakeTimers() })
   afterEach(() => { _resetSequencerEngine(); vi.useRealTimers(); vi.restoreAllMocks() })
 
   it('each lane is its own engine and banks store; Main keeps its ids', async () => {
@@ -160,5 +163,41 @@ describe('Sequencer lanes (Main / Bass / Arp)', () => {
     expect(seqLaneQueued.bass).toBeNull()
     Object.assign(rigDensity, { active: false, bass: 127 })
     rigLaneRows.bass = true
+  })
+
+  it('SYNC: on (default) a start waits for the transport\'s next bar, off it starts now; Play All in phase', async () => {
+    const { bass } = setup()
+    const tm = useTransportManager()
+    tm.acquireTransport() // another app playing: the transport runs
+    expect(bass.laneSync.value).toBe(true)
+    window.dispatchEvent(new CustomEvent('toggle-seq-bass', { detail: { play: true } }))
+    await flush()
+    expect(starts.at(-1)).toBeDefined() // the next bar
+    expect(bass.startPending.value).toBe(true)
+    repeats.at(-1)!(0)
+    expect(bass.startPending.value).toBe(false)
+    window.dispatchEvent(new CustomEvent('toggle-seq-bass', { detail: { play: false } }))
+    await flush()
+    bass.laneSync.value = false
+    window.dispatchEvent(new CustomEvent('toggle-seq-bass', { detail: { play: true } }))
+    await flush()
+    expect(starts.at(-1)).toBeUndefined() // now
+    tm.forceStopAll()
+    setActivePinia(createPinia()) // saved per lane
+    expect(useSeqLaneStore('bass').syncStart).toBe(false)
+    expect(useSeqLaneStore('arp').syncStart).toBe(true)
+  })
+
+  it('Stop All stops the Bass and Arp lanes too', async () => {
+    const { bass } = setup()
+    const arp = useSequencerEngine('arp')
+    window.dispatchEvent(new CustomEvent('toggle-seq-bass', { detail: { play: true } }))
+    window.dispatchEvent(new CustomEvent('toggle-seq-arp', { detail: { play: true } }))
+    await flush()
+    expect(bass.isPlaying.value && arp.isPlaying.value).toBe(true)
+    useGlobalTransportControls().stopAll()
+    await flush()
+    expect(bass.isPlaying.value).toBe(false)
+    expect(arp.isPlaying.value).toBe(false)
   })
 })
