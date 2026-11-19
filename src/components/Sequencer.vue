@@ -3,6 +3,7 @@ import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import SeqPlayView from '@/components/play/SeqPlayView.vue'
+import SeqViewSelect from '@/components/play/SeqViewSelect.vue'
 import { usePlayView } from '@/composables/usePlayView'
 // Performance: a play view (banks, pattern) instead of the panel; EDIT: the panel.
 const { play } = usePlayView('sequencer2')
@@ -16,13 +17,14 @@ import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUiStore } from '@/stores/useUiStore'
 import SeqMapModal from '@/components/SeqMapModal.vue'
+import { useSeqDeviceParamsStore } from '@/stores/useSeqDeviceParamsStore'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { useLinkStore } from '@/stores/useLinkStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import AiPromptModal from './AiPromptModal.vue'
-import { useSequencerEngine, DEFAULT_STEP, NOTE_NAMES, GRID_SEMITONES, STYLES, SCALES } from '@/core/engines/sequencer'
+import { useSequencerEngine, DEFAULT_STEP, NOTE_NAMES, GRID_SEMITONES, STYLES, SCALES, OWN_GEN_STYLES } from '@/core/engines/sequencer'
 
 defineOptions({ inheritAttrs: false })
 
@@ -130,7 +132,8 @@ function setTransportPosition(text) {
 
 function openSaveLibraryModal() {
   if (!authStore.user) return
-  libraryPatternName.value = `${props.currentSoundName || 'Pattern'}`
+  // suggested name: [style]-[oct]-[steps], e.g. Berlin School-2-16
+  libraryPatternName.value = `${selectedStyle.value || 'Pattern'}-${selectedOctave.value}-${numSteps.value}`
   showSaveLibraryModal.value = true
 }
 
@@ -395,7 +398,8 @@ const liveMap = useLiveMapStore()
 const linkStore = useLinkStore()
 const showSeqMap = computed(() => linkStore.connected || liveMap.seqRoutes.length > 0)
 const seqMapOpen = ref(false)
-const seqMapCount = computed(() => liveMap.seqRoutes.filter(r => r.p1 !== null || r.p2 !== null).length)
+const seqDevParams = useSeqDeviceParamsStore()
+const seqMapCount = computed(() => liveMap.seqRoutes.filter(r => r.p1 !== null || r.p2 !== null).length + seqDevParams.count)
 
 const allS1Params = computed(() => {
   return Object.entries(S1_CC_MAP)
@@ -693,7 +697,7 @@ let generateHidden = ref(false)
           </div>
         </div>
 
-        <div v-if="selectedStyle !== 'Arpeggio'" class="flex items-center gap-2">
+        <div v-if="!OWN_GEN_STYLES.includes(selectedStyle)" class="flex items-center gap-2">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Density</span>
           <div class="flex items-center gap-3 bg-black/40 border border-neutral-800 rounded-lg px-2 h-7">
             <input v-model.number="genDensity" type="range" min="0" max="100" class="w-24 h-1 accent-synth-amber bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
@@ -702,7 +706,7 @@ let generateHidden = ref(false)
         </div>
 
         <!-- Generate's pitches (melodic mode): a motif and a melodic walk, or each step its own -->
-        <div v-if="selectedStyle !== 'Arpeggio' && !chordsEnabled" class="flex items-center gap-2"
+        <div v-if="!OWN_GEN_STYLES.includes(selectedStyle) && !chordsEnabled" class="flex items-center gap-2"
              title="Melody — Line: a motif (half a bar at 16 steps, a bar at 32+) repeated with a variant, mostly by step, the tonic chord's notes on the strong steps, ending on the tonic (following the Chord Prog moves them onto each chord). Classic: a random note of the scale on each step (as before).">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Melody</span>
           <div class="flex rounded-lg border border-neutral-800 overflow-hidden">
@@ -713,7 +717,7 @@ let generateHidden = ref(false)
         </div>
 
         <!-- Generate's rhythm (melodic mode): which steps play -->
-        <div v-if="selectedStyle !== 'Arpeggio' && !chordsEnabled" class="flex items-center gap-2"
+        <div v-if="!OWN_GEN_STYLES.includes(selectedStyle) && !chordsEnabled" class="flex items-center gap-2"
              title="Rhythm — which steps Generate fills. Weighted: the strong steps first (the bar's 1, the beats), the style's accents, Sync moves them to the weak steps. Euclid: Density's onsets spread evenly, Rot turns them. Random: any step (as before).">
           <span class="text-[12px] font-mono text-neutral-500 uppercase">Rhythm</span>
           <div class="flex rounded-lg border border-neutral-800 overflow-hidden">
@@ -859,7 +863,7 @@ let generateHidden = ref(false)
           <div class="w-px h-5 bg-neutral-800 mx-1" />
           <button type="button" class="px-1.5 h-6 rounded border text-[10px] font-mono uppercase"
                   :class="liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? 'border-amber-500/60 text-amber-400' : seqMapCount ? 'border-emerald-500/50 text-emerald-300' : 'border-neutral-800 text-neutral-400 hover:text-white'"
-                  :title="liveMap.seqParamsHint || 'P1 / P2 → Map slots, a route per track in Live'"
+                  :title="liveMap.seqParamsHint || 'P1 / P2 → Map slots, a route per track in Live · a CC per MIDI Flow device'"
                   @click="seqMapOpen = true">→ Map{{ seqMapCount ? ` · ${seqMapCount}` : '' }}{{ liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? ' ⚠' : '' }}</button>
           <span v-if="liveMap.seqParamsHint" class="w-full text-[10px] text-amber-400">{{ liveMap.seqParamsHint }}</span>
           <SeqMapModal v-if="seqMapOpen" @close="seqMapOpen = false" />
@@ -1191,9 +1195,49 @@ let generateHidden = ref(false)
         </div>
       </div>
 
+    </div>
+    </template>
+    <!-- Performance: the play view (display only; the Rig plays it) -->
+    <template v-else>
+      <PlayPanelHeader title="Sequencer" panel-id="sequencer2" @pointerdown.stop="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
+        <!-- the active bank's style: what Generate (and the Rig's GEN on the Seq row) writes -->
+        <select v-model="selectedStyle" title="Sequencer style (this bank): what Generate (and the Rig's GEN) writes"
+                class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-200 max-w-36 cursor-pointer [color-scheme:dark]"
+                @pointerdown.stop @mousedown.stop>
+          <option v-for="style in Object.keys(STYLES)" :key="style" :value="style">{{ style }}</option>
+        </select>
+        <!-- Oct / Range: where Generate writes the pattern and the octaves it spans from there -->
+        <div class="flex items-center gap-0.5" title="Octave: where Generate writes the pattern · Range: the octaves it spans from there (− below, + above)"
+             @pointerdown.stop @mousedown.stop>
+          <span class="text-[9px] font-mono text-neutral-500 uppercase">Oct</span>
+          <select v-model="selectedOctave"
+                  class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-[10px] font-bold text-amber-200 cursor-pointer [color-scheme:dark]">
+            <option v-for="o in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="o" :value="o">{{ o }}</option>
+          </select>
+          <select v-model="octaveRange"
+                  class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-[10px] font-bold text-amber-200 cursor-pointer [color-scheme:dark]">
+            <option v-for="r in [-3, -2, -1, 0, 1, 2, 3]" :key="r" :value="r">{{ r >= 0 ? '+' + r : r }}</option>
+          </select>
+        </div>
+        <SeqViewSelect />
+        <button v-if="authStore.user" type="button" @click="openLoadLibraryModal" @pointerdown.stop @mousedown.stop
+                class="p-1 rounded border border-neutral-700 text-amber-300 hover:text-white" title="Load from Library">
+          <FolderOpen class="w-3.5 h-3.5" />
+        </button>
+        <button v-if="authStore.user" type="button" @click="openSaveLibraryModal" @pointerdown.stop @mousedown.stop
+                class="p-1 rounded border border-neutral-700 text-amber-300 hover:text-white" title="Save to Library">
+          <FolderPlus class="w-3.5 h-3.5" />
+        </button>
+      </PlayPanelHeader>
+      <SeqPlayView class="flex-1 overflow-hidden" />
+    </template>
+
+    <!-- the library's modals: on the page, centred on the screen (inside the panel they followed it, and
+         a small Performance panel near the edge put them off screen) -->
+    <Teleport to="body">
       <!-- ── SAVE PATTERN TO LIBRARY MODAL ── -->
       <Transition name="fade">
-        <div v-if="showSaveLibraryModal" class="absolute inset-0 bg-black/85 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+        <div v-if="showSaveLibraryModal" class="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4" @mousedown.stop @pointerdown.stop>
           <div class="bg-neutral-950 border border-synth-neon/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative overflow-hidden flex flex-col items-center text-center gap-4">
             <!-- Neon pulsing top stripe -->
             <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 via-synth-neon to-emerald-500 animate-pulse" />
@@ -1239,7 +1283,7 @@ let generateHidden = ref(false)
 
       <!-- ── LOAD PATTERN FROM LIBRARY MODAL ── -->
       <Transition name="fade">
-        <div v-if="showLoadLibraryModal" class="absolute inset-0 bg-black/85 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+        <div v-if="showLoadLibraryModal" class="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4" @mousedown.stop @pointerdown.stop>
           <div class="bg-neutral-950 border border-synth-neon/30 rounded-xl max-w-lg w-full h-[360px] p-6 shadow-2xl relative overflow-hidden flex flex-col gap-4">
             <!-- Neon pulsing top stripe -->
             <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 via-synth-neon to-emerald-500 animate-pulse" />
@@ -1304,20 +1348,7 @@ let generateHidden = ref(false)
           </div>
         </div>
       </Transition>
-    </div>
-    </template>
-    <!-- Performance: the play view (display only; the Rig plays it) -->
-    <template v-else>
-      <PlayPanelHeader title="Sequencer" panel-id="sequencer2" @pointerdown.stop="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
-        <!-- the active bank's style: what Generate (and the Rig's GEN on the Seq row) writes -->
-        <select v-model="selectedStyle" title="Sequencer style (this bank): what Generate (and the Rig's GEN) writes"
-                class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-200 max-w-36 cursor-pointer [color-scheme:dark]"
-                @pointerdown.stop @mousedown.stop>
-          <option v-for="style in Object.keys(STYLES)" :key="style" :value="style">{{ style }}</option>
-        </select>
-      </PlayPanelHeader>
-      <SeqPlayView class="flex-1 overflow-hidden" />
-    </template>
+    </Teleport>
 
     <!-- AI Prompt -->
     <AiPromptModal

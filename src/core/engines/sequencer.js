@@ -39,9 +39,12 @@ import { rigReports } from '@/lib/rig-live'
 import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
 import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
+import { berlinLine, sweepShape } from '@/lib/seq-gen/berlin'
 import { mixSteps, mutateAmount, varyFromMidi } from '@/lib/seq-gen/mutate'
 import { paramValue } from '@/lib/seq-gen/params'
 import { detectKey } from '@/lib/chord-key'
+import { paramTargets, hasDeviceRoutes } from '@/lib/seq-device-params'
+import { useSeqDeviceParamsStore } from '@/stores/useSeqDeviceParamsStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 
 export const DEFAULT_STEP = {
@@ -82,7 +85,11 @@ export const STYLES = {
   Rock: { steps: 16, density: 0.60, octaves: [2, 4], velMin: 90, velMax: 127, gateMin: 35, gateMax: 65, accentGrid: [true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false] },
   Electronic: { steps: 16, density: 0.50, octaves: [3, 4], velMin: 85, velMax: 115, gateMin: 30, gateMax: 60, accentGrid: [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false] },
   Arpeggio: { steps: 16, density: 1, octaves: [4, 5], velMin: 90, velMax: 110, gateMin: 60, gateMax: 80 },
+  // every step, short notes, a root pedal under a repeated cell (seq-gen/berlin.ts)
+  'Berlin School': { steps: 16, density: 1, octaves: [2, 3], velMin: 88, velMax: 102, gateMin: 35, gateMax: 50 },
 }
+/** Styles with their own generator: Density, Melody, Rhythm and chords don't apply. */
+export const OWN_GEN_STYLES = ['Arpeggio', 'Berlin School']
 
 export const SCALES = {
   'Major': [0, 2, 4, 5, 7, 9, 11],
@@ -244,6 +251,20 @@ function createSequencerEngine() {
   let _cpRootPc = null
   const _onChordOn = (e) => { _cpRootPc = typeof e.detail?.rootPc === 'number' ? e.detail.rootPc : null }
   window.addEventListener('cp-chord-on', _onChordOn)
+  // P1 / P2 out: the Sequencer's CC to every cable, or — a MIDI Flow device with a route of its own
+  // (useSeqDeviceParamsStore, set in the → Map modal) — that device's CC to it, the CC to the rest.
+  const deviceParams = useSeqDeviceParamsStore()
+  function sendParam(which, cc, value, ch) {
+    const cabled = midiService.getCableTargets(MidiSource.SEQUENCER2)
+    if (!hasDeviceRoutes(cabled, deviceParams.routes)) {
+      midiStore.sendCC(cc, value, ch, MidiSource.SEQUENCER2)
+      return
+    }
+    const ch0 = (ch ?? midiStore.midiChannel) - 1
+    const { plain, own } = paramTargets(cabled, deviceParams.routes, which)
+    if (plain.length) midiService.sendCC(cc, value, ch0, MidiSource.SEQUENCER2, null, { onlyTargets: plain })
+    for (const o of own) midiService.sendCC(o.cc, value, ch0, MidiSource.SEQUENCER2, null, { onlyTargets: [o.device] })
+  }
   const keyPc = () => Math.max(0, NOTE_NAMES.indexOf(selectedKey.value))
   const scaleNow = () => SCALES[selectedScale.value] ?? SCALES['Major']
   /** A note received moves the pattern: by scale degree (default) or by semitones (as before). */
@@ -716,7 +737,7 @@ function createSequencerEngine() {
     const before = steps.value.map(st => ({ ...st, notes: [...(st.notes ?? [])] }))
     _generateFresh()
     if (amount < 100 && before.length === steps.value.length) {
-      const motifLen = melodyMode.value !== 'classic' && !chordsEnabled.value && selectedStyle.value !== 'Arpeggio' ? motifLength(numSteps.value) : numSteps.value
+      const motifLen = melodyMode.value !== 'classic' && !chordsEnabled.value && !OWN_GEN_STYLES.includes(selectedStyle.value) ? motifLength(numSteps.value) : numSteps.value
       steps.value = mixSteps(before, steps.value, amount, { motifLen })
     }
   }
@@ -766,6 +787,24 @@ function createSequencerEngine() {
         ...genParams(),
         edited: true,
       }))
+      basePatternLength.value = numSteps.value
+      return
+    }
+
+    if (selectedStyle.value === 'Berlin School') {
+      const line = berlinLine({ steps: numSteps.value, keyPc: Math.max(0, keyIdx), scale: scaleIntervals, octMin: finalOctMin })
+      steps.value = line.map((b, i) => {
+        // the downbeats a little harder, the pedal a little softer
+        let velocity = styleCfg.velMin + Math.floor(Math.random() * (styleCfg.velMax - styleCfg.velMin + 1))
+        if (i % 4 === 0) velocity = Math.min(127, velocity + 14)
+        if (b.pedal) velocity = Math.max(1, velocity - 6)
+        const gate = styleCfg.gateMin + Math.floor(Math.random() * (styleCfg.gateMax - styleCfg.gateMin + 1))
+        // P1 sweeps (the style's filter opening and closing across the pattern): RND% is how far, 0 → +50
+        const p1Var = param1Variation.value || 50
+        const sweep = sweepShape(i, line.length)
+        return { ...DEFAULT_STEP, active: true, notes: [b.note], octave: Math.floor(b.note / 12) - 1, velocity, gate, tieSteps: 0,
+          ...genParams(), param1Value: paramValue(p1Base, p1Var, () => sweep), edited: true }
+      })
       basePatternLength.value = numSteps.value
       return
     }
@@ -1567,8 +1606,8 @@ function createSequencerEngine() {
           }
 
           if (step.active && probabilityHit && (!late || chase)) {
-            if (state.param1CC !== null) midiStore.sendCC(state.param1CC, step.param1Value, state.channel, MidiSource.SEQUENCER2)
-            if (state.param2CC !== null) midiStore.sendCC(state.param2CC, step.param2Value, state.channel, MidiSource.SEQUENCER2)
+            if (state.param1CC !== null) sendParam(1, state.param1CC, step.param1Value, state.channel)
+            if (state.param2CC !== null) sendParam(2, state.param2CC, step.param2Value, state.channel)
             // …and to Map · Live Instruments slots (Live can't MIDI-map a track's own CCs), a route per
             // track (useLiveMapStore.seqRoutes)
             if (state.param1CC !== null) liveMap.seqParam(1, step.param1Value)

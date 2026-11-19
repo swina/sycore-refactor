@@ -982,6 +982,11 @@ const APP_SECTIONS = [
       ...['a','b','c','d','e','f'].map(s => ({ paramName: `dm_seq_${s}`, label: `Seq ${s.toUpperCase()}` })),
       ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_pad_${i}`, label: `Pad: ${lbl}` })),
       ..._DM_TRACKS.map((lbl, i) => ({ paramName: `dm_vol_${i}`, label: `Vol: ${lbl}` })),
+      ...[0, 1, 2, 3].map(i => ({ paramName: `dm_cc_${i}`, label: `Drum CC ${i + 1}` })),
+      { paramName: 'dm_dyn',      label: 'Dynamics' },
+      { paramName: 'dm_density',  label: 'Density' },
+      { paramName: 'dm_humanize', label: 'Humanize' },
+      { paramName: 'dm_swing',    label: 'Swing' },
     ],
   },
   {

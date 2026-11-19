@@ -23,6 +23,7 @@ import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { StepScheduler, createWorkerTicker, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
+import { drumPerform, applyDynamics, humanizeOffsets } from '@/lib/drum-perform'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { journaled } from '@/lib/session-takes'
@@ -522,7 +523,8 @@ function createDrumMachineEngine() {
 
       if (!step.active) return
       // Rig Controller Density (LIVE): the weakest steps of the bar on Live's grid go first.
-      if (!densityKeeps(songStep, !!step.accent, densityFor('drum'))) return
+      // With the Drum Machine's own Density (drum-perform.ts) the lower of the two.
+      if (!densityKeeps(songStep, !!step.accent, Math.min(densityFor('drum'), drumPerform.density))) return
       // Rig Controller Drum row (LIVE): Mute / Solo and Intensity on the drums only (the bassline has its row).
       if (rigParts.drumMuted) return
 
@@ -533,29 +535,34 @@ function createDrumMachineEngine() {
         ? state.repeaterDivision
         : step.ratchet
 
+      // Dyn and Humanize (drum-perform.ts): the hit's velocity and a few ms off its time
+      const hum = humanizeOffsets(drumPerform.humanize)
+      const hitTime = fireTime + hum.time
+      const hitVel = (v) => Math.max(1, Math.min(127, applyDynamics(v, drumPerform.dynamics) + hum.velocity))
+
       if (track.midiOutEnabled || midiOutOnly.value) {
         // MIDI Out (this track, or MIDI OUT ONLY for all): drive an external drum
         // machine/synth's own sound instead of SY.CORE's internal sample.
-        const vel = step.velocity * rigParts.drumVelocity
+        const vel = hitVel(step.velocity * rigParts.drumVelocity)
         if (divisions <= 1) {
-          _sendMidiNote(track.midiNote, vel, step.accent, fireTime, stepDur)
+          _sendMidiNote(track.midiNote, vel, step.accent, hitTime, stepDur)
         } else {
           _sendMidiRatchet(track.midiNote, stepTimeSec, divisions, {
             velocity: vel,
             accent:   step.accent,
-            baseTime: fireTime,
+            baseTime: hitTime,
             duration: stepDur,
           })
         }
       } else if (!_silentStep) {
         drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
         if (divisions <= 1) {
-          drumEngine.triggerPad(trackIdx, { velocity: step.velocity, accent: step.accent, time: fireTime, duration: stepDur })
+          drumEngine.triggerPad(trackIdx, { velocity: hitVel(step.velocity), accent: step.accent, time: hitTime, duration: stepDur })
         } else {
           drumEngine.triggerRatchet(trackIdx, stepTimeSec, divisions, {
-            velocity: step.velocity,
+            velocity: hitVel(step.velocity),
             accent:   step.accent,
-            baseTime: fireTime,
+            baseTime: hitTime,
             duration: stepDur,
           })
         }

@@ -345,6 +345,10 @@ const endLiveLoop = () => { stopLiveLoop?.(); stopLiveLoop = null }
 
 /** Following Live (or another external master) as the clock. */
 const followingLive = () => clockStore.source !== 'internal' && !clockStore.fallbackToInternal
+/** The transport is stopped: a pad arms its slot, Play starts it — Live's Play following Live, SY.CORE's
+ *  Play on its own clock (with Live Play off there, the pads start their slots at once, as before). */
+const arming = () => followingLive() ? !externalGrid.active : rigFollowPlay.value && !transportManager.isRunning.value
+const playName = () => followingLive() ? "Live's Play" : 'Play'
 // Play (Live's or SY.CORE's): only the armed slots start (playAll skips the rig's apps — no
 // last progression starting on its own). Live's Stop: the real apps stop at once (Live's grid is
 // gone: no bar left to finish on), armed slots are kept and the slots that were playing are armed
@@ -541,13 +545,13 @@ function onSlotDown(appId, slot) {
   // Drum and Bass are the Drum Machine's two parts: each row turns its own on / off / to a sequence.
   const playing = a.playing
   const what = `${a.label} ${SLOT_LABELS[slot]}`
-  // Following Live while it is stopped: the pad arms the slot (selected now); the app starts from it
-  // on Live's Start. The armed pad again: disarmed.
-  if (followingLive() && !externalGrid.active && playing === null) {
+  // The transport stopped (Live's, or SY.CORE's own clock): the pad arms the slot (selected now); the
+  // app starts from it on Play. The armed pad again: disarmed.
+  if (arming() && playing === null) {
     rigArmed[appId] = armPress(rigArmed[appId], slot)
     if (rigArmed[appId] === null) { s.display = `${what}: not armed`; return }
     selectSlot(appId, slot)
-    s.display = `${what} armed: starts on Live's Play`
+    s.display = `${what} armed: starts on ${playName()}`
     return
   }
   // Latch with the track's Trigger sync: the playing slot stops, another switches, a stopped app starts.
@@ -628,9 +632,9 @@ function onSection(i) {
   if (!live.value) return selectSection(s, i)
   const apps = s.apps.filter(a => SLOT_ROWS.includes(a.id) && a.filled[i])
   if (!apps.length) { s.display = `Section ${i + 1}: no app has slot ${SLOT_LABELS[i]}`; return }
-  const arming = followingLive() && !externalGrid.active
+  const armed = arming()
   for (const a of apps) {
-    if (arming) {
+    if (armed) {
       if (a.playing !== null) continue
       rigArmed[a.id] = i
       selectSlot(a.id, i)
@@ -639,7 +643,7 @@ function onSection(i) {
     }
   }
   liveSection = i
-  s.display = `Section ${i + 1} → ${apps.map(a => a.label).join(', ')} ${SLOT_LABELS[i]}${arming ? ": armed, starts on Live's Play" : externalGrid.active ? ' on their Trigger sync' : ' now'}`
+  s.display = `Section ${i + 1} → ${apps.map(a => a.label).join(', ')} ${SLOT_LABELS[i]}${armed ? `: armed, starts on ${playName()}` : externalGrid.active ? ' on their Trigger sync' : ' now'}`
 }
 /** LIVE: the section shown — lit while its apps play it, blinking while one is still queued or armed;
  *  dropped when none of them is on it any more (or one moved to another slot). */

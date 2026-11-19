@@ -6,13 +6,14 @@
 // sequence: the Rig's bass part's own, else the drums'). The pads edit as in the panel (emitted to
 // DrumMachine.vue): click a step on / off, right-click its menu (velocity, accent, ratchet, tie); on
 // the bass rows also the wheel (note) and double-click (note from MIDI); the label previews the pad.
-// Re-renders once per beat (the bar), and on edits.
+// Re-renders once per beat (the bar), and on edits. Under the pads: the performance row (DrumPerformRow).
 import { computed } from 'vue'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { drumSnapshot, rigReports, rigArmed, bassInUse } from '@/lib/rig-live'
 import { drumPosition } from '@/lib/drum-position'
 import PlaySlots from './PlaySlots.vue'
 import PlayChain from './PlayChain.vue'
+import DrumPerformRow from './DrumPerformRow.vue'
 
 const drumStore = useDrumMachineStore()
 // the chain (from DrumMachine.vue, the engine's: letters or null — an empty entry plays on the one
@@ -96,5 +97,7 @@ function onDbl(t, i) {
         </div>
       </div>
     </div>
+    <!-- performance controls (MIDI OUT first): Drum CC 1–4, Dyn, Density, Humanize, Swing -->
+    <DrumPerformRow class="pt-1 border-t border-neutral-900" />
   </div>
 </template>

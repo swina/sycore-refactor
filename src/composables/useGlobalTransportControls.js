@@ -7,7 +7,7 @@
  * Per-app start delays (in beats) are read from syncStore.appDelays.
  * The delay is calculated as: delayBeats * (60 / bpm) * 1000 ms.
  */
-import { rigTransport } from '@/lib/rig-live'
+import { rigTransport, LIVE_APPS, stopEvents, dispatchRig } from '@/lib/rig-live'
 import { countIn, startCountIn, cancelCountIn } from '@/lib/count-in'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useSyncStore } from '@/stores/useSyncStore'
@@ -114,6 +114,9 @@ export function useGlobalTransportControls() {
     if (syncStore.syncRecordToTransport) {
       window.dispatchEvent(new CustomEvent('capture-stop-rec'))
     }
+    // Rig Controller in LIVE: its armed slots started Chord Prog, Drum Machine and Sequencer
+    // whatever their sync flag (startAll skips them) — Stop All stops them too.
+    if (rigTransport.live) for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
     transportManager.forceStopAll()
   }
 

@@ -148,13 +148,14 @@ export function useRigCaptures() {
   function select(i) { state.selected = state.selected === i ? null : i }
   /** Put a clip (or null) into a slot, journaled in Session takes (app 'capt'): what was there before
    *  and the new one — a clip recorded over or cleared can be brought back. */
-  function setClip(i, clip) {
+  // journal false: not kept as session takes (the Session panel's Preview / Revert)
+  function setClip(i, clip, { journal = true } = {}) {
     const old = state.clips[i]
     if (same(old, clip)) return
     stopSlot(i, true)
-    try { if (old) takes.before('capt', i, clone(old)) } catch {}
+    try { if (journal && old) takes.before('capt', i, clone(old)) } catch {}
     state.clips[i] = clip ? clone(clip) : null
-    try { if (clip) takes.after('capt', i, clone(clip)) } catch {}
+    try { if (journal && clip) takes.after('capt', i, clone(clip)) } catch {}
   }
   function clear(i) {
     setClip(i, null)

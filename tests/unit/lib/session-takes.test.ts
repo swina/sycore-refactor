@@ -5,7 +5,7 @@ import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useSessionTakesStore, TAKES_PER_APP } from '@/stores/useSessionTakesStore'
-import { journaled, applyTake, snapshot, takeSummary } from '@/lib/session-takes'
+import { journaled, applyTake, snapshot, takeSummary, previewTake, revertPreview, keepPreview, takePreview } from '@/lib/session-takes'
 
 // Session takes: Generate keeps the slot it writes over and what it made; any of them loads back.
 describe('session takes', () => {
@@ -90,5 +90,58 @@ describe('session takes', () => {
     takes.before('drum', 'A', [[1]])
     takes.clear()
     expect(takes.takes).toEqual([])
+  })
+
+  describe('preview (A/B in the slot)', () => {
+    beforeEach(() => { takePreview.value = null })
+    const genTwo = () => {
+      const dm = useDrumMachineStore()
+      const takes = useSessionTakesStore()
+      const seq = dm.activeSequence
+      journaled('drum', seq, () => dm.generateDrumPattern('House' as any))
+      const first = takes.takes[takes.takes.length - 1]
+      journaled('drum', seq, () => dm.generateDrumPattern('Techno' as any))
+      return { dm, takes, seq, first }
+    }
+
+    it('Preview puts the take in the slot without a take; Revert puts the slot back', () => {
+      const { takes, seq, first } = genTwo()
+      const now = snapshot('drum', seq)
+      const n = takes.takes.length
+      expect(previewTake(first, seq)).toBe(true)
+      expect(snapshot('drum', seq)).toEqual(first.data)
+      expect(takes.takes.length).toBe(n)
+      expect(takePreview.value?.takeId).toBe(first.id)
+      expect(revertPreview()).toBe(true)
+      expect(snapshot('drum', seq)).toEqual(now)
+      expect(takes.takes.length).toBe(n)
+      expect(takePreview.value).toBeNull()
+    })
+
+    it('Keep leaves the take in the slot and keeps what was there as a take', () => {
+      const { takes, seq, first } = genTwo()
+      const now = snapshot('drum', seq)
+      previewTake(first, seq)
+      // what was there is the last take already (the Generate's result): not kept twice
+      const n = takes.takes.length
+      expect(keepPreview()).toBe(true)
+      expect(snapshot('drum', seq)).toEqual(first.data)
+      expect(takes.takes.length).toBe(n)
+      expect(takes.takes[takes.takes.length - 1].data).toEqual(now)
+      expect(takePreview.value).toBeNull()
+    })
+
+    it('a second Preview reverts the first one before', () => {
+      const cp = useChordProgStore()
+      const takes = useSessionTakesStore()
+      const s0 = snapshot('chord', 0)
+      const t1 = takes.after('chord', 1, { ...(s0 as any), numSteps: 3 })!
+      const t2 = takes.after('seq', 0, snapshot('seq', 0))!
+      previewTake(t1, 0)
+      expect(cp.numSteps).toBe(3)
+      previewTake(t2, 0)
+      expect(snapshot('chord', 0)).toEqual(s0)
+      expect(takePreview.value?.app).toBe('seq')
+    })
   })
 })

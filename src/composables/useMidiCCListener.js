@@ -1,6 +1,8 @@
 import { onMounted, onUnmounted } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { rigDensity } from '@/lib/rig-density'
+import { drumPerform } from '@/lib/drum-perform'
+import { setDrumCc } from '@/lib/drum-perform-send'
 import { parseRigAction, isContinuousRigAction } from '@/lib/rig-actions'
 import { parseMapSlot, parseMapButton, MAP_TRACK_KNOB } from '@/lib/live-map'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -206,6 +208,16 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     if (!isNaN(idx)) window.dispatchEvent(new CustomEvent('dm-pad-trigger', { detail: { trackIdx: idx, velocity: val } }))
     return
   }
+  // Drum Machine performance (lib/drum-perform.ts): Drum CC 1–4, Dyn (0–200 %), Density, Humanize, Swing (0–80 %)
+  if (fieldName.startsWith('dm_cc_')) {
+    const idx = parseInt(fieldName.slice(6))
+    if (!isNaN(idx)) setDrumCc(idx, val)
+    return
+  }
+  if (fieldName === 'dm_dyn')      { drumPerform.dynamics = Math.round((val / 127) * 200); return }
+  if (fieldName === 'dm_density')  { drumPerform.density = val; return }
+  if (fieldName === 'dm_humanize') { drumPerform.humanize = Math.round((val / 127) * 100); return }
+  if (fieldName === 'dm_swing')    { drumStore.swing = Math.round((val / 127) * 80); return }
   if (fieldName.startsWith('dm_vol_')) {
     const idx = parseInt(fieldName.slice(7))
     if (!isNaN(idx)) drumStore.setTrackVolume(idx, val / 127)

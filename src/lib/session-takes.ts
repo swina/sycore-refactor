@@ -10,6 +10,7 @@ import { useChordProgStore, DEFAULT_CHORD_STEP } from '@/stores/useChordProgStor
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useRigCaptures } from '@/core/engines/rig-captures'
 import { clipSummary, CLIP_SLOTS } from '@/lib/rig-captures'
+import { shallowRef } from 'vue'
 import { useSessionTakesStore, type SessionTake, type TakeApp, type TakeTarget } from '@/stores/useSessionTakesStore'
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
@@ -50,18 +51,24 @@ export function snapshot(app: TakeApp, target: TakeTarget): unknown {
 }
 
 /** Load a snapshot into a slot (its own or another of the same app). The slot's content before is
- *  kept as a take first, so a restore can be undone too. Heard at once while playing. */
-export function applyTake(take: Pick<SessionTake, 'app' | 'data'>, target: TakeTarget): boolean {
+ *  kept as a take first, so a restore can be undone too (journal false: not — Preview / Revert).
+ *  Heard at once while playing. */
+export function applyTake(take: Pick<SessionTake, 'app' | 'data'>, target: TakeTarget, { journal = true } = {}): boolean {
   const { app } = take
   const data = clone(take.data) as any
-  if (data === null || data === undefined) return false
   if (app === 'capt') {
-    // the engine keeps the pad's clip before as a take itself
+    // the engine keeps the pad's clip before as a take itself; an empty pad (null) only on a Revert
+    if (data === null || data === undefined) {
+      if (journal || !(Number(target) >= 0 && Number(target) < CLIP_SLOTS)) return false
+      useRigCaptures().setClip(Number(target), null, { journal: false })
+      return true
+    }
     if (!Array.isArray(data.notes) || !(Number(target) >= 0 && Number(target) < CLIP_SLOTS)) return false
-    useRigCaptures().setClip(Number(target), data)
+    useRigCaptures().setClip(Number(target), data, { journal })
     return true
   }
-  useSessionTakesStore().before(app, target, snapshot(app, target))
+  if (data === null || data === undefined) return false
+  if (journal) useSessionTakesStore().before(app, target, snapshot(app, target))
   if (app === 'drum' || app === 'bass') {
     const dm = useDrumMachineStore()
     const tracks = (app === 'drum' ? dm.sequences : dm.basslineSequences)[target as string]
@@ -95,6 +102,38 @@ export function applyTake(take: Pick<SessionTake, 'app' | 'data'>, target: TakeT
   seq.banks = [...seq.banks]
   // the Sequencer plays its working copy of the active bank: reload it
   if (i === seq.activeBankIndex) window.dispatchEvent(new CustomEvent('seq-banks-reloaded'))
+  return true
+}
+
+// ── Preview (A/B in the slot): a take heard in its slot, then Revert (the slot as it was) or Keep ──
+export interface TakePreview { takeId: string; app: TakeApp; target: TakeTarget; prev: unknown }
+/** The take in preview (one at a time), with the slot's content before it. */
+export const takePreview = shallowRef<TakePreview | null>(null)
+
+/** The take into `target` without journaling it, the slot's content kept to go back to; a preview
+ *  already on is reverted first. */
+export function previewTake(take: Pick<SessionTake, 'id' | 'app' | 'data'>, target: TakeTarget): boolean {
+  if (takePreview.value) revertPreview()
+  const prev = snapshot(take.app, target)
+  if (!applyTake(take, target, { journal: false })) return false
+  takePreview.value = { takeId: take.id, app: take.app, target, prev }
+  return true
+}
+
+/** The slot back as before the preview. */
+export function revertPreview(): boolean {
+  const p = takePreview.value
+  if (!p) return false
+  takePreview.value = null
+  return applyTake({ app: p.app, data: p.prev }, p.target, { journal: false })
+}
+
+/** The take in preview stays in the slot; what was there is kept as a take (as a Load). */
+export function keepPreview(): boolean {
+  const p = takePreview.value
+  if (!p) return false
+  takePreview.value = null
+  if (p.prev !== null && p.prev !== undefined) useSessionTakesStore().before(p.app, p.target, clone(p.prev))
   return true
 }
 

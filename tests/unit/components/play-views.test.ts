@@ -16,10 +16,12 @@ import { SLOT_CLASS } from '@/lib/play-colors'
 import { rigArmed } from '@/lib/rig-live'
 import { useSequencerEngine } from '@/core/engines/sequencer'
 import { velLevel } from '@/lib/play-colors'
+import SeqViewSelect from '@/components/play/SeqViewSelect.vue'
+import { reloadSeqPlayView } from '@/lib/seq-play-view'
 
 // Performance play views: display only, in the amber scheme.
 describe('play views', () => {
-  beforeEach(() => { localStorage.clear(); setActivePinia(createPinia()) })
+  beforeEach(() => { localStorage.clear(); reloadSeqPlayView(); setActivePinia(createPinia()) })
 
   it('Chord Prog: slots A–H and the chords; the chord sounding in full amber', () => {
     const store = useChordProgStore()
@@ -112,6 +114,69 @@ describe('play views', () => {
     expect(eng.steps.value[0].notes).toEqual([60]) // the notes kept
     await cells()[0].trigger('click')
     expect(eng.steps.value[0].active).toBe(true)
+  })
+
+  it('Sequencer lanes (View in the header): 4 / 8 / 16 set Steps, other lengths by the slider (max 16); bars at their pitch, note under it, velocity meter, M mutes, a drag moves the note', async () => {
+    const w = mount(SeqPlayView)
+    const sel = mount(SeqViewSelect)
+    const eng = useSequencerEngine()
+    eng.numSteps.value = 32
+    await w.vm.$nextTick()
+    const view = (label: string) => sel.findAll('[data-view-opt]').find(b => b.text() === label)!
+    await view('8').trigger('click')
+    expect(eng.numSteps.value).toBe(8)
+    eng.updateStep(0, { active: true, notes: [60], velocity: 100 })
+    eng.updateStep(1, { active: true, notes: [72], velocity: 100 })
+    await w.vm.$nextTick()
+    const cells = () => w.findAll('[data-lane-step]')
+    expect(cells()).toHaveLength(8)
+    const top = (i: number) => (cells()[i].find('span').element as HTMLElement).style.top
+    expect(top(0)).toBe('85%') // lowest note at the bottom
+    expect(top(1)).toBe('15%') // highest at the top
+    expect(w.findAll('[data-lane-note]')[0].text()).toBe('C4')
+    // drag step 0 (C4) up two degrees of C Major → E4
+    eng.selectedKey.value = 'C'; eng.selectedScale.value = 'Major'
+    await cells()[0].trigger('pointerdown', { clientY: 100, pointerId: 1 })
+    await cells()[0].trigger('pointermove', { clientY: 84, pointerId: 1 })
+    await cells()[0].trigger('pointerup', { pointerId: 1 })
+    expect(eng.steps.value[0].notes).toEqual([64])
+    expect(w.findAll('[data-lane-note]')[0].text()).toBe('E4')
+    // velocity: a click at a quarter of the meter
+    const vel = w.findAll('[data-lane-vel]')[0]
+    ;(vel.element as HTMLElement).getBoundingClientRect = () => ({ left: 0, width: 100, top: 0, height: 10, right: 100, bottom: 10, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+    await vel.trigger('pointerdown', { clientX: 25, pointerId: 2 })
+    await vel.trigger('pointerup', { pointerId: 2 })
+    expect(eng.steps.value[0].velocity).toBe(32)
+    const mute = () => w.findAll('[data-lane-mute]')
+    await mute()[0].trigger('click')
+    expect(eng.steps.value[0].active).toBe(false)
+    expect(eng.steps.value[0].notes).toEqual([64])
+    await view('16').trigger('click')
+    expect(eng.numSteps.value).toBe(16)
+    expect(cells()).toHaveLength(16)
+    expect(w.find('input[type="range"][min="2"]').attributes('max')).toBe('16')
+    eng.numSteps.value = 6
+    await w.vm.$nextTick()
+    expect(cells()).toHaveLength(6)
+    expect(sel.findAll('[data-view-opt]').some(b => b.classes().includes('bg-amber-600'))).toBe(false)
+    expect(sel.findAll('[data-view-opt]').map(b => b.text())).toEqual(['Notes', '4', '8', '16'])
+    await view('Notes').trigger('click')
+    expect(cells()).toHaveLength(0)
+  })
+
+  it('Sequencer: Berlin School — Gen fills every step, short notes; Density / Melody / Rhythm hidden', async () => {
+    const w = mount(SeqPlayView)
+    const eng = useSequencerEngine()
+    eng.selectedStyle.value = 'Berlin School'
+    eng.numSteps.value = 16
+    await w.vm.$nextTick()
+    expect(w.text()).not.toContain('Dens')
+    expect(w.text()).not.toContain('Rhy')
+    eng.generateSequence()
+    await w.vm.$nextTick()
+    expect(eng.steps.value).toHaveLength(16)
+    expect(eng.steps.value.every((s: any) => s.active && s.notes.length === 1)).toBe(true)
+    expect(eng.steps.value.every((s: any) => s.gate <= 50)).toBe(true)
   })
 
   it('Sequencer: P1 / P2 RND% move, also while playing; ↻ regenerates P1 alone', async () => {

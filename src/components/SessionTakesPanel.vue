@@ -3,12 +3,13 @@ import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 // Session panel: the session takes (stores/useSessionTakesStore.ts, lib/session-takes.ts) — each
 // slot's content before a Generate ('start' the first of the session) and each Generate's result,
 // newest first. Load one back into its slot or into another (e.g. a free one, to keep it), delete
-// it, or clear the session.
-import { computed, ref } from 'vue'
+// it, or clear the session. Preview: A/B in the chosen slot — heard as that slot plays, then Revert
+// (the slot as it was) or Keep (as a Load); closing the panel reverts it.
+import { computed, ref, onUnmounted } from 'vue'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import { useSessionTakesStore } from '@/stores/useSessionTakesStore'
-import { applyTake, takeSummary, takeTargets, targetLabel, TAKE_APP_LABELS } from '@/lib/session-takes'
+import { applyTake, takeSummary, takeTargets, targetLabel, TAKE_APP_LABELS, takePreview, previewTake, revertPreview, keepPreview } from '@/lib/session-takes'
 
 const emit = defineEmits(['close'])
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
@@ -40,9 +41,30 @@ let msgTimer = null
 function say(text) { msg.value = text; clearTimeout(msgTimer); msgTimer = setTimeout(() => { msg.value = '' }, 2500) }
 
 function load(t) {
+  if (takePreview.value) revertPreview()
   const to = destOf(t)
   say(applyTake(t, to) ? `${targetLabel(t.app, t.target)} ${kindLabel(t)} → ${targetLabel(t.app, to)}` : 'Could not load it')
 }
+
+const inPreview = (t) => takePreview.value?.takeId === t.id
+function preview(t) {
+  const to = destOf(t)
+  say(previewTake(t, to) ? `Preview in ${targetLabel(t.app, to)} — Revert or Keep` : 'Could not preview it')
+}
+function revert() {
+  const p = takePreview.value
+  if (p && revertPreview()) say(`${targetLabel(p.app, p.target)} back as it was`)
+}
+function keep() {
+  const p = takePreview.value
+  if (p && keepPreview()) say(`Kept in ${targetLabel(p.app, p.target)}`)
+}
+function remove(t) {
+  if (inPreview(t)) revertPreview()
+  takes.remove(t.id)
+}
+// closing the panel: the slot goes back as it was
+onUnmounted(() => { if (takePreview.value) revertPreview() })
 
 function kindLabel(t) { return t.kind === 'start' ? 'Start' : t.kind === 'before' ? 'Before' : t.source === 'ai' ? 'AI' : 'Gen' }
 const KIND_CLASS = { start: 'bg-sky-500/20 text-sky-300', before: 'bg-neutral-700/60 text-neutral-300', gen: 'bg-amber-500/20 text-amber-300', ai: 'bg-emerald-500/20 text-emerald-300' }
@@ -54,6 +76,7 @@ let clearTimer = null
 function clearAll() {
   if (!confirmClear.value) { confirmClear.value = true; clearTimeout(clearTimer); clearTimer = setTimeout(() => { confirmClear.value = false }, 3000); return }
   confirmClear.value = false
+  if (takePreview.value) revertPreview()
   takes.clear()
   say('New session')
 }
@@ -83,18 +106,29 @@ const since = computed(() => new Date(takes.startedAt).toLocaleString([], { day:
         Nothing yet. Each Generate (Drum, Bass, Chord Prog, Sequencer — from the panels, the Rig or MIDI) keeps
         here the slot it writes over and what it made, until you clear the session.
       </div>
-      <div v-for="t in rows" :key="t.id" class="flex items-center gap-2 px-2 py-1 border-b border-white/5 hover:bg-white/[0.03] text-[11px]">
+      <div v-for="t in rows" :key="t.id" class="flex items-center gap-2 px-2 py-1 border-b border-white/5 text-[11px]"
+           :class="inPreview(t) ? 'bg-sky-500/10' : 'hover:bg-white/[0.03]'">
         <span class="font-mono text-[10px] text-neutral-500 w-14 shrink-0">{{ time(t.at) }}</span>
         <span class="w-16 shrink-0 font-bold" :class="APP_CLASS[t.app]">{{ targetLabel(t.app, t.target) }}</span>
         <span class="px-1.5 py-px rounded text-[9px] font-black uppercase shrink-0" :class="kindClass(t)">{{ kindLabel(t) }}</span>
         <span class="flex-1 min-w-0 truncate text-neutral-300 font-mono" :title="takeSummary(t)">{{ takeSummary(t) }}</span>
-        <select :value="destOf(t)" @change="dest[t.id] = t.app === 'drum' || t.app === 'bass' ? $event.target.value : Number($event.target.value)"
+        <select :value="destOf(t)" :disabled="inPreview(t)" @change="dest[t.id] = t.app === 'drum' || t.app === 'bass' ? $event.target.value : Number($event.target.value)"
                 class="bg-black/40 border border-white/10 rounded px-1 py-0.5 text-[10px] text-white shrink-0" :title="`Load into (${TAKE_APP_LABELS[t.app]})`">
           <option v-for="o in takeTargets(t.app)" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
-        <button class="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-600/20 border-emerald-500/50 text-emerald-200 hover:bg-emerald-600/40 shrink-0"
-                title="Load this take into the chosen slot (what is there now is kept as a take first)" @click="load(t)">Load</button>
-        <button class="px-1.5 py-0.5 rounded text-[10px] text-neutral-500 hover:text-red-300 shrink-0" title="Delete this take" @click="takes.remove(t.id)">✕</button>
+        <template v-if="inPreview(t)">
+          <button class="px-2 py-0.5 rounded text-[10px] font-bold border bg-sky-600/30 border-sky-400/60 text-sky-100 hover:bg-sky-600/50 shrink-0"
+                  title="Revert: the slot back as it was before the preview" @click="revert">■ Revert</button>
+          <button class="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-600/20 border-emerald-500/50 text-emerald-200 hover:bg-emerald-600/40 shrink-0"
+                  title="Keep: the take stays in the slot (what was there is kept as a take)" @click="keep">✓ Keep</button>
+        </template>
+        <template v-else>
+          <button class="px-2 py-0.5 rounded text-[10px] font-bold border bg-white/[0.03] border-sky-500/40 text-sky-200 hover:bg-sky-600/30 shrink-0"
+                  title="Preview: the take in the chosen slot, heard as that slot plays — then Revert or Keep (another Preview, or closing the panel, reverts it)" @click="preview(t)">▶ Preview</button>
+          <button class="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-600/20 border-emerald-500/50 text-emerald-200 hover:bg-emerald-600/40 shrink-0"
+                  title="Load this take into the chosen slot (what is there now is kept as a take first)" @click="load(t)">Load</button>
+        </template>
+        <button class="px-1.5 py-0.5 rounded text-[10px] text-neutral-500 hover:text-red-300 shrink-0" title="Delete this take" @click="remove(t)">✕</button>
       </div>
     </div>
     <ResizeHandles :start="onResizeStart" />
