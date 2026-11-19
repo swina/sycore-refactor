@@ -22,6 +22,7 @@ import { drawAt } from '@/lib/ui-clock'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { StepScheduler, createWorkerTicker, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
+import { intGrid } from '@/core/midi/int-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { drumPerform, applyDynamics, humanizeOffsets } from '@/lib/drum-perform'
 import { useTransportManager } from '@/composables/useTransportManager'
@@ -126,7 +127,7 @@ function createDrumMachineEngine() {
     // leaves the grid on the old BPM and those offsets drift off-beat.
     if (drumStore.isPlaying) getTransport().bpm.value = v
     // System clock on the internal tempo (with an external master the grid follows Live's beats).
-    if (_sysSched && !externalGrid.active) _sysSched.setTempo(v)
+    if (_sysSched && !externalGrid.active) { _sysSched.setTempo(v); intGrid.setTempo(v, performance.now()) }
   })
 
   // ── Tone.js scheduling ────────────────────────────────────────────────────────
@@ -345,9 +346,15 @@ function createDrumMachineEngine() {
       _startSteps = 0
       const t = bar != null ? externalGrid.timeOf(bar) : null
       if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
-    } else if (transportManager.isRunning.value && (syncStore.syncDrumMachineToTransport.value || _startSteps >= 16)) {
-      // INT, with other apps on the Tone.js transport: their next bar line (synced to it, or Start@bar).
-      startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+    } else {
+      // INT: on the bar grid of the sequences already playing (int-grid.ts) — Start@bar: their next bar
+      // line; else in phase with the bar playing. Alone: now, or the Tone.js transport's next bar line
+      // when it runs (synced to it, or Start@bar).
+      const sync = _startSteps >= 16
+      if (transportManager.isRunning.value && (syncStore.syncDrumMachineToTransport.value || sync)) {
+        startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+      }
+      startMs = intGrid.join('drum', now, bpm, sync, startMs)
     }
     _startSteps = 0
     _sysSched = new StepScheduler((_step, t, late) => {
@@ -363,6 +370,7 @@ function createDrumMachineEngine() {
   }
 
   function _stopSystemClock() {
+    intGrid.leave('drum')
     _stopTicker?.(); _stopTicker = null
     _offExtGrid?.(); _offExtGrid = null
     _sysSched?.stop(); _sysSched = null

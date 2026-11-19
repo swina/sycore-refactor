@@ -35,6 +35,7 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
+import { intGrid } from '@/core/midi/int-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
@@ -576,7 +577,7 @@ function createSequencerEngine(lane = 'main') {
       midiStore.setBpm(bpm)
     }
     // System clock on the internal tempo (with an external master the grid follows Live's beats).
-    if (_sysSched && !externalGrid.active) _sysSched.setTempo(bpm)
+    if (_sysSched && !externalGrid.active) { _sysSched.setTempo(bpm); intGrid.setTempo(bpm, performance.now()) }
   })
 
   // ── System clock (CLK SYS) — steps from a StepScheduler on performance.now(), ticked by a
@@ -618,9 +619,15 @@ function createSequencerEngine(lane = 'main') {
       }
       const t = bar != null ? externalGrid.timeOf(bar) : null
       if (t != null) { startMs = t; startBpm = externalGrid.bpm || startBpm; _sysStartSixteenth = bar }
-    } else if (transportManager.isRunning.value && ((isMain && syncStore.syncSequencer2ToTransport.value) || _seqStartSteps >= 16)) {
-      // INT, with other apps on the Tone.js transport: their next bar line (SYNC on, or synced to the transport)
-      startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+    } else {
+      // INT: on the bar grid of the sequences already playing (int-grid.ts) — SYNC on: their next bar
+      // line; off: in phase with the bar playing. Alone: now, or (SYNC / synced to the transport) the
+      // Tone.js transport's next bar line when it runs.
+      const sync = _seqStartSteps >= 16
+      if (transportManager.isRunning.value && ((isMain && syncStore.syncSequencer2ToTransport.value) || sync)) {
+        startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+      }
+      startMs = intGrid.join(SEQ_WORKER_TAG, now, startBpm, sync, startMs)
     }
     _seqStartSteps = 0
     _sysStep = 0
@@ -634,6 +641,7 @@ function createSequencerEngine(lane = 'main') {
   }
 
   function _stopSystemClock() {
+    intGrid.leave(SEQ_WORKER_TAG)
     _stopTicker?.(); _stopTicker = null
     _offExtGrid?.(); _offExtGrid = null
     _sysSched?.stop(); _sysSched = null

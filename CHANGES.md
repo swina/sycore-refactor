@@ -4,6 +4,12 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-20
 
+- **Internal clock: the sequences line up with each other** (`core/midi/int-grid.ts`). On CLK SYS without Live as master, each sequence (the Sequencer's Main / Bass / Arp lanes, the Drum Machine) used to start its own clock "now", so two started a moment apart never lined up. Now they share one bar grid: the first one to start sets bar 1, and the next ones join it.
+  - **SYNC** on (Drum Machine: Start@bar): it starts on the next bar line of the sequences already playing. Up to ~80 ms after the downbeat counts as that downbeat.
+  - **SYNC** off: it joins at once, in phase with the bar playing. The steps already gone pass silently, as when joining Live's grid.
+
+  A tempo change keeps the grid's phase. When the last sequence stops, the grid is dropped. With Live as master nothing changes: they already sit on Live's grid. Tests: `int-grid.test.ts`. Branch: `feat/sequencer-lanes`
+
 - **Sequencer lanes: SYNC per lane; Stop stops Bass and Arp** —
   - **Stop** (the transport's Stop All, the Rig's Stop) now also stops the Bass and Arp lanes. Before, it only stopped Chord, Drum and Main.
   - **SYNC**: new **S** button per lane (Main, Bass, Arp) in the lanes strip, saved per lane, on by default.
