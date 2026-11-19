@@ -573,7 +573,8 @@ function onSlotDown(appId, slot) {
     s.display = p.enabled ? `Arp ${SLOT_LABELS[slot]}: ${p.mode} on` : 'Arp off'
     return
   }
-  if (!a.filled[slot]) { s.display = `${a.label} ${SLOT_LABELS[slot]}: ${appId === 'bass' && !rowLane('bass') ? 'no bassline' : 'empty slot'}`; return }
+  // an empty slot plays too (silent): the user fills it — GEN (a lane queued on it: GEN writes there)
+  const empty = !a.filled[slot]
   // Drum and Bass are the Drum Machine's two parts: each row turns its own on / off / to a sequence.
   const playing = a.playing
   const what = `${a.label} ${SLOT_LABELS[slot]}`
@@ -590,7 +591,7 @@ function onSlotDown(appId, slot) {
   // The sync point is on Live's grid: with Live stopped (or SY.CORE on its own clock), at once.
   const sync = liveSyncSteps(a.opts.triggerSync, externalGrid.active)
   for (const ev of rowPadEvents(appId, slot, playing, sync)) dispatchRig(ev)
-  s.display = `${what} ${padWhen(appId, playing, slot, sync)}`
+  s.display = `${what}${empty ? ' (empty — GEN fills it)' : ''} ${padWhen(appId, playing, slot, sync)}`
 }
 /** Arming: Chord and the Sequencer's lanes select the slot now; Drum and Bass (on the Drum Machine) load theirs from the watcher below. */
 function selectSlot(id, slot) {

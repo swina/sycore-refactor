@@ -4,6 +4,8 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-20
 
+- **Rig: empty slots A–H can be launched** — on every row, an empty slot's pad starts, switches to or arms it like a full one (it plays silently), and the display says "empty — GEN fills it". Sections still skip empty slots. On the Sequencer's lanes (Seq / Bass / Arp), a bank queued while playing, empty or not, is where **GEN** writes, while the bank playing stays untouched. An empty bank first takes the playing bank's settings (style, key, octaves, length…), so it's generated in the same vein. Files: `RigControllerPanel.vue`, `core/engines/sequencer.js`; tests: `sequencer-lanes.test.ts`. Branch: `feat/sequencer-lanes`
+
 - **Internal clock: the sequences line up with each other** (`core/midi/int-grid.ts`). On CLK SYS without Live as master, each sequence (the Sequencer's Main / Bass / Arp lanes, the Drum Machine) used to start its own clock "now", so two started a moment apart never lined up. Now they share one bar grid: the first one to start sets bar 1, and the next ones join it.
   - **SYNC** on (Drum Machine: Start@bar): it starts on the next bar line of the sequences already playing. Up to ~80 ms after the downbeat counts as that downbeat.
   - **SYNC** off: it joins at once, in phase with the bar playing. The steps already gone pass silently, as when joining Live's grid.

@@ -718,7 +718,27 @@ function createSequencerEngine(lane = 'main') {
   // key), otherwise Major / Minor.
   const MINOR_FAMILY = ['Minor', 'Harmonic Min', 'Pentatonic Min', 'Blues', 'Dorian', 'Phrygian', 'Locrian']
   const MAJOR_FAMILY = ['Major', 'Pentatonic Maj', 'Lydian', 'Mixolydian']
-  function handleRigGenerate(e) { journaledGenerate(() => _rigGenerate(e)) }
+  // A bank queued (a Rig pad while playing, e.g. an empty one): GEN writes into it, not into the one playing —
+  // the working copy goes to it for the generate and back (the playback reads the banks, untouched meanwhile).
+  function handleRigGenerate(e) {
+    const target = _pendingBank
+    if (target === null || target === seqStore.activeBankIndex) { journaledGenerate(() => _rigGenerate(e)); return }
+    const back = seqStore.activeBankIndex
+    syncLocalToBank()
+    // an empty bank takes the playing one's settings (style, key, octaves, length…): GEN writes in the same vein
+    const dst = seqStore.banks[target]
+    if (dst && !dst.steps.some(st => st?.active)) {
+      const src = JSON.parse(JSON.stringify(seqStore.banks[back]))
+      Object.assign(dst, src, { steps: Array.from({ length: src.numSteps }, () => ({ ...DEFAULT_STEP })) })
+    }
+    seqStore.setActiveBank(target)
+    loadBankIntoLocal()
+    try { journaledGenerate(() => _rigGenerate(e)) } finally {
+      syncLocalToBank()
+      seqStore.setActiveBank(back)
+      loadBankIntoLocal()
+    }
+  }
   function applyKey(root, mode) {
     selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
     const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY

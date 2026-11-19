@@ -200,4 +200,25 @@ describe('Sequencer lanes (Main / Bass / Arp)', () => {
     expect(bass.isPlaying.value).toBe(false)
     expect(arp.isPlaying.value).toBe(false)
   })
+
+  it('an empty bank queued while playing: GEN fills it, the bank playing stays as it is', async () => {
+    const { bass } = setup()
+    const store = useSeqLaneStore('bass')
+    bass.laneSync.value = false
+    window.dispatchEvent(new CustomEvent('toggle-seq-bass', { detail: { play: true } }))
+    await flush()
+    const playing = JSON.stringify(bass.steps.value)
+    window.dispatchEvent(new CustomEvent('seq-bass-bank-cue', { detail: { idx: 2 } }))
+    expect(seqLaneQueued.bass).toBe(2)
+    expect(store.banks[2].steps.some((st: any) => st.active)).toBe(false)
+    bass.selectedStyle.value = 'Offbeat' // bank A's style (the working copy)
+    window.dispatchEvent(new CustomEvent('seq-bass-generate', { detail: {} }))
+    await flush()
+    expect(store.banks[2].steps.some((st: any) => st.active)).toBe(true)
+    expect(store.banks[2].selectedStyle).toBe('Offbeat') // the playing bank's settings
+    expect(store.banks[2].steps[2].active).toBe(true)  // Offbeat: on the "and"
+    expect(store.activeBankIndex).toBe(0)
+    expect(JSON.stringify(bass.steps.value)).toBe(playing)
+    expect(seqLaneQueued.bass).toBe(2)
+  })
 })
