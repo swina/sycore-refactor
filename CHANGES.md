@@ -4,6 +4,15 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-20
 
+- **Sequencer lanes, phase 5: the Rig's Bass and Arp rows drive the Bass / Arp lanes** (plan: `docs/plans/sequencer-lanes.md`). They work like the Seq row:
+  - pads A–H are the lane's banks, switching at the end of the pattern;
+  - armed with Live stopped, they start on Live's Play; Live's Stop stops them and keeps them armed;
+  - sections and GEN (in the Chord Prog's key) work on them, and Shift + GEN is Mutate;
+  - Density thins the lane's steps (MIDI Learn `rig_density_bass` / `rig_density_arp`);
+  - Mute / Solo / Intensity (CC 7 and/or velocity, with cable scopes) act on the `SEQ_BASS` / `SEQ_ARP` sources. CC 7 goes out on the lane's channel.
+
+  The Arp row now has a volume Intensity too. In each row's Track options, **The row plays** can switch back to how it worked before the lanes: Bass → *Drum Machine bassline*, Arp → *Arpeggiator* (modes, octave, rate). The choice is saved per user. Switching stops what was playing and drops the armed slot. With Bass on its lane, the Drum Machine's bassline is off the Rig: the Drum row starts drums only. Files: `lib/rig-live.ts`, `rig-density.ts`, `rig-actions.ts`, `RigControllerPanel.vue`, `seq-lanes.ts`, `core/engines/sequencer.js`; tests: `rig-live-lanes.test.ts`, `sequencer-lanes.test.ts`; the existing Rig tests run with the rows as before. Branch: `feat/sequencer-lanes`
+
 - **MIDI: every note released when the page reloads or closes** — a dev rebuild reloads the whole page (`midi-service.ts` declines hot updates), and a reload or close while playing used to lose the queued note-offs. The instrument then kept the notes: with the Emulator X3, voices streaming from disk never freed (DISK in the red, polyphony stuck until a restart). Now `pagehide` drops what is queued on each output and on SY.CORE Link, then sends All Notes Off, All Sound Off and Sustain off on all 16 channels of every output (real and virtual). `core/midi/midi-service.ts`; tests: `midi-unload-release.test.ts`. Branch: `feat/sequencer-lanes`
 
 ## 2026-11-19

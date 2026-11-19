@@ -36,6 +36,7 @@ import {
 } from '@/lib/rig-controller'
 import {
   isLiveApp, isLiveRow, SLOT_ROWS, rigTransport, rowPadEvents, rigParts, bassSnapshot, arpSnapshot, arpPress, RIG_ARP_MODES, arpOctaveOf, arpOctaveValue, arpRateOf, arpRateValue, rigMutes, rigVelocityScales, rigCc7, intensityMode, loadIntensityModes, saveIntensityModes, loadMuteScopes, saveMuteScopes, LIVE_APP_SOURCE, rigReports, drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, dispatchRig, liveSyncSteps, padEvents, padWhen, rigArmed, armPress, armPlaying, armedDrumLoads, fillLook, rigFollowPlay, stopEvents, LIVE_APPS,
+  rigLaneRows, rowLane, activeSlotRows, isSlotRow, liveAppSource, arpeggiatorRow, stopRows,
 } from '@/lib/rig-live'
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
@@ -52,7 +53,8 @@ import { rigChord } from '@/lib/chord-next'
 const RIG_LINK_ORDER = ['chord', 'drum', 'seq', 'bass', 'arp']
 import { frameLoop, uiTimeout } from '@/lib/ui-clock'
 import { createWorkerTicker } from '@/core/midi/step-scheduler'
-import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
+import { useStepSequencerStore, useSeqLaneStore } from '@/stores/useStepSequencerStore'
+import { seqLanePlaying, seqLaneQueued, SEQ_LANE_CFG, laneEvent } from '@/lib/seq-lanes'
 import { useArpStore } from '@/stores/useArpStore'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -160,6 +162,8 @@ function onCapturePad(i) {
 }
 const chordStore = useChordProgStore()
 const seqStore = useStepSequencerStore()
+// the Bass / Arp lanes' banks (the rows on their lanes: rigLaneRows)
+const laneStores = { bass: useSeqLaneStore('bass'), arp: useSeqLaneStore('arp') }
 const arpStore = useArpStore()
 const clockStore = useExternalClockStore()
 const linkStore = useLinkStore()
@@ -195,10 +199,14 @@ function syncLive() {
     if (a.id === 'drum') applySnapshot(a, drumSnapshot(drumStore.sequences, undefined, drumStore.activeSequence, drumStore.isPlaying && drumStore.drumsOn, rigReports.queued.drum ?? rigArmed.drum))
     else if (a.id === 'chord') applySnapshot(a, chordSnapshot(chordStore.slots, chordStore.activeSlotIndex, chordStore.playingSlotIndex, chordStore.isPlaying, rigReports.queued.chord ?? rigArmed.chord))
     else if (a.id === 'seq') applySnapshot(a, seqSnapshot(seqStore.banks, seqStore.activeBankIndex, rigReports.seqPlaying, rigReports.queued.seq ?? rigArmed.seq))
+    else if ((a.id === 'bass' || a.id === 'arp') && rowLane(a.id)) {
+      const ls = laneStores[a.id]
+      applySnapshot(a, seqSnapshot(ls.banks, ls.activeBankIndex, seqLanePlaying[a.id], seqLaneQueued[a.id] ?? rigArmed[a.id]))
+    }
     else if (a.id === 'bass') applySnapshot(a, bassSnapshot(drumStore.basslineSequences, drumStore.basslineEnabled, drumStore.basslineSequence ?? drumStore.activeSequence, drumStore.isPlaying && drumStore.bassOn, rigReports.queued.bass ?? rigArmed.bass))
     else if (a.id === 'arp') { applySnapshot(a, arpSnapshot(arpStore.arpEnabled, arpStore.arpMode)); mirrorArp(a) }
     // Density: the panel's value and a MIDI-learned encoder both drive rigDensity (the one that moved wins).
-    if (DENSITY_APPS.includes(a.id)) {
+    if (densityRow(a.id)) {
       if (a.density !== lastDensity[a.id]) rigDensity[a.id] = a.density
       else a.density = rigDensity[a.id]
       lastDensity[a.id] = a.density
@@ -207,8 +215,28 @@ function syncLive() {
   syncSection()
 }
 const lastDensity = {}
-/** The focused row's knobs: on the Arp row in LIVE, Density is its Octave and Intensity its Rate. */
-const arpKnobs = () => live.value && focused.value?.id === 'arp'
+/** Bass / Arp row → its lane or back to the Drum Machine's bassline / the Arpeggiator: what played stops
+ *  (the other side doesn't inherit a running part), the armed slot is dropped. */
+function setLaneRow(id, on) {
+  if (rigLaneRows[id] === on) return
+  if (live.value) for (const ev of stopEvents(id)) dispatchRig(ev)
+  if (live.value && id === 'arp' && on) arpStore.arpEnabled = false
+  if (live.value && id === 'bass' && on) dispatchRig({ name: 'dm-part', detail: { part: 'bass', on: false, sync: 0 } })
+  rigArmed[id] = null
+  rigLaneRows[id] = on
+  // Arp: its knobs change meaning (lane: Density / Intensity; Arpeggiator: octave / rate) — the lane starts
+  // as written and at full, the Arpeggiator's are read back from it
+  const a = s.apps.find(x => x.id === id)
+  if (id === 'arp' && a) {
+    if (on) { a.density = 127; a.intensity = 127 }
+    lastArp.density = null; lastArp.intensity = null
+  }
+  s.display = `${id === 'bass' ? 'Bass' : 'Arp'} row → ${on ? `Seq ${id === 'bass' ? 'Bass' : 'Arp'} lane` : id === 'bass' ? 'Drum Machine bassline' : 'Arpeggiator'}`
+}
+/** The rows whose Density thins the real app's steps: Drum, Seq, and Bass / Arp on their lanes. */
+const densityRow = id => DENSITY_APPS.includes(id) && (id === 'drum' || id === 'seq' || !!rowLane(id))
+/** The focused row's knobs: on the Arp row in LIVE (on the Arpeggiator), Density is its Octave and Intensity its Rate. */
+const arpKnobs = () => live.value && arpeggiatorRow(focused.value?.id)
 const knobLabel = k => (arpKnobs() && k[1] === 'density' ? 'Octave' : arpKnobs() && k[1] === 'intensity' ? 'Rate' : k[0])
 function knobValue(key) {
   const v = focused.value[key]
@@ -219,7 +247,7 @@ function knobValue(key) {
 function knobTitle(key) {
   if (key !== 'density' && key !== 'intensity') return ''
   if (arpKnobs()) return `${key === 'density' ? "The Arpeggiator's octave range (−3…+3)" : "The Arpeggiator's rate"}. Right-click: MIDI Learn`
-  if (key === 'density' && live.value && ['drum', 'seq'].includes(focused.value.id)) return 'Density on the real app: 127 = as written, lower thins the weakest steps out. Right-click: MIDI Learn'
+  if (key === 'density' && live.value && densityRow(focused.value.id)) return 'Density on the real app: 127 = as written, lower thins the weakest steps out. Right-click: MIDI Learn'
   return ''
 }
 /** Arp row (LIVE): Density = the Arpeggiator's octave range, Intensity = its rate. The control that
@@ -237,8 +265,8 @@ let liveSection = null // LIVE: the section last launched (onSection / syncSecti
 const { openMenu } = useMidiContextMenu()
 /** Right-click on a Density control (LIVE, Drum / Seq): MIDI Learn it, e.g. on a Worlde encoder. */
 function densityMenu(ev, a) {
-  if (!live.value || !(DENSITY_APPS.includes(a.id) || a.id === 'arp')) return
-  openMenu(ev, { name: `rig_density_${a.id}`, label: a.id === 'arp' ? 'Rig: Arp Octave' : `Rig: ${a.label} Density` })
+  if (!live.value || !(DENSITY_APPS.includes(a.id))) return
+  openMenu(ev, { name: `rig_density_${a.id}`, label: arpeggiatorRow(a.id) ? 'Rig: Arp Octave' : `Rig: ${a.label} Density` })
 }
 // Mute / Solo on the real apps (LIVE): their note-ons are dropped at the MIDI service —
 // the whole app, or only the cables picked in its scope (e.g. Chord → Live ch 2 only).
@@ -246,7 +274,7 @@ function densityMenu(ev, a) {
 const muteScopes = reactive(loadMuteScopes())
 /** The devices a real app is cabled to (MIDI Flow), plus the ones in its scope no longer cabled. */
 function appCables(id) {
-  const cabled = midiService.getCableTargets(LIVE_APP_SOURCE[id])
+  const cabled = midiService.getCableTargets(liveAppSource(id))
   return [...new Set([...cabled, ...(muteScopes[id] ?? [])])]
 }
 function toggleScope(id, dev) {
@@ -296,10 +324,14 @@ onUnmounted(() => {
 const cc7Sent = new Map() // `${source}|${targets}` → { value, source, targets }
 let cc7Timer = null
 let cc7Pending = []
-const appChannel = id => (id === 'chord' ? chordStore.midiChannel : id === 'bass' ? drumStore.basslineMidiChannel : midiStore.midiChannel) - 1
+// a Sequencer lane's own channel (1–16), or 0: the global one
+const laneCh = id => { const l = rowLane(id); return l === 'bass' || l === 'arp' ? laneStores[l].midiChannel : l === 'main' ? seqStore.midiChannel : 0 }
+const appChannel = id => (id === 'chord' ? chordStore.midiChannel : rowLane(id) ? (laneCh(id) >= 1 ? laneCh(id) : midiStore.midiChannel) : id === 'bass' ? drumStore.basslineMidiChannel : midiStore.midiChannel) - 1
 function sendCc7(source, targets, value, id) {
-  // Bass: on the bassline's own channel, as its notes (rigCc7 sends Bass only when it has one).
-  const opts = { ...(targets.length ? { onlyTargets: targets } : {}), ...(id === 'bass' ? { exactChannel: true } : {}) }
+  // Bass on the Drum Machine: on the bassline's own channel, as its notes (rigCc7 sends Bass only when it has
+  // one); a lane on a channel of its own: that channel as is, as its notes
+  const exact = rowLane(id) ? laneCh(id) >= 1 : id === 'bass'
+  const opts = { ...(targets.length ? { onlyTargets: targets } : {}), ...(exact ? { exactChannel: true } : {}) }
   midiService.sendCC(7, value, Math.max(0, appChannel(id) ?? 0), source, null, Object.keys(opts).length ? opts : undefined)
 }
 function flushCc7() {
@@ -332,7 +364,7 @@ function velocityReadout(a) {
   const where = scope.length ? scope.map(d => `→ ${d}`).join(', ') : 'whole app'
   const mode = intensityMode(intensityModes, a.id)
   const parts = []
-  const noCc7 = a.id === 'bass' && !(drumStore.basslineMidiChannel >= 1) // Bass: CC 7 needs the bassline's own channel
+  const noCc7 = a.id === 'bass' && !rowLane('bass') && !(drumStore.basslineMidiChannel >= 1) // Bass on the Drum Machine: CC 7 needs the bassline's own channel
   if (mode !== 'velocity' && !noCc7) parts.push(`CC 7 = ${Math.round(a.intensity * s.globalIntensity / 127)}`)
   if (mode !== 'cc7' || noCc7) parts.push(`Velocity ×${f.toFixed(2)}`)
   return `${parts.join(' · ')} (Intensity ${a.intensity} · Global ${s.globalIntensity}) · ${where}`
@@ -355,7 +387,7 @@ const playName = () => followingLive() ? "Live's Play" : 'Play'
 // (the next Play starts them again; a press on an armed pad disarms it).
 function startArmed() {
   if (!rigFollowPlay.value) { s.display = 'Live Play: nothing started (Live Play off)'; return }
-  for (const id of SLOT_ROWS) {
+  for (const id of activeSlotRows()) {
     const slot = rigArmed[id]
     if (slot === null) continue
     rigArmed[id] = null
@@ -365,14 +397,14 @@ function startArmed() {
 rigTransport.onPlayAll = startArmed
 watch(live, v => { rigTransport.live = v }, { immediate: true })
 /** The slots playing now, by row (what a Stop keeps armed). */
-const playingSlots = () => Object.fromEntries(SLOT_ROWS.map(id => [id, s.apps.find(x => x.id === id)?.playing]))
+const playingSlots = () => Object.fromEntries(activeSlotRows().map(id => [id, s.apps.find(x => x.id === id)?.playing]))
 // A Stop from Rig Controls: the slots playing when it was pressed — by the time Live stops, the Drum
 // Machine may have ended (Stop@end) and the others stopped, so Live's Stop would find none playing.
 let stopArm = null
 const offLiveGrid = externalGrid.on(e => {
   if (!live.value || e.type !== 'stop') return
   armPlaying(stopArm ?? playingSlots()); stopArm = null
-  for (const id of LIVE_APPS) for (const ev of stopEvents(id)) dispatchRig(ev)
+  for (const id of stopRows()) for (const ev of stopEvents(id)) dispatchRig(ev)
 })
 onUnmounted(() => {
   offLiveGrid(); rigDensity.active = false; for (const id of SLOT_ROWS) rigArmed[id] = null
@@ -533,15 +565,15 @@ function onSlotDown(appId, slot) {
   if (!live.value) return pressSlot(s, appId, slot)
   const a = s.apps.find(x => x.id === appId)
   if (!isLiveRow(appId)) return notConnected(a.label)
-  // Arp: the pad picks a mode and switches the Arpeggiator on; the mode playing switches it off.
-  if (appId === 'arp') {
+  // Arp on the Arpeggiator: the pad picks a mode and switches it on; the mode playing switches it off.
+  if (arpeggiatorRow(appId)) {
     const p = arpPress(a.playing, slot)
     if (p.mode) arpStore.arpMode = p.mode
     arpStore.arpEnabled = p.enabled
     s.display = p.enabled ? `Arp ${SLOT_LABELS[slot]}: ${p.mode} on` : 'Arp off'
     return
   }
-  if (!a.filled[slot]) { s.display = `${a.label} ${SLOT_LABELS[slot]}: ${appId === 'bass' ? 'no bassline' : 'empty slot'}`; return }
+  if (!a.filled[slot]) { s.display = `${a.label} ${SLOT_LABELS[slot]}: ${appId === 'bass' && !rowLane('bass') ? 'no bassline' : 'empty slot'}`; return }
   // Drum and Bass are the Drum Machine's two parts: each row turns its own on / off / to a sequence.
   const playing = a.playing
   const what = `${a.label} ${SLOT_LABELS[slot]}`
@@ -560,9 +592,9 @@ function onSlotDown(appId, slot) {
   for (const ev of rowPadEvents(appId, slot, playing, sync)) dispatchRig(ev)
   s.display = `${what} ${padWhen(appId, playing, slot, sync)}`
 }
-/** Arming: Chord and Seq select the slot now; Drum and Bass load theirs from the watcher below. */
+/** Arming: Chord and the Sequencer's lanes select the slot now; Drum and Bass (on the Drum Machine) load theirs from the watcher below. */
 function selectSlot(id, slot) {
-  if (id === 'chord' || id === 'seq') dispatchRig(padEvents(id, slot, null, 0)[0])
+  if (id === 'chord' || rowLane(id)) dispatchRig(rowPadEvents(id, slot, null, 0)[0])
 }
 // Drum and Bass armed with the Drum Machine stopped (a pad with Live stopped, or the slots kept
 // armed at Live's Stop): the slot is loaded at once, as Chord and Seq — the drums' sequence and the
@@ -571,12 +603,15 @@ function selectSlot(id, slot) {
 // unchanged (each part from its armed slot). After the engine's reset at a stop (flush 'post').
 watch(() => [rigArmed.drum, rigArmed.bass, drumStore.isPlaying, live.value], ([drum, bass, playing, isLive]) => {
   if (!isLive || playing) return
-  const load = armedDrumLoads({ drum: drum ?? null, bass: bass ?? null }, drumStore.activeSequence)
-  if (drumStore.basslineSequence !== load.bassline) drumStore.basslineSequence = load.bassline
+  // Bass on its lane: its armed slot is the lane's bank (selected by selectSlot), not a bassline
+  const onLane = !!rowLane('bass')
+  const load = armedDrumLoads({ drum: drum ?? null, bass: onLane ? null : bass ?? null }, drumStore.activeSequence)
+  if (!onLane && drumStore.basslineSequence !== load.bassline) drumStore.basslineSequence = load.bassline
   if (load.drums) dispatchRig({ name: 'dm-seq-switch', detail: { seq: load.drums, sync: 0 } })
 }, { flush: 'post' })
-/** The rows whose GEN is connected in LIVE. */
-const GEN_APPS = ['drum', 'chord', 'seq', 'bass']
+/** The rows whose GEN is connected in LIVE (Arp: on its lane); Mutate (Shift): the Sequencer's lanes. */
+const GEN_ROWS = ['drum', 'chord', 'seq', 'bass', 'arp']
+const genOn = (id, mut) => GEN_ROWS.includes(id) && (id !== 'arp' || !!rowLane('arp')) && (!mut || !!rowLane(id))
 function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
 // Generates done per row (any source: panel, controller, Rig device): the devices flash GEN on each.
 const genCount = reactive({})
@@ -585,8 +620,16 @@ function onGenerate(appId, mutate = false) {
   if (!live.value) { genCount[appId] = (genCount[appId] ?? 0) + 1; return generate(s, appId, mutate || s.shift) }
   // LIVE: Mutate (Shift + GEN) is connected for the Sequencer (a part of its pattern: Lock / Vary)
   const mut = mutate || s.shift
-  if (!GEN_APPS.includes(appId) || (mut && appId !== 'seq')) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mut ? 'Mutate' : 'Generate'}`)
+  if (!genOn(appId, mut)) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mut ? 'Mutate' : 'Generate'}`)
   genCount[appId] = (genCount[appId] ?? 0) + 1
+  if (rowLane(appId) && appId !== 'seq') {
+    // Bass / Arp lanes: as the Seq row, in the Chord Prog's key when it has an exact one
+    const mode = chordStore.keyMode
+    const root = mode ? keyRoot(chordStore.selectedKey, mode) : null
+    dispatchRig({ name: laneEvent(rowLane(appId), 'generate'), detail: { ...(root !== null ? { root, mode } : {}), ...(mut ? { mutate: true } : {}) } })
+    s.display = `${SEQ_LANE_CFG[rowLane(appId)].label}: ${mut ? 'Mutate' : 'Generate'} ${root !== null ? `in ${keyText.value}` : '(its own key)'}`
+    return
+  }
   if (appId === 'bass') {
     // A new bassline in the Drum Machine's active sequence, on the Chord Prog's key when it has an exact one.
     const mode = chordStore.keyMode
@@ -630,7 +673,7 @@ function onFill() {
  */
 function onSection(i) {
   if (!live.value) return selectSection(s, i)
-  const apps = s.apps.filter(a => SLOT_ROWS.includes(a.id) && a.filled[i])
+  const apps = s.apps.filter(a => isSlotRow(a.id) && a.filled[i])
   if (!apps.length) { s.display = `Section ${i + 1}: no app has slot ${SLOT_LABELS[i]}`; return }
   const armed = arming()
   for (const a of apps) {
@@ -649,7 +692,7 @@ function onSection(i) {
  *  dropped when none of them is on it any more (or one moved to another slot). */
 function syncSection() {
   const i = liveSection
-  const apps = i === null ? [] : s.apps.filter(a => SLOT_ROWS.includes(a.id) && a.filled[i])
+  const apps = i === null ? [] : s.apps.filter(a => isSlotRow(a.id) && a.filled[i])
   const waiting = apps.some(a => a.queued === i)
   const on = apps.some(a => a.playing === i) || waiting
   const left = apps.some(a => a.playing !== null && a.playing !== i && a.queued !== i)
@@ -1046,7 +1089,7 @@ function lpSide(row) {
     : { label: 'Row S: Sections (press: Captures)', short: 'S·SEC', color: 'amber' }
   if (row < 5) {
     // LIVE: Generate is connected for the Drum Machine, Chord Prog and Sequencer; Mutate (Shift) for the Sequencer.
-    const off = live.value && (!GEN_APPS.includes(s.apps[row].id) || (s.shift && s.apps[row].id !== 'seq'))
+    const off = live.value && !genOn(s.apps[row].id, s.shift)
     return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: off ? 'off' : s.shift ? 'green' : 'amber' }
   }
 }
@@ -1647,7 +1690,7 @@ provide(RIG_CONTROLS_CTX, {
                 <button v-for="(l, i) in SLOT_LABELS" :key="l"
                         class="relative w-9 h-9 rounded-md border text-[11px] font-black transition-colors overflow-hidden"
                         :class="[SLOT_CLASS[slotState(a, i)], isRigApp(a.id) ? learnedRing(rigSlotParam(a.id, i)) : '']"
-                        :title="`${a.label} ${l}${live && a.id === 'arp' ? ` (${RIG_ARP_MODES[i]})` : ''}: ${slotState(a, i)} · ${a.lengths[i]} bar${a.lengths[i] > 1 ? 's' : ''}${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
+                        :title="`${a.label} ${l}${live && arpeggiatorRow(a.id) ? ` (${RIG_ARP_MODES[i]})` : ''}: ${slotState(a, i)} · ${a.lengths[i]} bar${a.lengths[i] > 1 ? 's' : ''}${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
                         @contextmenu="isRigApp(a.id) && learnMenu($event, rigSlotParam(a.id, i), `${a.label} slot ${l}`)"
                         @pointerdown="onSlotDown(a.id, i)" @pointerup="onSlotUp(a.id, i)" @pointerleave="a.held !== null && onSlotUp(a.id, i)">
                   {{ l }}
@@ -1706,27 +1749,38 @@ provide(RIG_CONTROLS_CTX, {
               </label>
             </div>
             <!-- Mute / Solo scope (LIVE, real apps): the whole app or some of its MIDI Flow cables -->
+            <!-- Bass / Arp: the Sequencer's lane (default) or, as before the lanes, the Drum Machine's bassline / the Arpeggiator -->
+            <div v-if="focused.id === 'bass' || focused.id === 'arp'" class="mt-3 pt-2 border-t border-white/5" data-rig-lane-row>
+              <span class="text-[10px] text-neutral-400">The row plays</span>
+              <div class="flex flex-wrap gap-1 mt-1">
+                <button v-for="o in [[true, focused.id === 'bass' ? 'Seq Bass lane' : 'Seq Arp lane'], [false, focused.id === 'bass' ? 'Drum Machine bassline' : 'Arpeggiator']]" :key="String(o[0])"
+                        class="px-1.5 py-0.5 rounded border text-[9px] font-bold"
+                        :class="rigLaneRows[focused.id] === o[0] ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
+                        :title="o[0] ? `The Sequencer's ${focused.id === 'bass' ? 'Bass' : 'Arp'} lane: banks A–H as slots, at the end of the pattern; Density, Mute / Solo, Intensity, GEN on the lane` : (focused.id === 'bass' ? 'The Drum Machine\'s bassline (as before the lanes)' : 'The Arpeggiator: pads = modes, Density = octave, Intensity = rate (as before the lanes)')"
+                        @click="setLaneRow(focused.id, o[0])">{{ o[1] }}</button>
+              </div>
+            </div>
             <div v-if="live && isLiveRow(focused.id)" class="mt-3 pt-2 border-t border-white/5">
               <span class="text-[10px] text-neutral-400">Mute / Solo / Intensity act on</span>
-              <div v-if="focused.id === 'bass'" class="mt-1 text-[9px] text-neutral-500">the Drum Machine's bassline only (Drum, on the whole app: its drums only). Its pads turn the bassline on from a sequence or off, the drums go on. CC 7 needs the bassline's own MIDI channel.</div>
+              <div v-if="focused.id === 'bass' && !rowLane('bass')" class="mt-1 text-[9px] text-neutral-500">the Drum Machine's bassline only (Drum, on the whole app: its drums only). Its pads turn the bassline on from a sequence or off, the drums go on. CC 7 needs the bassline's own MIDI channel.</div>
               <div v-else class="flex flex-wrap gap-1 mt-1">
                 <button class="px-1.5 py-0.5 rounded border text-[9px] font-bold"
                         :class="!(muteScopes[focused.id] ?? []).length ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
                         title="Mute/Solo and Intensity act on the whole app, on every device it's cabled to" @click="clearScope(focused.id)">Whole app</button>
                 <button v-for="dev in appCables(focused.id)" :key="dev" class="px-1.5 py-0.5 rounded border text-[9px]"
                         :class="(muteScopes[focused.id] ?? []).includes(dev) ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
-                        :title="`Mute/Solo and Intensity act only on the cable ${focused.label} → ${dev}${midiService.getCableTargets(LIVE_APP_SOURCE[focused.id]).includes(dev) ? '' : ' (not cabled in MIDI Flow now)'}`"
+                        :title="`Mute/Solo and Intensity act only on the cable ${focused.label} → ${dev}${midiService.getCableTargets(liveAppSource(focused.id)).includes(dev) ? '' : ' (not cabled in MIDI Flow now)'}`"
                         @click="toggleScope(focused.id, dev)">→ {{ dev }}</button>
                 <span v-if="!appCables(focused.id).length" class="text-[9px] text-neutral-600">no cables in MIDI Flow</span>
               </div>
-              <div v-if="focused.id !== 'arp'" class="flex items-center gap-1 mt-2">
+              <div v-if="!arpeggiatorRow(focused.id)" class="flex items-center gap-1 mt-2">
                 <span class="text-[10px] text-neutral-400">Intensity sends</span>
                 <button v-for="m in [['cc7', 'CC 7 (volume)'], ['velocity', 'Velocity'], ['both', 'Both']]" :key="m[0]" class="px-1.5 py-0.5 rounded border text-[9px]"
                         :class="intensityMode(intensityModes, focused.id) === m[0] ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'border-white/10 text-neutral-400 hover:text-white'"
                         :title="{ cc7: 'CC 7 = Intensity × Global, on the app\'s channel: MIDI-map it in Live to the track volume (any instrument)', velocity: 'Note-on velocity scaled by Intensity × Global (the instrument must respond to velocity)', both: 'CC 7 and velocity' }[m[0]]"
                         @click="setIntensityMode(focused.id, m[0])">{{ m[1] }}</button>
               </div>
-              <div v-if="focused.id === 'arp'" class="mt-1 text-[9px] text-neutral-500">Arp: Mute / Solo only — its Density is the octave range, its Intensity the rate.</div>
+              <div v-if="arpeggiatorRow(focused.id)" class="mt-1 text-[9px] text-neutral-500">Arp: Mute / Solo only — its Density is the octave range, its Intensity the rate.</div>
               <div v-else class="mt-1 font-mono text-[9px]" :class="focused.intensity * s.globalIntensity < 127 * 127 ? 'text-amber-300' : 'text-neutral-500'">{{ velocityReadout(focused) }}</div>
             </div>
           </section>

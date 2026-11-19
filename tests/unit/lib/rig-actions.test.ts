@@ -19,7 +19,7 @@ describe('rig-actions', () => {
   })
 
   it('rejects other names and unknown apps or slots', () => {
-    for (const n of ['dm_fill', 'rig_slot_pad_a', 'rig_slot_chord_i', 'rig_section_9', 'rig_gen', 'rig_density_chord', 'rig_density_bass']) {
+    for (const n of ['dm_fill', 'rig_slot_pad_a', 'rig_slot_chord_i', 'rig_section_9', 'rig_gen', 'rig_density_chord', 'rig_density_pad']) {
       expect(parseRigAction(n)).toBeNull()
     }
   })
@@ -29,7 +29,7 @@ describe('rig-actions', () => {
     expect(isContinuousRigAction({ kind: 'slot', app: 'drum', slot: 0 })).toBe(false)
     expect(rigSlotParam('drum', 7)).toBe('rig_slot_drum_h')
     const cat = rigActionCatalog()
-    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 1 + 3 + 8 + 3 + 6) // + Seq Free, 3 chains, play, tap, tempo − / +, round, tempo knob
+    expect(cat.length).toBe(5 * 13 + 3 + 1 + 1 + 1 + 1 + 3 + 8 + 3 + 6) // + Bass Density (its lane) + Seq Free, 3 chains, play, tap, tempo − / +, round, tempo knob
     for (const { paramName } of cat) expect(parseRigAction(paramName)).not.toBeNull()
   })
 })

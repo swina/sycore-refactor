@@ -8,15 +8,16 @@
  * only sparser. Live crescendos and breaks without preparing other patterns.
  *
  * Set by the Rig Controller panel (LIVE) or a MIDI-learned encoder
- * (`rig_density_drum`, `rig_density_seq`); read by the Drum Machine and the
- * Sequencer for each step. Only while the panel is open in LIVE (`active`).
+ * (`rig_density_drum`, `rig_density_seq`, `rig_density_bass`, `rig_density_arp`); read by the Drum
+ * Machine and the Sequencer's lanes for each step. Only while the panel is open in LIVE (`active`).
  */
 import { reactive } from 'vue'
 
-export type DensityApp = 'drum' | 'seq'
-export const DENSITY_APPS: readonly DensityApp[] = ['drum', 'seq']
+// bass / arp: the Sequencer's Bass / Arp lanes, while the Rig's Bass / Arp rows drive them (rig-live.ts rigLaneRows)
+export type DensityApp = 'drum' | 'seq' | 'bass' | 'arp'
+export const DENSITY_APPS: readonly DensityApp[] = ['drum', 'seq', 'bass', 'arp']
 
-export const rigDensity = reactive({ active: false, drum: 127, seq: 127 })
+export const rigDensity = reactive({ active: false, drum: 127, seq: 127, bass: 127, arp: 127 })
 
 /** Metric weight of a 16th in the bar: 4 downbeat, 3 beat 3, 2 beats 2/4, 1 8ths, 0 off-beat 16ths (+1 accent). */
 export function stepWeight(pos16: number, accent = false): number {

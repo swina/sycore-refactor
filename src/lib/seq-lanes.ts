@@ -29,6 +29,8 @@ export interface SeqLaneCfg {
   keySuffix: string
   /** CLK SYS Worker-queue tag (a Stop cancels only its own queued notes) */
   workerTag: string
+  /** the Rig row that drives it (rig-live.ts) */
+  rigRow: 'seq' | 'bass' | 'arp'
   /** a new bank's style / octave */
   defaults: { selectedStyle: string; selectedOctave: number; octaveRange: number }
 }
@@ -36,17 +38,17 @@ export interface SeqLaneCfg {
 export const SEQ_LANE_CFG: Record<SeqLane, SeqLaneCfg> = {
   main: {
     lane: 'main', label: 'Main', source: MidiSource.SEQUENCER2, ev: 'seq', toggle: 'toggle-sequencer2', learn: 'seq',
-    storeId: 'stepSequencer', keySuffix: '', workerTag: 'sequencer2',
+    storeId: 'stepSequencer', keySuffix: '', workerTag: 'sequencer2', rigRow: 'seq',
     defaults: { selectedStyle: 'House', selectedOctave: 4, octaveRange: 0 },
   },
   bass: {
     lane: 'bass', label: 'Bass', source: MidiSource.SEQ_BASS, ev: 'seq-bass', toggle: 'toggle-seq-bass', learn: 'seqbass',
-    storeId: 'stepSequencer-bass', keySuffix: '_BASS', workerTag: 'seq-bass',
+    storeId: 'stepSequencer-bass', keySuffix: '_BASS', workerTag: 'seq-bass', rigRow: 'bass',
     defaults: { selectedStyle: 'Acid', selectedOctave: 2, octaveRange: 0 },
   },
   arp: {
     lane: 'arp', label: 'Arp', source: MidiSource.SEQ_ARP, ev: 'seq-arp', toggle: 'toggle-seq-arp', learn: 'seqarp',
-    storeId: 'stepSequencer-arp', keySuffix: '_ARP', workerTag: 'seq-arp',
+    storeId: 'stepSequencer-arp', keySuffix: '_ARP', workerTag: 'seq-arp', rigRow: 'arp',
     defaults: { selectedStyle: 'Arpeggio', selectedOctave: 4, octaveRange: 1 },
   },
 }
@@ -57,8 +59,10 @@ export const SEQ_LANE_SOURCES: ReadonlySet<string> = new Set(SEQ_LANES.map(l => 
 /** A lane's window event: laneEvent('bass', 'bank-select') → 'seq-bass-bank-select'. */
 export const laneEvent = (lane: SeqLane, name: string) => `${SEQ_LANE_CFG[lane].ev}-${name}`
 
-/** Each lane playing (its engine writes it; MIDI Learn's play toggles read it). */
+/** Each lane playing (its engine writes it; MIDI Learn's play toggles and the Rig read it). */
 export const seqLanePlaying = reactive<Record<SeqLane, boolean>>({ main: false, bass: false, arp: false })
+/** Each lane's bank queued for the end of its pattern (null = none), for the Rig's pads. */
+export const seqLaneQueued = reactive<Record<SeqLane, number | null>>({ main: null, bass: null, arp: null })
 
 /** The lane a MIDI Learn name belongs to and the name without its prefix ('seqbass_play' → bass, 'play'). */
 export function parseLaneLearn(name: string): { lane: SeqLane; rest: string } | null {

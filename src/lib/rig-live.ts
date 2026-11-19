@@ -8,6 +8,11 @@
  * (control-map.ts), so a clip in Live and a pad do exactly the same thing:
  * the slot starts on the next bar (Sequencer: at the end of its pattern).
  *
+ * The Bass and Arp rows drive the Sequencer's Bass and Arp lanes (lib/seq-lanes.ts) as the Seq row
+ * drives its Main lane: banks A–H as slots, at the end of the pattern, Density / Mute / Solo /
+ * Intensity on the lane (`rigLaneRows`, on by default). Off (each row on its own), the rows are what
+ * they were before the lanes:
+ *
  * The Bass row is the Drum Machine's bassline, a part of its own: the Drum and Bass rows each turn
  * their part on (from a sequence A–H — the bassline may play another one than the drums) or off,
  * so drums + bass, drums only or bass only ('dm-part'; both off, the Drum Machine stops). Bass's
@@ -24,6 +29,7 @@ import { ARP_SUBDIVISIONS } from '@/stores/useArpStore'
 import { controlActionEvent, type ControlAction } from '@/lib/control-map'
 import type { RigAppState, RigState } from '@/lib/rig-controller'
 import { STEPS_PER_BAR, STEPS_PER_BEAT } from '@/lib/rig-controller'
+import { SEQ_LANE_CFG, laneEvent, type SeqLane } from '@/lib/seq-lanes'
 
 export type LiveAppId = 'chord' | 'drum' | 'seq'
 export const LIVE_APPS: readonly LiveAppId[] = ['chord', 'drum', 'seq']
@@ -33,9 +39,31 @@ export const isLiveApp = (id: string): id is LiveAppId => (LIVE_APPS as readonly
 export type LiveRowId = LiveAppId | 'bass' | 'arp'
 export const LIVE_ROWS: readonly LiveRowId[] = ['chord', 'drum', 'seq', 'bass', 'arp']
 export const isLiveRow = (id: string): id is LiveRowId => (LIVE_ROWS as readonly string[]).includes(id)
-/** The rows with slots to launch, arm and put in a section (Arp's pads are modes). */
-export type SlotRowId = LiveAppId | 'bass'
-export const SLOT_ROWS: readonly SlotRowId[] = ['chord', 'drum', 'seq', 'bass']
+/** The rows with slots to launch, arm and put in a section (Arp: on its lane; on the Arpeggiator its pads are modes). */
+export type SlotRowId = LiveAppId | 'bass' | 'arp'
+export const SLOT_ROWS: readonly SlotRowId[] = ['chord', 'drum', 'seq', 'bass', 'arp']
+
+/** The Bass / Arp rows drive the Sequencer's Bass / Arp lanes (true, the default) or, as before the
+ *  lanes, the Drum Machine's bassline / the Arpeggiator (false). Remembered per user. */
+const LS_LANE_ROWS = 'SYCORE_RIG_LANE_ROWS'
+export const rigLaneRows = reactive<{ bass: boolean; arp: boolean }>((() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(userKey(LS_LANE_ROWS)) ?? '{}') ?? {}
+    return { bass: v.bass !== false, arp: v.arp !== false }
+  } catch { return { bass: true, arp: true } }
+})())
+watch(rigLaneRows, v => { try { localStorage.setItem(userKey(LS_LANE_ROWS), JSON.stringify({ bass: v.bass, arp: v.arp })) } catch {} }, { deep: true })
+
+/** The Sequencer lane a row drives: Seq → Main; Bass / Arp → their lanes (with rigLaneRows on); else null. */
+export function rowLane(id: string): SeqLane | null {
+  if (id === 'seq') return 'main'
+  if (id === 'bass' || id === 'arp') return rigLaneRows[id] ? id : null
+  return null
+}
+/** A row with slots now (Arp only on its lane). */
+export const isSlotRow = (id: string): id is SlotRowId => (SLOT_ROWS as readonly string[]).includes(id) && (id !== 'arp' || rigLaneRows.arp)
+/** The rows with slots now. */
+export const activeSlotRows = (): SlotRowId[] => SLOT_ROWS.filter(isSlotRow)
 
 /** The Rig Controller in LIVE drives Chord Prog, Drum Machine and Sequencer: the transport's Play
  *  (Live's, or SY.CORE's) does not start them from "Sync Apps to Transport" then — only the slots
@@ -60,7 +88,7 @@ const LETTERS = 'ABCDEFGH'
 
 /** Reported by the apps: the slot queued (null = none), and the Sequencer's play state. */
 export const rigReports = reactive({
-  queued: { chord: null, drum: null, seq: null, bass: null } as Record<SlotRowId, number | null>,
+  queued: { chord: null, drum: null, seq: null, bass: null, arp: null } as Record<SlotRowId, number | null>,
   seqPlaying: false,
   /** The Drum Machine's Fill is on (triggered, until its bar ends) or armed for the next bar: lit on the Rig's devices. */
   fill: false,
@@ -219,6 +247,7 @@ type RigEvent = { name: string; detail?: Record<string, unknown> }
  *  - stopped → select the slot, then start on the sync point.
  */
 export function padEvents(id: LiveAppId, slot: number, playing: number | null, sync: number): RigEvent[] {
+  if (id === 'seq') return lanePadEvents('main', slot, playing, sync)
   if (playing === slot) {
     if (id === 'chord') return [{ name: 'cp-stop', detail: { sync } }]
     if (id === 'drum') return [{ name: 'dm-play-stop', detail: { play: false, sync } }]
@@ -237,9 +266,19 @@ export function padEvents(id: LiveAppId, slot: number, playing: number | null, s
   return [select, start]
 }
 
+/** A Sequencer lane's pad (the Seq row: Main; Bass / Arp on their lanes): its bank at the end of the pattern. */
+export function lanePadEvents(lane: SeqLane, slot: number, playing: number | null, sync: number): RigEvent[] {
+  const toggle = SEQ_LANE_CFG[lane].toggle
+  // user: the lane held off the auto-start by the notes it follows (core/engines/sequencer.js)
+  if (playing === slot) return [{ name: toggle, detail: { play: false, sync, user: true } }]
+  const select: RigEvent = { name: laneEvent(lane, 'bank-cue'), detail: { idx: slot } }
+  if (playing !== null) return [select]
+  return [select, { name: toggle, detail: { play: true, sync } }]
+}
+
 /** Slots armed with Live stopped (following Live): each row starts from its armed slot on Live's
  *  Start. A second press of the armed pad disarms it. */
-export const rigArmed = reactive({ chord: null, drum: null, seq: null, bass: null } as Record<SlotRowId, number | null>)
+export const rigArmed = reactive({ chord: null, drum: null, seq: null, bass: null, arp: null } as Record<SlotRowId, number | null>)
 
 /**
  * The commands of a pad of a row with slots. Drum and Bass are parts of the Drum Machine: the slot
@@ -247,6 +286,9 @@ export const rigArmed = reactive({ chord: null, drum: null, seq: null, bass: nul
  * if stopped) — each on its own, on the sync point. The other rows: padEvents.
  */
 export function rowPadEvents(id: SlotRowId, slot: number, playing: number | null, sync: number): RigEvent[] {
+  const lane = rowLane(id)
+  if (lane) return lanePadEvents(lane, slot, playing, sync)
+  if (id === 'arp') return [] // on the Arpeggiator: its pads are modes (the panel's arpPress)
   if (id === 'drum' || id === 'bass') {
     return [playing === slot
       ? { name: 'dm-part', detail: { part: id, on: false, sync } }
@@ -258,7 +300,7 @@ export function rowPadEvents(id: SlotRowId, slot: number, playing: number | null
 /** Live's Stop: the slots playing stay armed (unless the row already has one armed), so Live's next
  *  Play starts them again — as Live's clips after a Stop / Play of the scene. */
 export function armPlaying(playing: Partial<Record<SlotRowId, number | null | undefined>>): void {
-  for (const id of SLOT_ROWS) {
+  for (const id of activeSlotRows()) {
     const slot = playing[id]
     if (slot != null && rigArmed[id] === null) rigArmed[id] = slot
   }
@@ -281,37 +323,49 @@ export function armedDrumLoads(armed: { drum: number | null; bass: number | null
  * in use the source pads are drums like the others.
  */
 export const bassInUse = (d: { basslineEnabled: boolean; isPlaying: boolean; bassOn: boolean }, armedBass: number | null): boolean =>
-  d.basslineEnabled && (d.isPlaying ? d.bassOn : armedBass !== null)
+  d.basslineEnabled && (d.isPlaying ? d.bassOn : !rigLaneRows.bass && armedBass !== null) // Bass row on its lane: the armed slot is the lane's
 
 /** The armed slot after a press on `slot`: the same pad disarms, another pad arms that slot. */
 export const armPress = (armed: number | null, slot: number): number | null => (armed === slot ? null : slot)
 
-/** The commands that stop a real app at once (Live's Stop). */
-export function stopEvents(id: LiveAppId): RigEvent[] {
+/** The commands that stop a real app at once (Live's Stop); Bass / Arp: their lanes (nothing off them). */
+export function stopEvents(id: LiveRowId): RigEvent[] {
   if (id === 'chord') return [{ name: 'cp-stop' }]
   if (id === 'drum') return [{ name: 'dm-play-stop', detail: { play: false, sync: 0 } }]
-  return [{ name: 'toggle-sequencer2', detail: { play: false, sync: 0 } }]
+  const lane = rowLane(id)
+  return lane ? [{ name: SEQ_LANE_CFG[lane].toggle, detail: { play: false, sync: 0 } }] : []
 }
+/** The rows Live's Stop stops: the apps and the Bass / Arp lanes. */
+export const stopRows = (): LiveRowId[] => [...LIVE_APPS, ...(['bass', 'arp'] as const).filter(id => rigLaneRows[id])]
 
 /** What a pad press does, for the panel's display. */
-export function padWhen(id: LiveAppId, playing: number | null, slot: number, sync: number): string {
+export function padWhen(id: LiveRowId, playing: number | null, slot: number, sync: number): string {
   const at = sync === 0 ? 'now' : sync === 16 ? 'on the next bar' : `on the next ${sync / 4 === 1 ? 'beat' : '2 beats'}`
   if (playing === slot) return `stops ${at}`
   if (playing === null) return `starts ${at}`
-  return id === 'seq' ? 'at the end of its pattern' : at
+  return rowLane(id) ? 'at the end of its pattern' : at
 }
 
 export function dispatchRig(ev: { name: string; detail?: Record<string, unknown> }): void {
   window.dispatchEvent(new CustomEvent(ev.name, ev.detail ? { detail: ev.detail } : undefined))
 }
 
-/** The MidiSource each real app sends its notes with. */
+/** The MidiSource each real app sends its notes with (Bass / Arp before the lanes: rigLaneRows off). */
 export const LIVE_APP_SOURCE = { chord: 'CHORD_PROG', drum: 'DRUM_MACHINE', seq: 'SEQUENCER2', bass: 'DRUM_MACHINE', arp: 'ARP' } as const
+/** The MidiSource a row's notes go out with now: Bass / Arp on their lanes, the lane's. */
+export function liveAppSource(id: LiveRowId): string {
+  const lane = rowLane(id)
+  return lane ? SEQ_LANE_CFG[lane].source : LIVE_APP_SOURCE[id]
+}
+/** The Bass row on the Drum Machine's bassline (inside it: no cables of its own). */
+const dmBass = (id: LiveRowId) => id === 'bass' && !rigLaneRows.bass
+/** The Arp row on the Arpeggiator (its Density / Intensity are octave / rate). */
+export const arpeggiatorRow = (id: string) => id === 'arp' && !rigLaneRows.arp
 
 /** Which cables a real app's Mute/Solo acts on: [] = the whole app, else these devices only.
  *  Bass has none (it shares the Drum Machine's cables): it acts on the bassline. */
 export type MuteScopes = Partial<Record<LiveRowId, string[]>>
-const scopeOf = (scopes: MuteScopes, id: LiveRowId): string[] => (id === 'bass' ? [] : scopes[id] ?? [])
+const scopeOf = (scopes: MuteScopes, id: LiveRowId): string[] => (dmBass(id) ? [] : scopes[id] ?? [])
 
 /** The rows the rig's Mute/Solo silences: with a Solo on among the connected rows, all but the soloed ones; otherwise the muted ones. */
 function silencedApps(apps: readonly { id: string; muted: boolean; solo: boolean }[]): LiveRowId[] {
@@ -321,7 +375,7 @@ function silencedApps(apps: readonly { id: string; muted: boolean; solo: boolean
 }
 
 /** Drum (whole app) and Bass act inside the Drum Machine (rigParts), so each leaves the other playing. */
-const inDrumMachine = (id: LiveRowId, scopes: MuteScopes) => id === 'bass' || (id === 'drum' && !scopeOf(scopes, id).length)
+const inDrumMachine = (id: LiveRowId, scopes: MuteScopes) => dmBass(id) || (id === 'drum' && !scopeOf(scopes, id).length)
 
 /** The sources to mute (whole apps) for the rig's Mute/Solo. */
 export function mutedLiveSources(apps: readonly { id: string; muted: boolean; solo: boolean }[]): string[] {
@@ -340,8 +394,8 @@ export function rigMutes(apps: readonly { id: string; muted: boolean; solo: bool
   for (const id of silencedApps(apps)) {
     const scope = scopeOf(scopes, id)
     if (inDrumMachine(id, scopes)) parts[id as 'drum' | 'bass'] = true
-    else if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[id], dev])
-    else sources.push(LIVE_APP_SOURCE[id])
+    else if (scope.length) for (const dev of scope) cables.push([liveAppSource(id), dev])
+    else sources.push(liveAppSource(id))
   }
   return { sources, cables, parts }
 }
@@ -359,15 +413,15 @@ export function rigVelocityScales(
   const parts = { drum: 1, bass: 1 }
   const g = Math.max(0, Math.min(127, global)) / 127
   for (const a of apps) {
-    if (!isLiveRow(a.id) || a.id === 'arp') continue // Arp: its Intensity is the rate
+    if (!isLiveRow(a.id) || arpeggiatorRow(a.id)) continue // Arp on the Arpeggiator: its Intensity is the rate
     // `modes` given: only the apps whose Intensity scales velocity (without it: all, as before)
     if (modes && effectiveMode(modes, a.id, opts) === 'cc7') continue
     const f = (Math.max(0, Math.min(127, a.intensity)) / 127) * g
     if (f >= 1) continue
     const scope = scopeOf(scopes, a.id)
     if (inDrumMachine(a.id, scopes)) parts[a.id as 'drum' | 'bass'] = f
-    else if (scope.length) for (const dev of scope) cables.push([LIVE_APP_SOURCE[a.id], dev, f])
-    else sources[LIVE_APP_SOURCE[a.id]] = f
+    else if (scope.length) for (const dev of scope) cables.push([liveAppSource(a.id), dev, f])
+    else sources[liveAppSource(a.id)] = f
   }
   return { sources, cables, parts }
 }
@@ -376,7 +430,7 @@ export function rigVelocityScales(
 export interface RigIntensityOpts { bassChannel?: number }
 /** A row's Intensity mode as it applies: Bass without a channel of its own can only scale velocity. */
 const effectiveMode = (modes: IntensityModes, id: LiveRowId, opts: RigIntensityOpts): IntensityMode =>
-  id === 'bass' && !(opts.bassChannel && opts.bassChannel >= 1) ? 'velocity' : intensityMode(modes, id)
+  dmBass(id) && !(opts.bassChannel && opts.bassChannel >= 1) ? 'velocity' : intensityMode(modes, id)
 
 /** What a real app's Intensity sends: CC 7 (volume, any instrument), Velocity (note-on scale), or both. */
 export type IntensityMode = 'cc7' | 'velocity' | 'both'
@@ -396,8 +450,8 @@ export function rigCc7(
   apps: readonly { id: string; intensity: number }[], global: number, modes: IntensityModes = {}, scopes: MuteScopes = {}, opts: RigIntensityOpts = {},
 ): { id: LiveRowId; source: string; value: number; targets: string[] }[] {
   return apps
-    .filter(a => isLiveRow(a.id) && a.id !== 'arp' && effectiveMode(modes, a.id, opts) !== 'velocity')
-    .map(a => ({ id: a.id as LiveRowId, source: LIVE_APP_SOURCE[a.id as LiveRowId], value: intensityCc7(a.intensity, global), targets: scopeOf(scopes, a.id as LiveRowId) }))
+    .filter(a => isLiveRow(a.id) && !arpeggiatorRow(a.id) && effectiveMode(modes, a.id, opts) !== 'velocity')
+    .map(a => ({ id: a.id as LiveRowId, source: liveAppSource(a.id as LiveRowId), value: intensityCc7(a.intensity, global), targets: scopeOf(scopes, a.id as LiveRowId) }))
 }
 
 const LS_MODES = 'SYCORE_RIG_INTENSITY_MODES'

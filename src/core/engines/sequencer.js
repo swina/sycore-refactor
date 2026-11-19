@@ -26,7 +26,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSeqLaneStore, BANK_COUNT } from '@/stores/useStepSequencerStore'
-import { SEQ_LANE_CFG, SEQ_LANES, SEQ_LANE_SOURCES, laneEvent, seqLanePlaying } from '@/lib/seq-lanes'
+import { SEQ_LANE_CFG, SEQ_LANES, SEQ_LANE_SOURCES, laneEvent, seqLanePlaying, seqLaneQueued } from '@/lib/seq-lanes'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { journaled } from '@/lib/session-takes'
 import { useLocalStorage } from '@/composables/useLocalStorage'
@@ -38,7 +38,7 @@ import { externalGrid } from '@/core/midi/external-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
-import { rigReports } from '@/lib/rig-live'
+import { rigReports, rigLaneRows } from '@/lib/rig-live'
 import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
 import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
@@ -180,6 +180,7 @@ export function _resetSequencerEngine() {
     delete engineScopes[lane]
     delete engines[lane]
     seqLanePlaying[lane] = false
+    seqLaneQueued[lane] = null
   }
 }
 
@@ -445,7 +446,7 @@ function createSequencerEngine(lane = 'main') {
   let _seqChainPlaying = false
   let _seqLastBank = null
   // Rig Controller (rig-live.ts): the queued bank, mirrored for the pads.
-  function setPendingBank(v) { _pendingBank = v; if (isMain) rigReports.queued.seq = v }
+  function setPendingBank(v) { _pendingBank = v; seqLaneQueued[lane] = v; if (isMain) rigReports.queued.seq = v }
   function handleBankCue(e) {
     const idx = e.detail?.idx
     if (idx == null || idx < 0 || idx >= BANK_COUNT) return
@@ -1646,7 +1647,7 @@ function createSequencerEngine(lane = 'main') {
           // below (standard Elektron/Ableton-style step probability).
           // Rig Controller Density (LIVE) thins the weakest steps of the bar out, like a missed probability roll.
           const probabilityHit = (step.probability == null || Math.random() * 100 < step.probability)
-            && densityKeeps(stepIdx, !!step.accent, isMain ? densityFor('seq') : 127)
+            && densityKeeps(stepIdx, !!step.accent, isMain || rigLaneRows[lane] ? densityFor(cfg.rigRow) : 127)
 
           // CLK SYS, a late step (late start after Live's Play, stalled page): a long note
           // (ties, slow Time) whose end is still ahead sounds now for what is left ("chase").

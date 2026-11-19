@@ -149,7 +149,7 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
     return
   }
   // ── Rig Controller: Density of the real apps (an encoder or fader, 0–127) ─────
-  if (fieldName === 'rig_density_drum' || fieldName === 'rig_density_seq') {
+  if (fieldName === 'rig_density_drum' || fieldName === 'rig_density_seq' || fieldName === 'rig_density_bass') {
     rigDensity[fieldName.slice(12)] = val
     return
   }

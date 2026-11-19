@@ -19,7 +19,8 @@
  *   rig_intensity_<app>    Intensity (0–127)                                           knob / fader
  *   rig_global             Global intensity (0–127)                                    knob / fader
  *   rig_density_<drum|seq> Density (0–127; rig-density.ts)                             knob / fader
- *   rig_density_arp        Arp octave range (−3…+3); rig_intensity_arp = Arp rate      knob / fader
+ *   rig_density_bass       Bass lane Density (the Bass row on its lane)                 knob / fader
+ *   rig_density_arp        Arp lane Density; on the Arpeggiator: its octave range (−3…+3); rig_intensity_arp = its rate  knob / fader
  *
  * The MIDI Learn handler (useMidiCCListener) turns a mapped message into a
  * 'rig-action' window event; the Rig Controller panel acts on it while open
@@ -35,7 +36,7 @@ export type RigAction =
   | { kind: 'gen' | 'mute' | 'solo' | 'sync' | 'intensity'; app: RigActionApp }
   | { kind: 'fill' | 'seq_free' | 'play' | 'key_down' | 'key_up' | 'key_mode' | 'global' | 'tap' | 'tempo_down' | 'tempo_up' | 'tempo_round' | 'tempo' }
   | { kind: 'section'; index: number }
-  | { kind: 'density'; app: 'drum' | 'seq' | 'arp' }
+  | { kind: 'density'; app: 'drum' | 'seq' | 'bass' | 'arp' }
   | { kind: 'chain'; app: 'drum' | 'chord' | 'seq' }
 
 const isApp = (s: string): s is RigActionApp => (RIG_ACTION_APPS as readonly string[]).includes(s)
@@ -53,8 +54,8 @@ export function parseRigAction(name: string): RigAction | null {
   if (m) return { kind: 'section', index: Number(m[1]) - 1 }
   m = /^chain_(drum|chord|seq)$/.exec(rest)
   if (m) return { kind: 'chain', app: m[1] as 'drum' | 'chord' | 'seq' }
-  m = /^density_(drum|seq|arp)$/.exec(rest)
-  if (m) return { kind: 'density', app: m[1] as 'drum' | 'seq' | 'arp' }
+  m = /^density_(drum|seq|bass|arp)$/.exec(rest)
+  if (m) return { kind: 'density', app: m[1] as 'drum' | 'seq' | 'bass' | 'arp' }
   return null
 }
 
@@ -79,7 +80,8 @@ export function rigActionCatalog(): { paramName: string; label: string }[] {
   }
   out.push({ paramName: 'rig_density_drum', label: 'Drum Density' })
   out.push({ paramName: 'rig_density_seq', label: 'Seq Density' })
-  out.push({ paramName: 'rig_density_arp', label: 'Arp Octave' })
+  out.push({ paramName: 'rig_density_bass', label: 'Bass Density' })
+  out.push({ paramName: 'rig_density_arp', label: 'Arp Density / Octave' })
   out.push({ paramName: 'rig_global', label: 'Global intensity' })
   out.push({ paramName: 'rig_fill', label: 'Fill' })
   out.push({ paramName: 'rig_seq_free', label: 'Seq Free (decoupled from Chord Prog)' })

@@ -13,7 +13,7 @@ import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { SLOT_CLASS } from '@/lib/play-colors'
-import { rigArmed } from '@/lib/rig-live'
+import { rigArmed, rigLaneRows } from '@/lib/rig-live'
 import { useSequencerEngine } from '@/core/engines/sequencer'
 import { velLevel } from '@/lib/play-colors'
 import SeqViewSelect from '@/components/play/SeqViewSelect.vue'
@@ -49,6 +49,7 @@ describe('play views', () => {
   })
 
   it('Drum Machine: with a bassline in use the last three pads are BASS 1–3 (purple); else all drums', () => {
+    rigLaneRows.bass = false // the Bass row on the Drum Machine's bassline (as before the lanes)
     const store = useDrumMachineStore()
     store.basslineEnabled = true
     const w0 = mount(DrumPlayView)

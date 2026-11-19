@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { rigLaneRows } from '@/lib/rig-live'
+
+// Bass / Arp rows as before the Sequencer lanes (the Drum Machine's bassline, the Arpeggiator); the lanes: rig-live-lanes.test.ts
+beforeEach(() => { rigLaneRows.bass = false; rigLaneRows.arp = false })
 import { drumSnapshot, chordSnapshot, seqSnapshot, applySnapshot, applyClock, slotEvent, isLiveApp } from '@/lib/rig-live'
 import { createRigState } from '@/lib/rig-controller'
 
@@ -261,7 +265,7 @@ describe("rig-live: Live's Stop arms the slots playing", () => {
   it('arms each row playing; keeps a slot already armed; rows stopped stay unarmed', () => {
     Object.assign(rigArmed, { chord: null, drum: 5, seq: null, bass: null })
     armPlaying({ chord: 2, drum: 1, seq: null, bass: 0 })
-    expect({ ...rigArmed }).toEqual({ chord: 2, drum: 5, seq: null, bass: 0 })
+    expect({ ...rigArmed }).toEqual({ chord: 2, drum: 5, seq: null, bass: 0, arp: null })
     Object.assign(rigArmed, { chord: null, drum: null, seq: null, bass: null })
   })
 })

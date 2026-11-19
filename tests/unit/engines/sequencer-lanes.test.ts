@@ -18,7 +18,9 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useSeqLaneStore, useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { MidiSource } from '@/types/midi'
 import { rigReports } from '@/lib/rig-live'
-import { seqLanePlaying, parseLaneLearn, laneEvent } from '@/lib/seq-lanes'
+import { seqLanePlaying, seqLaneQueued, parseLaneLearn, laneEvent } from '@/lib/seq-lanes'
+import { rigLaneRows } from '@/lib/rig-live'
+import { rigDensity } from '@/lib/rig-density'
 import { applyParamValue } from '@/composables/useMidiCCListener'
 
 type Sent = { note: number; ch: number | null; src: string; opts: any }
@@ -137,5 +139,26 @@ describe('Sequencer lanes (Main / Bass / Arp)', () => {
     expect(bass.arpModeForGen.value).toBe('up')
     bass.selectBank(0)
     expect(bass.arpModeForGen.value).toBe('down')
+  })
+
+  it('the Rig on the Bass lane: its Density thins it, its queued bank is reported; off its lane, no Density', async () => {
+    const { bass, on } = setup()
+    bass.steps.value = bass.steps.value.map((st: any) => ({ ...st, active: true, notes: [36], gate: 50, probability: 100 }))
+    rigLaneRows.bass = true
+    Object.assign(rigDensity, { active: true, bass: 0 })
+    window.dispatchEvent(new CustomEvent('toggle-seq-bass', { detail: { play: true } }))
+    await flush()
+    for (let i = 0; i < 16; i++) repeats[0](0)
+    expect(on.length).toBe(1) // Density 0: the downbeat only
+    on.length = 0
+    rigLaneRows.bass = false
+    for (let i = 0; i < 16; i++) repeats[0](0)
+    expect(on.length).toBe(16)
+    window.dispatchEvent(new CustomEvent('seq-bass-bank-cue', { detail: { idx: 3 } }))
+    expect(seqLaneQueued.bass).toBe(3)
+    repeats[0](0) // the pattern's end: bank D starts
+    expect(seqLaneQueued.bass).toBeNull()
+    Object.assign(rigDensity, { active: false, bass: 127 })
+    rigLaneRows.bass = true
   })
 })
