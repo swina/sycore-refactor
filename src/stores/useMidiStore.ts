@@ -753,9 +753,9 @@ export const useMidiStore = defineStore('midi', () => {
     broadcastMode.value = midiService.getBroadcastMode()
   }
 
-  function sendCC(cc: number, value: number, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null) {
+  function sendCC(cc: number, value: number, channel: number | null = null, source: MidiSourceType = MidiSource.UI, skipDeviceId: string | null = null, opts?: BroadcastOptions) {
     const targetChannel = channel !== null ? channel - 1 : midiChannel.value - 1
-    midiService.sendCC(cc, value, targetChannel, source, skipDeviceId)
+    midiService.sendCC(cc, value, targetChannel, source, skipDeviceId, opts)
   }
 
   function sendNRPN(param: number, value: number, channel: number | null = null, source: MidiSourceType = MidiSource.UI) {

@@ -6,9 +6,11 @@
  * seq-banks-reloaded, seq-time-set, seq-direction-set, seq-steps-set), MIDI inputs (transpose, auto-start,
  * record) and the local autosave.
  *
- * One instance for the whole app (useSequencerEngine), created on first use in a detached
- * effectScope: it keeps playing with the Sequencer panel closed or unmounted. The panel
- * (Sequencer.vue) renders its state and calls its actions.
+ * One instance per lane (useSequencerEngine(lane): Main — the Sequencer as it always was —, Bass, Arp;
+ * lib/seq-lanes.ts), created on first use in a detached effectScope: it keeps playing with the
+ * Sequencer panel closed or unmounted. The panel (Sequencer.vue) renders its state and calls its
+ * actions. A lane has its own banks store, MIDI source and channel, events and MIDI Learn names; what
+ * is the app's (the Rig's reports, the transport, the backing track, CC 77, swing) stays Main's.
  *
  * The code is moved from Sequencer.vue as it was (2026-11-11); only what tied it to the component
  * changed: props.bpm / channel → midiStore.currentBpm / midiChannel, props.isOpen →
@@ -23,7 +25,8 @@ import { midiService, MidiSource, traceOn } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { usePresetStore } from '@/stores/usePresetStore'
 import { useUiStore } from '@/stores/useUiStore'
-import { useStepSequencerStore, BANK_COUNT } from '@/stores/useStepSequencerStore'
+import { useSeqLaneStore, BANK_COUNT } from '@/stores/useStepSequencerStore'
+import { SEQ_LANE_CFG, SEQ_LANES, SEQ_LANE_SOURCES, laneEvent, seqLanePlaying } from '@/lib/seq-lanes'
 import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { journaled } from '@/lib/session-takes'
 import { useLocalStorage } from '@/composables/useLocalStorage'
@@ -150,38 +153,50 @@ function buildChordNotes(scaleDegree, scaleIntervals, keyMidi, octave, voices) {
   return notes
 }
 
-let engine = null
-let engineScope = null
+const engines = {}
+const engineScopes = {}
 
-/** The Sequencer engine (created on first call; needs Pinia installed). */
-export function useSequencerEngine() {
-  if (!engine) {
-    engineScope = effectScope(true)
-    engine = engineScope.run(createSequencerEngine)
+/** A lane's Sequencer engine (default Main; created on first call; needs Pinia installed). */
+export function useSequencerEngine(lane = 'main') {
+  if (!SEQ_LANE_CFG[lane]) lane = 'main'
+  if (!engines[lane]) {
+    engineScopes[lane] = effectScope(true)
+    engines[lane] = engineScopes[lane].run(() => createSequencerEngine(lane))
   }
-  return engine
+  return engines[lane]
 }
 
-/** Tests: drop the engine (its watchers and listeners), so the next call makes a new one. */
+/** Tests: drop the engines (their watchers and listeners), so the next call makes new ones. */
 export function _resetSequencerEngine() {
-  engineScope?.stop()
-  engineScope = null
-  engine = null
+  for (const lane of SEQ_LANES) {
+    engineScopes[lane]?.stop()
+    delete engineScopes[lane]
+    delete engines[lane]
+    seqLanePlaying[lane] = false
+  }
 }
 
-function createSequencerEngine() {
+function createSequencerEngine(lane = 'main') {
+  const cfg = SEQ_LANE_CFG[lane]
+  const isMain = lane === 'main'
+  const SRC = cfg.source
+  const ev = (name) => laneEvent(lane, name)
   const midiStore = useMidiStore()
   const presetStore = usePresetStore()
   const uiStore = useUiStore()
   const syncStore = useSyncStore()
-  const seqStore = useStepSequencerStore()
+  const seqStore = useSeqLaneStore(lane)
   const liveMap = useLiveMapStore()
   const transportManager = useTransportManager()
   const bpm = () => midiStore.currentBpm || 120
-  const channel = () => midiStore.midiChannel
+  // the lane's MIDI channel (seqStore.midiChannel): 0 = the global one, with MIDI Flow's remaps; 1–16 =
+  // that channel as is (exactChannel: no cable / device OUT channel remap)
+  const channel = () => (seqStore.midiChannel >= 1 ? seqStore.midiChannel : midiStore.midiChannel)
+  const chOpts = (o) => (seqStore.midiChannel >= 1 ? { ...(o ?? {}), exactChannel: true } : o)
+  const laneChannel = computed({ get: () => seqStore.midiChannel, set: (v) => { seqStore.midiChannel = v } })
 
   // Local state — active bank working copy
-  const { state: seqStateStorage } = useLocalStorage('S1_SEQUENCER2_STATE', {})
+  const { state: seqStateStorage } = useLocalStorage('S1_SEQUENCER2_STATE' + cfg.keySuffix, {})
 
   const selectedStyle = ref(seqStore.activeBank.selectedStyle)
   const selectedKey = ref(seqStore.activeBank.selectedKey)
@@ -190,7 +205,7 @@ function createSequencerEngine() {
   const maxPolyphony = ref(seqStore.activeBank.maxPolyphony)
   const chordDensity = ref(seqStore.activeBank.chordDensity)
   const isPlaying = ref(false)
-  watch(isPlaying, v => { rigReports.seqPlaying = v })
+  watch(isPlaying, v => { seqLanePlaying[lane] = v; if (isMain) rigReports.seqPlaying = v })
   const isRecording = ref(false)
   const currentStep = ref(0)
   const selectedStepIdx = ref(0)
@@ -210,7 +225,7 @@ function createSequencerEngine() {
   // the Arpeggio style's notes: 'chord' (default: the tonic triad), 'chord7', 'scale' (as before)
   const arpNotes = ref(seqStore.activeBank.arpNotes ?? 'chord')
   const _onVarySet = (e) => { varyAmount.value = varyFromMidi(e.detail?.value ?? 0) }
-  window.addEventListener('seq-vary-set', _onVarySet)
+  window.addEventListener(ev('vary-set'), _onVarySet)
   const arpModeForGen = ref('up')
   const swingAmount = ref(0)
   const basePatternLength = ref(seqStore.activeBank.basePatternLength || seqStore.activeBank.numSteps)
@@ -255,15 +270,15 @@ function createSequencerEngine() {
   // (useSeqDeviceParamsStore, set in the → Map modal) — that device's CC to it, the CC to the rest.
   const deviceParams = useSeqDeviceParamsStore()
   function sendParam(which, cc, value, ch) {
-    const cabled = midiService.getCableTargets(MidiSource.SEQUENCER2)
+    const cabled = midiService.getCableTargets(SRC)
     if (!hasDeviceRoutes(cabled, deviceParams.routes)) {
-      midiStore.sendCC(cc, value, ch, MidiSource.SEQUENCER2)
+      midiStore.sendCC(cc, value, ch, SRC, null, chOpts())
       return
     }
     const ch0 = (ch ?? midiStore.midiChannel) - 1
     const { plain, own } = paramTargets(cabled, deviceParams.routes, which)
-    if (plain.length) midiService.sendCC(cc, value, ch0, MidiSource.SEQUENCER2, null, { onlyTargets: plain })
-    for (const o of own) midiService.sendCC(o.cc, value, ch0, MidiSource.SEQUENCER2, null, { onlyTargets: [o.device] })
+    if (plain.length) midiService.sendCC(cc, value, ch0, SRC, null, chOpts({ onlyTargets: plain }))
+    for (const o of own) midiService.sendCC(o.cc, value, ch0, SRC, null, chOpts({ onlyTargets: [o.device] }))
   }
   const keyPc = () => Math.max(0, NOTE_NAMES.indexOf(selectedKey.value))
   const scaleNow = () => SCALES[selectedScale.value] ?? SCALES['Major']
@@ -417,7 +432,7 @@ function createSequencerEngine() {
   let _seqChainPlaying = false
   let _seqLastBank = null
   // Rig Controller (rig-live.ts): the queued bank, mirrored for the pads.
-  function setPendingBank(v) { _pendingBank = v; rigReports.queued.seq = v }
+  function setPendingBank(v) { _pendingBank = v; if (isMain) rigReports.queued.seq = v }
   function handleBankCue(e) {
     const idx = e.detail?.idx
     if (idx == null || idx < 0 || idx >= BANK_COUNT) return
@@ -514,7 +529,7 @@ function createSequencerEngine() {
       chordDensity: chordDensity.value
     }
     seqStateStorage.value = config
-    midiStore.sendCC(77, Math.max(0, Math.min(127, (uiStore.seqGlobalTranspose || 0) + 64)), channel())
+    if (isMain) midiStore.sendCC(77, Math.max(0, Math.min(127, (uiStore.seqGlobalTranspose || 0) + 64)), channel())
     syncLocalToBank()
 
     // Sync live playback state immediately
@@ -539,8 +554,10 @@ function createSequencerEngine() {
   }, { deep: true })
 
   watch(() => bpm(), (bpm) => {
-    getTransport().bpm.value = bpm
-    midiStore.setBpm(bpm)
+    if (isMain) {
+      getTransport().bpm.value = bpm
+      midiStore.setBpm(bpm)
+    }
     // System clock on the internal tempo (with an external master the grid follows Live's beats).
     if (_sysSched && !externalGrid.active) _sysSched.setTempo(bpm)
   })
@@ -549,9 +566,12 @@ function createSequencerEngine() {
   // Worker timer, instead of the Tone.js transport (audio clock); notes leave from a Worker-timed
   // queue at their time (see DrumMachine.vue). Off by default. ──
   const LS_SEQ_SYSTEM_CLOCK = 'SYCORE_SEQ2_SYSTEM_CLOCK'
-  const systemClock = ref((() => { try { return localStorage.getItem(userKey(LS_SEQ_SYSTEM_CLOCK)) === '1' } catch { return false } })())
-  watch(systemClock, v => { try { localStorage.setItem(userKey(LS_SEQ_SYSTEM_CLOCK), v ? '1' : '0') } catch {} })
-  const SEQ_WORKER_TAG = 'sequencer2'
+  // one clock for every lane: Main's (saved), the other lanes share its ref
+  const systemClock = isMain
+    ? ref((() => { try { return localStorage.getItem(userKey(LS_SEQ_SYSTEM_CLOCK)) === '1' } catch { return false } })())
+    : useSequencerEngine('main').systemClock
+  if (isMain) watch(systemClock, v => { try { localStorage.setItem(userKey(LS_SEQ_SYSTEM_CLOCK), v ? '1' : '0') } catch {} })
+  const SEQ_WORKER_TAG = cfg.workerTag
   /** CLK SYS: who owns each sounding pitch, so a bank switch ends a tied note of the old bank
    *  and its queued note-off doesn't cut the new bank's note of the same pitch. */
   const _seqVoices = new VoiceLedger()
@@ -662,6 +682,7 @@ function createSequencerEngine() {
   }
 
   watch(swingAmount, (val) => {
+    if (!isMain) return // the transport's swing: the Main's
     getTransport().swing = val / 100
     getTransport().swingSubdivision = '16n'
   })
@@ -705,6 +726,7 @@ function createSequencerEngine() {
   }
   /** Journaled (lib/session-takes.ts): `fn` runs between a take of the bank before and one after. */
   function journaledGenerate(fn) {
+    if (!isMain) return fn() // session takes: the Main lane's for now
     return journaled('seq', seqStore.activeBankIndex, fn, { snap: bankSnapshot })
   }
   function generateSequence() { journaledGenerate(() => { applyProgKey(); _generateSequence() }) }
@@ -1034,16 +1056,16 @@ function createSequencerEngine() {
     }
     isPlaying.value = play === undefined ? !isPlaying.value : play
   }
-  window.addEventListener('toggle-sequencer2', handleToggle2)
+  window.addEventListener(cfg.toggle, handleToggle2)
 
   const handleBankSelect = (e) => {
     const idx = e.detail?.idx
     if (idx != null && idx >= 0 && idx < BANK_COUNT) selectBank(idx)
   }
-  window.addEventListener('seq-bank-select', handleBankSelect)
-  window.addEventListener('seq-bank-cue', handleBankCue)
-  window.addEventListener('seq-generate', handleRigGenerate)
-  window.addEventListener('seq-banks-reloaded', handleBanksReloaded)
+  window.addEventListener(ev('bank-select'), handleBankSelect)
+  window.addEventListener(ev('bank-cue'), handleBankCue)
+  window.addEventListener(ev('generate'), handleRigGenerate)
+  window.addEventListener(ev('banks-reloaded'), handleBanksReloaded)
 
   const handleTimeSet = (e) => {
     tempoMultiplier.value = pickFromMidi(TEMPO_MULTIPLIERS, tempoMultiplier.value, e.detail ?? {})
@@ -1056,9 +1078,14 @@ function createSequencerEngine() {
   const handleStepsSet = (e) => {
     numSteps.value = pickFromMidi(STEP_COUNTS, STEP_COUNTS.includes(numSteps.value) ? numSteps.value : 16, e.detail ?? {})
   }
-  window.addEventListener('seq-time-set', handleTimeSet)
-  window.addEventListener('seq-direction-set', handleDirectionSet)
-  window.addEventListener('seq-steps-set', handleStepsSet)
+  window.addEventListener(ev('time-set'), handleTimeSet)
+  window.addEventListener(ev('direction-set'), handleDirectionSet)
+  window.addEventListener(ev('steps-set'), handleStepsSet)
+
+  // Routed to this lane in MIDI Flow: to its own IN, or (Bass / Arp) to the Main's — a lane follows
+  // the chords the Sequencer is cabled to without a cable of its own.
+  const routedHere = (key, note) => midiStore.isDeviceRoutedToApp(key, SRC, note)
+    || (!isMain && midiStore.isDeviceRoutedToApp(key, MidiSource.SEQUENCER2, note))
 
   const isMidiDeviceAllowed = (chan, inputId, note) => {
     if (!inputId) return true
@@ -1109,7 +1136,7 @@ function createSequencerEngine() {
     // actions like the Virtual Keyboard, wrong here — see its comment in
     // useMidiStore.ts), so hasExplicitInputRouting is required in addition,
     // matching canAutoStart below and Note Latch's own convention.
-    if (!midiStore.hasExplicitInputRouting(deviceName) || !midiStore.isDeviceRoutedToApp(deviceName, MidiSource.SEQUENCER2, note)) {
+    if (!midiStore.hasExplicitInputRouting(deviceName) || !routedHere(deviceName, note)) {
       if (window.SY_LOG) {
         window.SY_LOG(`[Seq Ingress] Blocked ${deviceName} (not routed to Sequencer in MIDI Flow)`)
       }
@@ -1124,7 +1151,7 @@ function createSequencerEngine() {
   // which is device-specific (registrations/inChannel don't apply to an
   // app source). Same no-fail-open convention as above.
   function isAppSourceAllowed(sourceApp, note) {
-    return midiStore.hasExplicitInputRouting(sourceApp) && midiStore.isDeviceRoutedToApp(sourceApp, MidiSource.SEQUENCER2, note)
+    return midiStore.hasExplicitInputRouting(sourceApp) && routedHere(sourceApp, note)
   }
 
   // Auto-starting the sequencer's own transport is a higher-stakes action than
@@ -1205,7 +1232,7 @@ function createSequencerEngine() {
 
       if (isNoteOn) {
         // 1. Make the note audible immediately
-        midiStore.sendNoteOn(note, velocity, channel() || 1, MidiSource.SEQUENCER2)
+        midiStore.sendNoteOn(note, velocity, channel() || 1, SRC, null, undefined, chOpts())
 
         // 2. Record it onto the currently active play step (overdub/overwrite)
         const stepIdx = currentStep.value
@@ -1249,7 +1276,7 @@ function createSequencerEngine() {
         }
       } else if (isNoteOff) {
         // Make the note-off audible immediately
-        midiStore.sendNoteOff(note, 0, channel() || 1, MidiSource.SEQUENCER2)
+        midiStore.sendNoteOff(note, 0, channel() || 1, SRC, null, undefined, chOpts())
       }
       return
     }
@@ -1410,7 +1437,7 @@ function createSequencerEngine() {
   // definition above), but this guard stays as a hard backstop against that
   // specific self-referencing cable case.
   const unsubAppNote = midiStore.addAppNoteListener((type, note, velocity, chan, sourceApp) => {
-    if (sourceApp === MidiSource.SEQUENCER2) return
+    if (SEQ_LANE_SOURCES.has(sourceApp)) return // its own notes, or another lane's
     handleIncomingNote(type, note, velocity, chan, null, sourceApp)
   })
 
@@ -1425,10 +1452,12 @@ function createSequencerEngine() {
 
 
   watch(isPlaying, (playing) => {
-    midiService.isSequencerPlaying = playing
-    uiStore.isSequencerPlaying = playing
+    if (isMain) {
+      midiService.isSequencerPlaying = playing
+      uiStore.isSequencerPlaying = playing
+    }
 
-    if (syncTrack.value) {
+    if (isMain && syncTrack.value) {
       if (skipBackingTrackSync.value) {
         skipBackingTrackSync.value = false
       } else {
@@ -1436,7 +1465,7 @@ function createSequencerEngine() {
       }
     }
 
-    if (midiStore.syncSequencerTransport) {
+    if (isMain && midiStore.syncSequencerTransport) {
       if (midiStore.isTransportPlaying !== playing) {
         if (playing) midiStore.sendStart()
         else midiStore.sendStop()
@@ -1470,16 +1499,16 @@ function createSequencerEngine() {
         const [noteStr, chanStr] = key.split('-')
         const note = parseInt(noteStr)
         const chan = parseInt(chanStr)
-        midiStore.sendNoteOff(note, 0, chan, MidiSource.SEQUENCER2)
+        midiStore.sendNoteOff(note, 0, chan, SRC, null, undefined, chOpts())
       })
       activeMidiNotes.value.clear()
       _seqVoices.clear()
 
-      if (midiStore.syncSequencerTransport) midiStore.sendStop()
+      if (isMain && midiStore.syncSequencerTransport) midiStore.sendStop()
       midiStore.allNotesOff(channel())
 
       // Ensure Expression CC#11 is fully open at 127 immediately
-      midiStore.sendCC(11, 127, channel(), MidiSource.SEQUENCER2)
+      midiStore.sendCC(11, 127, channel(), SRC, null, chOpts())
 
       currentStep.value = 0
       seqStore.playingChainIndex = null
@@ -1490,7 +1519,7 @@ function createSequencerEngine() {
       if (fadeOutIntervalRef.value !== null) {
         clearInterval(fadeOutIntervalRef.value)
         fadeOutIntervalRef.value = null
-        midiStore.sendCC(11, 127, channel(), MidiSource.SEQUENCER2)
+        midiStore.sendCC(11, 127, channel(), SRC, null, chOpts())
       }
 
       let stepCounter = 0
@@ -1499,7 +1528,7 @@ function createSequencerEngine() {
       toneStart().then(() => {
         getTransport().bpm.value = bpm()
         midiStore.setBpm(bpm())
-        if (midiStore.syncSequencerTransport) midiStore.sendStart()
+        if (isMain && midiStore.syncSequencerTransport) midiStore.sendStart()
 
         // tMs (performance.now() ms) and late: only on the system clock (CLK SYS).
         stepCallback = (time, tMs, late = false) => {
@@ -1512,7 +1541,7 @@ function createSequencerEngine() {
             if (Math.abs(off - Math.round(off)) < 1e-6) {
               _seqStopSteps = 0
               for (const v of _seqVoices.cutAt(tMs)) {
-                midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.SEQUENCER2, null, tMs - 1, { workerTimed: true })
+                midiStore.sendNoteOff(v.note, 0, v.channel, SRC, null, tMs - 1, chOpts({ workerTimed: true }))
                 activeMidiNotes.value.delete(v.key)
               }
               state.isPlaying = false
@@ -1566,7 +1595,7 @@ function createSequencerEngine() {
             // The old bank's notes still sounding (ties) end where the new bank starts.
             if (tMs != null) {
               for (const v of _seqVoices.cutAt(tMs)) {
-                midiStore.sendNoteOff(v.note, 0, v.channel, MidiSource.SEQUENCER2, null, tMs - 1, { workerTimed: true })
+                midiStore.sendNoteOff(v.note, 0, v.channel, SRC, null, tMs - 1, chOpts({ workerTimed: true }))
                 activeMidiNotes.value.delete(v.key)
               }
             }
@@ -1593,7 +1622,7 @@ function createSequencerEngine() {
           // below (standard Elektron/Ableton-style step probability).
           // Rig Controller Density (LIVE) thins the weakest steps of the bar out, like a missed probability roll.
           const probabilityHit = (step.probability == null || Math.random() * 100 < step.probability)
-            && densityKeeps(stepIdx, !!step.accent, densityFor('seq'))
+            && densityKeeps(stepIdx, !!step.accent, isMain ? densityFor('seq') : 127)
 
           // CLK SYS, a late step (late start after Live's Play, stalled page): a long note
           // (ties, slow Time) whose end is still ahead sounds now for what is left ("chase").
@@ -1610,8 +1639,8 @@ function createSequencerEngine() {
             if (state.param2CC !== null) sendParam(2, state.param2CC, step.param2Value, state.channel)
             // …and to Map · Live Instruments slots (Live can't MIDI-map a track's own CCs), a route per
             // track (useLiveMapStore.seqRoutes)
-            if (state.param1CC !== null) liveMap.seqParam(1, step.param1Value)
-            if (state.param2CC !== null) liveMap.seqParam(2, step.param2Value)
+            if (isMain && state.param1CC !== null) liveMap.seqParam(1, step.param1Value)
+            if (isMain && state.param2CC !== null) liveMap.seqParam(2, step.param2Value)
 
             const stepDurationMs = 60000 / (state.bpm * 4) * (tempoMultiplier.value.beatsPerStep * 4)
             let noteDurationMs = stepDurationMs * (step.gate / 100)
@@ -1632,27 +1661,27 @@ function createSequencerEngine() {
                 const ch = state.channel
                 const offAt = tMs + noteDurationMs
                 const id = _seqVoices.start(noteKey, offAt, { note: clampedNote, channel: ch, key: noteKey })
-                midiStore.sendNoteOn(clampedNote, velocity, ch, MidiSource.SEQUENCER2, null, tMs, { workerTimed: true, workerTag: SEQ_WORKER_TAG })
+                midiStore.sendNoteOn(clampedNote, velocity, ch, SRC, null, tMs, chOpts({ workerTimed: true, workerTag: SEQ_WORKER_TAG }))
                 // a note-off of this pitch already sent for later would cut it: strike it again just after
                 const cutBy = _seqVoices.sentOffAfter(noteKey, tMs)
-                if (cutBy !== null && cutBy + 1 < offAt) midiStore.sendNoteOn(clampedNote, velocity, ch, MidiSource.SEQUENCER2, null, cutBy + 1, { workerTimed: true, workerTag: SEQ_WORKER_TAG })
+                if (cutBy !== null && cutBy + 1 < offAt) midiStore.sendNoteOn(clampedNote, velocity, ch, SRC, null, cutBy + 1, chOpts({ workerTimed: true, workerTag: SEQ_WORKER_TAG }))
                 activeMidiNotes.value.add(noteKey)
                 // decided NOTE_OFF_LEAD_MS early, sent timestamped (not when due: the main thread delayed it)
                 midiService.scheduleOnWorker(noteOffDecideAt(offAt, performance.now()), () => {
                   // A newer note of the same pitch owns it now: this note-off would cut it.
                   if (!_seqVoices.release(noteKey, id)) return
-                  midiStore.sendNoteOff(clampedNote, 0, ch, MidiSource.SEQUENCER2, null, offAt, { workerTimed: true })
+                  midiStore.sendNoteOff(clampedNote, 0, ch, SRC, null, offAt, chOpts({ workerTimed: true }))
                   activeMidiNotes.value.delete(noteKey)
                 }, undefined, 'SEQ note-off')
                 return
               }
-              midiStore.sendNoteOn(clampedNote, velocity, state.channel, MidiSource.SEQUENCER2)
+              midiStore.sendNoteOn(clampedNote, velocity, state.channel, SRC, null, undefined, chOpts())
             
               const noteKey = `${clampedNote}-${state.channel}`
               activeMidiNotes.value.add(noteKey)
 
               const timeoutId = window.setTimeout(() => {
-                midiStore.sendNoteOff(clampedNote, 0, state.channel, MidiSource.SEQUENCER2)
+                midiStore.sendNoteOff(clampedNote, 0, state.channel, SRC, null, undefined, chOpts())
                 activeMidiNotes.value.delete(noteKey)
                 activeTimeouts.value = activeTimeouts.value.filter(id => id !== timeoutId)
               }, noteDurationMs)
@@ -1702,7 +1731,7 @@ function createSequencerEngine() {
   })
 
   watch(() => midiStore.isTransportPlaying, (isPlayingMIDI) => {
-    if (midiStore.syncSequencerTransport) {
+    if (isMain && midiStore.syncSequencerTransport) {
       if (isPlaying.value !== isPlayingMIDI) {
         isPlaying.value = isPlayingMIDI
       }
@@ -1712,25 +1741,27 @@ function createSequencerEngine() {
   onScopeDispose(() => {
     if (repeatEventIdRef.value !== null) getTransport().clear(repeatEventIdRef.value)
     _stopSystemClock()
-    midiService.isSequencerPlaying = false
+    if (isMain) midiService.isSequencerPlaying = false
     window.removeEventListener('virtual-midi-note', handleVirtualNote)
-    window.removeEventListener('toggle-sequencer2', handleToggle2)
+    window.removeEventListener(cfg.toggle, handleToggle2)
     window.removeEventListener('cp-chord-release', _onChordRelease)
     window.removeEventListener('cp-chord-on', _onChordOn)
-    window.removeEventListener('seq-vary-set', _onVarySet)
-    window.removeEventListener('seq-bank-select', handleBankSelect)
-    window.removeEventListener('seq-bank-cue', handleBankCue)
-    window.removeEventListener('seq-generate', handleRigGenerate)
-    window.removeEventListener('seq-banks-reloaded', handleBanksReloaded)
-    window.removeEventListener('seq-time-set', handleTimeSet)
-    window.removeEventListener('seq-direction-set', handleDirectionSet)
-    window.removeEventListener('seq-steps-set', handleStepsSet)
+    window.removeEventListener(ev('vary-set'), _onVarySet)
+    window.removeEventListener(ev('bank-select'), handleBankSelect)
+    window.removeEventListener(ev('bank-cue'), handleBankCue)
+    window.removeEventListener(ev('generate'), handleRigGenerate)
+    window.removeEventListener(ev('banks-reloaded'), handleBanksReloaded)
+    window.removeEventListener(ev('time-set'), handleTimeSet)
+    window.removeEventListener(ev('direction-set'), handleDirectionSet)
+    window.removeEventListener(ev('steps-set'), handleStepsSet)
     unsubNote?.()
     unsubAppNote?.()
     unsubCC?.()
   })
 
   return {
+    // the lane (lib/seq-lanes.ts) and its MIDI channel (0 = global, 1–16)
+    lane, laneChannel,
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, progKey, chordsEnabled, maxPolyphony, chordDensity,
     isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,

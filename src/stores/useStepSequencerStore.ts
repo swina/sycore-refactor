@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { sendAiPrompt } from '@/lib/ai-service'
 import { useAiAgentStore } from './useAiAgentStore'
+import { SEQ_LANE_CFG, clampLaneChannel, type SeqLane } from '@/lib/seq-lanes'
 
 export const BANK_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 export const BANK_COUNT = 8
@@ -59,7 +60,8 @@ export interface SeqBank {
   chordDensity: number
 }
 
-function makeBank(): SeqBank {
+function makeBank(lane: SeqLane = 'main'): SeqBank {
+  const d = SEQ_LANE_CFG[lane].defaults
   return {
     numSteps: 16,
     basePatternLength: 16,
@@ -68,11 +70,11 @@ function makeBank(): SeqBank {
     param2CC: 71,
     param1Variation: 25,
     param2Variation: 25,
-    selectedOctave: 4,
-    octaveRange: 0,
+    selectedOctave: d.selectedOctave,
+    octaveRange: d.octaveRange,
     selectedKey: 'C',
     selectedScale: 'Major',
-    selectedStyle: 'House',
+    selectedStyle: d.selectedStyle,
     genDensity: 75,
     rhythmMode: 'weighted',
     syncopation: 30,
@@ -86,8 +88,11 @@ function makeBank(): SeqBank {
   }
 }
 
+// Main: the keys it always had; Bass / Arp: suffixed (lib/seq-lanes.ts)
 const BANKS_KEY = 'SYCORE_STEP_SEQ_BANKS'
 const CHAIN_KEY = 'SYCORE_STEP_SEQ_CHAIN'
+/** the lane's MIDI channel (0 = global, 1–16): per lane, not per bank — a lane is an instrument */
+const CHANNEL_KEY = 'SYCORE_STEP_SEQ_CHANNEL'
 
 function loadString(key: string): string | null {
   try {
@@ -101,27 +106,27 @@ function saveString(key: string, val: any) {
   } catch {}
 }
 
-function loadBanks(): SeqBank[] | null {
-  const raw = loadString(BANKS_KEY)
+function loadBanks(lane: SeqLane): SeqBank[] | null {
+  const raw = loadString(BANKS_KEY + SEQ_LANE_CFG[lane].keySuffix)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed) && parsed.length > 0) {
       const banks = parsed.slice(0, BANK_COUNT).map((b: any) => ({
-        ...makeBank(),
+        ...makeBank(lane),
         ...b,
-        steps: Array.isArray(b.steps) ? b.steps.map((s: any) => ({ ...DEFAULT_STEP, ...s })) : makeBank().steps,
+        steps: Array.isArray(b.steps) ? b.steps.map((s: any) => ({ ...DEFAULT_STEP, ...s })) : makeBank(lane).steps,
       }))
       // Pad with empty banks if saved data has fewer than BANK_COUNT
-      while (banks.length < BANK_COUNT) banks.push(makeBank())
+      while (banks.length < BANK_COUNT) banks.push(makeBank(lane))
       return banks
     }
   } catch {}
   return null
 }
 
-function loadChain(): { chain: (number | null)[]; chainEnabled: boolean } | null {
-  const raw = loadString(CHAIN_KEY)
+function loadChain(lane: SeqLane): { chain: (number | null)[]; chainEnabled: boolean } | null {
+  const raw = loadString(CHAIN_KEY + SEQ_LANE_CFG[lane].keySuffix)
   if (!raw) return null
   try {
     return JSON.parse(raw)
@@ -171,13 +176,27 @@ function migrateFromOldState(): SeqBank[] | null {
   return null
 }
 
-export const useStepSequencerStore = defineStore('stepSequencer', () => {
-  const savedBanks = loadBanks() ?? migrateFromOldState() ?? null
-  const savedChain = loadChain()
+function loadChannel(lane: SeqLane): number {
+  const raw = loadString(CHANNEL_KEY + SEQ_LANE_CFG[lane].keySuffix)
+  try { return clampLaneChannel(raw === null ? 0 : JSON.parse(raw)) } catch { return 0 }
+}
+
+/** A lane's banks store (Main: the Sequencer's, as always; Bass / Arp: their own keys). */
+const laneSetup = (lane: SeqLane) => () => {
+  const sfx = SEQ_LANE_CFG[lane].keySuffix
+  const savedBanks = loadBanks(lane) ?? (lane === 'main' ? migrateFromOldState() : null) ?? null
+  const savedChain = loadChain(lane)
 
   const banks = ref<SeqBank[]>(
-    savedBanks ?? Array.from({ length: BANK_COUNT }, () => makeBank())
+    savedBanks ?? Array.from({ length: BANK_COUNT }, () => makeBank(lane))
   )
+  /** the lane's MIDI channel: 0 = the global one (MIDI Flow's remaps apply), 1–16 = that channel as is */
+  const midiChannel = ref(loadChannel(lane))
+  watch(midiChannel, v => {
+    const c = clampLaneChannel(v)
+    if (c !== v) { midiChannel.value = c; return }
+    saveString(CHANNEL_KEY + sfx, c)
+  })
   const activeBankIndex = ref(0)
 
   const chain = ref<(number | null)[]>(
@@ -227,14 +246,14 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
   })
 
   function persistBanks() {
-    saveString(BANKS_KEY, banks.value.map(b => ({
+    saveString(BANKS_KEY + sfx, banks.value.map(b => ({
       ...b,
       steps: b.steps.map(s => ({ ...s })),
     })))
   }
 
   function persistChain() {
-    saveString(CHAIN_KEY, { chain: chain.value, chainEnabled: chainEnabled.value })
+    saveString(CHAIN_KEY + sfx, { chain: chain.value, chainEnabled: chainEnabled.value })
   }
 
   watch(banks, persistBanks, { deep: true })
@@ -303,11 +322,11 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
   function restoreAllBanks(snap: { banks?: any[]; chain?: unknown; chainEnabled?: boolean; activeBankIndex?: number } | null) {
     if (!snap || !Array.isArray(snap.banks)) return
     const next = snap.banks.slice(0, BANK_COUNT).map((b: any) => ({
-      ...makeBank(),
+      ...makeBank(lane),
       ...b,
-      steps: Array.isArray(b?.steps) ? b.steps.map((st: any) => ({ ...DEFAULT_STEP, ...st })) : makeBank().steps,
+      steps: Array.isArray(b?.steps) ? b.steps.map((st: any) => ({ ...DEFAULT_STEP, ...st })) : makeBank(lane).steps,
     }))
-    while (next.length < BANK_COUNT) next.push(makeBank())
+    while (next.length < BANK_COUNT) next.push(makeBank(lane))
     banks.value = next
     if (snap.chain !== undefined) chain.value = normalizeChain(snap.chain)
     if (snap.chainEnabled !== undefined) chainEnabled.value = !!snap.chainEnabled
@@ -433,6 +452,8 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
   }
 
   return {
+    lane,
+    midiChannel,
     banks,
     activeBankIndex,
     activeBank,
@@ -454,4 +475,13 @@ export const useStepSequencerStore = defineStore('stepSequencer', () => {
     restoreLinkedBank,
     generateFromAiPrompt,
   }
-})
+}
+
+export const useStepSequencerStore = defineStore(SEQ_LANE_CFG.main.storeId, laneSetup('main'))
+const useBassLaneStore = defineStore(SEQ_LANE_CFG.bass.storeId, laneSetup('bass'))
+const useArpLaneStore = defineStore(SEQ_LANE_CFG.arp.storeId, laneSetup('arp'))
+
+/** A lane's banks store: Main (the Sequencer's, `useStepSequencerStore`), Bass or Arp. */
+export function useSeqLaneStore(lane: SeqLane = 'main') {
+  return lane === 'bass' ? useBassLaneStore() : lane === 'arp' ? useArpLaneStore() : useStepSequencerStore()
+}

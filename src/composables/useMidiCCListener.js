@@ -2,6 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
 import { rigDensity } from '@/lib/rig-density'
 import { drumPerform } from '@/lib/drum-perform'
+import { parseLaneLearn, laneEvent, seqLanePlaying, SEQ_LANE_CFG } from '@/lib/seq-lanes'
 import { setDrumCc } from '@/lib/drum-perform-send'
 import { parseRigAction, isContinuousRigAction } from '@/lib/rig-actions'
 import { parseMapSlot, parseMapButton, MAP_TRACK_KNOB } from '@/lib/live-map'
@@ -248,6 +249,24 @@ export function applyParamValue(fieldName, val, fromNote = false, stores = {}) {
   if (fieldName.startsWith('cp_slot_')) {
     const idx = parseInt(fieldName.slice(8))
     if (!isNaN(idx) && (fromNote || val > 0)) window.dispatchEvent(new CustomEvent('cp-slot-select', { detail: { idx } }))
+    return
+  }
+  // ── Sequencer lanes Bass / Arp (lib/seq-lanes.ts): seqbass_… / seqarp_…, as the Main's seq_… ──
+  const laneLearn = parseLaneLearn(fieldName)
+  if (laneLearn && laneLearn.lane !== 'main') {
+    const { lane, rest } = laneLearn
+    const fire = (name, detail) => window.dispatchEvent(new CustomEvent(laneEvent(lane, name), { detail }))
+    if (rest === 'play') {
+      const shouldPlay = fromNote ? !seqLanePlaying[lane] : on
+      window.dispatchEvent(new CustomEvent(SEQ_LANE_CFG[lane].toggle, { detail: { play: shouldPlay, user: true } }))
+    } else if (rest === 'time' || rest === 'direction' || rest === 'steps') {
+      fire(`${rest}-set`, { value: val, fromNote })
+    } else if (rest === 'vary') {
+      fire('vary-set', { value: val })
+    } else if (rest.startsWith('bank_')) {
+      const idx = parseInt(rest.slice(5))
+      if (!isNaN(idx) && (fromNote || val > 0)) fire('bank-select', { idx })
+    }
     return
   }
   // ── Sequencer (Step Sequencer) ──────────────────────────────────────────────────

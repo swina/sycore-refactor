@@ -33,6 +33,8 @@ import { decodeRaw, decodeOut, applyVelocityCurve, noteStatusByte, snapFaderValu
 
 export type { DeviceRegistration, RoutingConfig, SplitConfig, MidiMessageType, MidiMonitorEntry };
 export { MidiSource };
+// The step sequencers (and the Sequencer's lanes) never fan out to every output unwired (see broadcast below).
+const NO_BROADCAST_SOURCES = new Set<string>([MidiSource.SEQUENCER, MidiSource.SEQUENCER2, MidiSource.SEQ_BASS, MidiSource.SEQ_ARP]);
 
 function _parseSysExString(input: string): number[] | null {
   const s = input.trim();
@@ -1531,7 +1533,7 @@ export class MidiService {
     // reaches outputs normally via an explicit routing-matrix mapping.
     this.midiAccess.outputs.forEach((outPort: any) => {
       const isMatrixMatch = targetsFromMatrix.has(outPort.name) || normalizedMatrix.has(outPort.name.toLowerCase().trim());
-      const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && (source !== MidiSource.SEQUENCER2) && !hasMappings;
+      const isBroadcastTarget = this.router.getBroadcastMode() && !NO_BROADCAST_SOURCES.has(source) && !hasMappings;
       if (!isMatrixMatch && !isBroadcastTarget) return;
 
       const config = this.routingConfig?.registrations[outPort.name];
@@ -1558,7 +1560,7 @@ export class MidiService {
     // SEQUENCER/SEQUENCER2 broadcast exclusion as above.
     this.virtualOutputs.forEach((_, virtName) => {
       const isMatrixMatch = targetsFromMatrix.has(virtName) || normalizedMatrix.has(virtName.toLowerCase().trim());
-      const isBroadcastTarget = this.router.getBroadcastMode() && (source !== MidiSource.SEQUENCER) && (source !== MidiSource.SEQUENCER2) && !hasMappings;
+      const isBroadcastTarget = this.router.getBroadcastMode() && !NO_BROADCAST_SOURCES.has(source) && !hasMappings;
       if (!isMatrixMatch && !isBroadcastTarget) return;
       virtualTargets.add(virtName);
     });

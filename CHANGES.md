@@ -4,6 +4,14 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-19
 
+- **Sequencer lanes, phase 1: an engine per lane (Main / Bass / Arp)** — the groundwork for replacing the Drum Machine's bassline (plan: `docs/plans/sequencer-lanes.md`). `useSequencerEngine(lane)` and `useSeqLaneStore(lane)` give each lane its own engine and banks (independent active bank, chain, pattern). Main keeps every id it had: store, saved keys, events (`seq-…`, `toggle-sequencer2`), MIDI Learn `seq_…`, source `SEQUENCER2`. Bass and Arp get their own:
+  - store `stepSequencer-bass` / `-arp`, keys `…_BASS` / `…_ARP`
+  - events `seq-bass-…` / `seq-arp-…`, `toggle-seq-bass` / `toggle-seq-arp`
+  - MIDI Learn `seqbass_…` / `seqarp_…`
+  - MIDI sources `SEQ_BASS` / `SEQ_ARP`, which never broadcast unwired, like the Sequencer
+
+  **Each lane has its MIDI channel**: 0 = the global channel with MIDI Flow's remaps (as today), 1–16 = sent on that channel as is. It's saved per lane, not per bank. A lane follows notes routed to its own IN or to the Main's, and never another lane's notes. CLK SYS is one setting for all lanes. The Rig's reports, transport sync, backing track, CC 77, swing, session takes and Map's P1/P2 stay Main's for now. No UI yet (phase 4). Files: `lib/seq-lanes.ts`, `core/engines/sequencer.js`, `stores/useStepSequencerStore.ts`, `useMidiCCListener.js`, `midi-service.ts`; tests: `sequencer-lanes.test.ts`. Branch: `feat/sequencer-lanes`
+
 - **Drum Machine performance row: dials; Drum CC setup in a modal** — the eight controls are now dials (`KnobDial`, amber) aligned in one row: CC 1–4, Dyn, Dens, Hum, Swing. Drag up / down or use the wheel; double-click returns to the default; right-click is MIDI Learn as before. ⚙ opens the **Drum CC** modal, centred on the screen, with each knob's name and CC number (it replaces the inline setup). `components/play/DrumPerformRow.vue`; tests: `drum-perform-row.test.ts`. Branch: `master`
 
 - **Drum Machine: performance controls for MIDI OUT** — a new row under the pads in the Performance play view, every control MIDI-learnable (right-click):

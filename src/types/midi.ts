@@ -115,6 +115,9 @@ export interface MidiMonitorEntry {
 export enum MidiSource {
   SEQUENCER = 'SEQUENCER',
   SEQUENCER2 = 'SEQUENCER2',
+  /** The Sequencer's Bass and Arp lanes (lib/seq-lanes.ts) */
+  SEQ_BASS = 'SEQ_BASS',
+  SEQ_ARP = 'SEQ_ARP',
   CHORD_PROG = 'CHORD_PROG',
   KEYBOARD = 'KEYBOARD',
   ARP = 'ARP',
