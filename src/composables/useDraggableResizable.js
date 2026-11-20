@@ -12,6 +12,17 @@ import { useViewportClass } from './useViewportClass'
 // once; one not mounted reads it from its storage key when it mounts. Geometry changes by hand are
 // reported (the active workspace remembers them).
 const _livePanels = new Map() // panelId → (rect) => void
+const _editSnaps = new Map() // panelId → its geometry before EDIT went full screen
+const _editCtl = new Map()   // panelId → { enter, leave } (a mounted panel)
+/**
+ * A player in a workspace with play views (Performance): EDIT opens it full screen (`on`), Play view puts
+ * it back where and as big as it was. Not persisted while full screen (a drag there isn't kept either).
+ */
+export function setEditFullscreen(panelId, on) {
+  const ctl = _editCtl.get(panelId)
+  if (ctl) { on ? ctl.enter() : ctl.leave() }
+  else if (!on) _editSnaps.delete(panelId)
+}
 const _geometryListeners = new Set()
 /** Place a panel: live if mounted, else written to its storage key for its next mount. */
 export function setPanelGeometry(panelId, storageKey, rect) {
@@ -171,15 +182,23 @@ export function useDraggableResizable({
   if (panelId) {
     // placed by a workspace: kept in the window, not grown to the Classic minimum size (the play
     // views are compact)
-    _livePanels.set(panelId, (rect) => {
+    const setLive = (rect) => {
       pos.value = { ...pos.value, minimized: false, ...rect }
       const p = pos.value
       p.x = Math.max(0, Math.min(window.innerWidth - p.w, p.x))
       p.y = Math.max(0, Math.min(window.innerHeight - p.h, p.y))
       persist()
+    }
+    const getLive = () => ({ ...pos.value })
+    _livePanels.set(panelId, setLive)
+    _liveGetters.set(panelId, getLive)
+    // Only its own entries: a panel remounted under the same id (the Sequencer, keyed per lane) runs
+    // the new instance's setup before the old one's onUnmounted — which then removed the new entries
+    // (the Sequencer's EDIT no longer went full screen once a lane had been switched).
+    onUnmounted(() => {
+      if (_livePanels.get(panelId) === setLive) _livePanels.delete(panelId)
+      if (_liveGetters.get(panelId) === getLive) _liveGetters.delete(panelId)
     })
-    _liveGetters.set(panelId, () => ({ ...pos.value }))
-    onUnmounted(() => { _livePanels.delete(panelId); _liveGetters.delete(panelId) })
   }
   const reportGeometry = () => {
     if (!panelId) return
@@ -349,6 +368,30 @@ export function useDraggableResizable({
     watch(() => uiStore.silentPanels[panelId], (isSilent) => {
       if (isSilent) isMinimized.value = true
     })
+  }
+
+  // EDIT full screen (setEditFullscreen, from usePlayView): a panel remounted while editing (the
+  // Sequencer switching lane) comes up full screen too and still goes back.
+  if (panelId) {
+    const full = () => {
+      pos.value = { ...pos.value, x: 0, y: 0, w: window.innerWidth, h: window.innerHeight - FOOTER_H, minimized: false }
+      bringToFront()
+    }
+    const ctl = {
+      enter() {
+        if (isMaximized.value && !_editSnaps.has(panelId)) return
+        if (!_editSnaps.has(panelId)) _editSnaps.set(panelId, { x: pos.value.x, y: pos.value.y, w: pos.value.w, h: pos.value.h })
+        full()
+      },
+      leave() {
+        const snap = _editSnaps.get(panelId)
+        _editSnaps.delete(panelId)
+        if (snap) { pos.value = { ...pos.value, ...snap }; persist(); reportGeometry() }
+      },
+    }
+    _editCtl.set(panelId, ctl)
+    if (_editSnaps.has(panelId)) full()
+    onUnmounted(() => { if (_editCtl.get(panelId) === ctl) _editCtl.delete(panelId) })
   }
 
   return { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize, isMaximized }

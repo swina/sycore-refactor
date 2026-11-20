@@ -314,3 +314,22 @@ describe('rigFollowPlay', () => {
     rigFollowPlay.value = true
   })
 })
+
+describe('the current slot (play views: shown while stopped, after a restart)', async () => {
+  const { seqSnapshot, chordSnapshot } = await import('@/lib/rig-live')
+  const { slotLook } = await import('@/lib/play-colors')
+  const bank = (on: boolean) => ({ steps: [{ active: on, notes: on ? [60] : [] }], numSteps: 1 })
+  it('the active slot when it holds something; none when empty', () => {
+    const banks = [bank(true), bank(false), bank(true), ...Array(5).fill(bank(false))]
+    expect(seqSnapshot(banks, 2, false, null).current).toBe(2)
+    expect(seqSnapshot(banks, 1, false, null).current).toBeNull()
+    const s = seqSnapshot(banks, 2, false, null)
+    expect(slotLook(s, 2)).toBe('current')
+    expect(slotLook(s, 0)).toBe('filled')
+    expect(slotLook(seqSnapshot(banks, 2, true, null), 2)).toBe('playing')
+  })
+  it('Chord Prog: the slot playing, else the active one', () => {
+    const slots = [bank(true), bank(true), ...Array(6).fill(bank(false))]
+    expect(chordSnapshot(slots, 1, null, false, null).current).toBe(1)
+  })
+})

@@ -62,8 +62,11 @@ function onDbl(t, i) {
 
 <template>
   <div class="flex flex-col gap-2 p-3 min-h-0">
-    <PlaySlots :snap="snap" />
-    <PlayChain v-if="drumStore.chainEnabled" :entries="chainEntries" :trim-empty="false" :current="drumStore.isPlaying ? props.chainPos : -1" />
+    <!-- Chain mode on: the slots narrow, the chain on their right -->
+    <div class="flex items-center gap-3 min-w-0">
+      <PlaySlots :snap="snap" :compact="drumStore.chainEnabled" :class="drumStore.chainEnabled ? '' : 'flex-1'" />
+      <PlayChain v-if="drumStore.chainEnabled" class="flex-1" :entries="chainEntries" :trim-empty="false" :current="drumStore.isPlaying ? props.chainPos : -1" />
+    </div>
     <div class="flex flex-col gap-1 min-h-0">
       <div class="flex items-center gap-2">
         <div class="shrink-0 w-20" />

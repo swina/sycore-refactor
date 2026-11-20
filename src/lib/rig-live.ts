@@ -108,7 +108,11 @@ export interface LiveSnapshot {
   filled: boolean[]
   playing: number | null
   queued: number | null
+  /** The app's current slot (the one Play starts, shown while stopped too — after a restart): only when
+   *  it holds something. The play views show it; the Rig's LEDs don't. */
+  current?: number | null
 }
+const currentOf = (filled: boolean[], idx: number): number | null => (idx >= 0 && filled[idx] ? idx : null)
 
 interface StepLike { active?: boolean; notes?: number[] }
 
@@ -124,7 +128,7 @@ export function drumSnapshot(
   const filled = [...LETTERS].map(k =>
     (sequences[k] ?? []).some(t => anyActive(t.steps)) || (bassline?.[k] ?? []).some(t => anyActive(t.steps)))
   const idx = LETTERS.indexOf(active)
-  return { filled, playing: isPlaying && idx >= 0 ? idx : null, queued }
+  return { filled, playing: isPlaying && idx >= 0 ? idx : null, queued, current: currentOf(filled, idx) }
 }
 
 /** Bass: the Drum Machine's sequences A–H holding a bassline; the one playing while it's on. */
@@ -172,7 +176,8 @@ export function chordSnapshot(
     const sl = slots[i]
     return !!sl && sl.steps.slice(0, sl.numSteps).some(st => !!st?.active && (st.notes?.length ?? 0) > 0)
   })
-  return { filled, playing: isPlaying ? (playingIdx ?? activeIdx) : null, queued }
+  const cur = isPlaying ? (playingIdx ?? activeIdx) : activeIdx
+  return { filled, playing: isPlaying ? (playingIdx ?? activeIdx) : null, queued, current: currentOf(filled, cur) }
 }
 
 /** Sequencer: banks A–H, the active one plays. */
@@ -181,7 +186,7 @@ export function seqSnapshot(
   activeIdx: number, isPlaying: boolean, queued: number | null,
 ): LiveSnapshot {
   const filled = Array.from({ length: 8 }, (_, i) => anyActive(banks[i]?.steps, banks[i]?.numSteps))
-  return { filled, playing: isPlaying ? activeIdx : null, queued }
+  return { filled, playing: isPlaying ? activeIdx : null, queued, current: currentOf(filled, activeIdx) }
 }
 
 /** Mirror a snapshot into a rig row (options, mute… are kept). */

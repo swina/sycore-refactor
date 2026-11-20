@@ -1,14 +1,16 @@
 <script setup>
-// A player's slots A–H in a play view: dark amber filled, blinking queued / armed, full amber playing.
+// A player's slots A–H in a play view: dark amber filled, outlined the current one (stopped: the one
+// Play starts), blinking queued / armed, full amber playing. `compact`: small fixed cells (the chain
+// sits on their right, Chain mode on).
 import { SLOT_CLASS, slotLook } from '@/lib/play-colors'
-defineProps({ snap: { type: Object, required: true } })
+defineProps({ snap: { type: Object, required: true }, compact: { type: Boolean, default: false } })
 const LETTERS = 'ABCDEFGH'
 </script>
 
 <template>
-  <div class="grid grid-cols-8 gap-1.5">
-    <div v-for="(l, i) in LETTERS" :key="l"
-         class="h-8 rounded border flex items-center justify-center text-[12px] font-black font-mono"
-         :class="SLOT_CLASS[slotLook(snap, i)]">{{ l }}</div>
+  <div :class="compact ? 'flex gap-1 shrink-0' : 'grid grid-cols-8 gap-1.5'">
+    <div v-for="(l, i) in LETTERS" :key="l" data-play-slot
+         class="rounded border flex items-center justify-center font-black font-mono"
+         :class="[compact ? 'w-6 h-6 text-[11px]' : 'h-8 text-[12px]', SLOT_CLASS[slotLook(snap, i)]]">{{ l }}</div>
   </div>
 </template>

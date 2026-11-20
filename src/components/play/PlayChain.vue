@@ -20,7 +20,7 @@ const shown = computed(() => {
   <div class="flex items-center gap-1.5 min-w-0">
     <span class="shrink-0 text-[9px] font-black uppercase tracking-widest text-red-400/80">Chain</span>
     <div v-if="shown.length" class="flex-1 flex flex-wrap gap-1 min-w-0">
-      <div v-for="(e, i) in shown" :key="i"
+      <div v-for="(e, i) in shown" :key="i" data-chain-entry
            class="w-6 h-6 rounded border flex items-center justify-center text-[11px] font-black font-mono"
            :class="i === current ? 'bg-red-600 border-red-400 text-white'
              : e != null ? 'bg-red-950/60 border-red-900/70 text-red-200/80' : 'bg-neutral-950 border-neutral-900 text-neutral-600'">

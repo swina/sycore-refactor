@@ -3,11 +3,13 @@
  * and pads — empty: dark; filled, not playing: dark amber; queued / armed: amber, blinking;
  * playing: full amber. No glow (lowEffects).
  */
-export type SlotLook = 'empty' | 'filled' | 'queued' | 'playing'
+export type SlotLook = 'empty' | 'filled' | 'current' | 'queued' | 'playing'
 
 export const SLOT_CLASS: Record<SlotLook, string> = {
   empty:   'bg-neutral-900 border-neutral-800 text-neutral-600',
   filled:  'bg-amber-950/60 border-amber-900/70 text-amber-200/70',
+  // the current slot while stopped (the one Play starts): an amber outline
+  current: 'bg-amber-900/60 border-amber-400 text-amber-100 ring-1 ring-amber-400/70',
   queued:  'bg-amber-500 border-amber-300 text-black animate-pulse',
   playing: 'bg-amber-400 border-amber-200 text-black',
 }
@@ -24,9 +26,10 @@ export const PLAY_LED_CLASS: Record<string, string> = {
 }
 
 /** A slot's look from a rig-live snapshot ({ filled, playing, queued }). */
-export function slotLook(snap: { filled: boolean[]; playing: number | null; queued: number | null }, i: number): SlotLook {
+export function slotLook(snap: { filled: boolean[]; playing: number | null; queued: number | null; current?: number | null }, i: number): SlotLook {
   if (snap.queued === i && snap.playing !== i) return 'queued'
   if (snap.playing === i) return 'playing'
+  if (snap.playing == null && snap.current === i) return 'current'
   return snap.filled[i] ? 'filled' : 'empty'
 }
 
