@@ -36,6 +36,7 @@ import { nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { intGrid } from '@/core/midi/int-grid'
+import { stopGate } from '@/core/midi/stop-gate'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
@@ -1791,6 +1792,8 @@ function createSequencerEngine(lane = 'main') {
         stepCallback = (time, tMs, late = false) => {
           const state = playStateRef.current
           if (!state.isPlaying) return
+          // a Stop queued on the bar line (stop-gate.ts): no step from there on
+          if (stopGate.reached(tMs ?? audioTimeToPerfMs(time))) return
           if (_pendingChord) _takePendingChord(tMs ?? audioTimeToPerfMs(time))
           if (startPending.value) startPending.value = false // once per start: the first step is here
           // A Rig pad's stop: on its sync point of the song grid; the notes still sounding end there.

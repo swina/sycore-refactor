@@ -23,6 +23,7 @@ import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { StepScheduler, createWorkerTicker, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { intGrid } from '@/core/midi/int-grid'
+import { stopGate } from '@/core/midi/stop-gate'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { drumPerform, applyDynamics, humanizeOffsets } from '@/lib/drum-perform'
 import { useTransportManager } from '@/composables/useTransportManager'
@@ -379,6 +380,8 @@ function createDrumMachineEngine() {
   function _scheduleCallback(time) {
     let state = playStateRef.current
     if (!state) return
+    // a Stop queued on the bar line (stop-gate.ts): nothing from there on
+    if (stopGate.reached(audioTimeToPerfMs(time))) return
 
     // Global 16-step position drives the bar boundary and UI highlight.
     // Each track uses its own length for wrapping (per-track polymetry).
@@ -1216,6 +1219,14 @@ function createDrumMachineEngine() {
     if (typeof play === 'boolean') requestPlay(play, e.detail?.sync); else handlePlayStop()
   }
 
+  // 'dm-end-fill' (the Rig Controls' Stop, at the end of the next bar): with +Fill, that last bar is a
+  // fill (armed for the next bar line, as Fill: Bar)
+  function _onEndFill() {
+    if (!drumStore.isPlaying || !endWithFill.value || fillActive.value) return
+    if (!_fillArmed) { _fillArmed = true; fillArmed.value = true }
+    generateFill()
+  }
+
   function handlePlayStop() {
     if (!drumStore.isPlaying) { requestPlay(true); return }
     if (_pendingStop) { _pendingStop = false; pendingStop.value = false; drumStore.isPlaying = false; return }
@@ -1276,6 +1287,7 @@ function createDrumMachineEngine() {
     window.addEventListener('dm-part',           _onPart)
     window.addEventListener('dm-seq-switch',     _onMidiSeqSwitch)
     window.addEventListener('dm-play-stop',      _onPlayStopRequest)
+    window.addEventListener('dm-end-fill',       _onEndFill)
     window.addEventListener('timeline-dm-start', _tlDmStartHandler)
     window.addEventListener('timeline-dm-stop',  _tlDmStopHandler)
     window.addEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)
@@ -1304,6 +1316,7 @@ function createDrumMachineEngine() {
   window.removeEventListener('dm-part',           _onPart)
   window.removeEventListener('dm-seq-switch',     _onMidiSeqSwitch)
   window.removeEventListener('dm-play-stop',      _onPlayStopRequest)
+  window.removeEventListener('dm-end-fill',       _onEndFill)
   window.removeEventListener('timeline-dm-start', _tlDmStartHandler)
   window.removeEventListener('timeline-dm-stop',  _tlDmStopHandler)
   window.removeEventListener('timeline-dm-rec-sync', _tlDmRecSyncHandler)

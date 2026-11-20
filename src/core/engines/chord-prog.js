@@ -33,6 +33,7 @@ import { sendPartPresets } from '@/lib/song-composer'
 import { nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
+import { stopGate } from '@/core/midi/stop-gate'
 import { chordAfter, latchIndex } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
@@ -529,6 +530,8 @@ function createChordProgEngine() {
       const tickCb = (time) => {
         const state = playStateRef.current
         if (!state.isPlaying || _stopPending) return
+        // a Stop queued on the bar line (stop-gate.ts): no chord from there on
+        if (stopGate.reached(_sysTickMs ?? audioTimeToPerfMs(time))) return
 
         _transportTicks++
         // Position on Live's song grid (24 ticks per sixteenth), for a Rig pad's Trigger sync.
@@ -1073,11 +1076,16 @@ function createChordProgEngine() {
     })
   }
   // journaled (lib/session-takes.ts): the progression it replaces is kept as a session take
-  function handleGenerate() {
+  // name: that progression of the Source (the Progressions browser), else one picked for the style
+  function handleGenerate(name) {
     journaled('chord', store.activeSlotIndex, () => {
       // the style decides the chords' durations (chord-gen-style.ts); Fill › Dur sets them all after
-      store.generateAlgorithmic(progressionData.value)
+      store.generateAlgorithmic(progressionData.value, typeof name === 'string' ? name : undefined)
     })
+  }
+  /** A progression of the Source into the slot as written (the Progressions browser's AS IS). */
+  function loadProgressionAsIs(name) {
+    journaled('chord', store.activeSlotIndex, () => store.loadProgressionByName(progressionData.value, name))
   }
   // A Rig pad adds { sync } (its Trigger sync, sixteenths): the start waits for that sync point of
   // Live's song grid (0 = at once), the stop lets the chords play up to it.
@@ -1273,6 +1281,6 @@ function createChordProgEngine() {
     getTransportTicks: () => _transportTicks,
     // actions
     chordNotes, handleSlotSelect, triggerChordStep, stopHeldChord, releaseChord, stopAllNotes,
-    previewChord, previewStep, handleGenerate,
+    previewChord, previewStep, handleGenerate, loadProgressionAsIs,
   }
 }

@@ -86,7 +86,7 @@ SY.CORE (browser)                          Ableton Live
 
 From now on, pressing **Play in Live** starts the apps that are in *Sync Apps to Transport*, and Live's **Stop** stops them.
 
-**Live's transport and tempo from SY.CORE** (bridge 1.5 / 1.6): the Rig Controller's **Play** (Rig Controls in the Performance workspace, the Rig's mode bar) starts and stops **Live** itself (with the Drum Machine's *Stop@end* on, the Stop waits for its bar to end — with *+Fill*, a fill as the ending — then stops Live); **TAP**, **− / +** and the tempo knob set **Live's tempo** (SY.CORE follows it, Live playing or stopped). See [Transport and tempo](#transport-and-tempo).
+**Live's transport and tempo from SY.CORE** (bridge 1.5 / 1.6): the Rig Controller's **Play** (Rig Controls in the Performance workspace, the Rig's mode bar) starts and stops **Live** itself. The **Stop** comes at the **end of the next bar** (pressed at 3.2.4: bar 4 plays to its end, everything stops on 5.1.1 — no note from that bar line on; with the Drum Machine's *+Fill*, bar 4 is a fill), then stops Live; pressed again while waiting: at once. The same on SY.CORE's own clock; **TAP**, **− / +** and the tempo knob set **Live's tempo** (SY.CORE follows it, Live playing or stopped). See [Transport and tempo](#transport-and-tempo).
 
 ---
 
@@ -306,8 +306,8 @@ The Chord Prog's key is a pair of relative keys from its library (e.g. *Eb Major
 
 | Key mode | Generates |
 |---|---|
-| **Minor** | from the library: its progressions are written on the minor tonic (e.g. **Cm**) |
-| **Major** | common major progressions (I–V–vi–IV, ii–V–I…), diatonic triads voiced close, with a bass (e.g. **Eb**) |
+| **Minor** | the library's minor progressions, on the minor tonic (e.g. **Cm**) |
+| **Major** | the library's major progressions, on the major tonic (e.g. **Eb**) |
 | **Both** | any progression of the pair |
 
 From the Rig Controller (LIVE):

@@ -15,6 +15,9 @@ import { PLAY_LED_CLASS } from '@/lib/play-colors'
 // Control Map's commands (Arp: the pads pick its mode).
 import { keyLabel, keyRoot, keyFile, progressionKeyDetail, NOTE_NAMES as KEY_NOTE_NAMES } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
+import { intGrid } from '@/core/midi/int-grid'
+import { stopGate, endOfNextBar } from '@/core/midi/stop-gate'
+import { audioTimeToPerfMs } from '@/lib/audio-clock'
 import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
 import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor, parseRigAction } from '@/lib/rig-actions'
 import { exportRigTemplate, parseRigTemplate, applyRigTemplate, clearRigMappings, rigMappedDevices, templateMatches, sysexBytes, templateFileName } from '@/lib/rig-template'
@@ -465,23 +468,56 @@ function restartTimer() {
   timer = null
   if (!live.value && s.clock.running) timer = setInterval(() => tick(s), 60000 / s.clock.bpm / 4) // 16ths
 }
-// Stop with the Drum Machine's Stop@end (+Fill): it finishes its bar (its fill) first, then `stop`
-// (Live's Stop, or SY.CORE's). Pressed again while waiting: the Drum Machine stops now, then `stop`.
-// Called off (a pad starts the drums again): nothing stops.
-let endingStop = null
-function stopAtDrumEnd(stop) {
-  if (!endingStop) stopArm = playingSlots()
-  if (endingStop) { window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: false, end: true } })); return }
-  const detail = { play: false, end: true, deferred: false }
-  if (drumStore.isPlaying) window.dispatchEvent(new CustomEvent('dm-play-stop', { detail }))
-  if (!detail.deferred) { stop(); return }
-  s.display = 'Stop at the end of the bar (Drum Machine Stop@end) — press again: now'
-  endingStop = watch([() => drumStore.isPlaying, () => rigReports.drumStopPending], ([playing, pending]) => {
-    if (playing && pending) return
-    endingStop(); endingStop = null
-    if (!playing) stop(); else stopArm = null // called off
-  })
+// Stop at the end of the next bar (stop-gate.ts): at 3.2.4 the sequences play bar 4 to its end and
+// stop on 5.1.1 — every step from that bar line on stays silent (no accented last note), then `stop`
+// (Live's Stop, or SY.CORE's) comes on it. The Drum Machine's +Fill: its fill is the last bar.
+// Pressed again while waiting: stop now. No bar grid (nothing playing on one): now.
+const BAR_STOP_CLEAR_MS = 3000 // the gate outlives the stop a moment: Live's Stop comes back over the network
+let barStop = null
+/** The first bar line at or after `t` and the bar's length: Live's grid, the internal one, or Tone's transport. */
+function nextBarLine(t) {
+  if (externalGrid.active && externalGrid.bpm > 0) {
+    const sx = externalGrid.barAtOrAfter(t)
+    const at = sx != null ? externalGrid.timeOf(sx) : null
+    return at != null ? { t: at, barMs: 240000 / externalGrid.bpm } : null
+  }
+  const g = intGrid.barLineAtOrAfter(t)
+  if (g) return g
+  if (transportManager.isRunning.value) {
+    const tr = getTransport()
+    return { t: audioTimeToPerfMs(tr.nextSubdivision('1m')), barMs: tr.toSeconds('1m') * 1000 }
+  }
+  return null
 }
+function clearBarStop() {
+  if (!barStop) return
+  clearTimeout(barStop.timer); clearTimeout(barStop.clear)
+  barStop = null
+  stopGate.clear()
+}
+function stopAtBarEnd(stop) {
+  if (barStop?.timer) { clearBarStop(); stop(); s.display = 'Stopped now'; return } // pressed again: now
+  clearBarStop()
+  stopArm = playingSlots()
+  const now = performance.now()
+  const at = endOfNextBar(now, nextBarLine)
+  if (at == null) { stop(); return }
+  stopGate.set(at)
+  window.dispatchEvent(new CustomEvent('dm-end-fill')) // +Fill: the Drum Machine's fill on the last bar
+  s.display = 'Stop at the end of the next bar — press again: now'
+  barStop = {
+    timer: setTimeout(() => {
+      const b = barStop
+      b.timer = null
+      stop()
+      if (barStop === b) b.clear = setTimeout(clearBarStop, BAR_STOP_CLEAR_MS) // (SY.CORE's stop clears it itself)
+    }, Math.max(0, at - now)),
+    clear: null,
+  }
+}
+// a start (Live's Play, a new start on the grid) never waits behind an old Stop
+const offStopGateGrid = externalGrid.on(e => { if (e.type === 'start') clearBarStop() })
+onUnmounted(() => { offStopGateGrid(); clearBarStop() })
 // Play with the sync panel's Count-in (lib/count-in.ts): the bars counted on screen first, then
 // `go` (Live's Play over SY.CORE Link, or the simulated clock). Pressed again while counting: off.
 function countedPlay(go) {
@@ -499,10 +535,10 @@ function togglePlay() {
         s.display = sent ? `Live: ${on ? 'Play' : 'Stop'}` : 'Live is the clock master: Play / Stop from Live (SY.CORE Link 1.5+ plays it from here)'
       }
       if (countIn.active) { cancelCountIn(); s.display = 'Count-in cancelled'; return }
-      if (on) { stopArm = null; countedPlay(send) } else stopAtDrumEnd(send)
+      if (on) { stopArm = null; clearBarStop(); countedPlay(send) } else stopAtBarEnd(send)
       return
     }
-    if (s.clock.running) stopAtDrumEnd(() => { const arm = stopArm; stopAll(); if (arm) armPlaying(arm); stopArm = null }); else playAll()
+    if (s.clock.running) stopAtBarEnd(() => { const arm = stopArm; stopAll(); if (arm) armPlaying(arm); stopArm = null; clearBarStop() }); else { clearBarStop(); playAll() }
     return
   }
   if (s.clock.running) { stopClock(s); restartTimer() } else countedPlay(() => { startClock(s); restartTimer() })
@@ -521,7 +557,7 @@ watch(mode, m => {
   restartTimer()
   if (m === 'live') { s.display = 'LIVE · Chord, Drum, Seq, Bass, Arp connected'; liveLoop() }
 }, { immediate: true })
-onUnmounted(() => { clearInterval(timer); endLiveLoop(); endingStop?.(); endingStop = null })
+onUnmounted(() => { clearInterval(timer); endLiveLoop() })
 
 /** LIVE: an action not connected to the apps yet. */
 const notConnected = what => { s.display = `${what}: not connected yet (SIM only)` }

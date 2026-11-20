@@ -53,6 +53,12 @@ export const intGrid = {
     barMs = next
   },
 
+  /** The first bar line at or after `tMs` and the bar's length; null when nothing plays on the grid. */
+  barLineAtOrAfter(tMs: number): { t: number; barMs: number } | null {
+    if (!users.size) return null
+    return { t: t0 + Math.ceil((tMs - t0) / barMs - 1e-9) * barMs, barMs }
+  },
+
   /** Tests. */
   _reset(): void { users.clear(); t0 = 0; barMs = 2000 },
 }
