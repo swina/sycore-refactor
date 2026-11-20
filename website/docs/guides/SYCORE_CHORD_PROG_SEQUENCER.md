@@ -237,7 +237,8 @@ Shows every chord in the selected progression.
 
 Generates a progression from a library, in a style.
 
-1. **Source** — the library: **Modal Chords** (the default: 816 progressions, 68 per root, named by mood, e.g. "A Mysterious Dark"), a key file (C Major / A min …) or a genre file.
+1. **Source** — the library: **Modal Chords** (the default: 1020 progressions, 85 per root, named by mood and numerals, e.g. "A Mysterious Dark · bIIM ivm biii im"), a key file (C Major / A min …: 50 major + 60 minor progressions, e.g. "C Hopeful Romantic · I V vi IV", "Am Dark Nostalgic · …") or a genre file. The key files and Modal Chords come from [free-midi-chords](https://github.com/ldrolez/free-midi-chords) (MIT, © Ludovic Drolez).
+   The **list button** next to it (with the count; also in the Performance play view's header) opens **Progressions**: the Source's progressions with a search (name, mood) and, on Modal Chords with a Root, **On <root>** to show only those. Click one to see its chords, click a chord to hear it; **Use · <style>** (or double-click) puts it in the slot in the Generate style, **As is** puts its chords over the steps as written (the steps' lengths kept). Both can be undone.
 2. **Root** (Modal Chords) — only the progressions on that root; **Any** = all. The Rig Controller's **Key ◀ ▶** moves it (Modal Chords stays the source).
 3. **Key** (key files) — Major / Minor: exactly that key; Both: any progression of the pair.
 4. **Style** — the Sequencer's styles (House, Techno, HipHop, Acid, Funk, Jazz, Ambient, Drum&Bass, Minimal, Latin, Industrial, Reggae, Pop, Rock, Electronic, Arpeggio, Berlin School). The style sets:

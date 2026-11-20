@@ -66,10 +66,10 @@ The Sequencer also has four **bassline styles** of its own: Root-5-Oct, Offbeat,
 
 ## Chord Prog
 
-- **Source**: **Modal Chords** by default: 816 progressions, 68 for each of the 12 roots, named by mood ("A Mysterious Dark", "C Peaceful Tender"). You can also use the 12 key files (major / minor pairs) or the genre files (Blues, Jazz, Pop, Rock, R&B, Latin, EDM, Funk).
+- **Source**: **Modal Chords** by default: 1020 progressions, 85 for each of the 12 roots, named by mood and numerals ("A Mysterious Dark · bIIM ivm biii im"). You can also use the 12 key files (major / minor pairs: 50 major + 60 minor progressions each, with their moods) or the genre files (Blues, Jazz, Pop, Rock, R&B, Latin, EDM, Funk).
 - **Root** (Modal Chords): stay on one root, or Any. The Rig's Key ◀ ▶ moves it.
 - **Style** sets the **harmonic rhythm**. Each chord's length comes from whole-bar patterns: Ambient 2–8 bars, House 1–2 bars or pushed 3/4 + 1/4, Funk and Latin half-bar pushes. The style also sets the **gate**, the **velocity**, the **voicing** (triads, 7ths, stabs, power chords, open / spread with a 9th) and the **moods** it picks first. Arpeggio and Berlin School play the chords as arpeggios.
-- **Major / Minor** on a key file: generates in exactly that key (major keys from common major progressions).
+- **Major / Minor** on a key file: generates in exactly that key, from that mode's progressions of the file.
 - **AI Generate**: describe the progression in words. The style and the key go into the prompt.
 - Source, Root and Style are also in the Play View's header.
 

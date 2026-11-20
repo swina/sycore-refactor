@@ -104,3 +104,61 @@ describe('stepPlayMode (the header AUTO / CHORD / ARP)', async () => {
     expect(stepPlayMode('arp', 'chord', 'chord')).toBe('arp')
   })
 })
+
+describe('generateStyled with a name (the Progressions browser)', () => {
+  const data = {
+    'A Peaceful': [{ chordName: 'Am', notes: [57, 60, 64, 45] }],
+    'C Dark': [{ chordName: 'C', notes: [60, 64, 67, 48] }],
+  }
+  it('takes that progression, in the style', () => {
+    const g = generateStyled({ data, selectedKey: MODAL_KEY_INDEX, keyMode: null, root: 9, style: 'Ambient', numSteps: 2, name: 'C Dark', rnd: () => 0 })!
+    expect(g.name).toBe('C Dark')
+    expect(g.steps.map(s => s.duration)).toEqual(['4m', '4m'])
+  })
+  it('also on a key file set to Major; null when not in the library', () => {
+    expect(generateStyled({ data, selectedKey: 0, keyMode: 'major', root: null, style: 'Pop', numSteps: 2, name: 'A Peaceful' })!.name).toBe('A Peaceful')
+    expect(generateStyled({ data, selectedKey: 0, keyMode: null, root: null, style: 'Pop', numSteps: 2, name: 'Nope' })).toBeNull()
+  })
+})
+
+describe('the key files: major and minor progressions (free-midi-chords)', async () => {
+  const { progressionMode, progressionsInMode } = await import('@/lib/chord-gen-style')
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const dir = path.resolve(__dirname, '../../../src/data/progressions')
+  const read = (f: string) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))
+
+  it('progressionMode: by the root token', () => {
+    expect(progressionMode('C Hopeful Romantic · I V vi IV')).toBe('major')
+    expect(progressionMode('Am Dark · i VI III VII')).toBe('minor')
+    expect(progressionMode('C#m Sad · i iv')).toBe('minor')
+    expect(progressionMode('i-VI-III-VII Cm')).toBeNull()
+    expect(progressionsInMode(['C A · I', 'Am B · i'], null)).toHaveLength(2)
+  })
+  it('every key file: 50 major on its major tonic + 60 minor on the relative minor, chords with notes', () => {
+    const f = read('05-EMajor-C#minor.json')
+    const names = Object.keys(f)
+    expect(progressionsInMode(names, 'major')).toHaveLength(50)
+    expect(progressionsInMode(names, 'minor')).toHaveLength(60)
+    expect(names.filter(n => progressionMode(n) === 'major').every(n => n.startsWith('E '))).toBe(true)
+    expect(names.filter(n => progressionMode(n) === 'minor').every(n => n.startsWith('C#m '))).toBe(true)
+    expect(Object.values(f).every((cs: any) => cs.length && cs.every((c: any) => c[1].length >= 2))).toBe(true)
+  })
+  it('Modal Chords: 85 on each root, moods first', () => {
+    const names = Object.keys(read('ModalChords.json'))
+    expect(names).toHaveLength(1020)
+    expect(names.filter(n => modalRoot(n) === 9)).toHaveLength(85)
+    expect(names).toContain('A Mysterious Dark · bIIM ivm biii im')
+  })
+  it('Generate on a major key picks a major progression of the file', async () => {
+    const { normalizeChord } = await import('@/composables/useProgressionLoader')
+    const raw = read('01-CMajor-Aminor.json')
+    const data = Object.fromEntries(Object.entries(raw).map(([k, v]: [string, any]) => [k, v.map(normalizeChord)]))
+    for (let i = 0; i < 10; i++) {
+      const g = generateStyled({ data, selectedKey: 0, keyMode: 'major', root: null, style: 'Pop', numSteps: 4 })!
+      expect(progressionMode(g.name)).toBe('major')
+      const m = generateStyled({ data, selectedKey: 0, keyMode: 'minor', root: null, style: 'Pop', numSteps: 4 })!
+      expect(m.name.startsWith('Am ')).toBe(true)
+    }
+  })
+})

@@ -5,6 +5,7 @@ import { journaled } from '@/lib/session-takes'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import ChordProgPlayView from '@/components/play/ChordProgPlayView.vue'
 import ChordGenControls from '@/components/play/ChordGenControls.vue'
+import ProgressionBrowserModal from '@/components/play/ProgressionBrowserModal.vue'
 import ChordModeSwitch from '@/components/play/ChordModeSwitch.vue'
 import ChordKeyBadge from '@/components/play/ChordKeyBadge.vue'
 import { usePlayView } from '@/composables/usePlayView'
@@ -41,7 +42,7 @@ import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patte
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { keyLabel, NOTE_NAMES as KEY_NOTE_NAMES } from '@/lib/chord-key'
-import { CHORD_GEN_STYLES, CHORD_GEN_STYLE_NAMES, MODAL_KEY_INDEX } from '@/lib/chord-gen-style'
+import { CHORD_GEN_STYLES, CHORD_GEN_STYLE_NAMES, MODAL_KEY_INDEX, progressionsInMode } from '@/lib/chord-gen-style'
 import { chordAfter } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { useChordProgEngine } from '@/core/engines/chord-prog'
@@ -129,8 +130,14 @@ const {
   captureBarCount, captureAutoStop, captureArmed, captureRecording,
   systemClock, panicDelayMs, cuedSlotIdx, fillDuration, fillDurationRandom,
   getTransportTicks, chordNotes, handleSlotSelect, triggerChordStep, stopHeldChord, releaseChord,
-  previewStep, handleGenerate,
+  previewStep, handleGenerate, loadProgressionAsIs,
 } = engine
+// Progressions (the button next to Source): the Source's progressions, one into the slot
+const showProgBrowser = ref(false)
+// a key file on Major / Minor: that mode's progressions (as Generate picks)
+const browserNames = computed(() => store.selectedKey < 12 ? progressionsInMode(progressionNames.value, store.keyMode) : progressionNames.value)
+function onBrowserUse(name) { handleGenerate(name); showProgBrowser.value = false }
+function onBrowserLoad(name) { loadProgressionAsIs(name); showProgBrowser.value = false }
 /** A library chord: selected, and heard (with the library's transpose). */
 function previewChord(chord) {
   selectedChord.value = chord
@@ -1538,6 +1545,11 @@ function velBarColor(v) {
                         class="bg-neutral-800 border border-neutral-700 rounded px-1.5 py-0.5 text-[11px] text-purple-300 font-bold outline-none">
                   <option v-for="(name, idx) in KEY_FILE_NAMES" :key="idx" :value="idx">{{ name.replace(/^· /, 'Genre · ') }}</option>
                 </select>
+                <button type="button" data-prog-browse
+                        :disabled="progLoading || progressionNames.length === 0"
+                        class="flex items-center gap-1 px-2 py-0.5 rounded border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-[10px] font-bold uppercase tracking-widest text-purple-300 disabled:opacity-40"
+                        :title="`The progressions of ${KEY_FILE_NAMES[store.selectedKey]?.replace(/^· /, 'Genre · ')} (${progressionNames.length}): hear them, put one in the slot`"
+                        @click="showProgBrowser = true"><ListMusic class="w-3 h-3" /> {{ progressionNames.length }}</button>
               </div>
               <!-- Modal Chords: the root to stay on -->
               <div v-if="store.selectedKey === MODAL_KEY_INDEX" class="flex items-center gap-2">
@@ -1557,7 +1569,7 @@ function velBarColor(v) {
                           @click="store.keyMode = m[0]"
                           :class="['px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest transition-colors',
                             store.keyMode === m[0] ? 'bg-purple-800 text-purple-100' : 'text-neutral-500 hover:text-neutral-200']"
-                          :title="m[0] === 'major' ? 'Major key: generated from common major progressions' : m[0] === 'minor' ? 'Minor key: from the library (its progressions are minor)' : 'Any progression of the pair'">{{ m[1] }}</button>
+                          :title="m[0] === 'major' ? 'Major key: the library\'s major progressions (50 per key)' : m[0] === 'minor' ? 'Minor key: the library\'s minor progressions (60 per key)' : 'Any progression of the pair'">{{ m[1] }}</button>
                 </div>
                 <span class="text-[11px] font-bold text-purple-300 font-mono">{{ keyLabel(store.selectedKey, store.keyMode) }}</span>
               </div>
@@ -1879,7 +1891,7 @@ function velBarColor(v) {
         <!-- the whole progression's mode: AUTO / CHORD / ARP -->
         <ChordModeSwitch />
         <!-- Generate's Source / Root / Style (also the Rig's Chord GEN) -->
-        <ChordGenControls />
+        <ChordGenControls @browse="showProgBrowser = true" />
         <!-- the key / scale detected + AUTO SEQ -->
         <ChordKeyBadge />
       </PlayPanelHeader>
@@ -1888,6 +1900,18 @@ function velBarColor(v) {
 
     <!-- Resize handles: every edge and corner -->
     <ResizeHandles v-if="!isMinimized" :start="onResizeStart" />
+
+    <!-- Progressions of the Source (Generate's / the play view header's list button) -->
+    <Teleport to="body">
+    <ProgressionBrowserModal
+      v-if="showProgBrowser"
+      :title="store.selectedKey < 12 && store.keyMode ? keyLabel(store.selectedKey, store.keyMode) : (KEY_FILE_NAMES[store.selectedKey]?.replace(/^· /, 'Genre · ') ?? '')"
+      :names="browserNames" :data="progressionData" :loading="progLoading"
+      :root="store.selectedKey === MODAL_KEY_INDEX ? store.modalRoot : null"
+      :style-name="store.genStyle" :num-steps="store.numSteps"
+      @preview="previewChord" @use="onBrowserUse" @load="onBrowserLoad" @close="showProgBrowser = false"
+    />
+    </Teleport>
 
     <!-- Custom chord assignment modal -->
     <ChordAssignModal

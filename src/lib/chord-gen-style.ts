@@ -69,6 +69,17 @@ export function modalRoot(name: string): number | null {
   return i >= 0 ? i : null
 }
 
+/** A key file's progression: major ("C Hopeful · I V vi IV") or minor ("Am Dark · i VI III VII", its
+ *  root token ending in m); null for a name without a root token. */
+export function progressionMode(name: string): 'major' | 'minor' | null {
+  const m = /^([A-G][#b]?)(m?)\s/.exec(String(name))
+  return m ? (m[2] ? 'minor' : 'major') : null
+}
+/** A key file's progressions in the mode (Major / Minor; null: all). */
+export function progressionsInMode(names: readonly string[], mode: KeyMode): string[] {
+  return mode ? names.filter(n => progressionMode(n) === mode) : [...names]
+}
+
 /** A progression's name for the style: on its root (null = any), the style's moods first. */
 export function pickProgression(names: readonly string[], opts: { root?: number | null; moods?: readonly string[]; rnd?: () => number } = {}): string | null {
   const rnd = opts.rnd ?? Math.random
@@ -153,6 +164,8 @@ export interface StyledGenOpts {
   style: string
   numSteps: number
   rnd?: () => number
+  /** This progression of the library (the Progressions browser) instead of one picked. */
+  name?: string
 }
 
 /** The steps of a new progression in the style (null when the library has nothing). */
@@ -161,12 +174,18 @@ export function generateStyled(o: StyledGenOpts): { name: string; steps: StyledS
   const st = CHORD_GEN_STYLES[o.style] ?? CHORD_GEN_STYLES[DEFAULT_CHORD_GEN_STYLE]
   let name: string
   let chords: GenChord[]
-  if (o.keyMode === 'major' && o.selectedKey >= 0 && o.selectedKey < 12) {
-    // a major key: the library has none (its progressions are minor), from the major templates
+  if (o.name != null) {
+    if (!o.data[o.name]?.length) return null
+    name = o.name
+    chords = o.data[o.name]
+  } else if (o.keyMode === 'major' && o.selectedKey >= 0 && o.selectedKey < 12 && !progressionsInMode(Object.keys(o.data), 'major').length) {
+    // a major key in a library without major progressions: from the major templates
     chords = generateMajor(keyRoot(o.selectedKey, 'major') ?? 0, o.numSteps, rnd)
     name = `${NOTE_NAMES[o.selectedKey]} major`
   } else {
-    const picked = pickProgression(Object.keys(o.data), { root: o.selectedKey === MODAL_KEY_INDEX ? o.root : null, moods: st.moods, rnd })
+    const keyFile = o.selectedKey >= 0 && o.selectedKey < 12
+    const names = keyFile ? progressionsInMode(Object.keys(o.data), o.keyMode) : Object.keys(o.data)
+    const picked = pickProgression(names.length ? names : Object.keys(o.data), { root: o.selectedKey === MODAL_KEY_INDEX ? o.root : null, moods: st.moods, rnd })
     if (!picked || !o.data[picked]?.length) return null
     name = picked
     chords = o.data[picked]

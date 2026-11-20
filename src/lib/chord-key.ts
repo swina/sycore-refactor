@@ -2,10 +2,10 @@
  * chord-key.ts — the Chord Prog's key as root + mode, and a diatonic generator.
  *
  * The Chord Prog library is one file per pair of relative keys (selectedKey 0–11:
- * "C Major / A min", "Db Major / Bb min", …; 12+ modal and genres). Its
- * progressions are written from the minor tonic ("A i bVIIM …"), so a minor key
- * draws from the library; a major key — with nothing major in the library — is
- * generated here from common major progressions (I–V–vi–IV, ii–V–I…).
+ * "C Major / A min", "Db Major / Bb min", …; 12+ modal and genres), from free-midi-chords
+ * (scripts/build-progressions.mjs): the major key's progressions ("C Hopeful · I V vi IV") and the
+ * minor's ("Am Dark · i VI III VII") — Major / Minor draw from their own. generateMajor (common
+ * major progressions, I–V–vi–IV, ii–V–I…) is the fallback for a library with nothing major.
  *
  * keyMode: 'major' | 'minor' picks a key exactly (e.g. Cm = file "Eb Major / C min"
  * in minor); null = the pair as before (any progression of the file).
