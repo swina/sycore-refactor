@@ -73,16 +73,35 @@ function refreshKnownDevices() {
   knownDevices.value = Array.from(names)
 }
 
+// The log keeps LOG_CAP events (500 filled in seconds with the lanes and a chord fanned out on
+// 4 channels); the view shows the last RENDER_CAP of the filtered ones, refreshed every 150 ms (light on the main thread while playing).
+// PAUSE freezes the view only: events are still captured (Export saves them all).
+const LOG_CAP = 20000
+const RENDER_CAP = 2000
+let _flushQueued = false
+function _flush() {
+  _flushQueued = false
+  if (paused.value) return
+  entries.value  = _log.slice()
+  entryCount.value = _log.length
+}
+function _queueFlush() {
+  if (_flushQueued) return
+  _flushQueued = true
+  setTimeout(_flush, 150)
+}
+watch(paused, v => { if (!v) _queueFlush() })
+
 function _appendEntry(entry) {
-  if (!monitoring.value || paused.value) return
+  if (!monitoring.value) return
   // Skip clock messages if the clock filter is off — prevents flooding the buffer
   if (entry.type === 'clock' && !typeFilter.value.clock) return
   if (!knownDevices.value.includes(entry.device)) {
     knownDevices.value = [...knownDevices.value, entry.device]
   }
-  _log = _log.length >= 500 ? [..._log.slice(-499), entry] : [..._log, entry]
-  entries.value  = _log
-  entryCount.value = _log.length
+  _log.push(entry)
+  if (_log.length > LOG_CAP + 1000) _log.splice(0, _log.length - LOG_CAP)
+  _queueFlush()
 }
 
 // ─── System log integration ───────────────────────────────────────────────────
@@ -122,8 +141,10 @@ const filteredEntries = computed(() => {
   })
 })
 
+const shownEntries = computed(() => filteredEntries.value.length > RENDER_CAP ? filteredEntries.value.slice(-RENDER_CAP) : filteredEntries.value)
+
 // ─── Auto-scroll ──────────────────────────────────────────────────────────────
-watch(filteredEntries, async () => {
+watch(shownEntries, async () => {
   await nextTick()
   logEndRef.value?.scrollIntoView({ behavior: 'instant' })
 })
@@ -131,6 +152,7 @@ watch(filteredEntries, async () => {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function clear() {
   _log = []
+  _flushQueued = false
   entries.value  = _log
   entryCount.value = 0
   midiService.clearMonitorBuffer()
@@ -361,7 +383,7 @@ onUnmounted(() => {
       <!-- ── Log rows ────────────────────────────────────────────────────── -->
       <div class="h-64 overflow-y-auto font-mono text-[10px] leading-tight bg-black p-2 custom-scrollbar">
         <div
-          v-for="e in filteredEntries"
+          v-for="e in shownEntries"
           :key="e.id"
           :class="['mb-px px-1 flex items-baseline gap-1.5 whitespace-nowrap overflow-hidden', rowClass(e)]"
         >
