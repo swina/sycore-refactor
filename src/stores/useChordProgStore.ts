@@ -531,11 +531,12 @@ export const useChordProgStore = defineStore('chordProg', () => {
   }
 
   /** A new progression from the library chosen, in the Generate style (chord-gen-style.ts): its
-   *  chords' durations, gate, velocity, voicing (and Arp for Arpeggio / Berlin School). */
-  function generateAlgorithmic(progressionData: Record<string, any>): boolean {
+   *  chords' durations, gate, velocity, voicing (and Arp for Arpeggio / Berlin School). `name`: that
+   *  progression (the Progressions browser), else one picked for the style. */
+  function generateAlgorithmic(progressionData: Record<string, any>, name?: string): boolean {
     const gen = generateStyled({
       data: progressionData, selectedKey: selectedKey.value, keyMode: keyMode.value,
-      root: modalRoot.value, style: genStyle.value, numSteps: numSteps.value,
+      root: modalRoot.value, style: genStyle.value, numSteps: numSteps.value, name,
     })
     if (!gen) return false
     gen.steps.forEach((g, i) => {
