@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { sendAiPrompt } from '@/lib/ai-service'
 import { useAiAgentStore } from './useAiAgentStore'
+import type { LaneSound } from '@/lib/lane-sound'
 import { SEQ_LANE_CFG, clampLaneChannel, type SeqLane } from '@/lib/seq-lanes'
 
 export const BANK_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -60,6 +61,8 @@ export interface SeqBank {
   chordsEnabled: boolean
   maxPolyphony: number
   chordDensity: number
+  /** the sound (presets on the lane's channel) sent when this bank starts (lib/lane-sound.ts); null: none */
+  sound?: LaneSound | null
 }
 
 function makeBank(lane: SeqLane = 'main'): SeqBank {
@@ -88,6 +91,7 @@ function makeBank(lane: SeqLane = 'main'): SeqBank {
     chordsEnabled: false,
     maxPolyphony: 4,
     chordDensity: 4,
+    sound: null,
   }
 }
 
@@ -98,6 +102,7 @@ const CHAIN_KEY = 'SYCORE_STEP_SEQ_CHAIN'
 const CHANNEL_KEY = 'SYCORE_STEP_SEQ_CHANNEL'
 /** SYNC: a start waits for the next bar (on) or plays now (off) — per lane */
 const SYNC_KEY = 'SYCORE_STEP_SEQ_SYNC'
+const SOUND_ON_KEY = 'SYCORE_STEP_SEQ_SOUND_ON'
 
 function loadString(key: string): string | null {
   try {
@@ -202,6 +207,9 @@ const laneSetup = (lane: SeqLane) => () => {
    *  it) or the transport's when it runs; off: it starts now. A Rig pad keeps its own Trigger sync. */
   const syncStart = ref((() => { const r = loadString(SYNC_KEY + sfx); return r === null ? true : r !== 'false' })())
   watch(syncStart, v => saveString(SYNC_KEY + sfx, !!v))
+  /** the banks' sounds (lib/lane-sound.ts) sent on a bank's start (on by default); off: no Program Change */
+  const soundEnabled = ref((() => { const r = loadString(SOUND_ON_KEY + sfx); return r === null ? true : r !== 'false' })())
+  watch(soundEnabled, v => saveString(SOUND_ON_KEY + sfx, !!v))
   /** the lane muted (M): it plays on (its playhead, follow, bank switches), its notes don't go out — not saved */
   const muted = ref(false)
   watch(midiChannel, v => {
@@ -468,6 +476,7 @@ const laneSetup = (lane: SeqLane) => () => {
     lane,
     midiChannel,
     syncStart,
+    soundEnabled,
     muted,
     banks,
     activeBankIndex,

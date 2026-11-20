@@ -24,6 +24,7 @@ import { useSequencerEngine, _resetSequencerEngine } from '@/core/engines/sequen
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useStepSequencerStore } from '@/stores/useStepSequencerStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useChordProgStore } from '@/stores/useChordProgStore'
 import { MidiSource } from '@/types/midi'
 import { rigReports } from '@/lib/rig-live'
 
@@ -216,6 +217,101 @@ describe('Sequencer engine — no panel mounted', () => {
     await flush()
     expect(engine.dynamicDegreeShift.value).toBe(1)
     expect(engine.dynamicMidiTranspose.value).toBe(0)
+  })
+  it("a bank coming in while following the Chord Prog: moved onto the chord held at once, by its own key", async () => {
+    const { engine } = setup()
+    const ui = useUiStore()
+    ui.seqFollowMode = 'degree'
+    ui.seqGenKeyFromProg = false
+    const seqStore = useStepSequencerStore()
+    seqStore.banks[1].selectedKey = 'D'
+    seqStore.banks[1].selectedScale = 'Major'
+    engine.selectedKey.value = 'C'
+    engine.selectedScale.value = 'Major'
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
+    ;(midiStore.sendNoteOn as any).mockRestore()
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: 2, name: 'D', pcs: [2, 6, 9] } }))
+    midiStore.sendNoteOn(62, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.dynamicDegreeShift.value).toBe(1) // D in C major
+    engine.selectBank(1)
+    expect(engine.selectedKey.value).toBe('D')
+    expect(engine.dynamicDegreeShift.value).toBe(0) // D in D major: the tonic, not the last bank's shift
+  })
+  it("Key: CP — a bank in another key than the progression's plays aligned into it (the nearest way)", async () => {
+    const { engine } = setup()
+    const ui = useUiStore()
+    ui.seqFollowMode = 'degree'
+    ui.seqGenKeyFromProg = true
+    const cp = useChordProgStore()
+    cp.selectedKey = 12 // Modal Chords: the key detected from the chords
+    cp.steps = [
+      { active: true, chordName: 'D', notes: [62, 66, 69] },
+      { active: true, chordName: 'G', notes: [55, 59, 62] },
+      { active: true, chordName: 'A', notes: [57, 61, 64] },
+      { active: true, chordName: 'D', notes: [62, 66, 69] },
+    ].map(st => ({ ...cp.steps[0], ...st }))
+    cp.numSteps = 4
+    cp.isPlaying = true
+    await flush()
+    expect(cp.detectedKey?.root).toBe(2)
+    engine.selectedKey.value = 'C'
+    engine.selectedScale.value = 'Major'
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
+    expect(engine.alignOffset.value).toBe(0) // not following the Chord Prog yet
+    ;(midiStore.sendNoteOn as any).mockRestore()
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: 2, name: 'D', pcs: [2, 6, 9] } }))
+    midiStore.sendNoteOn(62, 100, 1, MidiSource.CHORD_PROG)
+    await flush()
+    expect(engine.alignOffset.value).toBe(2) // C → D
+    expect(engine.dynamicDegreeShift.value).toBe(0) // the chord D is the progression's tonic
+    engine.selectedKey.value = 'A'
+    expect(engine.alignOffset.value).toBe(5) // A → D: up a 4th (the nearest way)
+    ui.seqGenKeyFromProg = false
+    expect(engine.alignOffset.value).toBe(0)
+  })
+  it("a chord announced ahead (CLK SYS: its time): pending, taken by its time — not by the steps before it", async () => {
+    const { engine } = setup()
+    useUiStore().seqFollowMode = 'degree'
+    engine.selectedKey.value = 'C'
+    engine.selectedScale.value = 'Major'
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
+    ;(midiStore.sendNoteOn as any).mockRestore()
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: 7, name: 'G', pcs: [2, 7, 11], note: 55, at: performance.now() + 200 } }))
+    expect(engine.dynamicDegreeShift.value).toBe(0) // not yet: it sounds in 200 ms
+    midiStore.sendNoteOn(55, 100, 1, MidiSource.CHORD_PROG) // its notes at its time
+    await flush()
+    expect(engine.dynamicDegreeShift.value).toBe(-3) // G: three degrees down (the nearest way)
+    // a chord now (at: its tick's time, no lead): at once, before its notes
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: 2, name: 'Dm', pcs: [2, 5, 9], note: 62, at: performance.now() } }))
+    expect(engine.dynamicDegreeShift.value).toBe(1)
+  })
+  it("a lane started while the Chord Prog plays: on its chord from the first step", async () => {
+    const { engine } = setup()
+    useUiStore().seqFollowMode = 'degree'
+    engine.selectedKey.value = 'C'
+    engine.selectedScale.value = 'Major'
+    const midiStore = useMidiStore()
+    vi.spyOn(midiStore, 'hasExplicitInputRouting').mockReturnValue(true as any)
+    vi.spyOn(midiStore, 'isDeviceRoutedToApp').mockReturnValue(true as any)
+    useChordProgStore().isPlaying = true
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: 9, name: 'Am', pcs: [0, 4, 9], note: 57, at: performance.now() } }))
+    expect(engine.dynamicDegreeShift.value).toBe(0) // stopped: nothing moves
+    window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
+    await flush()
+    expect(engine.dynamicDegreeShift.value).toBe(-2) // Am in C major
   })
   it("Play / Stop independent of the Chord Prog: its chords don't start it, its stop doesn't stop it; playing, they transpose it", async () => {
     const { engine } = setup()

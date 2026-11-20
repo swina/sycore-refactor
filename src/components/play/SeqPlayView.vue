@@ -1,10 +1,10 @@
 <script setup>
-// The Sequencer's play view (Performance): its banks and the pattern on one row (each active step's
-// note), the step sounding lit; Steps, Time and Direction can be set here — Style and Oct in the panel's header (right-click: MIDI Learn,
-// same targets as the edit panel: seq_steps, seq_time, seq_direction), and Generate with its settings
-// (Style, Oct / Range, Arp notes, Density, Melody, Rhythm with Sync / Rot, Vary, P1 / P2 RND% — the edit panel's, saved
-// per bank; P1 / P2's CC is chosen in EDIT).
-// Otherwise the Rig plays it.
+// The Sequencer's play view (Performance), top to bottom: its banks A–H (slot `slots-end` on their right:
+// the panel's library buttons), the three lanes (SeqLanesStrip), the chain, the pattern (Notes or the
+// lanes view), then the controls — Steps, Time, Direction; Style, Oct / Range, View, Key and Generate's
+// settings (Arp notes, Density, Melody, Rhythm with Sync / Rot — the edit panel's, saved per bank) — and
+// on the right Vary, P1 / P2 RND% (dials; ↻ regenerates one) and GEN. Right-click: MIDI Learn (seq_steps,
+// seq_time, seq_direction, seq_vary). P1 / P2's CC is chosen in EDIT. Otherwise the Rig plays it.
 import { computed, ref, watch } from 'vue'
 import { useSeqLaneStore } from '@/stores/useStepSequencerStore'
 import { SEQ_LANE_CFG, learnName, learnLabel } from '@/lib/seq-lanes'
@@ -12,11 +12,14 @@ import { useLiveMapStore } from '@/stores/useLiveMapStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSeqDeviceParamsStore } from '@/stores/useSeqDeviceParamsStore'
 import { seqSnapshot, rigReports, rigArmed } from '@/lib/rig-live'
-import { useSequencerEngine, NOTE_NAMES, SCALES, OWN_GEN_STYLES } from '@/core/engines/sequencer'
+import { useSequencerEngine, NOTE_NAMES, SCALES, STYLES, OWN_GEN_STYLES } from '@/core/engines/sequencer'
 import { transposeDiatonic } from '@/lib/seq-gen/harmony'
 import { ARP_MODES } from '@/lib/arp-patterns'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import PlaySlots from './PlaySlots.vue'
+import SeqLanesStrip from './SeqLanesStrip.vue'
+import SeqViewSelect from './SeqViewSelect.vue'
+import KnobDial from '@/components/ui/KnobDial.vue'
 import SeqMapModal from '@/components/SeqMapModal.vue'
 import PlayChain from './PlayChain.vue'
 import { VEL_CLASS, velLevel } from '@/lib/play-colors'
@@ -37,8 +40,13 @@ const {
   steps, gridCurrentStep, isPlaying, numSteps, tempoMultiplier, sequenceDirection, TEMPO_MULTIPLIERS, SEQ_DIRECTIONS,
   selectedStyle, chordsEnabled, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
   param1CC, param2CC, param1Variation, param2Variation,
-  generateSequence, regenerateParams, updateStep, selectedKey, selectedScale, progKey,
+  generateSequence, regenerateParams, updateStep, selectedKey, selectedScale, progKey, selectedOctave, octaveRange,
 } = useSequencerEngine(lane)
+const STYLE_NAMES = Object.keys(STYLES)
+const KNOB_AMBER = '#f59e0b'
+const KNOB_SIZE = 34
+const signed = (v) => `${v > 0 ? '+' : ''}${Math.round(v)}`
+const pct = (v) => `${Math.round(v)}%`
 // Key: CP — Gen writes in the key of the Chord Prog's chords (detected; shown before the click)
 const uiStore = useUiStore()
 const cpKey = computed(() => (uiStore.seqGenKeyFromProg ? progKey() : null))
@@ -131,114 +139,14 @@ const label = (s) => {
 
 <template>
   <div class="flex flex-col gap-3 p-3 min-h-0">
-    <PlaySlots :snap="snap" />
-    <PlayChain v-if="seqStore.chainEnabled" :entries="chainEntries" :current="isPlaying ? (seqStore.playingChainIndex ?? -1) : -1" />
-    <div class="flex flex-wrap items-center gap-3 text-[10px] font-mono">
-      <div class="flex items-center gap-1.5" title="Steps (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: L('steps'), label: LL('Steps') })">
-        <span class="text-neutral-500 uppercase">Steps</span>
-        <input v-model.number="numSteps" type="range" min="2" :max="stepsMax"
-               class="w-20 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-        <span class="w-5 text-right font-bold text-amber-400">{{ numSteps }}</span>
-      </div>
-      <div class="flex items-center gap-1.5" title="Time: steps per beat (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: L('time'), label: LL('Time') })">
-        <span class="text-neutral-500 uppercase">Time</span>
-        <select v-model="tempoMultiplier"
-                class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
-          <option v-for="opt in TEMPO_MULTIPLIERS" :key="opt.label" :value="opt">{{ opt.label }}</option>
-        </select>
-      </div>
-      <div class="flex items-center gap-1.5" title="Direction (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: L('direction'), label: LL('Direction') })">
-        <span class="text-neutral-500 uppercase">Dir</span>
-        <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
-          <button v-for="dir in SEQ_DIRECTIONS" :key="dir" :title="`Direction: ${dir}`" @click="sequenceDirection = dir"
-                  class="px-1.5 rounded font-bold"
-                  :class="sequenceDirection === dir ? 'bg-amber-600 text-black' : 'text-neutral-500 hover:text-neutral-300'">{{ DIR_ICON[dir] }}</button>
-        </div>
-      </div>
+    <!-- the banks A–H; the panel's own buttons (library load / save) on their right -->
+    <!-- Chain mode on (this lane's): the slots narrow, the chain on their right -->
+    <div class="flex items-center gap-3 min-w-0">
+      <PlaySlots :snap="snap" :compact="seqStore.chainEnabled" :class="seqStore.chainEnabled ? '' : 'flex-1 max-w-[34rem]'" />
+      <PlayChain v-if="seqStore.chainEnabled" class="flex-1" :entries="chainEntries" :current="isPlaying ? (seqStore.playingChainIndex ?? -1) : -1" />
+      <div class="ml-auto flex items-center gap-1.5 shrink-0"><slot name="slots-end" /></div>
     </div>
-    <!-- Generate and its settings (the edit panel's, saved per bank) -->
-    <div class="flex flex-wrap items-center gap-3 text-[10px] font-mono">
-      <button title="Generate: a new pattern by these settings (Vary: the share replaced) — the bank before is kept as a session take"
-              class="px-2 py-0.5 rounded bg-amber-500 text-black font-black uppercase hover:bg-amber-300"
-              @click="generateSequence">Gen</button>
-      <div class="flex items-center gap-1.5"
-           :title="`Key — CP: Gen writes in the key of the Chord Prog's chords (detected from the slot, or the chain when on${cpKey ? ': ' + cpKey.label : ''}) · Own: the Sequencer's key (${selectedKey} ${selectedScale})`">
-        <span class="text-neutral-500 uppercase">Key</span>
-        <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
-          <button :class="seg(uiStore.seqGenKeyFromProg)" @click="uiStore.seqGenKeyFromProg = true">CP</button>
-          <button :class="seg(!uiStore.seqGenKeyFromProg)" @click="uiStore.seqGenKeyFromProg = false">Own</button>
-        </div>
-        <span class="font-bold text-amber-400">{{ uiStore.seqGenKeyFromProg ? (cpKey ? cpKey.label : '—') : `${selectedKey} ${selectedScale}` }}</span>
-      </div>
-      <template v-if="isArp">
-        <div class="flex items-center gap-1.5" title="Arpeggio: its order, and its notes — 1-3-5 / +7: the key's chord (moved onto each chord when following the Chord Prog) · Scale: every note of the scale">
-          <span class="text-neutral-500 uppercase">Arp</span>
-          <select v-model="arpModeForGen"
-                  class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
-            <option v-for="m in ARP_MODES" :key="m" :value="m">{{ m }}</option>
-          </select>
-          <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
-            <button v-for="m in [['chord', '1-3-5'], ['chord7', '+7'], ['scale', 'Scl']]" :key="m[0]" :class="seg(arpNotes === m[0])" @click="arpNotes = m[0]">{{ m[1] }}</button>
-          </div>
-        </div>
-      </template>
-      <div v-else-if="!ownGen" class="flex items-center gap-1.5" title="Density: the share of steps Generate fills">
-        <span class="text-neutral-500 uppercase">Dens</span>
-        <input v-model.number="genDensity" type="range" min="0" max="100"
-               class="w-16 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-        <span class="w-7 text-right font-bold text-amber-400">{{ genDensity }}%</span>
-      </div>
-      <div v-if="melodic" class="flex items-center gap-1.5" title="Melody — Line: a motif repeated with a variant, mostly by step, the tonic chord on the strong steps · Classic: a random note of the scale on each step">
-        <span class="text-neutral-500 uppercase">Mel</span>
-        <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
-          <button v-for="m in [['line', 'Line'], ['classic', 'Cls']]" :key="m[0]" :class="seg(melodyMode === m[0])" @click="melodyMode = m[0]">{{ m[1] }}</button>
-        </div>
-      </div>
-      <div v-if="melodic" class="flex items-center gap-1.5" title="Rhythm — Weighted: the strong steps first, Sync moves them to the weak steps · Euclid: Density's onsets spread evenly, Rot turns them · Random: any step">
-        <span class="text-neutral-500 uppercase">Rhy</span>
-        <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
-          <button v-for="m in [['weighted', 'Wgt'], ['euclid', 'Eucl'], ['random', 'Rnd']]" :key="m[0]" :class="seg(rhythmMode === m[0])" @click="rhythmMode = m[0]">{{ m[1] }}</button>
-        </div>
-        <template v-if="rhythmMode === 'weighted'">
-          <span class="text-neutral-500 uppercase">Sync</span>
-          <input v-model.number="syncopation" type="range" min="0" max="100"
-                 class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-          <span class="w-5 text-right font-bold text-amber-400">{{ syncopation }}</span>
-        </template>
-        <template v-else-if="rhythmMode === 'euclid'">
-          <span class="text-neutral-500 uppercase">Rot</span>
-          <button class="w-4 rounded bg-neutral-800 text-neutral-300" @click="euclidRotation = euclidRotation - 1">−</button>
-          <span class="w-4 text-center font-bold text-amber-400">{{ euclidRotation }}</span>
-          <button class="w-4 rounded bg-neutral-800 text-neutral-300" @click="euclidRotation = euclidRotation + 1">+</button>
-        </template>
-      </div>
-      <div class="flex items-center gap-1.5" title="Vary: the share of the pattern Generate replaces (100 = all new); the Rig's Shift + GEN uses it (right-click: MIDI Learn)"
-           @contextmenu.prevent="openMenu($event, { name: L('vary'), label: LL('Vary') })">
-        <span class="text-neutral-500 uppercase">Vary</span>
-        <input v-model.number="varyAmount" type="range" min="0" max="100" step="5"
-               class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-        <span class="w-7 text-right font-bold text-amber-400">{{ varyAmount }}%</span>
-      </div>
-      <div v-for="p in P_ROWS" :key="p.n"
-           class="flex items-center gap-1.5"
-           :title="`P${p.n} (CC ${p.cc.value}, chosen in EDIT): Generate takes the preset's value, moved at random by RND% — + up toward 127, − down toward 0`">
-        <span class="text-neutral-500 uppercase">P{{ p.n }}</span>
-        <input v-model.number="p.v.value" type="range" min="-100" max="100"
-               class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-        <span class="w-7 text-right font-bold text-amber-400">{{ p.v.value > 0 ? '+' : '' }}{{ p.v.value }}</span>
-        <button type="button" class="px-1 rounded border border-amber-500/50 text-amber-400 font-bold hover:bg-amber-500/10"
-                :title="`Regenerate P${p.n} only — the notes and the rhythm stay`" @click.stop="regenerateParams(`p${p.n}`)">↻</button>
-      </div>
-      <button v-if="isMain" type="button" class="px-1.5 rounded border font-bold" @click="seqMapOpen = true"
-            :class="liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? 'border-amber-500/60 text-amber-400' : liveMap.seqParamsBlock !== 'off' || devParams.count ? 'border-emerald-500/50 text-emerald-300' : 'border-neutral-800 text-neutral-400 hover:text-white'"
-            :title="liveMap.seqParamsHint || `P1 / P2 → Map slots: ${liveMap.seqRoutes.length} track(s) · MIDI Flow devices with their own CC: ${devParams.count} — click to edit`">
-        → MAP{{ devParams.count ? ` · ${devParams.count} dev` : '' }}{{ liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? ' ⚠' : '' }}
-      </button>
-      <SeqMapModal v-if="seqMapOpen" @close="seqMapOpen = false" />
-    </div>
+    <SeqLanesStrip class="shrink-0" />
     <!-- lanes: one cell per step, each note a bar at its pitch; under it the note, the velocity meter, M (mute) -->
     <div v-if="lanes" class="flex items-start gap-1">
       <span class="w-4 shrink-0 h-14 flex items-center justify-center text-[11px] font-mono font-bold text-amber-500/80">{{ bankLetter }}</span>
@@ -264,7 +172,7 @@ const label = (s) => {
             <div class="absolute inset-y-0 left-0 pointer-events-none" :class="[VEL_FILL[velLevel(c.s.velocity ?? 100)], c.s.active ? '' : 'opacity-40']"
                  :style="{ width: `${((c.s.velocity ?? 100) / 127) * 100}%` }" />
           </div>
-          <button type="button" data-lane-mute
+          <button type="button" data-step-mute
                   class="h-3.5 rounded text-[8px] font-mono font-bold leading-none border"
                   :class="c.s.active ? 'border-neutral-800 text-neutral-500 hover:text-neutral-200' : 'bg-neutral-700 border-neutral-600 text-neutral-200'"
                   :title="`Step ${c.i + 1}: ${c.s.active ? 'on — click: mute' : 'muted — click: unmute'}`" @click="toggleStep(c.i)">M</button>
@@ -278,6 +186,143 @@ const label = (s) => {
            :class="stepClass(s, i)" :title="stepTitle(s, i)" @click="toggleStep(i)">
         {{ label(s) }}
       </button>
+    </div>
+
+    <!-- the controls: the pattern and Generate's settings (the edit panel's, saved per bank) on the left;
+         Vary, P1, P2 and GEN on the right -->
+    <div class="mt-auto flex flex-wrap items-end gap-x-4 gap-y-2 text-[10px] font-mono">
+      <div class="flex-1 min-w-0 flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-1.5" title="Steps (right-click: MIDI Learn)"
+               @contextmenu.prevent="openMenu($event, { name: L('steps'), label: LL('Steps') })">
+            <span class="text-neutral-500 uppercase">Steps</span>
+            <input v-model.number="numSteps" type="range" min="2" :max="stepsMax"
+                   class="w-28 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+            <span class="w-5 text-right font-bold text-amber-400">{{ numSteps }}</span>
+          </div>
+          <div class="flex items-center gap-1.5" title="Time: steps per beat (right-click: MIDI Learn)"
+               @contextmenu.prevent="openMenu($event, { name: L('time'), label: LL('Time') })">
+            <span class="text-neutral-500 uppercase">Time</span>
+            <select v-model="tempoMultiplier"
+                    class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
+              <option v-for="opt in TEMPO_MULTIPLIERS" :key="opt.label" :value="opt">{{ opt.label }}</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-1.5" title="Direction (right-click: MIDI Learn)"
+               @contextmenu.prevent="openMenu($event, { name: L('direction'), label: LL('Direction') })">
+            <span class="text-neutral-500 uppercase">Dir</span>
+            <div class="flex items-center gap-0.5 rounded bg-black/40 border border-neutral-800 p-0.5">
+              <button v-for="dir in SEQ_DIRECTIONS" :key="dir" :title="`Direction: ${dir}`" @click="sequenceDirection = dir"
+                      class="px-1.5 rounded font-bold"
+                      :class="sequenceDirection === dir ? 'bg-amber-600 text-black' : 'text-neutral-500 hover:text-neutral-300'">{{ DIR_ICON[dir] }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- the bank's style: what Generate (and the Rig's GEN on this lane's row) writes -->
+          <select v-model="selectedStyle" title="Style (this bank): what Generate (and the Rig's GEN) writes"
+                  class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 font-bold text-amber-200 max-w-36 cursor-pointer [color-scheme:dark]">
+            <option v-for="st in STYLE_NAMES" :key="st" :value="st">{{ st }}</option>
+          </select>
+          <div class="flex items-center gap-0.5" title="Octave: where Generate writes the pattern · Range: the octaves it spans from there (− below, + above)">
+            <span class="text-[9px] text-neutral-500 uppercase">Oct</span>
+            <select v-model="selectedOctave"
+                    class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-200 cursor-pointer [color-scheme:dark]">
+              <option v-for="o in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="o" :value="o">{{ o }}</option>
+            </select>
+            <select v-model="octaveRange"
+                    class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-200 cursor-pointer [color-scheme:dark]">
+              <option v-for="r in [-3, -2, -1, 0, 1, 2, 3]" :key="r" :value="r">{{ r >= 0 ? '+' + r : r }}</option>
+            </select>
+          </div>
+          <SeqViewSelect :lane="lane" />
+          <div class="flex items-center gap-1.5"
+               :title="`Key — CP: Gen writes in the key of the Chord Prog's chords (detected from the slot, or the chain when on${cpKey ? ': ' + cpKey.label : ''}) · Own: the Sequencer's key (${selectedKey} ${selectedScale})`">
+            <span class="text-neutral-500 uppercase">Key</span>
+            <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+              <button :class="seg(uiStore.seqGenKeyFromProg)" @click="uiStore.seqGenKeyFromProg = true">CP</button>
+              <button :class="seg(!uiStore.seqGenKeyFromProg)" @click="uiStore.seqGenKeyFromProg = false">Own</button>
+            </div>
+            <span class="font-bold text-amber-400">{{ uiStore.seqGenKeyFromProg ? (cpKey ? cpKey.label : '—') : `${selectedKey} ${selectedScale}` }}</span>
+          </div>
+          <template v-if="isArp">
+            <div class="flex items-center gap-1.5" title="Arpeggio: its order, and its notes — 1-3-5 / +7: the key's chord (moved onto each chord when following the Chord Prog) · Scale: every note of the scale">
+              <span class="text-neutral-500 uppercase">Arp</span>
+              <select v-model="arpModeForGen"
+                      class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 font-bold text-amber-400 outline-none cursor-pointer [color-scheme:dark]">
+                <option v-for="m in ARP_MODES" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+                <button v-for="m in [['chord', '1-3-5'], ['chord7', '+7'], ['scale', 'Scl']]" :key="m[0]" :class="seg(arpNotes === m[0])" @click="arpNotes = m[0]">{{ m[1] }}</button>
+              </div>
+            </div>
+          </template>
+          <div v-else-if="!ownGen" class="flex items-center gap-1.5" title="Density: the share of steps Generate fills">
+            <span class="text-neutral-500 uppercase">Dens</span>
+            <input v-model.number="genDensity" type="range" min="0" max="100"
+                   class="w-16 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+            <span class="w-7 text-right font-bold text-amber-400">{{ genDensity }}%</span>
+          </div>
+          <div v-if="melodic" class="flex items-center gap-1.5" title="Melody — Line: a motif repeated with a variant, mostly by step, the tonic chord on the strong steps · Classic: a random note of the scale on each step">
+            <span class="text-neutral-500 uppercase">Mel</span>
+            <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+              <button v-for="m in [['line', 'Line'], ['classic', 'Cls']]" :key="m[0]" :class="seg(melodyMode === m[0])" @click="melodyMode = m[0]">{{ m[1] }}</button>
+            </div>
+          </div>
+          <div v-if="melodic" class="flex items-center gap-1.5" title="Rhythm — Weighted: the strong steps first, Sync moves them to the weak steps · Euclid: Density's onsets spread evenly, Rot turns them · Random: any step">
+            <span class="text-neutral-500 uppercase">Rhy</span>
+            <div class="flex rounded bg-black/40 border border-neutral-800 p-0.5">
+              <button v-for="m in [['weighted', 'Wgt'], ['euclid', 'Eucl'], ['random', 'Rnd']]" :key="m[0]" :class="seg(rhythmMode === m[0])" @click="rhythmMode = m[0]">{{ m[1] }}</button>
+            </div>
+            <template v-if="rhythmMode === 'weighted'">
+              <span class="text-neutral-500 uppercase">Sync</span>
+              <input v-model.number="syncopation" type="range" min="0" max="100"
+                     class="w-12 h-1 accent-amber-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
+              <span class="w-5 text-right font-bold text-amber-400">{{ syncopation }}</span>
+            </template>
+            <template v-else-if="rhythmMode === 'euclid'">
+              <span class="text-neutral-500 uppercase">Rot</span>
+              <button class="w-4 rounded bg-neutral-800 text-neutral-300" @click="euclidRotation = euclidRotation - 1">−</button>
+              <span class="w-4 text-center font-bold text-amber-400">{{ euclidRotation }}</span>
+              <button class="w-4 rounded bg-neutral-800 text-neutral-300" @click="euclidRotation = euclidRotation + 1">+</button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-end gap-3 shrink-0">
+        <div data-seq-knob="vary" class="flex flex-col items-center gap-0.5"
+             title="Vary: the share of the pattern Generate replaces (100 = all new); the Rig's Shift + GEN uses it (right-click: MIDI Learn · double-click: 100)"
+             @contextmenu.prevent="openMenu($event, { name: L('vary'), label: LL('Vary') })">
+          <span class="text-[10px] uppercase font-bold text-neutral-300">Vary</span>
+          <KnobDial :model-value="varyAmount" :min="0" :max="100" :step="5" :default-val="100" :size="KNOB_SIZE" :color="KNOB_AMBER"
+                    :show-value="false" @update:model-value="v => (varyAmount = v)" />
+          <span class="h-4 font-bold text-amber-400">{{ pct(varyAmount) }}</span>
+        </div>
+        <div v-for="p in P_ROWS" :key="p.n" :data-seq-knob="`p${p.n}`"
+             class="flex flex-col items-center gap-0.5"
+             :title="`P${p.n} (CC ${p.cc.value}, chosen in EDIT): Generate takes the preset's value, moved at random by RND% — + up toward 127, − down toward 0 (double-click: 0)`">
+          <span class="text-[10px] uppercase font-bold text-neutral-300">P{{ p.n }}</span>
+          <KnobDial :model-value="p.v.value" :min="-100" :max="100" :step="1" :default-val="0" :size="KNOB_SIZE" :color="KNOB_AMBER"
+                    :show-value="false" @update:model-value="v => (p.v.value = v)" />
+          <div class="h-4 flex items-center gap-1">
+            <span class="font-bold text-amber-400">{{ signed(p.v.value) }}</span>
+            <button type="button" class="px-1 rounded border border-amber-500/50 text-amber-400 font-bold leading-none hover:bg-amber-500/10"
+                    :title="`Regenerate P${p.n} only — the notes and the rhythm stay`" @click.stop="regenerateParams(`p${p.n}`)">↻</button>
+          </div>
+        </div>
+        <div class="flex flex-col items-end gap-1">
+          <button v-if="isMain" type="button" class="px-1.5 rounded border font-bold" @click="seqMapOpen = true"
+                  :class="liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? 'border-amber-500/60 text-amber-400' : liveMap.seqParamsBlock !== 'off' || devParams.count ? 'border-emerald-500/50 text-emerald-300' : 'border-neutral-800 text-neutral-400 hover:text-white'"
+                  :title="liveMap.seqParamsHint || `P1 / P2 → Map slots: ${liveMap.seqRoutes.length} track(s) · MIDI Flow devices with their own CC: ${devParams.count} — click to edit`">
+            → MAP{{ devParams.count ? ` · ${devParams.count} dev` : '' }}{{ liveMap.seqParamsBlock && liveMap.seqParamsBlock !== 'off' ? ' ⚠' : '' }}
+          </button>
+          <button data-seq-gen title="Generate: a new pattern by these settings (Vary: the share replaced) — the bank before is kept as a session take"
+                  class="px-3 py-2 rounded border border-amber-300 bg-amber-500 text-black text-[13px] font-black uppercase hover:bg-amber-300"
+                  @click="generateSequence">Gen</button>
+        </div>
+        <SeqMapModal v-if="seqMapOpen" @close="seqMapOpen = false" />
+      </div>
     </div>
   </div>
 </template>

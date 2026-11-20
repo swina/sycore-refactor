@@ -3,7 +3,6 @@ import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import SeqPlayView from '@/components/play/SeqPlayView.vue'
-import SeqViewSelect from '@/components/play/SeqViewSelect.vue'
 import SeqLanesStrip from '@/components/play/SeqLanesStrip.vue'
 import { SEQ_LANE_CFG, learnName, learnLabel } from '@/lib/seq-lanes'
 import { usePlayView } from '@/composables/usePlayView'
@@ -1212,38 +1211,19 @@ let generateHidden = ref(false)
     </template>
     <!-- Performance: the play view (display only; the Rig plays it) -->
     <template v-else>
-      <PlayPanelHeader :title="panelTitle" panel-id="sequencer2" @pointerdown.stop="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
-        <!-- the active bank's style: what Generate (and the Rig's GEN on the Seq row) writes -->
-        <select v-model="selectedStyle" title="Sequencer style (this bank): what Generate (and the Rig's GEN) writes"
-                class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-200 max-w-36 cursor-pointer [color-scheme:dark]"
-                @pointerdown.stop @mousedown.stop>
-          <option v-for="style in Object.keys(STYLES)" :key="style" :value="style">{{ style }}</option>
-        </select>
-        <!-- Oct / Range: where Generate writes the pattern and the octaves it spans from there -->
-        <div class="flex items-center gap-0.5" title="Octave: where Generate writes the pattern · Range: the octaves it spans from there (− below, + above)"
-             @pointerdown.stop @mousedown.stop>
-          <span class="text-[9px] font-mono text-neutral-500 uppercase">Oct</span>
-          <select v-model="selectedOctave"
-                  class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-[10px] font-bold text-amber-200 cursor-pointer [color-scheme:dark]">
-            <option v-for="o in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="o" :value="o">{{ o }}</option>
-          </select>
-          <select v-model="octaveRange"
-                  class="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-[10px] font-bold text-amber-200 cursor-pointer [color-scheme:dark]">
-            <option v-for="r in [-3, -2, -1, 0, 1, 2, 3]" :key="r" :value="r">{{ r >= 0 ? '+' + r : r }}</option>
-          </select>
-        </div>
-        <SeqViewSelect :lane="lane" />
-        <button v-if="authStore.user" type="button" @click="openLoadLibraryModal" @pointerdown.stop @mousedown.stop
-                class="p-1 rounded border border-neutral-700 text-amber-300 hover:text-white" title="Load from Library">
-          <FolderOpen class="w-3.5 h-3.5" />
-        </button>
-        <button v-if="authStore.user" type="button" @click="openSaveLibraryModal" @pointerdown.stop @mousedown.stop
-                class="p-1 rounded border border-neutral-700 text-amber-300 hover:text-white" title="Save to Library">
-          <FolderPlus class="w-3.5 h-3.5" />
-        </button>
-      </PlayPanelHeader>
-      <SeqLanesStrip class="shrink-0 px-3 pt-2" />
-      <SeqPlayView :lane="lane" class="flex-1 overflow-hidden" />
+      <PlayPanelHeader :title="panelTitle" panel-id="sequencer2" @pointerdown.stop="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
+      <SeqPlayView :lane="lane" class="flex-1 overflow-hidden">
+        <template #slots-end>
+          <button v-if="authStore.user" type="button" @click="openLoadLibraryModal"
+                  class="p-1.5 rounded border border-neutral-700 text-amber-300 hover:text-white" title="Load from Library">
+            <FolderOpen class="w-4 h-4" />
+          </button>
+          <button v-if="authStore.user" type="button" @click="openSaveLibraryModal"
+                  class="p-1.5 rounded border border-neutral-700 text-amber-300 hover:text-white" title="Save to Library">
+            <FolderPlus class="w-4 h-4" />
+          </button>
+        </template>
+      </SeqPlayView>
     </template>
 
     <!-- the library's modals: on the page, centred on the screen (inside the panel they followed it, and

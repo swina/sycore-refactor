@@ -19,7 +19,7 @@
  */
 import { ref, computed, watch, effectScope, onScopeDispose } from 'vue'
 import { getTransport, start as toneStart } from 'tone'
-import { drawAt } from '@/lib/ui-clock'
+import { drawAt, uiTimeout } from '@/lib/ui-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource, traceOn } from '@/core/midi/midi-service'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -40,15 +40,16 @@ import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
 import { userKey } from '@/lib/userKey'
 import { rigReports, rigLaneRows } from '@/lib/rig-live'
-import { degreeShift, transposeDiatonic } from '@/lib/seq-gen/harmony'
+import { degreeShift, transposeDiatonic, fitToChord, seqFitOf } from '@/lib/seq-gen/harmony'
 import { pickOnsets, euclidOnsets, randomOnsets } from '@/lib/seq-gen/rhythm'
 import { melodyLine, motifLength, repeatOnsets, arpDegrees } from '@/lib/seq-gen/melody'
 import { berlinLine, sweepShape } from '@/lib/seq-gen/berlin'
 import { bassLine, BASS_STYLES } from '@/lib/seq-gen/bass'
 import { mixSteps, mutateAmount, varyFromMidi } from '@/lib/seq-gen/mutate'
 import { paramValue } from '@/lib/seq-gen/params'
-import { detectKey } from '@/lib/chord-key'
+import { progressionKey, progressionKeyDetail } from '@/lib/chord-key'
 import { paramTargets, hasDeviceRoutes } from '@/lib/seq-device-params'
+import { captureLaneSound, laneSoundMessages, laneSoundLabel } from '@/lib/lane-sound'
 import { useSeqDeviceParamsStore } from '@/stores/useSeqDeviceParamsStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 
@@ -89,6 +90,10 @@ export const STYLES = {
   Pop: { steps: 16, density: 0.55, octaves: [3, 4], velMin: 80, velMax: 115, gateMin: 45, gateMax: 75, accentGrid: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
   Rock: { steps: 16, density: 0.60, octaves: [2, 4], velMin: 90, velMax: 127, gateMin: 35, gateMax: 65, accentGrid: [true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false] },
   Electronic: { steps: 16, density: 0.50, octaves: [3, 4], velMin: 85, velMax: 115, gateMin: 30, gateMax: 60, accentGrid: [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false] },
+  // aligned with the Drum Machine's and the Chord Prog's styles (gen-styles.ts)
+  Trap: { steps: 16, density: 0.35, octaves: [3, 5], velMin: 80, velMax: 120, gateMin: 30, gateMax: 85, accentGrid: [true, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false] },
+  EDM: { steps: 16, density: 0.60, octaves: [3, 5], velMin: 90, velMax: 122, gateMin: 40, gateMax: 70, accentGrid: [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false] },
+  Urban: { steps: 16, density: 0.45, octaves: [3, 4], velMin: 70, velMax: 110, gateMin: 45, gateMax: 85, accentGrid: [true, false, false, false, false, false, true, false, false, false, false, false, true, false, false, false] },
   Arpeggio: { steps: 16, density: 1, octaves: [4, 5], velMin: 90, velMax: 110, gateMin: 60, gateMax: 80 },
   // every step, short notes, a root pedal under a repeated cell (seq-gen/berlin.ts)
   'Berlin School': { steps: 16, density: 1, octaves: [2, 3], velMin: 88, velMax: 102, gateMin: 35, gateMax: 50 },
@@ -147,6 +152,9 @@ export const STYLE_PROGRESSIONS = {
   Pop: [[0, 4, 5, 3], [0, 5, 3, 4]],
   Rock: [[0, 6, 3, 0], [0, 3, 4, 0]],
   Electronic: [[0, 2, 3, 5, 7, 5, 3, 2], [0, 3, 5, 4], [0, 5, 3, 4]],
+  Trap: [[0, 5, 3, 0], [0, 6, 5, 6], [0, 0, 5, 3]],
+  EDM: [[0, 4, 5, 3], [5, 3, 0, 4], [0, 5, 3, 4]],
+  Urban: [[0, 3, 4, 3], [1, 4, 0, 5], [0, 5, 1, 4]],
 }
 
 function buildChordNotes(scaleDegree, scaleIntervals, keyMidi, octave, voices) {
@@ -210,6 +218,35 @@ function createSequencerEngine(lane = 'main') {
   const laneMuted = computed({ get: () => seqStore.muted, set: (v) => { seqStore.muted = !!v } })
   const _onMuteSet = (e) => { const d = e.detail ?? {}; laneMuted.value = d.fromNote || d.value == null ? !laneMuted.value : d.value >= 64 }
 
+  // SOUND (lib/lane-sound.ts): a bank remembers the presets now on the lane's channel, on each device
+  // it is cabled to (MIDI Flow's Program Change state); they're sent again when that bank starts.
+  function laneReach() {
+    const ch0 = channel() - 1
+    const exact = seqStore.midiChannel >= 1
+    const regs = midiStore.routingConfig?.registrations ?? {}
+    return midiService.getCableTargets(SRC).map(device => ({ device, chs: midiService.appChannelsOn(SRC, device, ch0, exact), pcChannels: regs[device]?.pcChannels }))
+  }
+  /** The active bank takes the sound now on the lane's channel (null: no preset recorded there). */
+  function assignBankSound() {
+    const s = captureLaneSound(laneReach())
+    seqStore.activeBank.sound = s
+    return s
+  }
+  function clearBankSound() { seqStore.activeBank.sound = null }
+  const bankSound = computed(() => seqStore.activeBank?.sound ?? null)
+  const bankSoundLabel = computed(() => laneSoundLabel(bankSound.value))
+  // the lane's Program Change on (its banks' sounds sent) / off (none sent); switched on while playing: sent now
+  const laneSoundOn = computed({ get: () => seqStore.soundEnabled, set: (v) => { seqStore.soundEnabled = !!v; if (v && isPlaying.value) recallBankSound() } })
+  function recallBankSound() {
+    const sound = seqStore.activeBank?.sound
+    if (!sound || !seqStore.soundEnabled) return
+    for (const { device, msgs } of laneSoundMessages(sound)) for (const m of msgs) midiService.sendRawToDeviceByName(device, m)
+    // the devices' panels show it as their channel's preset
+    for (const t of sound.targets) {
+      const reg = midiStore.routingConfig?.registrations?.[t.device]
+      if (reg) midiStore.updateRegistration(t.device, 'pcChannels', { ...(reg.pcChannels ?? {}), [t.ch]: { ...t.preset } })
+    }
+  }
   // Local state — active bank working copy
   const { state: seqStateStorage } = useLocalStorage('S1_SEQUENCER2_STATE' + cfg.keySuffix, {})
 
@@ -221,6 +258,13 @@ function createSequencerEngine(lane = 'main') {
   const chordDensity = ref(seqStore.activeBank.chordDensity)
   const isPlaying = ref(false)
   watch(isPlaying, v => { seqLanePlaying[lane] = v; if (isMain) rigReports.seqPlaying = v })
+  // sent when the lane starts and when its bank changes while it plays (a queued slot, the chain)
+  watch(() => [isPlaying.value, seqStore.activeBankIndex], ([playing, idx], old) => {
+    if (!playing) return
+    if (old && old[0] && old[1] === idx) return
+    recallBankSound()
+  })
+
   const isRecording = ref(false)
   const currentStep = ref(0)
   const selectedStepIdx = ref(0)
@@ -280,7 +324,52 @@ function createSequencerEngine(lane = 'main') {
   // The root of the chord the Chord Prog is about to play (its 'cp-chord-on', from the chord's name):
   // its notes then move the pattern by that root, not by each note of the voicing.
   let _cpRootPc = null
-  const _onChordOn = (e) => { _cpRootPc = typeof e.detail?.rootPc === 'number' ? e.detail.rootPc : null }
+  let _cpChordPcs = null
+  const _cpHeld = ref(false) // a Chord Prog chord is sounding (its notes received, not released)
+  const _followsCp = ref(false) // the pattern was last moved by a Chord Prog chord (routed to this lane)
+  let _cpChordNote = null // its lowest note (a probe for the routing; Chromatic's note)
+  // The Chord Prog announces a chord when its tick runs — on CLK SYS ~200 ms ahead of the time it sounds
+  // (`at`), while its notes reach the lanes only at that time. Waiting for them, the lane had already
+  // handed out the first steps of the new chord (its lookahead) with the old one: the downbeat — and an
+  // arpeggio's first 16ths — played on the chord before. So a chord ahead is kept pending and taken by
+  // the first step at or after its time (stepCallback), or by its notes when they come first.
+  let _pendingChord = null // { at, rootPc, pcs, note }
+  function _setCpChord(c) {
+    _cpRootPc = c.rootPc
+    _cpChordPcs = c.pcs
+    _cpChordNote = c.note
+  }
+  function _takePendingChord(atMs) {
+    const c = _pendingChord
+    if (!c || atMs < c.at - 2) return false
+    _pendingChord = null
+    _setCpChord(c)
+    if (_cpFollowing(c.note)) { followNote(c.note, MidiSource.CHORD_PROG); _writeFollowState() }
+    return true
+  }
+  const _onChordOn = (e) => {
+    const c = {
+      rootPc: typeof e.detail?.rootPc === 'number' ? e.detail.rootPc : null,
+      pcs: Array.isArray(e.detail?.pcs) && e.detail.pcs.length ? e.detail.pcs : null,
+      note: typeof e.detail?.note === 'number' ? e.detail.note : null,
+      at: typeof e.detail?.at === 'number' ? e.detail.at : null,
+    }
+    if (c.at != null && c.at - performance.now() > 5 && isPlaying.value) { _pendingChord = c; return }
+    _pendingChord = null
+    _setCpChord(c)
+    if (_cpFollowing(c.note)) { followNote(c.note, MidiSource.CHORD_PROG); _writeFollowState() }
+  }
+  // Fit (per lane, saved): 'scale' — the pattern moves by degree in its scale · 'chord' — then each note
+  // is fitted onto the Chord Prog's chord sounding (seq-gen/harmony.ts fitToChord: the strong steps on a
+  // chord tone, a weak step's b9 moved down onto it), so a borrowed chord doesn't clash. Default: Bass and
+  // Arp on Chord, Main on Scale. With Follow: Degree only.
+  const FIT_KEY = 'SYCORE_SEQ_FIT_' + lane
+  const fitMode = ref(seqFitOf((() => { try { return localStorage.getItem(userKey(FIT_KEY)) } catch { return null } })() ?? (isMain ? 'scale' : 'chord')))
+  watch(fitMode, v => { try { localStorage.setItem(userKey(FIT_KEY), seqFitOf(v)) } catch {} })
+  // the chord the pattern is fitted to now (null: none — Fit: Scale, Chromatic, or no chord from the Chord Prog)
+  const dynamicChordPcs = ref(null)
+  // (only while the lane follows the Chord Prog: switching CHD on doesn't pin it to the chord of the moment)
+  watch(fitMode, v => { dynamicChordPcs.value = v === 'chord' && uiStore.seqFollowMode !== 'chromatic' && _followsCp.value && _cpRootPc !== null ? _cpChordPcs : null })
   window.addEventListener('cp-chord-on', _onChordOn)
   // P1 / P2 out: the Sequencer's CC to every cable, or — a MIDI Flow device with a route of its own
   // (useSeqDeviceParamsStore, set in the → Map modal) — that device's CC to it, the CC to the rest.
@@ -298,16 +387,41 @@ function createSequencerEngine(lane = 'main') {
   }
   const keyPc = () => Math.max(0, NOTE_NAMES.indexOf(selectedKey.value))
   const scaleNow = () => SCALES[selectedScale.value] ?? SCALES['Major']
+  // Key alignment (Key: CP on, following the Chord Prog — playing, or a chord held): a bank written in
+  // another key than the progression's (detectedKey) plays transposed into it, the pattern itself kept —
+  // by the nearest way (−6…+5 semitones), and moved by degree in the progression's scale when it has one
+  // (a mode). 0 / the bank's own key and scale otherwise.
+  const alignKey = computed(() => {
+    if (!uiStore.seqGenKeyFromProg || uiStore.seqDecoupled || uiStore.seqFollowMode === 'chromatic') return null
+    if (!_followsCp.value) return null
+    const cp = useChordProgStore()
+    if (!cp.isPlaying && !_cpHeld.value) return null
+    const k = progKey()
+    return k ? k : null
+  })
+  const alignOffset = computed(() => {
+    const k = alignKey.value
+    if (!k) return 0
+    const d = ((((k.root - keyPc()) % 12) + 12) % 12)
+    return d > 5 ? d - 12 : d
+  })
+  const playKeyPc = () => (alignKey.value ? alignKey.value.root : keyPc())
+  const playScale = () => (alignKey.value?.scale && SCALES[alignKey.value.scale]) || scaleNow()
   /** A note received moves the pattern: by scale degree (default) or by semitones (as before). */
   function followNote(note, sourceApp) {
+    _followsCp.value = sourceApp === MidiSource.CHORD_PROG
     if (uiStore.seqFollowMode === 'chromatic') {
       dynamicDegreeShift.value = 0
+      dynamicChordPcs.value = null
       dynamicMidiTranspose.value = note - sequenceRootMidi.value
       return
     }
-    const root = sourceApp === MidiSource.CHORD_PROG && _cpRootPc !== null ? _cpRootPc : ((note % 12) + 12) % 12
+    const fromCp = sourceApp === MidiSource.CHORD_PROG
+    const root = fromCp && _cpRootPc !== null ? _cpRootPc : ((note % 12) + 12) % 12
     dynamicMidiTranspose.value = 0
-    dynamicDegreeShift.value = degreeShift(root, keyPc(), scaleNow())
+    dynamicDegreeShift.value = degreeShift(root, playKeyPc(), playScale())
+    const pcs = fromCp && fitMode.value === 'chord' ? _cpChordPcs : null
+    if (pcs?.join() !== dynamicChordPcs.value?.join()) dynamicChordPcs.value = pcs
   }
   const sequenceRootMidi = computed(() => {
     const firstActiveStep = steps.value.find(s => s.active && s.notes && s.notes.length > 0)
@@ -424,6 +538,38 @@ function createSequencerEngine(lane = 'main') {
     loadBankIntoLocal()
     selectedStepIdx.value = 0
     lastFollowedBank = -1
+    refollowChord()
+  }
+  // A bank coming in while the lane follows the Chord Prog: moved onto the chord held at once, by its
+  // own key (and the alignment into the progression's), not by the last bank's until the next chord.
+  // The playback state is written now too: the bank switch happens on the step being played.
+  // (also when the lane starts while the Chord Prog plays: a Rig pad, Play)
+  function refollowChord() {
+    const note = _lastCpNote ?? _cpChordNote
+    if (_cpRootPc === null || note === null || !_cpFollowing(note)) return
+    const cp = useChordProgStore()
+    if (!cp.isPlaying && !_cpHeld.value) return
+    followNote(note, MidiSource.CHORD_PROG)
+    _writeFollowState()
+  }
+  /** This lane follows the Chord Prog now: playing, not recording, not Seq Free, and routed (a MIDI Flow
+   *  cable Chord Prog → Sequencer) or with Key: CP on — the lanes in the Chord Prog's key follow its
+   *  chords without a cable (they did only with one: without it a lane never moved, while switching Fit
+   *  CHD on pinned it to the chord of that moment). */
+  function _cpFollowing(note) {
+    if (note == null || !isPlaying.value || isRecording.value || uiStore.seqDecoupled) return false
+    return uiStore.seqGenKeyFromProg || isAppSourceAllowed(MidiSource.CHORD_PROG, note)
+  }
+  /** The follow written into the playback state at once (the step being played takes it). */
+  function _writeFollowState() {
+    const st = playStateRef.current
+    if (!st) return
+    st.degreeShift = dynamicDegreeShift.value
+    st.dynamicMidiTranspose = dynamicMidiTranspose.value
+    st.chordPcs = dynamicChordPcs.value
+    st.keyPc = playKeyPc()
+    st.scale = playScale()
+    st.align = alignOffset.value
   }
 
   const gridCurrentStep = computed(() => {
@@ -518,7 +664,7 @@ function createSequencerEngine(lane = 'main') {
   watch([
     numSteps, steps, param1CC, param2CC, param1Variation, param2Variation,
     selectedOctave, octaveRange, () => uiStore.seqGlobalTranspose, () => midiStore.currentBpm,
-    dynamicMidiTranspose, dynamicDegreeShift, () => uiStore.seqFollowMode, selectedKey, selectedScale, selectedStyle,
+    dynamicMidiTranspose, dynamicDegreeShift, dynamicChordPcs, fitMode, alignOffset, () => alignKey.value?.label, () => uiStore.seqFollowMode, selectedKey, selectedScale, selectedStyle,
     genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen, chordsEnabled, maxPolyphony, chordDensity
   ], () => {
     const config = { 
@@ -566,8 +712,10 @@ function createSequencerEngine(lane = 'main') {
       playStateRef.current.channel = channel()
       playStateRef.current.dynamicMidiTranspose = dynamicMidiTranspose.value
       playStateRef.current.degreeShift = dynamicDegreeShift.value
-      playStateRef.current.keyPc = keyPc()
-      playStateRef.current.scale = scaleNow()
+      playStateRef.current.chordPcs = dynamicChordPcs.value
+      playStateRef.current.keyPc = playKeyPc()
+      playStateRef.current.scale = playScale()
+      playStateRef.current.align = alignOffset.value
     }
   }, { deep: true })
 
@@ -729,7 +877,7 @@ function createSequencerEngine(lane = 'main') {
     const dst = seqStore.banks[target]
     if (dst && !dst.steps.some(st => st?.active)) {
       const src = JSON.parse(JSON.stringify(seqStore.banks[back]))
-      Object.assign(dst, src, { steps: Array.from({ length: src.numSteps }, () => ({ ...DEFAULT_STEP })) })
+      Object.assign(dst, src, { steps: Array.from({ length: src.numSteps }, () => ({ ...DEFAULT_STEP })), sound: dst.sound ?? null })
     }
     seqStore.setActiveBank(target)
     loadBankIntoLocal()
@@ -739,31 +887,75 @@ function createSequencerEngine(lane = 'main') {
       loadBankIntoLocal()
     }
   }
-  function applyKey(root, mode) {
+  function applyKey(root, mode, scale = null) {
     selectedKey.value = NOTE_NAMES[((root % 12) + 12) % 12]
+    // a mode detected from a progression with no major / minor (Modal Chords, a genre file): exactly that scale
+    if (scale && SCALES[scale]) { selectedScale.value = scale; return }
     const family = mode === 'minor' ? MINOR_FAMILY : MAJOR_FAMILY
     if (!family.includes(selectedScale.value)) selectedScale.value = mode === 'minor' ? 'Minor' : 'Major'
   }
   // Gen "Key: CP" (uiStore.seqGenKeyFromProg): the key the Chord Prog's chords sit in (chord-key.ts
   // detectKey — the chain when it is on, else the slot's active steps; its own key file as the hint).
+  // With no exact key (Modal Chords, a genre file, a key file on Both): the mode too (detectScale —
+  // Dorian, Mixolydian…; Modal Chords' Root as the tonic when set), `scale` set.
   function progKey() {
-    const cp = useChordProgStore()
-    const src = cp.chainEnabled ? cp.getChainSteps().steps : cp.steps.slice(0, cp.numSteps)
-    const chords = src.filter(st => st?.active && st.notes?.length)
-    return detectKey(chords, { selectedKey: cp.selectedKey, keyMode: cp.keyMode })
+    return useChordProgStore().detectedKey ?? null
   }
   function applyProgKey() {
     if (!uiStore.seqGenKeyFromProg) return
     const k = progKey()
-    if (k) applyKey(k.root, k.mode)
+    if (k) applyKey(k.root, k.mode, k.scale ?? null)
   }
   function _rigGenerate(e) {
-    const { root, mode, mutate } = e?.detail ?? {}
-    if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) applyKey(root, mode)
+    const { root, mode, scale, mutate } = e?.detail ?? {}
+    if (typeof root === 'number' && typeof scale === 'string' && SCALES[scale]) applyKey(root, null, scale)
+    else if (typeof root === 'number' && (mode === 'major' || mode === 'minor')) applyKey(root, mode)
     else applyProgKey()
     // the Rig's Mutate (Shift + GEN): a part of the pattern, Vary's amount or a quarter
     _generateSequence(mutate ? mutateAmount(varyAmount.value) : varyAmount.value)
   }
+
+  // AUTO SEQ (uiStore.seqAutoRegen, the Chord Prog's header): when the key / scale of the Chord Prog's
+  // progression changes (a new progression, another slot, a chord edited), this lane generates again in
+  // it — when it's in use (playing, or a pattern in its bank); not with Seq Free (seqDecoupled).
+  // Debounced: editing chords one after another regenerates once. Quantized: while the lane plays, the
+  // new pattern comes in on the next bar line (written just before the scheduler hands that step out).
+  let _autoRegenStop = null
+  const AUTO_REGEN_DEBOUNCE_MS = 300
+  const AUTO_REGEN_LEAD_MS = 250 // > the StepScheduler's 200 ms lookahead
+  // The time (performance.now() ms) of the next bar line of this lane's playback, and one bar's length;
+  // null when it isn't playing.
+  function nextBarAt() {
+    if (_sysSched?.isRunning) {
+      const spb = Math.max(1, Math.round(4 / _sysSched.stepBeats))
+      const b = Math.ceil(_sysSched.upcomingStep / spb) * spb
+      return { t: _sysSched.timeOf(b), barMs: _sysSched.timeOf(b + spb) - _sysSched.timeOf(b) }
+    }
+    if (isPlaying.value && transportManager.isRunning.value) {
+      const tr = getTransport()
+      return { t: audioTimeToPerfMs(tr.nextSubdivision('1m')), barMs: tr.toSeconds('1m') * 1000 }
+    }
+    return null
+  }
+  function autoRegenDelay(now = performance.now()) {
+    const bar = nextBarAt()
+    if (!bar || !(bar.barMs > 0)) return AUTO_REGEN_DEBOUNCE_MS
+    let at = bar.t - AUTO_REGEN_LEAD_MS
+    while (at - now < AUTO_REGEN_DEBOUNCE_MS) at += bar.barMs
+    return at - now
+  }
+  // (switching AUTO SEQ on regenerates nothing: only the next change of key does)
+  watch(() => progKey()?.label ?? null, (label, prev) => {
+    _autoRegenStop?.(); _autoRegenStop = null
+    if (!uiStore.seqAutoRegen || !label || label === prev || uiStore.seqDecoupled) return
+    _autoRegenStop = uiTimeout(() => {
+      _autoRegenStop = null
+      const k = progKey()
+      if (!k || !uiStore.seqAutoRegen || uiStore.seqDecoupled) return
+      if (!isPlaying.value && !steps.value.some(st => st?.active)) return
+      handleRigGenerate({ detail: progressionKeyDetail(k) })
+    }, autoRegenDelay())
+  })
 
   // The bank as it is now: the working copy written into it first (its watcher syncs a tick later).
   function bankSnapshot() {
@@ -1246,7 +1438,7 @@ function createSequencerEngine(lane = 'main') {
     if (d) return
     if (isPlaying.value && !isRecording.value && _lastCpNote !== null) followNote(_lastCpNote, MidiSource.CHORD_PROG)
   })
-  const _onChordRelease = () => { _lastCpNote = null }
+  const _onChordRelease = () => { _lastCpNote = null; _cpHeld.value = false }
   window.addEventListener('cp-chord-release', _onChordRelease)
 
   const handleIncomingNote = (type, note, velocity, chan, inputId, sourceApp) => {
@@ -1255,7 +1447,7 @@ function createSequencerEngine(lane = 'main') {
       window.SY_LOG(`[Seq Ingress] Note received: type=${type}, note=${note}, velocity=${velocity}, chan=${chan}, inputId=${inputId || 'null'}, sourceApp=${sourceApp || 'null'}, isOpen=${uiStore.isSequencer2Open}, isPlaying=${isPlaying.value}, isRecording=${isRecording.value}, selectedStepIdx=${selectedStepIdx.value}`)
     }
     if (sourceApp === MidiSource.CHORD_PROG) {
-      if (type === 'on' && velocity > 0) _lastCpNote = note
+      if (type === 'on' && velocity > 0) { _lastCpNote = note; _cpHeld.value = true; if (_pendingChord) _takePendingChord(performance.now()) }
       if (uiStore.seqDecoupled) return
     }
     const allowed = sourceApp ? isAppSourceAllowed(sourceApp, note) : isMidiDeviceAllowed(chan, inputId, note)
@@ -1514,6 +1706,8 @@ function createSequencerEngine(lane = 'main') {
 
 
   watch(isPlaying, (playing) => {
+    if (playing) refollowChord() // started while the Chord Prog plays: on its chord from the first step
+    else _pendingChord = null
     if (isMain) {
       midiService.isSequencerPlaying = playing
       uiStore.isSequencerPlaying = playing
@@ -1597,6 +1791,7 @@ function createSequencerEngine(lane = 'main') {
         stepCallback = (time, tMs, late = false) => {
           const state = playStateRef.current
           if (!state.isPlaying) return
+          if (_pendingChord) _takePendingChord(tMs ?? audioTimeToPerfMs(time))
           if (startPending.value) startPending.value = false // once per start: the first step is here
           // A Rig pad's stop: on its sync point of the song grid; the notes still sounding end there.
           if (_seqStopSteps && tMs != null) {
@@ -1716,8 +1911,13 @@ function createSequencerEngine(lane = 'main') {
             // accentGrid already does (see generateSequence() below).
             const velocity = step.accent ? Math.min(127, Math.floor(step.velocity * 1.15)) : step.velocity
 
+            // Fit: Chord — a step on the beat is a strong one (lands on a chord tone)
+            const fitPcs = state.chordPcs
+            const strong = !!fitPcs && (((state.localIndices?.[stepIdx] ?? stepIdx) * (tempoMultiplier.value.beatsPerStep ?? 0.25)) % 1) < 1e-6
             step.notes.forEach(note => {
-              const followed = state.degreeShift ? transposeDiatonic(note, state.degreeShift, state.keyPc ?? 0, state.scale ?? SCALES['Major']) : note
+              const aligned = note + (state.align || 0)
+              let followed = state.degreeShift ? transposeDiatonic(aligned, state.degreeShift, state.keyPc ?? 0, state.scale ?? SCALES['Major']) : aligned
+              if (fitPcs) followed = fitToChord(followed, fitPcs, strong, state.keyPc ?? 0, state.scale ?? SCALES['Major'])
               const clampedNote = Math.max(0, Math.min(127, followed + state.transpose + (state.dynamicMidiTranspose || 0)))
               if (tMs != null) {
                 // CLK SYS: on and off at their times, from the Worker-timed queue.
@@ -1791,8 +1991,10 @@ function createSequencerEngine(lane = 'main') {
       transpose: uiStore.seqGlobalTranspose || 0,
       dynamicMidiTranspose: dynamicMidiTranspose.value,
       degreeShift: dynamicDegreeShift.value,
-      keyPc: keyPc(),
-      scale: scaleNow(),
+      chordPcs: dynamicChordPcs.value,
+      keyPc: playKeyPc(),
+      scale: playScale(),
+      align: alignOffset.value,
     }
   })
 
@@ -1829,9 +2031,10 @@ function createSequencerEngine(lane = 'main') {
   return {
     // the lane (lib/seq-lanes.ts) and its MIDI channel (0 = global, 1–16)
     lane, laneChannel, laneMuted, laneSync, startPending,
+    bankSound, bankSoundLabel, assignBankSound, clearBankSound, laneSoundOn,
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, progKey, chordsEnabled, maxPolyphony, chordDensity,
-    isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
+    fitMode, alignOffset, isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
     swingAmount, basePatternLength, selectedOctave, octaveRange, numSteps, steps,
     param1CC, param2CC, clampParam1CC, clampParam2CC, param1Variation, param2Variation,
     dynamicMidiTranspose, dynamicDegreeShift, gridCurrentStep, systemClock, tempoMultiplier, sequenceDirection,

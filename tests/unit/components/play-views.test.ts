@@ -8,6 +8,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import ChordProgPlayView from '@/components/play/ChordProgPlayView.vue'
 import DrumPlayView from '@/components/play/DrumPlayView.vue'
 import SeqPlayView from '@/components/play/SeqPlayView.vue'
+import KnobDial from '@/components/ui/KnobDial.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
 import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 import { useChordProgStore } from '@/stores/useChordProgStore'
@@ -117,7 +118,7 @@ describe('play views', () => {
     expect(eng.steps.value[0].active).toBe(true)
   })
 
-  it('Sequencer lanes (View in the header): 4 / 8 / 16 set Steps, other lengths by the slider (max 16); bars at their pitch, note under it, velocity meter, M mutes, a drag moves the note', async () => {
+  it('Sequencer lanes (View): 4 / 8 / 16 set Steps, other lengths by the slider (max 16); bars at their pitch, note under it, velocity meter, M mutes, a drag moves the note', async () => {
     const w = mount(SeqPlayView)
     const sel = mount(SeqViewSelect)
     const eng = useSequencerEngine()
@@ -148,7 +149,7 @@ describe('play views', () => {
     await vel.trigger('pointerdown', { clientX: 25, pointerId: 2 })
     await vel.trigger('pointerup', { pointerId: 2 })
     expect(eng.steps.value[0].velocity).toBe(32)
-    const mute = () => w.findAll('[data-lane-mute]')
+    const mute = () => w.findAll('[data-step-mute]')
     await mute()[0].trigger('click')
     expect(eng.steps.value[0].active).toBe(false)
     expect(eng.steps.value[0].notes).toEqual([64])
@@ -180,16 +181,17 @@ describe('play views', () => {
     expect(eng.steps.value.every((s: any) => s.gate <= 50)).toBe(true)
   })
 
-  it('Sequencer: P1 / P2 RND% move, also while playing; ↻ regenerates P1 alone', async () => {
+  it('Sequencer: Vary / P1 / P2 dials move, also while playing; ↻ regenerates P1 alone', async () => {
     const w = mount(SeqPlayView)
     const eng = useSequencerEngine()
     eng.isPlaying.value = true
     await w.vm.$nextTick()
-    const rnd = w.findAll('input[type="range"][min="-100"]')
-    expect(rnd).toHaveLength(2)
-    expect(rnd[0].attributes('disabled')).toBeUndefined()
-    await rnd[0].setValue('80')
-    await rnd[1].setValue('-40')
+    const dial = (k: string) => w.find(`[data-seq-knob="${k}"]`).findComponent(KnobDial)
+    dial('p1').vm.$emit('update:modelValue', 80)
+    dial('p2').vm.$emit('update:modelValue', -40)
+    dial('vary').vm.$emit('update:modelValue', 35)
+    await w.vm.$nextTick()
+    expect(eng.varyAmount.value).toBe(35)
     expect(eng.param1Variation.value).toBe(80)
     expect(eng.param2Variation.value).toBe(-40)
     expect(w.text()).toContain('+80')
@@ -209,7 +211,7 @@ describe('play views', () => {
     store.playingChainPos = 1
     const w = mount(ChordProgPlayView)
     expect(w.text()).toContain('Chain')
-    const cells = w.findAll('div').filter(d => d.classes().includes('w-6'))
+    const cells = w.findAll('[data-chain-entry]')
     expect(cells.map(c => c.text())).toEqual(['A', 'C', 'B'])
     expect(cells[1].classes()).toContain('bg-red-600')
   })
@@ -217,7 +219,7 @@ describe('play views', () => {
   it('Drum Machine: the chain from its panel, empty entries as ·', () => {
     useDrumMachineStore().chainEnabled = true
     const w = mount(DrumPlayView, { props: { chain: ['A', null, 'B', null], chainPos: -1 } })
-    const cells = w.findAll('div').filter(d => d.classes().includes('w-6'))
+    const cells = w.findAll('[data-chain-entry]')
     expect(cells.map(c => c.text())).toEqual(['A', '·', 'B', '·'])
   })
 })

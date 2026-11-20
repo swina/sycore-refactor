@@ -53,6 +53,18 @@ function _parseSysExString(input: string): number[] | null {
   return b.some(isNaN) ? null : b;
 }
 
+/** The channels a message on `channel` goes out on to a device: the cable's OUT channels, else the
+ *  device's fanout / OUT remap, else as is (exactChannel: always as is). */
+function outChannelsFor(config: any, outputFilter: any, channel: number, exactChannel: boolean): number[] {
+  if (exactChannel) return [channel];
+  const cableChs = cableOutChannels(outputFilter);
+  if (cableChs.length > 0) return cableChs;   // the cable's own OUT channels win
+  if (config?.outChannels && config.outChannels.length > 0) return config.outChannels;
+  if (config?.isMulti) return [channel];
+  if (config && config.outChannel !== -1) return [config.outChannel];
+  return [channel];
+}
+
 /** Options for a single app send (see broadcast) */
 export interface BroadcastOptions {
   /** send on exactly `channel`, bypassing the cable / device OUT channel remap and channel filter */
@@ -882,6 +894,16 @@ export class MidiService {
     return f === undefined ? v : scaleVelocity(v, f);
   }
 
+  /** The channels an app's message on `channel` (0-based) reaches on a cabled device, after the
+   *  cable / device OUT remaps and the cable's channel filter (as broadcast sends to a real port). */
+  appChannelsOn(source: MidiSource | string, deviceName: string, channel: number, exactChannel = false): number[] {
+    const config = this.routingConfig?.registrations[deviceName];
+    const filter = this.getOutputRouteFilter(source as string, deviceName);
+    const chs = outChannelsFor(config, filter, channel, exactChannel).map(c => c & 0x0f);
+    if (exactChannel || !filter?.channels?.length) return chs;
+    return chs.filter(c => filter.channels!.includes(c));
+  }
+
   /** The devices an app is cabled to in MIDI Flow (routing matrix targets). */
   getCableTargets(source: MidiSource | string): string[] {
     return Array.from(this.router.matrix.get(source as string) ?? []);
@@ -1621,21 +1643,7 @@ export class MidiService {
       // outChannels (multi-timbral fanout) takes precedence over the single
       // outChannel remap when set — duplicates the message onto every
       // listed channel instead of picking just one.
-      let channels: number[];
-      const cableChs = cableOutChannels(outputFilter);
-      if (exactChannel) {
-        channels = [channel];
-      } else if (cableChs.length > 0) {
-        channels = cableChs;   // the cable's own OUT channels win
-      } else if (config?.outChannels && config.outChannels.length > 0) {
-        channels = config.outChannels;
-      } else if (config?.isMulti) {
-        channels = [channel];
-      } else if (config && config.outChannel !== -1) {
-        channels = [config.outChannel];
-      } else {
-        channels = [channel];
-      }
+      const channels = outChannelsFor(config, outputFilter, channel, exactChannel);
 
       const applyLatch = config?.latchEnabled || (this.latch.isActive && config?.smartLatch);
       channels.forEach(targetChannel => {
