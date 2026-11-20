@@ -13,7 +13,7 @@ import { PLAY_LED_CLASS } from '@/lib/play-colors'
 // LIVE (rig-live.ts): the Chord, Drum, Seq, Bass (the Drum Machine's bassline) and Arp rows
 // mirror the real apps and the clock is the real one (EXT from Live, or INT); pads send the
 // Control Map's commands (Arp: the pads pick its mode).
-import { keyLabel, keyRoot, keyFile } from '@/lib/chord-key'
+import { keyLabel, keyRoot, keyFile, progressionKeyDetail, NOTE_NAMES as KEY_NOTE_NAMES } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
 import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
 import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor, parseRigAction } from '@/lib/rig-actions'
@@ -27,7 +27,7 @@ import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import {
   SLOT_LABELS, SECTION_COUNT, SPLIT_COUNT, KEY_NAMES,
-  LP_TOP_LABELS, LP_SIDE_LOW_LABELS,
+  LP_TOP_LABELS,
   PRESS_OPTIONS, MOTION_OPTIONS, TRIGGER_SYNC_OPTIONS, POSITION_SYNC_OPTIONS,
   createRigState, slotState, slotColor, slotProgress, pressSlot, releaseSlot, setTrackOption,
   generate, selectSection,
@@ -52,9 +52,11 @@ import { rigChord } from '@/lib/chord-next'
 /** The SY.CORE Rig device's rows (bridge protocol: rows 0–4). */
 const RIG_LINK_ORDER = ['chord', 'drum', 'seq', 'bass', 'arp']
 import { frameLoop, uiTimeout } from '@/lib/ui-clock'
+import { MODAL_KEY_INDEX } from '@/lib/chord-gen-style'
+import { djCutoff, djFilter, djFilterCc, DJ_FILTER_OPEN } from '@/lib/dj-filter'
 import { createWorkerTicker } from '@/core/midi/step-scheduler'
 import { useStepSequencerStore, useSeqLaneStore } from '@/stores/useStepSequencerStore'
-import { seqLanePlaying, seqLaneQueued, SEQ_LANE_CFG, laneEvent } from '@/lib/seq-lanes'
+import { seqLanePlaying, seqLaneQueued, SEQ_LANE_CFG, SEQ_LANES, laneEvent, seqActiveLane } from '@/lib/seq-lanes'
 import { useArpStore } from '@/stores/useArpStore'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -357,6 +359,51 @@ watch(() => (live.value ? JSON.stringify(rigCc7(s.apps, s.globalIntensity, inten
   if (!cc7Timer) cc7Timer = uiTimeout(flushCc7, 20) // a knob turned with Live in front: not 1 s late
 })
 onUnmounted(() => { cc7Timer?.(); cc7Pending = []; flushCc7() })
+
+// ── DJ Filter (Launchpad side, row 6): its CC (djFilter.cc, default 21) closes while held, opens on release (dj-filter.ts) ──
+// Sent on every real row's channel, through its own routing (as CC 7), once per source + channel.
+const djHeld = ref(false)
+let djStop = null
+let djTargets = []
+let djLast = DJ_FILTER_OPEN
+function djSend(value) {
+  const cc = djFilterCc(djFilter.cc)
+  for (const t of djTargets) midiService.sendCC(cc, value, t.ch, t.source, null, t.opts)
+}
+function djStart() {
+  if (!live.value) { s.display = `DJ Filter: LIVE only (it sends CC ${djFilterCc(djFilter.cc)} to the real apps)`; return }
+  if (djHeld.value) return
+  const seen = new Set()
+  djTargets = []
+  for (const a of s.apps) {
+    if (!isLiveRow(a.id)) continue
+    const exact = rowLane(a.id) ? laneCh(a.id) >= 1 : a.id === 'bass' && drumStore.basslineMidiChannel >= 1
+    const t = { source: liveAppSource(a.id), ch: Math.max(0, appChannel(a.id) ?? 0), opts: exact ? { exactChannel: true } : undefined }
+    const key = `${t.source}|${t.ch}|${exact}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    djTargets.push(t)
+  }
+  djHeld.value = true
+  djLast = DJ_FILTER_OPEN
+  const t0 = performance.now()
+  djStop = frameLoop(() => {
+    const v = djCutoff(performance.now() - t0)
+    if (v === djLast) return
+    djLast = v
+    djSend(v)
+    s.display = `DJ Filter: CC ${djFilterCc(djFilter.cc)} = ${v}`
+  })
+}
+function djEnd() {
+  if (!djHeld.value) return
+  djStop?.(); djStop = null
+  djHeld.value = false
+  if (djLast !== DJ_FILTER_OPEN) djSend(DJ_FILTER_OPEN)
+  djLast = DJ_FILTER_OPEN
+  s.display = 'DJ Filter: open'
+}
+onUnmounted(djEnd)
 /** Readout for the Track options: the velocity scale now applied to a real app, and where. */
 function velocityReadout(a) {
   const f = (a.intensity / 127) * (s.globalIntensity / 127)
@@ -573,6 +620,9 @@ function onSlotDown(appId, slot) {
     s.display = p.enabled ? `Arp ${SLOT_LABELS[slot]}: ${p.mode} on` : 'Arp off'
     return
   }
+  // a lane's pad shows that lane in the Sequencer panel
+  const lane = rowLane(appId)
+  if (lane) seqActiveLane.value = lane
   // an empty slot plays too (silent): the user fills it — GEN (a lane queued on it: GEN writes there)
   const empty = !a.filled[slot]
   // Drum and Bass are the Drum Machine's two parts: each row turns its own on / off / to a sequence.
@@ -616,6 +666,12 @@ const genOn = (id, mut) => GEN_ROWS.includes(id) && (id !== 'arp' || !!rowLane('
 function onSlotUp(appId, slot) { if (!live.value) releaseSlot(s, appId, slot) }
 // Generates done per row (any source: panel, controller, Rig device): the devices flash GEN on each.
 const genCount = reactive({})
+/** The key the Sequencer's GEN writes in: the Chord Prog's exact one (Major / Minor), else — Modal
+ *  Chords, a genre file, Both — the mode its chords sit in (detectScale; Modal Chords' Root as tonic). */
+function cpGenKey() {
+  const k = chordStore.detectedKey
+  return k ? { detail: progressionKeyDetail(k), label: k.label } : null
+}
 function onGenerate(appId, mutate = false) {
   focusApp.value = appId
   if (!live.value) { genCount[appId] = (genCount[appId] ?? 0) + 1; return generate(s, appId, mutate || s.shift) }
@@ -624,27 +680,24 @@ function onGenerate(appId, mutate = false) {
   if (!genOn(appId, mut)) return notConnected(`${s.apps.find(x => x.id === appId).label} ${mut ? 'Mutate' : 'Generate'}`)
   genCount[appId] = (genCount[appId] ?? 0) + 1
   if (rowLane(appId) && appId !== 'seq') {
-    // Bass / Arp lanes: as the Seq row, in the Chord Prog's key when it has an exact one
-    const mode = chordStore.keyMode
-    const root = mode ? keyRoot(chordStore.selectedKey, mode) : null
-    dispatchRig({ name: laneEvent(rowLane(appId), 'generate'), detail: { ...(root !== null ? { root, mode } : {}), ...(mut ? { mutate: true } : {}) } })
-    s.display = `${SEQ_LANE_CFG[rowLane(appId)].label}: ${mut ? 'Mutate' : 'Generate'} ${root !== null ? `in ${keyText.value}` : '(its own key)'}`
+    // Bass / Arp lanes: as the Seq row, in the Chord Prog's key (or its mode, detected)
+    const k = cpGenKey()
+    dispatchRig({ name: laneEvent(rowLane(appId), 'generate'), detail: { ...(k ? k.detail : {}), ...(mut ? { mutate: true } : {}) } })
+    s.display = `${SEQ_LANE_CFG[rowLane(appId)].label}: ${mut ? 'Mutate' : 'Generate'} ${k ? `in ${k.label}` : '(its own key)'}`
     return
   }
   if (appId === 'bass') {
-    // A new bassline in the Drum Machine's active sequence, on the Chord Prog's key when it has an exact one.
-    const mode = chordStore.keyMode
-    const root = mode ? keyRoot(chordStore.selectedKey, mode) : null
+    // A new bassline in the Drum Machine's active sequence, on the Chord Prog's tonic (exact key or detected mode).
+    const root = cpGenKey()?.detail.root ?? null
     dispatchRig({ name: 'dm-generate-bass', detail: root !== null ? { root } : {} })
     s.display = `Bass: Generate ${root !== null ? `on ${KEY_NAMES[root]}` : '(its root note)'}`
     return
   }
   if (appId === 'seq') {
-    // A new sequence, in the Chord Prog's key when it has an exact one (Major / Minor), else in its own.
-    const mode = chordStore.keyMode
-    const root = mode ? keyRoot(chordStore.selectedKey, mode) : null
-    dispatchRig({ name: 'seq-generate', detail: { ...(root !== null ? { root, mode } : {}), ...(mut ? { mutate: true } : {}) } })
-    s.display = `Seq: ${mut ? 'Mutate' : 'Generate'} ${root !== null ? `in ${keyText.value}` : '(its own key)'}`
+    // A new sequence, in the Chord Prog's key (or its mode, detected), else in its own.
+    const k = cpGenKey()
+    dispatchRig({ name: 'seq-generate', detail: { ...(k ? k.detail : {}), ...(mut ? { mutate: true } : {}) } })
+    s.display = `Seq: ${mut ? 'Mutate' : 'Generate'} ${k ? `in ${k.label}` : '(its own key)'}`
     return
   }
   if (appId === 'chord') {
@@ -945,19 +998,28 @@ const LP_PERF_LABELS = ['Fill', 'Auto', 'Now/Bar', 'Repeat', 'Seq Free', 'Drum C
 const CHAIN_PADS = { 5: 'drum', 6: 'chord', 7: 'seq' }
 const CHAIN_SHORT = { drum: 'D·CHN', chord: 'C·CHN', seq: 'S·CHN' }
 const CHAIN_NAME = { drum: 'Drum', chord: 'Chord', seq: 'Seq' }
+// Seq Chain: every lane of the Sequencer with a chain set (Main · Bass · Arp, each its own chain) —
+// it was Main's only, so with Bass / Arp shown the panel never showed it on. None set: Main.
+const seqLaneStores = () => SEQ_LANES.map(l => useSeqLaneStore(l))
+const laneHasChain = (st) => st.chain.some(i => i !== null && i >= 0)
 function chainOn(id) {
-  return id === 'drum' ? drumStore.chainEnabled : id === 'chord' ? chordStore.chainEnabled : seqStore.chainEnabled
+  return id === 'drum' ? drumStore.chainEnabled : id === 'chord' ? chordStore.chainEnabled : seqLaneStores().some(st => st.chainEnabled)
 }
 function chainEmpty(id) {
   return id === 'drum' ? !useDrumMachineEngine().chain.value.some(Boolean)
     : id === 'chord' ? !chordStore.chain.some(i => i >= 0)
-    : !seqStore.chain.some(i => i !== null && i >= 0)
+    : !seqLaneStores().some(laneHasChain)
 }
 function toggleChain(id) {
   const on = !chainOn(id)
   if (id === 'drum') drumStore.chainEnabled = on
   else if (id === 'chord') chordStore.chainEnabled = on
-  else seqStore.setChainEnabled(on)
+  else {
+    const all = seqLaneStores()
+    const withChain = all.filter(laneHasChain)
+    if (!on) all.forEach(st => st.setChainEnabled(false))
+    else (withChain.length ? withChain : [seqStore]).forEach(st => st.setChainEnabled(true))
+  }
   const when = id === 'drum' ? 'next bar' : id === 'chord' ? 'end of the slot' : 'end of the pattern'
   s.display = `${CHAIN_NAME[id]} Chain ${on ? 'on' : 'off'}${chainEmpty(id) ? ' (no chain set: set it in its panel)' : ` — from the ${when}`}`
 }
@@ -1081,9 +1143,8 @@ function toggleLatch(col) {
 }
 
 function lpSide(row) {
-  // Side: GEN Drum / Chord / Seq / Bass · Key − · Key + (Shift: Maj/Min) · Capt · Row S mode
-  if (row === 4) return { label: LP_SIDE_LOW_LABELS[1], short: 'K−', color: 'amber' }
-  if (row === 5) return { label: LP_SIDE_LOW_LABELS[2], short: 'K+', color: 'amber' }
+  // Side: GEN Drum / Chord / Seq / Bass / Arp · DJ Filter (hold) · Capt · Row S mode
+  if (row === 5) return { label: djHeld.value ? 'DJ Filter: closing (release: open)' : 'DJ Filter (hold: cutoff down)', short: 'DJ', color: djHeld.value ? 'green' : live.value ? 'amber' : 'off' }
   if (row === 6) return { label: captures.state.recording ? 'Capture: recording (press: stop)' : 'Capture (press: record)', short: 'Capt', color: captures.state.recording ? 'redFlash' : 'redDim' }
   if (row === 7) return sMode.value === 'captures'
     ? { label: 'Row S: Captures (press: Sections)', short: 'S·CAP', color: 'red' }
@@ -1116,6 +1177,15 @@ function toggleAutoFill() {
   drumStore.autofillEnabled = !drumStore.autofillEnabled
   s.display = `Drum: Auto Fill ${drumStore.autofillEnabled ? 'on' : 'off'}`
 }
+/** Auto Fill's bar: a fill on every 4th / 8th / 12th / 16th bar (the Drum Machine's Autofill every N). */
+const AUTOFILL_BARS = [4, 8, 12, 16]
+const autoFillEvery = computed(() => useDrumMachineEngine().autofillEvery.value)
+function cycleAutoFillEvery() {
+  const e = useDrumMachineEngine().autofillEvery
+  const i = AUTOFILL_BARS.indexOf(e.value)
+  e.value = AUTOFILL_BARS[(i + 1) % AUTOFILL_BARS.length]
+  s.display = `Drum: Auto Fill on bar ${e.value} (every ${e.value} bars)${drumStore.autofillEnabled ? '' : ' — Auto is off'}`
+}
 function toggleFillWhen() {
   drumStore.fillWhen = drumStore.fillWhen === 'bar' ? 'now' : 'bar'
   s.display = `Fill: ${drumStore.fillWhen === 'bar' ? 'the whole next bar' : 'now, to the end of this bar'}`
@@ -1139,11 +1209,13 @@ function lpPadUp(row, col) {
   if (row === 5 && col === 3) repeaterOff()
 }
 function lpSideDown(row) {
-  if (row < 4) return onGenerate(s.apps[row].id)
+  if (row < 5) return onGenerate(s.apps[row].id)
+  if (row === 5) return djStart()
   if (row === 6) return onCapt()
   if (row === 7) return toggleSMode()
-  if (s.shift && live.value) return onKeyMode()
-  onKeyShift(row === 4 ? -1 : 1)
+}
+function lpSideUp(row) {
+  if (row === 5) djEnd()
 }
 
 // The device's state out / presses in — set up here, after the Launchpad view it sends (lpTop…).
@@ -1157,7 +1229,7 @@ const offRigLink = linkClient.on(e => {
     const lp = parseRigLinkPress(e.name)
     if (lp) {
       if (lp.kind === 'pad') { if (lp.down) lpPadDown(lp.row, lp.col); else lpPadUp(lp.row, lp.col) }
-      else if (lp.kind === 'side') { if (lp.down) lpSideDown(lp.index) }
+      else if (lp.kind === 'side') { if (lp.down) lpSideDown(lp.index); else lpSideUp(lp.index) }
       else if (lp.down) lpTopDown(lp.index)
       else lpTopUp(lp.index)
       return
@@ -1170,11 +1242,23 @@ onUnmounted(() => { offRigLink(); linkClient.sendRig(null) })
 
 // ── Key (LIVE: the Chord Prog's key, root + mode — chord-key.ts) ──────────
 /** The key shown: LIVE = the Chord Prog's ("Cm", "Bb", "Eb/Cm"); SIM = the rig's own. */
-const keyText = computed(() => (live.value ? keyLabel(chordStore.selectedKey, chordStore.keyMode) || '—' : KEY_NAMES[s.key]))
+const keyText = computed(() => {
+  if (!live.value) return KEY_NAMES[s.key]
+  // Modal Chords: its root (Any = every root)
+  if (chordStore.selectedKey === MODAL_KEY_INDEX) return chordStore.modalRoot === null ? 'Modal' : `${KEY_NOTE_NAMES[chordStore.modalRoot]} modal`
+  return keyLabel(chordStore.selectedKey, chordStore.keyMode) || '—'
+})
 /** Key ◀ ▶: LIVE moves the Chord Prog's tonic a semitone, in the same mode (a genre / modal library
  *  goes back to the keys, from C). */
 function onKeyShift(delta) {
   if (!live.value) return shiftKey(s, delta)
+  if (chordStore.selectedKey === MODAL_KEY_INDEX) {
+    // Modal Chords: the root its Generate stays on, a semitone (from Any: C)
+    const r = chordStore.modalRoot
+    chordStore.modalRoot = r === null ? 0 : (r + delta + 12) % 12
+    s.display = `Key ${keyText.value} (Chord Prog · Modal Chords)`
+    return
+  }
   const mode = chordStore.keyMode
   const root = keyRoot(chordStore.selectedKey, mode) ?? (mode === 'minor' ? 9 : 0)
   chordStore.selectedKey = keyFile(root + delta + 12, mode)
@@ -1184,6 +1268,7 @@ function onKeyShift(delta) {
  *  key on the same tonic (C ↔ Cm); from Both, it picks the major. */
 function onKeyMode() {
   if (!live.value) return notConnected('Major / minor')
+  if (chordStore.selectedKey === MODAL_KEY_INDEX) { s.display = 'Maj/Min: Modal Chords has no major / minor (pick a key file in the Chord Prog)'; return }
   const mode = chordStore.keyMode
   const root = keyRoot(chordStore.selectedKey, mode ?? 'major') ?? 0
   const next = mode === 'major' ? 'minor' : 'major'
@@ -1229,7 +1314,7 @@ function onLaunchpadMidi(data) {
   const ev = parseLaunchpadInput(data)
   if (!ev) return
   if (ev.kind === 'pad') { if (ev.down) lpPadDown(ev.row, ev.col); else lpPadUp(ev.row, ev.col) }
-  else if (ev.kind === 'side') { if (ev.down) lpSideDown(ev.row) }
+  else if (ev.kind === 'side') { if (ev.down) lpSideDown(ev.row); else lpSideUp(ev.row) }
   else if (ev.down) lpTopDown(ev.index)
   else lpTopUp(ev.index)
 }
@@ -1541,7 +1626,7 @@ const arcPath = v => {
 // The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
 // (Performance), teleported there while it is open.
 provide(RIG_CONTROLS_CTX, {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 })
 </script>
 
@@ -1821,19 +1906,21 @@ provide(RIG_CONTROLS_CTX, {
                       @pointerdown="lpPadDown(row - 1, col - 1)" @pointerup="lpPadUp(row - 1, col - 1)" @pointerleave="lpPadUp(row - 1, col - 1)">{{ showLabels || play ? lpPad(row - 1, col - 1).short : '' }}</button>
               <button :class="['m-auto rounded-full border font-sans font-semibold tracking-tight leading-tight', play ? 'w-4/5 h-4/5 text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(lpSide(row - 1).color)]"
                       :title="`Note ${lpSideNote(row - 1)} · ${lpSide(row - 1).label}`"
-                      @pointerdown="lpSideDown(row - 1)">{{ showLabels || play ? lpSide(row - 1).short : '' }}</button>
+                      @pointerdown="lpSideDown(row - 1)" @pointerup="lpSideUp(row - 1)" @pointerleave="lpSideUp(row - 1)">{{ showLabels || play ? lpSide(row - 1).short : '' }}</button>
             </template>
           </div>
         </div>
         <div v-if="!play" class="space-y-3 max-w-xs">
           <label class="flex items-center gap-2 text-neutral-300"><input v-model="showLabels" type="checkbox" class="accent-amber-400" /> Show labels (the real pads have none)</label>
+          <label class="flex items-center gap-2 text-neutral-300" title="The CC the DJ Filter (side, row 6) sends while held: your device's cutoff">DJ Filter CC
+            <input :value="djFilter.cc" type="number" min="0" max="127" class="w-16 bg-black border border-white/10 rounded px-1.5 py-0.5 text-neutral-200" @change="djFilter.cc = djFilterCc($event.target.value); $event.target.value = djFilter.cc" /></label>
           <section class="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-1 text-neutral-300">
             <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Map</h3>
             <div>Rows 1–5 · Drum, Chord, Seq, Bass, Arp × slots A–H (Arp: modes)</div>
             <div>Row 6 · Fill · Auto Fill · Now/Bar · Repeat (hold) · Latch · Drum Chain · Chord Chain · Seq Chain (dark red off · red blinking on)</div>
             <div>Row 7 · Sections 1–8 — or Captures 1–8 (side S·SEC / S·CAP)</div>
             <div>Row 8 · Latch 1–8: the Chord Prog stays on chord 1–8 (green; blinking until the chord sounding ends) — press again: the progression goes on</div>
-            <div>Side · Generate Drum, Chord, Seq, Bass (Shift: Mutate) · Key − · Key + (Shift: Maj/Min) · Capt (record a capture) · Row S: Sections / Captures</div>
+            <div>Side · Generate Drum, Chord, Seq, Bass, Arp (Shift: Mutate) · DJ Filter (hold: CC {{ djFilter.cc }} cutoff closes, release: opens) · Capt (record a capture) · Row S: Sections / Captures</div>
             <div>Top · Beat/Tap · EXT/INT (hold) · Shift · Gen AI · Sync (cycles the focused track's Trigger sync) · Rig · — · Panic (hold)</div>
             <div class="text-[10px] text-neutral-500">Slot pads follow each track's Press mode: hold modes react on release too.</div>
           </section>

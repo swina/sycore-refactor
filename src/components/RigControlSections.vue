@@ -12,7 +12,7 @@ defineProps({ only: { type: String, required: true } }) // transport | template 
 const {
   s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu,
   tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg,
-  onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode,
+  onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode,
   knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 } = inject(RIG_CONTROLS_CTX)
 const tplFile = ref(null)
@@ -83,9 +83,13 @@ const takes = useSessionTakesStore()
       <div class="grid grid-cols-2 gap-1.5">
         <div class="col-span-2 flex gap-1">
           <button :class="[btn, 'flex-1', fillClass]" @click="onFill">Fill</button>
-          <!-- the Drum Machine's Autofill (a fill every N bars, set in the Drum Machine) -->
-          <button :class="[btn, drumStore.autofillEnabled ? btnOn : btnIdle]" title="Auto Fill: the Drum Machine's Autofill on / off (a fill every N bars, set in the Drum Machine)"
+          <!-- the Drum Machine's Autofill (a fill every N bars) -->
+          <button :class="[btn, drumStore.autofillEnabled ? btnOn : btnIdle]" title="Auto Fill: the Drum Machine's Autofill on / off (a fill every N bars: the button next to it)"
                   @click="toggleAutoFill">Auto</button>
+          <!-- Auto Fill's bar: on every 4th / 8th / 12th / 16th bar (click: the next) -->
+          <button data-autofill-every :class="[btn, drumStore.autofillEnabled ? btnOn : btnIdle]"
+                  :title="`Auto Fill on bar ${autoFillEvery} (every ${autoFillEvery} bars, the whole bar) · click: 4 → 8 → 12 → 16`"
+                  @click="cycleAutoFillEvery">{{ autoFillEvery }}</button>
           <!-- the Drum Machine's Fill: now (to the end of this bar) or the whole next bar -->
           <button :class="[btn, drumStore.fillWhen === 'bar' ? btnOn : btnIdle]" title="Fill: Now = at once, to the end of this bar · Bar = armed, the whole next bar"
                   @click="drumStore.fillWhen = drumStore.fillWhen === 'bar' ? 'now' : 'bar'">{{ drumStore.fillWhen === 'bar' ? 'Bar' : 'Now' }}</button>
@@ -105,7 +109,7 @@ const takes = useSessionTakesStore()
       <div class="flex items-center justify-between">
         <button :class="[btn, btnIdle, learnedRing('rig_key_down')]" @click="onKeyShift(-1)" @contextmenu="learnMenu($event, 'rig_key_down', 'Key −')">◀</button>
         <span class="font-mono text-white">Key {{ keyText }}</span>
-        <button v-if="live" :class="[btn, btnIdle]" title="Major / minor on the same tonic (Launchpad: Shift + Key)" @click="onKeyMode" @contextmenu="learnMenu($event, 'rig_key_mode', 'Key Maj/Min')">Maj/Min</button>
+        <button v-if="live" :class="[btn, btnIdle]" title="Major / minor on the same tonic" @click="onKeyMode" @contextmenu="learnMenu($event, 'rig_key_mode', 'Key Maj/Min')">Maj/Min</button>
         <button :class="[btn, btnIdle, learnedRing('rig_key_up')]" @click="onKeyShift(1)" @contextmenu="learnMenu($event, 'rig_key_up', 'Key +')">▶</button>
       </div>
       <!-- the app the knobs act on: picked here (or by a press on one of its pads) -->
