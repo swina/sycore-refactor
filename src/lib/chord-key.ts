@@ -165,3 +165,92 @@ export function detectKey(chords: readonly KeyChord[], hint?: { selectedKey: num
   }
   return best ? { root: best.root, mode: best.mode, label: best.label } : null
 }
+
+// ── The mode of a progression, from its chords (Modal Chords, genre files, "Both") ─────────────
+
+/** The scales a mode can be detected as — named as the Sequencer's SCALES. */
+export const MODE_SCALES: Record<string, readonly number[]> = {
+  Major: [0, 2, 4, 5, 7, 9, 11],
+  Minor: [0, 2, 3, 5, 7, 8, 10],
+  Dorian: [0, 2, 3, 5, 7, 9, 10],
+  Phrygian: [0, 1, 3, 5, 7, 8, 10],
+  Lydian: [0, 2, 4, 6, 7, 9, 11],
+  Mixolydian: [0, 2, 4, 5, 7, 9, 10],
+  'Harmonic Min': [0, 2, 3, 5, 7, 8, 11],
+  Locrian: [0, 1, 3, 5, 6, 8, 10],
+}
+// a tie (a degree no chord touches: Minor ↔ Dorian without the 6th) goes to the plainer scale
+const MODE_BIAS: Record<string, number> = { Major: 0.3, Minor: 0.3, Dorian: 0.15, Mixolydian: 0.15, 'Harmonic Min': 0.05, Phrygian: 0.05, Lydian: 0.05, Locrian: 0 }
+
+export interface DetectedScale { root: number; scale: string; mode: 'major' | 'minor'; label: string }
+
+/**
+ * The tonic and mode (Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Harmonic Min, Locrian) the
+ * chords sit in best — scored as detectKey: notes in the scale +1 / outside −2, roots on its degrees,
+ * the tonic chord, a progression starting / ending on it. `tonic` (Modal Chords' Root) is the tonic
+ * when given. null when there are no chords.
+ */
+export function detectScale(chords: readonly KeyChord[], tonic: number | null = null): DetectedScale | null {
+  const parsed = chords
+    .map(c => {
+      const root = rootOf(c)
+      const pcs = new Set((c.notes ?? []).map(n => m12(n + (c.transpose ?? 0))))
+      if (root !== null) pcs.add(root)
+      return root === null ? null : { root, pcs }
+    })
+    .filter((c): c is { root: number; pcs: Set<number> } => c !== null)
+  if (!parsed.length) return null
+  let best: (DetectedScale & { score: number }) | null = null
+  const tonics = tonic !== null ? [m12(tonic)] : [...Array(12).keys()]
+  for (const [scale, iv] of Object.entries(MODE_SCALES)) {
+    const set = new Set(iv)
+    for (const t of tonics) {
+      let score = MODE_BIAS[scale] ?? 0
+      parsed.forEach((c, i) => {
+        for (const pc of c.pcs) score += set.has(m12(pc - t)) ? 1 : -2
+        if (set.has(m12(c.root - t))) score += 1
+        if (c.root === t) {
+          score += 2
+          if (i === 0) score += 2
+          if (i === parsed.length - 1) score += 1.5
+        }
+      })
+      if (!best || score > best.score) {
+        const mode = set.has(3) ? 'minor' : 'major'
+        best = { root: t, scale, mode, score, label: `${NOTE_NAMES[t]} ${scale}` }
+      }
+    }
+  }
+  return best ? { root: best.root, scale: best.scale, mode: best.mode, label: best.label } : null
+}
+
+// ── The progression's key, as the Sequencer uses it (Key: CP, the Rig's GEN, AUTO SEQ) ────────
+
+/** The library index of Modal Chords (useProgressionLoader's KEY_FILE_NAMES). */
+export const MODAL_KEY_INDEX = 12
+
+export interface ProgressionKey {
+  root: number
+  mode: 'major' | 'minor'
+  /** a mode detected (Dorian, Mixolydian…): the Sequencer takes exactly that scale; null = an exact
+   *  Major / Minor key (the Sequencer keeps a scale of the same family, e.g. Pentatonic Min) */
+  scale: string | null
+  label: string
+}
+
+/**
+ * The key the Chord Prog's chords sit in: with an exact key (Major / Minor on a key file) detectKey,
+ * hinted by it; otherwise (Modal Chords, a genre file, Both) the mode too (detectScale, Modal Chords'
+ * Root as the tonic when set). null without chords.
+ */
+export function progressionKey(chords: readonly KeyChord[], o: { selectedKey: number; keyMode: KeyMode; modalRoot?: number | null }): ProgressionKey | null {
+  if (o.keyMode && keyRoot(o.selectedKey, o.keyMode) !== null) {
+    const k = detectKey(chords, { selectedKey: o.selectedKey, keyMode: o.keyMode })
+    return k ? { root: k.root, mode: k.mode, scale: null, label: k.label } : null
+  }
+  const s = detectScale(chords, o.selectedKey === MODAL_KEY_INDEX ? o.modalRoot ?? null : null)
+  return s ? { root: s.root, mode: s.mode, scale: s.scale, label: s.label } : null
+}
+
+/** The detail of a Sequencer generate event for that key ({ root, mode } or { root, scale }). */
+export const progressionKeyDetail = (k: ProgressionKey) => (k.scale ? { root: k.root, scale: k.scale } : { root: k.root, mode: k.mode })

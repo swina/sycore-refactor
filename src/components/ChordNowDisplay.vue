@@ -2,6 +2,7 @@
 // Now / Next: the Chord Prog's chord sounding and the one after it, with their lengths ('1/1' = a
 // bar…), and a bar filling over the chord sounding. As the SY.CORE Rig device in Live shows it
 // (lib/chord-next.ts rigChord; past the end, a queued slot's first chord is next).
+// Stopped, a chord played on its own (controller, panel) is Now.
 // `stacked`: Now over Next (the Rig Controls column in Performance, above Play); else on one row.
 import { computed } from 'vue'
 import { useChordProgStore, DURATION_LABELS } from '@/stores/useChordProgStore'
@@ -14,10 +15,16 @@ const queuedSlot = () => {
   const q = rigReports.queued.chord ?? rigArmed.chord
   return q !== null && q !== undefined && q !== store.playingSlotIndex ? store.slots[q] ?? null : null
 }
+// stopped, a chord played on its own (a controller's MIDI Learn, a click in the panel): Now shows it, no Next
+const held = computed(() => {
+  if (!store.playingChordName) return null
+  const st = store.steps[store.currentStep]
+  return { now: store.playingChordName, dur: st ? (DURATION_LABELS[st.duration] ?? '') : '', next: '', nextDur: '', ms: 0, seq: 0 }
+})
 const chord = computed(() => store.isPlaying ? rigChord(
   { name: store.playingChordName, duration: store.playingChordDuration, ms: store.playingChordMs, bars: store.playingChordBars, seq: store.playingChordSeq },
   store.nextChord, queuedSlot(), DURATION_LABELS,
-) : null)
+) : held.value)
 </script>
 
 <template>

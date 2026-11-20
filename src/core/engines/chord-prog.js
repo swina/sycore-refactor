@@ -26,7 +26,7 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
-import { useChordProgStore, DURATION_OPTIONS } from '@/stores/useChordProgStore'
+import { useChordProgStore, stepPlayMode } from '@/stores/useChordProgStore'
 import { useProgressionLoader } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
 import { sendPartPresets } from '@/lib/song-composer'
@@ -36,7 +36,7 @@ import { externalGrid } from '@/core/midi/external-grid'
 import { chordAfter, latchIndex } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
-import { chordRootPc } from '@/lib/seq-gen/harmony'
+import { chordRootPc, chordPcs } from '@/lib/seq-gen/harmony'
 
 let engine = null
 let engineScope = null
@@ -339,11 +339,17 @@ function createChordProgEngine() {
   }
 
   /** A chord about to sound: its root (from the name — chord-follow by scale degree in the Sequencer,
-   *  seq-gen/harmony.ts), sent before its notes so a follower moves on the chord, not on each note. */
+   *  seq-gen/harmony.ts) and its pitch classes (a lane's Fit: Chord), sent before its notes so a follower
+   *  moves on the chord, not on each note. */
   function announceChord(name, notes, shift = 0) {
     const pc = chordRootPc(name, notes)
     if (pc === null) return
-    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: { rootPc: (((pc + shift) % 12) + 12) % 12, name } }))
+    const shifted = (notes ?? []).map(n => n + shift)
+    // at: CLK SYS, the time the chord sounds (the tick runs ahead of it); null: now
+    window.dispatchEvent(new CustomEvent('cp-chord-on', { detail: {
+      rootPc: (((pc + shift) % 12) + 12) % 12, name, pcs: chordPcs(shifted),
+      note: shifted.length ? Math.min(...shifted) : null, at: _sysTickMs,
+    } }))
   }
 
   /** CLK SYS: a note on at onMs and off durMs later, from the Worker-timed queue (onBeat: its exact
@@ -604,7 +610,7 @@ function createChordProgEngine() {
         const step = state.steps[state.stepPointer]
         const ticksNeeded = DURATION_TICKS[step?.duration] ?? 32
         // Per-step Chord/Arp override — unset means "inherit the slot's global playMode".
-        const effectiveMode = step?.stepMode ?? state.playMode
+        const effectiveMode = stepPlayMode(store.progMode, step?.stepMode, state.playMode) // the header's AUTO / CHORD / ARP
 
         if (state.chainSlotIndices && store.drumFollow) cueNextSection(state)
 
@@ -957,7 +963,7 @@ function createChordProgEngine() {
 
     const channel = midiStore.midiChannel
     const shift = (seqTranspose.value || 0) + (step.transpose || 0)
-    const effectiveMode = step.stepMode ?? store.playMode
+    const effectiveMode = stepPlayMode(store.progMode, step.stepMode, store.playMode)
     announceChord(step.chordName, step.notes, shift)
 
     // Stop any held chord + any preview notes
@@ -1069,11 +1075,8 @@ function createChordProgEngine() {
   // journaled (lib/session-takes.ts): the progression it replaces is kept as a session take
   function handleGenerate() {
     journaled('chord', store.activeSlotIndex, () => {
+      // the style decides the chords' durations (chord-gen-style.ts); Fill › Dur sets them all after
       store.generateAlgorithmic(progressionData.value)
-      const dur = fillDurationRandom.value
-        ? DURATION_OPTIONS[Math.floor(Math.random() * DURATION_OPTIONS.length)]
-        : fillDuration.value
-      for (let i = 0; i < store.numSteps; i++) store.setStep(i, { duration: dur })
     })
   }
   // A Rig pad adds { sync } (its Trigger sync, sixteenths): the start waits for that sync point of

@@ -1,7 +1,8 @@
 import { customChordName, normalizeCustomStep } from '@/lib/chord-custom'
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { generateMajor, keyPhrase, keyRoot, type KeyMode } from '@/lib/chord-key'
+import { keyPhrase, keyRoot, progressionKey, NOTE_NAMES as KEY_NOTE_NAMES, type KeyMode } from '@/lib/chord-key'
+import { generateStyled, isChordGenStyle, DEFAULT_CHORD_GEN_STYLE, MODAL_KEY_INDEX } from '@/lib/chord-gen-style'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
 import { db, doc, collection, getDocs, setDoc, deleteDoc } from '@/lib/idb'
@@ -36,6 +37,14 @@ export interface ChordStep {
 }
 
 export type PlayMode = 'chord' | 'arp' | 'bass'
+/** The whole progression's mode (the play view's header): 'auto' = as written (each step's Mode, else
+ *  its slot's Chord / Arp); 'chord' / 'arp' = every step so, its own Mode kept for when it's back on Auto. */
+export type ProgMode = 'auto' | 'chord' | 'arp'
+export const PROG_MODES: readonly ProgMode[] = ['auto', 'chord', 'arp']
+/** A step's mode as played. */
+export function stepPlayMode(progMode: ProgMode | undefined, stepMode: 'chord' | 'arp' | undefined, slotMode: PlayMode): PlayMode {
+  return progMode === 'chord' || progMode === 'arp' ? progMode : stepMode ?? slotMode
+}
 
 export interface CapturedChord {
   chordName: string
@@ -63,6 +72,10 @@ export interface ChordProgAllSlotsSnapshot {
   numSteps: number
   selectedKey: number
   keyMode?: KeyMode
+  /** Generate: the style, and Modal Chords' root (null = any). */
+  genStyle?: string
+  modalRoot?: number | null
+  progMode?: ProgMode
   playMode: PlayMode
   arpRate: DurationOption
   midiChannel: number
@@ -149,11 +162,27 @@ export const useChordProgStore = defineStore('chordProg', () => {
   // on — from the end of the chord sounding; null = the progression (it goes on after the latched chord).
   const latchStep = ref<number | null>(null)
   const selectedStepIdx = ref(0)
-  const selectedKey = ref(saved?.selectedKey ?? 0)
+  // Modal Chords is the default library (once for a state saved before, on another key file).
+  const MODAL_DEFAULT_FLAG = 'SYCORE_CP_MODAL_DEFAULT'
+  const takeModalDefault = () => {
+    try {
+      const k = userKey(MODAL_DEFAULT_FLAG)
+      if (localStorage.getItem(k)) return false
+      localStorage.setItem(k, '1')
+      return true
+    } catch { return false }
+  }
+  const startKey = (snap: ChordProgSnapshot | null) => (takeModalDefault() ? MODAL_KEY_INDEX : snap?.selectedKey ?? MODAL_KEY_INDEX)
+  const selectedKey = ref(startKey(saved))
+  // Generate: the style (chord-gen-style.ts) and, on Modal Chords, the root to stay on (null = any).
+  const genStyle = ref<string>(isChordGenStyle(saved?.genStyle) ? saved!.genStyle! : DEFAULT_CHORD_GEN_STYLE)
+  const validRoot = (v: unknown) => (typeof v === 'number' && v >= 0 && v < 12 ? v : null)
+  const modalRoot = ref<number | null>(validRoot(saved?.modalRoot))
   // The key's mode for generating (chord-key.ts): 'major' / 'minor' = exactly that key of the
   // selectedKey pair (e.g. Cm), null = the pair (any progression of the file).
   const keyMode = ref<KeyMode>(saved?.keyMode ?? null)
   const playMode = ref<PlayMode>(saved?.playMode ?? 'chord')
+  const progMode = ref<ProgMode>(PROG_MODES.includes(saved?.progMode as ProgMode) ? saved!.progMode! : 'auto')
   const arpRate = ref<DurationOption>(saved?.arpRate ?? '16n')
   const midiChannel = ref(saved?.midiChannel ?? 1)
   // ── Progression Slots (A-H) & Chain ─────────────────────────────────────
@@ -339,6 +368,13 @@ export const useChordProgStore = defineStore('chordProg', () => {
     }
     return { steps: all, numSteps: all.length, slotIndices, localIndices, positions }
   }
+  /** The key / scale the progression sits in (chord-key.ts progressionKey): the chain's chords when it
+   *  is on, else the slot's — shown in the Chord Prog, used by the Sequencer (Key: CP, GEN, AUTO SEQ). */
+  const detectedKey = computed(() => {
+    const src = chainEnabled.value ? getChainSteps().steps : steps.value.slice(0, numSteps.value)
+    return progressionKey(src.filter(st => st?.active && st.notes?.length), { selectedKey: selectedKey.value, keyMode: keyMode.value, modalRoot: modalRoot.value })
+  })
+
 
   // ── Chord Capture ───────────────────────────────────────────────────────
   // A MIDI-learned button (cp_capture) snapshots the chord played on the MIDI
@@ -418,13 +454,16 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const libraryPatterns = ref<any[]>([])
   const loadingLibrary = ref(false)
 
-  watch([steps, numSteps, selectedKey, keyMode, playMode, arpRate, midiChannel], () => {
+  watch([steps, numSteps, selectedKey, keyMode, genStyle, modalRoot, progMode, playMode, arpRate, midiChannel], () => {
     try {
       localStorage.setItem(userKey(STORAGE_KEY), JSON.stringify({
         steps: steps.value,
         numSteps: numSteps.value,
         selectedKey: selectedKey.value,
         keyMode: keyMode.value,
+        genStyle: genStyle.value,
+        modalRoot: modalRoot.value,
+        progMode: progMode.value,
         playMode: playMode.value,
         arpRate: arpRate.value,
         midiChannel: midiChannel.value,
@@ -491,18 +530,27 @@ export const useChordProgStore = defineStore('chordProg', () => {
     }
   }
 
-  function generateAlgorithmic(progressionData: Record<string, any>) {
-    // A major key: the library has none (its progressions are minor) — generated from the major templates.
-    if (keyMode.value === 'major' && selectedKey.value >= 0 && selectedKey.value < 12) {
-      generateMajor(selectedKey.value, numSteps.value).forEach((c, i) => {
-        steps.value[i] = { ...DEFAULT_CHORD_STEP, chordName: c.chordName, notes: c.notes, active: true }
-      })
-      return
-    }
-    const names = Object.keys(progressionData)
-    if (!names.length) return
-    const name = names[Math.floor(Math.random() * names.length)]
-    loadProgressionByName(progressionData, name)
+  /** A new progression from the library chosen, in the Generate style (chord-gen-style.ts): its
+   *  chords' durations, gate, velocity, voicing (and Arp for Arpeggio / Berlin School). */
+  function generateAlgorithmic(progressionData: Record<string, any>): boolean {
+    const gen = generateStyled({
+      data: progressionData, selectedKey: selectedKey.value, keyMode: keyMode.value,
+      root: modalRoot.value, style: genStyle.value, numSteps: numSteps.value,
+    })
+    if (!gen) return false
+    gen.steps.forEach((g, i) => {
+      steps.value[i] = {
+        ...DEFAULT_CHORD_STEP,
+        chordName: g.chordName,
+        notes: g.notes,
+        duration: g.duration as DurationOption,
+        gate: g.gate,
+        velocity: g.velocity,
+        active: true,
+        ...(g.stepMode ? { stepMode: g.stepMode, arpRate: g.arpRate as DurationOption } : {}),
+      }
+    })
+    return true
   }
 
   /**
@@ -516,8 +564,9 @@ export const useChordProgStore = defineStore('chordProg', () => {
     if (!aiStore.isConfigured) return false
 
     // The exact key (root + mode), or the relative pair; none for the modal / genre libraries.
-    const phrase = keyPhrase(selectedKey.value, keyMode.value)
-    const root = keyRoot(selectedKey.value, keyMode.value)
+    const modal = selectedKey.value === MODAL_KEY_INDEX && modalRoot.value !== null
+    const phrase = keyPhrase(selectedKey.value, keyMode.value) ?? (modal ? `${KEY_NOTE_NAMES[modalRoot.value!]} (any mode)` : null)
+    const root = keyRoot(selectedKey.value, keyMode.value) ?? (modal ? modalRoot.value : null)
     const rootMidi = 48 + (root ?? 0)
 
     const systemPrompt = [
@@ -525,6 +574,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
       `Write a chord progression${phrase ? ` in ${phrase}` : ''}, ${numSteps.value} chords long, that matches the requested mood.`,
       `Output ONLY a valid JSON array (no markdown fences, no commentary) of objects with "chordName" (e.g. "Cmaj7", "Am7", "F") and "notes" — a flat array of MIDI note numbers. ` +
       `The notes should sit near MIDI ${rootMidi}${root !== null ? ` (that octave is the root of the key)` : ''}.`,
+      `Style: ${genStyle.value} (its harmony and voicings).`,
       'Keep each chord to 3-5 notes, and use a cohesive key.'
     ].join('\n')
 
@@ -768,8 +818,11 @@ export const useChordProgStore = defineStore('chordProg', () => {
     const s: ChordProgSnapshot | null = newUid ? loadSaved() : null
     steps.value = ensureSteps16(s?.steps ?? Array(16).fill(null).map(() => ({ ...DEFAULT_CHORD_STEP })))
     numSteps.value = s?.numSteps ?? 8
-    selectedKey.value = s?.selectedKey ?? 0
+    selectedKey.value = startKey(s)
     keyMode.value = s?.keyMode ?? null
+    genStyle.value = isChordGenStyle(s?.genStyle) ? s!.genStyle! : DEFAULT_CHORD_GEN_STYLE
+    modalRoot.value = validRoot(s?.modalRoot)
+    progMode.value = PROG_MODES.includes(s?.progMode as ProgMode) ? s!.progMode! : 'auto'
     playMode.value = s?.playMode ?? 'chord'
     arpRate.value = s?.arpRate ?? '16n'
     midiChannel.value = s?.midiChannel ?? 1
@@ -777,7 +830,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
 
   return {
     steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, playingChordMs, playingChordBars, playingChordSeq, nextChord, latchStep, selectedStepIdx,
-    selectedKey, keyMode, playMode, arpRate, midiChannel,
+    selectedKey, keyMode, genStyle, modalRoot, progMode, detectedKey, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, moveStep, toggleStepActive, assignChordToStep, cycleDuration,
     loadProgressionByName, generateAlgorithmic, generateFromAiPrompt, clearSteps,

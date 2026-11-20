@@ -4,6 +4,9 @@ import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import { journaled } from '@/lib/session-takes'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
 import ChordProgPlayView from '@/components/play/ChordProgPlayView.vue'
+import ChordGenControls from '@/components/play/ChordGenControls.vue'
+import ChordModeSwitch from '@/components/play/ChordModeSwitch.vue'
+import ChordKeyBadge from '@/components/play/ChordKeyBadge.vue'
 import { usePlayView } from '@/composables/usePlayView'
 // Performance: a play view (slots, chords) instead of the panel; EDIT: the panel.
 const { play } = usePlayView('chord-prog')
@@ -25,7 +28,7 @@ import { useSyncStore } from '@/stores/useSyncStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
-import { useChordProgStore, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP, CAPTURE_MAX } from '@/stores/useChordProgStore'
+import { useChordProgStore, stepPlayMode, DURATION_OPTIONS, DURATION_LABELS, DEFAULT_CHORD_STEP, CAPTURE_MAX } from '@/stores/useChordProgStore'
 import { noteLabel } from '@/lib/chord-detector'
 import { useProgressionLoader, KEY_FILE_NAMES } from '@/composables/useProgressionLoader'
 import { orderChordStrumNotes } from '@/lib/chord-strum'
@@ -37,7 +40,8 @@ import { sendPartPresets } from '@/lib/song-composer'
 import { ARP_MODES, nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
-import { keyLabel } from '@/lib/chord-key'
+import { keyLabel, NOTE_NAMES as KEY_NOTE_NAMES } from '@/lib/chord-key'
+import { CHORD_GEN_STYLES, CHORD_GEN_STYLE_NAMES, MODAL_KEY_INDEX } from '@/lib/chord-gen-style'
 import { chordAfter } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { useChordProgEngine } from '@/core/engines/chord-prog'
@@ -178,6 +182,13 @@ onUnmounted(() => {
 const activeTab = ref('generate')
 watch(activeTab, (tab) => { if (tab === 'performance') loadPcSets() })
 const libSubTab = ref(store.selectedKey >= 13 ? 'genre' : 'keys')
+const VOICING_LABEL = { triad: 'triads', seventh: '7ths', stab: 'stabs', power: 'power', open: 'open' }
+const styleSummary = computed(() => {
+  const st = CHORD_GEN_STYLES[store.genStyle]
+  if (!st) return ''
+  const lens = [...new Set(st.rhythms.map(r => r.map(d => DURATION_LABELS[d] ?? d).join('·')))].join(' / ')
+  return `${lens} · ${VOICING_LABEL[st.voicing]}${st.arp ? ' · arp' : ''} · ${st.moods.slice(0, 3).join(', ')}`
+})
 const selectedProgressionName = ref('')
 const savePatternName = ref('')
 const loadedPatternName = ref(localStorage.getItem(userKey('S1_CP_LOADED_NAME')) || '')
@@ -439,7 +450,7 @@ function onChordAssigned({ notes, name }) {
 }
 // The selected step's own Chord/Arp mode if it overrides the slot's global
 // playMode, else the global playMode — matches the scheduler's effectiveMode.
-const effectiveStepMode = computed(() => selectedStep.value?.stepMode ?? store.playMode)
+const effectiveStepMode = computed(() => stepPlayMode(store.progMode, selectedStep.value?.stepMode, store.playMode))
 
 // While playing, follow the currently-sounding step so the STEP DETAIL
 // panel shows its settings instead of staying frozen on whatever was last
@@ -829,8 +840,13 @@ function velBarColor(v) {
       </div>
 
       <div class="flex items-center gap-2 justify-start w-full">
-        <!-- Play mode -->
-        <div class="flex items-center rounded overflow-hidden border border-neutral-700 text-[12px] font-mono uppercase tracking-wider">
+        <!-- The whole progression's mode (as in the play view's header) -->
+        <ChordModeSwitch />
+        <!-- the key / scale detected + AUTO SEQ -->
+        <ChordKeyBadge />
+        <!-- The slot's mode: what AUTO plays for the steps on Auto -->
+        <div :class="['flex items-center rounded overflow-hidden border border-neutral-700 text-[12px] font-mono uppercase tracking-wider', store.progMode !== 'auto' ? 'opacity-40' : '']"
+             title="This slot's mode — used with AUTO for the steps whose Mode is Auto">
           <button
             @click.stop="store.playMode = 'chord'"
             title="Play chords"
@@ -1515,15 +1531,27 @@ function velBarColor(v) {
                 <Zap class="w-4 h-4" />
                 Generate Progression
               </button>
-              <!-- Key display -->
-              <div class="flex items-center gap-3">
-                <span class="text-[10px] text-neutral-500 font-mono">Source:</span>
-                <span class="text-[11px] font-bold text-purple-300">{{ KEY_FILE_NAMES[store.selectedKey] }}</span>
-                <span class="text-[9px] text-neutral-600">(change in Library tab)</span>
+              <!-- Source: the library the progression comes from (Modal Chords by default) -->
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-neutral-500 font-mono w-12">Source</span>
+                <select v-model.number="store.selectedKey"
+                        class="bg-neutral-800 border border-neutral-700 rounded px-1.5 py-0.5 text-[11px] text-purple-300 font-bold outline-none">
+                  <option v-for="(name, idx) in KEY_FILE_NAMES" :key="idx" :value="idx">{{ name.replace(/^· /, 'Genre · ') }}</option>
+                </select>
+              </div>
+              <!-- Modal Chords: the root to stay on -->
+              <div v-if="store.selectedKey === MODAL_KEY_INDEX" class="flex items-center gap-2">
+                <span class="text-[10px] text-neutral-500 font-mono w-12">Root</span>
+                <select :value="store.modalRoot ?? ''" @change="store.modalRoot = $event.target.value === '' ? null : Number($event.target.value)"
+                        class="bg-neutral-800 border border-neutral-700 rounded px-1.5 py-0.5 text-[11px] text-purple-300 font-bold font-mono outline-none"
+                        title="Modal Chords: only the progressions on this root (Rig Key ◀ ▶ moves it)">
+                  <option value="">Any</option>
+                  <option v-for="(n, i) in KEY_NOTE_NAMES" :key="n" :value="i">{{ n }}</option>
+                </select>
               </div>
               <!-- Mode: exactly the major or the minor key of the pair (e.g. Cm), or both -->
               <div v-if="store.selectedKey < 12" class="flex items-center gap-2">
-                <span class="text-[10px] text-neutral-500 font-mono">Key:</span>
+                <span class="text-[10px] text-neutral-500 font-mono w-12">Key</span>
                 <div class="flex rounded border border-neutral-700 overflow-hidden">
                   <button v-for="m in [['major', 'Major'], ['minor', 'Minor'], [null, 'Both']]" :key="String(m[0])"
                           @click="store.keyMode = m[0]"
@@ -1533,9 +1561,19 @@ function velBarColor(v) {
                 </div>
                 <span class="text-[11px] font-bold text-purple-300 font-mono">{{ keyLabel(store.selectedKey, store.keyMode) }}</span>
               </div>
+              <!-- Style: harmonic rhythm, mood, voicing -->
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-neutral-500 font-mono w-12">Style</span>
+                <select v-model="store.genStyle"
+                        class="bg-neutral-800 border border-neutral-700 rounded px-1.5 py-0.5 text-[11px] text-purple-300 font-bold outline-none">
+                  <option v-for="n in CHORD_GEN_STYLE_NAMES" :key="n" :value="n">{{ n }}</option>
+                </select>
+                <span class="text-[9px] text-neutral-500 font-mono">{{ styleSummary }}</span>
+              </div>
               <div class="text-[10px] text-neutral-400 leading-relaxed max-w-[300px]">
-                Generate a random progression from the currently selected key source (Major / Minor: that key exactly). 
-                Chords are distributed across all active steps.
+                Generate a progression from the source (Modal Chords: on its root; Major / Minor: that key exactly).
+                The style sets each chord's length, gate and velocity, the voicing and — on Modal Chords — the moods
+                it picks first. Fill › Dur › All still sets every length afterwards.
               </div>
 
           </div>
@@ -1837,7 +1875,14 @@ function velBarColor(v) {
     </template>
     <!-- Performance: the play view (display only; the Rig plays it) -->
     <template v-else>
-      <PlayPanelHeader title="Chord Prog" panel-id="chord-prog" accent="text-purple-300" @pointerdown="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
+      <PlayPanelHeader title="Chord Prog" panel-id="chord-prog" accent="text-purple-300" @pointerdown="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
+        <!-- the whole progression's mode: AUTO / CHORD / ARP -->
+        <ChordModeSwitch />
+        <!-- Generate's Source / Root / Style (also the Rig's Chord GEN) -->
+        <ChordGenControls />
+        <!-- the key / scale detected + AUTO SEQ -->
+        <ChordKeyBadge />
+      </PlayPanelHeader>
       <ChordProgPlayView v-if="!isMinimized" class="flex-1 overflow-hidden" />
     </template>
 

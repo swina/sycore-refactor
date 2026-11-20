@@ -58,3 +58,45 @@ export function transposeDiatonic(note: number, shift: number, keyPc: number, sc
   const di = ((nd % len) + len) % len
   return keyPc + (oct + octAdd) * 12 + scale[di] + chroma
 }
+
+/** How a lane follows the Chord Prog's chords: 'scale' — by degree in its scale (above) · 'chord' — the
+ *  same, then fitted onto the chord sounding (fitToChord). */
+export type SeqFit = 'scale' | 'chord'
+export const SEQ_FITS: readonly SeqFit[] = ['scale', 'chord']
+export const seqFitOf = (v: unknown): SeqFit => (v === 'chord' ? 'chord' : 'scale')
+
+/** The pitch classes of a chord's notes (any octave, any voicing), sorted, no repeats. */
+export function chordPcs(notes: readonly number[] | null | undefined): number[] {
+  return [...new Set((notes ?? []).map(mod12))].sort((a, b) => a - b)
+}
+
+/** The chord tone nearest to `note` (the lower one on a tie, so a line doesn't climb). */
+function nearestChordTone(note: number, pcs: readonly number[]): number {
+  let best = note
+  let bestD = Infinity
+  for (let d = 0; d <= 6; d++) {
+    for (const cand of d ? [note - d, note + d] : [note]) {
+      if (pcs.includes(mod12(cand)) && d < bestD) { best = cand; bestD = d }
+    }
+    if (bestD <= d) break
+  }
+  return best
+}
+
+/**
+ * Fit a note (already moved onto the chord by degree) to the chord sounding, so a chord from outside
+ * the lane's scale (a borrowed bVII, a major IV in minor…) doesn't clash with the line:
+ *  - a strong step (on the beat): the nearest chord tone;
+ *  - a weak step: kept, unless it's a half step above a chord tone (a b9 against it: moved down onto
+ *    it) or outside the scale and not a chord tone (moved to the nearest chord tone).
+ * `pcs`: the chord's pitch classes (chordPcs); empty: the note as it is.
+ */
+export function fitToChord(note: number, pcs: readonly number[], strong: boolean, keyPc: number, scale: readonly number[]): number {
+  if (!pcs.length) return note
+  const pc = mod12(note)
+  if (pcs.includes(pc)) return note
+  if (strong) return nearestChordTone(note, pcs)
+  if (pcs.includes(mod12(pc - 1))) return note - 1
+  const inScale = scale.includes(mod12(pc - keyPc))
+  return inScale ? note : nearestChordTone(note, pcs)
+}
