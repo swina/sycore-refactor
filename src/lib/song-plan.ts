@@ -6,6 +6,7 @@
 // grids, roman numerals → chord symbols) and reports every change as an issue; it gives up
 // (plan null) only when nothing playable is left (no key, no section with chords).
 
+import { genStyleName } from '@/lib/gen-styles'
 import { DRUM_TRACK_LABELS, DRUM_STYLE_LIST, type DrumTrackLabel, type DrumStyleName } from '@/types/drum-machine'
 import { NOTE_NAMES, parsePitchClass, parseMode, resolveChord, nonDiatonicTones, type ModeName } from './music-theory'
 import { ARP_MODES, type ArpMode } from './arp-patterns'
@@ -391,7 +392,9 @@ export function validateSongPlan(input: unknown): ValidationResult {
   const styleIn = isObj(input.style) ? input.style : { summary: typeof input.style === 'string' ? input.style : '' }
   const style: SongPlan['style'] = { summary: typeof styleIn.summary === 'string' ? styleIn.summary : '' }
   if (styleIn.drumStyle != null) {
+    const alias = genStyleName(styleIn.drumStyle)
     const ds = DRUM_STYLE_LIST.find(s => s.toLowerCase().replace(/[^a-z]/g, '') === String(styleIn.drumStyle).toLowerCase().replace(/[^a-z]/g, ''))
+      ?? DRUM_STYLE_LIST.find(s => s === alias)
     if (ds) style.drumStyle = ds
     else issues.push({ path: 'style.drumStyle', message: `Unknown drum style "${styleIn.drumStyle}": ignored`, level: 'repaired' })
   }

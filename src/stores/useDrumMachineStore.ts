@@ -6,6 +6,8 @@ import { bigLoad, bigSave } from '@/lib/big-storage'
 import { debounce } from '@/lib/debounce'
 import type { DrumStep, DrumTrack, SerializedDrumTrack, DrumPreset, DrumKit, DrumStyleName } from '@/types/drum-machine'
 import { DRUM_TRACK_LABELS } from '@/types/drum-machine'
+import { EXTRA_DRUM_STYLES, EXTRA_DRUM_STYLE_VARIATION } from '@/lib/drum-styles-extra'
+import { genStyleName } from '@/lib/gen-styles'
 import { parseAiDrumPattern } from '@/lib/drum-grid'
 import { IMPORTED_PATTERNS, patternToDrumSteps } from '@/data/imported-patterns'
 import { DEFAULT_ADSR } from '@/core/audio/envelope'
@@ -306,7 +308,7 @@ const DRUM_STYLES: Record<string, any> = {
     velMin: 72, velMax: 118, ghostVelMax: 42,
   },
 
-  'Jungle/DnB': {
+  'Drum&Bass': {
     variants: [
       // V1 — Amen-inspired 2-step
       [
@@ -623,6 +625,8 @@ const DRUM_STYLES: Record<string, any> = {
 }
 
 // Sorted alphabetically for the style combo.
+// the styles that align the Drum Machine with the Sequencer and the Chord Prog (gen-styles.ts)
+Object.assign(DRUM_STYLES, EXTRA_DRUM_STYLES)
 export const DRUM_STYLE_NAMES = Object.keys(DRUM_STYLES).sort((a, b) => a.localeCompare(b))
 
 // ── Per-style variation config ─────────────────────────────────────────────
@@ -641,7 +645,7 @@ const DRUM_STYLE_VARIATION: Record<string, StyleVariation> = {
   HipHop:       { ghostSeedChance: 0.15, accentShiftChance: 0.08, ratchetChance: 0.06, maxRatchet: 3, velJitter: 12 },
   Trap:         { ghostSeedChance: 0.10, accentShiftChance: 0.12, ratchetChance: 0.15, maxRatchet: 4, velJitter: 10 },
   Funk:         { ghostSeedChance: 0.18, accentShiftChance: 0.10, ratchetChance: 0.08, maxRatchet: 3, velJitter: 14 },
-  'Jungle/DnB': { ghostSeedChance: 0.12, accentShiftChance: 0.08, ratchetChance: 0.10, maxRatchet: 3, velJitter: 10 },
+  'Drum&Bass':  { ghostSeedChance: 0.12, accentShiftChance: 0.08, ratchetChance: 0.10, maxRatchet: 3, velJitter: 10 },
   Latin:        { ghostSeedChance: 0.12, accentShiftChance: 0.05, ratchetChance: 0.04, maxRatchet: 2, velJitter: 8  },
   Rock:         { ghostSeedChance: 0.06, accentShiftChance: 0.10, ratchetChance: 0.04, maxRatchet: 2, velJitter: 6  },
   EDM:          { ghostSeedChance: 0.04, accentShiftChance: 0.08, ratchetChance: 0.03, maxRatchet: 2, velJitter: 4  },
@@ -649,9 +653,17 @@ const DRUM_STYLE_VARIATION: Record<string, StyleVariation> = {
   Jazz:         { ghostSeedChance: 0.22, accentShiftChance: 0.05, ratchetChance: 0.04, maxRatchet: 3, velJitter: 15 },
   Ambient:      { ghostSeedChance: 0.04, accentShiftChance: 0.00, ratchetChance: 0.00, maxRatchet: 2, velJitter: 10 },
   Urban:        { ghostSeedChance: 0.08, accentShiftChance: 0.06, ratchetChance: 0.10, maxRatchet: 3, velJitter: 8  },
+  ...EXTRA_DRUM_STYLE_VARIATION,
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+/** A style name as saved or given (an old 'Jungle/DnB', any case) → a Drum Machine style. */
+export function drumStyleOf(v: unknown): string {
+  if (typeof v === 'string' && v in DRUM_STYLES) return v
+  const n = genStyleName(v)
+  return n && n in DRUM_STYLES ? n : 'House'
+}
 
 function rand() { return Math.random() }
 function randInt(min: number, max: number) { return min + Math.floor(rand() * (max - min + 1)) }
@@ -1337,7 +1349,8 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     _saveCurrentKitName(kit.name)
   }
 
-  function generateDrumPattern(style: DrumStyleName) {
+  function generateDrumPattern(styleIn: DrumStyleName) {
+    const style = drumStyleOf(styleIn)
     const cfg = DRUM_STYLES[style]
     if (!cfg) return
     const variant = cfg.variants[Math.floor(rand() * cfg.variants.length)]
@@ -1354,7 +1367,8 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
   }
 
   /** Returns a raw 8×16 DrumStep array for a style (no sequence mutation). Used for fill patterns. */
-  function generateDrumPatternRaw(style: DrumStyleName): DrumStep[][] | null {
+  function generateDrumPatternRaw(styleIn: DrumStyleName): DrumStep[][] | null {
+    const style = drumStyleOf(styleIn)
     const cfg = DRUM_STYLES[style]
     if (!cfg) return null
     const variant = cfg.variants[Math.floor(rand() * cfg.variants.length)]

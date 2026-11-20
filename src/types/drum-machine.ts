@@ -129,11 +129,13 @@ export type SequenceKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
 /** Drum style name */
 export type DrumStyleName =
   | 'House' | 'Techno' | 'HipHop' | 'Trap' | 'Funk'
-  | 'Jungle/DnB' | 'Latin' | 'Rock' | 'EDM' | 'Pop' | 'Jazz' | 'Ambient' | 'Urban';
+  | 'Drum&Bass' | 'Latin' | 'Rock' | 'EDM' | 'Pop' | 'Jazz' | 'Ambient' | 'Urban'
+  | 'Acid' | 'Minimal' | 'Industrial' | 'Reggae' | 'Electronic' | 'Arpeggio' | 'Berlin School';
 
 /** Drum style names, as a list (generateDrumPattern's styles) */
 export const DRUM_STYLE_LIST: readonly DrumStyleName[] = [
-  'House', 'Techno', 'HipHop', 'Trap', 'Funk', 'Jungle/DnB', 'Latin', 'Rock', 'EDM', 'Pop', 'Jazz', 'Ambient', 'Urban',
+  'House', 'Techno', 'HipHop', 'Trap', 'Funk', 'Drum&Bass', 'Latin', 'Rock', 'EDM', 'Pop', 'Jazz', 'Ambient', 'Urban',
+  'Acid', 'Minimal', 'Industrial', 'Reggae', 'Electronic', 'Arpeggio', 'Berlin School',
 ];
 
 /** The Drum Machine's tracks, in order (one per row of each sequence) */

@@ -26,7 +26,7 @@ import { intGrid } from '@/core/midi/int-grid'
 import { densityKeeps, densityFor } from '@/lib/rig-density'
 import { drumPerform, applyDynamics, humanizeOffsets } from '@/lib/drum-perform'
 import { useTransportManager } from '@/composables/useTransportManager'
-import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
+import { useDrumMachineStore, drumStyleOf } from '@/stores/useDrumMachineStore'
 import { journaled } from '@/lib/session-takes'
 import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -760,8 +760,20 @@ function createDrumMachineEngine() {
     sendMidiMappingFeedback('dm_seq_' + newSeq.toLowerCase(), true)
   })
 
+  // MIDI OUT ONLY: the footer's Vol (master) is CC 7 on the Drum Machine's channel (the notes' channel,
+  // routing as them) — sent when it moves and when MIDI OUT ONLY comes on. Track Vols stay sample-only.
+  let _lastVolCc = null
+  function _sendMasterVolCc(force = false) {
+    if (!midiOutOnly.value) return
+    const v = Math.max(0, Math.min(127, Math.round(mixer.drumsLevelVol * 127)))
+    if (!force && v === _lastVolCc) return
+    _lastVolCc = v
+    midiStore.sendCC(7, v, null, MidiSource.DRUM_MACHINE)
+  }
+  watch(() => mixer.drumsLevelVol, () => _sendMasterVolCc())
+
   watch(midiOutOnly, async (on) => {
-    if (on) { paintPlayhead(-1); return }
+    if (on) { paintPlayhead(-1); _sendMasterVolCc(true); return }
     await loadAllSamples(drumStore.currentPattern)
     pushAllFxToEngine(drumStore.currentPattern)
   })
@@ -952,7 +964,7 @@ function createDrumMachineEngine() {
     chain.value        = preset.chain?.length >= 2 ? (preset.chain.slice(0, chainLength.value).map(s => s ?? null)) : Array(chainLength.value).fill(null)
     autofillEnabled.value = preset.autofillEnabled ?? false
     autofillEvery.value   = preset.autofillEvery   ?? 4
-    if (preset.generatedStyle) selectedStyle.value = preset.generatedStyle
+    if (preset.generatedStyle) selectedStyle.value = drumStyleOf(preset.generatedStyle) // an old 'Jungle/DnB': Drum&Bass
     if (preset.bpm)           midiStore.setGlobalBpm(preset.bpm)
     await nextTick()
     await loadAllSamples(drumStore.currentPattern)
@@ -1146,7 +1158,10 @@ function createDrumMachineEngine() {
     if (_chainSlotIdx >= clamped) _chainSlotIdx = 0
   }
 
-  const autofillEvery   = ref(4)
+  // Autofill every N bars (the Rig's 4 / 8 / 12 / 16, the panel's field): kept across reloads
+  const LS_AUTOFILL_EVERY = 'dm_autofill_every'
+  const autofillEvery   = ref((() => { try { const n = Number(localStorage.getItem(userKey(LS_AUTOFILL_EVERY))); return n >= 1 && n <= 128 ? Math.round(n) : 4 } catch { return 4 } })())
+  watch(autofillEvery, v => { try { localStorage.setItem(userKey(LS_AUTOFILL_EVERY), String(v)) } catch {} })
   let _measureCount     = 0
 
   // Start@bar / Stop@end: for a press of PLAY/STOP (panel, DECK card, MIDI Learn dm_play_stop).
