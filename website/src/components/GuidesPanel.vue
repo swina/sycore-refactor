@@ -46,6 +46,7 @@ const CATEGORIES = [
       { id: 'commercial',     label: 'Product Overview',      file: 'SYCORE_COMMERCIAL_PRESENTATION' },
       { id: 'advantages',     label: 'SY.CORE Advantages',    file: 'SYCORE_ADVANTEGES' },
       { id: 'start-here',     label: 'Start Here',  file: 'SYCORE_MIDI_SETUP' },
+      { id: 'generative',     label: 'Generative Engines',  file: 'SYCORE_GENERATIVE_ENGINES', badge: 'New' },
       { id: 'entrepreneurs',  label: 'Note for Entrepreneurs', file: 'SYCORE_FOR_ENTERPRENEURS' },
     ],
   },

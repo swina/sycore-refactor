@@ -11,6 +11,7 @@
 | [Manifesto](../MANIFESTO.md) | Why SY.CORE exists — the personal story, principles, and the role of AI as a tool |
 | [SY.CORE Commercial Presentation](./SYCORE_COMMERCIAL_PRESENTATION.md) | Full product overview — the problem, the solution, and the ecosystem |
 | [SY.CORE with Ableton Live — Link & Rig Controller](./SYCORE_ABLETON_LIVE_GUIDE.md) | The complete guide: SY.CORE Link devices, track layout and recording, Rig Controller (Trigger sync, arming, Density, Fill, GEN, key, Launchpad) |
+| [Generative Engines](./SYCORE_GENERATIVE_ENGINES.md) | Drums, sequences, basslines, chord progressions and songs written for you: shared styles, one key, GEN on stage |
 | [Workspaces — Classic and Performance](./SYCORE_WORKSPACES.md) | The stage screen: players, Rig Controls and the Rig side by side, play views, touch resizing, Map sliders |
 | [SY.CORE for Ableton Live](./SYCORE_FOR_ABLETON_LIVE.md) | For musicians: generate and play inside Live with SY.CORE Link and the Rig Controller ([italiano](./SYCORE_FOR_ABLETON_LIVE_IT.md)) |
 | [SY.CORE Advantages](./SYCORE_ADVANTEGES.md) | Why a browser-based app beats traditional desktop software |

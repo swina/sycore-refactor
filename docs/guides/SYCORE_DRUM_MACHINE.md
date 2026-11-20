@@ -165,7 +165,7 @@ Located between the track grid and the footer, the transport bar holds the main 
 
 ## Master Volume
 
-A **Vol** slider in the footer controls the overall output gain of all 11 tracks simultaneously (0–100). This is separate from per-track volume and is not stored in presets. Right-click to MIDI-learn.
+A **Vol** slider in the footer controls the overall output gain of all 11 tracks simultaneously (0–100). This is separate from per-track volume and is not stored in presets. Right-click to MIDI-learn. In **MIDI OUT ONLY** it also sends **CC 7** on the Drum Machine's MIDI channel (the one its notes go out on), when it moves and when MIDI OUT ONLY is switched on. The per-track Vol faders only set the samples' level.
 
 ---
 
@@ -175,7 +175,9 @@ Select a style from the dropdown next to the header, then click **Generate**. Th
 
 ### Styles
 
-`House` · `Techno` · `HipHop` · `Trap` · `Funk` · `Jungle/DnB` · `Latin` · `Rock` · `EDM` · `Pop` · `Jazz`
+`House` · `Techno` · `HipHop` · `Trap` · `Acid` · `Funk` · `Jazz` · `Ambient` · `Drum&Bass` · `Minimal` · `Latin` · `Industrial` · `Reggae` · `Pop` · `Rock` · `Electronic` · `EDM` · `Urban` · `Arpeggio` · `Berlin School`
+
+The same 20 styles as the Sequencer and the Chord Prog's Generate ([Generative Engines](./SYCORE_GENERATIVE_ENGINES.md)). A preset saved with the old `Jungle/DnB` loads as `Drum&Bass`.
 
 Each style has multiple variants; one is chosen randomly on each press so repeated generates produce unique results within the genre feel. After the base variant is applied, **style-aware variation** adds musical unpredictability — ghost notes on empty steps, accent promotion/demotion, ratchet subdivision, and velocity jitter — all tuned per style (e.g., Jazz gets high ghost-note density and wide velocity jitter; EDM stays tight with minimal variation).
 

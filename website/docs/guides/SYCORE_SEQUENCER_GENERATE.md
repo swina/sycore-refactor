@@ -23,7 +23,7 @@ The options are listed in the order Generate uses them: Style sets the character
 
 | Option | Values | Effect |
 | --- | --- | --- |
-| **Style** | House, Techno, Acid, Ambient, Jazz, Funk, Drum&Bass, HipHop, Latin, Industrial, Minimal, Reggae, Pop, Rock, Electronic, Arpeggio | sets the starting Density and octaves, and gives the velocity profile, gate character and accent grid; Drum&Bass uses 32 steps, Acid adds slides automatically |
+| **Style** | House, Techno, HipHop, Trap, Acid, Funk, Jazz, Ambient, Drum&Bass, Minimal, Latin, Industrial, Reggae, Pop, Rock, Electronic, EDM, Urban, Arpeggio, Berlin School (the same as the Drum Machine and the Chord Prog); bass lines: Root-5-Oct, Offbeat, Acid Slide, Walking | sets the starting Density and octaves, and gives the velocity profile, gate character and accent grid; Drum&Bass uses 32 steps, Acid adds slides automatically |
 | **Key / Scale** | 12 keys; Major, Minor, Harmonic Minor, Pentatonic Maj / Min, Blues, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Whole Tone, Hungarian Minor, Chromatic | every generated note stays in the scale |
 | **Base Octave / Range** | octave 0–8, range ±3 | the span of the notes; a top at octave 3 or below = a bass line |
 | **Density** | 0–100 % | how many steps are on |
@@ -38,6 +38,7 @@ The options are listed in the order Generate uses them: Style sets the character
 | **P1 / P2 RND%** | −100…+100 | each step's P1 / P2 = the preset's value for that CC, moved at random: + towards 127, − towards 0, 0 = the preset's value |
 | **↻ P1 / ↻ P2 / ↻ P1+P2** | — | new P1 / P2 values only (the same rule as RND%), the notes and the rhythm untouched |
 | **Follow** | Degree (default) / Chrom | how the pattern follows incoming chords and notes: by scale degree, or by semitones |
+| **Fit** (per lane, lanes strip) | SCL / CHD | with Degree: CHD fits the notes onto the Chord Prog's chord (beats on a chord tone, no b9 against it), so borrowed chords don't clash; default CHD on Bass / Arp |
 
 Rhythm and Melody apply in melodic mode and are saved with the bank. P1 / P2 are written in every mode (melodic, Chords, Arpeggio).
 
@@ -54,7 +55,7 @@ Values: **100** = a whole new pattern (default), **25** = a quarter, **0** = not
 
 ## Links with the other apps
 
-- **Chord Prog → the Rig's GEN:** GEN generates in the Chord Prog's key. It keeps the scale when it is of the same family (e.g. Pentatonic Min in a minor key), otherwise it switches to Major / Minor.
+- **Chord Prog → the Rig's GEN:** GEN generates in the Chord Prog's key. It keeps the scale when it is of the same family (e.g. Pentatonic Min in a minor key), otherwise it switches to Major / Minor. With no Major / Minor in the Chord Prog (Modal Chords, a genre file, Both), the mode is detected from its chords (Dorian, Mixolydian…) and the lane takes exactly that scale; the same for Gen **Key: CP**.
 - **Chord Prog while the Sequencer plays:** transposes the pattern (Follow Degree: by the root read from the chord's name). With *Drums + Sequencer follow* the sections switch the bank.
 - **Independent Play / Stop:** a Chord Prog chord or slot doesn't start the Sequencer, and its stop doesn't stop it. A routed keyboard, with AUTO on, still starts it.
 - **Seq Free (Rig):** the Sequencer ignores the Chord Prog's notes, stop and section changes.

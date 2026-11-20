@@ -175,7 +175,7 @@ With a MIDI clock master (EXT over a MIDI port) the tempo is the master's: the d
 
 The footer's workspace switch (**Classic | Performance**) lays out a stage screen: the panels side by side, no overlap, the others closed, lighter visual effects; what plays keeps playing.
 
-- **Left**: Drum Machine, Chord Prog and Sequencer as **play views** (what plays, the settings folded away; **EDIT** in the header opens the full panel, **Play view** goes back). **Now / Next** — the chord sounding and the next one with their lengths (`1/1` = a bar) and a bar filling over the chord — is in the middle column (Rig Controls), right above **Play**.
+- **Left**: Drum Machine, Chord Prog and Sequencer as **play views** (what plays, the settings folded away; **EDIT** in the header opens the full panel **full screen**, **Play view** puts it back where and as big as it was). The slots A–H show the **current** one outlined while stopped (after a restart too; none when it's empty). With **Chain** on, the slots narrow and the chain follows them on the same row. **Seq Chain** (Rig) turns on the chain of every Sequencer lane that has one (the lane cards show **CHN**). **Now / Next** — the chord sounding and the next one with their lengths (`1/1` = a bar) and a bar filling over the chord — is in the middle column (Rig Controls), right above **Play**.
 - **Middle**: **Rig Controls** — the Rig Controller's Transport / Clock, Performance (Fill with its *Now / Bar* switch, Repeat, Seq Free, key, knobs, Generate mode), Safety, and a big **Play** (the Controller template is in the Rig's EDIT layout).
 - **Right**: the Rig Controller (its Launchpad layout, labels on) and, with Live set up in MIDI Flow ("Live (M4L)"), **Map · Live Instruments** under it.
 - The headers: name, **EDIT**, window buttons; the Drum Machine's and the Sequencer's carry their **style** menu (what GEN writes). The Chord Prog's pads show each chord with its length.
@@ -312,8 +312,8 @@ The Chord Prog's key is a pair of relative keys from its library (e.g. *Eb Major
 
 From the Rig Controller (LIVE):
 
-- **Key ◀ ▶** (Launchpad: **Key −** / **Key +**) moves the tonic a semitone, in the same mode: Cm → C#m.
-- **Maj/Min** (Launchpad: **Shift + Key − / Key +**) switches major ↔ minor on the same tonic: C ↔ Cm.
+- **Key ◀ ▶** (Rig Controls) moves the tonic a semitone, in the same mode: Cm → C#m.
+- **Maj/Min** (Rig Controls) switches major ↔ minor on the same tonic: C ↔ Cm.
 - The display shows the key: `Key Cm`.
 
 The **Sequencer**'s GEN follows the Chord Prog's key when it's exact. If you picked a scale of the same family it's kept (e.g. *Pentatonic Min* in a minor key), otherwise it switches to Major or Minor. That way the line sits on the chords.
@@ -330,7 +330,7 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 | **Row 6** | **Fill** (dark amber / light amber waiting / red playing) · **Auto Fill** (the Drum Machine's Autofill: on green, off amber) · **Now / Bar** (the Fill's when: NOW amber, BAR green) · **Repeat** (hold) · **Seq Free** (the Sequencer decoupled from the Chord Prog: on green, off amber) · **Drum Chain** · **Chord Chain** · **Seq Chain** (dark red off, red blinking on) |
 | **Row 7** | **Sections 1–8** — or **Captures 1–8** (side **S·SEC / S·CAP**, below) |
 | **Row 8** | **Latch 1–8**: the Chord Prog stays on chord 1–8 of the slot playing, without advancing (amber: a chord there · blinking: waits for the chord sounding to end · green: holding); press it again and the progression goes on from the chord after it. Another Latch pad moves the hold to that chord; Panic releases it. (To silence an app: its slot pads, the MIDImix's Mute, the panel's **M**.) |
-| **Side** | **GEN** Drum, Chord, Seq, Bass (Shift: Mutate) · **Key −** · **Key +** (Shift: Maj/Min) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
+| **Side** | **GEN** Drum, Chord, Seq, Bass, Arp (Shift: Mutate) · **DJ** Filter (hold: the cutoff CC — default 21, set in the Launchpad panel's **DJ Filter CC** — closes on every real app, release: opens) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
 | **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Sync** · Rig · — · Panic (hold) |
 
 ### Captures (row 7 in Captures mode)

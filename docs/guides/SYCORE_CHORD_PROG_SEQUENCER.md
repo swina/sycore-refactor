@@ -11,6 +11,9 @@ The **Chord Progression Sequencer** is a dedicated step-based engine for buildin
 - **8 independent progression slots** (A–H), each with its own steps, step count, play mode, and arp rate.
 - A **Chain** mode that strings up to 16 slots together into one longer playing sequence.
 - Two **play modes**: simultaneous chord voicing or staggered arpeggio — settable globally per slot, or **overridden per step** (Chord/Arp/Auto).
+- **Key** (next to the mode switch and in the play view's header): the key / scale the progression sits in, detected from its chords (the chain's when it's on). With an exact Major / Minor key it's that key; with Modal Chords, a genre file or Both it's the mode (A Dorian, C Mixolydian…; Modal Chords' Root as the tonic). The Sequencer's **Key: CP**, the Rig's **GEN** and **AUTO SEQ** use it.
+- **AUTO SEQ On / Off**: when the key / scale changes (a new progression, another slot, a chord edited), the Sequencer's lanes in use (Main, Bass, Arp: playing, or with a pattern) generate again in it, into the bank playing (or queued). A lane that's playing changes on its next bar line, never mid-bar. Not with the Rig's Seq Free. Switching it on changes nothing until the next key change; every regeneration is in the session journal.
+- **AUTO / CHORD / ARP** for the whole progression, in the play view's header and the panel's toolbar: **AUTO** (the default) plays it as written — each step's Mode, else the slot's Chord / Arp (Chord by default); **CHORD** / **ARP** play every step so, without touching the steps' own Modes (back on AUTO, they come back). To mix chords and arpeggios, set the steps' Mode in EDIT and leave it on AUTO.
 - Per-step **chord strum direction** (Sim / Up / Down / Up-Down / Down-Up) and per-step **arp pattern** (10 styles, shared with the standalone Arpeggiator).
 - Per-step control: **duration**, **velocity**, **gate**, and **per-step transpose**.
 - Global **sequence transpose** and **loop / once** playback.
@@ -232,12 +235,17 @@ Shows every chord in the selected progression.
 
 **GENERATE PROGRESSION**
 
-Generates a random progression automatically from the currently loaded key source.
+Generates a progression from a library, in a style.
 
-1. Select your **key or genre** in the Library tab.
-2. Switch to **Generate** and click **Generate Progression**.
-3. Chords are drawn from a random named progression in the loaded data and spread evenly across all active steps.
-4. The **Fill duration** setting in the Fill row is applied to all generated steps. Tick the **~** checkbox in the Fill row before generating if you want random per-step durations.
+1. **Source** — the library: **Modal Chords** (the default: 816 progressions, 68 per root, named by mood, e.g. "A Mysterious Dark"), a key file (C Major / A min …) or a genre file.
+2. **Root** (Modal Chords) — only the progressions on that root; **Any** = all. The Rig Controller's **Key ◀ ▶** moves it (Modal Chords stays the source).
+3. **Key** (key files) — Major / Minor: exactly that key; Both: any progression of the pair.
+4. **Style** — the Sequencer's styles (House, Techno, HipHop, Acid, Funk, Jazz, Ambient, Drum&Bass, Minimal, Latin, Industrial, Reggae, Pop, Rock, Electronic, Arpeggio, Berlin School). The style sets:
+   - each chord's **length** (e.g. Ambient 2–8 bars, House 1–2 bars or pushed 3/4 + 1/4, Funk / Latin 1/2 bar and 3/8 pushes), its **gate** and **velocity**;
+   - the **voicing**: triads (as written), 7ths (House, HipHop, Funk, Jazz, D&B), stabs without bass (Techno, Acid, Minimal), power chords (Rock, Industrial), open / spread with a 9th (Ambient, Arpeggio, Berlin School);
+   - the **moods** picked first on Modal Chords (Ambient: Peaceful, Tender…; Industrial: Dark, Fearful…);
+   - Arpeggio / Berlin School: the steps play arpeggiated (16ths).
+5. Click **Generate Progression** (or the Rig's Chord **GEN**). Fill › Dur › **All** still sets every length afterwards. AI Generate gets the style in its prompt too.
 
 > The Generate button is disabled while progression data is loading.
 

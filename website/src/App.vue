@@ -86,12 +86,26 @@ const navLinks = [
   { label: 'Sound Engine', href: '#sound-engine' },
   { label: 'MIDI', href: '#midi' },
   { label: 'Live', href: '#live' },
+  { label: 'Generate', href: '#generate' },
   { label: 'Ableton Live', href: '/ableton-live' },
   { label: 'Audio', href: '#audio' },
   { label: 'Freesound', href: '#freesound' },
   { label: 'Video', href: '#video' },
   { label: 'Technology', href: '#technology' },
   { label: 'Free & Open', href: '#free' },
+]
+
+// Generative engines (docs/guides/SYCORE_GENERATIVE_ENGINES.md)
+const genEngines = [
+  { icon: Drum, title: 'Drum Machine', text: '20 styles, three hand-written variants each, reshaped with ghosts, accents, ratchets and velocity jitter. Fills, Auto Fill, Euclidean rhythms and a 3-voice bassline on the chords\' tonic.' },
+  { icon: Workflow, title: 'Sequencer lanes', text: 'Main, Bass and Arp lanes, 8 banks each. Weighted, Euclidean or random rhythm, motif-based melody, chords, arpeggios, Berlin School, four bassline styles. Vary / Mutate changes a part and keeps the motif.' },
+  { icon: Piano, title: 'Chord Prog', text: '816 Modal Chords progressions by mood and root, key and genre libraries. The style sets each chord\'s length, gate, velocity and voicing: 7ths, stabs, power chords, open spreads, arpeggios.' },
+  { icon: Sparkles, title: 'AI Song Composer', text: 'Key, style and tempo in, a whole song out: Chord Prog slots and chain, Drum Machine sequences, Sequencer banks. The chain conducts the form and the parts follow it.' },
+]
+const genPoints = [
+  'One vocabulary of styles: pick Techno and drums, sequences and chords all know what Techno means.',
+  'One key: the lanes generate in the key of the chords, or in their mode (A Dorian, C Mixolydian…).',
+  'GEN on stage: from the Launchpad, into the slot playing or queued, at the next bar. Every take is journaled.',
 ]
 
 const heroBadges = ['100% Free & Open Source', 'Zero Installation', 'No Drivers', 'Works Fully Offline', 'Stage-Ready']
@@ -745,6 +759,36 @@ const scenarios = [
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- ============ GENERATIVE ENGINES ============ -->
+    <section id="generate" class="mx-auto max-w-6xl px-5 py-20 scroll-mt-16">
+      <p class="font-mono text-[11px] uppercase tracking-[0.4em] text-synth-cyan">Generative Engines</p>
+      <h2 class="mt-3 max-w-3xl text-3xl font-extrabold md:text-4xl">
+        Music written for you. <span class="text-synth-neon">In key, in style, in time.</span>
+      </h2>
+      <p class="mt-4 max-w-2xl text-sm text-neutral-400">
+        SY.CORE's generators share the same styles and follow the same chords, so a progression, a bassline
+        and a groove generated a minute apart still belong to the same song.
+      </p>
+      <div class="mt-10 grid gap-4 sm:grid-cols-2">
+        <div v-for="g in genEngines" :key="g.title" v-reveal class="rounded-xl border border-neutral-800 bg-neutral-900/40 p-6">
+          <div class="flex items-center gap-3">
+            <component :is="g.icon" class="h-6 w-6 text-synth-neon" />
+            <h3 class="font-mono text-sm font-black uppercase tracking-[0.2em]">{{ g.title }}</h3>
+          </div>
+          <p class="mt-3 text-sm text-neutral-400">{{ g.text }}</p>
+        </div>
+      </div>
+      <ul class="mt-8 space-y-2">
+        <li v-for="p in genPoints" :key="p" class="flex items-start gap-2 text-sm text-neutral-300">
+          <Check class="mt-0.5 h-4 w-4 shrink-0 text-synth-neon" /> {{ p }}
+        </li>
+      </ul>
+      <button @click="openGuide('generative')"
+              class="mt-8 inline-flex items-center gap-2 font-mono text-xs font-black uppercase tracking-[0.2em] text-synth-neon hover:text-white">
+        Read the Generative Engines guide <ArrowRight class="h-4 w-4" />
+      </button>
     </section>
 
     <!-- ============ ABLETON LIVE (teaser → /ableton-live) ============ -->
