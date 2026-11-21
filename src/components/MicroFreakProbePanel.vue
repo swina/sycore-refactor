@@ -5,9 +5,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Download, Loader2, Square, Search, ListOrdered } from 'lucide-vue-next'
 import { midiService } from '@/core/midi/midi-service'
 import {
-  nameRequest, idRequest, dataRequest, parseReply, isArturiaSysEx, decodeRows, percent,
-  modMatrix, oscTypeName, categoryName, findParam, CHUNKS_FULL, CHUNKS_HEAD, PRESET_SLOTS, hex,
+  decodeRows, percent, modMatrix, oscTypeName, categoryName, CHUNKS_FULL, PRESET_SLOTS, hex,
 } from '@/lib/microfreak/sysex'
+import { createMicroFreakReader, microFreakOutput } from '@/lib/microfreak/reader'
 
 const outputs = ref([])
 const inputs = ref([])
@@ -20,10 +20,7 @@ const log = ref([])
 const dump = ref(null)
 const scan = ref([])               // [{ preset, name, category, osc }]
 
-let stop = false
-let pending = null                 // { accept, resolve, timer }
-let replies = []
-let unsub = null
+let reader = null
 
 function refreshPorts() {
   outputs.value = midiService.getOutputs().map(p => p.name)
@@ -33,113 +30,60 @@ function refreshPorts() {
   if (!inputs.value.includes(inName.value)) inName.value = guess(inputs.value)
 }
 
-function onRaw(ev) {
-  const d = ev.data
-  if (!d || !isArturiaSysEx(d)) return
-  if (inName.value && ev.target?.name && ev.target.name !== inName.value) return
-  if (!busy.value) return
-  replies.push(hex(d))
-  const r = parseReply(d)
-  if (pending && r && pending.accept(r)) {
-    clearTimeout(pending.timer)
-    const p = pending; pending = null
-    p.resolve(r)
-  }
-}
-
-const wait = (ms) => new Promise(r => setTimeout(r, ms))
-
-function request(out, bytes, accept, timeoutMs = 1000) {
-  return new Promise((resolve) => {
-    pending = { accept, resolve, timer: setTimeout(() => { pending = null; resolve(null) }, timeoutMs) }
-    out.send(bytes)
-  })
-}
-
-function requestStop() { stop = true }
+function requestStop() { reader?.stop() }
 
 const note = (s) => { log.value.push(s); status.value = s }
 
-async function ensureOut() {
-  if (!midiService.isSysExEnabled()) {
-    note('Asking the browser for SysEx access…')
-    if (!(await midiService.enableSysEx())) { note('SysEx access denied by the browser.'); return null }
-    refreshPorts()
-  }
-  const out = midiService.getOutputs().find(p => p.name === outName.value)
-  if (!out) note(`Output "${outName.value}" not found.`)
-  return out ?? null
+async function begin() {
+  let out = null
+  try { out = await microFreakOutput(outName.value) } catch (e) { note(e.message); return null }
+  refreshPorts()
+  if (!out) { note(`Output "${outName.value}" not found.`); return null }
+  reader = createMicroFreakReader(out, { inputName: inName.value || undefined, log: note })
+  busy.value = true
+  return reader
 }
 
-/** Name + ID + `chunks` data requests for one preset (0-based). Null if the synth did not answer. */
-async function readPreset(out, index, chunks, verbose) {
-  const nameR = await request(out, nameRequest(index), r => r.kind === 'name' || r.kind === 'other')
-  if (!nameR) { note(`Preset ${index + 1}: no reply to the name request — check the MIDI In port and that the MicroFreak is on USB.`); return null }
-  if (verbose) note(nameR.kind === 'name' ? `Name: "${nameR.name}", category byte ${nameR.category}.` : `Name request answered with an unknown reply (type 0x${nameR.type.toString(16)}).`)
-  await wait(15)
-  const idR = await request(out, idRequest(index), () => true, 400)
-  if (verbose) note(idR ? `ID request answered (${idR.kind}, ${idR.raw.length} bytes).` : 'ID request: no reply.')
-  await wait(15)
-  const rows = []
-  for (let i = 0; i < chunks && !stop; i++) {
-    if (verbose) status.value = `Data chunk ${i + 1}/${chunks}…`
-    const r = await request(out, dataRequest(i), x => x.kind === 'data' || x.kind === 'other')
-    if (!r) { note(`Preset ${index + 1}, chunk ${i}: no reply — stopping (${rows.length} chunks read).`); break }
-    if (r.kind !== 'data') { note(`Preset ${index + 1}, chunk ${i}: unexpected reply type 0x${r.type.toString(16)}, ${r.raw.length} bytes — stopping.`); break }
-    rows.push(r.row)
-    await wait(15)
-  }
-  return {
-    preset: index + 1,
-    name: nameR.kind === 'name' ? nameR.name : null,
-    category: nameR.kind === 'name' ? nameR.category : null,
-    rows,
-  }
+function end() {
+  reader?.dispose()
+  reader = null
+  busy.value = false
 }
 
 async function read() {
-  log.value = []; dump.value = null; replies = []; stop = false
-  const out = await ensureOut()
-  if (!out) return
+  log.value = []; dump.value = null
+  const r = await begin()
+  if (!r) return
   const index = Math.max(1, Math.min(PRESET_SLOTS, preset.value | 0)) - 1
-  busy.value = true
   try {
     note(`Reading preset ${index + 1}…`)
-    const p = await readPreset(out, index, CHUNKS_FULL, true)
+    const p = await r.readPreset(index, CHUNKS_FULL, true)
     if (!p) return
-    if (stop) note(`Stopped after ${p.rows.length} chunks.`)
-    dump.value = { ...p, replies: [...replies], readAt: new Date().toISOString() }
-    note(`Done: ${p.rows.length} data chunks, ${replies.length} replies in all.`)
+    if (r.stopped) note(`Stopped after ${p.rows.length} chunks.`)
+    dump.value = { ...p, replies: [...r.replies], readAt: new Date().toISOString() }
+    note(`Done: ${p.rows.length} data chunks, ${r.replies.length} replies in all.`)
   } catch (e) {
     note(`Error: ${e?.message ?? e}`)
   } finally {
-    busy.value = false
-    pending = null
+    end()
   }
 }
 
 /** Names + oscillator of every slot (the first chunks only). */
 async function scanBank() {
-  log.value = []; scan.value = []; replies = []; stop = false
-  const out = await ensureOut()
-  if (!out) return
-  busy.value = true
+  log.value = []; scan.value = []
+  const r = await begin()
+  if (!r) return
   try {
-    for (let i = 0; i < PRESET_SLOTS && !stop; i++) {
-      status.value = `Scanning preset ${i + 1}/${PRESET_SLOTS}…`
-      replies = []
-      const p = await readPreset(out, i, CHUNKS_HEAD, false)
-      if (!p) break
-      const osc = findParam(decodeRows(p.rows), 'VCO', 'Type')?.index ?? null
-      scan.value = [...scan.value, { preset: p.preset, name: p.name, category: p.category, osc }]
-    }
-    note(`Scan ${stop ? 'stopped' : 'done'}: ${scan.value.length} presets.`)
+    const rows = await r.scan((done, total, sofar) => {
+      status.value = `Scanning preset ${done}/${total}…`
+      scan.value = [...sofar]
+    })
+    note(`Scan ${r.stopped ? 'stopped' : 'done'}: ${rows.length} presets.`)
   } catch (e) {
     note(`Error: ${e?.message ?? e}`)
   } finally {
-    busy.value = false
-    pending = null
-    replies = []
+    end()
   }
 }
 
@@ -188,10 +132,9 @@ function download(text, filename) {
 let unsubState = null
 onMounted(() => {
   refreshPorts()
-  unsub = midiService.addRawListener(onRaw)
-  unsubState = midiService.addStateChangeListener?.(() => refreshPorts()) ?? null
+  unsubState = midiService.addStateChangeListener(() => refreshPorts())
 })
-onUnmounted(() => { unsub?.(); unsubState?.(); stop = true })
+onUnmounted(() => { unsubState?.(); end() })
 </script>
 
 <template>

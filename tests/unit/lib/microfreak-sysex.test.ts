@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   presetAddress, nameRequest, idRequest, dataRequest, parseReply, unpack7, parsePresetStream, decodeRows, percent,
-  modMatrix, oscTypeName, findParam, categoryName, CHUNKS_HEAD,
+  modMatrix, oscTypeName, findParam, categoryName, bankFromScan, CHUNKS_HEAD,
 } from '@/lib/microfreak/sysex'
 import preset001 from '../../fixtures/microfreak-preset-001.json'
 import synthBank from '@/data/program_change/microfreak/synth_bank.json'
@@ -108,5 +108,14 @@ describe('microfreak sysex', () => {
     expect(sent[127]).toMatchObject({ msb: 0, progNum: 127 })
     expect(sent[128]).toMatchObject({ msb: 1, progNum: 0 })
     expect(synthBank[0]).toMatchObject({ no: 1, name: 'Revert to Iron', category: 'Strings', osc: 'Sample' })
+  })
+
+  it('bankFromScan: numbered as on the synth, banks of 128, trailing Init left out', () => {
+    const scan = Array.from({ length: 132 }, (_, i) => ({ preset: i + 1, name: i < 129 ? `P${i + 1}` : 'Init', category: 9, osc: 19 }))
+    const bank = bankFromScan(scan)
+    expect(bank).toHaveLength(129)
+    expect(bank[0]).toEqual({ category: 'Strings', no: 1, name: 'P1', osc: 'Sample', msb: 0, lsb: 0, bank: 0, program: 1 })
+    expect(bank[128]).toMatchObject({ no: 129, msb: 1, bank: 1, program: 129 })
+    expect(() => bankFromScan([{ preset: 2, name: 'x', category: 0, osc: 1 }])).toThrow(/out of order/)
   })
 })

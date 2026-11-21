@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, Download, FolderOpen, LayoutGrid, FileText, Copy, Braces, Database, CheckCircle2 } from 'lucide-vue-next'
+import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, Download, FolderOpen, LayoutGrid, FileText, Copy, Braces, Database, CheckCircle2, ScanLine, Square } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { userKey } from '@/lib/userKey'
@@ -26,6 +26,8 @@ import { FM1_OUTPUT, fm1Firmware } from '@/lib/fm1-bridge'
 import { fm1PartChannels } from '@/lib/fm1-firmwares'
 import catalogIndex from '@/data/program_change/program_change.json'
 import { catalogPcAddress } from '@/lib/pc-address'
+import { createMicroFreakReader, microFreakOutput } from '@/lib/microfreak/reader'
+import { bankFromScan } from '@/lib/microfreak/sysex'
 import { on } from '@/types/events'
 import { pcBrowse, recordDeviceCategories, matchCategory } from '@/lib/pc-browse'
 import { mappedParamFor, isVirtualDeviceControl } from '@/composables/useMidiCCListener'
@@ -474,6 +476,45 @@ async function onImportVirusSyxFile(event) {
     event.target.value = ''
   }
 }
+
+// ── MicroFreak: the bank list read from the synth (SysEx) ─────────
+// Reads every slot's name, category and oscillator, then the usual rename
+// dialog saves it as a user bank (presets numbered as on the synth).
+const isMicroFreak   = computed(() => catalogDevice.value === 'Arturia MicroFreak')
+const mfScanProgress = ref('')
+let mfReader = null
+
+async function scanMicroFreak() {
+  importError.value = ''
+  const dn = selectedDeviceName.value
+  let out = null
+  try { out = await microFreakOutput(dn) } catch (e) { importError.value = e.message; return }
+  if (!out) { importError.value = `Output "${dn}" not found.`; return }
+  const inputs = midiService.getInputs().map(p => p.name)
+  const inputName = inputs.find(n => n === dn) ?? inputs.find(n => /microfreak/i.test(n))
+  let lastLog = ''
+  mfReader = createMicroFreakReader(out, { inputName, log: l => { lastLog = l } })
+  mfScanProgress.value = 'Scanning…'
+  try {
+    const rows = await mfReader.scan((done, total) => { mfScanProgress.value = `Scanning ${done}/${total}…` })
+    const stopped = mfReader.stopped
+    if (!rows.length) { importError.value = lastLog || 'No reply from the MicroFreak.'; return }
+    if (stopped) return
+    if (rows.length < 512 && lastLog) importError.value = `Scan ended at preset ${rows.length}: ${lastLog}`
+    pendingPresets.value = bankFromScan(rows)
+    pendingBankName.value = `MicroFreak synth ${new Date().toISOString().slice(0, 10)}`
+    pendingImportSource.value = 'mfprojz'
+    showImportRename.value = true
+  } catch (e) {
+    importError.value = e?.message ?? 'Scan failed.'
+  } finally {
+    mfReader?.dispose()
+    mfReader = null
+    mfScanProgress.value = ''
+  }
+}
+
+function stopMicroFreakScan() { mfReader?.stop() }
 
 function confirmImport() {
   const name = pendingBankName.value.trim() || 'Imported Bank'
@@ -1342,6 +1383,7 @@ onMounted(() => {
   _unsubCategorySelect = on('device-pc-category-select', selectCategoryFor)
   _unsubPcToast = on('device-pc-toast', ({ deviceName, channel }) => showChannelToast(deviceName, channel))
 })
+onUnmounted(() => { mfReader?.dispose() })
 onUnmounted(() => {
   _unregLearnOwners()
   _unsubScrollCC?.()
@@ -2371,6 +2413,26 @@ function assignToPad(setId, padIdx) {
                           <Loader2 v-if="isImporting" class="w-2.5 h-2.5 animate-spin" />
                           <Upload v-else class="w-2.5 h-2.5" />
                           Import .mfprojz
+                        </button>
+                        <!-- MicroFreak: read the bank list from the synth over SysEx -->
+                        <button
+                          v-if="isMicroFreak && !mfScanProgress"
+                          @click="scanMicroFreak"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-400 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all text-[8px] font-black uppercase tracking-wider"
+                          title="Read every preset's name, category and oscillator from the MicroFreak (SysEx, about a minute) and save them as a bank"
+                        >
+                          <ScanLine class="w-2.5 h-2.5" />
+                          Scan synth
+                        </button>
+                        <button
+                          v-if="mfScanProgress"
+                          @click="stopMicroFreakScan"
+                          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:bg-neutral-700 transition-all text-[8px] font-black uppercase tracking-wider"
+                          title="Stop the scan"
+                        >
+                          <Loader2 class="w-2.5 h-2.5 animate-spin" />
+                          {{ mfScanProgress }}
+                          <Square class="w-2.5 h-2.5" />
                         </button>
                         <!-- Standard JSON import button — explicit template, or legacy (unset) -->
                         <button

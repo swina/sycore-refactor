@@ -191,6 +191,40 @@ export function modMatrix(p: MfPreset): { row: string; cells: { col: string; amo
 /** Data chunks that hold the #VCO section — enough for a bank scan of names + oscillator. */
 export const CHUNKS_HEAD = 2
 
+// ── Bank list ───────────────────────────────────────────────────────────────
+
+/** One slot of a bank scan: name, category byte, oscillator index. */
+export interface ScanRow { preset: number; name: string | null; category: number | null; osc: number | null }
+
+/** A program-change catalog entry (the program_change/*.json shape). */
+export interface BankEntry {
+  category: string; no: number; name: string; osc: string | null
+  msb: number; lsb: number; bank: number; program: number
+}
+
+/**
+ * The bank list from a scan: numbered as on the synth (`program` 1..512, to use
+ * with program_base −1), the trailing empty "Init" slots left out.
+ */
+export function bankFromScan(scan: ScanRow[]): BankEntry[] {
+  let last = scan.length
+  while (last > 0 && /^init$/i.test((scan[last - 1].name ?? '').trim())) last--
+  return scan.slice(0, last).map((r, i) => {
+    if (r.preset !== i + 1) throw new Error(`preset ${i + 1} out of order (${r.preset})`)
+    const bank = Math.floor(i / 128)
+    return {
+      category: categoryName(r.category),
+      no: r.preset,
+      name: r.name ?? `Preset ${r.preset}`,
+      osc: r.osc === null ? null : oscTypeName(r.osc),
+      msb: bank,
+      lsb: 0,
+      bank,
+      program: i + 1,
+    }
+  })
+}
+
 export interface MicroFreakDump {
   preset: number          // 1..512, as on the synth
   name: string | null
