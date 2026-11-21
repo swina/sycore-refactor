@@ -162,10 +162,10 @@ const lastSent    = ref(null)
 watch(selectedDeviceName, () => { activeSound.value = null; lastSent.value = null })
 
 // ── pcChannels persistence helper ──────────────────────────────
-function recordChannelState(ch, program, bank, soundName) {
+function recordChannelState(ch, program, bank, soundName, msb = 0, lsb = 0) {
   const reg = selectedReg.value
   if (!reg) return
-  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName } }
+  const updated = { ...(reg.pcChannels ?? {}), [ch]: { program, bank, soundName, msb, lsb } }
   midiStore.updateRegistration(selectedDeviceName.value, 'pcChannels', updated)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcProgram', program)
   midiStore.updateRegistration(selectedDeviceName.value, 'pcBank', bank)
@@ -202,7 +202,7 @@ function sendCatalogSound(sound) {
   port.send([0xC0 | ch, progNum])
 
   lastSent.value = sound
-  recordChannelState(ch, progNum, selectedBank.value, sound.name)
+  recordChannelState(ch, progNum, selectedBank.value, sound.name, msb, lsb)
 
   const msg = `[Device PC] → ${selectedDeviceName.value} ch${ch + 1}: MSB=${msb} LSB=${lsb} PC=${progNum} | ${sound.name}`
   if (window.SY_LOG) window.SY_LOG(msg); else console.log(msg)

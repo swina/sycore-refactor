@@ -59,6 +59,7 @@ import Fm1EmulatorPanel from '@/components/Fm1EmulatorPanel.vue'
 import VirtualDevicePanel from '@/components/VirtualDevicePanel.vue'
 import AudioDiagnosticsPanel from '@/components/AudioDiagnosticsPanel.vue'
 import RigControllerPanel from '@/components/RigControllerPanel.vue'
+import MicroFreakEditorPanel from '@/components/MicroFreakEditorPanel.vue'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
@@ -207,6 +208,7 @@ const simpleTogglePanels = [
   { openId: 'rig-controls', focusKey: 'rigControls', component: RigControlsPanel, transition: null },
   { openId: 'chord-now', focusKey: 'chordNow', component: ChordNowPanel, transition: null },
   { openId: 'session-takes', focusKey: 'sessionTakes', component: SessionTakesPanel, transition: null },
+  { openId: 'microfreak-editor', focusKey: 'microFreakEditor', component: MicroFreakEditorPanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {

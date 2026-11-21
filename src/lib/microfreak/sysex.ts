@@ -11,6 +11,8 @@ export const MF_DEVICE = 0x07
 
 /** A full preset: 146 data chunks (the parameter sections need ~43, the rest is the sequence). */
 export const CHUNKS_FULL = 146
+/** The parameter sections with margin (they end at byte ~1187 = chunk 43): what the editor reads. */
+export const CHUNKS_PARAMS = 48
 
 export const REPLY_NAME = 0x52
 export const REPLY_DATA = [0x16, 0x17] as const

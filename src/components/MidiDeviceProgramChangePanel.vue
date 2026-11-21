@@ -486,7 +486,8 @@ let mfReader = null
 
 async function scanMicroFreak() {
   importError.value = ''
-  const dn = selectedDeviceName.value
+  // a virtual instrument (Virtual Device) plays through a real port: SysEx goes there
+  const dn = midiStore.virtualInstruments.find(v => v.name === selectedDeviceName.value)?.midiOutputPort || selectedDeviceName.value
   let out = null
   try { out = await microFreakOutput(dn) } catch (e) { importError.value = e.message; return }
   if (!out) { importError.value = `Output "${dn}" not found.`; return }
