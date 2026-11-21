@@ -7,6 +7,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import { MidiSource } from '@/core/midi/midi-service'
 import catalogIndex from '@/data/program_change/program_change.json'
+import { catalogPcAddress } from '@/lib/pc-address'
 
 const emit = defineEmits(['close'])
 const midiStore   = useMidiStore()
@@ -194,12 +195,7 @@ function sendCatalogSound(sound) {
 
   const cfg    = bankConfig.value
   const ch     = reg.pcChannel ?? 0
-  const pField = cfg?.program_field ?? 'program'
-  const prog   = sound[pField] ?? 0
-  let progNum  = prog >= 128 ? prog % 128 : prog
-  progNum      = Math.max(0, Math.min(127, progNum + cfg.program_base))
-  const msb    = cfg.msb ? (sound.msb ?? 0) : Math.floor(prog / 128)
-  const lsb    = cfg.lsb ? (sound.lsb ?? 0) : 0
+  const { msb, lsb, progNum } = catalogPcAddress(sound, cfg)
 
   port.send([0xB0 | ch, 0,  msb])
   port.send([0xB0 | ch, 32, lsb])

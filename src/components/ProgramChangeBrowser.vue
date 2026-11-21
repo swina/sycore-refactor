@@ -7,6 +7,7 @@ import { useUiStore } from '@/stores/useUiStore'
 
 // ── catalog index ──────────────────────────────────────────────
 import catalogIndex from '@/data/program_change/program_change.json'
+import { catalogPcAddress } from '@/lib/pc-address'
 
 const midiStore = useMidiStore()
 const uiStore   = useUiStore()
@@ -141,24 +142,8 @@ function sendProgramChange(sound) {
   const cfg    = bankConfig.value
   
   const ch     = selectedChannel.value - 1   // 0-based
-  const pField = cfg?.program_field ?? 'program'
-  const prog   = (sound[pField] ?? 0)         // 0-based in data
-  let progNum = prog
-  let msb = sound.msb
-  let lsb = sound.lsb
-
-  if (progNum >= 128) {
-    progNum = progNum % 128
-  }
-  progNum = Math.max(0, Math.min(127, progNum + cfg.program_base))
-  
-  if (!cfg.msb ) {
-    msb = Math.floor(prog / 128 )
-  }
-  if (!cfg.lsb){
-    lsb = 0
-  }
-  // console.log ( "msb" , msb , "lsb" , lsb , "prog" , progNum )
+  const prog   = sound[cfg?.program_field ?? 'program'] ?? 0
+  const { msb, lsb, progNum } = catalogPcAddress(sound, cfg)
 
   port.send([0xB0 | ch, 0, msb ])
   port.send([0xB0 | ch, 32, lsb ])
@@ -236,12 +221,7 @@ function assignPad(seriesIdx, padIdx, sound) {
   const cfg = bankConfig.value
   if (!cfg) return
 
-  const pField = cfg.program_field ?? 'program'
-  const prog   = sound[pField] ?? 0
-  let progNum  = prog >= 128 ? prog % 128 : prog
-  progNum      = Math.max(0, Math.min(127, progNum + cfg.program_base))
-  const msb    = cfg.msb ? (sound.msb ?? 0) : Math.floor(prog / 128)
-  const lsb    = cfg.lsb ? (sound.lsb ?? 0) : 0
+  const { msb, lsb, progNum } = catalogPcAddress(sound, cfg)
 
   padSeries.value = padSeries.value.map((s, si) =>
     si === seriesIdx

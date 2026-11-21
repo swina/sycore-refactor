@@ -21,6 +21,7 @@ import { useAuthStore }    from '@/stores/useAuthStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { usePerformanceSets } from '@/composables/usePerformanceSets'
 import catalogIndex        from '@/data/program_change/program_change.json'
+import { catalogPcAddress } from '@/lib/pc-address'
 const _pcDataModules = import.meta.glob('@/data/program_change/**/*.json')
 import { collection, onSnapshot, query, orderBy, addDoc, getDocs, setDoc, deleteDoc, doc, serverTimestamp, db } from '@/lib/idb'
 import { userKey } from '@/lib/userKey'
@@ -1292,14 +1293,8 @@ function openPcBrowser() {
 function selectPcSound(sound) {
   const cfg    = pcBrowserBankConfig.value
   if (!cfg) return
-  const pField = cfg.program_field ?? 'program'
-  const prog   = sound[pField] ?? 0
-  let progNum  = prog >= 128 ? prog % 128 : prog
-  progNum      = Math.max(0, Math.min(127, progNum + (cfg.program_base ?? 0)))
-  // Mirror MidiDeviceProgramChangePanel.sendCatalogSound: always derive msb/lsb,
-  // never store null when the catalog has cfg.msb/lsb = false.
-  const msb = cfg.msb ? (sound.msb ?? 0) : Math.floor(prog / 128)
-  const lsb = cfg.lsb ? (sound.lsb ?? 0) : 0
+  // always derive msb/lsb, never store null when the catalog has cfg.msb/lsb = false
+  const { msb, lsb, progNum } = catalogPcAddress(sound, cfg)
   newMkr.value.value       = progNum
   newMkrPc.value.msb       = msb
   newMkrPc.value.lsb       = lsb

@@ -83,7 +83,7 @@ Sound data files are lazy-loaded at runtime via `fetch()` when a bank is selecte
 
 | Device key | Banks |
 |---|---|
-| `Arturia MicroFreak` | Factory Bank 6, New Presets 4 |
+| `Arturia MicroFreak` | New Presets 4 |
 | `SEQTRAK-1` | AWM2, DX, Drums, Sampler |
 
 User-imported banks are device-scoped and stored client-side; they are visually distinguished with a teal color scheme and a `FolderOpen` icon.

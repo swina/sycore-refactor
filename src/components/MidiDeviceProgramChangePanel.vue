@@ -25,6 +25,7 @@ import { MidiSource, midiService } from '@/core/midi/midi-service'
 import { FM1_OUTPUT, fm1Firmware } from '@/lib/fm1-bridge'
 import { fm1PartChannels } from '@/lib/fm1-firmwares'
 import catalogIndex from '@/data/program_change/program_change.json'
+import { catalogPcAddress } from '@/lib/pc-address'
 import { on } from '@/types/events'
 import { pcBrowse, recordDeviceCategories, matchCategory } from '@/lib/pc-browse'
 import { mappedParamFor, isVirtualDeviceControl } from '@/composables/useMidiCCListener'
@@ -739,9 +740,7 @@ function scrollToCurrentProgram() {
       const progNum = Math.max(0, Math.min(127, s[pField] ?? 0))
       return progNum === (pcProgram ?? 0) && bank === (pcLsb ?? 0)
     }
-    const progIdx = (s[pField] ?? 0) + (cfg.program_base ?? 0)
-    const progNum = Math.max(0, Math.min(127, progIdx % 128))
-    const msb     = cfg.msb ? (s.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
+    const { msb, progNum } = catalogPcAddress(s, cfg)
     return progNum === (pcProgram ?? 0) && msb === (pcMsb ?? 0)
   })
   if (idx < 0) return
@@ -823,11 +822,9 @@ function soundAddress(sound, ch) {
     // Roland S-1: nothing to send as MIDI program — the position only identifies the sound
     return { msb: 0, lsb: 0, progNum: Math.max(0, prog - 1), msgs: [] }
   }
-  const progIdx = prog + (cfg?.program_base ?? 0)           // 0-indexed absolute program
-  const msb = cfg?.msb ? (sound.msb ?? 0) : Math.max(0, Math.floor(progIdx / 128))
-  const lsb = cfg?.lsb ? (sound.lsb ?? 0) : 0
-  const progNum = Math.max(0, Math.min(127, progIdx % 128))
-  return { msb, lsb, progNum, msgs: [[0xB0 | ch, 0, sound.msb], [0xB0 | ch, 32, sound.lsb], [0xC0 | ch, progNum]] }
+  const { msb, lsb, progNum } = catalogPcAddress(sound, cfg)
+  // the wire carries the sound's own bank bytes when it has them (imported banks); else the derived ones
+  return { msb, lsb, progNum, msgs: [[0xB0 | ch, 0, sound.msb ?? msb], [0xB0 | ch, 32, sound.lsb ?? lsb], [0xC0 | ch, progNum]] }
 }
 
 // The sound last sent on each device:channel, so the current preset is found exactly in the list
