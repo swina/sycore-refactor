@@ -106,3 +106,22 @@ These write to the same paramNames that DECK's on-screen right-click MIDI Learn 
 ### Audio Mixer
 
 The **Audio Mixer** action group provides per-channel Volume, Mute, and Solo controls (up to 16 channels), plus a Toggle Mixer action — each with numbered channel-slot assignments and a save/update/load configuration system.
+
+## LED feedback
+
+SY.CORE lights the LEDs of mapped buttons from the app's state, with every panel closed. It sends the button's own note / CC back to the controller: 127 / 0 for MIDI Learn mappings, the **LED Feedback** values for app mappings. Only changes are sent. A mapping with no device gives no LED.
+
+| Mapping | Lit while |
+|---|---|
+| `mix_ch<N>_mute`, `mix_<source>_mute` (MIDI Learn), **Mixer ch N Mute** (app) | that mixer channel is muted |
+| `dm_play_stop` | the Drum Machine plays |
+| `dm_seq_<a–h>` | that pattern is the current one |
+| `cp_play` | the Chord Prog plays |
+| `cp_slot_<0–7>` | that Chord Prog slot is the current one |
+| `seq_play`, `seq_play_stop` | the Sequencer plays |
+| `arp_active`, **Toggle Arp** | the arpeggiator is on |
+| panel toggles (app) | the panel is open |
+
+A controller in **Live** mode (footer **Live / Perf**, see the Ableton Live guide) gets no LEDs. Its LEDs are turned off when Live mode starts and sent again in full when it comes back to Performance.
+
+**AKAI MIDImix**: one LED of one colour per button. The Mute row is amber, the Rec Arm row is red, and Bank ◀ ▶ light too. A strip can show four states with its two buttons: off, amber, red, both. The LEDs answer the factory notes (Mute 1, 4, 7 … 22; Rec Arm 3, 6, 9 … 24), so map those buttons as notes.

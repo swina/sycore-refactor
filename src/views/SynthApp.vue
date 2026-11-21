@@ -59,6 +59,9 @@ import Fm1EmulatorPanel from '@/components/Fm1EmulatorPanel.vue'
 import VirtualDevicePanel from '@/components/VirtualDevicePanel.vue'
 import AudioDiagnosticsPanel from '@/components/AudioDiagnosticsPanel.vue'
 import RigControllerPanel from '@/components/RigControllerPanel.vue'
+import { installControllerProfiles } from '@/core/midi/controller-profiles'
+import { installLedFeedback } from '@/core/midi/led-feedback-service'
+import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
@@ -131,6 +134,12 @@ const showPartSelector = computed(() => configStore.enablePartSelector)
 useMidiInit()
 useMidiCCListener()
 useControllerManager()
+// Live / Performance controllers (one key) and the LEDs of mapped buttons, with every panel closed
+{
+  const clock = useExternalClockStore()
+  installControllerProfiles(() => clock.isExternal)
+  installLedFeedback()
+}
 const { captureNotesRef, captureNoteCount, captureEnabled, resetCapture } = useMidiCapture()
 const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
 const { minimizedModals } = useMinimizedModals()

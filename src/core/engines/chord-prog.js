@@ -19,6 +19,8 @@ import { getTransport, start as toneStart } from 'tone'
 import { drawAt } from '@/lib/ui-clock'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { midiService, MidiSource } from '@/core/midi/midi-service'
+import { isLiveOwned } from '@/core/midi/controller-profiles'
+import { findOutputFor } from '@/lib/led-feedback'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { userKey } from '@/lib/userKey'
@@ -1137,12 +1139,14 @@ function createChordProgEngine() {
   }
 
   // ── MIDI feedback for Learn-mapped params ──────────────────────────────────
+  // cp_play / cp_slot_*: core/midi/led-feedback-service.ts; here only cp_panic's flash.
   function sendChMappingFeedback(paramNamePrefix, isOn) {
     const val = isOn ? 127 : 0
     for (const entry of Object.values(mappingStore.midiMappings)) {
       const m = entry
       if (typeof m !== 'object' || !m.paramName?.startsWith(paramNamePrefix)) continue
-      const out = m.device ? midiService.getOutputs().find(o => o.name === m.device) : midiService.getOutputs()[0]
+      if (!m.device || isLiveOwned(m.device)) continue
+      const out = findOutputFor(m.device, midiService.getOutputs())
       if (!out) continue
       const ch = (m.channel ?? 0) & 0x0f
       if ('cc' in m) {
@@ -1152,16 +1156,6 @@ function createChordProgEngine() {
       }
     }
   }
-
-  watch(() => store.isPlaying, (playing) => {
-    sendChMappingFeedback('cp_play', playing)
-  })
-
-  watch(() => store.activeSlotIndex, (idx) => {
-    for (let i = 0; i < (store.SLOT_COUNT ?? 8); i++) {
-      sendChMappingFeedback('cp_slot_' + i, i === idx)
-    }
-  })
 
   // MIDI FLOW device→app input routing: a device wired to Chord Sequencer in
   // the canvas starts playback on note-on (see docs/plans/modular/MIDI-Flow-Control.md).

@@ -316,3 +316,21 @@ export function applyMixerChannelParam(slot, kind, val, fromNote = false, mixer 
   }
   return true
 }
+
+/**
+ * Is mixer channel N (0-based slot) muted? From its assignment, as applyMixerChannelParam
+ * (no component): the LEDs of mix_ch<N>_mute / mixer_ch<N>_mute. Undefined: nothing assigned.
+ */
+export function mixerChannelMuted(slot, mixer = useAudioMixerStore()) {
+  const a = mixer.channelSlots[slot]
+  if (!a) return undefined
+  if (a.type === 'catalog') {
+    const c = MIXER_CATALOG.find(x => x.id === a.id)
+    return c ? !!c.muted() : undefined
+  }
+  if (a.type === 'instrument') return mixer.isInstrumentMuted(a.id)
+  const sep = a.id.lastIndexOf(':')
+  const ch = sep > 0 ? Number(a.id.slice(sep + 1)) : NaN
+  if (Number.isInteger(ch)) return mixer.isVirtualChannelMuted(a.id.slice(0, sep), ch)
+  return mixer.isInstrumentMuted(a.id)
+}

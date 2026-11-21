@@ -1,5 +1,6 @@
 <template>
   <div class="flex items-center gap-1" @mouseleave="hoverOpen = false">
+    <ControllerModeChip />
     <!-- Enabled presets indicator -->
     <div
       class="flex items-center gap-1 px-2 py-1 rounded-full bg-neutral-900/60 border border-neutral-800/60 relative cursor-default"
@@ -56,6 +57,7 @@ import { Cpu, Check } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { loadControllerPresets } from '@/lib/midi-controller-presets'
+import ControllerModeChip from '@/components/ControllerModeChip.vue'
 
 const uiStore = useUiStore()
 const authStore = useAuthStore()

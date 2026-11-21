@@ -44,6 +44,7 @@ import {
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
 import { isMidimixName, parseMidimixInput, mixLedDiff, mixLedsOff, Pickup, roleId, learnMixMsg, assignMix, mixMsgLabel, loadMixMap, saveMixMap } from '@/lib/rig-midimix'
+import { controllerMode, isLiveOwned } from '@/core/midi/controller-profiles'
 import { learnToggle, matchToggle, toggleLabel, toggleShortLabel, sameToggle, loadToggle, saveToggle, RIG_TOGGLE_SLOTS } from '@/lib/rig-toggle'
 import { rigLinkLaunchpad, parseRigLinkPress } from '@/lib/rig-link-launchpad'
 import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVelocity, RIG_INIT_MESSAGES, muteOtherSenders, unmuteOtherSenders, rigSend } from '@/lib/rig-launchpad'
@@ -1564,6 +1565,12 @@ watch(mixRig, on => {
   localStorage.setItem(LS_MIX_RIG, on ? '1' : '0')
   if (on) mixRigOn(); else mixRigOff()
 }, { immediate: true })
+// Live mode (core/midi/controller-profiles.ts): a controller that belongs to Live leaves the Rig.
+watch(controllerMode, mode => {
+  if (mode !== 'live') return
+  if (mixRig.value && isLiveOwned(mixOutput.value?.name ?? 'MIDI Mix')) { mixRig.value = false; s.display = 'Live mode · MIDImix Rig off' }
+  if (lpRig.value && lpOutput.value && isLiveOwned(lpOutput.value.name)) { lpRig.value = false; s.display = 'Live mode · Launchpad Rig off' }
+})
 let mixReinit = null
 watch(() => mixOutput.value?.id, id => {
   clearTimeout(mixReinit)

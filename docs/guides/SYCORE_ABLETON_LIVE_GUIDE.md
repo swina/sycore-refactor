@@ -378,7 +378,16 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 - The same actions are listed under **Rig Controller** in the **Controller Designer**, to build an on-screen layout of your controller.
 - Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_seq_free`, `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`, `rig_play` (Rig Controls' Play / Stop), `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode`, `rig_tap`, `rig_tempo_down`, `rig_tempo_up`, `rig_tempo_round`, `rig_tempo` (`<app>` = chord, drum, seq, bass, arp).
 
-Controllers you keep for Live (e.g. a MIDImix mapped to Live's mixer) are unaffected.
+### Live or Performance: one controller, two roles
+
+A controller can belong to Live (its Control Surface, e.g. a MIDImix on Live's mixer) while you play with Live, and to SY.CORE when Live is closed. The **Live / Perf** button in the footer switches all of them at once:
+
+- **Live**: the controllers ticked under *Live's controllers* (by default any MIDImix) are ignored by SY.CORE: no mappings, no MIDI Flow, no LEDs. Their Rig mode is turned off.
+- **Performance**: they work with your MIDI Learn and app mappings, and their LEDs show the state (see *LED feedback* in the Controller Designer guide).
+- **Key**: click **Learn**, then press a button on any controller. That one button switches Live ↔ Performance, even with every panel closed. Its release never reaches a mapping. It works even when the button is on a Live controller, but a button on another controller is better: Live receives the MIDImix's buttons too.
+- **Follow the clock** (off by default): Live mode while SY.CORE follows an external clock (CLK SYS / Link), Performance when that stops.
+
+In Performance mode with Live open, Live still receives the controller if it is selected as a Control Surface. Close Live, or set that Control Surface to None.
 
 ### Controller templates (JSON)
 

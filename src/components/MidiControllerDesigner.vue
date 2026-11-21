@@ -16,7 +16,7 @@
         <span class="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">{{ activePreset?.name }}</span>
       </div>
       <div class="flex items-center gap-1">
-        <button @click.stop="deletePreset" :disabled="!activePreset || activePreset.name === 'Default'" class="p-1 text-neutral-500 hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Delete preset">
+        <button @click.stop="deletePreset" :disabled="!activePreset" class="p-1 text-neutral-500 hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" :title="activePreset?.name === 'Default' ? 'Reset the Default preset (controls, device, their mappings)' : 'Delete preset (and its controls\' mappings)'">
           <Trash2 class="w-4 h-4 mr-2" />
         </button>
         <MacOsButtons @close="uiStore.isMidiControllerDesignerOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
@@ -610,10 +610,13 @@
                 </div>
               </template>
 
+              <p v-if="pendingAssignment?.type === 'action' && !assignedDevice" class="text-[9px] text-amber-400 leading-snug">
+                Assign the preset to a MIDI device first (Preset Settings → Device): an action without a device never fires and gets no LED.
+              </p>
               <!-- Confirm / Cancel -->
               <div class="flex gap-1.5 pt-1">
                 <button @click="cancelAssignment" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-neutral-800 border border-neutral-700 rounded text-neutral-400 hover:text-white transition-colors">Cancel</button>
-                <button @click="confirmAssignment" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-violet-500 rounded text-white hover:bg-violet-400 transition-colors">Confirm</button>
+                <button @click="confirmAssignment" :disabled="pendingAssignment?.type === 'action' && !assignedDevice" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-violet-500 rounded text-white hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Confirm</button>
               </div>
             </div>
           </template>
@@ -681,6 +684,17 @@
           <span class="text-[9px] uppercase tracking-widest text-neutral-500 font-bold">Preset Settings</span>
         </div>
         <div class="flex flex-col gap-3 px-3 py-3 overflow-y-auto">
+          <!-- Start over on a device: every mapping of it -->
+          <div v-if="assignedDevice" class="flex flex-col gap-1.5">
+            <label class="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">Device Mappings</label>
+            <button
+              @click="clearDeviceMappings"
+              class="self-start text-[9px] font-mono px-2.5 py-1 rounded border border-red-800 hover:border-red-500 text-red-400 hover:text-red-200 transition-colors"
+              :title="`Remove every mapping of ${assignedDevice}: MIDI Learn, app mappings (from any preset or the App MIDI Mapper) and the assignments of the Designer's controls on it`"
+            >Clear all mappings of this device</button>
+            <p v-if="clearMessage" class="text-[8px] text-emerald-400">{{ clearMessage }}</p>
+          </div>
+
           <!-- Auto-generate layout -->
           <div v-if="matchedLayout" class="flex flex-col gap-1.5">
             <label class="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">Surface Template</label>
@@ -1110,6 +1124,19 @@ const assignedDevice = computed({
   get: () => activePreset.value?.assignedDevice ?? '',
   set: (v) => { if (activePreset.value) { activePreset.value.assignedDevice = v; debouncedSave() } },
 })
+// The preset's device changed: its controls' app mappings (designer_ctrl_<id>) follow it,
+// saved before with the old device (or none: they never fired).
+watch(() => [activePreset.value?.id, activePreset.value?.assignedDevice], ([id, dev], [oldId]) => {
+  if (!id || id !== oldId || !dev) return
+  const ids = new Set((activePreset.value?.controls ?? []).map(c => `designer_ctrl_${c.id}`))
+  let changed = false
+  const next = mappingStore.appMidiMappings.map(m => {
+    if (!ids.has(m.id) || m.device === dev) return m
+    changed = true
+    return { ...m, device: dev }
+  })
+  if (changed) mappingStore.saveAppMidiMappings(next)
+})
 const sysexInit = computed({
   get: () => activePreset.value?.sysexInit ?? '',
   set: (v) => { if (activePreset.value) { activePreset.value.sysexInit = v || undefined; debouncedSave() } },
@@ -1123,10 +1150,34 @@ function generateLayout() {
   if (controls.value.length > 0) {
     if (!confirm(`Replace ${controls.value.length} existing control(s) with the ${layout.label} template?`)) return
   }
-  activePreset.value.controls = layout.controls
+  removeControlsMappings(activePreset.value.controls)
+  // Templates give the channel 0-based (controller-layout-library.ts); the Designer's controls are 1–16.
+  activePreset.value.controls = layout.controls.map(c => (c.channel != null ? { ...c, channel: c.channel + 1 } : c))
   debouncedSave()
   generateMessage.value = `Generated ${layout.controls.length} controls`
   setTimeout(() => { generateMessage.value = '' }, 3000)
+}
+
+const clearMessage = ref('')
+function clearDeviceMappings() {
+  const dev = (assignedDevice.value || '').toLowerCase()
+  if (!dev) return
+  const sameDev = d => (d || '').toLowerCase() === dev
+  const app = mappingStore.appMidiMappings.filter(m => sameDev(m.device))
+  const learnKeys = Object.entries(mappingStore.midiMappings)
+    .filter(([, m]) => m && typeof m === 'object' && sameDev(m.device))
+    .map(([k]) => k)
+  if (!app.length && !learnKeys.length) { clearMessage.value = 'No mappings on this device'; setTimeout(() => { clearMessage.value = '' }, 3000); return }
+  if (!confirm(`Remove every mapping of ${assignedDevice.value}?\n${app.length} app mapping(s), ${learnKeys.length} MIDI Learn mapping(s).\nThe controls stay; their assignments are cleared.`)) return
+  mappingStore.saveAppMidiMappings(mappingStore.appMidiMappings.filter(m => !sameDev(m.device)))
+  for (const k of learnKeys) mappingStore.removeMapping(k)
+  for (const p of presets.value) {
+    if (!sameDev(p.assignedDevice)) continue
+    for (const c of p.controls ?? []) c.assignment = undefined
+  }
+  debouncedSave()
+  clearMessage.value = `Removed ${app.length + learnKeys.length} mapping(s)`
+  setTimeout(() => { clearMessage.value = '' }, 3000)
 }
 
 const sysexSendResult = ref(null) // null | { ok: boolean, error?: string, sent?: number }
@@ -1323,10 +1374,30 @@ function duplicatePreset() {
   debouncedSave()
 }
 
+// The app mappings of these controls (designer_ctrl_<id>): left behind they keep firing on
+// the same buttons, ahead of the new ones.
+function removeControlsMappings(ctrls) {
+  const ids = new Set((ctrls ?? []).map(c => `designer_ctrl_${c.id}`))
+  if (!ids.size) return
+  const next = mappingStore.appMidiMappings.filter(m => !ids.has(m.id))
+  if (next.length !== mappingStore.appMidiMappings.length) mappingStore.saveAppMidiMappings(next)
+}
+
 function deletePreset() {
   if (!activePreset.value) return
-  if (activePreset.value.name === 'Default') return
-  if (!confirm(`Delete preset "${activePreset.value.name}"?`)) return
+  if (activePreset.value.name === 'Default') {
+    // Default can't go: it is reset (no controls, no device, no mappings)
+    if (!confirm('Reset the Default preset? Its controls, device and their mappings are removed.')) return
+    removeControlsMappings(activePreset.value.controls)
+    activePreset.value.controls = []
+    activePreset.value.assignedDevice = undefined
+    activePreset.value.sysexInit = undefined
+    selectedControlId.value = null
+    debouncedSave()
+    return
+  }
+  if (!confirm(`Delete preset "${activePreset.value.name}"? Its controls' mappings are removed too.`)) return
+  removeControlsMappings(activePreset.value.controls)
   const id = activePreset.value.id
   const idx = presets.value.findIndex(p => p.id === id)
   if (idx === -1) return
@@ -1666,7 +1737,10 @@ function assignToMidiAction(ctrl, action) {
   exactValue.value  = 127
   minValue.value    = 1
   consume.value     = true
-  hasFeedback.value = false
+  // A button lights by default (127 / 0): without it an on/off action gets no LED
+  hasFeedback.value = ctrl.type === 'pad-switch' || ctrl.type === 'pad-momentary'
+  fbOn.value = 127
+  fbOff.value = 0
 
   const viCc = parseViCcAction(action)
   if (viCc) {
@@ -1695,6 +1769,8 @@ function confirmAssignment() {
   const ctrl = drawerControl.value
   if (!ctrl || !pendingAssignment.value) return
   const pa = pendingAssignment.value
+  // useControllerManager drops an app mapping without a device (malformed, not a wildcard)
+  if (pa.type === 'action' && !assignedDevice.value) return
 
   if (pa.type === 'action') {
     // vi_cc: entries carry the target channel as part of the action id itself
@@ -1721,7 +1797,7 @@ function confirmAssignment() {
       })
       existing.push({
         id: stableId,
-        device: assignedDevice.value, // '' matches any device in useControllerManager
+        device: assignedDevice.value,
         ...(isNote ? { note: ctrl.noteNumber } : { cc: ctrl.ccNumber }),
         channel: ch,
         value: mappingValue,

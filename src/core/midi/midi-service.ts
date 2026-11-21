@@ -168,6 +168,10 @@ export class MidiService {
   /** Takes an input over entirely (Rig Controller's Launchpad Rig mode): a message it
    *  returns true for reaches nothing else — raw listeners, MIDI Learn, mappings, Thru. */
   private exclusiveInput: ((event: MIDIMessageEvent) => boolean) | null = null;
+  /** Controller profiles (core/midi/controller-profiles.ts): 'consumed' — the Live/Performance
+   *  key (or its Learn), before everything; 'drop' — a Live controller in Live mode, after the
+   *  exclusive input (a Rig turned on by hand still gets it). */
+  private profileGate: ((event: MIDIMessageEvent) => 'consumed' | 'drop' | 'pass') | null = null;
   // Sources whose note-ons are dropped (the Rig Controller's Mute/Solo on the real apps).
   // Note-offs still go out, so notes already playing end.
   private mutedSources = new Set<MidiSource>();
@@ -861,6 +865,10 @@ export class MidiService {
 
   setExclusiveInput(fn: ((event: MIDIMessageEvent) => boolean) | null): void {
     this.exclusiveInput = fn;
+  }
+
+  setProfileGate(fn: ((event: MIDIMessageEvent) => 'consumed' | 'drop' | 'pass') | null): void {
+    this.profileGate = fn;
   }
 
   /** Drop the note-ons of these sources (empty: none). */
@@ -1841,8 +1849,14 @@ export class MidiService {
     const status = event.data[0];
     const now = Date.now();
 
+    const gate = this.profileGate ? this.profileGate(event) : 'pass';
+    if (gate === 'consumed') return;
+
     // An input taken over (setExclusiveInput): nobody else sees its messages.
     if (this.exclusiveInput && this.exclusiveInput(event)) return;
+
+    // A controller that belongs to Ableton Live right now: SY.CORE ignores it.
+    if (gate === 'drop') return;
 
     // Fire raw listeners
     this.onRawListeners.forEach(l => l(event));
