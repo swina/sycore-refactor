@@ -79,6 +79,11 @@ const soundTitle = (r) => {
           <option v-for="ch in CHANNELS" :key="ch" :value="ch">{{ ch === 0 ? 'G' : ch }}</option>
         </select>
       </div>
+      <!-- the sound: locked to the bank (blue, its Program Change ON / OFF) or, not locked, the one now on its channel (white) -->
+      <button v-if="!r.eng.bankSoundLabel.value && r.eng.currentSoundLabel.value" type="button" data-lane-sound-current
+              class="text-left text-[9px] truncate text-neutral-200 hover:text-white"
+              :title="`${r.cfg.label}: the sound now on its channel — not locked to this bank (click: lock it, so the bank recalls it)`"
+              @click="r.eng.assignBankSound()">♪ {{ r.eng.currentSoundLabel.value }}</button>
       <button v-if="r.eng.bankSoundLabel.value" type="button" data-lane-sound-name
               class="text-left text-[9px] truncate hover:text-white"
               :class="r.eng.laneSoundOn.value ? 'text-sky-300/80' : 'text-neutral-600 line-through'"

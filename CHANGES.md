@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-22
 
+- **Sequencer lanes: the current sound always shown**: a lane showed a sound only when its bank had one locked (blue, Program Change ON / OFF). Now, when the bank has none, it shows in white the sound now on the lane's channel (MIDI Flow's Program Change state of the devices it is cabled to). A click locks it to the bank. Files: `core/engines/sequencer.js` (`currentSoundLabel`), `play/SeqLanesStrip.vue`. Branch: `feat/controller-profiles`
 - **Rig Trigger sync: Per lane / Global, and Start only**: in Track options, **Trigger sync Per lane | Global**. Global is one value for every lane (2 bars, 4 bars…), and the Launchpad's Sync button, Rig Controls' Sync and `rig_sync_*` then change it; the lanes' own selects are disabled meanwhile. **Start only**: the sync is for a lane's start, and a lane playing switches or stops at the end of its slot:
   - the Chord Prog at the end of its progression (`cp-slot-cue` / `cp-stop` with sync −1);
   - the Sequencer lanes at the end of the pattern (their switch was there already; the stop now too);

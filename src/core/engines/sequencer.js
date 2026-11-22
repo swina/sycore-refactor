@@ -236,6 +236,9 @@ function createSequencerEngine(lane = 'main') {
   function clearBankSound() { seqStore.activeBank.sound = null }
   const bankSound = computed(() => seqStore.activeBank?.sound ?? null)
   const bankSoundLabel = computed(() => laneSoundLabel(bankSound.value))
+  // The sound now on the lane's channel (MIDI Flow's Program Change state), whether locked to the bank or not
+  const currentSound = computed(() => { void JSON.stringify(midiStore.routingMatrix); return captureLaneSound(laneReach()) })
+  const currentSoundLabel = computed(() => laneSoundLabel(currentSound.value))
   // the lane's Program Change on (its banks' sounds sent) / off (none sent); switched on while playing: sent now
   const laneSoundOn = computed({ get: () => seqStore.soundEnabled, set: (v) => { seqStore.soundEnabled = !!v; if (v && isPlaying.value) recallBankSound() } })
   function recallBankSound() {
@@ -2049,7 +2052,7 @@ function createSequencerEngine(lane = 'main') {
   return {
     // the lane (lib/seq-lanes.ts) and its MIDI channel (0 = global, 1–16)
     lane, laneChannel, laneMuted, laneSync, startPending,
-    bankSound, bankSoundLabel, assignBankSound, clearBankSound, laneSoundOn,
+    bankSound, bankSoundLabel, currentSoundLabel, assignBankSound, clearBankSound, laneSoundOn,
     // pattern (working copy of the active bank) and settings the panel shows / edits
     selectedStyle, selectedKey, selectedScale, progKey, chordsEnabled, maxPolyphony, chordDensity,
     fitMode, alignOffset, isPlaying, isRecording, currentStep, selectedStepIdx, syncTrack, genDensity, rhythmMode, syncopation, euclidRotation, melodyMode, varyAmount, arpNotes, arpModeForGen,
