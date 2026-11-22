@@ -62,6 +62,7 @@ import RigControllerPanel from '@/components/RigControllerPanel.vue'
 import { installControllerProfiles } from '@/core/midi/controller-profiles'
 import { installLedFeedback } from '@/core/midi/led-feedback-service'
 import { installDesignerPresets } from '@/core/midi/designer-presets'
+import { installProjects } from '@/core/projects'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
@@ -93,6 +94,7 @@ import LoopMachine        from '@/components/LoopMachine.vue'
 import DrumMachine        from '@/components/DrumMachine.vue'
 import MidiWizard         from '@/components/MidiWizard.vue'
 import MidiWizardFlow     from '@/components/MidiWizardFlow.vue'
+import FirstProjectModal  from '@/components/FirstProjectModal.vue'
 import MidiMonitorPanel   from '@/components/MidiMonitorPanel.vue'
 import InstrumentCockpit  from '@/components/InstrumentCockpit.vue'
 import SamplerPanel            from '@/components/SamplerPanel.vue'
@@ -141,6 +143,7 @@ useControllerManager()
   installControllerProfiles(() => clock.isExternal)
   installLedFeedback()
   installDesignerPresets()
+  installProjects()
 }
 const { captureNotesRef, captureNoteCount, captureEnabled, resetCapture } = useMidiCapture()
 const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
@@ -481,6 +484,7 @@ onMounted(() => {
 
       <MidiWizard     v-if="uiStore.isMidiWizardOpen" />
       <MidiWizardFlow />
+      <FirstProjectModal />
       <MidiMonitorPanel />
       <InstrumentCockpit />
       <MidiDevices    v-if="uiStore.isMidiDevicesOpen" />

@@ -61,12 +61,15 @@ A preset holds the mappings of its controls. Only the presets that are **on** ar
 
 ### Projects: a setup with its controllers
 
-A **project** is a MIDI Flow setup plus the presets that are on with it. Loading a project loads the setup and turns on exactly its presets.
+A **project** is your rig: its MIDI Flow setup plus the controller presets that are on with it. You always work in a project. The footer shows the current one (violet button, next to the workspaces).
 
-- **Save** a setup in MIDI Flow (Saved configurations, or the save icon in the footer). SY.CORE then asks **Controllers for this setup**. The presets on now are already ticked. Name the project and press **Save project**. **Setup only** saves just the routing.
-- **Load**: in MIDI Flow's Saved configurations, under **Projects**, click a project. Clicking a setup under **Setups** loads only the routing and leaves the presets as they are.
-- **Same setup, different controllers**: save two projects on the same setup, e.g. *Studio · Live* (MIDImix as Live's surface) and *Studio · Perf* (MIDImix Mixer preset on). The routing is saved once. Change it and both projects use the change.
-- Saving under an existing project name updates that project. Deleting a project keeps its setup and presets. A project whose setup was deleted can't be loaded. Presets deleted since it was saved are skipped.
+- **First start**: SY.CORE asks you to name your first project, then opens MIDI Flow. **Later** creates it and lets you set it up afterwards. If you already used SY.CORE, it makes **My project** from what you have (and your earlier MIDI Flow projects), so nothing changes.
+- **The current project follows what you do**: load a setup in MIDI Flow, or turn a preset on / off in Controller Presets, and the project keeps it.
+- **Switch**: click the project button in the footer, then a project. SY.CORE loads its setup and turns on exactly its presets.
+- **Same setup, different controllers**: two projects on one setup, e.g. *Studio · Perf* (MIDImix Mixer on) and *Studio · Live* (none on). The routing is saved once.
+- **Saving a setup** in MIDI Flow asks **Controllers for this setup**. Keep the current project's name to update it, or type another to make a new project. **Setup only** saves just the routing.
+- **New** (footer): a project from what is on screen now. **Rename**, **Duplicate**, **Delete** (the setup and the presets stay; the last project can't be deleted).
+- **Export** saves a project as a file with its setup and the presets it uses. **Import** adds it as a new project, so nothing of yours is overwritten. An identical setup or preset is reused; a different one with the same name is added beside yours.
 
 ---
 

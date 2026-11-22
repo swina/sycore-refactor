@@ -17,7 +17,7 @@ import { FM1_OUTPUT } from '@/lib/fm1-bridge'
 import { DEVICE_TYPE_META, typeMeta } from '@/lib/device-type-meta'
 import { loadControllerPresets, AUTOSAVE_CONTROLLER_ID } from '@/lib/midi-controller-presets'
 import { designerPresets } from '@/core/midi/designer-presets'
-import { projectPresetIds, freeProjectName } from '@/lib/flow-projects'
+import { currentProject, saveSetupAsProject } from '@/core/projects'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
@@ -705,22 +705,19 @@ function overwriteConfig(name) {
   askControllers(name)
 }
 
-// ── Projects: a setup + the controllers set for it (lib/flow-projects.ts) ──
-// Saving a setup asks which Controller Designer presets go with it: the answer is
-// a project. The same setup can be in several projects, with different controllers.
-const currentProjectName = computed(() => midiFlowConfigsStore.lastProjectName)
+// ── Projects (core/projects.ts): saving a setup asks which controllers go with it ──
+// The answer updates the current project (same name) or makes a new one (another name).
+// The same setup can be in several projects, with different controllers.
+const currentProjectName = computed(() => currentProject.value?.name ?? '')
 const controllerPresetChoices = computed(() => designerPresets.value.filter(p => p.id !== AUTOSAVE_CONTROLLER_ID))
-const presetName = (id) => designerPresets.value.find(p => p.id === id)?.name ?? null
 /** The "controllers for this setup" step of the menu: { setup, name, ids } or null. */
 const associating = ref(null)
 
 function askControllers(setup) {
-  const projects = midiFlowConfigsStore.projects
-  const current = projects.find(p => p.name === currentProjectName.value && p.setup === setup)
   const existing = new Set(controllerPresetChoices.value.map(p => p.id))
   associating.value = {
     setup,
-    name: current?.name ?? (projects.some(p => p.setup === setup) ? freeProjectName(projects, setup) : setup),
+    name: currentProjectName.value || setup,
     ids: uiStore.enabledControllerDesignerPresetIds.filter(id => existing.has(id)),
   }
   showConfigsMenu.value = true
@@ -734,10 +731,8 @@ function toggleAssociated(id) {
 
 function saveProjectFromStep() {
   const a = associating.value
-  const name = a?.name.trim()
-  if (!a || !name) return
-  midiFlowConfigsStore.saveProject(name, a.setup, a.ids)
-  uiStore.enabledControllerDesignerPresetIds = [...a.ids]
+  if (!a || !a.name.trim()) return
+  saveSetupAsProject(a.name, a.setup, a.ids)
   associating.value = null
   showConfigsMenu.value = false
 }
@@ -747,31 +742,15 @@ function skipProjectStep() {
   showConfigsMenu.value = false
 }
 
-function projectInfo(p) {
-  const { ids, missing } = projectPresetIds(p, designerPresets.value.map(x => x.id))
-  return {
-    setupMissing: !midiFlowConfigsStore.hasConfig(p.setup),
-    controllers: ids.map(presetName).filter(Boolean),
-    missing: missing.length,
-  }
-}
-
-function loadProject(p) {
-  if (!midiFlowConfigsStore.hasConfig(p.setup)) return
-  loadConfig(p.setup)
-  uiStore.enabledControllerDesignerPresetIds = projectPresetIds(p, designerPresets.value.map(x => x.id)).ids
-  midiFlowConfigsStore.setLastProjectName(p.name)
-}
-
-function deleteProjectEntry(name) {
-  midiFlowConfigsStore.deleteProject(name)
-}
-
-// A setup picked on its own (not through a project): no project is current.
+// A setup picked in the menu: loaded in the canvas (the current project now uses it).
 function pickConfig(name) {
   loadConfig(name)
-  midiFlowConfigsStore.setLastProjectName('')
 }
+
+// A setup to load asked from outside (a project loaded from the footer).
+watch(() => midiFlowConfigsStore.loadRequest, (req) => {
+  if (req && midiFlowConfigsStore.hasConfig(req.name)) loadConfig(req.name)
+})
 
 function loadConfig(name) {
   const entry = midiFlowConfigsStore.getConfig(name)
@@ -1016,7 +995,7 @@ function pendingPath() {
               <div v-if="associating" class="p-2.5 flex flex-col gap-2">
                 <div class="text-[9px] font-black uppercase tracking-widest text-violet-400">Controllers for this setup</div>
                 <div class="text-[9px] font-mono text-neutral-500">
-                  Setup <span class="text-white">{{ associating.setup }}</span> saved. Tick the Controller Designer presets to use with it: they become a project you can load in one click.
+                  Setup <span class="text-white">{{ associating.setup }}</span> saved. Tick the Controller Designer presets to use with it. The project's name: the current one to update it, another to make a new project.
                 </div>
                 <div class="max-h-40 overflow-y-auto custom-scrollbar flex flex-col border border-neutral-800 rounded">
                   <div v-if="!controllerPresetChoices.length" class="px-2 py-3 text-center text-[9px] font-mono text-neutral-700 uppercase tracking-widest">
@@ -1077,39 +1056,6 @@ function pendingPath() {
                   <Save class="w-2.5 h-2.5" /> Save
                 </button>
               </div>
-              <div v-if="midiFlowConfigsStore.projects.length" class="border-b border-neutral-800">
-                <div class="px-3 pt-2 pb-1 text-[8px] font-black uppercase tracking-widest text-violet-400">Projects · setup + controllers</div>
-                <div class="max-h-48 overflow-y-auto custom-scrollbar">
-                  <button
-                    v-for="pj in midiFlowConfigsStore.projects"
-                    :key="pj.name"
-                    @click="loadProject(pj)"
-                    :disabled="projectInfo(pj).setupMissing"
-                    class="group w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-neutral-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    :title="projectInfo(pj).setupMissing ? 'Its setup was deleted' : 'Load the setup and turn on these controllers'"
-                  >
-                    <span class="min-w-0">
-                      <span class="flex items-center gap-1 min-w-0">
-                        <span class="block text-[10px] font-bold text-white truncate">{{ pj.name }}</span>
-                        <span v-if="pj.name === currentProjectName" class="shrink-0 text-[7px] font-black uppercase tracking-wider px-1 py-0.5 rounded bg-violet-500/15 text-violet-300">Current</span>
-                      </span>
-                      <span class="block text-[8px] font-mono text-neutral-600 truncate">
-                        <template v-if="projectInfo(pj).setupMissing"><span class="text-red-400">setup "{{ pj.setup }}" missing</span></template>
-                        <template v-else>{{ pj.setup }} · {{ projectInfo(pj).controllers.length ? projectInfo(pj).controllers.join(', ') : 'no controllers' }}</template>
-                        <template v-if="projectInfo(pj).missing"> · {{ projectInfo(pj).missing }} deleted</template>
-                      </span>
-                    </span>
-                    <span
-                      @click.stop="deleteProjectEntry(pj.name)"
-                      class="shrink-0 opacity-0 group-hover:opacity-100 text-neutral-600 hover:text-red-400 transition-all"
-                      title="Delete this project (the setup and the presets stay)"
-                    >
-                      <Trash2 class="w-3 h-3" />
-                    </span>
-                  </button>
-                </div>
-              </div>
-              <div v-if="midiFlowConfigsStore.projects.length" class="px-3 pt-2 pb-1 text-[8px] font-black uppercase tracking-widest text-neutral-500">Setups</div>
               <div class="max-h-64 overflow-y-auto custom-scrollbar">
                 <div v-if="!midiFlowConfigsStore.configs.length" class="px-3 py-4 text-center text-[9px] font-mono text-neutral-700 uppercase tracking-widest">
                   No saved configurations

@@ -34,7 +34,8 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
   const liveNodes = ref<any[]>([])
   const liveCables = ref<any[]>([])
 
-  // Projects: a setup + the Controller Designer presets on with it (lib/flow-projects.ts).
+  // v1 projects (setup + presets, lib/flow-projects.ts): read once to migrate them to
+  // core/projects.ts (IDB); no longer written.
   const projects = ref<FlowProject[]>(loadProjects())
   const lastProjectName = ref<string>(localStorage.getItem(userKey(LAST_PROJECT_STORAGE_KEY)) ?? '')
 
@@ -107,9 +108,17 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
     if (lastProjectName.value === name) lastProjectName.value = ''
   }
 
+  // A setup to load in the canvas, asked from outside MIDI Flow (a project loaded from the
+  // footer): MidiWizardFlow.vue, always mounted, watches it and loads it.
+  const loadRequest = ref<{ name: string; seq: number } | null>(null)
+  let loadSeq = 0
+  function requestLoad(name: string) {
+    loadRequest.value = { name, seq: ++loadSeq }
+  }
+
   function setLastProjectName(name: string) {
     lastProjectName.value = name
   }
 
-  return { projects, lastProjectName, saveProject, deleteProject, setLastProjectName, configs, saveConfig, getConfig, deleteConfig, hasConfig, lastConfigName, setLastConfigName, liveNodes, liveCables }
+  return { loadRequest, requestLoad, projects, lastProjectName, saveProject, deleteProject, setLastProjectName, configs, saveConfig, getConfig, deleteConfig, hasConfig, lastConfigName, setLastConfigName, liveNodes, liveCables }
 })
