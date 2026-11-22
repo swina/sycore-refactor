@@ -70,3 +70,18 @@ describe('designer-preset-mappings', () => {
     expect(learnKeyFor('X', { id: 'x' })).toBeNull()
   })
 })
+
+describe('the Designer canvas learn helper', () => {
+  it('ctrl_designer_<id> entries are removed (they only find the button\'s note / CC)', async () => {
+    const { syncPresetMappings, isDesignerLearnHelper } = await import('@/lib/designer-preset-mappings')
+    const learn = {
+      'MIDI Mix:CH1:NOTE1': { note: 1, device: 'MIDI Mix', channel: 0, paramName: 'ctrl_designer_adyhlvrpl' },
+      'Keys:CH1:CC74': { cc: 74, device: 'Keys', channel: 0, paramName: 'filter_cutoff' },
+      'Old:20': 'ctrl_designer_x',
+    }
+    expect(isDesignerLearnHelper(learn['Old:20'])).toBe(true)
+    const r = syncPresetMappings({ presets: [], enabledIds: [], app: [], learn })
+    expect(Object.keys(r.learn)).toEqual(['Keys:CH1:CC74'])
+    expect(r.learnChanged).toBe(true)
+  })
+})

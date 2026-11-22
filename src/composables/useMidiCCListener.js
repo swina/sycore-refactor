@@ -505,6 +505,17 @@ export function isLearnedOnDevice(mappings, deviceName, chan, kind, number) {
   return mappedParamFor(mappings, deviceName, chan, kind, number, { withPlain: false }) != null
 }
 
+/** A MIDI Learn parameter as the MIDI Monitor shows it (who took the message). */
+export function paramOwnerLabel(name) {
+  const vd = /^vdp_cc:(.+):(\d+)$/.exec(name ?? '')
+  if (vd) return `${vd[1]} · CC ${vd[2]} (Virtual Device)`
+  const vdo = /^vdp_([a-z_]+\d*):(.+)$/.exec(name ?? '')
+  if (vdo) return `${vdo[2]} · ${vdo[1].replace(/_/g, ' ')} (Virtual Device)`
+  const mix = /^mix_ch(\d+)_(vol|mute)$/.exec(name ?? '')
+  if (mix) return `Mixer ch ${mix[1]} ${mix[2] === 'vol' ? 'volume' : 'mute'}`
+  return String(name ?? '').replace(/_/g, ' ')
+}
+
 /** Kept out of Thru: Virtual Device controls (any key) and controls learned on this device. */
 export function isThruExcludedControl(mappings, deviceName, chan, kind, number) {
   return isVirtualDeviceControl(mappings, deviceName, chan, kind, number)
@@ -699,6 +710,7 @@ export function useMidiCCListener() {
   }
 
   function applyParam(fieldName, val, fromNote = false) {
+    midiService.claimIngress('param', paramOwnerLabel(fieldName))
     return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, noteLatchStore, drumStore, cpStore, mixerStore, configStore })
   }
 
@@ -777,6 +789,7 @@ export function useMidiCCListener() {
   }
 
   function applyParam(fieldName, val, fromNote = false) {
+    midiService.claimIngress('param', paramOwnerLabel(fieldName))
     return applyParamValue(fieldName, val, fromNote, { lfoStore, mappingStore, uiStore, presetStore, midiStore, arpStore, noteLatchStore, drumStore, cpStore, mixerStore, configStore })
   }
 

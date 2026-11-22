@@ -6,7 +6,7 @@ import { useMappingStore } from '@/stores/useMappingStore'
 import { midiService }     from '@/core/midi/midi-service'
 import { useLivePadStore } from '@/stores/useLivePadStore'
 import { useAppActions }   from './useAppActions'
-import { isContinuousAction } from '@/lib/app-midi-actions'
+import { isContinuousAction, actionLabel } from '@/lib/app-midi-actions'
 import { isVirtualDeviceControl } from './useMidiCCListener'
 import { loopMachineState } from '@/core/state/loopMachineState'
 import { rigLaunchpad, isLaunchpadName } from '@/lib/rig-launchpad'
@@ -292,6 +292,8 @@ export function useControllerManager() {
 
     if (matchedMapping) {
       const action = matchedMapping.action
+      // Shown in the MIDI Monitor with who took the message
+      midiService.claimIngress('action', action === 'pass_thru' ? 'pass-through' : actionLabel(action, midiStore.virtualInstruments))
       const now = Date.now()
       if (now - (lastTriggerTimes.get(action) || 0) < 50) return true
 
@@ -341,6 +343,7 @@ export function useControllerManager() {
     if (isRelease) {
        const mapped = mappings.find(matchesNote)
        if (mapped) {
+         midiService.claimIngress('action', `${actionLabel(mapped.action, midiStore.virtualInstruments)} (release)`)
          updateFeedback()
          if (hasMidiLearnMapping(mappingStore.midiMappings, cc, note, deviceName, chan)) return false
          return mapped.consume !== false
@@ -358,7 +361,7 @@ export function useControllerManager() {
          log(`Native Driver: Executing Action ${action}`)
          dispatchAction(action, val)
       }, getAppState())
-      if (handled) return true
+      if (handled) { midiService.claimIngress('profile', ctrl.profile.name ?? 'controller profile'); return true }
     }
 
     return false

@@ -9,11 +9,9 @@ import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 
 const props = defineProps({ embedded: { type: Boolean, default: false } })
 import { midiService, MidiSource } from '@/core/midi/midi-service'
-import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
 
 const uiStore       = useUiStore()
-const mappingStore  = useMappingStore()
 
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } =
   useDraggableResizable({
@@ -119,15 +117,6 @@ function _handleSystemLog(e) {
   })
 }
 
-// ─── Computed: mapped CCs set (from mapping store) ────────────────────────────
-const mappedCCs = computed(() => {
-  const s = new Set()
-  Object.values(mappingStore.midiMappings).forEach(m => {
-    if (typeof m === 'object' && m.cc != null) s.add(m.cc)
-  })
-  return s
-})
-
 // ─── Filtered display list ────────────────────────────────────────────────────
 const filteredEntries = computed(() => {
   const q = searchText.value.toLowerCase()
@@ -136,7 +125,7 @@ const filteredEntries = computed(() => {
     if (!typeFilter.value[e.type]) return false
     if (filterDevice.value !== 'all' && e.device !== filterDevice.value) return false
     if (filterChannel.value > 0 && e.channel !== filterChannel.value) return false
-    if (q && !e.decoded.toLowerCase().includes(q) && !e.device.toLowerCase().includes(q)) return false
+    if (q && !e.decoded.toLowerCase().includes(q) && !e.device.toLowerCase().includes(q) && !(e.owners ?? []).some(o => o.label.toLowerCase().includes(q))) return false
     return true
   })
 })
@@ -186,8 +175,26 @@ function directionBadge(e) {
   return e.direction === 'in' ? '↓' : '↑'
 }
 
-function isMapped(e) {
-  return e.type === 'cc' && e.data.length >= 2 && mappedCCs.value.has(e.data[1])
+// Who took an incoming message (midiService.claimIngress)
+const OWNER_CLASS = {
+  played:        'bg-neutral-800/60 text-neutral-400 border-neutral-700/50',
+  action:        'bg-violet-900/40 text-violet-300 border-violet-700/40',
+  param:         'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
+  profile:       'bg-sky-900/40 text-sky-300 border-sky-700/40',
+  'control-map': 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
+  rig:           'bg-amber-900/40 text-amber-300 border-amber-700/40',
+  key:           'bg-amber-900/40 text-amber-300 border-amber-700/40',
+  live:          'bg-amber-950/40 text-amber-500 border-amber-800/40',
+  echo:          'bg-neutral-900 text-neutral-600 border-neutral-800',
+}
+const OWNER_TITLE = {
+  played: 'Played (MIDI Flow cable) to', action: 'App action', param: 'MIDI Learn parameter',
+  profile: 'Controller profile', 'control-map': 'Control Map (Live CTRL port)', rig: 'Taken by',
+  key: 'Taken by', live: 'Ignored', echo: 'Ignored',
+}
+const ACTING = new Set(['action', 'param', 'profile', 'control-map'])
+function isConflict(e) {
+  return (e.owners ?? []).filter(o => ACTING.has(o.kind)).length > 1
 }
 
 function fmtTime(ts) {
@@ -397,10 +404,17 @@ onUnmounted(() => {
           <span class="text-neutral-500 shrink-0 max-w-[120px] truncate" :title="e.device">{{ e.device }}</span>
           <!-- Message -->
           <span class="truncate flex-1">{{ e.decoded }}</span>
-          <!-- Mapped badge -->
-          <span v-if="isMapped(e)"
-            class="shrink-0 text-[8px] px-1 py-px rounded bg-cyan-900/50 text-cyan-400 border border-cyan-700/40 uppercase tracking-wider"
-          >mapped</span>
+          <!-- Who took it (incoming): the layer that acted, where it was played; two acting = conflict -->
+          <template v-if="e.owners?.length">
+            <span v-if="isConflict(e)"
+              class="shrink-0 text-[8px] px-1 py-px rounded bg-red-900/50 text-red-300 border border-red-700/50 uppercase tracking-wider"
+              title="Two mappings act on this one message: the same button is assigned twice"
+            >conflict</span>
+            <span v-for="(o, i) in e.owners" :key="i"
+              :class="['shrink-0 max-w-[220px] truncate text-[8px] px-1 py-px rounded border', OWNER_CLASS[o.kind] ?? OWNER_CLASS.param]"
+              :title="OWNER_TITLE[o.kind] + ': ' + o.label"
+            >{{ o.kind === 'played' ? '→ ' + o.label : o.label }}</span>
+          </template>
         </div>
 
         <span v-if="filteredEntries.length === 0" class="text-neutral-600 italic px-1">

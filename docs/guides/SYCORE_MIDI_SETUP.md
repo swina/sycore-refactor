@@ -153,6 +153,22 @@ Before leaving setup, open **MIDI Monitor** and click **Start**. Play a note or 
 - **IN** entries (blue arrow) = messages received from your controller
 - **OUT** entries (green arrow) = messages sent to your synth
 
+### Who took the message
+
+Each IN entry shows who took it, as small tags at the end of the row:
+
+| Tag | Meaning |
+|---|---|
+| `→ X3` (grey) | Played: it went through the MIDI Flow cable to that device |
+| violet | An app action (App MIDI Mapper, Controller Designer) |
+| cyan | A MIDI Learn parameter (e.g. `Mixer ch 1 volume`, a Virtual Device control) |
+| blue | A controller's built-in profile (e.g. Launchpad Mini MK1) |
+| green | The Control Map (Live's clips on the CTRL port) |
+| amber | Taken by the Rig Controller or the Live / Perf key, or ignored because the controller is in Live mode |
+| red **conflict** | Two mappings act on the same message: that button is assigned twice. Remove one of them |
+
+No tag: no mapping took it and no cable plays it (an open panel that listens to MIDI, e.g. the Step Sequencer, may still use it). Search also finds the tags (e.g. type `mute`).
+
 If IN entries appear but OUT entries do not, check MIDI Flow and confirm the cable to that device has **NOTE** and/or **CC** enabled. MIDI Monitor is also reachable directly from MIDI Flow's footer while you're wiring things up.
 
 Use the **Direction**, **Type**, and **Device** filters to narrow the view when debugging a specific issue.

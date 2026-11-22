@@ -65,6 +65,12 @@ function learnEntryFor(preset: DesignerPreset, ctrl: DesignerControl): Record<st
   return null
 }
 
+/** A Designer canvas control's learn entry (`ctrl_designer_<id>`): a helper, not a mapping. */
+export function isDesignerLearnHelper(v: unknown): boolean {
+  const name = v && typeof v === 'object' ? (v as any).paramName : v
+  return typeof name === 'string' && name.startsWith('ctrl_designer_')
+}
+
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
 
 /**
@@ -111,6 +117,10 @@ export function syncPresetMappings({ presets, enabledIds, app, learn }: SyncInpu
   const nextLearn: Record<string, any> = {}
   for (const [k, v] of Object.entries(learn)) {
     if (v && typeof v === 'object' && (v.designerPreset || owned.has(k))) continue
+    // A canvas control's own learn (right-click → MIDI Learn, `ctrl_designer_<id>`) only finds
+    // the button's note / CC, copied into the control: left in the table it was a second
+    // mapping on that button (a conflict, and it stopped the action consuming the message).
+    if (isDesignerLearnHelper(v)) continue
     nextLearn[k] = v
   }
   for (const p of presets) {

@@ -4,8 +4,9 @@
  * A controller "Keys" cabled to "X3" in MIDI Flow. For each layer that can take a
  * message, what still sees it: raw listeners (MIDI Learn capture, panels), the
  * MIDI Monitor (incoming rows), Thru (the cable to X3), the CC / note listeners (MIDI Learn
- * mappings, the Designer canvas). Phase 2 replaces this chain with one owner per
- * message: these tests say what it must keep, or change on purpose.
+ * mappings, the Designer canvas), and who took it (the Monitor's owners, phase 2).
+ * Phase 2 changed on purpose: the Monitor now sees every message, the ones the
+ * Live/Perf key, the Rig or Live mode take included, with who took it.
  */
 import { describe, it, expect } from 'vitest'
 import { MidiService } from '@/core/midi/midi-service'
@@ -24,48 +25,55 @@ function rig() {
     },
   })
   const seen = { raw: 0, monitor: 0, thru: [] as number[][], cc: [] as number[], note: [] as string[] }
+  const entries: any[] = []
   svc.registerVirtualOutput('X3', (data: number[]) => seen.thru.push(data))
   svc.router.matrix.set('Keys', new Set(['X3']))
   svc.addRawListener(() => { seen.raw++ })
   svc.addCCListener((cc: number) => seen.cc.push(cc))
   svc.addNoteListener((type: string, note: number) => seen.note.push(`${type}${note}`))
   const append = svc.monitor.append.bind(svc.monitor)
-  svc.monitor.append = (e: any) => { if (e?.direction === 'in') seen.monitor++; return append(e) }
+  svc.monitor.append = (e: any) => { if (e?.direction === 'in') { seen.monitor++; entries.push(e) } return append(e) }
+  /** The owners of the last incoming message ("kind: label"). */
+  const owners = () => (entries[entries.length - 1]?.owners ?? []).map((o: any) => `${o.kind}: ${o.label}`)
   const receive = (bytes: number[]) =>
     svc.handleIngress({ data: new Uint8Array(bytes), target: input, timeStamp: performance.now() })
-  return { svc, seen, receive }
+  return { svc, seen, receive, owners }
 }
 
 const CC74 = [0xb0, 74, 100]
 
-describe('a controller CC, layer by layer (today)', () => {
+describe('a controller CC, layer by layer', () => {
   it('no layer takes it: seen everywhere and played to the cable', () => {
-    const { seen, receive } = rig()
+    const { seen, receive, owners } = rig()
     receive(CC74)
     expect(seen).toEqual({ raw: 1, monitor: 1, thru: [CC74], cc: [74], note: [] })
+    expect(owners()).toEqual(['played: X3'])
   })
 
-  it('the Live/Perf key (profile gate "consumed"): nobody sees it, not even the Monitor', () => {
-    const { svc, seen, receive } = rig()
+  it('the Live/Perf key (profile gate "consumed"): only the Monitor sees it, with its owner', () => {
+    const { svc, seen, receive, owners } = rig()
     svc.setProfileGate((): Gate => 'consumed')
     receive(CC74)
-    expect(seen).toEqual({ raw: 0, monitor: 0, thru: [], cc: [], note: [] })
+    expect(seen).toEqual({ raw: 0, monitor: 1, thru: [], cc: [], note: [] })
+    expect(owners()).toEqual(['key: Live / Perf key'])
   })
 
-  it('a controller in Live mode (profile gate "drop"): nobody sees it', () => {
-    const { svc, seen, receive } = rig()
+  it('a controller in Live mode (profile gate "drop"): only the Monitor sees it, dropped', () => {
+    const { svc, seen, receive, owners } = rig()
     svc.setProfileGate((): Gate => 'drop')
     receive(CC74)
-    expect(seen).toEqual({ raw: 0, monitor: 0, thru: [], cc: [], note: [] })
+    expect(seen).toEqual({ raw: 0, monitor: 1, thru: [], cc: [], note: [] })
+    expect(owners()).toEqual(['live: Live mode (dropped)'])
   })
 
-  it('Rig mode (exclusive input): only the Rig sees it', () => {
-    const { svc, seen, receive } = rig()
+  it('Rig mode (exclusive input): only the Rig (and the Monitor) sees it', () => {
+    const { svc, seen, receive, owners } = rig()
     let rigSaw = 0
     svc.setExclusiveInput(() => { rigSaw++; return true })
     receive(CC74)
     expect(rigSaw).toBe(1)
-    expect(seen).toEqual({ raw: 0, monitor: 0, thru: [], cc: [], note: [] })
+    expect(seen).toEqual({ raw: 0, monitor: 1, thru: [], cc: [], note: [] })
+    expect(owners()).toEqual(['rig: Rig Controller'])
   })
 
   it('Rig before Live: a Live-dropped controller still reaches the Rig', () => {
@@ -86,10 +94,11 @@ describe('a controller CC, layer by layer (today)', () => {
   })
 
   it('the Control Map (control consumer): Monitor and raw see it, not Thru nor the listeners', () => {
-    const { svc, seen, receive } = rig()
+    const { svc, seen, receive, owners } = rig()
     svc.setControlConsumer(() => true)
     receive(CC74)
     expect(seen).toEqual({ raw: 1, monitor: 1, thru: [], cc: [], note: [] })
+    expect(owners()).toEqual(['control-map: Control Map'])
   })
 
   it('a MIDI Learn mapping (Thru exclusion): not played, the listeners still apply it', () => {
@@ -114,5 +123,16 @@ describe('a controller CC, layer by layer (today)', () => {
     svc.setIngressFilter(() => false)
     receive(CC74)
     expect(seen).toEqual({ raw: 1, monitor: 1, thru: [CC74], cc: [74], note: [] })
+  })
+
+  it('layers claim the message while it is handled; two that act = shown both (a conflict)', () => {
+    const { svc, receive, owners } = rig()
+    svc.setIngressFilter(() => { svc.claimIngress('action', 'Mixer Ch 1: Mute'); return false })
+    svc.addCCListener(() => svc.claimIngress('param', 'Mixer ch 1 volume'))
+    svc.setThruExclude(() => true)
+    receive(CC74)
+    expect(owners()).toEqual(['action: Mixer Ch 1: Mute', 'param: Mixer ch 1 volume'])
+    svc.claimIngress('param', 'outside ingress')
+    expect(owners()).toEqual(['action: Mixer Ch 1: Mute', 'param: Mixer ch 1 volume'])
   })
 })

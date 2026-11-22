@@ -109,7 +109,13 @@ export interface MidiMonitorEntry {
   type: MidiMessageType;
   data: number[];
   decoded: string;
+  /** Incoming: who took the message (core/midi/midi-service.ts claimIngress). None: nobody. */
+  owners?: MidiOwner[];
 }
+
+/** Who took an incoming message. Two of the kinds that act (not 'played') = a conflict. */
+export type MidiOwnerKind = 'key' | 'rig' | 'live' | 'echo' | 'action' | 'profile' | 'param' | 'control-map' | 'played'
+export interface MidiOwner { kind: MidiOwnerKind; label: string }
 
 /** Well-known sources of MIDI messages within the app */
 export enum MidiSource {

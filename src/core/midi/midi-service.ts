@@ -19,6 +19,7 @@ import type {
   SplitConfig,
   MidiMessageType,
   MidiMonitorEntry,
+  MidiOwnerKind,
   InputRouteFilter,
 } from '@/types/midi'
 import { cableOutChannels } from '@/types/midi';
@@ -172,6 +173,20 @@ export class MidiService {
    *  key (or its Learn), before everything; 'drop' — a Live controller in Live mode, after the
    *  exclusive input (a Rig turned on by hand still gets it). */
   private profileGate: ((event: MIDIMessageEvent) => 'consumed' | 'drop' | 'pass') | null = null;
+  /** The Monitor entry of the incoming message being handled: its owners are added to it. */
+  private ingressEntry: MidiMonitorEntry | null = null;
+
+  /**
+   * Who takes the incoming message being handled (called synchronously by the layer that
+   * acts on it: an app action, a MIDI Learn parameter, a controller profile…). Shown in the
+   * MIDI Monitor; two that act on one message are a conflict. Outside ingress: ignored.
+   */
+  claimIngress(kind: MidiOwnerKind, label: string): void {
+    const e = this.ingressEntry;
+    if (!e) return;
+    const owners = e.owners ?? (e.owners = []);
+    if (!owners.some(o => o.kind === kind && o.label === label)) owners.push({ kind, label });
+  }
   // Sources whose note-ons are dropped (the Rig Controller's Mute/Solo on the real apps).
   // Note-offs still go out, so notes already playing end.
   private mutedSources = new Set<MidiSource>();
@@ -1548,21 +1563,6 @@ export class MidiService {
     const deferMs = at != null ? at - performance.now() : 0;
     const scheduled = deferMs > 1;
 
-    // Log to monitor (skip clock to avoid flooding)
-    if (type !== 'clock') {
-      const { type: mType, decoded } = decodeOut(type, data, channel);
-      this.monitor.append({
-        id: ++this._monitorSeq,
-        timestamp: Date.now(),
-        direction: 'out',
-        device: source,
-        channel: channel + 1,
-        type: mType,
-        data: [],
-        decoded,
-      });
-    }
-
     // Collect target device IDs
     const targetDeviceIds = new Set<string>();
     const virtualTargets = new Set<string>();
@@ -1623,6 +1623,22 @@ export class MidiService {
       if (!isMatrixMatch && !isBroadcastTarget) return;
       virtualTargets.add(virtName);
     });
+
+    // Log to monitor (skip clock to avoid flooding) — only a message that goes somewhere:
+    // an app sending with nothing cabled (e.g. an LFO) filled the Monitor with sends to nobody.
+    if (type !== 'clock' && (targetDeviceIds.size > 0 || virtualTargets.size > 0)) {
+      const { type: mType, decoded } = decodeOut(type, data, channel);
+      this.monitor.append({
+        id: ++this._monitorSeq,
+        timestamp: Date.now(),
+        direction: 'out',
+        device: source,
+        channel: channel + 1,
+        type: mType,
+        data: [],
+        decoded,
+      });
+    }
 
     // Send to real MIDI outputs
     targetDeviceIds.forEach(id => {
@@ -1849,33 +1865,46 @@ export class MidiService {
     const status = event.data[0];
     const now = Date.now();
 
-    const gate = this.profileGate ? this.profileGate(event) : 'pass';
-    if (gate === 'consumed') return;
-
-    // An input taken over (setExclusiveInput): nobody else sees its messages.
-    if (this.exclusiveInput && this.exclusiveInput(event)) return;
-
-    // A controller that belongs to Ableton Live right now: SY.CORE ignores it.
-    if (gate === 'drop') return;
-
-    // Fire raw listeners
-    this.onRawListeners.forEach(l => l(event));
-
-    // Log to monitor (before ingress filter so controller-consumed msgs are visible)
-    {
-      const inputDevice = this.midiAccess?.inputs.get(inputId);
+    // Log to the Monitor first, so every message is seen with who took it (claimIngress),
+    // the ones the Live/Perf key, the Rig or Live mode take included.
+    const entry: MidiMonitorEntry = (() => {
+      const dev = this.midiAccess?.inputs.get(inputId);
       const { type: mType, channel: mCh, decoded } = decodeRaw(event.data as Uint8Array);
-      this.monitor.append({
+      return {
         id: ++this._monitorSeq,
         timestamp: now,
         direction: 'in',
-        device: inputDevice?.name ?? 'Unknown',
+        device: dev?.name ?? 'Unknown',
         channel: mCh,
         type: mType,
         data: Array.from(event.data as Uint8Array),
         decoded,
-      });
+      };
+    })();
+    this.monitor.append(entry);
+    // Restored after: a message handled inside another (a virtual port looping back) keeps
+    // the outer one's claims on the outer entry.
+    const outer = this.ingressEntry;
+    this.ingressEntry = entry;
+    try {
+      this.handleIngressOwned(event, input, inputId, status, now);
+    } finally {
+      this.ingressEntry = outer;
     }
+  }
+
+  private handleIngressOwned(event: MIDIMessageEvent, input: MIDIInput, inputId: string, status: number, now: number): void {
+    const gate = this.profileGate ? this.profileGate(event) : 'pass';
+    if (gate === 'consumed') { this.claimIngress('key', 'Live / Perf key'); return; }
+
+    // An input taken over (setExclusiveInput): nobody else sees its messages.
+    if (this.exclusiveInput && this.exclusiveInput(event)) { this.claimIngress('rig', 'Rig Controller'); return; }
+
+    // A controller that belongs to Ableton Live right now: SY.CORE ignores it.
+    if (gate === 'drop') { this.claimIngress('live', 'Live mode (dropped)'); return; }
+
+    // Fire raw listeners
+    this.onRawListeners.forEach(l => l(event));
 
     const inputDevice = this.midiAccess?.inputs.get(inputId);
     const inConfig = inputDevice ? this.routingConfig?.registrations[inputDevice.name] : null;
@@ -1970,12 +1999,12 @@ export class MidiService {
     // may have generated a note-off for the same note+channel (panic, UI, etc.)
     // and the controller's real note-off must not be mistaken for a loopback.
     // On a detected loopback input it is our own note-off coming back, though.
-    if (isEcho && (!isNoteOff || isLoopback)) return;
+    if (isEcho && (!isNoteOff || isLoopback)) { this.claimIngress('echo', 'echo of our own output (dropped)'); return; }
     const recent = this.lastSentMessages.get(inputId);
-    if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) return;
+    if (recent && recent.data === `${inputId}:${rawHash}` && now - recent.time < 50) { this.claimIngress('echo', 'repeat of our own output (dropped)'); return; }
 
     // Control Map (P3): consumed here — no Thru, no app sees it as a note.
-    if (status < 0xF0 && this.controlConsumer?.(processedData, inputDevice?.name ?? '')) return;
+    if (status < 0xF0 && this.controlConsumer?.(processedData, inputDevice?.name ?? '')) { this.claimIngress('control-map', 'Control Map'); return; }
 
     // Global Thru routing (never from the external clock source port)
     const thruBlocked = !!this.thruBlockedInput?.(inputDevice?.name ?? '');
@@ -1998,6 +2027,8 @@ export class MidiService {
       const consumed = (isCC || isNote) && !!this.thruExclude?.(
         inputDevice?.name ?? '', status & 0x0f, isCC ? 'cc' : 'note', (processedData as Uint8Array)[1]);
       if (passGlobal && !consumed) {
+        const targets = this.router.matrix.get(inputDevice?.name ?? '');
+        if (targets?.size && (isNote || isCC)) this.claimIngress('played', Array.from(targets).join(', '));
         this.router.routeMessageToOutputs(processedData as Uint8Array, inputId, now);
         this.routeMessageToVirtualOutputs(processedData as Uint8Array, inputDevice?.name || '', now);
       }

@@ -4,6 +4,8 @@ import { Signal } from 'tone'
 import { useMidiStore } from './useMidiStore'
 import { usePresetStore } from './usePresetStore'
 import { useUiStore } from './useUiStore'
+import { midiService } from '@/core/midi/midi-service'
+import { MidiSource } from '@/types/midi'
 import { FIELD_TO_CC } from '@/constants/s1-config'
 
 const PARAM_TO_CC = FIELD_TO_CC
@@ -108,6 +110,11 @@ export const useLfoStore = defineStore('lfo', () => {
     }
   }
 
+  /** The Sound Engine (MidiSource.UI) has a MIDI Flow cable: its LFOs may send MIDI. */
+  function soundEngineCabled(): boolean {
+    return midiService.getCableTargets(MidiSource.UI).length > 0
+  }
+
   function processLfo(id: string, lfo: LfoState, dt: number) {
     if (!lfo.active) return
 
@@ -165,6 +172,10 @@ export const useLfoStore = defineStore('lfo', () => {
     let finalVal = Math.round(baseValue + scaledVal)
     finalVal = Math.max(0, Math.min(127, finalVal))
 
+    // MIDI out only when the Sound Engine is cabled in MIDI Flow: an LFO restored by a sound
+    // preset otherwise sent this CC every frame to every output (broadcast) — a device's
+    // cutoff modulated by an engine that isn't in the setup.
+    if (!soundEngineCabled()) return
     if (finalVal !== lfo.lastSentValue) {
       midiStore.sendCC(cc, finalVal)
       lfo.lastSentValue = finalVal
@@ -179,6 +190,7 @@ export const useLfoStore = defineStore('lfo', () => {
       ? presetStore.lastPreset?.bVariant
       : presetStore.lastPreset?.aVariant
     const originalValue = (activeVariant as any)?.data?.[param] ?? offsetFallback
+    if (!soundEngineCabled()) return
 
     for (let i = 0; i < 3; i++) {
       midiStore.sendCC(cc, originalValue)
