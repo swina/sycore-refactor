@@ -1,11 +1,12 @@
 /**
- * control-summary.ts — what a controller does, in a few lines (the Control view). Pure.
+ * control-summary.ts — what a controller does (the Control view: its flow and detail panel). Pure.
  *
  * A preset's assigned controls grouped: controls whose label and assignment differ
  * only by a number become one link ("Mute 1–8 → Mixer Ch 1–8: Mute"). And the
  * conflicts: one button (device + channel + note / CC) assigned by two presets on.
  */
 import { learnKeyFor, type DesignerPreset, type DesignerControl } from '@/lib/designer-preset-mappings'
+import { MIDI_ACTION_GROUPS, parseViCcAction, parseViChannelAction } from '@/lib/app-midi-actions'
 
 export interface ControlLink {
   /** The controls ("Mute 1–8", "Knob 3"). */
@@ -98,3 +99,63 @@ export function presetConflicts(presets: readonly (DesignerPreset & { name?: str
   }
   return [...byKey.values()].filter(e => e.presets.length > 1)
 }
+
+// ── The Control flow: controllers → the apps / devices they drive ─────────────
+
+const ACTION_GROUP = new Map<string, string>()
+for (const [g, list] of Object.entries(MIDI_ACTION_GROUPS)) for (const a of list) ACTION_GROUP.set(a, g)
+
+const PARAM_PREFIX: [RegExp, string][] = [
+  [/^(mix_|mixer_)/, 'Audio Mixer'],
+  [/^dm_/, 'Drum Machine'],
+  [/^cp_/, 'Chord Prog'],
+  [/^(seq_|seq2_)/, 'Sequencer'],
+  [/^arp/, 'Arpeggiator'],
+  [/^(lfo|velocity_)/, 'Modulation'],
+  [/^(playlist_|transport_|global_)/, 'Transport & Performance'],
+  [/^(panel_|toggle_|open_|deck_|cockpit_)/, 'UI & Panels'],
+]
+
+/** What a control drives, as a node of the Control flow: an app, a device (by name), or a group. */
+export function targetGroupOf(a: DesignerControl['assignment'] | undefined): string | null {
+  if (!a) return null
+  const name = a.action ?? a.paramName ?? ''
+  if (!name) return null
+  const vi = parseViCcAction(name) ?? parseViChannelAction(name)
+  if (vi) return vi.instrumentName
+  const vd = /^vdp_[a-z_0-9]*:(.+?)(?::\d+)?$/.exec(name)
+  if (vd) return vd[1]
+  if (a.type === 'midi-action' && ACTION_GROUP.has(name)) return ACTION_GROUP.get(name)!
+  for (const [re, g] of PARAM_PREFIX) if (re.test(name)) return g
+  return a.type === 'app-param' ? 'Sound Engine' : 'Other'
+}
+
+export interface FlowEdge { from: string; to: string; count: number }
+
+/** The flow's edges (controller → target, how many controls) and its targets, most used first. */
+export function controlFlowGraph(entries: readonly { controller: string; controls: readonly Ctrl[] }[]): { targets: string[]; edges: FlowEdge[] } {
+  const edges = new Map<string, FlowEdge>()
+  const used = new Map<string, number>()
+  for (const { controller, controls } of entries) {
+    for (const c of controls) {
+      const to = targetGroupOf(c.assignment)
+      if (!to) continue
+      const k = `${controller}\u0000${to}`
+      const e = edges.get(k) ?? { from: controller, to, count: 0 }
+      e.count++
+      edges.set(k, e)
+      used.set(to, (used.get(to) ?? 0) + 1)
+    }
+  }
+  const targets = [...used.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t)
+  return { targets, edges: [...edges.values()] }
+}
+
+/** A control's message, for the detail panel ("Note 1 · ch 1", "CC 19 · ch 1"). */
+export function controlMessage(c: DesignerControl): string {
+  if (c.ccNumber != null) return `CC ${c.ccNumber} · ch ${c.channel ?? 1}`
+  if (c.noteNumber != null) return `Note ${c.noteNumber} · ch ${c.channel ?? 1}`
+  return 'not learned'
+}
+
+export const controlTarget = targetOf

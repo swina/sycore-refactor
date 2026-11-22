@@ -59,69 +59,120 @@
         Editing <span class="text-violet-300 font-bold">{{ set.name }}</span>, the set in force. To change another set, switch to it.
       </div>
 
-      <!-- Controllers → what they do -->
-      <div class="flex-1 overflow-y-auto custom-scrollbar p-4 flex flex-col gap-2 min-h-0">
-        <div v-if="!controllers.length" class="text-center text-[10px] font-mono text-neutral-600 py-8">
-          No controllers yet. Add one to the MIDI Flow (Routing), or give a Controller Designer preset a device.
-        </div>
+      <!-- The flow: controllers → what they drive; a controller clicked: its controls on the right -->
+      <div class="flex-1 flex min-h-0">
+        <div class="flex-1 overflow-auto custom-scrollbar p-4 min-w-0" @click.self="selected = null">
+          <div v-if="!controllers.length" class="text-center text-[10px] font-mono text-neutral-600 py-8">
+            No controllers yet. Add one to the MIDI Flow (Routing), or give a Controller Designer preset a device.
+          </div>
+          <div v-else class="relative" :style="{ width: FLOW_W + 'px', height: flowH + 'px' }" @click.self="selected = null">
+            <svg class="absolute inset-0 pointer-events-none" :width="FLOW_W" :height="flowH">
+              <g v-for="e in drawnEdges" :key="e.from + '→' + e.to">
+                <path :d="e.d" fill="none" :stroke="e.hot ? '#a78bfa' : '#4c1d95'" :stroke-width="e.w" :stroke-opacity="e.dim ? 0.25 : 0.9" />
+                <text :x="e.mx" :y="e.my - 4" text-anchor="middle" class="font-mono" font-size="9"
+                      :fill="e.hot ? '#ddd6fe' : '#7c3aed'" :fill-opacity="e.dim ? 0.3 : 1">{{ e.count }}</text>
+              </g>
+            </svg>
 
-        <div v-for="c in controllers" :key="c.name"
-             class="grid grid-cols-[220px_1fr] gap-3 rounded-lg border p-2.5"
-             :class="c.role === 'live' ? 'border-amber-800/50 bg-amber-950/10' : c.conflicts.length ? 'border-red-800/60 bg-red-950/10' : 'border-neutral-800 bg-neutral-900/40'">
-          <!-- the controller: its role, its presets in this set -->
-          <div class="flex flex-col gap-1.5 min-w-0">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <Gamepad2 class="w-3.5 h-3.5 text-sky-400 shrink-0" />
-              <span class="text-[11px] font-black text-white truncate" :title="c.name">{{ c.name }}</span>
-              <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="c.connected ? 'bg-emerald-400' : 'bg-neutral-700'" :title="c.connected ? 'Connected' : 'Not connected'" />
-            </div>
-            <div class="flex rounded border border-neutral-700 overflow-hidden w-max">
-              <button v-for="r in ROLES" :key="r.id"
-                      class="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition-colors"
-                      :class="c.role === r.id ? r.on : 'text-neutral-500 hover:text-neutral-200'"
-                      :title="r.title" @click="setControllerRole(c.name, r.id)">{{ r.label }}</button>
-            </div>
-            <div v-if="c.presets.length" class="flex flex-col gap-0.5" :class="c.role === 'live' ? 'opacity-40' : ''">
-              <label v-for="p in c.presets" :key="p.id" class="flex items-center gap-1.5 cursor-pointer text-[10px] text-neutral-300">
-                <input type="checkbox" class="w-3 h-3 accent-violet-500" :checked="enabled.includes(p.id)" @change="togglePreset(p.id)" />
-                <span class="truncate">{{ p.name }}</span>
-              </label>
-            </div>
-            <span v-else class="text-[9px] text-neutral-600">No preset for this controller</span>
-            <button class="self-start flex items-center gap-1 text-[9px] text-violet-400 hover:text-violet-200" @click="openDesigner">
-              <Pencil class="w-3 h-3" /> {{ c.presets.length ? 'Edit in Controller Designer' : 'Make a preset in Controller Designer' }}
+            <!-- controllers -->
+            <button v-for="(c, i) in controllers" :key="c.name"
+                    class="absolute flex flex-col justify-center gap-0.5 px-2.5 rounded-lg border text-left transition-colors"
+                    :style="{ left: '0px', top: nodeY(i) + 'px', width: NODE_W + 'px', height: NODE_H + 'px' }"
+                    :class="[
+                      selected === c.name ? 'ring-2 ring-violet-400' : '',
+                      c.role === 'live' ? 'border-amber-700/60 bg-amber-950/30' : c.conflicts.length ? 'border-red-700/60 bg-red-950/20' : 'border-sky-800/60 bg-sky-950/30 hover:border-sky-500/60',
+                    ]"
+                    :title="'Show its controls'" @click.stop="selected = selected === c.name ? null : c.name">
+              <span class="flex items-center gap-1.5 min-w-0">
+                <Gamepad2 class="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span class="text-[11px] font-black text-white truncate">{{ c.name }}</span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="c.connected ? 'bg-emerald-400' : 'bg-neutral-700'" :title="c.connected ? 'Connected' : 'Not connected'" />
+              </span>
+              <span class="flex items-center gap-1.5 text-[9px] font-mono">
+                <span :class="c.role === 'live' ? 'text-amber-300' : 'text-emerald-400'" class="font-black uppercase">{{ c.role === 'live' ? 'Live' : 'Perform' }}</span>
+                <span class="text-neutral-500 truncate">· {{ c.role === 'live' ? 'ignored by SY.CORE' : c.assigned + ' assigned' }}</span>
+                <AlertTriangle v-if="c.conflicts.length && c.role !== 'live'" class="w-3 h-3 text-red-400 shrink-0" />
+              </span>
             </button>
+
+            <!-- targets -->
+            <div v-for="(t, i) in graph.targets" :key="t"
+                 class="absolute flex items-center gap-1.5 px-2.5 rounded-lg border text-[11px] font-bold"
+                 :style="{ left: TARGET_X + 'px', top: targetY(i) + 'px', width: NODE_W + 'px', height: TARGET_H + 'px' }"
+                 :class="hotTargets.has(t) ? 'border-violet-400/70 bg-violet-950/50 text-violet-100' : 'border-neutral-700 bg-neutral-900/70 text-neutral-300'">
+              <component :is="targetIcon(t)" class="w-3.5 h-3.5 text-violet-400 shrink-0" />
+              <span class="truncate" :title="t">{{ t }}</span>
+            </div>
           </div>
 
-          <!-- what it does -->
-          <div class="flex flex-col gap-1 min-w-0">
-            <div v-if="c.role === 'live'" class="text-[10px] text-amber-300/80 leading-snug">
+          <div v-if="noDevicePresets.length" class="mt-4 rounded-lg border border-amber-800/50 bg-amber-950/10 p-2.5 text-[10px] text-amber-200/90 flex items-start gap-2 max-w-[640px]">
+            <AlertTriangle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              {{ noDevicePresets.map(p => p.name).join(', ') }}: no device. A preset needs its controller's device
+              (Controller Designer → Preset Settings → Device) to work and to light its LEDs.
+            </span>
+          </div>
+        </div>
+
+        <!-- the controller clicked: role, presets in this set, its controls -->
+        <aside v-if="sel" class="w-[340px] shrink-0 border-l border-neutral-800 bg-neutral-950/80 flex flex-col min-h-0">
+          <div class="flex items-center gap-1.5 px-3 py-2 border-b border-neutral-800">
+            <Gamepad2 class="w-4 h-4 text-sky-400 shrink-0" />
+            <span class="text-[12px] font-black text-white truncate flex-1" :title="sel.name">{{ sel.name }}</span>
+            <button class="text-neutral-500 hover:text-white" title="Close" @click="selected = null"><X class="w-3.5 h-3.5" /></button>
+          </div>
+          <div class="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-3 min-h-0">
+            <div class="flex items-center gap-2">
+              <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Role in {{ set.name }}</span>
+              <div class="flex rounded border border-neutral-700 overflow-hidden">
+                <button v-for="r in ROLES" :key="r.id"
+                        class="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition-colors"
+                        :class="sel.role === r.id ? r.on : 'text-neutral-500 hover:text-neutral-200'"
+                        :title="r.title" @click="setControllerRole(sel.name, r.id)">{{ r.label }}</button>
+              </div>
+            </div>
+
+            <div v-if="sel.role === 'live'" class="text-[10px] text-amber-300/80 leading-snug">
               Ableton Live's control surface in this set: SY.CORE ignores it and sends it no LEDs.
             </div>
-            <template v-else>
-              <div v-for="(l, i) in c.links" :key="i" class="flex items-center gap-2 text-[10px] min-w-0">
-                <span class="shrink-0 w-32 truncate font-mono text-neutral-300" :title="l.from">{{ l.from }}</span>
-                <ArrowRight class="w-3 h-3 text-violet-500 shrink-0" />
-                <span class="truncate text-violet-200" :title="l.to">{{ l.to }}</span>
-              </div>
-              <div v-if="!c.links.length" class="text-[10px] text-neutral-600">
-                {{ c.presets.some(p => enabled.includes(p.id)) ? 'Nothing assigned yet' : 'No preset on: its controls are played (MIDI Flow cables) and do nothing else' }}
-              </div>
-              <div v-for="(k, i) in c.conflicts" :key="'c' + i" class="flex items-center gap-1.5 text-[10px] text-red-300">
-                <AlertTriangle class="w-3 h-3 shrink-0" />
-                <span>{{ k.button }} is assigned by {{ k.presets.join(' and ') }}: turn one off, or change one of them.</span>
-              </div>
-            </template>
-          </div>
-        </div>
 
-        <div v-if="noDevicePresets.length" class="rounded-lg border border-amber-800/50 bg-amber-950/10 p-2.5 text-[10px] text-amber-200/90 flex items-start gap-2">
-          <AlertTriangle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <span>
-            {{ noDevicePresets.map(p => p.name).join(', ') }}: no device. A preset needs its controller's device
-            (Controller Designer → Preset Settings → Device) to work and to light its LEDs.
-          </span>
-        </div>
+            <div class="flex flex-col gap-1" :class="sel.role === 'live' ? 'opacity-40' : ''">
+              <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Presets in this set</span>
+              <label v-for="p in sel.presets" :key="p.id" class="flex items-center gap-1.5 cursor-pointer text-[10px] text-neutral-300">
+                <input type="checkbox" class="w-3 h-3 accent-violet-500" :checked="enabled.includes(p.id)" @change="togglePreset(p.id)" />
+                <span class="truncate">{{ p.name }}</span>
+                <span class="text-neutral-600 font-mono text-[9px]">{{ (p.controls ?? []).filter(c => c.assignment).length }}/{{ (p.controls ?? []).length }}</span>
+              </label>
+              <span v-if="!sel.presets.length" class="text-[9px] text-neutral-600">No preset for this controller</span>
+            </div>
+
+            <div v-for="(k, i) in sel.conflicts" :key="'c' + i" class="flex items-start gap-1.5 text-[10px] text-red-300">
+              <AlertTriangle class="w-3 h-3 shrink-0 mt-0.5" />
+              <span>{{ k.button }} is assigned by {{ k.presets.join(' and ') }}: turn one off, or change one of them.</span>
+            </div>
+
+            <div v-if="sel.role !== 'live'" class="flex flex-col gap-1">
+              <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Controls</span>
+              <div v-for="r in sel.rows" :key="r.key"
+                   class="grid grid-cols-[1fr_auto] gap-x-2 px-2 py-1 rounded border border-neutral-800 bg-neutral-900/50 text-[10px]">
+                <span class="flex items-center gap-1 min-w-0">
+                  <span class="font-bold text-neutral-200 truncate">{{ r.label }}</span>
+                  <span v-if="r.led" class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="LED feedback" />
+                </span>
+                <span class="font-mono text-[9px] text-neutral-500 text-right">{{ r.msg }}</span>
+                <span class="col-span-2 flex items-center gap-1 min-w-0" :class="r.to ? 'text-violet-200' : 'text-neutral-600'">
+                  <ArrowRight class="w-3 h-3 shrink-0" :class="r.to ? 'text-violet-500' : 'text-neutral-700'" />
+                  <span class="truncate" :title="r.to || 'Not assigned: played (MIDI Flow cables)'">{{ r.to || 'not assigned' }}</span>
+                </span>
+              </div>
+              <span v-if="!sel.rows.length" class="text-[9px] text-neutral-600">No preset on: its controls are played (MIDI Flow cables) and do nothing else.</span>
+            </div>
+
+            <button class="self-start flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-200" @click="openDesigner">
+              <Pencil class="w-3 h-3" /> {{ sel.presets.length ? 'Edit in Controller Designer' : 'Make a preset in Controller Designer' }}
+            </button>
+          </div>
+        </aside>
       </div>
     </template>
   </div>
@@ -129,7 +180,7 @@
 
 <script setup>
 import { ref, computed, nextTick, watch } from 'vue'
-import { Plus, Gamepad2, Pencil, ArrowRight, AlertTriangle } from 'lucide-vue-next'
+import { Plus, Gamepad2, Pencil, ArrowRight, AlertTriangle, X, SlidersHorizontal, Drum, Music, ListMusic, Waves, LayoutGrid, Play, Radio, Cpu } from 'lucide-vue-next'
 import {
   currentProject, currentSet, switchSet, newControlSet, renameControlSet, removeControlSet,
   setKeyPair, setControllerRole,
@@ -137,7 +188,7 @@ import {
 import { liveDevicesOf, roleOf } from '@/lib/projects'
 import { profileSettings, learningProfileKey, updateProfile } from '@/core/midi/controller-profiles'
 import { designerPresets } from '@/core/midi/designer-presets'
-import { summarizeControls, presetConflicts } from '@/lib/control-summary'
+import { presetConflicts, controlFlowGraph, controlMessage, controlTarget } from '@/lib/control-summary'
 import { toggleLabel, toggleShortLabel } from '@/lib/rig-toggle'
 import { AUTOSAVE_CONTROLLER_ID } from '@/lib/midi-controller-presets'
 import { useUiStore } from '@/stores/useUiStore'
@@ -172,16 +223,56 @@ const controllers = computed(() => {
   return [...names.values()].map(name => {
     const own = presets.value.filter(p => norm(p.assignedDevice) === norm(name))
     const controls = own.filter(p => enabled.value.includes(p.id)).flatMap(p => p.controls ?? [])
+    const rows = own.filter(p => enabled.value.includes(p.id)).flatMap(p => (p.controls ?? []).map(c => ({
+      key: `${p.id}:${c.id}`,
+      label: (c.label ?? '').trim() || controlMessage(c),
+      msg: controlMessage(c),
+      to: controlTarget(c),
+      led: c.appMapping?.feedbackOn !== undefined,
+    })))
     return {
       name,
       connected: connectedNames.value.has(norm(name)),
       role: roleOf(set.value, name),
       presets: own,
-      links: summarizeControls(controls),
+      controls,
+      rows: rows.sort((a, b) => (a.to ? 0 : 1) - (b.to ? 0 : 1)),
+      assigned: controls.filter(c => c.assignment).length,
       conflicts: conflicts.filter(k => norm(k.device) === norm(name)),
     }
   })
 })
+
+// ── the flow's layout: controllers on the left, what they drive on the right ──
+const FLOW_W = 620, NODE_W = 210, NODE_H = 52, TARGET_H = 36, GAP = 14, TARGET_X = FLOW_W - NODE_W
+const nodeY = i => i * (NODE_H + GAP)
+const targetY = i => i * (TARGET_H + GAP)
+const selected = ref(null)
+const sel = computed(() => controllers.value.find(c => c.name === selected.value) ?? null)
+const graph = computed(() => controlFlowGraph(controllers.value.filter(c => c.role !== 'live').map(c => ({ controller: c.name, controls: c.controls }))))
+const flowH = computed(() => Math.max(nodeY(controllers.value.length) - GAP, targetY(graph.value.targets.length) - GAP, NODE_H))
+const hotTargets = computed(() => new Set(selected.value ? graph.value.edges.filter(e => e.from === selected.value).map(e => e.to) : []))
+const drawnEdges = computed(() => {
+  const ci = new Map(controllers.value.map((c, i) => [c.name, i]))
+  const ti = new Map(graph.value.targets.map((t, i) => [t, i]))
+  return graph.value.edges.map(e => {
+    const x1 = NODE_W, y1 = nodeY(ci.get(e.from)) + NODE_H / 2
+    const x2 = TARGET_X, y2 = targetY(ti.get(e.to)) + TARGET_H / 2
+    const dx = (x2 - x1) / 2
+    const hot = selected.value === e.from
+    return {
+      ...e, hot, dim: !!selected.value && !hot,
+      w: Math.min(4, 1 + Math.log2(e.count)),
+      d: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`,
+      mx: (x1 + x2) / 2, my: (y1 + y2) / 2,
+    }
+  })
+})
+const TARGET_ICONS = {
+  'Audio Mixer': SlidersHorizontal, 'Drum Machine': Drum, 'Chord Prog': Music, 'Sequencer': ListMusic,
+  'Arpeggiator': Waves, 'Modulation': Waves, 'UI & Panels': LayoutGrid, 'Transport & Performance': Play, 'Sound Engine': Radio,
+}
+const targetIcon = t => TARGET_ICONS[t] ?? Cpu
 
 const noDevicePresets = computed(() => presets.value.filter(p => !p.assignedDevice && (p.controls?.length ?? 0) > 0))
 
