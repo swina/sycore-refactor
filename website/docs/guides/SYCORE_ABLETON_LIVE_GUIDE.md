@@ -209,6 +209,10 @@ Each track has a **Trigger sync** in its *Track options*, equivalent to Live's l
 
 Sync points are on **Live's song grid**: a drum pattern launched on beat 2 with *1 beat* keeps beat 2 as its own start, exactly as a clip launched with 1-beat quantization. On **SY.CORE's own clock** (no Live) they are on SY.CORE's bar grid while its transport runs: a Drum pad on *Bar* waits for the next bar line there too. On the Launchpad, the top **Sync** button cycles the focused track's Trigger sync.
 
+### Fades
+
+In Track options, **Fades** gives the master and each lane an **In** (from the Play) and an **Out** (ending on the Rig's Stop, at the end of the next bar), of ½, 1, 2 or 4 bars (Off = none). A lane fades through its Intensity: CC 7 to its devices, or the velocity of its new notes, as its Intensity mode. The master fades the Global intensity and the audio mixer's master. After the Stop everything is back to full.
+
 ### With Live stopped: arming
 
 While SY.CORE follows Live and Live is **stopped**:

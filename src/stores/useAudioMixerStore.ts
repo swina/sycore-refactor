@@ -85,6 +85,8 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
   const drumsVol      = ref(loadFloat('S1_MIX_DRUMS',       0.85))
   const drumsLevelVol = ref(loadFloat('S1_MIX_DRUMS_LEVEL', 0.85))
   const masterVol     = ref(loadFloat('S1_MIX_MASTER',      1.0))
+  /** The Rig's master Fade In / Out (0–1, not saved): multiplies the master volume while it runs. */
+  const masterFade    = ref(1)
 
   const backingMuted    = ref(false)
   const tracksMuted     = ref(false)
@@ -112,7 +114,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
 
   function effective(ch: number, id: MixerChannelId, ownMuted: boolean): number {
     const muted = isEffectivelyMuted(id, ownMuted)
-    return muted ? 0 : Math.min(1, ch * masterVol.value)
+    return muted ? 0 : Math.min(1, ch * masterVol.value * masterFade.value)
   }
 
   const effectiveDrumsLevel = computed(() => effective(drumsLevelVol.value, 'drumsLevel', drumsLevelMuted.value))
@@ -155,6 +157,14 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     masterVol.value = v
     _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM(); _dispatchDrums()
     _dispatchSampler(); _dispatchLiveperf()
+  }
+  /** The master Fade (Rig): the audio apps' volume follows it, the saved master volume stays. */
+  function setMasterFade(f: number) {
+    const v = Math.max(0, Math.min(1, f))
+    if (v === masterFade.value) return
+    masterFade.value = v
+    _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM(); _dispatchDrums()
+    _dispatchSampler(); _dispatchLiveperf(); _dispatchBassline()
   }
 
   function toggleBackingMute()    { backingMuted.value    = !backingMuted.value;    _dispatchBacking() }
@@ -417,7 +427,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     channelSlots,
     assignChannelSlot,
     clearChannelSlot,
-    backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, samplerVol, liveperfVol, basslineVol, masterVol,
+    backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, samplerVol, liveperfVol, basslineVol, masterVol, masterFade, setMasterFade,
     backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted, drumsLevelMuted, samplerMuted, liveperfMuted, basslineMuted,
     effectiveDrumsLevel,
     setBackingVol, setTracksVol, setLooperVol, setLMVol, setDrumsVol, setDrumsLevelVol, setSamplerVol, setLiveperfVol, setBasslineVol, setMasterVol,

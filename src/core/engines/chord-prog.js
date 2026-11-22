@@ -37,6 +37,7 @@ import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecid
 import { externalGrid } from '@/core/midi/external-grid'
 import { stopGate } from '@/core/midi/stop-gate'
 import { intGrid } from '@/core/midi/int-grid'
+import { linkClient } from '@/stores/useLinkStore'
 import { chordAfter, latchIndex } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
@@ -1124,6 +1125,18 @@ function createChordProgEngine() {
     store.isPlaying = false
   }
   const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
+  // A slot's own tempo (store.slotBpm): set when that slot comes in, playing — SY.CORE's, or Live's
+  // over SY.CORE Link; following a plain MIDI clock the master owns the tempo.
+  watch(() => store.playingSlotIndex, idx => {
+    if (idx == null || !store.isPlaying) return
+    const bpm = Number(store.slotBpm?.[idx])
+    if (!(bpm >= 20 && bpm <= 300)) return
+    if (clockStore.source !== 'internal' && !clockStore.fallbackToInternal) {
+      if (clockStore.isLink) linkClient.sendTempo(bpm)
+      return
+    }
+    if (Math.abs((midiStore.currentBpm ?? 0) - bpm) > 0.05) midiStore.setGlobalBpm(bpm)
+  })
   // The Rig's Mute (Shift + the Chord row): the chord sounding ends now, not at its note-off.
   const _onCpVoicesCut = () => { _cpCutVoicesAt(performance.now() + 1) }
   // Rig Controller GEN (LIVE): a new progression into the active slot, played from its next chord.

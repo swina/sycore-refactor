@@ -763,6 +763,15 @@ function velBarColor(v) {
           <div class="w-px h-4 bg-neutral-700 mx-1" />
         </div>
 
+        <!-- The slot's own tempo (optional): set when it comes in -->
+        <label class="flex items-center gap-1 text-[12px] font-mono" :title="`Slot ${String.fromCharCode(65 + store.activeSlotIndex)}: its tempo, set when it comes in (a switch, the chain, a start). Empty: the tempo stays`">
+          <span class="text-neutral-500">BPM</span>
+          <input type="number" min="20" max="300" step="0.1" placeholder="—"
+                 :value="store.slotBpm[store.activeSlotIndex] ?? ''"
+                 @change="e => { const v = Number(e.target.value); store.slotBpm = { ...store.slotBpm, [store.activeSlotIndex]: e.target.value === '' || !(v >= 20 && v <= 300) ? null : Math.round(v * 10) / 10 } }"
+                 class="w-14 bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-purple-300 [appearance:textfield]" />
+        </label>
+
         <!-- Step count -->
         <div class="flex items-center gap-1.5 text-[12px]">
           <span class="text-neutral-500 font-mono">Steps</span>

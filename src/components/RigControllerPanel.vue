@@ -17,6 +17,8 @@ import { keyLabel, keyRoot, keyFile, progressionKeyDetail, NOTE_NAMES as KEY_NOT
 import { externalGrid } from '@/core/midi/external-grid'
 import { intGrid } from '@/core/midi/int-grid'
 import { stopGate, endOfNextBar } from '@/core/midi/stop-gate'
+import { FADE_KEYS, FADE_BARS, defaultFades, parseFades, planFadeIn, planFadeOut, rampAt, faded, parseChFades, planChIn, planChOut, chRampAt, chKey } from '@/lib/rig-fades'
+import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { audioTimeToPerfMs } from '@/lib/audio-clock'
 import { rigDensity, DENSITY_APPS } from '@/lib/rig-density'
 import { rigSlotParam, RIG_ACTION_APPS, rigLedState, ledPaletteFor, parseRigAction } from '@/lib/rig-actions'
@@ -328,9 +330,155 @@ function setIntensityMode(id, mode) {
   saveIntensityModes({ ...intensityModes })
 }
 const intensityOpts = () => ({ bassChannel: drumStore.basslineMidiChannel })
+
+// ── Fade In (global Start) / Fade Out (global Stop), in bars (lib/rig-fades.ts) ──
+// A factor on each lane's Intensity (CC 7 or velocity, as its mode) and on the Global one (master),
+// plus the audio mixer's master. The Stop comes at the end of the next bar: the fade ends on it.
+const mixer = useAudioMixerStore()
+const LS_FADES = 'SYCORE_RIG_FADES'
+const fadeSettings = reactive((() => { try { return parseFades(JSON.parse(localStorage.getItem(LS_FADES) ?? 'null')) } catch { return defaultFades() } })())
+watch(fadeSettings, v => { try { localStorage.setItem(LS_FADES, JSON.stringify(v)) } catch {} }, { deep: true })
+const fade = reactive(Object.fromEntries(FADE_KEYS.map(k => [k, 1])))
+let fadeRamps = []
+let fadeTimer = null
+function setFade(k, v) {
+  fade[k] = v
+  if (k === 'master') mixer.setMasterFade(v)
+}
+function runFades() {
+  const now = performance.now()
+  for (const r of fadeRamps) setFade(r.key, rampAt(r, now))
+  fadeRamps = fadeRamps.filter(r => now < r.t1)
+  if (!fadeRamps.length) { clearInterval(fadeTimer); fadeTimer = null }
+}
+function startRamps(ramps) {
+  const keys = new Set(ramps.map(r => r.key))
+  fadeRamps = [...fadeRamps.filter(r => !keys.has(r.key)), ...ramps]
+  runFades()
+  if (fadeRamps.length && !fadeTimer) fadeTimer = setInterval(runFades, 40)
+}
+const barMsNow = () => 240000 / (s.clock.bpm > 0 ? s.clock.bpm : 120)
+/** The lane-level fades in use: Master (the audio mixer) and Drum (its own sounds); the MIDI lanes fade per channel. */
+const laneFadeSettings = () => Object.fromEntries(FADE_KEYS.map(k => [k, k === 'master' || k === 'drum' ? fadeSettings[k] : { in: 0, out: 0, max: 127 }]))
+function fadeIn() {
+  chFadeIn()
+  const { ramps, full } = planFadeIn(laneFadeSettings(), performance.now(), barMsNow())
+  if (ramps.length) s.display = `Fade In: ${ramps.map(r => `${r.key === 'master' ? 'Master' : s.apps.find(a => a.id === r.key)?.label ?? r.key} → ${Math.round(r.to * 127)}`).join(', ')}`
+  for (const { key, level } of full) { fadeRamps = fadeRamps.filter(r => r.key !== key); setFade(key, level) }
+  startRamps(ramps)
+}
+function fadeOut(stopAt) {
+  const b = nextBarLine(performance.now())
+  startRamps(planFadeOut(laneFadeSettings(), performance.now(), stopAt, b?.barMs ?? barMsNow(), { ...fade }))
+  chFadeOut(stopAt, b?.barMs ?? barMsNow())
+}
+
+// ── Per MIDI channel: each device + channel a lane reaches (cables, Multi-CH out), CC 7 straight to it ──
+const fadesOpen = ref(false)
+const LS_CH_FADES = 'SYCORE_RIG_CH_FADES'
+const chFadeSettings = reactive((() => { try { return parseChFades(JSON.parse(localStorage.getItem(LS_CH_FADES) ?? 'null')) } catch { return {} } })())
+watch(chFadeSettings, v => { try { localStorage.setItem(LS_CH_FADES, JSON.stringify(v)) } catch {} }, { deep: true })
+const chValue = reactive({}) // key → the CC 7 sent last
+let chRamps = []
+let chTimer = null
+const FADE_LANES = ['drum', 'chord', 'seq', 'bass', 'arp']
+/** The lanes' MIDI channels: { id, label, rows: [{ key, device, ch }] } (the Arp on the Arpeggiator: none). */
+const fadeLanes = computed(() => {
+  void JSON.stringify(midiStore.routingMatrix); void JSON.stringify(midiStore.routingConfig?.registrations ?? {})
+  return FADE_LANES.filter(id => isLiveRow(id) && !(id === 'arp' && !rowLane('arp'))).map(id => {
+    const src = liveAppSource(id)
+    const exact = rowLane(id) ? laneCh(id) >= 1 : id === 'bass'
+    const ch0 = Math.max(0, appChannel(id) ?? 0)
+    const rows = []
+    for (const device of midiService.getCableTargets(src)) {
+      for (const ch of midiService.appChannelsOn(src, device, ch0, exact)) {
+        const key = chKey(device, ch)
+        if (!rows.some(r => r.key === key)) rows.push({ key, device, ch })
+      }
+    }
+    return { id, label: s.apps.find(a => a.id === id)?.label ?? id, rows }
+  })
+})
+const allChKeys = () => fadeLanes.value.flatMap(l => l.rows.map(r => r.key))
+const NO_CH_FADE = Object.freeze({ in: 0, out: 0, max: 127 })
+/** A channel's fade (made when the modal shows it: not during the render). */
+const chFadeOf = key => chFadeSettings[key] ?? NO_CH_FADE
+// (the lanes are read only while the modal is open: appChannel & co. are set up further below)
+watch(() => fadesOpen.value && fadeLanes.value, lanes => {
+  if (!lanes) return
+  for (const l of lanes) for (const r of l.rows) if (!chFadeSettings[r.key]) chFadeSettings[r.key] = { in: 0, out: 0, max: 127 }
+})
+function sendCh(key, v) {
+  if (chValue[key] === v) return
+  chValue[key] = v
+  const i = key.lastIndexOf('|')
+  midiService.sendRawToDeviceByName(key.slice(0, i), [0xB0 | (Number(key.slice(i + 1)) & 0x0f), 7, v])
+}
+function runChRamps() {
+  const now = performance.now()
+  for (const r of chRamps) sendCh(r.key, chRampAt(r, now))
+  chRamps = chRamps.filter(r => now < r.t1)
+  if (!chRamps.length) { clearInterval(chTimer); chTimer = null }
+}
+function startChRamps(ramps) {
+  const keys = new Set(ramps.map(r => r.key))
+  chRamps = [...chRamps.filter(r => !keys.has(r.key)), ...ramps]
+  runChRamps()
+  if (chRamps.length && !chTimer) chTimer = setInterval(runChRamps, 40)
+}
+function chFadeIn() {
+  const { ramps, set } = planChIn(chFadeSettings, allChKeys(), performance.now(), barMsNow())
+  for (const x of set) { chRamps = chRamps.filter(r => r.key !== x.key); sendCh(x.key, x.value) }
+  // a channel left at 0 (Reset all volumes) without a Fade In: back to its Max, not silent
+  const ramped = new Set([...ramps.map(r => r.key), ...set.map(x => x.key)])
+  for (const k of allChKeys()) if (!ramped.has(k) && chValue[k] === 0) sendCh(k, chFadeSettings[k]?.max ?? 127)
+  startChRamps(ramps)
+}
+/**
+ * At the Play press (before a count-in): what will fade in is put at 0 now, so the start comes from
+ * silence — the fade began only when the clock was seen running, after the first notes / audio.
+ */
+function primeFades() {
+  for (const k of allChKeys()) { const f = chFadeSettings[k]; if (f?.in > 0) { chRamps = chRamps.filter(r => r.key !== k); sendCh(k, 0) } }
+  for (const k of ['master', 'drum']) if (fadeSettings[k].in > 0) { fadeRamps = fadeRamps.filter(r => r.key !== k); setFade(k, 0) }
+}
+/** RESET ALL VOLUMES: every lane channel's CC 7 to 0, the master / Drum to 0 — the state a Fade
+ *  Out leaves, so the first Play fades in from silence (not from the levels the devices had). */
+function resetAllVolumes() {
+  chRamps = []; clearInterval(chTimer); chTimer = null
+  for (const k of allChKeys()) { delete chValue[k]; sendCh(k, 0) }
+  fadeRamps = []; clearInterval(fadeTimer); fadeTimer = null
+  setFade('master', 0); setFade('drum', 0)
+  s.display = 'All volumes at 0: the Play fades them in (a channel without a Fade In comes back to its Max)'
+}
+function chFadeOut(stopAt, barMs) {
+  startChRamps(planChOut(chFadeSettings, allChKeys(), performance.now(), stopAt, barMs, { ...chValue }))
+}
+onUnmounted(() => { clearInterval(chTimer); chTimer = null })
+function resetFades() {
+  fadeRamps = []
+  clearInterval(fadeTimer); fadeTimer = null
+  for (const k of FADE_KEYS) setFade(k, 1)
+}
+// The global Start: Fade In (from where the Fade Out left it: 0). The Stop leaves the levels where
+// the Fade Out took them — back to full, a pad's long release jumped (a glitch on some presets).
+watch(() => s.clock.running, (run, was) => { if (run && !was) fadeIn() })
+onUnmounted(() => mixer.setMasterFade(1))
+/** The apps / Global intensity with their fades (what CC 7 and velocity send). */
+// (The MIDI lanes fade per channel — their Intensity and the Global one are not faded here.)
+const fadedApps = () => s.apps
+/** The row of a MidiSource (the first one sending with it). */
+const appOfSource = src => s.apps.find(a => isLiveRow(a.id) && liveAppSource(a.id) === src)?.id ?? ''
+const fadedGlobal = () => s.globalIntensity
 watch(() => {
   if (!live.value) return '{"sources":{},"cables":[],"parts":{}}'
-  return JSON.stringify(rigVelocityScales(s.apps, s.globalIntensity, muteScopes, intensityModes, intensityOpts()))
+  const sc = effectiveScopes()
+  const v = rigVelocityScales(fadedApps(), fadedGlobal(), sc, intensityModes, intensityOpts())
+  // A fade also scales the velocity of the lanes whose Intensity is CC 7: the Drum Machine's own
+  // sounds (and any device that ignores CC 7) fade too.
+  // the Drum row's fade: the Drum Machine's own sounds (their level)
+  if (fade.drum < 1) v.parts.drum = (v.parts.drum ?? 1) * fade.drum
+  return JSON.stringify(v)
 }, json => {
   const v = JSON.parse(json)
   rigParts.drumVelocity = v.parts.drum ?? 1
@@ -377,7 +525,7 @@ function flushCc7() {
     cc7Sent.delete(key)
   }
 }
-watch(() => (live.value ? JSON.stringify(rigCc7(s.apps, s.globalIntensity, intensityModes, muteScopes, intensityOpts())) : '[]'), json => {
+watch(() => (live.value ? JSON.stringify(rigCc7(fadedApps(), fadedGlobal(), intensityModes, effectiveScopes(), intensityOpts())) : '[]'), json => {
   cc7Pending = JSON.parse(json)
   if (!cc7Timer) cc7Timer = uiTimeout(flushCc7, 20) // a knob turned with Live in front: not 1 s late
 })
@@ -523,6 +671,7 @@ function stopAtBarEnd(stop) {
   const at = endOfNextBar(now, nextBarLine)
   if (at == null) { stop(); return }
   stopGate.set(at)
+  fadeOut(at) // Fade Out: ends on that bar line
   window.dispatchEvent(new CustomEvent('dm-end-fill')) // +Fill: the Drum Machine's fill on the last bar
   s.display = 'Stop at the end of the next bar — press again: now'
   barStop = {
@@ -542,6 +691,7 @@ onUnmounted(() => { offStopGateGrid(); clearBarStop() })
 // `go` (Live's Play over SY.CORE Link, or the simulated clock). Pressed again while counting: off.
 function countedPlay(go) {
   if (cancelCountIn()) { s.display = 'Count-in cancelled'; return }
+  primeFades()
   if (!startCountIn(syncStore.countInBars, s.clock.bpm, go)) go()
 }
 function togglePlay() {
@@ -558,7 +708,7 @@ function togglePlay() {
       if (on) { stopArm = null; clearBarStop(); countedPlay(send) } else stopAtBarEnd(send)
       return
     }
-    if (s.clock.running) stopAtBarEnd(() => { const arm = stopArm; stopAll(); if (arm) armPlaying(arm); stopArm = null; clearBarStop() }); else { clearBarStop(); playAll() }
+    if (s.clock.running) stopAtBarEnd(() => { const arm = stopArm; stopAll(); if (arm) armPlaying(arm); stopArm = null; clearBarStop() }); else { clearBarStop(); primeFades(); playAll() }
     return
   }
   if (s.clock.running) { stopClock(s); restartTimer() } else countedPlay(() => { startClock(s); restartTimer() })
@@ -713,8 +863,9 @@ const rigWait = reactive({}) // appId → { slot, timer, at }
 // for a lane's start — a switch or a stop of a lane playing comes at the end of its slot.
 const LS_SYNC = 'SYCORE_RIG_SYNC'
 const syncSettings = reactive((() => {
+  // (Start only is gone: a lane's start belongs to the session / song, later)
   const d = { scope: 'lane', global: '4', startOnly: false }
-  try { return { ...d, ...JSON.parse(localStorage.getItem(LS_SYNC) ?? '{}') } } catch { return d }
+  try { return { ...d, ...JSON.parse(localStorage.getItem(LS_SYNC) ?? '{}'), startOnly: false } } catch { return d }
 })())
 watch(syncSettings, v => { try { localStorage.setItem(LS_SYNC, JSON.stringify(v)) } catch {} }, { deep: true })
 const trigOf = a => (syncSettings.scope === 'global' ? syncSettings.global : a.opts.triggerSync)
@@ -1805,14 +1956,14 @@ const syncButton = computed(() => {
   const global = syncSettings.scope === 'global'
   const v = global ? syncSettings.global : focused.value.opts.triggerSync
   return {
-    text: `${global ? 'All' : focused.value.label} ${SYNC_SHORT[v] ?? v}${syncSettings.startOnly ? ' · start' : ''}`,
+    text: `${global ? 'All' : focused.value.label} ${SYNC_SHORT[v] ?? v}${syncSettings.startOnly ? ' ⇥' : ''}`,
     title: `Trigger sync of ${global ? 'every lane (Global)' : focused.value.label}: ${TRIGGER_SYNC_OPTIONS.find(o => o.value === v)?.label ?? v}${syncSettings.startOnly ? ' · start only (a switch / stop at the end of the slot)' : ''} — click to cycle`,
   }
 })
 // The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
 // (Performance), teleported there while it is open.
 provide(RIG_CONTROLS_CTX, {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, syncButton, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, syncButton, fadesOpen, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 })
 </script>
 
@@ -2024,10 +2175,11 @@ provide(RIG_CONTROLS_CTX, {
                       class="bg-black/40 border border-white/10 rounded px-1.5 py-0.5 text-white text-[10px]">
                 <option v-for="o in TRIGGER_SYNC_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
               </select>
-              <label class="flex items-center gap-1 cursor-pointer text-neutral-300"
-                     title="The sync is for a lane's start; a lane playing switches or stops at the end of its slot (Chord Prog: its progression; Sequencer: its pattern; Drum: its bar)">
-                <input type="checkbox" class="w-3 h-3 accent-amber-500" v-model="syncSettings.startOnly" /> Start only (switch / stop at the end of the slot)
-              </label>
+
+            </div>
+            <div class="mb-2 pb-2 border-b border-white/5 text-[10px] flex items-center gap-2">
+              <span class="text-neutral-400">Fades</span>
+              <button class="px-2 py-0.5 rounded border border-amber-500/40 text-amber-200 text-[9px] font-black uppercase tracking-wider hover:bg-amber-500/15" @click="fadesOpen = true">Fade In / Fade Out…</button>
             </div>
             <div class="grid grid-cols-2 gap-x-3 gap-y-2">
               <label v-for="g in OPTION_GROUPS" :key="g.key" class="block">
@@ -2090,8 +2242,7 @@ provide(RIG_CONTROLS_CTX, {
         <!-- Right column -->
         <div class="space-y-3">
           <RigControlSections only="performance" />
-
-          <RigControlSections only="safety" />
+          <!-- (no Safety box: Panic is in the footer and on the Launchpad, EXT/INT and Shift on the Launchpad) -->
         </div>
       </div>
 
@@ -2226,12 +2377,87 @@ provide(RIG_CONTROLS_CTX, {
 
     <ResizeHandles :start="onResizeStart" />
 
+    <!-- Fades (Fade In on the global Start, Fade Out ending on the global Stop): per MIDI channel -->
+    <Teleport to="body">
+      <div v-if="fadesOpen" class="fixed inset-0 z-[3000] flex items-center justify-center bg-black/60" @pointerdown.self="fadesOpen = false" data-rig-fades-modal>
+        <div class="w-[760px] max-w-[calc(100vw-32px)] max-h-[85vh] flex flex-col bg-neutral-900 border border-amber-500/30 rounded-xl shadow-2xl">
+          <div class="flex items-center gap-2 px-4 py-3 border-b border-neutral-800">
+            <span class="text-[11px] font-black uppercase tracking-widest text-amber-300">Fade In / Fade Out</span>
+            <span class="text-[9px] text-neutral-500 flex-1">In: from the Play · Out: ends on the Stop (end of the next bar) · in bars</span>
+            <button class="px-2 py-1 rounded border border-red-500/50 text-red-300 text-[9px] font-black uppercase tracking-wider hover:bg-red-500/20"
+                    title="Every channel's CC 7 and the master to 0 now: the next Play fades in from silence" @click="resetAllVolumes">Reset all volumes</button>
+            <button class="text-neutral-500 hover:text-white text-sm" @click="fadesOpen = false">✕</button>
+          </div>
+          <div class="overflow-y-auto custom-scrollbar p-4 flex flex-col gap-3 text-[10px]">
+            <div class="grid grid-cols-[1fr_9rem_1fr_9rem] gap-x-2 items-center text-[9px] text-neutral-500 px-1">
+              <span /><span>In</span><span>Max</span><span>Out</span>
+            </div>
+            <!-- Master (the audio mixer) and the Drum Machine's own sounds -->
+            <div class="flex flex-col gap-1 rounded-lg border border-neutral-800 p-2">
+              <template v-for="k in ['master', 'drum']" :key="k">
+                <div class="grid grid-cols-[1fr_9rem_1fr_9rem] gap-x-2 items-center">
+                  <span class="font-bold" :class="fade[k] < 1 ? 'text-amber-300' : 'text-neutral-200'">{{ k === 'master' ? 'Master (audio mixer)' : 'Drum (its own sounds)' }}</span>
+                  <span class="flex rounded border border-white/10 overflow-hidden">
+                    <button v-for="b in FADE_BARS" :key="b" type="button"
+                            class="flex-1 min-w-[1.6rem] py-1.5 text-[10px] font-bold"
+                            :class="fadeSettings[k].in === b ? (b === 0 ? 'bg-neutral-700 text-white' : 'bg-amber-500 text-black') : 'text-neutral-400 hover:bg-white/10'"
+                            @click="fadeSettings[k].in = b">{{ b === 0 ? 'Off' : b === 0.5 ? '½' : b }}</button>
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <input type="range" min="0" max="127" v-model.number="fadeSettings[k].max" class="flex-1 accent-amber-500" />
+                    <span class="w-6 text-right font-mono text-neutral-300">{{ fadeSettings[k].max }}</span>
+                  </span>
+                  <span class="flex rounded border border-white/10 overflow-hidden">
+                    <button v-for="b in FADE_BARS" :key="b" type="button"
+                            class="flex-1 min-w-[1.6rem] py-1.5 text-[10px] font-bold"
+                            :class="fadeSettings[k].out === b ? (b === 0 ? 'bg-neutral-700 text-white' : 'bg-amber-500 text-black') : 'text-neutral-400 hover:bg-white/10'"
+                            @click="fadeSettings[k].out = b">{{ b === 0 ? 'Off' : b === 0.5 ? '½' : b }}</button>
+                  </span>
+                </div>
+              </template>
+            </div>
+            <!-- each lane: the MIDI channels it reaches (CC 7 to each) -->
+            <div v-for="l in fadeLanes" :key="l.id" class="flex flex-col gap-1 rounded-lg border border-neutral-800 p-2">
+              <span class="text-[9px] font-black uppercase tracking-widest text-sky-300">{{ l.label }}</span>
+              <span v-if="!l.rows.length" class="text-[9px] text-neutral-600">No MIDI channel: cable it in MIDI Flow</span>
+              <div v-for="r in l.rows" :key="r.key" class="grid grid-cols-[1fr_9rem_1fr_9rem] gap-x-2 items-center">
+                <span class="min-w-0">
+                  <span class="block truncate text-neutral-200" :title="r.device">{{ r.device }} · ch {{ r.ch + 1 }}</span>
+                  <span class="block h-1 rounded bg-neutral-800 overflow-hidden mt-0.5" :title="chValue[r.key] != null ? `CC 7 now: ${chValue[r.key]}` : 'Not sent yet'">
+                    <span class="block h-full bg-amber-400" :style="{ width: ((chValue[r.key] ?? chFadeOf(r.key).max) / 127 * 100) + '%' }" />
+                  </span>
+                </span>
+                <span class="flex rounded border border-white/10 overflow-hidden">
+                    <button v-for="b in FADE_BARS" :key="b" type="button"
+                            class="flex-1 min-w-[1.6rem] py-1.5 text-[10px] font-bold"
+                            :class="chFadeOf(r.key).in === b ? (b === 0 ? 'bg-neutral-700 text-white' : 'bg-amber-500 text-black') : 'text-neutral-400 hover:bg-white/10'"
+                            @click="chFadeOf(r.key).in = b">{{ b === 0 ? 'Off' : b === 0.5 ? '½' : b }}</button>
+                  </span>
+                <span class="flex items-center gap-1.5">
+                  <input type="range" min="0" max="127" v-model.number="chFadeOf(r.key).max" class="flex-1 accent-amber-500" />
+                  <span class="w-6 text-right font-mono text-neutral-300">{{ chFadeOf(r.key).max }}</span>
+                </span>
+                <span class="flex rounded border border-white/10 overflow-hidden">
+                    <button v-for="b in FADE_BARS" :key="b" type="button"
+                            class="flex-1 min-w-[1.6rem] py-1.5 text-[10px] font-bold"
+                            :class="chFadeOf(r.key).out === b ? (b === 0 ? 'bg-neutral-700 text-white' : 'bg-amber-500 text-black') : 'text-neutral-400 hover:bg-white/10'"
+                            @click="chFadeOf(r.key).out = b">{{ b === 0 ? 'Off' : b === 0.5 ? '½' : b }}</button>
+                  </span>
+              </div>
+            </div>
+            <p class="text-[9px] text-neutral-500 leading-snug">
+              A channel with an In goes from 0 to its Max at the Play; with an Out, to 0 on the Stop, and stays there until the next Play.
+              Off on both: its CC 7 isn't touched.
+            </p>
+          </div>
+        </div>
+      </div>
+    </Teleport>
     <!-- Performance: the controls in the Rig Controls panel (lib/rig-controls-host.ts) -->
     <Teleport v-if="play && rigControlsHost" :to="rigControlsHost">
       <div class="flex flex-col gap-2 text-xs min-h-0 h-full">
         <RigControlSections only="transport" />
         <RigControlSections only="performance" />
-        <RigControlSections only="safety" />
         <!-- no Controller template here: set up in EDIT (the Rig layout), not while performing -->
         <!-- Now / Next (the Chord Prog's chords) right above Play -->
         <ChordNowDisplay stacked class="mt-auto" />

@@ -568,7 +568,8 @@ function createDrumMachineEngine() {
           })
         }
       } else if (!_silentStep) {
-        drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel)
+        // the Rig's Drum Intensity / Fade (rigParts.drumVelocity) on the internal sounds too, as their level
+        drumEngine.setPadVolume(trackIdx, track.volume * mixer.effectiveDrumsLevel * rigParts.drumVelocity)
         if (divisions <= 1) {
           drumEngine.triggerPad(trackIdx, { velocity: hitVel(step.velocity), accent: step.accent, time: hitTime, duration: stepDur })
         } else {

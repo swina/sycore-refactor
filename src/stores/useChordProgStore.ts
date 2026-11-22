@@ -222,6 +222,11 @@ export const useChordProgStore = defineStore('chordProg', () => {
   const LS_SLOT_PRESETS = 'SYCORE_CHORD_PROG_SLOT_PRESETS'
   const slotPresets = ref<Record<number, { chords?: string; seq?: string }>>((() => { try { return JSON.parse(localStorage.getItem(userKey(LS_SLOT_PRESETS)) || '{}') || {} } catch { return {} } })())
   watch(slotPresets, v => { try { localStorage.setItem(userKey(LS_SLOT_PRESETS), JSON.stringify(v)) } catch {} }, { deep: true })
+  // A tempo per slot (optional): when the slot comes in (a switch, the chain, a start), SY.CORE's tempo
+  // goes to it — or Live's, over SY.CORE Link. Null / missing: the tempo stays.
+  const LS_SLOT_BPM = 'SYCORE_CHORD_PROG_SLOT_BPM'
+  const slotBpm = ref<Record<number, number | null>>((() => { try { return JSON.parse(localStorage.getItem(userKey(LS_SLOT_BPM)) || '{}') || {} } catch { return {} } })())
+  watch(slotBpm, v => { try { localStorage.setItem(userKey(LS_SLOT_BPM), JSON.stringify(v)) } catch {} }, { deep: true })
 
   const SLOT_STORAGE_KEY = 'SYCORE_CHORD_PROG_SLOTS'
   const CHAIN_STORAGE_KEY = 'SYCORE_CHORD_PROG_CHAIN'
@@ -841,7 +846,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
     captureBuffer, trackCaptureNote, captureChord, removeCapturedChord, clearCaptureBuffer, importCaptureBuffer,
     // Slots & Chain
     SLOT_COUNT, CHAIN_MAX,
-    slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled, playingChainPos, drumFollow, slotPresets, persistSlots, persistChain,
+    slots, activeSlotIndex, playingSlotIndex, chain, chainEnabled, playingChainPos, drumFollow, slotPresets, slotBpm, persistSlots, persistChain,
     slotSave, slotLoad, copySlot, chainSet, chainInsert, chainRemove, chainClear, getChainSteps,
   }
 })
