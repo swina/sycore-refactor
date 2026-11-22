@@ -2,6 +2,7 @@ import { usePresetStore } from '@/stores/usePresetStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useLivePadStore } from '@/stores/useLivePadStore'
+import { projects, loadProject } from '@/core/projects'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useLfoStore } from '@/stores/useLfoStore'
 import { useMappingStore } from '@/stores/useMappingStore'
@@ -504,11 +505,12 @@ export function useAppActions() {
           // Generic grid pad press, can be used by other components
           window.dispatchEvent(new CustomEvent('grid-pad-press', { detail: ccVal }))
         } else if (action.startsWith('midi_config_preset_')) {
+          // Project N (the footer's list, in order): its setup and its controllers. The action id
+          // stays (the MIDI Config Presets it loaded are retired; mappings made to it keep working).
           if (ccVal > 63) {
             const slotIdx = parseInt(action.replace('midi_config_preset_', ''), 10) - 1
-            const namedPresets = midiStore.configPresets.filter(p => p.id !== '__autosave__')
-            const preset = namedPresets[slotIdx]
-            if (preset) midiStore.loadConfigPreset(preset.id)
+            const p = projects.value[slotIdx]
+            if (p) loadProject(p.id)
           }
         } else if (action === 'mixer_master_volume_cc') {
           mixerStore.setMasterVol(ccVal / 127)

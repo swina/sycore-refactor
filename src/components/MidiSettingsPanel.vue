@@ -1,41 +1,12 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Settings, Download, Upload, AlertTriangle, Save, FolderOpen, Trash2 } from 'lucide-vue-next'
+import { Settings, Download, Upload, AlertTriangle } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { userKey } from '@/lib/userKey'
 
 const midiStore    = useMidiStore()
 const mappingStore = useMappingStore()
-
-// ─── Config Presets ───────────────────────────────────────────────────────────
-
-const newPresetName   = ref('')
-const presetSaveError = ref('')
-
-const namedPresets = computed(() =>
-  midiStore.configPresets.filter(p => p.id !== '__autosave__')
-)
-
-async function saveNewPreset() {
-  const name = newPresetName.value.trim()
-  if (!name) { presetSaveError.value = 'Enter a preset name.'; return }
-  presetSaveError.value = ''
-  await midiStore.saveConfigPreset(name)
-  newPresetName.value = ''
-}
-
-async function loadSelectedPreset(id) {
-  if (!id) return
-  await midiStore.loadConfigPreset(id)
-}
-
-async function deleteActivePreset() {
-  const id = midiStore.activeConfigPresetId
-  if (!id || id === '__autosave__') return
-  if (!confirm('Delete this MIDI config preset?')) return
-  await midiStore.deleteConfigPreset(id)
-}
 
 // ─── Export / Import ──────────────────────────────────────────────────────────
 
@@ -295,59 +266,13 @@ async function resetDefaults() {
         </div>
       </section>
 
-      <!-- Config Presets -->
+      <!-- Config Presets: retired — a project holds the setup (MIDI Flow) and the controllers -->
       <section>
-        <h3 class="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-3">Config Presets</h3>
-        <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-4 flex flex-col gap-3">
-
-          <!-- Active preset display + load -->
-          <div class="flex items-center gap-2">
-            <select
-              :value="midiStore.activeConfigPresetId || ''"
-              @change="loadSelectedPreset($event.target.value)"
-              class="flex-1 bg-black border border-neutral-700 text-[11px] font-mono text-neutral-300 px-2 py-1.5 rounded focus:outline-none focus:border-emerald-500/50"
-            >
-              <option value="" class="bg-black">— No preset loaded —</option>
-              <option v-for="p in namedPresets" :key="p.id" :value="p.id" class="bg-black">{{ p.name }}</option>
-            </select>
-            <button
-              v-if="midiStore.activeConfigPresetId && midiStore.activeConfigPresetId !== '__autosave__'"
-              @click="deleteActivePreset"
-              class="p-1.5 rounded border border-rose-900/40 text-rose-500 hover:bg-rose-950/20 transition-colors"
-              title="Delete preset"
-            >
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <p v-if="midiStore.activeConfigPresetId && midiStore.activeConfigPresetId !== '__autosave__'"
-            class="text-[9px] text-emerald-500 font-mono px-0.5"
-          >
-            Active: {{ namedPresets.find(p => p.id === midiStore.activeConfigPresetId)?.name }}
-            · auto-saving
-          </p>
-
-          <!-- Save new -->
-          <div class="flex items-center gap-2 pt-1 border-t border-neutral-800">
-            <input
-              v-model="newPresetName"
-              placeholder="New preset name…"
-              @keydown.enter="saveNewPreset"
-              class="flex-1 bg-black border border-neutral-700 rounded-lg px-3 py-1.5 text-[11px] font-mono text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-emerald-500/50"
-            />
-            <button @click="saveNewPreset"
-              class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-emerald-700/40 text-emerald-500 hover:bg-emerald-900/20 transition-colors text-[10px] whitespace-nowrap"
-            >
-              <Save class="w-3 h-3" /> Save
-            </button>
-          </div>
-          <p v-if="presetSaveError" class="text-rose-400 text-[9px] font-mono px-0.5">{{ presetSaveError }}</p>
-
-          <p class="text-[9px] text-neutral-600 font-mono px-0.5">
-            Snapshots routing, split, smart latch, channel, and active mapping preset.
-            Slots 1–8 can be recalled via MIDI CC in App Actions.
-          </p>
-        </div>
+        <h3 class="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Setups</h3>
+        <p class="text-[10px] text-neutral-500 leading-snug">
+          A setup is saved in a <span class="text-violet-300 font-bold">project</span>: its MIDI Flow and its controllers.
+          Save and switch projects from the project button in the footer; the MIDI Flow's own setups from its Saved configurations.
+        </p>
       </section>
 
       <!-- Export / Import / Reset -->

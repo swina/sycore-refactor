@@ -45,14 +45,11 @@ A global "hold notes after release" mode, independent of the per-device Latch av
 | **Max Notes** | How many held notes to keep sounding at once (1–32) |
 | **Fade Time (ms)** | How long held notes ring out after latch is disabled, instead of cutting off instantly |
 
-## Config Presets
+## Setups (Config Presets retired)
 
-Snapshots of routing, keyboard split, Smart Latch, channel, and the active CC-mapping preset — not the same as a session/project save.
+Config Presets are gone. A setup is now saved in a **project**: its MIDI Flow routing and its controllers (see *Projects* in the Controller Designer guide). Save and switch projects from the project button in the footer.
 
-- Pick a preset from the dropdown to load it immediately.
-- **Save** stores the current live configuration under a new name.
-- Slots 1–8 can be recalled remotely via MIDI CC from **App Actions**.
-- The active preset auto-saves as you keep changing settings.
+- The App Actions **Project 1–8** (the former MIDI Config Preset 1–8 slots) load the footer's projects in their order. Mappings made to the old slots keep working.
 
 ## Configuration — Export / Import / Reset
 

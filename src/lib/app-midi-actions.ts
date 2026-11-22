@@ -302,14 +302,14 @@ export const APP_ACTION_LABELS: Record<AppAction, string> = {
   backing_track_pad_14: 'Backing Track Pad 14',
   backing_track_pad_15: 'Backing Track Pad 15',
   backing_track_pad_16: 'Backing Track Pad 16',
-  midi_config_preset_1: 'MIDI Config Preset 1',
-  midi_config_preset_2: 'MIDI Config Preset 2',
-  midi_config_preset_3: 'MIDI Config Preset 3',
-  midi_config_preset_4: 'MIDI Config Preset 4',
-  midi_config_preset_5: 'MIDI Config Preset 5',
-  midi_config_preset_6: 'MIDI Config Preset 6',
-  midi_config_preset_7: 'MIDI Config Preset 7',
-  midi_config_preset_8: 'MIDI Config Preset 8',
+  midi_config_preset_1: 'Project 1',
+  midi_config_preset_2: 'Project 2',
+  midi_config_preset_3: 'Project 3',
+  midi_config_preset_4: 'Project 4',
+  midi_config_preset_5: 'Project 5',
+  midi_config_preset_6: 'Project 6',
+  midi_config_preset_7: 'Project 7',
+  midi_config_preset_8: 'Project 8',
   sysex_send: 'Send SysEx (requires payload config)',
   focus_next_modal: 'Focus Next Open Panel (any CC value)',
   channel_up:   'MIDI Channel +1 (wraps 16→1)',
@@ -425,7 +425,7 @@ export const MIDI_ACTION_GROUPS: Record<string, AppAction[]> = {
   'MIDI Channel': [
     'channel_up', 'channel_down', 'channel_cc'
   ],
-  'MIDI Config': [
+  'Projects': [
     'midi_config_preset_1', 'midi_config_preset_2', 'midi_config_preset_3', 'midi_config_preset_4',
     'midi_config_preset_5', 'midi_config_preset_6', 'midi_config_preset_7', 'midi_config_preset_8',
     'sysex_send',

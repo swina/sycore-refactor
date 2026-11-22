@@ -233,11 +233,7 @@ Each cell is an independent boolean toggle. Enabling a cell means "when this row
 
 **Data source:** `useMidiStore.configPresets`, `useMappingStore`
 
-**Config Presets:**
-
-- Named snapshots saved to `midiStore` via `saveConfigPreset(name)`.
-- Load via `loadConfigPreset(id)`, delete via `deleteConfigPreset(id)`.
-- The `__autosave__` preset ID is reserved and excluded from the user-visible list.
+**Config Presets (retired):** the named snapshots are no longer shown; projects replace them (footer project button). The store keeps `__autosave__`, the live routing state restored at start. App Actions `midi_config_preset_1…8` load projects 1–8.
 
 **Export snapshot keys (written to `sy-midi-config-{timestamp}.json`):**
 
