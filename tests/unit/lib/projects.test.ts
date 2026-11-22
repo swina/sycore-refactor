@@ -120,3 +120,67 @@ describe('export / import', () => {
     expect(r.project.flow).toBe('Rig A (imported)')
   })
 })
+
+describe('control sets', async () => {
+  const m = await import('@/lib/projects')
+  const base = () => m.createProject('Studio', 'Rig A', ['mix'], 1)
+
+  it('roles: perform by default, by port name ignoring case', () => {
+    let p = base()
+    const id = p.control.activeSetId
+    p = m.withSetRole(p, id, 'MIDI Mix', 'live')
+    expect(m.roleOf(m.activeSet(p), 'midi mix')).toBe('live')
+    expect(m.roleOf(m.activeSet(p), 'Launchkey')).toBe('perform')
+    expect(m.liveDevicesOf(m.activeSet(p))).toEqual(['MIDI Mix'])
+    p = m.withSetRole(p, id, 'midi mix', 'perform')
+    expect(m.activeSet(p).roles).toEqual({})
+  })
+
+  it('add (a copy), rename, switch, remove; the key switches between its pair', () => {
+    let p = base()
+    const perform = p.control.activeSetId
+    p = m.withSetRole(p, perform, 'Keys', 'live')
+    const { project, set } = m.addSet(p, 'Live', perform)
+    p = project
+    expect(set.presetIds).toEqual(['mix'])
+    expect(set.roles).toEqual({ Keys: 'live' })
+    expect(m.activeSet(p).id).toBe(perform)
+    p = m.renameSet(p, set.id, 'Perform')
+    expect(p.control.sets.find(s => s.id === set.id)!.name).toBe('Perform 2')
+    expect(m.keyTarget(p)).toBeNull()
+    p = m.withKeySets(p, perform, set.id)
+    expect(m.keyTarget(p)).toBe(set.id)
+    p = m.withActiveSet(p, set.id)
+    expect(m.keyTarget(p)).toBe(perform)
+    p = m.removeSet(p, set.id)
+    expect(p.control.activeSetId).toBe(perform)
+    expect(p.control.keySets).toBeNull()
+    expect(m.removeSet(p, perform)).toBe(p) // never the last
+  })
+
+  it('migration of Live / Performance: a Live set, the key on the pair, the mode active', () => {
+    const old = { ...base(), control: { sets: [{ id: 's1', name: 'Main', presetIds: ['mix'] }], activeSetId: 's1' } } as any
+    const p = m.migrateControlSets(old, { mode: 'live', liveDevices: ['MIDI Mix'] })
+    expect(p.control.sets.map(s => s.name)).toEqual(['Perform', 'Live'])
+    const live = p.control.sets[1]
+    expect(live.presetIds).toEqual(['mix'])
+    expect(m.roleOf(live, 'MIDI Mix')).toBe('live')
+    expect(p.control.keySets).toEqual(['s1', live.id])
+    expect(p.control.activeSetId).toBe(live.id)
+    expect(m.migrateControlSets(p, { mode: 'performance', liveDevices: ['X'] })).toBe(p)
+    const none = m.migrateControlSets(old, { mode: 'performance', liveDevices: [] })
+    expect(none.control.sets).toHaveLength(1)
+    expect(none.control.keySets).toBeNull()
+  })
+
+  it('duplicate and import keep the key pair on the new sets', () => {
+    let p = base()
+    const a = p.control.activeSetId
+    const r = m.addSet(p, 'Live', a); p = m.withKeySets(r.project, a, r.set.id)
+    const d = m.duplicateProject(p, [p])
+    expect(d.control.keySets).toEqual([d.control.sets[0].id, d.control.sets[1].id])
+    const f = m.buildProjectFile(p, null, [])
+    const imp = m.planImport(f as any, { setups: [], presets: [], projectNames: [] })
+    expect(imp.project.control.keySets).toEqual([imp.project.control.sets[0].id, imp.project.control.sets[1].id])
+  })
+})

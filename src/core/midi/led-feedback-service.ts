@@ -10,8 +10,7 @@
 import { computed, watch } from 'vue'
 import { midiService } from '@/core/midi/midi-service'
 import { ledTargets, ledChanges, ledKey, findOutputFor, type LedEntry } from '@/lib/led-feedback'
-import { isLiveOwned, controllerMode, profileSettings } from '@/core/midi/controller-profiles'
-import { isLiveDevice } from '@/lib/controller-profile'
+import { isLiveOwned, controllerMode, liveOwnedNames } from '@/core/midi/controller-profiles'
 import { useMappingStore } from '@/stores/useMappingStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -129,13 +128,17 @@ export function installLedFeedback(): void {
   // A controller (re)connected: its LEDs again.
   watch(() => midi.outputs.length, () => { sent.clear(); flush() })
 
-  // Performance → Live: the Live controllers' LEDs off (Live lights them on its next change).
-  // Live → Performance: forgotten, so `wanted` sends them all.
-  watch(controllerMode, mode => {
+  // A controller that goes to Live (the active set changed): its LEDs off (Live lights them on
+  // its next change). One that comes back from Live: forgotten, so `wanted` sends them all.
+  const norm = (n: string) => n.trim().toLowerCase()
+  watch(() => liveOwnedNames.value.map(norm).sort().join('|'), (now, before) => {
+    const nowSet = new Set(now ? now.split('|') : [])
+    const changed = new Set([...nowSet, ...(before ? before.split('|') : [])])
     const all = ledTargets(mapping.midiMappings as Record<string, unknown>, mapping.appMidiMappings ?? [], paramState, actionState)
     for (const e of all) {
-      if (!isLiveDevice(profileSettings.value, e.device)) continue
-      if (mode === 'live') send({ ...e, value: offValue(e, mapping.appMidiMappings ?? []) })
+      const d = norm(e.device)
+      if (!changed.has(d)) continue
+      if (nowSet.has(d)) send({ ...e, value: offValue(e, mapping.appMidiMappings ?? []) })
       sent.delete(ledKey(e))
     }
     flush()

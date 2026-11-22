@@ -380,14 +380,17 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 
 ### Live or Performance: one controller, two roles
 
-A controller can belong to Live (its Control Surface, e.g. a MIDImix on Live's mixer) while you play with Live, and to SY.CORE when Live is closed. The **Live / Perf** button in the footer switches all of them at once:
+A controller can belong to Live (its Control Surface, e.g. a MIDImix on Live's mixer) while you play with Live, and to SY.CORE when Live is closed. This is set in the project's **control sets** (MIDI Flow → **Control**):
 
-- **Live**: the controllers ticked under *Live's controllers* (by default any MIDImix) are ignored by SY.CORE: no mappings, no MIDI Flow, no LEDs. Their Rig mode is turned off.
-- **Performance**: they work with your MIDI Learn and app mappings, and their LEDs show the state (see *LED feedback* in the Controller Designer guide).
-- **Key**: click **Learn**, then press a button on any controller. That one button switches Live ↔ Performance, even with every panel closed. Its release never reaches a mapping. It works even when the button is on a Live controller, but a button on another controller is better: Live receives the MIDImix's buttons too.
-- **Follow the clock** (off by default): Live mode while SY.CORE follows an external clock (Live's MIDI clock or Link), Performance when that stops.
+- **A control set** gives each controller a **role** and turns its presets on:
+  - **Perform**: SY.CORE uses it, with its Controller Designer presets and LEDs (see *LED feedback* in the Controller Designer guide).
+  - **Live**: SY.CORE ignores it (no mappings, no MIDI Flow, no LEDs) and its Rig mode is turned off.
+- A project has as many sets as you want, e.g. *Perform* (MIDImix on the Mixer preset) and *Live* (MIDImix in the Live role). The footer chip shows the set in force (amber when it gives a controller to Live). Click the chip to switch.
+- **Key**: in Control, click **Learn**, then press a button on any controller, and choose the two sets it switches between. It works even with every panel closed, and its release never reaches a mapping. It works even when the button is on a Live controller, but a button on another controller is better: Live receives the MIDImix's buttons too.
+- **Follow the clock** (off by default): the key's second set while SY.CORE follows an external clock (Live's MIDI clock or Link), the first when that stops.
+- If you used the earlier Live / Perf button, each project already has the two sets *Perform* and *Live*, with your Live controllers and your key.
 
-In Performance mode with Live open, Live still receives the controller if it is selected as a Control Surface. Close Live, or set that Control Surface to None.
+With a controller in the Perform role and Live open, Live still receives it if it is selected as a Control Surface. Close Live, or set that Control Surface to None.
 
 ### Controller templates (JSON)
 

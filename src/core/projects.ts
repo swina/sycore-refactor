@@ -14,7 +14,12 @@ import { auth } from '@/lib/auth'
 import {
   type Project, type ProjectsDoc, createProject, activeSet, withActivePresets, withFlow, uniqueName,
   duplicateProject, migrateProjects, parseProjectsDoc, buildProjectFile, parseProjectFile, planImport,
+  withActiveSet, withSetRole, addSet, renameSet, removeSet, withKeySets, keyTarget, migrateControlSets,
+  type ControllerRole,
 } from '@/lib/projects'
+import { loadMode, loadProfile } from '@/lib/controller-profile'
+import { isMidimixName } from '@/lib/rig-midimix'
+import { midiService } from '@/core/midi/midi-service'
 import { designerPresets, designerPresetsLoaded, setDesignerPresets } from '@/core/midi/designer-presets'
 import { persistControllerPresets } from '@/lib/midi-controller-presets'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
@@ -26,6 +31,8 @@ export const currentProjectId = ref<string | null>(null)
 /** True once the user's projects are read (and migrated). */
 export const projectsLoaded = ref(false)
 export const currentProject = computed(() => projects.value.find(p => p.id === currentProjectId.value) ?? null)
+/** The current project's active control set (roles: who is Live's). */
+export const currentSet = computed(() => (currentProject.value ? activeSet(currentProject.value) : null))
 /** A user with no project yet: the first-start wizard asks for one. */
 export const needsFirstProject = computed(() => projectsLoaded.value && projects.value.length === 0)
 
@@ -160,6 +167,68 @@ export async function importProjectFile(file: File): Promise<Project> {
   return plan.project
 }
 
+// ── Control sets (phase 3a) ─────────────────────────────────────────────────
+
+function updateCurrent(fn: (p: Project) => Project): Project | null {
+  const p = currentProject.value
+  if (!p) return null
+  const next = fn(p)
+  if (next !== p) replace(next)
+  return next
+}
+
+/** Make a set of the current project active: its presets on, its roles in force. */
+export function switchSet(setId: string): void {
+  const next = updateCurrent(p => withActiveSet(p, setId))
+  if (next) applyProject(next)
+}
+
+/** The learned key: to the other set of its pair. False: no pair set. */
+export function toggleKeySet(): boolean {
+  const p = currentProject.value
+  const target = p ? keyTarget(p) : null
+  if (!target) return false
+  switchSet(target)
+  return true
+}
+
+export function setControllerRole(device: string, role: ControllerRole, setId?: string): void {
+  updateCurrent(p => withSetRole(p, setId ?? p.control.activeSetId, device, role))
+}
+
+/** A new set, a copy of the active one; made active. */
+export function newControlSet(name: string): void {
+  const p = currentProject.value
+  if (!p) return
+  const r = addSet(p, name, p.control.activeSetId)
+  replace(r.project)
+  switchSet(r.set.id)
+}
+
+export function renameControlSet(setId: string, name: string): void {
+  updateCurrent(p => renameSet(p, setId, name))
+}
+
+export function removeControlSet(setId: string): void {
+  const next = updateCurrent(p => removeSet(p, setId))
+  if (next) applyProject(next)
+}
+
+export function setKeyPair(a: string | null, b: string | null): void {
+  updateCurrent(p => withKeySets(p, a, b))
+}
+
+/** The Live / Performance settings of before (localStorage) as control sets, once per project. */
+function oldLiveSettings(): { mode: 'live' | 'performance'; liveDevices: string[] } {
+  const mode = loadMode()
+  const prof = loadProfile()
+  const used = mode === 'live' || !!prof.key || prof.liveDevices !== null
+  if (!used) return { mode, liveDevices: [] }
+  if (prof.liveDevices) return { mode, liveDevices: prof.liveDevices }
+  const mixes = [...new Set(midiService.getInputs().map(i => i.name).filter((n): n is string => !!n && isMidimixName(n)))]
+  return { mode, liveDevices: mixes.length ? mixes : ['MIDI Mix'] }
+}
+
 let installed = false
 
 export function installProjects(): void {
@@ -187,12 +256,20 @@ export function installProjects(): void {
         hasSetups: flow.configs.length > 0,
         hasPresets: designerPresets.value.some(p => (p.controls?.length ?? 0) > 0 || !!p.assignedDevice),
       })
-      if (migrated) parsed = migrated
+      // …with their Live / Performance settings as control sets (below).
+      if (migrated) parsed = { ...migrated, projects: migrated.projects.map(p => ({ ...p, control: { ...p.control, keySets: undefined } })) }
+    }
+    // Projects from before control sets: Live / Performance becomes their sets.
+    let migratedSets = false
+    if (parsed.projects.some(p => p.control.keySets === undefined)) {
+      const old = oldLiveSettings()
+      parsed.projects = parsed.projects.map(p => migrateControlSets(p, old))
+      migratedSets = true
     }
     projects.value = parsed.projects
     currentProjectId.value = parsed.currentId ?? parsed.projects[0]?.id ?? null
     projectsLoaded.value = true
-    if (!found && parsed.projects.length) persistSoon()
+    if ((!found || migratedSets) && parsed.projects.length) persistSoon()
     // At start the current project is the source: its presets, its setup.
     if (currentProject.value) applyProject(currentProject.value)
   }

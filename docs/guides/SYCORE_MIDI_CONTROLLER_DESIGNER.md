@@ -69,6 +69,7 @@ A **project** is your rig: its MIDI Flow setup plus the controller presets that 
 - **Same setup, different controllers**: two projects on one setup, e.g. *Studio · Perf* (MIDImix Mixer on) and *Studio · Live* (none on). The routing is saved once.
 - **Saving a setup** in MIDI Flow asks **Controllers for this setup**. Keep the current project's name to update it, or type another to make a new project. **Setup only** saves just the routing.
 - **New** (footer): a project from what is on screen now. **Rename**, **Duplicate**, **Delete** (the setup and the presets stay; the last project can't be deleted).
+- **Control** (MIDI Flow → Control): every controller of the project with its role (**Perform** or **Live**), its presets in the set in force, and what it does, in grouped lines ("Mute 1–8 → Mixer Ch 1–8: Mute"). A button assigned by two presets that are on is shown in red. A project can have several **control sets** (e.g. *Perform* and *Live*), switched from the footer chip or by a learned key: see the Ableton Live guide, *Live or Performance*.
 - **Export** saves a project as a file with its setup and the presets it uses. **Import** adds it as a new project, so nothing of yours is overwritten. An identical setup or preset is reused; a different one with the same name is added beside yours.
 
 ---

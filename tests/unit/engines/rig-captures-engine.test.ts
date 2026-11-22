@@ -11,7 +11,7 @@ vi.mock('@/core/midi/step-scheduler', async (orig) => {
 })
 
 import { createPinia, setActivePinia } from 'pinia'
-import { useRigCaptures, _resetRigCaptures } from '@/core/engines/rig-captures'
+import { useRigCaptures, _resetRigCaptures, stopRigCaptures } from '@/core/engines/rig-captures'
 import { midiService } from '@/core/midi/midi-service'
 import { externalGrid } from '@/core/midi/external-grid'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -83,6 +83,19 @@ describe('Rig captures engine', () => {
     expect(eng.state.play[4]).toBe('idle')
     eng.clear(4)
     expect(eng.state.clips[4]).toBeNull()
+  })
+
+  it('a Stop All stops the clips even with Live\'s grid left active (clock source changed without a Stop)', () => {
+    const { eng, play } = setup()
+    eng.toggleRecording(); play('on', 60); now = 1200; play('off', 60); now = 3000
+    eng.toggleRecording()
+    externalGrid.emit({ type: 'start', sixteenth: 0, t: now, bpm: 120 })
+    eng.toggleSlot(0)
+    ticker?.(); now += 2100; ticker?.()
+    expect(eng.state.play[0]).toBe('playing')
+    stopRigCaptures() // useGlobalTransportControls.stopAll
+    expect(eng.state.play[0]).toBe('idle')
+    expect(eng.state.clips[0]).not.toBeNull()
   })
 
   it('Live Perf IN cabled: only those inputs recorded; clips go out as Live Perf', () => {

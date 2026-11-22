@@ -177,6 +177,8 @@ export const useUiStore = defineStore('ui', () => {
   const unifiedMidiManagerTab    = ref('devices')
   const isMidiWizardOpen              = ref(false)
   const isMidiFlowOpen                = ref(false)
+  /** MIDI Flow's tab: 'routing' (who plays what) | 'control' (what the controllers do) | 'sync'. */
+  const midiFlowTab                   = ref<'routing' | 'control' | 'sync'>('routing')
   const isMidiControllerDesignerOpen  = ref(false)
   const isMidiDevicesOpen             = ref(false)
   const isInstrumentCockpitOpen       = ref(false)
@@ -727,7 +729,7 @@ export const useUiStore = defineStore('ui', () => {
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isLiveInputOpen, isMidiControllerDesignerOpen,
     isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen, isRigControlsOpen, isChordNowOpen, isSessionTakesOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
-    showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen,
+    showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen, midiFlowTab,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
     isPanelCollapsed, showFavoritesOnly, toolbarIconSize, isFullscreen,
     isPlayingPreview, isPlayingBacking, isSequencerPlaying, seqAutoStart, seqFollowMode, seqGenKeyFromProg, seqAutoRegen, seqDecoupled, isAudioPlaying, lastPlaylistName,

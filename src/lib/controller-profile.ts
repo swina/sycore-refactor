@@ -1,6 +1,11 @@
 /**
  * controller-profile.ts — controllers that belong to Ableton Live or to SY.CORE.
  *
+ * Since control sets (lib/projects.ts, phase 3a of docs/plans/projects-and-control.md)
+ * a controller's role is in the project's active set, and the key switches between
+ * two sets. What stays here: the key and Follow the clock (ProfileSettings), the
+ * ingress verdict, and the old mode / Live list, read once to migrate them to sets.
+ *
  * One mode for the whole rig, switched by one learned key (and optionally by the
  * Live clock): **Live** — the controllers chosen as "Live's" (by default the AKAI
  * MIDImix) are Live's Control Surface: SY.CORE drops their input and sends them
@@ -40,13 +45,14 @@ export type IngressVerdict = 'toggle' | 'swallow' | 'drop' | 'pass'
 
 /**
  * What to do with an incoming message: the key's press → 'toggle', its release
- * → 'swallow'; a Live controller in Live mode → 'drop'; else 'pass'.
+ * → 'swallow'; a controller that is Live's right now (its role in the active
+ * control set, `isLive`) → 'drop'; else 'pass'.
  */
-export function profileIngress(s: ProfileSettings, mode: ControllerMode, device: string | undefined | null, data: ArrayLike<number>): IngressVerdict {
+export function profileIngress(s: ProfileSettings, isLive: (device: string | undefined | null) => boolean, device: string | undefined | null, data: ArrayLike<number>): IngressVerdict {
   const k = matchToggle(s.key, device, data)
   if (k === 'press') return 'toggle'
   if (k === 'release') return 'swallow'
-  if (mode === 'live' && isLiveDevice(s, device)) return 'drop'
+  if (isLive(device)) return 'drop'
   return 'pass'
 }
 

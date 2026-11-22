@@ -19,6 +19,7 @@ import { loadControllerPresets, AUTOSAVE_CONTROLLER_ID } from '@/lib/midi-contro
 import { designerPresets } from '@/core/midi/designer-presets'
 import { currentProject, saveSetupAsProject } from '@/core/projects'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
+import ControlFlowView from '@/components/ControlFlowView.vue'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 
@@ -28,7 +29,8 @@ const noteLatchStore = useNoteLatchStore()
 const midiFlowConfigsStore = useMidiFlowConfigsStore()
 const { devices: registryDevices } = useDeviceRegistry()
 const { openMenu } = useMidiContextMenu()
-const activeTab  = ref('routing')  // 'routing' | 'sync'
+// 'routing' (who plays what) | 'control' (what the controllers do, ControlFlowView) | 'sync'
+const activeTab  = computed({ get: () => uiStore.midiFlowTab, set: v => { uiStore.midiFlowTab = v } })
 
 function deviceType(name) {
   if (midiStore.virtualInstruments.some(v => v.name === name)) return 'virtual'
@@ -958,7 +960,21 @@ function pendingPath() {
         <span class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-synth-neon shrink-0">
           <Cable class="w-4 h-4" /> MIDI FLOW
         </span>
-        <!-- Tabs -->
+        <!-- Tabs: the project's two first parts -->
+        <div class="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 shrink-0" @mousedown.stop>
+          <button
+            @click="activeTab = 'routing'"
+            class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-colors"
+            :class="activeTab === 'routing' ? 'bg-synth-neon text-black' : 'text-neutral-500 hover:text-white'"
+            title="Routing: who plays what (devices, controllers, apps, cables)"
+          >Routing</button>
+          <button
+            @click="activeTab = 'control'"
+            class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-colors"
+            :class="activeTab === 'control' ? 'bg-violet-500 text-white' : 'text-neutral-500 hover:text-white'"
+            title="Control: what each controller does, in the project's control sets"
+          >Control</button>
+        </div>
         <!-- <div class="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5" @mousedown.stop>
           <button
             @click="activeTab = 'routing'"
@@ -1115,6 +1131,11 @@ function pendingPath() {
           <Settings class="w-4 h-4" />
         </button>
         <MacOsButtons @close="uiStore.isMidiFlowOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
+      </div>
+
+      <!-- Control tab -->
+      <div v-if="activeTab === 'control'" class="flex-1 overflow-hidden flex flex-col min-h-0">
+        <ControlFlowView :canvas-nodes="canvasNodes" />
       </div>
 
       <!-- Sync Flow tab -->

@@ -21,24 +21,24 @@ describe('controller-profile', () => {
 
   it('drops a Live controller in Live mode only', () => {
     const s = { ...DEFAULT_PROFILE, key }
-    expect(profileIngress(s, 'live', 'MIDI Mix', [0xB0, 19, 64])).toBe('drop')
-    expect(profileIngress(s, 'performance', 'MIDI Mix', [0xB0, 19, 64])).toBe('pass')
-    expect(profileIngress(s, 'live', 'Launchkey MK4 49 MIDI', [0x90, 60, 100])).toBe('pass')
+    expect(profileIngress(s, d => isLiveDevice(s, d), 'MIDI Mix', [0xB0, 19, 64])).toBe('drop')
+    expect(profileIngress(s, () => false, 'MIDI Mix', [0xB0, 19, 64])).toBe('pass')
+    expect(profileIngress(s, d => isLiveDevice(s, d), 'Launchkey MK4 49 MIDI', [0x90, 60, 100])).toBe('pass')
   })
 
   it('the key toggles on press, its release is swallowed, in both modes', () => {
     const s = { ...DEFAULT_PROFILE, key }
     for (const mode of ['live', 'performance'] as const) {
-      expect(profileIngress(s, mode, key.device, [0x90, 40, 127])).toBe('toggle')
-      expect(profileIngress(s, mode, key.device, [0x90, 40, 0])).toBe('swallow')
-      expect(profileIngress(s, mode, key.device, [0x80, 40, 0])).toBe('swallow')
+      expect(profileIngress(s, mode === 'live' ? (d => isLiveDevice(s, d)) : () => false, key.device, [0x90, 40, 127])).toBe('toggle')
+      expect(profileIngress(s, mode === 'live' ? (d => isLiveDevice(s, d)) : () => false, key.device, [0x90, 40, 0])).toBe('swallow')
+      expect(profileIngress(s, mode === 'live' ? (d => isLiveDevice(s, d)) : () => false, key.device, [0x80, 40, 0])).toBe('swallow')
     }
   })
 
   it('the key works when it is on a Live controller', () => {
     const s = { ...DEFAULT_PROFILE, key: { device: 'MIDI Mix', status: 0x90, data1: 27 } }
-    expect(profileIngress(s, 'live', 'MIDI Mix', [0x90, 27, 127])).toBe('toggle')
-    expect(profileIngress(s, 'live', 'MIDI Mix', [0x90, 1, 127])).toBe('drop')
+    expect(profileIngress(s, d => isLiveDevice(s, d), 'MIDI Mix', [0x90, 27, 127])).toBe('toggle')
+    expect(profileIngress(s, d => isLiveDevice(s, d), 'MIDI Mix', [0x90, 1, 127])).toBe('drop')
   })
 
   it('setLiveDevice starts from the MIDImix ports connected', () => {

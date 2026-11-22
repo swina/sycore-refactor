@@ -326,6 +326,15 @@ export function useRigCaptures() {
   return engine
 }
 
+/**
+ * Every Stop (Stop All: the footer, the Rig's Stop, Live's / the MIDI clock's Stop) stops the clips.
+ * The engine's own watch on SY.CORE's transport skips its stop while Live's grid is active — a grid
+ * left active (the clock source changed without a Stop) left the clips looping after a Stop.
+ */
+export function stopRigCaptures() {
+  engine?.stopAllClips()
+}
+
 /** Tests: a fresh engine. */
 export function _resetRigCaptures() {
   engine?.stopAllClips()

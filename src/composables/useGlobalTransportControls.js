@@ -10,6 +10,7 @@
 import { rigTransport, stopRows, stopEvents, dispatchRig } from '@/lib/rig-live'
 import { SEQ_LANE_CFG } from '@/lib/seq-lanes'
 import { countIn, startCountIn, cancelCountIn } from '@/lib/count-in'
+import { stopRigCaptures } from '@/core/engines/rig-captures'
 import { useTransportManager } from '@/composables/useTransportManager'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useArpStore } from '@/stores/useArpStore'
@@ -121,6 +122,8 @@ export function useGlobalTransportControls() {
     if (rigTransport.live) for (const id of stopRows()) for (const ev of stopEvents(id)) dispatchRig(ev)
     // the Sequencer's Bass / Arp lanes: no transport sync of their own — a Stop All stops them
     for (const lane of ['bass', 'arp']) window.dispatchEvent(new CustomEvent(SEQ_LANE_CFG[lane].toggle, { detail: { play: false } }))
+    // the Rig's capture clips (C1–C8): they stay in their pads
+    stopRigCaptures()
     transportManager.forceStopAll()
   }
 
