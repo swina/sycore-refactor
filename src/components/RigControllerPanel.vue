@@ -293,9 +293,27 @@ function clearScope(id) {
   muteScopes[id] = []
   saveMuteScopes({ ...muteScopes })
 }
+/**
+ * The scopes in force: only the devices still cabled from the app. A scope left on a device no
+ * longer cabled (an old "Live Drums") muted nothing at all; empty after that: the whole app.
+ */
+function effectiveScopes() {
+  const out = {}
+  for (const [id, devs] of Object.entries(muteScopes)) {
+    const cabled = midiService.getCableTargets(liveAppSource(id)).map(d => d.toLowerCase())
+    out[id] = (devs ?? []).filter(d => cabled.includes(d.toLowerCase()))
+  }
+  return out
+}
+/** What a lane's Mute silences, for the display. */
+function muteWhat(id) {
+  const sc = effectiveScopes()[id] ?? []
+  return sc.length ? `only → ${sc.join(', ')} (its Mute scope)` : 'the whole lane'
+}
 watch(() => {
   if (!live.value) return '{"sources":[],"cables":[],"parts":{}}'
-  return JSON.stringify(rigMutes(s.apps, muteScopes))
+  void JSON.stringify(midiStore.routingMatrix) // the cables (the scopes in force follow them)
+  return JSON.stringify(rigMutes(s.apps, effectiveScopes()))
 }, json => {
   const m = JSON.parse(json)
   rigParts.drumMuted = !!m.parts.drum
@@ -676,11 +694,93 @@ function onSlotDown(appId, slot) {
     return
   }
   // Latch with the track's Trigger sync: the playing slot stops, another switches, a stopped app starts.
-  // The sync point is on Live's grid: with Live stopped (or SY.CORE on its own clock), at once.
-  const sync = liveSyncSteps(a.opts.triggerSync, externalGrid.active)
+  // On Live's grid the apps wait for the sync point themselves; on SY.CORE's own clock the Rig does
+  // (rigWait): every app, either timing, on the song's lines from Play.
+  if (endOfSlot(appId, slot, playing, what)) return
+  const sync = liveSyncSteps(trigOf(a), gridRunning())
+  if (sync > 0 && !externalGrid.active) { waitPad(appId, slot, sync, what); return }
   for (const ev of rowPadEvents(appId, slot, playing, sync)) dispatchRig(ev)
   s.display = `${what}${empty ? ' (empty — GEN fills it)' : ''} ${padWhen(appId, playing, slot, sync)}`
 }
+
+// ── Trigger sync on SY.CORE's own clock (no Live grid): the Rig waits for the sync point ──
+// The song position is SY.CORE's transport (bar 1 = its Play): a pad on "4 bars" pressed at bar 2
+// goes on bar 5, at bar 13 on bar 17 — for every app, whatever its timing (MIDI / AUDIO), as Live's
+// launch quantization. Waiting, the pad blinks; pressed again: called off; another pad: replaces.
+const rigWait = reactive({}) // appId → { slot, timer, at }
+
+// The Trigger sync in force: each lane's own, or one for all (Global); "Start only": the sync is
+// for a lane's start — a switch or a stop of a lane playing comes at the end of its slot.
+const LS_SYNC = 'SYCORE_RIG_SYNC'
+const syncSettings = reactive((() => {
+  const d = { scope: 'lane', global: '4', startOnly: false }
+  try { return { ...d, ...JSON.parse(localStorage.getItem(LS_SYNC) ?? '{}') } } catch { return d }
+})())
+watch(syncSettings, v => { try { localStorage.setItem(LS_SYNC, JSON.stringify(v)) } catch {} }, { deep: true })
+const trigOf = a => (syncSettings.scope === 'global' ? syncSettings.global : a.opts.triggerSync)
+/** Drum / Bass on the Drum Machine: a slot is one bar (its sequence), its end the next bar line. */
+const dmPartRow = id => (id === 'drum' || id === 'bass') && !rowLane(id)
+/** "Start only": a lane playing switches / stops at the end of its slot. True: done. */
+function endOfSlot(appId, slot, playing, what) {
+  if (!syncSettings.startOnly || playing === null || !gridRunning()) return false
+  if (dmPartRow(appId)) {
+    if (externalGrid.active) for (const ev of rowPadEvents(appId, slot, playing, 16)) dispatchRig(ev)
+    else waitPad(appId, slot, 16, what)
+  } else {
+    // Chord Prog: at the end of its progression · Sequencer lanes: at the end of the pattern (sync -1)
+    for (const ev of rowPadEvents(appId, slot, playing, -1)) dispatchRig(ev)
+    s.display = `${what}: at the end of the slot playing`
+  }
+  return true
+}
+/** The time (performance.now() ms) of the song's next line of `steps` sixteenths; now when just on one. */
+function songSyncTime(steps, now = performance.now()) {
+  const tr = getTransport()
+  if (transportManager.isRunning.value && tr.bpm.value > 0) {
+    const ms16 = 60000 / (tr.bpm.value * 4)
+    const cur = tr.ticks / (tr.PPQ / 4)
+    const into = cur - Math.floor(cur / steps) * steps
+    if (into * ms16 <= Math.min(80, ms16 * 0.5)) return now // a press a hair after the line: on it
+    return now + (Math.ceil(cur / steps) * steps - cur) * ms16
+  }
+  // no transport: the bar grid of what plays (bars only)
+  const b = intGrid.barLineAtOrAfter(now)
+  return b ? b.t : now
+}
+const songBarOf = t => {
+  const tr = getTransport()
+  if (!transportManager.isRunning.value || !(tr.bpm.value > 0)) return null
+  const cur16 = tr.ticks / (tr.PPQ / 4) + (t - performance.now()) / (60000 / (tr.bpm.value * 4))
+  return Math.round(cur16 / 16) + 1
+}
+function cancelWait(appId) {
+  const w = rigWait[appId]
+  if (!w) return
+  clearTimeout(w.timer)
+  delete rigWait[appId]
+}
+function waitPad(appId, slot, sync, what) {
+  if (rigWait[appId]?.slot === slot) { cancelWait(appId); s.display = `${what}: called off`; return }
+  cancelWait(appId)
+  const now = performance.now()
+  const at = songSyncTime(sync, now)
+  const fire = () => {
+    delete rigWait[appId]
+    const a = s.apps.find(x => x.id === appId)
+    for (const ev of rowPadEvents(appId, slot, a?.playing ?? null, 0)) dispatchRig(ev)
+  }
+  if (at - now < 1) { fire(); s.display = `${what} now`; return }
+  // just after the line (+2 ms): an app joining SY.CORE's bar grid takes that line as its bar 1
+  rigWait[appId] = { slot, at, timer: setTimeout(fire, at - now + 2) }
+  const bar = songBarOf(at)
+  const app = s.apps.find(x => x.id === appId)
+  s.display = `${what} waits for ${bar ? `bar ${bar}` : 'the next bar'} (${app ? SYNC_SHORT[sync === 16 && syncSettings.startOnly && app.playing !== null ? '4' : trigOf(app)] ?? '' : ''})`
+}
+// a Stop / the transport stopping: nothing waits any more
+watch(() => transportManager.isRunning.value, run => { if (!run) for (const id of Object.keys(rigWait)) cancelWait(id) })
+onUnmounted(() => { for (const id of Object.keys(rigWait)) cancelWait(id) })
+/** A pad's look with the Rig's own wait (SY.CORE's clock): blinking while it waits. */
+const padState = (a, i) => rigWait[a.id]?.slot === i ? 'queued' : slotState(a, i)
 /** Arming: Chord and the Sequencer's lanes select the slot now; Drum and Bass (on the Drum Machine) load theirs from the watcher below. */
 function selectSlot(id, slot) {
   if (id === 'chord' || rowLane(id)) dispatchRig(rowPadEvents(id, slot, null, 0)[0])
@@ -774,11 +874,14 @@ function onSection(i) {
       rigArmed[a.id] = i
       selectSlot(a.id, i)
     } else if (a.playing !== i) {
-      for (const ev of rowPadEvents(a.id, i, a.playing, liveSyncSteps(a.opts.triggerSync, externalGrid.active))) dispatchRig(ev)
+      if (endOfSlot(a.id, i, a.playing, `${a.label} ${SLOT_LABELS[i]}`)) continue
+      const sync = liveSyncSteps(trigOf(a), gridRunning())
+      if (sync > 0 && !externalGrid.active) waitPad(a.id, i, sync, `${a.label} ${SLOT_LABELS[i]}`)
+      else for (const ev of rowPadEvents(a.id, i, a.playing, sync)) dispatchRig(ev)
     }
   }
   liveSection = i
-  s.display = `Section ${i + 1} → ${apps.map(a => a.label).join(', ')} ${SLOT_LABELS[i]}${armed ? `: armed, starts on ${playName()}` : externalGrid.active ? ' on their Trigger sync' : ' now'}`
+  s.display = `Section ${i + 1} → ${apps.map(a => a.label).join(', ')} ${SLOT_LABELS[i]}${armed ? `: armed, starts on ${playName()}` : gridRunning() ? ' on their Trigger sync' : ' now'}`
 }
 /** LIVE: the section shown — lit while its apps play it, blinking while one is still queued or armed;
  *  dropped when none of them is on it any more (or one moved to another slot). */
@@ -819,6 +922,18 @@ function toggleSeqFree() {
   s.display = uiStore.seqDecoupled ? 'Seq Free: the Sequencer plays on its own' : 'Seq Free off: the Sequencer follows the Chord Prog'
 }
 function toggleShift() { s.shift = !s.shift }
+/** A bar grid to sync a pad to: Live's, SY.CORE's transport running, or a sequence playing on SY.CORE's own grid. */
+const gridRunning = () => externalGrid.active || transportManager.isRunning.value || intGrid.barLineAtOrAfter(performance.now()) != null
+/** Mute / unmute a lane (Shift + its side button). Muting also ends its notes sounding (a chord held
+ *  for bars would go on to its note-off: the Mute drops new notes only). */
+function muteLane(id) {
+  toggleMute(s, id)
+  const a = s.apps.find(x => x.id === id)
+  if (live.value && a?.muted) {
+    if (id === 'chord') dispatchRig({ name: 'cp-voices-cut' })
+    s.display = `${a.label} muted: ${muteWhat(id)}`
+  }
+}
 function toggleGenMode() { s.generateMode = s.generateMode === 'ai' ? 'builtin' : 'ai'; s.display = `Generate: ${s.generateMode === 'ai' ? 'AI' : 'built-in'}` }
 const focused = computed(() => s.apps.find(a => a.id === focusApp.value))
 /** The app the knobs act on (Rig Controls' app buttons). */
@@ -827,8 +942,13 @@ const anySolo = computed(() => s.apps.some(a => a.solo))
 
 /** Cycle the focused track's Trigger sync (Launchpad top button "Sync"). */
 function cycleSync() {
-  const i = TRIGGER_SYNC_OPTIONS.findIndex(o => o.value === focused.value.opts.triggerSync)
-  setTrackOption(s, focused.value.id, 'triggerSync', TRIGGER_SYNC_OPTIONS[(i + 1) % TRIGGER_SYNC_OPTIONS.length].value)
+  const global = syncSettings.scope === 'global'
+  const cur = global ? syncSettings.global : focused.value.opts.triggerSync
+  const next = TRIGGER_SYNC_OPTIONS[(TRIGGER_SYNC_OPTIONS.findIndex(o => o.value === cur) + 1) % TRIGGER_SYNC_OPTIONS.length].value
+  if (global) syncSettings.global = next
+  else setTrackOption(s, focused.value.id, 'triggerSync', next)
+  const o = TRIGGER_SYNC_OPTIONS.find(x => x.value === next)
+  s.display = `${global ? 'All lanes' : focused.value.label} Trigger sync: ${o?.label ?? next}${next === 'off' ? ' (starts at once)' : ''}`
 }
 
 // ── Rig actions from any MIDI-learned controller (rig-actions.ts) ─────────
@@ -840,12 +960,11 @@ function onRigAction(e) {
   switch (a.kind) {
     case 'slot': onSlotDown(a.app, a.slot); onSlotUp(a.app, a.slot); return
     case 'gen': return onGenerate(a.app)
-    case 'mute': return toggleMute(s, a.app)
+    case 'mute': return muteLane(a.app)
     case 'solo': return toggleSolo(s, a.app)
     case 'sync':
       focusApp.value = a.app
-      cycleSync()
-      s.display = `${app.label} Trigger sync: ${SYNC_SHORT[app.opts.triggerSync]}`
+      cycleSync() // (it says the new value; with Global: every lane's)
       return
     case 'fill': return onFill()
     case 'seq_free': return toggleSeqFree()
@@ -1024,8 +1143,8 @@ const optLabel = (group, value) => OPTION_GROUPS.find(g => g.key === group).opti
 const optHint = (group, value) => OPTION_GROUPS.find(g => g.key === group).options.find(o => o.value === value)?.hint ?? ''
 const PRESS_SHORT = { retrigger: 'RTRG', holdStop: 'HOLD', holdMotion: 'H+MO', latch: 'LTCH' }
 const MOTION_SHORT = { stay: 'STAY', oneShot: '1SHOT', marchWrap: 'MRCH↺', marchStay: 'MRCH→', marchStop: 'MRCH■', random: 'RND', exclusiveRandom: 'XRND' }
-const SYNC_SHORT = { off: 'OFF', '1/4': '¼', '1/2': '½', '1': '1b', '2': '2b', '4': 'BAR', auto: 'AUTO', queue: 'QUEUE', tolerant: 'TOL' }
-const rowBadge = a => `${PRESS_SHORT[a.opts.press]} · ${MOTION_SHORT[a.opts.motion]} · ${SYNC_SHORT[a.opts.triggerSync]}`
+const SYNC_SHORT = { off: 'OFF', '1/4': '¼', '1/2': '½', '1': '1b', '2': '2b', '4': 'BAR', '8': '2BAR', '16': '4BAR', auto: 'AUTO', queue: 'QUEUE', tolerant: 'TOL' }
+const rowBadge = a => `${PRESS_SHORT[a.opts.press]} · ${MOTION_SHORT[a.opts.motion]} · ${SYNC_SHORT[trigOf(a)]}${syncSettings.scope === 'global' ? '*' : ''}`
 const queueOrder = (a, i) => { const k = a.queue.indexOf(i); return k === -1 ? null : k + 1 }
 const sectionHasContent = i => s.apps.some(a => a.filled[i])
 const lanePageOffset = computed(() => (s.shift ? 8 : 0))
@@ -1096,9 +1215,13 @@ const lpTop = computed(() => LP_TOP_LABELS.map((label, i) => {
   if (i === 1) color = s.clock.source === 'EXT' ? 'green' : 'red'
   if (i === 2) color = s.shift ? 'green' : 'amber'
   if (i === 3) color = s.generateMode === 'ai' ? 'green' : 'amber'
-  if (i === 4) color = focused.value.opts.triggerSync === '4' ? 'amber' : 'green'
+  const tg = syncSettings.scope === 'global' ? syncSettings.global : focused.value.opts.triggerSync
+  const tgWho = syncSettings.scope === 'global' ? 'All' : focused.value.label
+  if (i === 4) color = tg === '4' ? 'amber' : tg === 'off' ? 'red' : 'green'
   if (i === 5) color = 'amber'
   if (i === 7) color = holding.panic ? 'amberFlash' : 'red'
+  // Sync shows the focused track and its value (it cycles that track's Trigger sync)
+  if (i === 4) return { label: `${tgWho} ${SYNC_SHORT[tg] ?? tg}`, color, id: `CC ${lpTopCc(i)}`, title: `Trigger sync of ${tgWho === 'All' ? 'every lane (Global)' : tgWho}: ${TRIGGER_SYNC_OPTIONS.find(o => o.value === tg)?.label ?? tg}${syncSettings.startOnly ? ' · start only' : ''} (press: next)` }
   return { label, color, id: `CC ${lpTopCc(i)}` }
 }))
 
@@ -1108,7 +1231,7 @@ function lpPad(row, col) {
     // The row's first pad names its app (Chord A, Drum A…).
     const short = col === 0 ? `${a.label} ${SLOT_LABELS[col]}` : SLOT_LABELS[col]
     if (live.value && !isLiveRow(a.id)) return { label: `${a.label} ${SLOT_LABELS[col]} (not connected)`, short, color: 'off' }
-    const st = slotState(a, col)
+    const st = padState(a, col)
     const color = a.muted && st === 'playing' ? 'red' : slotColor(st)
     return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
   }
@@ -1188,9 +1311,11 @@ function lpSide(row) {
     ? { label: 'Row S: Captures (press: Sections)', short: 'S·CAP', color: 'red' }
     : { label: 'Row S: Sections (press: Captures)', short: 'S·SEC', color: 'amber' }
   if (row < 5) {
-    // LIVE: Generate is connected for the Drum Machine, Chord Prog and Sequencer; Mutate (Shift) for the Sequencer.
-    const off = live.value && !genOn(s.apps[row].id, s.shift)
-    return { label: `${s.apps[row].label} ${s.shift ? 'Mutate' : 'Generate'}`, short: s.shift ? 'MUT' : 'GEN', color: off ? 'off' : s.shift ? 'green' : 'amber' }
+    const a = s.apps[row]
+    // Shift: Mute (red while muted); else GEN — connected in LIVE for Drum, Chord, Seq, Bass, Arp (on its lane).
+    if (s.shift) return { label: `${a.label} ${a.muted ? 'muted (press: unmute)' : 'Mute'}`, short: 'MUTE', color: a.muted ? 'red' : 'redDim' }
+    const off = live.value && !genOn(a.id, false)
+    return { label: `${a.label} Generate`, short: 'GEN', color: off ? 'off' : 'amber' }
   }
 }
 
@@ -1247,7 +1372,9 @@ function lpPadUp(row, col) {
   if (row === 5 && col === 3) repeaterOff()
 }
 function lpSideDown(row) {
-  if (row < 5) return onGenerate(s.apps[row].id)
+  // Shift + a row's side button: Mute that lane (every row, as the panel's M); else its GEN.
+  // (Mutate stays on the panel: Shift + its GEN.)
+  if (row < 5) return s.shift ? muteLane(s.apps[row].id) : onGenerate(s.apps[row].id)
   if (row === 5) return djStart()
   if (row === 6) return onCapt()
   if (row === 7) return toggleSMode()
@@ -1423,7 +1550,7 @@ const mixStrips = computed(() => Array.from({ length: 8 }, (_, i) => {
         { label: 'Gate', get: () => a.gate, set: v => { a.gate = v } },
       ],
       fader: { label: 'Intensity', get: () => a.intensity, set: v => { a.intensity = v } },
-      mute: { label: 'Mute', on: a.muted, press: () => toggleMute(s, a.id) },
+      mute: { label: 'Mute', on: a.muted, press: () => muteLane(a.id) },
       rec: { label: 'Solo', on: a.solo, press: () => toggleSolo(s, a.id) },
     }
   }
@@ -1673,10 +1800,19 @@ const arcPath = v => {
   return `M${cx + r * Math.cos(a0)} ${cy + r * Math.sin(a0)} A${r} ${r} 0 ${large} 1 ${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`
 }
 
+/** The Sync button: whose Trigger sync it cycles (the focused lane, or all with Global) and its value. */
+const syncButton = computed(() => {
+  const global = syncSettings.scope === 'global'
+  const v = global ? syncSettings.global : focused.value.opts.triggerSync
+  return {
+    text: `${global ? 'All' : focused.value.label} ${SYNC_SHORT[v] ?? v}${syncSettings.startOnly ? ' · start' : ''}`,
+    title: `Trigger sync of ${global ? 'every lane (Global)' : focused.value.label}: ${TRIGGER_SYNC_OPTIONS.find(o => o.value === v)?.label ?? v}${syncSettings.startOnly ? ' · start only (a switch / stop at the end of the slot)' : ''} — click to cycle`,
+  }
+})
 // The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
 // (Performance), teleported there while it is open.
 provide(RIG_CONTROLS_CTX, {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, syncButton, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
 })
 </script>
 
@@ -1825,7 +1961,7 @@ provide(RIG_CONTROLS_CTX, {
                 </button>
                 <button v-for="(l, i) in SLOT_LABELS" :key="l"
                         class="relative w-9 h-9 rounded-md border text-[11px] font-black transition-colors overflow-hidden"
-                        :class="[SLOT_CLASS[slotState(a, i)], isRigApp(a.id) ? learnedRing(rigSlotParam(a.id, i)) : '']"
+                        :class="[SLOT_CLASS[padState(a, i)], isRigApp(a.id) ? learnedRing(rigSlotParam(a.id, i)) : '']"
                         :title="`${a.label} ${l}${live && arpeggiatorRow(a.id) ? ` (${RIG_ARP_MODES[i]})` : ''}: ${slotState(a, i)} · ${a.lengths[i]} bar${a.lengths[i] > 1 ? 's' : ''}${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
                         @contextmenu="isRigApp(a.id) && learnMenu($event, rigSlotParam(a.id, i), `${a.label} slot ${l}`)"
                         @pointerdown="onSlotDown(a.id, i)" @pointerup="onSlotUp(a.id, i)" @pointerleave="a.held !== null && onSlotUp(a.id, i)">
@@ -1835,7 +1971,7 @@ provide(RIG_CONTROLS_CTX, {
                   <span v-if="a.cursor === i && a.opts.press === 'holdMotion'" class="absolute inset-0 rounded-md ring-2 ring-sky-400 pointer-events-none" />
                   <span v-if="a.playing === i" class="absolute left-0 bottom-0 h-1 bg-black/50" :style="{ width: `${slotProgress(a, i) * 100}%` }" />
                 </button>
-                <button :class="[btn, a.muted ? 'bg-red-600 border-red-400 text-white' : btnIdle, 'ml-1', isRigApp(a.id) ? learnedRing(`rig_mute_${a.id}`) : '']" @click="toggleMute(s, a.id)"
+                <button :class="[btn, a.muted ? 'bg-red-600 border-red-400 text-white' : btnIdle, 'ml-1', isRigApp(a.id) ? learnedRing(`rig_mute_${a.id}`) : '']" @click="muteLane(a.id)"
                         @contextmenu="isRigApp(a.id) && learnMenu($event, `rig_mute_${a.id}`, `${a.label} Mute`)">M</button>
                 <button :class="[btn, a.solo ? 'bg-sky-500 border-sky-300 text-black' : btnIdle, isRigApp(a.id) ? learnedRing(`rig_solo_${a.id}`) : '']" @click="toggleSolo(s, a.id)"
                         :title="`${a.label} Solo: only the soloed row plays${isRigApp(a.id) ? ' · right-click: MIDI Learn' : ''}`"
@@ -1874,10 +2010,31 @@ provide(RIG_CONTROLS_CTX, {
                         @click="focusApp = a.id">{{ a.label }}</button>
               </div>
             </div>
+            <!-- Trigger sync for the whole rig: each lane's or Global; Start only -->
+            <div class="flex flex-wrap items-center gap-2 mb-2 pb-2 border-b border-white/5 text-[10px]" data-rig-sync-settings>
+              <span class="text-neutral-400">Trigger sync</span>
+              <div class="flex rounded border border-white/10 overflow-hidden">
+                <button v-for="o in [['lane', 'Per lane'], ['global', 'Global']]" :key="o[0]"
+                        class="px-1.5 py-0.5 text-[9px] font-bold"
+                        :class="syncSettings.scope === o[0] ? 'bg-amber-500/30 text-amber-200' : 'text-neutral-400 hover:text-white'"
+                        :title="o[0] === 'global' ? 'One Trigger sync for every lane (the Launchpad\'s Sync button changes it)' : 'Each lane its own Trigger sync (Track options)'"
+                        @click="syncSettings.scope = o[0]">{{ o[1] }}</button>
+              </div>
+              <select v-if="syncSettings.scope === 'global'" v-model="syncSettings.global"
+                      class="bg-black/40 border border-white/10 rounded px-1.5 py-0.5 text-white text-[10px]">
+                <option v-for="o in TRIGGER_SYNC_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+              <label class="flex items-center gap-1 cursor-pointer text-neutral-300"
+                     title="The sync is for a lane's start; a lane playing switches or stops at the end of its slot (Chord Prog: its progression; Sequencer: its pattern; Drum: its bar)">
+                <input type="checkbox" class="w-3 h-3 accent-amber-500" v-model="syncSettings.startOnly" /> Start only (switch / stop at the end of the slot)
+              </label>
+            </div>
             <div class="grid grid-cols-2 gap-x-3 gap-y-2">
               <label v-for="g in OPTION_GROUPS" :key="g.key" class="block">
                 <span class="text-[10px] text-neutral-400">{{ g.title }}</span>
-                <select :value="focused.opts[g.key]" class="w-full mt-0.5 bg-black/40 border border-white/10 rounded px-1.5 py-1 text-white"
+                <select :value="focused.opts[g.key]" class="w-full mt-0.5 bg-black/40 border border-white/10 rounded px-1.5 py-1 text-white disabled:opacity-40"
+                        :disabled="g.key === 'triggerSync' && syncSettings.scope === 'global'"
+                        :title="g.key === 'triggerSync' && syncSettings.scope === 'global' ? 'Global Trigger sync in force (above)' : ''"
                         @change="setTrackOption(s, focused.id, g.key, $event.target.value)">
                   <option v-for="o in g.options" :key="o.value" :value="o.value">{{ o.label }}</option>
                 </select>
@@ -1945,7 +2102,7 @@ provide(RIG_CONTROLS_CTX, {
                :style="play ? 'grid-template-columns: repeat(9, minmax(0, 1fr)); grid-template-rows: repeat(9, minmax(0, 1fr))' : 'grid-template-columns: repeat(9, 2.6rem)'">
             <!-- top round buttons -->
             <button v-for="(t, i) in lpTop" :key="'t' + i"
-                    :class="['mx-auto rounded-full border font-sans font-semibold tracking-tight leading-tight', play ? 'w-4/5 h-4/5 my-auto text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(t.color)]" :title="`${t.id} · ${t.label}`"
+                    :class="['mx-auto rounded-full border font-sans font-semibold tracking-tight leading-tight', play ? 'w-4/5 h-4/5 my-auto text-[clamp(9px,2.1cqmin,15px)]' : 'w-9 h-9 text-[9px]', ledClass(t.color)]" :title="t.title ? `${t.id} · ${t.title}` : `${t.id} · ${t.label}`"
                     @pointerdown="lpTopDown(i)" @pointerup="lpTopUp(i)" @pointerleave="lpTopUp(i)">{{ showLabels || play ? t.label : '' }}</button>
             <span />
             <!-- 8 rows: 8 pads + 1 side button -->
@@ -1970,7 +2127,7 @@ provide(RIG_CONTROLS_CTX, {
             <div>Row 6 · Fill · Auto Fill · Now/Bar · Repeat (hold) · Latch · Drum Chain · Chord Chain · Seq Chain (dark red off · red blinking on)</div>
             <div>Row 7 · Sections 1–8 — or Captures 1–8 (side S·SEC / S·CAP)</div>
             <div>Row 8 · Latch 1–8: the Chord Prog stays on chord 1–8 (green; blinking until the chord sounding ends) — press again: the progression goes on</div>
-            <div>Side · Generate Drum, Chord, Seq, Bass, Arp (Shift: Mutate) · DJ Filter (hold: CC {{ djFilter.cc }} cutoff closes, release: opens) · Capt (record a capture) · Row S: Sections / Captures</div>
+            <div>Side · Generate Drum, Chord, Seq, Bass, Arp (Shift: Mute; Mutate: the panel's Shift + GEN) · DJ Filter (hold: CC {{ djFilter.cc }} cutoff closes, release: opens) · Capt (record a capture) · Row S: Sections / Captures</div>
             <div>Top · Beat/Tap · EXT/INT (hold) · Shift · Gen AI · Sync (cycles the focused track's Trigger sync) · Rig · — · Panic (hold)</div>
             <div class="text-[10px] text-neutral-500">Slot pads follow each track's Press mode: hold modes react on release too.</div>
           </section>

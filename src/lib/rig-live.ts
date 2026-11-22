@@ -234,7 +234,7 @@ export function slotEvent(id: LiveAppId, slot: number) {
 }
 
 /** Trigger sync in LIVE, as sixteenths of Live's song grid: Off = at once, 1 / 2 beats, Bar. */
-export const LIVE_SYNC_STEPS: Record<string, number> = { off: 0, '1': 4, '2': 8, '4': 16 }
+export const LIVE_SYNC_STEPS: Record<string, number> = { off: 0, '1': 4, '2': 8, '4': 16, '8': 32, '16': 64 }
 
 /** A track's Trigger sync for the real apps: its sixteenths (other values, SIM only, act as Bar);
  *  0 with Live stopped (nothing to sync to). */

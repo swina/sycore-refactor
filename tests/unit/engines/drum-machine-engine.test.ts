@@ -111,6 +111,22 @@ describe('Drum Machine engine — no panel mounted', () => {
     expect(store.activeSequence).toBe('B')
     expect(store.isPlaying).toBe(true)
   })
+  it('SY.CORE\'s own clock: a Rig switch with its Trigger sync waits for the bar line (no Live grid)', async () => {
+    const { store } = await setup()
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: true } }))
+    await flush()
+    for (let i = 0; i < 3; i++) { repeats[0](0); flushUi() } // into the bar
+    window.dispatchEvent(new CustomEvent('dm-seq-switch', { detail: { seq: 'C', sync: 16 } }))
+    expect(store.activeSequence).toBe('A') // queued, not at once
+    for (let i = 3; i < 16; i++) { repeats[0](0); flushUi() }
+    expect(store.activeSequence).toBe('A')
+    repeats[0](0); flushUi() // the bar line
+    expect(store.activeSequence).toBe('C')
+    window.dispatchEvent(new CustomEvent('dm-play-stop', { detail: { play: false, sync: 16 } }))
+    await flush()
+    expect(store.isPlaying).toBe(true) // the stop waits for its bar line too
+  })
+
   it('CLK SYS: plays on the system clock (a step falls due → its pad sounds)', async () => {
     const { store } = await setup()
     store.systemClock = true

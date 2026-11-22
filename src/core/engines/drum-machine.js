@@ -315,7 +315,8 @@ function createDrumMachineEngine() {
       _reportParts()
       return
     }
-    if (sync <= 0 || !externalGrid.active) {
+    // (INT too: the steps count from a bar line of the grid — int-grid.ts / Tone's transport)
+    if (sync <= 0) {
       _applyPart({ part, on, seq })
       _reportParts()
       if (!_drumsOn && !_bassOn) { drumStore.isPlaying = false; return }
@@ -793,7 +794,7 @@ function createDrumMachineEngine() {
     if (typeof sync !== 'number') { clickSequenceTab(e.detail?.seq, !!e.detail?.quantize); return }
     const seq = e.detail?.seq
     _rigSeqSteps = 0
-    if (!drumStore.isPlaying || sync <= 0 || !externalGrid.active || seq === drumStore.activeSequence) {
+    if (!drumStore.isPlaying || sync <= 0 || seq === drumStore.activeSequence) {
       // Stopped, at once, or the one already playing: switch now (and drop a queued switch).
       _pendingSequence = null
       pendingSequence.value = null
@@ -1185,7 +1186,7 @@ function createDrumMachineEngine() {
     }
     if (!drumStore.isPlaying) return
     if (!rig) { handlePlayStop(); return }
-    if (sync > 0 && externalGrid.active) { _rigStopSteps = sync; pendingStop.value = true } else drumStore.isPlaying = false
+    if (sync > 0) { _rigStopSteps = sync; pendingStop.value = true } else drumStore.isPlaying = false
   }
   // 'dm-play-stop' (MIDI Learn, DECK card): { play: true/false }, or a toggle like the PLAY button;
   // a Rig pad adds { sync } (its Trigger sync).

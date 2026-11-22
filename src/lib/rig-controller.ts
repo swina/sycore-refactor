@@ -40,7 +40,8 @@ export const KEY_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 
 export type PressMode = 'retrigger' | 'holdStop' | 'holdMotion' | 'latch'
 export type MotionMode = 'stay' | 'oneShot' | 'marchWrap' | 'marchStay' | 'marchStop' | 'random' | 'exclusiveRandom'
 export type GridSync = 'off' | '1/4' | '1/2' | '1' | '2' | '4'
-export type TriggerSync = GridSync | 'auto' | 'queue' | 'tolerant'
+/** '8' / '16': 2 / 4 bars (in beats, as '4' = a bar). */
+export type TriggerSync = GridSync | '8' | '16' | 'auto' | 'queue' | 'tolerant'
 export type PositionSync = GridSync | 'auto'
 
 export interface TrackOptions {
@@ -77,6 +78,8 @@ export const TRIGGER_SYNC_OPTIONS: { value: TriggerSync; label: string; hint: st
   // ¼ and ½ beat left out: too short a wait to launch a part (they still work as stored values in SIM).
   ...GRID_OPTIONS.filter(o => o.value !== '1/4' && o.value !== '1/2')
     .map(o => ({ ...o, hint: o.value === 'off' ? 'Starts at once' : `Starts on the next ${o.label}` })),
+  { value: '8', label: '2 bars', hint: 'Starts on the next 2-bar line (of the song grid)' },
+  { value: '16', label: '4 bars', hint: 'Starts on the next 4-bar line (of the song grid)' },
   { value: 'auto', label: 'Auto', hint: "From the slot's length, up to 4 beats" },
   { value: 'queue', label: 'Queue', hint: 'Slots pressed while one plays are queued and play in that order' },
   { value: 'tolerant', label: 'Tolerant', hint: 'A press just after the bar line (within 1 beat) starts at once, cutting the beginning' },
@@ -217,6 +220,8 @@ export function triggerSyncSteps(a: RigAppState, slot: number): number {
   const t = a.opts.triggerSync
   if (t === 'auto') return Math.min(slotSteps(a, slot), STEPS_PER_BAR)
   if (t === 'queue' || t === 'tolerant') return STEPS_PER_BAR
+  if (t === '8') return 2 * STEPS_PER_BAR
+  if (t === '16') return 4 * STEPS_PER_BAR
   return GRID_STEPS[t]
 }
 

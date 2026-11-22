@@ -134,7 +134,7 @@ Drop **`sycore-rig.amxd`** on any track (more than one if you like). **With brid
 
 Rows are ordered **Drum, Chord, Seq, Bass, Arp** (top to bottom: the panel, the Launchpad's rows 1–5, the MIDImix's strips 1–5). The SY.CORE Rig device in Live shows the same layout (bridge 1.7+). Two rows work differently from the others:
 
-- **Bass** is the Drum Machine's **bassline**, played as a **part of its own**: the Drum row launches the drums and the Bass row the bassline, independently — drums + bass, drums only, bass only. A Bass pad turns the bassline on from that sequence (it may be another one than the drums': drums on A, bass on C), the slot playing turns it off and the drums go on; the same for the Drum row. Both off, the Drum Machine stops; a pad on a stopped Drum Machine starts it with that part only. Trigger sync, arming with Live stopped and sections work per row; with Live stopped an armed Drum or Bass slot is **loaded at once** (the Drum Machine shows that sequence; the bassline is pinned to its own armed slot, so the drums' switch doesn't move it). The bassline plays on the Drum Machine's **bassline source pads** (the last three: Rim Shot, Cowbell, Tambourine by default): while no bassline is in use those pads play their **drum** steps like the others; with the Bass part on (or a Bass slot armed) they are its voices, shown as **BASS 1–3** in purple in the Drum Machine's play view. Its **Mute / Solo / Intensity** act on the bassline only, and the Drum row's (on the whole app) on the drums only. Intensity as **CC 7** needs the bassline on its own MIDI channel (Drum Machine › bassline › MIDI CH, with MIDI OUT ONLY); otherwise it scales velocity. **GEN** makes a new bassline in the sequence the bass plays, on the Chord Prog's key when it is exact, and switches the bassline on.
+- **Bass** is the Drum Machine's **bassline**, played as a **part of its own**: the Drum row launches the drums and the Bass row the bassline, independently — drums + bass, drums only, bass only. A Bass pad turns the bassline on from that sequence (it may be another one than the drums': drums on A, bass on C), the slot playing turns it off and the drums go on; the same for the Drum row. Both off, the Drum Machine stops; a pad on a stopped Drum Machine starts it with that part only. Trigger sync, arming with Live stopped and sections work per row; with Live stopped an armed Drum or Bass slot is **loaded at once** (the Drum Machine shows that sequence; the bassline is pinned to its own armed slot, so the drums' switch doesn't move it). The bassline plays on the Drum Machine's **bassline source pads** (the last three: Rim Shot, Cowbell, Tambourine by default): while no bassline is in use those pads play their **drum** steps like the others; with the Bass part on (or a Bass slot armed) they are its voices, shown as **BASS 1–3** in amber in the Drum Machine's play view (its EDIT colour). Its **Mute / Solo / Intensity** act on the bassline only, and the Drum row's (on the whole app) on the drums only. Intensity as **CC 7** needs the bassline on its own MIDI channel (Drum Machine › bassline › MIDI CH, with MIDI OUT ONLY); otherwise it scales velocity. **GEN** makes a new bassline in the sequence the bass plays, on the Chord Prog's key when it is exact, and switches the bassline on.
 - **Arp** has no slots: pads **A–H pick an arp mode** (up, down, up-down, down-up, converge, diverge, pinky-up, random) and switch the Arpeggiator on; the mode playing, pressed again, switches it off. Its **Density** sets the Arpeggiator's **octave range** (−3…+3) and its **Intensity** the **rate** (the Arpeggiator's own rates, 1/1d … 1/64t, as its Rate slider); both follow the Arpeggiator's panel and can be MIDI-learned (*Arp Octave*, *Arp Rate*). Mute / Solo act on the Arpeggiator's output (no volume Intensity, and Global doesn't touch it). The Arpeggiator runs on its own rate: Trigger sync and Live's Stop don't apply to it.
 
 In LIVE, **Repeat** (hold) is the Drum Machine's Repeat; **Seq Free** (where Latch was) decouples the Sequencer from the Chord Prog; splits, lane mutes and Undo are simulation-only (the splits and lane mutes are no longer on the Launchpad).
@@ -204,8 +204,10 @@ Each track has a **Trigger sync** in its *Track options*, equivalent to Live's l
 | **1 beat** | the next beat |
 | **2 beats** | the next half bar |
 | **Bar** (default) | the next bar line |
+| **2 bars** | the next 2-bar line of the song grid |
+| **4 bars** | the next 4-bar line (a phrase) |
 
-Sync points are on **Live's song grid**: a drum pattern launched on beat 2 with *1 beat* keeps beat 2 as its own start, exactly as a clip launched with 1-beat quantization. On the Launchpad, the top **Sync** button cycles the focused track's Trigger sync.
+Sync points are on **Live's song grid**: a drum pattern launched on beat 2 with *1 beat* keeps beat 2 as its own start, exactly as a clip launched with 1-beat quantization. On **SY.CORE's own clock** (no Live) they are on SY.CORE's bar grid while its transport runs: a Drum pad on *Bar* waits for the next bar line there too. On the Launchpad, the top **Sync** button cycles the focused track's Trigger sync.
 
 ### With Live stopped: arming
 
@@ -298,7 +300,7 @@ The Fill pad / button: **dark amber** off, **light amber blinking** waiting for 
 
 > GEN overwrites the active slot. Keep a progression you like in another slot, or save it, before generating over it.
 
-**Shift + GEN** (Mutate) works in LIVE for the **Sequencer**: a part of its pattern is generated again (its **Vary** amount, or a quarter at Vary 100), the rest kept; for the other rows it is simulation-only for now.
+**Shift + GEN** in the panel (Mutate) works in LIVE for the **Sequencer**: a part of its pattern is generated again (its **Vary** amount, or a quarter at Vary 100), the rest kept; for the other rows it is simulation-only for now.
 
 ### The key
 
@@ -330,7 +332,7 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 | **Row 6** | **Fill** (dark amber / light amber waiting / red playing) · **Auto Fill** (the Drum Machine's Autofill: on green, off amber) · **Now / Bar** (the Fill's when: NOW amber, BAR green) · **Repeat** (hold) · **Seq Free** (the Sequencer decoupled from the Chord Prog: on green, off amber) · **Drum Chain** · **Chord Chain** · **Seq Chain** (dark red off, red blinking on) |
 | **Row 7** | **Sections 1–8** — or **Captures 1–8** (side **S·SEC / S·CAP**, below) |
 | **Row 8** | **Latch 1–8**: the Chord Prog stays on chord 1–8 of the slot playing, without advancing (amber: a chord there · blinking: waits for the chord sounding to end · green: holding); press it again and the progression goes on from the chord after it. Another Latch pad moves the hold to that chord; Panic releases it. (To silence an app: its slot pads, the MIDImix's Mute, the panel's **M**.) |
-| **Side** | **GEN** Drum, Chord, Seq, Bass, Arp (Shift: Mutate) · **DJ** Filter (hold: the cutoff CC — default 21, set in the Launchpad panel's **DJ Filter CC** — closes on every real app, release: opens) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
+| **Side** | **GEN** Drum, Chord, Seq, Bass, Arp (**Shift: Mute** that lane, red while muted; Mutate: the panel's Shift + GEN) · **DJ** Filter (hold: the cutoff CC — default 21, set in the Launchpad panel's **DJ Filter CC** — closes on every real app, release: opens) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
 | **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Sync** · Rig · — · Panic (hold) |
 
 ### Captures (row 7 in Captures mode)

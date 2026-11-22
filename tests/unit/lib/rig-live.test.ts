@@ -177,6 +177,8 @@ describe('rig-live Trigger sync (pads in LIVE)', () => {
     expect(liveSyncSteps('1', true)).toBe(4)
     expect(liveSyncSteps('2', true)).toBe(8)
     expect(liveSyncSteps('4', true)).toBe(16)
+    expect(liveSyncSteps('8', true)).toBe(32) // 2 bars
+    expect(liveSyncSteps('16', true)).toBe(64) // 4 bars
     expect(liveSyncSteps('queue', true)).toBe(16)
     expect(liveSyncSteps('4', false)).toBe(0)
   })

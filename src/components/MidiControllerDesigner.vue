@@ -509,6 +509,11 @@
             :class="['flex-1 text-[9px] uppercase tracking-wider py-1.5 transition-colors font-bold', drawerTab === 'actions' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-neutral-500 hover:text-white']"
           >Actions</button>
           <button
+            @click="drawerTab = 'devices'"
+            :class="['flex-1 text-[9px] uppercase tracking-wider py-1.5 transition-colors font-bold', drawerTab === 'devices' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-neutral-500 hover:text-white']"
+            title="The instruments (not controllers): their Virtual Device controls, CC table, channels"
+          >Devices</button>
+          <button
             @click="drawerTab = 'app'"
             :class="['flex-1 text-[9px] uppercase tracking-wider py-1.5 transition-colors font-bold', drawerTab === 'app' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-neutral-500 hover:text-white']"
           >App</button>
@@ -623,7 +628,7 @@
 
           <!-- MIDI Actions tab -->
           <template v-else-if="drawerTab === 'actions'">
-            <template v-for="(actions, group) in actionGroups" :key="group">
+            <template v-for="[group, actions] in sortedActionGroups" :key="group">
               <button
                 @click="collapsedActions.has(group) ? collapsedActions.delete(group) : collapsedActions.add(group); collapsedActions = new Set(collapsedActions)"
                 class="w-full flex items-center justify-between px-3 py-1 text-[8px] uppercase tracking-widest text-amber-500/80 font-bold bg-neutral-900 sticky top-0 hover:text-amber-400 transition-colors"
@@ -646,9 +651,39 @@
             </template>
           </template>
 
+          <!-- Devices tab: the instruments (not controllers) -->
+          <template v-else-if="drawerTab === 'devices'">
+            <div v-if="!deviceGroups.length" class="px-3 py-4 text-[9px] text-neutral-600">No instruments: add one to the MIDI Flow (a Virtual Instrument with its CC table).</div>
+            <template v-for="g in deviceGroups" :key="g.name">
+              <button
+                @click="collapsedDevices.has(g.name) ? collapsedDevices.delete(g.name) : collapsedDevices.add(g.name); collapsedDevices = new Set(collapsedDevices)"
+                class="w-full flex items-center justify-between px-3 py-1 text-[8px] uppercase tracking-widest text-amber-500/80 font-bold bg-neutral-900 sticky top-0 hover:text-amber-400 transition-colors"
+              >
+                {{ g.name }}
+                <ChevronDown class="w-3 h-3 transition-transform shrink-0" :class="collapsedDevices.has(g.name) ? '-rotate-90' : ''" />
+              </button>
+              <template v-if="!collapsedDevices.has(g.name)">
+                <template v-for="sec in g.sections" :key="sec.label">
+                  <div class="px-3 pt-1.5 pb-0.5 text-[8px] uppercase tracking-wider text-neutral-600">{{ sec.label }}</div>
+                  <button
+                    v-for="item in sec.items" :key="item.paramName ?? item.action"
+                    @click="item.paramName ? assignToAppParam(drawerControl, item.paramName, item.label) : assignToMidiAction(drawerControl, item.action)"
+                    :class="[
+                      'w-full text-left px-3 py-1.5 text-[10px] transition-colors leading-tight',
+                      (drawerControl.assignment?.paramName && drawerControl.assignment.paramName === item.paramName) ||
+                      (item.action && isActionAssigned(drawerControl, item.action))
+                        ? 'text-violet-400 bg-violet-900/20'
+                        : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                    ]"
+                  >{{ item.label }}</button>
+                </template>
+              </template>
+            </template>
+          </template>
+
           <!-- App Controls tab -->
           <template v-else>
-            <template v-for="section in APP_SECTIONS" :key="section.key">
+            <template v-for="section in sortedAppSections" :key="section.key">
               <button
                 @click="collapsedApp.has(section.key) ? collapsedApp.delete(section.key) : collapsedApp.add(section.key); collapsedApp = new Set(collapsedApp)"
                 class="w-full flex items-center justify-between px-3 py-1 text-[8px] uppercase tracking-widest text-amber-500/80 font-bold bg-neutral-900 sticky top-0 hover:text-amber-400 transition-colors"
@@ -658,7 +693,7 @@
               </button>
               <template v-if="!collapsedApp.has(section.key)">
                 <button
-                  v-for="item in section.items" :key="item.paramName ?? item.action"
+                  v-for="item in sortedItems(section.items)" :key="item.paramName ?? item.action"
                   @click="item.paramName ? assignToAppParam(drawerControl, item.paramName, item.label) : assignToMidiAction(drawerControl, item.action)"
                   :class="[
                     'w-full text-left px-3 py-1.5 text-[10px] transition-colors',
@@ -878,6 +913,7 @@ import {
   createControl,
 } from '@/lib/midi-controller-presets'
 import { MIDI_ACTION_GROUPS, isContinuousAction, actionLabel, parseViCcAction } from '@/lib/app-midi-actions'
+import { vdpCcParam, vdpSlotParam } from '@/lib/virtual-device'
 import { findLayoutForDevice } from '@/lib/controller-layout-library'
 import { useMidiFeedback } from '@/composables/useMidiFeedback'
 import { applyParamValue } from '@/composables/useMidiCCListener'
@@ -1057,18 +1093,37 @@ const collapsedApp     = ref(new Set(APP_SECTIONS.map(s => s.key)))
 // MIDI_ACTION_GROUPS plus one dynamic group per virtual instrument that has a
 // named CC table — those entries can't be pre-declared as static AppAction
 // literals since instruments/tables are user-defined and open-ended.
-const actionGroups = computed(() => {
-  const groups = { ...MIDI_ACTION_GROUPS }
-  midiStore.virtualInstruments.forEach(vi => {
-    const actions = vi.ccTable?.length ? vi.ccTable.map(row => `vi_cc:${vi.name}:${row.cc}`) : []
-    // One toggle action per channel — enables/disables that channel in the
-    // instrument's multi-channel fanout, same as clicking it in the
-    // "Multi-CH out" grid on its MIDI FLOW card.
-    for (let ch = 0; ch < 16; ch++) actions.push(`vi_ch:${vi.name}:${ch}`)
-    groups[`Virtual: ${vi.name}`] = actions
-  })
-  return groups
-})
+// Lists in alphabetical order (numbers as numbers: "Ch 2" before "Ch 10")
+const byText = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+const sortedItems = items => [...items].sort((a, b) => byText(a.label, b.label))
+const sortedAppSections = computed(() => [...APP_SECTIONS].sort((a, b) => byText(a.label, b.label)))
+
+// Actions tab: the app's actions by group (the instruments' own: the Devices tab)
+const sortedActionGroups = computed(() =>
+  Object.entries(MIDI_ACTION_GROUPS)
+    .map(([g, list]) => [g, [...list].sort((a, b) => byText(actionLabel(a, midiStore.virtualInstruments), actionLabel(b, midiStore.virtualInstruments)))])
+    .sort((a, b) => byText(a[0], b[0])))
+
+// Devices tab: each instrument (a Virtual Instrument — not a controller): its Virtual Device
+// controls (the CC table, its sound slots), the CC sent as a MIDI action, its channels.
+const collapsedDevices = ref(new Set())
+const deviceGroups = computed(() => [...midiStore.virtualInstruments]
+  .sort((a, b) => byText(a.name, b.name))
+  .map(vi => {
+    const cc = [...(vi.ccTable ?? [])].sort((a, b) => byText(a.name ?? '', b.name ?? ''))
+    const sections = [
+      { label: 'Virtual Device · CC table', items: cc.map(row => ({ paramName: vdpCcParam(vi.name, row.cc), label: `${row.name || 'CC'} (CC ${row.cc})` })) },
+      { label: 'Virtual Device · sound slots', items: Array.from({ length: 8 }, (_, i) => ({ paramName: vdpSlotParam(i, vi.name), label: `Sound slot ${i + 1}` })) },
+      { label: 'CC (MIDI action)', items: cc.map(row => ({ action: `vi_cc:${vi.name}:${row.cc}`, label: actionLabel(`vi_cc:${vi.name}:${row.cc}`, midiStore.virtualInstruments) })) },
+      // One toggle per channel: that channel in the instrument's Multi-CH out (its MIDI FLOW card)
+      { label: 'Channels (Multi-CH out)', items: Array.from({ length: 16 }, (_, ch) => ({ action: `vi_ch:${vi.name}:${ch}`, label: actionLabel(`vi_ch:${vi.name}:${ch}`, midiStore.virtualInstruments) })) },
+    ].filter(s => s.items.length)
+    return { name: vi.name, sections }
+  }))
+watch(() => deviceGroups.value.map(g => g.name).join('|'), () => {
+  // collapsed by default, as the other tabs' groups
+  collapsedDevices.value = new Set(deviceGroups.value.map(g => g.name))
+}, { immediate: true })
 
 // Pending assignment — set when user clicks an action/param, confirmed before saving
 const pendingAssignment = ref(null) // { type: 'action'|'param', action?, paramName?, paramLabel?, label }
@@ -2073,7 +2128,7 @@ function exportMappingCatalogCsv() {
   const BOM = '\uFEFF'
   const rows = [['Type','Section','Action / Param Name','Label','Continuous']]
 
-  for (const [group, actions] of Object.entries(actionGroups.value)) {
+  for (const [group, actions] of sortedActionGroups.value) {
     for (const action of actions) {
       rows.push([
         'Action',
@@ -2082,6 +2137,12 @@ function exportMappingCatalogCsv() {
         actionLabel(action, midiStore.virtualInstruments),
         isContinuousAction(action) ? 'Yes' : '',
       ])
+    }
+  }
+
+  for (const g of deviceGroups.value) {
+    for (const sec of g.sections) for (const item of sec.items) {
+      rows.push([item.action ? 'Action' : 'Param', `Device: ${g.name} · ${sec.label}`, item.action ?? item.paramName, item.label, item.action && isContinuousAction(item.action) ? 'Yes' : ''])
     }
   }
 

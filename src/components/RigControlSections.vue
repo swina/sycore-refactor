@@ -10,7 +10,7 @@ import { useSessionTakesStore } from '@/stores/useSessionTakesStore'
 
 defineProps({ only: { type: String, required: true } }) // transport | template | performance | safety
 const {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, isRigApp, learnMenu,
+  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, syncButton, isRigApp, learnMenu,
   tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg,
   onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode,
   knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
@@ -51,8 +51,8 @@ const takes = useSessionTakesStore()
       <div class="flex gap-1.5 mt-2">
         <button :class="[btn, btnIdle, 'flex-1', learnedRing('rig_tap')]" title="Tap the tempo (EXT over SY.CORE Link: Live's) · right-click: MIDI Learn"
                 @click="tap" @contextmenu="learnMenu($event, 'rig_tap', 'Rig Tap tempo')">Tap</button>
-        <button :class="[btn, 'flex-1', btnIdle]" :title="`Trigger sync of ${focused.label} — click to cycle`" @click="cycleSync"
-                @contextmenu="isRigApp(focused.id) && learnMenu($event, `rig_sync_${focused.id}`, `${focused.label} Trigger sync`)">Sync: {{ SYNC_SHORT[focused.opts.triggerSync] }}</button>
+        <button :class="[btn, 'flex-1', btnIdle]" :title="syncButton.title" @click="cycleSync"
+                @contextmenu="isRigApp(focused.id) && learnMenu($event, `rig_sync_${focused.id}`, `${focused.label} Trigger sync`)">Sync: {{ syncButton.text }}</button>
       </div>
       <!-- Live's Play starts the armed slots — off to listen back to a take in Live (lib/rig-live.ts rigFollowPlay) -->
       <button :class="[btn, 'w-full mt-1.5', rigFollowPlay ? btnIdle : 'bg-red-600/30 border-red-500/60 text-red-200']"

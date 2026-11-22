@@ -36,6 +36,7 @@ import { nextArpIndex, defaultArpPatternState } from '@/lib/arp-patterns'
 import { StepScheduler, createWorkerTicker, chaseNote, VoiceLedger, noteOffDecideAt } from '@/core/midi/step-scheduler'
 import { externalGrid } from '@/core/midi/external-grid'
 import { stopGate } from '@/core/midi/stop-gate'
+import { intGrid } from '@/core/midi/int-grid'
 import { chordAfter, latchIndex } from '@/lib/chord-next'
 import { rigReports } from '@/lib/rig-live'
 import { audioTimeToPerfMs, perfMsToAudioTime } from '@/lib/audio-clock'
@@ -402,8 +403,13 @@ function createChordProgEngine() {
       }
       const t = bar != null ? externalGrid.timeOf(bar) : null
       if (t != null) { startMs = t; bpm = externalGrid.bpm || bpm; _sysStartSixteenth = bar }
-    } else if (alignToBar) {
-      startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+    } else {
+      // INT: on the bar grid of the sequences already playing (int-grid.ts), as the Drum Machine and
+      // the Sequencer — a Rig pad's Trigger sync (or the transport's bar) waits for their next bar
+      // line; else in phase with the bar playing. Alone: now, or the transport's next bar line.
+      const sync = alignToBar || _cpStartSteps >= 16
+      if (sync && transportManager.isRunning.value) startMs = audioTimeToPerfMs(getTransport().nextSubdivision('1m'))
+      startMs = intGrid.join('chord', now, bpm, sync, startMs)
     }
     _cpStartSteps = 0
     _sysSched = new StepScheduler((_step, t, late) => {
@@ -420,6 +426,7 @@ function createChordProgEngine() {
   }
 
   function _stopSystemClock() {
+    intGrid.leave('chord')
     _stopTicker?.(); _stopTicker = null
     _offExtGrid?.(); _offExtGrid = null
     _sysSched?.stop(); _sysSched = null
@@ -491,6 +498,9 @@ function createChordProgEngine() {
       _cpCueSteps = 0
       _cpStopSteps = 0
       _cpStartSteps = 0
+      _cpCueAtEnd = false
+      _cpStopAtEnd = false
+      _cpWrapped = false
       cuedSlotIdx.value = null
       if (repeatEventIdRef.value !== null) {
         getTransport().clear(repeatEventIdRef.value)
@@ -550,11 +560,14 @@ function createChordProgEngine() {
 
         // A cued slot (Control Map) starts on the bar line, from its first chord — a Rig pad's on
         // its sync point of the song grid.
-        const cueNow = _cpCueSteps ? songTick % (_cpCueSteps * 24) === 0 : (_transportTicks - 1) % 384 === 0
+        // sync -1 (the Rig's "start only"): at the end of the slot playing — its progression wrapped
+        const cueNow = _cpCueAtEnd ? _cpWrapped : _cpCueSteps ? songTick % (_cpCueSteps * 24) === 0 : (_transportTicks - 1) % 384 === 0
+        _cpWrapped = false
         if (_cpCueSlot !== null && cueNow && !state.chainSlotIndices) {
           const idx = _cpCueSlot
           _cpCueSlot = null
           _cpCueSteps = 0
+          _cpCueAtEnd = false
           // The old slot's notes end on the bar line, not where their own note-offs were.
           if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
           handleSlotSelect(idx)
@@ -774,9 +787,13 @@ function createChordProgEngine() {
           else {
             const nextPointer = state.stepPointer + 1
             if (nextPointer >= activeCount) {
-              if (!state.loop) {
+              // the end of the slot: a "start only" stop ends here, a cued slot comes in on the next tick
+              if (!state.loop || _cpStopAtEnd) {
+                if (_cpStopAtEnd && _sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
+                _cpStopAtEnd = false
                 drawAt(() => { store.isPlaying = false }, time)
               }
+              _cpWrapped = true
               state.stepPointer = 0
             } else {
               state.stepPointer = nextPointer
@@ -885,7 +902,7 @@ function createChordProgEngine() {
       getTransport().bpm.value = bpm
     }
     // System clock on the internal tempo (with an external master the grid follows Live's beats).
-    if (_sysSched && !externalGrid.active) _sysSched.setTempo(bpm)
+    if (_sysSched && !externalGrid.active) { _sysSched.setTempo(bpm); intGrid.setTempo(bpm, performance.now()) }
   })
 
   // Switching the clock while playing: restart on the other one.
@@ -1093,18 +1110,22 @@ function createChordProgEngine() {
   // Live's song grid (0 = at once), the stop lets the chords play up to it.
   const _onCpStart = (e) => {
     const sync = e?.detail?.sync
-    if (_cpStopSteps) { _cpStopSteps = 0; return } // a queued stop: un-queue it
+    if (_cpStopSteps || _cpStopAtEnd) { _cpStopSteps = 0; _cpStopAtEnd = false; return } // a queued stop: un-queue it
     if (store.isPlaying) return
     _cpStartSteps = typeof sync === 'number' ? Math.max(0, sync) : 0
     store.isPlaying = true
   }
   const _onCpStop = (e) => {
     const sync = e?.detail?.sync
-    // Queued only while following Live's grid: on its own clock the Chord Prog stops at once.
-    if (typeof sync === 'number' && sync > 0 && store.isPlaying && externalGrid.active) { _cpStopSteps = sync; return }
+    // -1 (the Rig's "start only"): at the end of the slot playing
+    if (sync === -1 && store.isPlaying) { _cpStopAtEnd = true; return }
+    // Queued for the sync point, on Live's grid or SY.CORE's own clock.
+    if (typeof sync === 'number' && sync > 0 && store.isPlaying) { _cpStopSteps = sync; return }
     store.isPlaying = false
   }
   const _onCpSlotSelect = (e) => { handleSlotSelect(e.detail?.idx ?? 0) }
+  // The Rig's Mute (Shift + the Chord row): the chord sounding ends now, not at its note-off.
+  const _onCpVoicesCut = () => { _cpCutVoicesAt(performance.now() + 1) }
   // Rig Controller GEN (LIVE): a new progression into the active slot, played from its next chord.
   // { mode: 'ai' } asks the AI (key and length of the slot); not configured or failed → built-in.
   let _cpGenBusy = false
@@ -1128,12 +1149,16 @@ function createChordProgEngine() {
   let _cpCueSteps = 0    // Rig pad (Trigger sync): the cue's sync point, sixteenths (1 = next sixteenth, "at once")
   let _cpStopSteps = 0   // Rig pad: a stop queued for that sync point
   let _cpStartSteps = 0  // Rig pad: the next start waits for that sync point
+  let _cpCueAtEnd = false   // Rig "start only": the cued slot comes in at the end of the slot playing
+  let _cpStopAtEnd = false  // Rig "start only": the stop at the end of the slot playing
+  let _cpWrapped = false    // the progression just wrapped (the end of the slot)
   const _onCpSlotCue = (e) => {
     const idx = e.detail?.idx
     if (idx == null || idx < 0 || idx >= (store.SLOT_COUNT ?? 8)) return
     if (!store.isPlaying || playStateRef.current?.chainSlotIndices) { handleSlotSelect(idx); return }
     const sync = e.detail?.sync
-    _cpCueSteps = typeof sync === 'number' ? Math.max(1, sync) : 0
+    _cpCueAtEnd = sync === -1
+    _cpCueSteps = typeof sync === 'number' && sync > 0 ? Math.max(1, sync) : typeof sync === 'number' && sync === 0 ? 1 : 0
     _cpCueSlot = idx === store.activeSlotIndex ? null : idx
     cuedSlotIdx.value = _cpCueSlot
   }
@@ -1253,7 +1278,7 @@ function createChordProgEngine() {
   const fillDuration = ref('1m')
   const fillDurationRandom = ref(false)
 
-  const events = { 'cp-start': _onCpStart, 'cp-stop': _onCpStop, 'cp-slot-select': _onCpSlotSelect, 'cp-slot-cue': _onCpSlotCue, 'cp-generate': _onCpGenerate }
+  const events = { 'cp-start': _onCpStart, 'cp-stop': _onCpStop, 'cp-slot-select': _onCpSlotSelect, 'cp-slot-cue': _onCpSlotCue, 'cp-generate': _onCpGenerate, 'cp-voices-cut': _onCpVoicesCut }
   for (const [name, fn] of Object.entries(events)) window.addEventListener(name, fn)
   const unsubs = [
     midiService.addNoteListener(_onMidiNoteIn),

@@ -750,6 +750,7 @@ function createSequencerEngine(lane = 'main') {
   // for that sync point of Live's song grid; a stop lets the pattern play up to it (CLK SYS only).
   let _seqStartSteps = 0
   let _seqStopSteps = 0
+  let _seqStopAtEnd = false // the Rig's "start only": the stop at the end of the pattern
   let _sysStep = 0 // the system clock's step index of the step being handed out
 
   function _startSystemClock(callback) {
@@ -1293,12 +1294,13 @@ function createSequencerEngine(lane = 'main') {
     if (play === false && e.detail?.user && isPlaying.value) _heldOff = true
     if (typeof sync === 'number') {
       if (play) {
-        if (_seqStopSteps) { _seqStopSteps = 0; return } // a queued stop: un-queue it
+        if (_seqStopSteps || _seqStopAtEnd) { _seqStopSteps = 0; _seqStopAtEnd = false; return } // a queued stop: un-queue it
         if (isPlaying.value) return
         _seqStartSteps = Math.max(0, sync)
         isPlaying.value = true
       } else if (isPlaying.value) {
-        if (sync > 0 && _sysSched && externalGrid.active) _seqStopSteps = sync
+        if (sync === -1) _seqStopAtEnd = true // at the end of its pattern
+        else if (sync > 0 && _sysSched) _seqStopSteps = sync
         else isPlaying.value = false
       }
       return
@@ -1734,6 +1736,7 @@ function createSequencerEngine(lane = 'main') {
       _stopSystemClock()
       _seqStartSteps = 0
       _seqStopSteps = 0
+      _seqStopAtEnd = false
       dynamicMidiTranspose.value = 0
       dynamicDegreeShift.value = 0
       transportManager.releaseTransport()
@@ -1853,6 +1856,18 @@ function createSequencerEngine(lane = 'main') {
             lastFollowedBank = -1
           }
           _seqLastBank = state.bankIndices?.[stepIdx] ?? null
+          // the Rig's "start only" stop: at the end of the pattern (its first step again)
+          if (_seqStopAtEnd && stepIdx === 0) {
+            _seqStopAtEnd = false
+            const at = tMs ?? audioTimeToPerfMs(time)
+            for (const v of _seqVoices.cutAt(at)) {
+              midiStore.sendNoteOff(v.note, 0, v.channel, SRC, null, at - 1, chOpts({ workerTimed: true }))
+              activeMidiNotes.value.delete(v.key)
+            }
+            state.isPlaying = false
+            setTimeout(() => { isPlaying.value = false }, Math.max(0, at - performance.now()))
+            return
+          }
           if (_pendingBank !== null && stepIdx === 0 && !seqStore.chainEnabled) {
             // The old bank's notes still sounding (ties) end where the new bank starts.
             if (tMs != null) {
