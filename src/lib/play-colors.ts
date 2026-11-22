@@ -1,9 +1,11 @@
 /**
- * Play views (Performance workspace) and the Rig's Launchpad in them: one color scheme for slots
- * and pads — empty: dark; filled, not playing: dark amber; queued / armed: amber, blinking;
- * playing: full amber. No glow (lowEffects).
+ * Play views (Performance workspace) and the Rig's Launchpad in them: one scheme for slots and
+ * pads — empty: dark; filled, not playing: dark; queued / armed: blinking; playing: full. In each
+ * app's own color, as its EDIT view: Drum Machine and Chord Prog purple, Sequencer amber (the
+ * Rig's Launchpad stays amber: its LEDs). No glow (lowEffects).
  */
 export type SlotLook = 'empty' | 'filled' | 'current' | 'queued' | 'playing'
+export type PlayAccent = 'amber' | 'purple'
 
 export const SLOT_CLASS: Record<SlotLook, string> = {
   empty:   'bg-neutral-900 border-neutral-800 text-neutral-600',
@@ -13,6 +15,18 @@ export const SLOT_CLASS: Record<SlotLook, string> = {
   queued:  'bg-amber-500 border-amber-300 text-black animate-pulse',
   playing: 'bg-amber-400 border-amber-200 text-black',
 }
+
+export const SLOT_CLASS_PURPLE: Record<SlotLook, string> = {
+  empty:   SLOT_CLASS.empty,
+  filled:  'bg-purple-950/60 border-purple-900/70 text-purple-200/70',
+  current: 'bg-purple-900/60 border-purple-400 text-purple-100 ring-1 ring-purple-400/70',
+  queued:  'bg-purple-500 border-purple-300 text-white animate-pulse',
+  playing: 'bg-purple-400 border-purple-200 text-black',
+}
+
+/** A slot's classes in an app's color. */
+export const slotClass = (accent: PlayAccent, look: SlotLook): string =>
+  (accent === 'purple' ? SLOT_CLASS_PURPLE : SLOT_CLASS)[look]
 
 /** The Rig's Launchpad colors (lib/rig-controller LpColor) in the play view's scheme. */
 export const PLAY_LED_CLASS: Record<string, string> = {

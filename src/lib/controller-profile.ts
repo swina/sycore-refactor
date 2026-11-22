@@ -20,7 +20,7 @@ export interface ProfileSettings {
   liveDevices: string[] | null
   /** The key that switches Live ↔ Performance. */
   key: RigToggleBinding | null
-  /** Follow the clock: Live while SY.CORE follows an external clock (CLK SYS / Link), Performance when it stops. */
+  /** Follow the clock: Live while SY.CORE follows an external clock (MIDI clock / Link), Performance when it stops. */
   autoLive: boolean
 }
 

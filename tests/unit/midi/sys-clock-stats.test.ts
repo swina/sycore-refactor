@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { StepScheduler } from '@/core/midi/step-scheduler'
 import { countSendDelay, countLongTask, countFlushGap, countSendCost, countLongFrame, takeSysClockStats, resetSysClockStats } from '@/core/midi/sys-clock-stats'
 
-describe('CLK SYS diagnostics counters', () => {
+describe('TIMING MIDI diagnostics counters', () => {
   beforeEach(() => resetSysClockStats())
 
   it('nothing happened: empty fragment', () => {
@@ -13,9 +13,9 @@ describe('CLK SYS diagnostics counters', () => {
     const s = new StepScheduler(() => {}, { lookaheadMs: 100, lateToleranceMs: 60, name: 'DRUM' })
     s.start(1000, 120)  // a 16th = 125 ms
     s.tick(1300)        // late start: steps 0, 1 late (skipped on purpose); 2 (1250), 3 (1375) on time
-    expect(takeSysClockStats()).toBe('CLK SYS start DRUM +300 ms')
+    expect(takeSysClockStats()).toBe('TIMING MIDI start DRUM +300 ms')
     s.tick(1800)        // stall: steps 4 (1500), 5 (1625) late; 6 (1750), 7 (1875) on time
-    expect(takeSysClockStats()).toBe('CLK SYS late steps DRUM 2')
+    expect(takeSysClockStats()).toBe('TIMING MIDI late steps DRUM 2')
   })
 
   it('send delay: average and max, negative as 0, reset after take', () => {

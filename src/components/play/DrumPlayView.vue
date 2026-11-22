@@ -21,8 +21,9 @@ const drumStore = useDrumMachineStore()
 const chainEntries = computed(() => props.chain ?? [])
 const snap = computed(() => drumSnapshot(drumStore.sequences, undefined, drumStore.activeSequence, drumStore.isPlaying && drumStore.drumsOn, rigReports.queued.drum ?? rigArmed.drum))
 const beat = computed(() => drumStore.isPlaying ? drumPosition.value.beat : 0)
-const DRUM_ON = 'bg-amber-700/80 border-amber-600/60'
-const BASS_ON = 'bg-purple-600/80 border-purple-400/60'
+// as the EDIT view: drum steps purple (accent yellow), bassline amber
+const DRUM_ON = 'bg-purple-600/80 border-purple-400/60'
+const BASS_ON = 'bg-amber-600/50 border-amber-400/60'
 const props = defineProps({ capture: { type: Number, default: -1 }, chain: { type: Array, default: null }, chainPos: { type: Number, default: -1 } }) // bass step awaiting a MIDI note (voice * 16 + step)
 const emit = defineEmits(['preview', 'step-toggle', 'step-context', 'bass-toggle', 'bass-context', 'bass-wheel', 'bass-capture'])
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -64,7 +65,7 @@ function onDbl(t, i) {
   <div class="flex flex-col gap-2 p-3 min-h-0">
     <!-- Chain mode on: the slots narrow, the chain on their right -->
     <div class="flex items-center gap-3 min-w-0">
-      <PlaySlots :snap="snap" :compact="drumStore.chainEnabled" :class="drumStore.chainEnabled ? '' : 'flex-1'" />
+      <PlaySlots accent="purple" :snap="snap" :compact="drumStore.chainEnabled" :class="drumStore.chainEnabled ? '' : 'flex-1'" />
       <PlayChain v-if="drumStore.chainEnabled" class="flex-1" :entries="chainEntries" :trim-empty="false" :current="drumStore.isPlaying ? props.chainPos : -1" />
     </div>
     <div class="flex flex-col gap-1 min-h-0">
@@ -72,19 +73,19 @@ function onDbl(t, i) {
         <div class="shrink-0 w-20" />
         <div class="flex-1 flex gap-2">
           <div v-for="b in 4" :key="b" class="flex-1 h-1.5 rounded-full"
-               :class="beat === b ? 'bg-amber-400' : 'bg-neutral-800'" />
+               :class="beat === b ? 'bg-purple-400' : 'bg-neutral-800'" />
         </div>
       </div>
       <div v-for="(t, ti) in rows" :key="ti" class="flex items-center gap-2">
         <button class="shrink-0 w-20 text-left text-[10px] font-bold truncate hover:text-white focus:outline-none"
-                :class="t.bass ? 'text-purple-300 uppercase' : 'text-neutral-400'" title="Preview"
+                :class="t.bass ? 'text-amber-300 uppercase' : 'text-neutral-400'" title="Preview"
                 @click.stop="emit('preview', t.ti)">{{ t.label }}</button>
         <div class="flex-1 flex gap-2">
           <div v-for="g in 4" :key="g" class="flex-1 grid grid-cols-4 gap-1">
             <button v-for="l in 4" :key="l" class="relative h-4 rounded-sm border focus:outline-none"
                  :class="(g - 1) * 4 + (l - 1) >= (t.length ?? 16) ? 'bg-transparent border-transparent cursor-default'
                    : t.steps[(g - 1) * 4 + (l - 1)]?.active
-                     ? (t.steps[(g - 1) * 4 + (l - 1)].accent ? (t.bass ? 'bg-purple-400 border-purple-200' : 'bg-amber-400 border-amber-300') : t.on)
+                     ? (t.steps[(g - 1) * 4 + (l - 1)].accent ? (t.bass ? 'bg-amber-400 border-amber-200' : 'bg-yellow-400 border-yellow-300') : t.on)
                      : 'bg-neutral-900 border-neutral-800 hover:bg-neutral-800'"
                  :title="inLen(t, (g - 1) * 4 + (l - 1)) ? cellTitle(t, (g - 1) * 4 + (l - 1)) : undefined"
                  @click.stop="onClick(t, (g - 1) * 4 + (l - 1))"

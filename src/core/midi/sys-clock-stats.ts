@@ -123,10 +123,10 @@ export function countSendDelay(lateMs: number): void {
 export function takeSysClockStats(): string {
   const parts: string[] = [];
   if (startLate.size > 0) {
-    parts.push(`CLK SYS start ${[...startLate.entries()].map(([app, ms]) => `${app} ${ms >= 0 ? '+' : ''}${Math.round(ms)}`).join(', ')} ms`);
+    parts.push(`TIMING MIDI start ${[...startLate.entries()].map(([app, ms]) => `${app} ${ms >= 0 ? '+' : ''}${Math.round(ms)}`).join(', ')} ms`);
   }
   if (lateSteps.size > 0) {
-    parts.push(`CLK SYS late steps ${[...lateSteps.entries()].map(([app, n]) => `${app} ${n}`).join(', ')}`);
+    parts.push(`TIMING MIDI late steps ${[...lateSteps.entries()].map(([app, n]) => `${app} ${n}`).join(', ')}`);
   }
   if (delayCount > 0) {
     parts.push(`send delay avg ${(delaySum / delayCount).toFixed(1)} / max ${Math.round(delayMax)} ms (${delayCount} msgs)`);

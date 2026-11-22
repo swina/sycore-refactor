@@ -2204,8 +2204,8 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
         <button
           @click.stop="drumStore.systemClock = !drumStore.systemClock"
           :title="drumStore.systemClock
-            ? 'Clock: SYSTEM — steps on the system clock (a Worker timer, timestamped MIDI): MIDI stays in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
-            : 'Clock: AUDIO — steps on the Tone.js transport (audio clock), as before. Click for SYSTEM (Worker timer, timestamped MIDI): best with MIDI OUT ONLY.'"
+            ? 'Timing: MIDI — the steps are timed for MIDI, each note sent at its exact time: MIDI stays in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
+            : 'Timing: AUDIO — the steps follow the audio engine (Tone.js), as before. Click for MIDI: best with MIDI OUT ONLY.'"
           :class="[
             'flex items-center gap-1 px-2 py-0.5 -mt-1 rounded border text-[9px] font-black uppercase tracking-widest transition-colors',
             drumStore.systemClock
@@ -2213,7 +2213,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
               : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
           ]"
         >
-          CLK {{ drumStore.systemClock ? 'SYS' : 'AUDIO' }}
+          TIMING {{ drumStore.systemClock ? 'MIDI' : 'AUDIO' }}
         </button>
         <div class="w-px h-4 bg-neutral-800 shrink-0" />
 
@@ -2328,7 +2328,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     </template>
       <!-- Performance: the play view (display only; the Rig plays it) -->
       <template v-else>
-        <PlayPanelHeader title="Drum Machine" panel-id="drum-machine" @pointerdown.stop="onDragStart" @close="uiStore.isDrumMachineOpen = false" @minimize="toggleMinimize" @maximize="maximize">
+        <PlayPanelHeader title="Drum Machine" panel-id="drum-machine" accent="text-purple-300" @pointerdown.stop="onDragStart" @close="uiStore.isDrumMachineOpen = false" @minimize="toggleMinimize" @maximize="maximize">
           <!-- the style Generate uses (also the Rig's GEN on the Drum row) -->
           <select v-model="selectedStyle" title="Drum style: what Generate (and the Rig's GEN) writes"
                   class="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-200 max-w-36 cursor-pointer"

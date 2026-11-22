@@ -13,18 +13,18 @@ import ChordNowPanel from '@/components/ChordNowPanel.vue'
 import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
-import { SLOT_CLASS } from '@/lib/play-colors'
+import { SLOT_CLASS_PURPLE } from '@/lib/play-colors'
 import { rigArmed, rigLaneRows } from '@/lib/rig-live'
 import { useSequencerEngine } from '@/core/engines/sequencer'
 import { velLevel } from '@/lib/play-colors'
 import SeqViewSelect from '@/components/play/SeqViewSelect.vue'
 import { reloadSeqPlayView } from '@/lib/seq-play-view'
 
-// Performance play views: display only, in the amber scheme.
+// Performance play views: display only, each in its app's EDIT color (Drum / Chord Prog purple, Sequencer amber).
 describe('play views', () => {
   beforeEach(() => { localStorage.clear(); reloadSeqPlayView(); setActivePinia(createPinia()) })
 
-  it('Chord Prog: slots A–H and the chords; the chord sounding in full amber', () => {
+  it('Chord Prog: slots A–H and the chords; the chord sounding in full purple', () => {
     const store = useChordProgStore()
     store.assignChordToStep(0, 'Cm7', [60, 63, 67, 70])
     store.assignChordToStep(1, 'F7', [65, 69, 72, 75])
@@ -35,10 +35,10 @@ describe('play views', () => {
     expect(w.text()).toContain('Cm7')
     expect(w.text()).toContain('1/4') // each chord with its length (default 4n)
     const f7 = w.findAll('div').find(d => d.text().startsWith('F7'))!
-    expect(f7.classes()).toContain('bg-amber-400')
-    // slot A: playing (full amber)
+    expect(f7.classes()).toContain('bg-purple-400')
+    // slot A: playing (full purple)
     const a = w.findAll('div').find(d => d.text() === 'A')!
-    for (const c of SLOT_CLASS.playing.split(' ')) expect(a.classes()).toContain(c)
+    for (const c of SLOT_CLASS_PURPLE.playing.split(' ')) expect(a.classes()).toContain(c)
   })
 
   it('Drum Machine: every track of the sequence, its active steps lit', () => {
@@ -46,10 +46,10 @@ describe('play views', () => {
     store.currentPattern[0].steps[0] = { ...store.currentPattern[0].steps[0], active: true }
     const w = mount(DrumPlayView)
     expect(w.text()).toContain(store.currentPattern[0].label)
-    expect(w.findAll('.bg-amber-700\\/80').length).toBeGreaterThan(0)
+    expect(w.findAll('.bg-purple-600\\/80').length).toBeGreaterThan(0)
   })
 
-  it('Drum Machine: with a bassline in use the last three pads are BASS 1–3 (purple); else all drums', () => {
+  it('Drum Machine: with a bassline in use the last three pads are BASS 1–3 (amber); else all drums', () => {
     rigLaneRows.bass = false // the Bass row on the Drum Machine's bassline (as before the lanes)
     const store = useDrumMachineStore()
     store.basslineEnabled = true

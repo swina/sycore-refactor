@@ -36,7 +36,7 @@
 
         <label class="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" class="w-3 h-3 accent-amber-500" :checked="profileSettings.autoLive" @change="updateProfile({ autoLive: $event.target.checked })" />
-          <span>Follow the clock: Live while an external clock (CLK SYS / Link) is followed</span>
+          <span>Follow the clock: Live while an external clock (Live's MIDI clock or Link) is followed</span>
         </label>
 
         <div class="flex flex-col gap-0.5">

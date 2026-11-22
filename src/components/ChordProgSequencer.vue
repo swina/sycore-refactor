@@ -706,15 +706,15 @@ function velBarColor(v) {
         <button
           @click.stop="systemClock = !systemClock"
           :title="systemClock
-            ? 'Clock: SYSTEM — ticks on the system clock (a Worker timer), chords, strums, arps and bass sent at their times: in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
-            : 'Clock: AUDIO — ticks on the Tone.js transport (audio clock), as before. Click for SYSTEM (Worker timer).'"
+            ? 'Timing: MIDI — timed for MIDI: chords, strums, arps and bass sent at their exact times, in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
+            : 'Timing: AUDIO — follows the audio engine (Tone.js), as before. Click for MIDI.'"
           :class="[
             'px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-widest transition-colors',
             systemClock
               ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
               : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
           ]"
-        >CLK {{ systemClock ? 'SYS' : 'AUDIO' }}</button>
+        >TIMING {{ systemClock ? 'MIDI' : 'AUDIO' }}</button>
 
         <!-- Play / Stop -->
         <button

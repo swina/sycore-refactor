@@ -921,15 +921,15 @@ let generateHidden = ref(false)
           <button
             @click.stop="systemClock = !systemClock"
             :title="systemClock
-              ? 'Clock: SYSTEM — steps on the system clock (a Worker timer), notes sent at their time: in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
-              : 'Clock: AUDIO — steps on the Tone.js transport (audio clock), as before. Click for SYSTEM (Worker timer).'"
+              ? 'Timing: MIDI — the steps are timed for MIDI, each note sent at its exact time: they stay in time when the audio is overloaded or the window is in the background. Click for AUDIO.'
+              : 'Timing: AUDIO — the steps follow the audio engine (Tone.js), as before. Click for MIDI.'"
             :class="[
               'px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-widest transition-colors',
               systemClock
                 ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
                 : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500'
             ]"
-          >CLK {{ systemClock ? 'SYS' : 'AUDIO' }}</button>
+          >TIMING {{ systemClock ? 'MIDI' : 'AUDIO' }}</button>
 
           <!-- Direction -->
           <span class="text-[12px] text-neutral-500 font-mono">Direction</span>  

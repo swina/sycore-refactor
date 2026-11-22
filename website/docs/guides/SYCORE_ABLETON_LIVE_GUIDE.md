@@ -385,7 +385,7 @@ A controller can belong to Live (its Control Surface, e.g. a MIDImix on Live's m
 - **Live**: the controllers ticked under *Live's controllers* (by default any MIDImix) are ignored by SY.CORE: no mappings, no MIDI Flow, no LEDs. Their Rig mode is turned off.
 - **Performance**: they work with your MIDI Learn and app mappings, and their LEDs show the state (see *LED feedback* in the Controller Designer guide).
 - **Key**: click **Learn**, then press a button on any controller. That one button switches Live ↔ Performance, even with every panel closed. Its release never reaches a mapping. It works even when the button is on a Live controller, but a button on another controller is better: Live receives the MIDImix's buttons too.
-- **Follow the clock** (off by default): Live mode while SY.CORE follows an external clock (CLK SYS / Link), Performance when that stops.
+- **Follow the clock** (off by default): Live mode while SY.CORE follows an external clock (Live's MIDI clock or Link), Performance when that stops.
 
 In Performance mode with Live open, Live still receives the controller if it is selected as a Control Surface. Close Live, or set that Control Surface to None.
 

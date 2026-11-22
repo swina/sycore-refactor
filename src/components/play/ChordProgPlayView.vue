@@ -22,14 +22,14 @@ const sounding = (i) => store.isPlaying
   <div class="flex flex-col gap-3 p-3 min-h-0">
     <!-- Chain mode on: the slots narrow, the chain on their right -->
     <div class="flex items-center gap-3 min-w-0">
-      <PlaySlots :snap="snap" :compact="store.chainEnabled" :class="store.chainEnabled ? '' : 'flex-1'" />
+      <PlaySlots accent="purple" :snap="snap" :compact="store.chainEnabled" :class="store.chainEnabled ? '' : 'flex-1'" />
       <PlayChain v-if="store.chainEnabled" class="flex-1" :entries="chainEntries" :current="store.isPlaying ? store.playingChainPos : -1" />
     </div>
     <!-- the chords: for reference (the one sounding is in Rig Controls' Now), kept low -->
     <div class="grid grid-cols-8 gap-1 content-start">
       <div v-for="(st, i) in steps" :key="i" data-cp-chord
            class="h-8 rounded border flex flex-col items-center justify-center px-1 font-mono font-bold leading-none min-w-0"
-           :class="sounding(i) ? 'bg-amber-400 border-amber-200 text-black'
+           :class="sounding(i) ? 'bg-purple-400 border-purple-200 text-black'
              : st.active ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-neutral-950 border-neutral-900 text-neutral-700'">
         <template v-if="st.active">
           <span class="text-[11px] truncate max-w-full">{{ st.chordName }}</span>
