@@ -385,6 +385,7 @@ A controller can belong to Live (its Control Surface, e.g. a MIDImix on Live's m
 - **A control set** gives each controller a **role** and turns its presets on:
   - **Perform**: SY.CORE uses it, with its Controller Designer presets and LEDs (see *LED feedback* in the Controller Designer guide).
   - **Live**: SY.CORE ignores it (no mappings, no MIDI Flow, no LEDs) and its Rig mode is turned off.
+  - **Rig**: the whole controller drives the Rig Controller, with its LEDs (Launchpad Mini MK1 and AKAI MIDImix, from their Rig templates). The Rig Controller's **Launchpad Rig / MIDImix Rig** switches set this role in the set in force. It works while the Rig Controller is open.
 - A project has as many sets as you want, e.g. *Perform* (MIDImix on the Mixer preset) and *Live* (MIDImix in the Live role). The footer chip shows the set in force (amber when it gives a controller to Live). Click the chip to switch.
 - **Key**: in Control, click **Learn**, then press a button on any controller, and choose the two sets it switches between. It works even with every panel closed, and its release never reaches a mapping. It works even when the button is on a Live controller, but a button on another controller is better: Live receives the MIDImix's buttons too.
 - **Follow the clock** (off by default): the key's second set while SY.CORE follows an external clock (Live's MIDI clock or Link), the first when that stops.

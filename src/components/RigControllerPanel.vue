@@ -44,7 +44,8 @@ import {
 import { getTransport } from 'tone'
 import { midiService, cableMuteKey } from '@/core/midi/midi-service'
 import { isMidimixName, parseMidimixInput, mixLedDiff, mixLedsOff, Pickup, roleId, learnMixMsg, assignMix, mixMsgLabel, loadMixMap, saveMixMap } from '@/lib/rig-midimix'
-import { liveOwnedNames, isLiveOwned } from '@/core/midi/controller-profiles'
+import { currentSet, setControllerRole } from '@/core/projects'
+import { roleOf } from '@/lib/projects'
 import { learnToggle, matchToggle, toggleLabel, toggleShortLabel, sameToggle, loadToggle, saveToggle, RIG_TOGGLE_SLOTS } from '@/lib/rig-toggle'
 import { rigLinkLaunchpad, parseRigLinkPress } from '@/lib/rig-link-launchpad'
 import { rigLaunchpad, isLaunchpadName, parseLaunchpadInput, ledDiff, colorVelocity, RIG_INIT_MESSAGES, muteOtherSenders, unmuteOtherSenders, rigSend } from '@/lib/rig-launchpad'
@@ -1317,9 +1318,16 @@ function onKeyMode() {
 // ── Physical Launchpad Mini MK1 in Rig mode (rig-launchpad.ts) ────────────
 // On: the Launchpad's buttons are the rig's (no usual mappings) and its LEDs
 // show the state above. Off, or the panel closed: its usual mappings come back.
-const LS_LP_RIG = 'SYCORE_RIG_LAUNCHPAD'
-const lpRig = ref(localStorage.getItem(LS_LP_RIG) === '1')
+// On / off: the Launchpad's role in the project's active control set (Rig ↔ Perform), so it
+// follows the set (the control-set key, Control in MIDI Flow).
 const lpOutput = computed(() => midiStore.outputs.find(o => isLaunchpadName(o.name)) ?? null)
+const LS_LP_PORT = 'SYCORE_RIG_LAUNCHPAD_PORT' // the port name last seen: its role while unplugged
+const lpName = computed(() => lpOutput.value?.name ?? localStorage.getItem(LS_LP_PORT) ?? 'Launchpad Mini')
+watch(() => lpOutput.value?.name, n => { if (n) localStorage.setItem(LS_LP_PORT, n) }, { immediate: true })
+const lpRig = computed({
+  get: () => roleOf(currentSet.value, lpName.value) === 'rig',
+  set: v => setControllerRole(lpName.value, v ? 'rig' : 'perform'),
+})
 let lpSent = null
 
 const lpLeds = computed(() => {
@@ -1373,7 +1381,6 @@ function lpRigOff() {
 }
 watch(lpLeds, pushLeds)
 watch(lpRig, on => {
-  localStorage.setItem(LS_LP_RIG, on ? '1' : '0')
   if (on) lpRigOn(); else lpRigOff()
 }, { immediate: true })
 // Plugged in (again) while Rig mode is on: its LEDs were reset — after the
@@ -1434,9 +1441,15 @@ const mixStrips = computed(() => Array.from({ length: 8 }, (_, i) => {
 // ── Physical AKAI MIDImix in Rig mode (rig-midimix.ts) ─────────────────────
 // On: its pots, faders and buttons are the strips above (no usual mappings),
 // absolute pots with pickup; Mute/Rec Arm/Bank LEDs show the state.
-const LS_MIX_RIG = 'SYCORE_RIG_MIDIMIX'
-const mixRig = ref(localStorage.getItem(LS_MIX_RIG) === '1')
+// On / off: the MIDImix's role in the active control set (Rig ↔ Perform), as the Launchpad's.
 const mixOutput = computed(() => midiStore.outputs.find(o => isMidimixName(o.name)) ?? null)
+const LS_MIX_PORT = 'SYCORE_RIG_MIDIMIX_PORT'
+const mixName = computed(() => mixOutput.value?.name ?? localStorage.getItem(LS_MIX_PORT) ?? 'MIDI Mix')
+watch(() => mixOutput.value?.name, n => { if (n) localStorage.setItem(LS_MIX_PORT, n) }, { immediate: true })
+const mixRig = computed({
+  get: () => roleOf(currentSet.value, mixName.value) === 'rig',
+  set: v => setControllerRole(mixName.value, v ? 'rig' : 'perform'),
+})
 const mixPickup = new Pickup()
 const mixMap = ref(loadMixMap()) // learned controls (a MIDImix reprogrammed with the Akai editor)
 let mixActive = false
@@ -1562,14 +1575,9 @@ function mixMapReset() {
 }
 watch(mixMap, () => { mixSent = null; pushMixLeds() })
 watch(mixRig, on => {
-  localStorage.setItem(LS_MIX_RIG, on ? '1' : '0')
   if (on) mixRigOn(); else mixRigOff()
 }, { immediate: true })
-// A controller that is Live's in the active control set (core/midi/controller-profiles.ts) leaves the Rig.
-watch(() => liveOwnedNames.value.join('|'), () => {
-  if (mixRig.value && isLiveOwned(mixOutput.value?.name ?? 'MIDI Mix')) { mixRig.value = false; s.display = 'Live mode · MIDImix Rig off' }
-  if (lpRig.value && lpOutput.value && isLiveOwned(lpOutput.value.name)) { lpRig.value = false; s.display = 'Live mode · Launchpad Rig off' }
-})
+// (A controller is Rig, Perform or Live in a set: one role at a time, so a Live one is never the Rig's.)
 let mixReinit = null
 watch(() => mixOutput.value?.id, id => {
   clearTimeout(mixReinit)

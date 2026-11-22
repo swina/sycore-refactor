@@ -80,7 +80,7 @@
                     :style="{ left: '0px', top: nodeY(i) + 'px', width: NODE_W + 'px', height: NODE_H + 'px' }"
                     :class="[
                       selected === c.name ? 'ring-2 ring-violet-400' : '',
-                      c.role === 'live' ? 'border-amber-700/60 bg-amber-950/30' : c.conflicts.length ? 'border-red-700/60 bg-red-950/20' : 'border-sky-800/60 bg-sky-950/30 hover:border-sky-500/60',
+                      c.role === 'live' ? 'border-amber-700/60 bg-amber-950/30' : c.role === 'rig' ? 'border-sky-500/60 bg-sky-900/40' : c.conflicts.length ? 'border-red-700/60 bg-red-950/20' : 'border-sky-800/60 bg-sky-950/30 hover:border-sky-500/60',
                     ]"
                     :title="'Show its controls'" @click.stop="selected = selected === c.name ? null : c.name">
               <span class="flex items-center gap-1.5 min-w-0">
@@ -89,9 +89,9 @@
                 <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="c.connected ? 'bg-emerald-400' : 'bg-neutral-700'" :title="c.connected ? 'Connected' : 'Not connected'" />
               </span>
               <span class="flex items-center gap-1.5 text-[9px] font-mono">
-                <span :class="c.role === 'live' ? 'text-amber-300' : 'text-emerald-400'" class="font-black uppercase">{{ c.role === 'live' ? 'Live' : 'Perform' }}</span>
-                <span class="text-neutral-500 truncate">· {{ c.role === 'live' ? 'ignored by SY.CORE' : c.assigned + ' assigned' }}</span>
-                <AlertTriangle v-if="c.conflicts.length && c.role !== 'live'" class="w-3 h-3 text-red-400 shrink-0" />
+                <span :class="c.role === 'live' ? 'text-amber-300' : c.role === 'rig' ? 'text-sky-300' : 'text-emerald-400'" class="font-black uppercase">{{ c.role === 'live' ? 'Live' : c.role === 'rig' ? 'Rig' : 'Perform' }}</span>
+                <span class="text-neutral-500 truncate">· {{ c.role === 'live' ? 'ignored by SY.CORE' : c.role === 'rig' ? 'the whole controller' : c.assigned + ' assigned' }}</span>
+                <AlertTriangle v-if="c.conflicts.length && c.role === 'perform'" class="w-3 h-3 text-red-400 shrink-0" />
               </span>
             </button>
 
@@ -126,17 +126,24 @@
               <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Role in {{ set.name }}</span>
               <div class="flex rounded border border-neutral-700 overflow-hidden">
                 <button v-for="r in ROLES" :key="r.id"
-                        class="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition-colors"
+                        class="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                         :class="sel.role === r.id ? r.on : 'text-neutral-500 hover:text-neutral-200'"
-                        :title="r.title" @click="setControllerRole(sel.name, r.id)">{{ r.label }}</button>
+                        :disabled="roleDisabled(r, sel.name)"
+                        :title="roleTitle(r, sel.name)" @click="setControllerRole(sel.name, r.id)">{{ r.label }}</button>
               </div>
             </div>
 
             <div v-if="sel.role === 'live'" class="text-[10px] text-amber-300/80 leading-snug">
               Ableton Live's control surface in this set: SY.CORE ignores it and sends it no LEDs.
             </div>
+            <div v-if="sel.role === 'rig'" class="flex flex-col gap-1.5 text-[10px] text-sky-200/90 leading-snug">
+              <span>The whole controller drives the Rig Controller ({{ isLaunchpadName(sel.name) ? 'Launchpad template' : 'MIDImix template' }}), with its LEDs. Its presets are paused meanwhile.</span>
+              <span class="text-neutral-500">It works while the Rig Controller is open.</span>
+              <button class="self-start px-2 py-0.5 rounded border border-sky-500/40 text-sky-300 text-[9px] font-black uppercase tracking-wider hover:bg-sky-500/15"
+                      @click="uiStore.openPanel('rig-controller')">Open Rig Controller</button>
+            </div>
 
-            <div class="flex flex-col gap-1" :class="sel.role === 'live' ? 'opacity-40' : ''">
+            <div class="flex flex-col gap-1" :class="sel.role !== 'perform' ? 'opacity-40' : ''">
               <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Presets in this set</span>
               <label v-for="p in sel.presets" :key="p.id" class="flex items-center gap-1.5 cursor-pointer text-[10px] text-neutral-300">
                 <input type="checkbox" class="w-3 h-3 accent-violet-500" :checked="enabled.includes(p.id)" @change="togglePreset(p.id)" />
@@ -151,7 +158,7 @@
               <span>{{ k.button }} is assigned by {{ k.presets.join(' and ') }}: turn one off, or change one of them.</span>
             </div>
 
-            <div v-if="sel.role !== 'live'" class="flex flex-col gap-1">
+            <div v-if="sel.role === 'perform'" class="flex flex-col gap-1">
               <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Controls</span>
               <div v-for="r in sel.rows" :key="r.key"
                    class="grid grid-cols-[1fr_auto] gap-x-2 px-2 py-1 rounded border border-neutral-800 bg-neutral-900/50 text-[10px]">
@@ -191,6 +198,8 @@ import { designerPresets } from '@/core/midi/designer-presets'
 import { presetConflicts, controlFlowGraph, controlMessage, controlTarget } from '@/lib/control-summary'
 import { toggleLabel, toggleShortLabel } from '@/lib/rig-toggle'
 import { AUTOSAVE_CONTROLLER_ID } from '@/lib/midi-controller-presets'
+import { isLaunchpadName } from '@/lib/rig-launchpad'
+import { isMidimixName } from '@/lib/rig-midimix'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 
@@ -198,8 +207,14 @@ const props = defineProps({ canvasNodes: { type: Array, default: () => [] } })
 
 const ROLES = [
   { id: 'perform', label: 'Perform', on: 'bg-emerald-500/80 text-black', title: 'SY.CORE uses it: its presets on, with LEDs' },
+  { id: 'rig', label: 'Rig', on: 'bg-sky-500/80 text-black', title: 'The whole controller drives the Rig Controller (its Rig template), with its LEDs' },
   { id: 'live', label: 'Live', on: 'bg-amber-500/80 text-black', title: "Ableton Live's control surface: SY.CORE ignores it" },
 ]
+/** A controller with a Rig template (the Rig on any controller: next). */
+const hasRigTemplate = name => isLaunchpadName(name) || isMidimixName(name)
+const roleDisabled = (r, name) => r.id === 'rig' && !hasRigTemplate(name)
+const roleTitle = (r, name) => roleDisabled(r, name) ? 'Rig templates for now: Launchpad Mini MK1 and AKAI MIDImix' : r.title
+const RIG_TARGET = 'Rig Controller'
 
 const uiStore = useUiStore()
 const midiStore = useMidiStore()
@@ -249,7 +264,16 @@ const nodeY = i => i * (NODE_H + GAP)
 const targetY = i => i * (TARGET_H + GAP)
 const selected = ref(null)
 const sel = computed(() => controllers.value.find(c => c.name === selected.value) ?? null)
-const graph = computed(() => controlFlowGraph(controllers.value.filter(c => c.role !== 'live').map(c => ({ controller: c.name, controls: c.controls }))))
+const graph = computed(() => {
+  const g = controlFlowGraph(controllers.value.filter(c => c.role === 'perform').map(c => ({ controller: c.name, controls: c.controls })))
+  // a Rig controller: one link to the Rig Controller, the whole controller
+  const rig = controllers.value.filter(c => c.role === 'rig')
+  if (!rig.length) return g
+  return {
+    targets: [RIG_TARGET, ...g.targets],
+    edges: [...rig.map(c => ({ from: c.name, to: RIG_TARGET, count: 'all' })), ...g.edges],
+  }
+})
 const flowH = computed(() => Math.max(nodeY(controllers.value.length) - GAP, targetY(graph.value.targets.length) - GAP, NODE_H))
 const hotTargets = computed(() => new Set(selected.value ? graph.value.edges.filter(e => e.from === selected.value).map(e => e.to) : []))
 const drawnEdges = computed(() => {
@@ -262,7 +286,7 @@ const drawnEdges = computed(() => {
     const hot = selected.value === e.from
     return {
       ...e, hot, dim: !!selected.value && !hot,
-      w: Math.min(4, 1 + Math.log2(e.count)),
+      w: e.count === 'all' ? 4 : Math.min(4, 1 + Math.log2(e.count)),
       d: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`,
       mx: (x1 + x2) / 2, my: (y1 + y2) / 2,
     }
@@ -270,7 +294,7 @@ const drawnEdges = computed(() => {
 })
 const TARGET_ICONS = {
   'Audio Mixer': SlidersHorizontal, 'Drum Machine': Drum, 'Chord Prog': Music, 'Sequencer': ListMusic,
-  'Arpeggiator': Waves, 'Modulation': Waves, 'UI & Panels': LayoutGrid, 'Transport & Performance': Play, 'Sound Engine': Radio,
+  [RIG_TARGET]: LayoutGrid, 'Arpeggiator': Waves, 'Modulation': Waves, 'UI & Panels': LayoutGrid, 'Transport & Performance': Play, 'Sound Engine': Radio,
 }
 const targetIcon = t => TARGET_ICONS[t] ?? Cpu
 

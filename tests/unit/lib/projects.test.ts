@@ -184,3 +184,19 @@ describe('control sets', async () => {
     expect(imp.project.control.keySets).toEqual([imp.project.control.sets[0].id, imp.project.control.sets[1].id])
   })
 })
+
+describe('the Rig role', async () => {
+  const m = await import('@/lib/projects')
+  it('a role like the others; the old Rig switches become it where the controller is Perform', () => {
+    let p = m.createProject('Studio', '', [], 1)
+    const a = p.control.activeSetId
+    const r = m.addSet(p, 'Live', a); p = m.withSetRole(r.project, r.set.id, 'MIDI Mix', 'live')
+    p = m.migrateRigRole(p, ['MIDI Mix', 'Launchpad Mini'])
+    expect(m.roleOf(m.activeSet(p), 'MIDI Mix')).toBe('rig')
+    expect(m.rigDevicesOf(m.activeSet(p)).sort()).toEqual(['Launchpad Mini', 'MIDI Mix'])
+    const live = p.control.sets.find(s => s.id === r.set.id)!
+    expect(m.roleOf(live, 'MIDI Mix')).toBe('live')
+    expect(m.roleOf(live, 'Launchpad Mini')).toBe('rig')
+    expect(m.migrateRigRole(p, [])).toBe(p)
+  })
+})

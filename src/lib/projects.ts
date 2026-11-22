@@ -11,8 +11,13 @@
  * that carries the setup and the presets it uses, so it opens on a clean install.
  */
 
-/** What a controller is in a control set: SY.CORE's (its presets) or Ableton Live's (ignored). */
-export type ControllerRole = 'perform' | 'live'
+/**
+ * What a controller is in a control set: SY.CORE's (its presets), the Rig Controller's (the whole
+ * controller, from a Rig template: Launchpad Mini MK1, AKAI MIDImix), or Ableton Live's (ignored).
+ */
+export type ControllerRole = 'perform' | 'rig' | 'live'
+
+import { portBaseName } from '@/lib/led-feedback'
 
 export interface ControlSet {
   id: string
@@ -210,7 +215,8 @@ export function planImport<S extends { name: string }, P extends { id: string; n
 
 // ── Control sets (phase 3a) ─────────────────────────────────────────────────
 
-const normName = (s: string) => s.trim().toLowerCase()
+// port names compared as the LEDs find a controller's output: "MIDIIN2 (x)" = "MIDIOUT2 (x)" = "x"
+const normName = (s: string) => portBaseName(s)
 
 /** A controller's role in a set (port names compared ignoring case). */
 export function roleOf(set: ControlSet | null | undefined, device: string | null | undefined): ControllerRole {
@@ -223,6 +229,23 @@ export function roleOf(set: ControlSet | null | undefined, device: string | null
 /** The port names that are Live's in a set. */
 export function liveDevicesOf(set: ControlSet | null | undefined): string[] {
   return Object.entries(set?.roles ?? {}).filter(([, r]) => r === 'live').map(([k]) => k)
+}
+
+/** The port names that are the Rig Controller's in a set. */
+export function rigDevicesOf(set: ControlSet | null | undefined): string[] {
+  return Object.entries(set?.roles ?? {}).filter(([, r]) => r === 'rig').map(([k]) => k)
+}
+
+/**
+ * Projects from before the Rig role: the Rig Controller's Launchpad / MIDImix switches
+ * (on in localStorage) become the Rig role of that controller, in every set where it is
+ * Perform. The same project when nothing changes.
+ */
+export function migrateRigRole(p: Project, devices: readonly string[], now = Date.now()): Project {
+  if (!devices.length) return p
+  let next = p
+  for (const s of p.control.sets) for (const d of devices) if (roleOf(s, d) === 'perform') next = withSetRole(next, s.id, d, 'rig', now)
+  return next
 }
 
 function mapSets(p: Project, fn: (s: ControlSet) => ControlSet, now: number): Project {

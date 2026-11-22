@@ -14,11 +14,12 @@ import { auth } from '@/lib/auth'
 import {
   type Project, type ProjectsDoc, createProject, activeSet, withActivePresets, withFlow, uniqueName,
   duplicateProject, migrateProjects, parseProjectsDoc, buildProjectFile, parseProjectFile, planImport,
-  withActiveSet, withSetRole, addSet, renameSet, removeSet, withKeySets, keyTarget, migrateControlSets,
+  withActiveSet, withSetRole, addSet, renameSet, removeSet, withKeySets, keyTarget, migrateControlSets, migrateRigRole,
   type ControllerRole,
 } from '@/lib/projects'
 import { loadMode, loadProfile } from '@/lib/controller-profile'
 import { isMidimixName } from '@/lib/rig-midimix'
+import { isLaunchpadName } from '@/lib/rig-launchpad'
 import { midiService } from '@/core/midi/midi-service'
 import { designerPresets, designerPresetsLoaded, setDesignerPresets } from '@/core/midi/designer-presets'
 import { persistControllerPresets } from '@/lib/midi-controller-presets'
@@ -229,6 +230,23 @@ function oldLiveSettings(): { mode: 'live' | 'performance'; liveDevices: string[
   return { mode, liveDevices: mixes.length ? mixes : ['MIDI Mix'] }
 }
 
+/** The Rig Controller's Launchpad / MIDImix switches of before (localStorage '1'), once: their port names. */
+const OLD_RIG_SWITCHES: [string, (n: string) => boolean, string][] = [
+  ['SYCORE_RIG_LAUNCHPAD', isLaunchpadName, 'Launchpad Mini'],
+  ['SYCORE_RIG_MIDIMIX', isMidimixName, 'MIDI Mix'],
+]
+function takeOldRigSwitches(): string[] {
+  const names = midiService.getInputs().map(i => i.name).filter((n): n is string => !!n)
+  const out: string[] = []
+  for (const [key, is, fallback] of OLD_RIG_SWITCHES) {
+    let v: string | null = null
+    try { v = localStorage.getItem(key) } catch {}
+    if (v === '1') out.push(names.find(is) ?? fallback)
+    if (v === '1' || v === '0') try { localStorage.setItem(key, 'migrated') } catch {}
+  }
+  return out
+}
+
 let installed = false
 
 export function installProjects(): void {
@@ -266,6 +284,9 @@ export function installProjects(): void {
       parsed.projects = parsed.projects.map(p => migrateControlSets(p, old))
       migratedSets = true
     }
+    // The Rig Controller's old Launchpad / MIDImix switches: the Rig role in the sets.
+    const rigDevices = takeOldRigSwitches()
+    if (rigDevices.length) { parsed.projects = parsed.projects.map(p => migrateRigRole(p, rigDevices)); migratedSets = true }
     projects.value = parsed.projects
     currentProjectId.value = parsed.currentId ?? parsed.projects[0]?.id ?? null
     projectsLoaded.value = true
