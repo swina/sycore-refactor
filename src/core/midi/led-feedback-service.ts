@@ -103,6 +103,29 @@ export function installLedFeedback(): void {
   }
 
   watch(wanted, flush, { immediate: true })
+
+  // Diagnosis from the browser console: `sycoreLeds()` — why a button is (not) lit.
+  ;(globalThis as any).sycoreLeds = () => {
+    const outputs = midiService.getOutputs().map(o => o.name)
+    const learn = Object.entries(mapping.midiMappings as Record<string, any>)
+      .filter(([, v]) => v && typeof v === 'object')
+      .map(([key, v]) => ({ kind: 'learn', key, param: v.paramName, device: v.device ?? '(none: no LED)', state: v.paramName ? paramState(v.paramName) : undefined }))
+    const app = (mapping.appMidiMappings ?? []).map((m: any) => ({
+      kind: 'app', key: m.id, param: m.action, device: m.device || '(none: no LED)',
+      state: m.action ? actionState(m.action) : undefined,
+      feedback: m.feedbackOn === undefined ? '(LED Feedback off)' : `${m.feedbackOn}/${m.feedbackOff}`,
+    }))
+    const rows = [...learn, ...app].map(r => ({
+      ...r,
+      output: r.device.startsWith('(') ? '-' : (findOutputFor(r.device, midiService.getOutputs())?.name ?? '(no output found)'),
+      liveOwned: !r.device.startsWith('(') && isLiveOwned(r.device),
+    }))
+    console.log('mode:', controllerMode.value, '· outputs:', outputs)
+    console.table(rows)
+    console.log('wanted (sent when changed):', wanted.value)
+    console.log('last sent:', Object.fromEntries(sent))
+    return rows.length
+  }
   // A controller (re)connected: its LEDs again.
   watch(() => midi.outputs.length, () => { sent.clear(); flush() })
 

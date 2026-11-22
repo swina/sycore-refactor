@@ -61,6 +61,7 @@ import AudioDiagnosticsPanel from '@/components/AudioDiagnosticsPanel.vue'
 import RigControllerPanel from '@/components/RigControllerPanel.vue'
 import { installControllerProfiles } from '@/core/midi/controller-profiles'
 import { installLedFeedback } from '@/core/midi/led-feedback-service'
+import { installDesignerPresets } from '@/core/midi/designer-presets'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
@@ -139,6 +140,7 @@ useControllerManager()
   const clock = useExternalClockStore()
   installControllerProfiles(() => clock.isExternal)
   installLedFeedback()
+  installDesignerPresets()
 }
 const { captureNotesRef, captureNoteCount, captureEnabled, resetCapture } = useMidiCapture()
 const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()

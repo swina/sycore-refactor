@@ -25,6 +25,8 @@ export interface ControlItem {
   channel?: number
   value?: number
   assignment?: ControlAssignment
+  /** An action's app mapping (id designer_ctrl_<id>), loaded while the preset is on (lib/designer-preset-mappings.ts). */
+  appMapping?: Record<string, any>
 }
 
 export interface BackgroundImage {

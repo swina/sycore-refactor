@@ -610,13 +610,13 @@
                 </div>
               </template>
 
-              <p v-if="pendingAssignment?.type === 'action' && !assignedDevice" class="text-[9px] text-amber-400 leading-snug">
-                Assign the preset to a MIDI device first (Preset Settings → Device): an action without a device never fires and gets no LED.
+              <p v-if="pendingAssignment && !assignedDevice" class="text-[9px] text-amber-400 leading-snug">
+                Assign the preset to a MIDI device first (Preset Settings → Device): without a device an action never fires, and nothing gets an LED.
               </p>
               <!-- Confirm / Cancel -->
               <div class="flex gap-1.5 pt-1">
                 <button @click="cancelAssignment" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-neutral-800 border border-neutral-700 rounded text-neutral-400 hover:text-white transition-colors">Cancel</button>
-                <button @click="confirmAssignment" :disabled="pendingAssignment?.type === 'action' && !assignedDevice" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-violet-500 rounded text-white hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Confirm</button>
+                <button @click="confirmAssignment" :disabled="!assignedDevice" class="flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider bg-violet-500 rounded text-white hover:bg-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Confirm</button>
               </div>
             </div>
           </template>
@@ -871,8 +871,8 @@ import { useMidiContextMenu }    from '@/composables/useMidiContextMenu'
 import MidiMapContextMenu        from '@/components/ui/MidiMapContextMenu.vue'
 import MidiControlSweep          from '@/components/MidiControlSweep.vue'
 import MidiAppMappingList       from '@/components/ui/MidiAppMappingList.vue'
+import { designerPresets, designerPresetsLoaded, loadDesignerPresets, setDesignerPresets } from '@/core/midi/designer-presets'
 import {
-  loadControllerPresets,
   persistControllerPresets,
   createControllerPreset,
   createControl,
@@ -925,7 +925,8 @@ const COLOR_PALETTE = [
   '#db2777', // pink
 ]
 
-const presets       = ref([])
+// Shared with the footer and the mapping sync (core/midi/designer-presets.ts)
+const presets       = designerPresets
 const activePresetId = ref('')
 const saving        = ref(false)
 const selectedTool  = ref('pad-switch')
@@ -1173,7 +1174,7 @@ function clearDeviceMappings() {
   for (const k of learnKeys) mappingStore.removeMapping(k)
   for (const p of presets.value) {
     if (!sameDev(p.assignedDevice)) continue
-    for (const c of p.controls ?? []) c.assignment = undefined
+    for (const c of p.controls ?? []) { c.assignment = undefined; c.appMapping = undefined }
   }
   debouncedSave()
   clearMessage.value = `Removed ${app.length + learnKeys.length} mapping(s)`
@@ -1314,20 +1315,13 @@ watch(uid, async (newUid) => {
     uiStore.enabledControllerDesignerPresetIds = [p.id]
     return
   }
-  const loaded = await loadControllerPresets()
-  if (loaded.length > 0) {
-    presets.value = loaded
-    activePresetId.value = loaded[0].id
-    // Enable any presets that don't have an enabled state yet (first-time load)
-    if (uiStore.enabledControllerDesignerPresetIds.length === 0) {
-      uiStore.enabledControllerDesignerPresetIds = loaded.map(p => p.id)
-    }
-  } else {
+  // The shared list (loaded at start by the app): which presets are on is kept per user.
+  if (!designerPresetsLoaded.value) await loadDesignerPresets()
+  if (presets.value.length === 0) {
     const p = createControllerPreset('Default')
-    presets.value = [p]
-    activePresetId.value = p.id
-    uiStore.enabledControllerDesignerPresetIds = [p.id]
+    setDesignerPresets([p])
   }
+  if (!presets.value.some(p => p.id === activePresetId.value)) activePresetId.value = presets.value[0]?.id ?? ''
 }, { immediate: true })
 
 async function savePresets() {
@@ -1593,6 +1587,10 @@ function applyIncoming(ctrl, isHigh, velocity = 127) {
   }
 }
 
+// Incoming MIDI only moves the controls on screen: the assignment itself runs through the
+// mappings it wrote (app mappings / MIDI Learn), as with the Designer closed. Firing it here
+// too ran it twice (a toggle undone).
+// eslint-disable-next-line no-unused-vars
 function fireAssignment(ctrl) {
   if (!ctrl.assignment) return
   const { type, action, paramName } = ctrl.assignment
@@ -1613,7 +1611,6 @@ function onIncomingCC(cc, val, chan, inputId) {
       if (ctrlCh !== chan) continue
       if (preset.assignedDevice && inputName && inputName !== preset.assignedDevice) continue
       applyIncoming(ctrl, val > 0, val)
-      fireAssignment(ctrl)
     }
   }
 }
@@ -1628,7 +1625,6 @@ function onIncomingNote(type, note, velocity, chan, inputId) {
       if (ctrlCh !== chan) continue
       if (preset.assignedDevice && inputName && inputName !== preset.assignedDevice) continue
       applyIncoming(ctrl, isOn, velocity)
-      fireAssignment(ctrl)
     }
   }
 }
@@ -1769,8 +1765,9 @@ function confirmAssignment() {
   const ctrl = drawerControl.value
   if (!ctrl || !pendingAssignment.value) return
   const pa = pendingAssignment.value
-  // useControllerManager drops an app mapping without a device (malformed, not a wildcard)
-  if (pa.type === 'action' && !assignedDevice.value) return
+  // A device is required (plan D2): useControllerManager drops an app mapping without one,
+  // and a parameter without one works on every input and gets no LED.
+  if (!assignedDevice.value) return
 
   if (pa.type === 'action') {
     // vi_cc: entries carry the target channel as part of the action id itself
@@ -1807,10 +1804,13 @@ function confirmAssignment() {
         feedbackOff: hasFeedback.value ? fbOff.value : undefined,
         consume: consume.value,
       })
+      // The control keeps its mapping: the preset loads it when turned on (lib/designer-preset-mappings.ts)
+      ctrl.appMapping = { ...existing[existing.length - 1] }
       mappingStore.saveAppMidiMappings(existing)
     }
     ctrl.assignment = { type: 'midi-action', action: finalAction, label: finalLabel }
   } else {
+    ctrl.appMapping = undefined
     if (ctrl.ccNumber != null || ctrl.noteNumber != null) {
       mappingStore.learnedDevice  = assignedDevice.value || null
       mappingStore.learnedChannel = (ctrl.channel ?? 1) - 1
@@ -1846,6 +1846,7 @@ function clearAssignment(ctrl) {
   if (!ctrl) return
   _removeCtrlFromAppMappings(ctrl)
   ctrl.assignment = undefined
+  ctrl.appMapping = undefined
   debouncedSave()
 }
 

@@ -52,18 +52,15 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { Cpu, Check } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
-import { useAuthStore } from '@/stores/useAuthStore'
-import { loadControllerPresets } from '@/lib/midi-controller-presets'
+import { designerPresets } from '@/core/midi/designer-presets'
 import ControllerModeChip from '@/components/ControllerModeChip.vue'
 
 const uiStore = useUiStore()
-const authStore = useAuthStore()
-const uid = computed(() => authStore.user?.uid)
 
-const presets = ref([])
+const presets = designerPresets
 const hoverOpen = ref(false)
 
 const enabledCount = computed(() => uiStore.enabledControllerDesignerPresetIds.length)
@@ -86,14 +83,6 @@ function openDesigner() {
   hoverOpen.value = false
 }
 
-watch(uid, async (newUid) => {
-  if (!newUid) {
-    presets.value = []
-    return
-  }
-  const loaded = await loadControllerPresets()
-  presets.value = loaded
-}, { immediate: true })
 </script>
 
 <style scoped>

@@ -493,6 +493,24 @@ export function isVirtualDeviceControl(mappings, deviceName, chan, kind, number)
   return !!mappedParamFor(mappings, deviceName || null, chan, kind, number)?.startsWith('vdp_')
 }
 
+/**
+ * Whether a CC / note is learned on this device (a device-bound MIDI Learn mapping): it is a
+ * control, so it is consumed — kept out of Thru. A knob learned on a controller that is also
+ * cabled in MIDI Flow moved its parameter and reached the cabled instrument as a CC too.
+ * Device-less (legacy "any device") mappings are left out: they would block that CC / note
+ * from every input's Thru.
+ */
+export function isLearnedOnDevice(mappings, deviceName, chan, kind, number) {
+  if (!deviceName) return false
+  return mappedParamFor(mappings, deviceName, chan, kind, number, { withPlain: false }) != null
+}
+
+/** Kept out of Thru: Virtual Device controls (any key) and controls learned on this device. */
+export function isThruExcludedControl(mappings, deviceName, chan, kind, number) {
+  return isVirtualDeviceControl(mappings, deviceName, chan, kind, number)
+    || isLearnedOnDevice(mappings, deviceName, chan, kind, number)
+}
+
 /** The mapping keys a CC/note can be stored under, most specific first (withPlain: the legacy device-less CC#/NOTE# key too). */
 export function mappingKeysFor(deviceName, chan, kind, number, { withPlain = true } = {}) {
   const frag = kind === 'note' ? `NOTE${number}` : `CC${number}`
@@ -690,9 +708,9 @@ export function useMidiCCListener() {
     unsubCC = midiService.addCCListener(onCC)
     unsubNote = midiService.addNoteListener(onNote)
     unsubPitch = midiService.addPitchBendListener(onPitchBend)
-    // Virtual Device controls are consumed: kept out of Thru (see midiService.setThruExclude)
+    // Learned controls are consumed: kept out of Thru (see midiService.setThruExclude)
     midiService.setThruExclude((deviceName, chan, kind, number) =>
-      isVirtualDeviceControl(mappingStore.midiMappings, deviceName, chan, kind, number))
+      isThruExcludedControl(mappingStore.midiMappings, deviceName, chan, kind, number))
   })
 
   onUnmounted(() => {

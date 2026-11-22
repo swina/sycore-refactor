@@ -49,9 +49,24 @@ If the currently selected device has a known template (Akai MIDI Mix, Novation L
 
 Attach a SysEx dump string to any controller preset via the **Preset Settings** drawer (visible in the right panel when no control is selected). The SysEx fires automatically on preset activate, with a manual **Send Now** button. Supports hex (`F0 … F7`), 0x-prefixed, and decimal formats.
 
-### Preset Enable/Disable
+### Presets are setups: turn them on and off
 
-Enabled presets (toggled from the footer indicator) broadcast their controls to the MIDI engine. Multiple presets can be active simultaneously — controls merge by device assignment.
+A preset holds the mappings of its controls. Only the presets that are **on** are mapped. Turn them on and off from the footer's **Controller Presets** (hover the icon, tick the presets). The choice is kept when you reload.
+
+- **On**: its actions and parameters work, with LEDs, whether the Designer is open or not.
+- **Off**: its mappings are removed. Your own MIDI Learn and App MIDI Mapper mappings are not touched.
+- Several presets can be on together, for different controllers or for the same one. When two presets that are on use the same button, the one later in the list wins.
+- So one controller can have several setups (e.g. *MIDImix Mixer* and *MIDImix Slots*): tick the one your rig needs.
+- A MIDI Learn mapping you made by hand on a button a preset uses is replaced while that preset is on.
+
+### Projects: a setup with its controllers
+
+A **project** is a MIDI Flow setup plus the presets that are on with it. Loading a project loads the setup and turns on exactly its presets.
+
+- **Save** a setup in MIDI Flow (Saved configurations, or the save icon in the footer). SY.CORE then asks **Controllers for this setup**. The presets on now are already ticked. Name the project and press **Save project**. **Setup only** saves just the routing.
+- **Load**: in MIDI Flow's Saved configurations, under **Projects**, click a project. Clicking a setup under **Setups** loads only the routing and leaves the presets as they are.
+- **Same setup, different controllers**: save two projects on the same setup, e.g. *Studio · Live* (MIDImix as Live's surface) and *Studio · Perf* (MIDImix Mixer preset on). The routing is saved once. Change it and both projects use the change.
+- Saving under an existing project name updates that project. Deleting a project keeps its setup and presets. A project whose setup was deleted can't be loaded. Presets deleted since it was saved are skipped.
 
 ---
 

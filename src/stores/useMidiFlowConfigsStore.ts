@@ -2,9 +2,12 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
+import { parseProjects, upsertProject, removeProject, type FlowProject } from '@/lib/flow-projects'
 
 const STORAGE_KEY = 'SYCORE_MIDI_FLOW_CONFIGS'
 const LAST_CONFIG_STORAGE_KEY = 'SYCORE_MIDI_FLOW_LAST_CONFIG'
+const PROJECTS_STORAGE_KEY = 'SYCORE_MIDI_FLOW_PROJECTS'
+const LAST_PROJECT_STORAGE_KEY = 'SYCORE_MIDI_FLOW_LAST_PROJECT'
 
 export interface MidiFlowConfigEntry {
   name: string
@@ -31,6 +34,14 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
   const liveNodes = ref<any[]>([])
   const liveCables = ref<any[]>([])
 
+  // Projects: a setup + the Controller Designer presets on with it (lib/flow-projects.ts).
+  const projects = ref<FlowProject[]>(loadProjects())
+  const lastProjectName = ref<string>(localStorage.getItem(userKey(LAST_PROJECT_STORAGE_KEY)) ?? '')
+
+  function loadProjects(): FlowProject[] {
+    try { return parseProjects(JSON.parse(localStorage.getItem(userKey(PROJECTS_STORAGE_KEY)) ?? '[]')) } catch { return [] }
+  }
+
   function load(): MidiFlowConfigEntry[] {
     try {
       return JSON.parse(localStorage.getItem(userKey(STORAGE_KEY)) ?? '[]')
@@ -47,8 +58,18 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
     localStorage.setItem(userKey(LAST_CONFIG_STORAGE_KEY), val)
   })
 
+  watch(projects, val => {
+    localStorage.setItem(userKey(PROJECTS_STORAGE_KEY), JSON.stringify(val))
+  }, { deep: true })
+
+  watch(lastProjectName, val => {
+    localStorage.setItem(userKey(LAST_PROJECT_STORAGE_KEY), val)
+  })
+
   watch(uid, (newUid) => {
     configs.value = newUid ? load() : []
+    projects.value = newUid ? loadProjects() : []
+    lastProjectName.value = newUid ? (localStorage.getItem(userKey(LAST_PROJECT_STORAGE_KEY)) ?? '') : ''
     lastConfigName.value = newUid ? (localStorage.getItem(userKey(LAST_CONFIG_STORAGE_KEY)) ?? '') : ''
   })
 
@@ -76,5 +97,19 @@ export const useMidiFlowConfigsStore = defineStore('midiFlowConfigs', () => {
     return configs.value.some(c => c.name === name)
   }
 
-  return { configs, saveConfig, getConfig, deleteConfig, hasConfig, lastConfigName, setLastConfigName, liveNodes, liveCables }
+  function saveProject(name: string, setup: string, controllerPresetIds: string[]) {
+    projects.value = upsertProject(projects.value, { name, setup, controllerPresetIds: [...controllerPresetIds], updatedAt: new Date().toISOString() })
+    lastProjectName.value = name
+  }
+
+  function deleteProject(name: string) {
+    projects.value = removeProject(projects.value, name)
+    if (lastProjectName.value === name) lastProjectName.value = ''
+  }
+
+  function setLastProjectName(name: string) {
+    lastProjectName.value = name
+  }
+
+  return { projects, lastProjectName, saveProject, deleteProject, setLastProjectName, configs, saveConfig, getConfig, deleteConfig, hasConfig, lastConfigName, setLastConfigName, liveNodes, liveCables }
 })
