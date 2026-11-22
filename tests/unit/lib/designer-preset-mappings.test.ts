@@ -85,3 +85,32 @@ describe('the Designer canvas learn helper', () => {
     expect(r.learnChanged).toBe(true)
   })
 })
+
+describe('outside changes go into the preset (one source)', () => {
+  it('the App MIDI Mapper edits or deletes a preset\'s mapping; MIDI Learn removes one', async () => {
+    const { syncPresetMappings } = await import('@/lib/designer-preset-mappings')
+    const presets: any[] = [{ id: 'p', assignedDevice: 'MIDI Mix', controls: [
+      { id: 'a', noteNumber: 1, channel: 1, assignment: { type: 'midi-action', action: 'mixer_ch1_mute' }, appMapping: { id: 'designer_ctrl_a', device: 'MIDI Mix', note: 1, channel: 0, action: 'mixer_ch1_mute', feedbackOn: 127, feedbackOff: 0 } },
+      { id: 'b', noteNumber: 4, channel: 1, assignment: { type: 'midi-action', action: 'mixer_ch2_mute' }, appMapping: { id: 'designer_ctrl_b', device: 'MIDI Mix', note: 4, channel: 0, action: 'mixer_ch2_mute' } },
+      { id: 'c', ccNumber: 19, channel: 1, assignment: { type: 'app-param', paramName: 'mix_ch1_vol' } },
+    ] }]
+    const first = syncPresetMappings({ presets, enabledIds: ['p'], app: [], learn: {} })
+    expect(first.app).toHaveLength(2)
+    // outside: a's LED feedback turned off, b deleted, c's MIDI Learn removed
+    const app = first.app.filter(m => m.id !== 'designer_ctrl_b').map(m => m.id === 'designer_ctrl_a' ? { ...m, feedbackOn: undefined, feedbackOff: undefined } : m)
+    const learn = { ...first.learn }
+    delete learn['MIDI Mix:CH1:CC19']
+    const r = syncPresetMappings({ presets, enabledIds: ['p'], app, learn, written: first.written })
+    expect(r.backfilled).toBe(true)
+    expect(presets[0].controls[0].appMapping.feedbackOn).toBeUndefined()
+    expect(presets[0].controls[1].assignment).toBeUndefined()
+    expect(presets[0].controls[2].assignment).toBeUndefined()
+    expect(r.app.map(m => m.id)).toEqual(['designer_ctrl_a'])
+    expect(r.learn).toEqual({})
+    // a preset turned on again: its mappings come back (not taken as deleted)
+    const off = syncPresetMappings({ presets, enabledIds: [], app: r.app, learn: r.learn, written: r.written })
+    const on = syncPresetMappings({ presets, enabledIds: ['p'], app: off.app, learn: off.learn, written: off.written })
+    expect(on.app.map(m => m.id)).toEqual(['designer_ctrl_a'])
+    expect(presets[0].controls[0].assignment).toBeDefined()
+  })
+})

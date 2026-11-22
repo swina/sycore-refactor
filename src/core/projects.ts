@@ -21,7 +21,7 @@ import { loadMode, loadProfile } from '@/lib/controller-profile'
 import { isMidimixName } from '@/lib/rig-midimix'
 import { isLaunchpadName } from '@/lib/rig-launchpad'
 import { midiService } from '@/core/midi/midi-service'
-import { designerPresets, designerPresetsLoaded, setDesignerPresets } from '@/core/midi/designer-presets'
+import { designerPresets, designerPresetsLoaded, setDesignerPresets, adoptionHooks } from '@/core/midi/designer-presets'
 import { persistControllerPresets } from '@/lib/midi-controller-presets'
 import { useMidiFlowConfigsStore } from '@/stores/useMidiFlowConfigsStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -255,6 +255,17 @@ export function installProjects(): void {
   const flow = useMidiFlowConfigsStore()
   const ui = useUiStore()
   const authStore = useAuthStore()
+
+  // The migration of the mappings into presets (phase 4): the presets it made are on in every
+  // set of every project, as their mappings were on everywhere.
+  adoptionHooks.onMigrated = ids => {
+    projects.value = projects.value.map(p => ({
+      ...p,
+      control: { ...p.control, sets: p.control.sets.map(s => ({ ...s, presetIds: [...new Set([...s.presetIds, ...ids])] })) },
+      updatedAt: Date.now(),
+    }))
+    persistSoon()
+  }
 
   async function load() {
     let parsed: ProjectsDoc

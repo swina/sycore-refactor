@@ -28,6 +28,7 @@ import { userKey } from '@/lib/userKey'
 import { bigLoad, bigSave } from '@/lib/big-storage'
 import { useSessionTakesStore } from '@/stores/useSessionTakesStore'
 import { CLIP_SLOTS, buildClip, clipEventsAt, targetSlot, clipSummary } from '@/lib/rig-captures'
+import { onStopAll } from '@/lib/stop-hooks'
 
 const LS_KEY = 'SYCORE_RIG_CAPTURES'
 /** The named sets (the 8 pads saved under a name) — IndexedDB (lib/big-storage.ts). */
@@ -44,6 +45,7 @@ function loadClips() {
 }
 
 let engine = null
+let offStopAll = null
 
 export function useRigCaptures() {
   if (engine) return engine
@@ -322,6 +324,8 @@ export function useRigCaptures() {
   /** Live Perf's OUT cables (routing matrix targets), for the display. */
   const outTargets = () => { try { return midiService.getRouting(MidiSource.LIVE_PERF) } catch { return [] } }
 
+  // every Stop All stops the clips (stopRigCaptures)
+  offStopAll = onStopAll(() => stopRigCaptures())
   engine = { state, hasOutCable, staleNode, outTargets, toggleRecording, startRecording, stopRecording, select, clear, setClip, toggleSlot, stopAllClips, clockRunning, saveSet, loadSet, deleteSet, setsReady }
   return engine
 }
@@ -338,5 +342,6 @@ export function stopRigCaptures() {
 /** Tests: a fresh engine. */
 export function _resetRigCaptures() {
   engine?.stopAllClips()
+  offStopAll?.(); offStopAll = null
   engine = null
 }

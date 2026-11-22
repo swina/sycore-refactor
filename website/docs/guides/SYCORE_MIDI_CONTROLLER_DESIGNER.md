@@ -57,7 +57,19 @@ A preset holds the mappings of its controls. Only the presets that are **on** ar
 - **Off**: its mappings are removed. Your own MIDI Learn and App MIDI Mapper mappings are not touched.
 - Several presets can be on together, for different controllers or for the same one. When two presets that are on use the same button, the one later in the list wins.
 - So one controller can have several setups (e.g. *MIDImix Mixer* and *MIDImix Slots*): tick the one your rig needs.
-- A MIDI Learn mapping you made by hand on a button a preset uses is replaced while that preset is on.
+- A MIDI Learn mapping you make on a button a preset uses goes into that preset (see below).
+
+### Every mapping lives in a preset
+
+A controller's mappings have one home: its Controller Designer presets. Wherever you map a button, it ends up there:
+
+- **MIDI Learn** (right-click a control → MIDI Learn), the **App MIDI Mapper**, a **rig template** (JSON): the mapping goes into a preset of that controller.
+  - If a preset that is on already uses that button, the button gets the new assignment, so learning again replaces it.
+  - Otherwise it goes into the controller's first preset that is on.
+  - If no preset of that controller is on, SY.CORE creates **"<controller> · Learned"** and turns it on.
+- Editing or deleting a preset's mapping in the App MIDI Mapper, or **Remove** in MIDI Learn, changes the preset.
+- A mapping needs its controller's device. One learned with no device, or saved in an old format, is dropped.
+- The first time, SY.CORE moves the mappings you already had into presets. It keeps a copy of the tables and of the MIDI Mapping Presets as they were: **Mappings backup** in MIDI Flow → Control downloads it.
 
 ### Projects: a setup with its controllers
 

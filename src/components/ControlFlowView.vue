@@ -55,17 +55,25 @@
         </div>
       </div>
 
-      <div class="px-4 pt-2 text-[9px] text-neutral-500">
-        Editing <span class="text-violet-300 font-bold">{{ set.name }}</span>, the set in force. To change another set, switch to it.
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-2 text-[9px] text-neutral-500">
+        <span>Editing <span class="text-violet-300 font-bold">{{ set.name }}</span>, the set in force. To change another set, switch to it.</span>
+        <span class="flex-1" />
+        <span v-if="lastAdoption && (lastAdoption.adopted || lastAdoption.dropped.length)" class="text-emerald-400/80"
+              :title="lastAdoption.dropped.length ? 'Dropped (no device, or an old format): ' + lastAdoption.dropped.join(', ') : ''">
+          {{ lastAdoption.adopted }} mapping{{ lastAdoption.adopted === 1 ? '' : 's' }} moved into presets<template v-if="lastAdoption.dropped.length">, {{ lastAdoption.dropped.length }} dropped</template>
+        </span>
+        <button v-if="hasBackup" class="text-neutral-500 hover:text-white underline decoration-dotted"
+                title="The MIDI Learn and App mappings and the MIDI Mapping Presets as they were before they moved into Controller Designer presets"
+                @click="downloadBackup">Mappings backup</button>
       </div>
 
       <!-- The flow: controllers → what they drive; a controller clicked: its controls on the right -->
       <div class="flex-1 flex min-h-0">
-        <div class="flex-1 overflow-auto custom-scrollbar p-4 min-w-0" @click.self="selected = null">
+        <div class="flex-1 overflow-auto custom-scrollbar p-4 min-w-0" @click.self="clearSelection">
           <div v-if="!controllers.length" class="text-center text-[10px] font-mono text-neutral-600 py-8">
             No controllers yet. Add one to the MIDI Flow (Routing), or give a Controller Designer preset a device.
           </div>
-          <div v-else class="relative" :style="{ width: FLOW_W + 'px', height: flowH + 'px' }" @click.self="selected = null">
+          <div v-else class="relative" :style="{ width: FLOW_W + 'px', height: flowH + 'px' }" @click.self="clearSelection">
             <svg class="absolute inset-0 pointer-events-none" :width="FLOW_W" :height="flowH">
               <g v-for="e in drawnEdges" :key="e.from + '→' + e.to">
                 <path :d="e.d" fill="none" :stroke="e.hot ? '#a78bfa' : '#4c1d95'" :stroke-width="e.w" :stroke-opacity="e.dim ? 0.25 : 0.9" />
@@ -96,13 +104,18 @@
             </button>
 
             <!-- targets -->
-            <div v-for="(t, i) in graph.targets" :key="t"
-                 class="absolute flex items-center gap-1.5 px-2.5 rounded-lg border text-[11px] font-bold"
+            <button v-for="(t, i) in graph.targets" :key="t"
+                 class="absolute flex items-center gap-1.5 px-2.5 rounded-lg border text-[11px] font-bold text-left transition-colors"
                  :style="{ left: TARGET_X + 'px', top: targetY(i) + 'px', width: NODE_W + 'px', height: TARGET_H + 'px' }"
-                 :class="hotTargets.has(t) ? 'border-violet-400/70 bg-violet-950/50 text-violet-100' : 'border-neutral-700 bg-neutral-900/70 text-neutral-300'">
+                 :class="[
+                   selectedTarget === t ? 'ring-2 ring-violet-400' : '',
+                   hotTargets.has(t) || selectedTarget === t ? 'border-violet-400/70 bg-violet-950/50 text-violet-100' : 'border-neutral-700 bg-neutral-900/70 text-neutral-300 hover:border-violet-500/50',
+                 ]"
+                 :title="sel ? `Only ${sel.name}'s controls to ${t}` : `Every control to ${t}`"
+                 @click.stop="selectedTarget = selectedTarget === t ? null : t">
               <component :is="targetIcon(t)" class="w-3.5 h-3.5 text-violet-400 shrink-0" />
-              <span class="truncate" :title="t">{{ t }}</span>
-            </div>
+              <span class="truncate">{{ t }}</span>
+            </button>
           </div>
 
           <div v-if="noDevicePresets.length" class="mt-4 rounded-lg border border-amber-800/50 bg-amber-950/10 p-2.5 text-[10px] text-amber-200/90 flex items-start gap-2 max-w-[640px]">
@@ -115,11 +128,40 @@
         </div>
 
         <!-- the controller clicked: role, presets in this set, its controls -->
+        <aside v-if="!sel && selectedTarget" class="w-[340px] shrink-0 border-l border-neutral-800 bg-neutral-950/80 flex flex-col min-h-0">
+          <div class="flex items-center gap-1.5 px-3 py-2 border-b border-neutral-800">
+            <component :is="targetIcon(selectedTarget)" class="w-4 h-4 text-violet-400 shrink-0" />
+            <span class="text-[12px] font-black text-white truncate flex-1" :title="selectedTarget">{{ selectedTarget }}</span>
+            <button class="text-neutral-500 hover:text-white" title="Close" @click="clearSelection"><X class="w-3.5 h-3.5" /></button>
+          </div>
+          <div class="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-3 min-h-0">
+            <span class="text-[9px] text-neutral-500">Every control that drives it, in {{ set.name }}.</span>
+            <div v-for="g in targetGroups" :key="g.name" class="flex flex-col gap-1">
+              <button class="self-start flex items-center gap-1 text-[10px] font-black text-sky-300 hover:text-white" title="Show this controller"
+                      @click="selected = g.name">
+                <Gamepad2 class="w-3 h-3" /> {{ g.name }}
+              </button>
+              <div v-if="g.whole" class="px-2 py-1 rounded border border-sky-800/50 bg-sky-950/20 text-[10px] text-sky-200">The whole controller (Rig role)</div>
+              <div v-for="r in g.rows" :key="r.key"
+                   class="grid grid-cols-[1fr_auto] gap-x-2 px-2 py-1 rounded border border-neutral-800 bg-neutral-900/50 text-[10px]">
+                <span class="flex items-center gap-1 min-w-0">
+                  <span class="font-bold text-neutral-200 truncate">{{ r.label }}</span>
+                  <span v-if="r.led" class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="LED feedback" />
+                </span>
+                <span class="font-mono text-[9px] text-neutral-500 text-right">{{ r.msg }}</span>
+                <span class="col-span-2 flex items-center gap-1 min-w-0 text-violet-200">
+                  <ArrowRight class="w-3 h-3 shrink-0 text-violet-500" />
+                  <span class="truncate" :title="r.to">{{ r.to }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </aside>
         <aside v-if="sel" class="w-[340px] shrink-0 border-l border-neutral-800 bg-neutral-950/80 flex flex-col min-h-0">
           <div class="flex items-center gap-1.5 px-3 py-2 border-b border-neutral-800">
             <Gamepad2 class="w-4 h-4 text-sky-400 shrink-0" />
             <span class="text-[12px] font-black text-white truncate flex-1" :title="sel.name">{{ sel.name }}</span>
-            <button class="text-neutral-500 hover:text-white" title="Close" @click="selected = null"><X class="w-3.5 h-3.5" /></button>
+            <button class="text-neutral-500 hover:text-white" title="Close" @click="clearSelection"><X class="w-3.5 h-3.5" /></button>
           </div>
           <div class="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-3 min-h-0">
             <div class="flex items-center gap-2">
@@ -159,8 +201,12 @@
             </div>
 
             <div v-if="sel.role === 'perform'" class="flex flex-col gap-1">
-              <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Controls</span>
-              <div v-for="r in sel.rows" :key="r.key"
+              <span class="flex items-center gap-1.5">
+                <span class="text-[8px] font-black uppercase tracking-widest text-neutral-500">Controls</span>
+                <button v-if="selectedTarget" class="flex items-center gap-1 px-1.5 py-px rounded bg-violet-500/20 border border-violet-500/40 text-[9px] text-violet-200 hover:bg-violet-500/30"
+                        title="Show all its controls" @click="selectedTarget = null">→ {{ selectedTarget }} <X class="w-2.5 h-2.5" /></button>
+              </span>
+              <div v-for="r in selRows" :key="r.key"
                    class="grid grid-cols-[1fr_auto] gap-x-2 px-2 py-1 rounded border border-neutral-800 bg-neutral-900/50 text-[10px]">
                 <span class="flex items-center gap-1 min-w-0">
                   <span class="font-bold text-neutral-200 truncate">{{ r.label }}</span>
@@ -173,6 +219,7 @@
                 </span>
               </div>
               <span v-if="!sel.rows.length" class="text-[9px] text-neutral-600">No preset on: its controls are played (MIDI Flow cables) and do nothing else.</span>
+              <span v-else-if="!selRows.length" class="text-[9px] text-neutral-600">None of its controls drives {{ selectedTarget }}.</span>
             </div>
 
             <button class="self-start flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-200" @click="openDesigner">
@@ -194,8 +241,10 @@ import {
 } from '@/core/projects'
 import { liveDevicesOf, roleOf } from '@/lib/projects'
 import { profileSettings, learningProfileKey, updateProfile } from '@/core/midi/controller-profiles'
-import { designerPresets } from '@/core/midi/designer-presets'
-import { presetConflicts, controlFlowGraph, controlMessage, controlTarget } from '@/lib/control-summary'
+import { designerPresets, lastAdoption, MAPPINGS_BACKUP_KEY } from '@/core/midi/designer-presets'
+import { bigLoad } from '@/lib/big-storage'
+import { userKey } from '@/lib/userKey'
+import { presetConflicts, controlFlowGraph, controlMessage, controlTarget, targetGroupOf } from '@/lib/control-summary'
 import { toggleLabel, toggleShortLabel } from '@/lib/rig-toggle'
 import { AUTOSAVE_CONTROLLER_ID } from '@/lib/midi-controller-presets'
 import { isLaunchpadName } from '@/lib/rig-launchpad'
@@ -245,6 +294,7 @@ const controllers = computed(() => {
       label: (c.label ?? '').trim() || controlMessage(c),
       msg: controlMessage(c),
       to: controlTarget(c),
+      group: targetGroupOf(c.assignment),
       led: c.appMapping?.feedbackOn !== undefined,
     })))
     return {
@@ -265,7 +315,18 @@ const FLOW_W = 620, NODE_W = 210, NODE_H = 52, TARGET_H = 36, GAP = 14, TARGET_X
 const nodeY = i => i * (NODE_H + GAP)
 const targetY = i => i * (TARGET_H + GAP)
 const selected = ref(null)
+/** A target clicked: the controls to it (of the controller selected, or of every one). */
+const selectedTarget = ref(null)
+const clearSelection = () => { selected.value = null; selectedTarget.value = null }
 const sel = computed(() => controllers.value.find(c => c.name === selected.value) ?? null)
+const selRows = computed(() => !sel.value ? [] : selectedTarget.value ? sel.value.rows.filter(r => r.group === selectedTarget.value) : sel.value.rows)
+const targetGroups = computed(() => {
+  const t = selectedTarget.value
+  if (!t) return []
+  return controllers.value
+    .map(c => ({ name: c.name, whole: c.role === 'rig' && t === RIG_TARGET, rows: c.role === 'perform' ? c.rows.filter(r => r.group === t) : [] }))
+    .filter(g => g.whole || g.rows.length)
+})
 const graph = computed(() => {
   const g = controlFlowGraph(controllers.value.filter(c => c.role === 'perform').map(c => ({ controller: c.name, controls: c.controls })))
   // a Rig controller: one link to the Rig Controller, the whole controller
@@ -278,6 +339,8 @@ const graph = computed(() => {
 })
 const flowH = computed(() => Math.max(nodeY(controllers.value.length) - GAP, targetY(graph.value.targets.length) - GAP, NODE_H))
 const hotTargets = computed(() => new Set(selected.value ? graph.value.edges.filter(e => e.from === selected.value).map(e => e.to) : []))
+const edgeHot = e => (!selected.value || e.from === selected.value) && (!selectedTarget.value || e.to === selectedTarget.value)
+const anySelection = computed(() => !!selected.value || !!selectedTarget.value)
 const drawnEdges = computed(() => {
   const ci = new Map(controllers.value.map((c, i) => [c.name, i]))
   const ti = new Map(graph.value.targets.map((t, i) => [t, i]))
@@ -285,9 +348,9 @@ const drawnEdges = computed(() => {
     const x1 = NODE_W, y1 = nodeY(ci.get(e.from)) + NODE_H / 2
     const x2 = TARGET_X, y2 = targetY(ti.get(e.to)) + TARGET_H / 2
     const dx = (x2 - x1) / 2
-    const hot = selected.value === e.from
+    const hot = anySelection.value && edgeHot(e)
     return {
-      ...e, hot, dim: !!selected.value && !hot,
+      ...e, hot, dim: anySelection.value && !hot,
       w: e.count === 'all' ? 4 : Math.min(4, 1 + Math.log2(e.count)),
       d: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`,
       mx: (x1 + x2) / 2, my: (y1 + y2) / 2,
@@ -305,6 +368,30 @@ const noDevicePresets = computed(() => presets.value.filter(p => !p.assignedDevi
 function togglePreset(id) {
   const ids = enabled.value
   uiStore.enabledControllerDesignerPresetIds = ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]
+}
+
+// the tables as they were before the move into presets (phase 4)
+const hasBackup = ref(false)
+bigLoad(userKey(MAPPINGS_BACKUP_KEY), null).then(v => { hasBackup.value = !!v }).catch(() => {})
+watch(lastAdoption, () => bigLoad(userKey(MAPPINGS_BACKUP_KEY), null).then(v => { hasBackup.value = !!v }).catch(() => {}))
+async function downloadBackup() {
+  const data = await bigLoad(userKey(MAPPINGS_BACKUP_KEY), null)
+  if (!data) return
+  const name = `${(project.value?.name ?? 'SY.CORE').replace(/[\\/:*?"<>|]+/g, '_')} - mappings backup.json`
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  // the save dialog with the name to edit, where the browser has it; else a download with that name
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] })
+      const w = await h.createWritable(); await w.write(blob); await w.close()
+      return
+    } catch (e) { if (e?.name === 'AbortError') return }
+  }
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
 function openDesigner() {

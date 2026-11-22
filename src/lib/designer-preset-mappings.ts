@@ -36,6 +36,12 @@ export interface SyncInput {
   enabledIds: readonly string[]
   app: readonly Record<string, any>[]
   learn: Readonly<Record<string, any>>
+  /**
+   * What the previous run wrote (its `written`). With it, a change made to the tables from
+   * outside (the App MIDI Mapper editing / deleting a preset's mapping, MIDI Learn's Remove)
+   * goes into the preset instead of being undone. None: the first run, nothing taken back.
+   */
+  written?: { app: ReadonlySet<string>; learn: ReadonlySet<string> }
 }
 
 export interface SyncResult {
@@ -43,8 +49,10 @@ export interface SyncResult {
   learn: Record<string, any>
   appChanged: boolean
   learnChanged: boolean
-  /** Controls given their app mapping copy from the table (older presets): save the presets. */
+  /** Controls changed from the tables (older presets' copies, outside edits / deletions): save the presets. */
   backfilled: boolean
+  /** What this run wrote: pass it to the next run. */
+  written: { app: Set<string>; learn: Set<string> }
 }
 
 /** The MIDI Learn key of a control (as useMappingStore.confirmLearn builds it). */
@@ -77,7 +85,7 @@ const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.str
  * The mapping tables with exactly the enabled presets' controls. Mutates the
  * presets only to backfill `appMapping` from the table (see SyncResult.backfilled).
  */
-export function syncPresetMappings({ presets, enabledIds, app, learn }: SyncInput): SyncResult {
+export function syncPresetMappings({ presets, enabledIds, app, learn, written }: SyncInput): SyncResult {
   const enabled = new Set(enabledIds)
   let backfilled = false
 
@@ -88,6 +96,30 @@ export function syncPresetMappings({ presets, enabledIds, app, learn }: SyncInpu
       if (c.assignment?.type !== 'midi-action' || c.appMapping) continue
       const m = byId.get(DESIGNER_APP_PREFIX + c.id)
       if (m) { c.appMapping = { ...m }; backfilled = true }
+    }
+  }
+
+  // Outside changes to what the previous run wrote (enabled presets only): into the presets.
+  if (written) {
+    for (const p of presets) {
+      if (!enabled.has(p.id)) continue
+      for (const c of p.controls ?? []) {
+        if (c.assignment?.type === 'midi-action' && c.appMapping) {
+          const id = DESIGNER_APP_PREFIX + c.id
+          const cur = byId.get(id)
+          if (!cur) {
+            if (written.app.has(id)) { c.assignment = undefined; c.appMapping = undefined; backfilled = true }
+          } else if (!same(cur, { ...c.appMapping, id, device: p.assignedDevice ?? c.appMapping.device })) {
+            c.appMapping = { ...cur }
+            if (cur.action && cur.action !== c.assignment.action) c.assignment = { ...c.assignment, action: cur.action }
+            backfilled = true
+          }
+        } else if (c.assignment?.type === 'app-param') {
+          const e = learnEntryFor(p, c)
+          const k = e && learnKeyFor(e.device, c)
+          if (k && written.learn.has(k) && !learn[k]) { c.assignment = undefined; backfilled = true }
+        }
+      }
     }
   }
 
@@ -133,5 +165,9 @@ export function syncPresetMappings({ presets, enabledIds, app, learn }: SyncInpu
   }
   const learnChanged = !same(nextLearn, learn)
 
-  return { app: nextApp, learn: nextLearn, appChanged, learnChanged, backfilled }
+  const out = {
+    app: new Set(wantedApp.map(m => m.id as string)),
+    learn: new Set(Object.entries(nextLearn).filter(([, v]) => v && typeof v === 'object' && v.designerPreset).map(([k]) => k)),
+  }
+  return { app: nextApp, learn: nextLearn, appChanged, learnChanged, backfilled, written: out }
 }

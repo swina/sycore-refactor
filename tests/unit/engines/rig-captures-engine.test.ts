@@ -11,7 +11,8 @@ vi.mock('@/core/midi/step-scheduler', async (orig) => {
 })
 
 import { createPinia, setActivePinia } from 'pinia'
-import { useRigCaptures, _resetRigCaptures, stopRigCaptures } from '@/core/engines/rig-captures'
+import { useRigCaptures, _resetRigCaptures } from '@/core/engines/rig-captures'
+import { runStopHooks } from '@/lib/stop-hooks'
 import { midiService } from '@/core/midi/midi-service'
 import { externalGrid } from '@/core/midi/external-grid'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -93,7 +94,7 @@ describe('Rig captures engine', () => {
     eng.toggleSlot(0)
     ticker?.(); now += 2100; ticker?.()
     expect(eng.state.play[0]).toBe('playing')
-    stopRigCaptures() // useGlobalTransportControls.stopAll
+    runStopHooks() // what useGlobalTransportControls.stopAll runs
     expect(eng.state.play[0]).toBe('idle')
     expect(eng.state.clips[0]).not.toBeNull()
   })
