@@ -106,6 +106,7 @@ const ACTION_GROUP = new Map<string, string>()
 for (const [g, list] of Object.entries(MIDI_ACTION_GROUPS)) for (const a of list) ACTION_GROUP.set(a, g)
 
 const PARAM_PREFIX: [RegExp, string][] = [
+  [/^rig_/, 'Rig Controller'],
   [/^(mix_|mixer_)/, 'Audio Mixer'],
   [/^dm_/, 'Drum Machine'],
   [/^cp_/, 'Chord Prog'],

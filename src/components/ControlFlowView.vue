@@ -210,10 +210,12 @@ const ROLES = [
   { id: 'rig', label: 'Rig', on: 'bg-sky-500/80 text-black', title: 'The whole controller drives the Rig Controller (its Rig template), with its LEDs' },
   { id: 'live', label: 'Live', on: 'bg-amber-500/80 text-black', title: "Ableton Live's control surface: SY.CORE ignores it" },
 ]
-/** A controller with a Rig template (the Rig on any controller: next). */
+/** A controller with a whole-controller Rig template (others: Rig Controller actions in a preset, Perform). */
 const hasRigTemplate = name => isLaunchpadName(name) || isMidimixName(name)
 const roleDisabled = (r, name) => r.id === 'rig' && !hasRigTemplate(name)
-const roleTitle = (r, name) => roleDisabled(r, name) ? 'Rig templates for now: Launchpad Mini MK1 and AKAI MIDImix' : r.title
+const roleTitle = (r, name) => roleDisabled(r, name)
+  ? 'The whole-controller Rig: Launchpad Mini MK1 and AKAI MIDImix. Any other controller drives the Rig in Perform: assign Rig Controller actions to its controls in the Controller Designer'
+  : r.title
 const RIG_TARGET = 'Rig Controller'
 
 const uiStore = useUiStore()
@@ -270,7 +272,7 @@ const graph = computed(() => {
   const rig = controllers.value.filter(c => c.role === 'rig')
   if (!rig.length) return g
   return {
-    targets: [RIG_TARGET, ...g.targets],
+    targets: [RIG_TARGET, ...g.targets.filter(t => t !== RIG_TARGET)],
     edges: [...rig.map(c => ({ from: c.name, to: RIG_TARGET, count: 'all' })), ...g.edges],
   }
 })

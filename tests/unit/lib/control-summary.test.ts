@@ -47,6 +47,7 @@ describe('control flow', () => {
     expect(targetGroupOf({ type: 'app-param', paramName: 'mix_ch1_vol' })).toBe('Audio Mixer')
     expect(targetGroupOf({ type: 'app-param', paramName: 'dm_play_stop' })).toBe('Drum Machine')
     expect(targetGroupOf({ type: 'app-param', paramName: 'cutoff' })).toBe('Sound Engine')
+    expect(targetGroupOf({ type: 'app-param', paramName: 'rig_slot_drum_a' })).toBe('Rig Controller')
     expect(targetGroupOf(undefined)).toBeNull()
   })
 
