@@ -4,6 +4,7 @@ A running log of new features added to SY.CORE, newest first.
 
 ## 2026-11-22
 
+- **`sycoreThru()` diagnosis**: from the browser console, `sycoreThru()` logs for each CC / note reaching Thru whether it is kept out (learned) or played, the mapping keys tried and the ones found. `sycoreThru(false)` stops it. Files: `composables/useMidiCCListener.js`. Branch: `feat/controller-profiles`
 - **Controller Designer: a parameter needs a device too; `sycoreLeds()` diagnosis**: a parameter assigned in a preset without a Device worked on every input, but never lit its LED, because an LED needs a device to find its output. Now Confirm needs the preset's Device for parameters too, as for actions (plan D2). From the browser console, `sycoreLeds()` lists every mapping with its device, state, LED Feedback, the output found and Live ownership, plus what is wanted and what was last sent. Files: `MidiControllerDesigner.vue`, `core/midi/led-feedback-service.ts`. Branch: `feat/controller-profiles`
 
 ## 2026-11-21

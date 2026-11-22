@@ -709,8 +709,17 @@ export function useMidiCCListener() {
     unsubNote = midiService.addNoteListener(onNote)
     unsubPitch = midiService.addPitchBendListener(onPitchBend)
     // Learned controls are consumed: kept out of Thru (see midiService.setThruExclude)
-    midiService.setThruExclude((deviceName, chan, kind, number) =>
-      isThruExcludedControl(mappingStore.midiMappings, deviceName, chan, kind, number))
+    midiService.setThruExclude((deviceName, chan, kind, number) => {
+      const out = isThruExcludedControl(mappingStore.midiMappings, deviceName, chan, kind, number)
+      // Diagnosis from the console: sycoreThru(true) logs each CC / note reaching Thru.
+      if (globalThis.__sycoreThruLog) {
+        const keys = mappingKeysFor(deviceName || null, chan, kind, number)
+        console.log(`[thru] ${deviceName} ch${chan + 1} ${kind}${number} →`, out ? 'kept out (learned)' : 'PLAYED',
+          '· keys tried:', keys, '· found:', keys.filter(k => mappingStore.midiMappings[k]))
+      }
+      return out
+    })
+    globalThis.sycoreThru = (on = true) => { globalThis.__sycoreThruLog = !!on; return on ? 'logging Thru decisions' : 'off' }
   })
 
   onUnmounted(() => {
