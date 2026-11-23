@@ -15,6 +15,7 @@ import ActiveMidiControllers from '@/components/ActiveMidiControllers.vue'
 import TransportBar from '@/components/TransportBar.vue'
 import WorkspaceSwitcher from '@/components/ui/WorkspaceSwitcher.vue'
 import ProjectSwitcher from '@/components/ProjectSwitcher.vue'
+import SessionSwitcher from '@/components/SessionSwitcher.vue'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import DrumPositionBadge from '@/components/ui/DrumPositionBadge.vue'
 import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
@@ -351,6 +352,7 @@ onUnmounted(() => {
 
         <div v-if="authStore.user" class="flex items-center gap-2">
           <ProjectSwitcher />
+          <SessionSwitcher />
           <WorkspaceSwitcher />
           <TransportBar />
           <VirtualDeviceBadge />

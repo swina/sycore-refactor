@@ -8,6 +8,7 @@
 //   songToModules()   pure: plan → Chord Prog slots / chain, Drum Machine grids
 //   applySongPlan()   loads it into the stores; returns a snapshot for undoSongPlan()
 
+import { autoName } from '@/lib/slot-names'
 import { sendAiPrompt } from '@/lib/ai-service'
 import { userKey } from '@/lib/userKey'
 import type { AiServiceResult } from '@/types/ai'
@@ -414,6 +415,14 @@ export function applySongPlan(plan: SongPlan, opts: { drumStyleFallback?: (style
   const changes = planPresetChanges(plan, mode)
   cp.slotPresets = changes.bySlot
   if (mode !== 'keep') issues.push(...sendPartPresets(changes.atLoad))
+
+  // the slots' names: the plan's sections (Verse, Chorus…), on every app they went to
+  plan.sections.forEach((sec, i) => {
+    const slot = SECTION_IDS.indexOf(sec.id)
+    autoName('chord', i, sec.name, true)
+    if (dm.sequences[sec.id] && (data.drums[sec.id] || plan.style.drumStyle)) autoName('drum', slot, sec.name, true)
+    if (data.seqBanks[sec.id]) autoName('seq', slot, sec.name, true)
+  })
 
   useMidiStore().setGlobalBpm(plan.bpm)
   return { before, issues }

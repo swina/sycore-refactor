@@ -4,7 +4,9 @@ import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import RigControlSections from '@/components/RigControlSections.vue'
 import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 import RigSongsView from '@/components/RigSongsView.vue'
-import { SONG_LANES, emptyLanes, loadSongs, saveSongs, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
+import { RIG_SETTINGS_EVENT, materialPending, syncSongMaterial } from '@/core/sessions'
+import { slotName, labelOf as slotLabelOf } from '@/lib/slot-names'
+import { SONG_LANES, emptyLanes, songLibrary, saveSongs, songRun as sharedSongRun, songCommand, rigLaneMutes, setSongChannels, lanesAt, laneClips, barsToEnd, songFadeBars, fadeStopLine, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
 import { loadSongMaterial, needsSwitch, switchMaterial, captureInto, dropMaterial } from '@/lib/song-material'
 import { rigControlsHost, RIG_CONTROLS_CTX } from '@/lib/rig-controls-host'
 import { usePlayView } from '@/composables/usePlayView'
@@ -276,9 +278,9 @@ function mirrorArp(a) {
 }
 let liveSection = null // LIVE: the section last launched (onSection / syncSection)
 // Session > Songs: the songs (saved per user) and the one playing (see songFrame)
-const songLib = reactive(loadSongs())
+const songLib = songLibrary()
 watch(songLib, v => saveSongs(v), { deep: true })
-const songRun = ref(null)
+const songRun = sharedSongRun
 let songArmed = false // the first section starts with the grid (armed for Play, or nothing running): its first bar counts at once
 const { openMenu } = useMidiContextMenu()
 /** Right-click on a Density control (LIVE, Drum / Seq): MIDI Learn it, e.g. on a Worlde encoder. */
@@ -847,7 +849,7 @@ function onSlotDown(appId, slot) {
   const empty = !a.filled[slot]
   // Drum and Bass are the Drum Machine's two parts: each row turns its own on / off / to a sequence.
   const playing = a.playing
-  const what = `${a.label} ${SLOT_LABELS[slot]}`
+  const what = `${a.label} ${slotLabelOf(rigSlotName(a.id, slot), slot)}`
   // The transport stopped (Live's, or SY.CORE's own clock): the pad arms the slot (selected now); the
   // app starts from it on Play. The armed pad again: disarmed.
   if (arming() && playing === null) {
@@ -883,6 +885,16 @@ const syncSettings = reactive((() => {
 })())
 watch(syncSettings, v => { try { localStorage.setItem(LS_SYNC, JSON.stringify(v)) } catch {} }, { deep: true })
 const trigOf = a => (syncSettings.scope === 'global' ? syncSettings.global : a.opts.triggerSync)
+// A session loaded (core/sessions.ts): its Trigger sync and Fades, read back from storage
+function reloadRigSettings() {
+  const read = k => { try { return JSON.parse(localStorage.getItem(k) ?? 'null') } catch { return null } }
+  Object.assign(syncSettings, { scope: 'lane', global: '4', ...(read(LS_SYNC) ?? {}), startOnly: false })
+  Object.assign(fadeSettings, parseFades(read(LS_FADES)))
+  for (const k of Object.keys(chFadeSettings)) delete chFadeSettings[k]
+  Object.assign(chFadeSettings, parseChFades(read(LS_CH_FADES)))
+}
+window.addEventListener(RIG_SETTINGS_EVENT, reloadRigSettings)
+onUnmounted(() => window.removeEventListener(RIG_SETTINGS_EVENT, reloadRigSettings))
 /** Drum / Bass on the Drum Machine: a slot is one bar (its sequence), its end the next bar line. */
 const dmPartRow = id => (id === 'drum' || id === 'bass') && !rowLane(id)
 /** "Start only": a lane playing switches / stops at the end of its slot. True: done. */
@@ -924,7 +936,8 @@ function cancelWait(appId) {
   clearTimeout(w.timer)
   delete rigWait[appId]
 }
-function waitPad(appId, slot, sync, what) {
+/** restart (a song's clip starting): the lane playing (any slot) stops and starts `slot` from its start, on the line. */
+function waitPad(appId, slot, sync, what, restart = false) {
   if (rigWait[appId]?.slot === slot) { cancelWait(appId); s.display = `${what}: called off`; return }
   cancelWait(appId)
   const now = performance.now()
@@ -932,7 +945,13 @@ function waitPad(appId, slot, sync, what) {
   const fire = () => {
     delete rigWait[appId]
     const a = s.apps.find(x => x.id === appId)
-    for (const ev of rowPadEvents(appId, slot, a?.playing ?? null, 0)) dispatchRig(ev)
+    const playing = a?.playing ?? null
+    if (restart && playing !== null) {
+      for (const ev of rowPadEvents(appId, playing, playing, 0)) dispatchRig(ev)
+      for (const ev of rowPadEvents(appId, slot, null, 0)) dispatchRig(ev)
+      return
+    }
+    for (const ev of rowPadEvents(appId, slot, playing, 0)) dispatchRig(ev)
   }
   if (at - now < 1) { fire(); s.display = `${what} now`; return }
   // just after the line (+2 ms): an app joining SY.CORE's bar grid takes that line as its bar 1
@@ -1356,12 +1375,14 @@ const songFilled = computed(() => Object.fromEntries(SONG_LANES.map(l => [l, s.a
 const songLanesOn = computed(() => Object.fromEntries(SONG_LANES.map(l => [l, isSlotRow(l)])))
 const songChains = computed(() => ['drum', 'chord', 'seq'].filter(chainOn).map(id => CHAIN_NAME[id]))
 /** Every lane to its slot in `lanes` (null: stopped) on the next bar line; stopped transport: armed. */
-function launchLanes(lanes) {
+/** restart: the lanes whose clip starts (from the pattern's start, even on the slot playing);
+ *  partial: only the lanes listed in `lanes` (a clip starting / ending inside a section). */
+function launchLanes(lanes, restart = [], partial = false) {
   const armed = arming()
   const running = gridRunning()
   for (const id of activeSlotRows()) {
     const a = s.apps.find(x => x.id === id)
-    if (!a) continue
+    if (!a || (partial && !(id in lanes))) continue
     const target = lanes[id] ?? null
     cancelWait(id)
     if (armed) {
@@ -1370,9 +1391,10 @@ function launchLanes(lanes) {
       continue
     }
     const from = target === null ? a.playing : target // stop: a press on the slot playing
-    // already on its slot: nothing (a press on it would stop it)
-    if (from === null || (target !== null && a.playing === target)) continue
-    if (running && !externalGrid.active) waitPad(id, from, 16, `${a.label} ${SLOT_LABELS[from]}`)
+    const again = target !== null && a.playing !== null && restart.includes(id) && running && !externalGrid.active
+    // already on its slot: nothing (a press on it would stop it) — unless its clip starts again
+    if (from === null || (target !== null && a.playing === target && !again)) continue
+    if (running && !externalGrid.active) waitPad(id, from, 16, `${a.label} ${SLOT_LABELS[from]}`, again)
     else for (const ev of rowPadEvents(id, from, a.playing, running ? 16 : 0)) dispatchRig(ev)
   }
 }
@@ -1442,7 +1464,8 @@ function songStepNow(st) {
   if (!st || !song) return
   if (st.kind === 'launch') {
     if (r.bar === 0) songArmed = arming() || !gridRunning() // no bar line to wait for: its bar 1 is now
-    launchLanes(song.sections[st.index].lanes)
+    const at1 = lanesAt(song.sections[st.index], 1)
+    launchLanes(at1.lanes, at1.starts)
     songVolumes(song.sections[st.index])
     songChordSteps(song.sections[st.index], r.bar === 0 && !gridRunning())
     songDrumDensity(song, song.sections[st.index])
@@ -1463,7 +1486,78 @@ function songStepNow(st) {
   } else {
     songRun.value = null
     s.display = `Song ${song.name}: ended`
+    // faded out: the levels back up a bar later, the lanes stopped (else the next pad played here is silent)
+    if (songFaded) { clearTimeout(songRestoreTimer); songRestoreTimer = setTimeout(songRestoreLevels, barMsNow()) }
   }
+}
+// ── The song's Fade Out (its own, or the Rig's: Performance) before its lanes stop ──
+let songFaded = false // the levels were taken down by a song's fade: back up when it goes on / the next one starts
+let songRestoreTimer = null
+/** The longest Out of the Rig's fades in use (Master, Drum, the MIDI channels). */
+const rigOutBars = () => Math.max(0, fadeSettings.master?.out ?? 0, fadeSettings.drum?.out ?? 0, ...allChKeys().map(k => chFadeSettings[k]?.out ?? 0))
+function songFadeOutTo(song, stopAt, barMs) {
+  if (song.fadeOut === 'rig') { fadeOut(stopAt); songFaded = true; return }
+  const bars = song.fadeOut
+  if (!(bars > 0)) return
+  const lane = Object.fromEntries(FADE_KEYS.map(k => [k, k === 'master' || k === 'drum' ? { ...fadeSettings[k], out: bars } : { in: 0, out: 0, max: 127 }]))
+  startRamps(planFadeOut(lane, performance.now(), stopAt, barMs, { ...fade }))
+  const ch = Object.fromEntries(allChKeys().map(k => [k, { ...chFadeOf(k), out: bars }]))
+  startChRamps(planChOut(ch, allChKeys(), performance.now(), stopAt, barMs, { ...chValue }))
+  songFaded = true
+}
+/** The levels back where they were (a fade called off, the next song): Master / Drum full, each channel at the song's volume / its Max. */
+function songRestoreLevels() {
+  clearTimeout(songRestoreTimer); songRestoreTimer = null
+  if (!songFaded) return
+  songFaded = false
+  fadeRamps = []; clearInterval(fadeTimer); fadeTimer = null
+  chRamps = []; clearInterval(chTimer); chTimer = null
+  for (const k of FADE_KEYS) setFade(k, 1)
+  const t = songTargets()
+  for (const k of allChKeys()) sendCh(k, t[k] ?? chFadeOf(k).max)
+}
+// ── Clips inside a section: a lane's clip starting / ending on the next bar line (launched mid-bar, as a section) ──
+let songClipTimer = null
+onUnmounted(() => clearTimeout(songClipTimer))
+function songClipLine(r, song, b) {
+  clearTimeout(songClipTimer); songClipTimer = null
+  if (songRun.value !== r || r.stopping || r.queued !== null || r.bar < 1) return
+  const sec = song.sections[r.index]
+  if (!sec) return
+  const bar = r.bar
+  const next = bar < sec.bars ? bar + 1 : 1 // past the last bar, nothing launched: the section again (Hold, Stay on section, a fade)
+  const cur = lanesAt(sec, bar), nxt = lanesAt(sec, next)
+  const lanes = {}
+  for (const l of SONG_LANES) {
+    if (nxt.lanes[l] === null) { if (cur.lanes[l] !== null) lanes[l] = null }
+    else if (nxt.starts.includes(l) || nxt.lanes[l] !== cur.lanes[l]) lanes[l] = nxt.lanes[l]
+  }
+  if (!Object.keys(lanes).length) return
+  const fire = () => {
+    songClipTimer = null
+    if (songRun.value !== r || r.index !== song.sections.indexOf(sec) || r.bar !== bar || r.stopping || r.queued !== null) return
+    launchLanes(lanes, nxt.starts, true)
+    if ('chord' in lanes && lanes.chord !== null) songChordSteps(sec)
+  }
+  const at = b.t - b.barMs / 2, now = performance.now()
+  if (at - now > 5) songClipTimer = setTimeout(fire, at - now)
+  else fire()
+}
+/** On a bar line: End Stop's fade, so it ends on the song's last bar line; Stop song's: the lanes stop on its line. */
+function songFadeLine(r, song, b) {
+  if (songRun.value !== r) return
+  if (r.outAt) {
+    if (b.t >= r.outAt - b.barMs / 2) { r.outAt = null; r.stopping = true; r.stay = false; r.queued = null; songStep({ kind: 'stop' }) }
+    return
+  }
+  if (r.fading) return
+  const left = barsToEnd(r, song)
+  if (left == null) return
+  const bars = songFadeBars(song, rigOutBars())
+  if (!(bars > 0) || left > Math.ceil(bars)) return
+  r.fading = true
+  songFadeOutTo(song, b.t + (left - 1) * b.barMs, b.barMs)
+  s.display = `Song ${song.name}: fading out to its end`
 }
 function songFrame() {
   const idle = appsIdle()
@@ -1484,10 +1578,10 @@ function songFrame() {
   if (songLine === null) {
     songLine = b.t
     // the grid just started (Play) and its first bar is already running: that is the section's bar 1
-    if (r.bar === 0 && songArmed && b.t - now > b.barMs * 0.5) songStep(songBarLine(r, song))
+    if (r.bar === 0 && songArmed && b.t - now > b.barMs * 0.5) { songStep(songBarLine(r, song)); songFadeLine(r, song, b); songClipLine(r, song, b) }
     return
   }
-  if (b.t > songLine + b.barMs * 0.5) { songLine = b.t; songStep(songBarLine(r, song)) }
+  if (b.t > songLine + b.barMs * 0.5) { songLine = b.t; songStep(songBarLine(r, song)); songFadeLine(r, song, b); songClipLine(r, song, b) }
 }
 // A slot changed in the section playing (or the one launched next): that lane follows on the next bar line
 const songLanesKey = () => {
@@ -1495,14 +1589,16 @@ const songLanesKey = () => {
   const song = songOf(r)
   if (!r || !song || r.stopping) return null
   const sec = song.sections[r.queued ?? r.index]
-  return sec ? `${sec.id}|${SONG_LANES.map(l => sec.lanes[l]).join(',')}` : null
+  return sec ? `${sec.id}|${JSON.stringify(SONG_LANES.map(l => laneClips(sec, l)))}` : null
 }
 watch(songLanesKey, (k, old) => {
   if (!k || !old || k.split('|')[0] !== old.split('|')[0]) return // another section / the song started or ended
   const r = songRun.value
   const sec = songOf(r)?.sections[r.queued ?? r.index]
   if (!sec) return
-  launchLanes(sec.lanes)
+  // the lanes as on the next bar (the section launched next: its bar 1)
+  const bar = r.queued !== null ? 1 : r.bar < sec.bars ? r.bar + 1 : 1
+  launchLanes(lanesAt(sec, bar).lanes)
   s.display = `Song: ${sec.name} changed — on the next bar`
 })
 // A volume changed in the section playing: at once (by ear); in the one launched next: on its bar line
@@ -1545,27 +1641,19 @@ watch(() => !!songRun.value, on => {
   if (chordStore.songLatch) { if (chordStore.latchStep === 0) chordStore.latchStep = null; chordStore.songLatch = false }
 })
 const songChordCounts = computed(() => chordStore.slots.map(x => x?.numSteps ?? 0))
+// the slots' names (lib/slot-names.ts) per song lane: Bass is the Sequencer's Bass lane, or the Drum Machine's basslines
+const songNameKeys = computed(() => ({ drum: 'drum', chord: 'chord', seq: 'seq', bass: rowLane('bass') ? 'bass' : 'dmBass', arp: 'arp' }))
+// the lanes' channels for the Session Browser's volumes (the Rig is mounted only while open)
+watch(fadeLanes, v => setSongChannels(v), { immediate: true })
+/** A Rig row's slot name ('' none). */
+function rigSlotName(id, slot) { const k = songNameKeys.value[id]; return k ? slotName(k, slot) : '' }
 // ── Songs with their own material (SG4, lib/song-material.ts): switched only with the apps stopped ──
 const songIdle = ref(true)
-const materialPending = ref(false)
 const currentSong = () => songLib.songs.find(x => x.id === songLib.currentId)
 /** Nothing plays: no grid (Live / SY.CORE's transport / a sequence on the internal grid), no app running. */
 const appsIdle = () => !gridRunning() && !drumStore.isPlaying && !chordStore.isPlaying && !rigReports.seqPlaying
-let materialBusy = false
-async function syncMaterial() {
-  const song = currentSong()
-  if (!needsSwitch(songLib, song)) { materialPending.value = false; return }
-  if (!appsIdle() || songRun.value) { materialPending.value = true; return }
-  if (materialBusy) return
-  materialBusy = true
-  materialPending.value = false
-  try {
-    await switchMaterial(songLib, song)
-    s.display = `Song ${song?.name ?? ''}: ${song?.own ? 'its own material' : "the session's slots"} in the apps`
-  } finally { materialBusy = false }
-}
-loadSongMaterial().then(syncMaterial)
-watch(() => songLib.currentId, syncMaterial)
+// (the song open's material: core/sessions.ts syncSongMaterial, now or at the stop)
+const syncMaterial = syncSongMaterial
 async function songOwn(on) {
   const song = currentSong()
   if (!song) return
@@ -1590,6 +1678,8 @@ async function playSong(i) {
   }
   // the song replaces the apps' own chains
   for (const id of ['drum', 'chord', 'seq']) if (chainOn(id)) toggleChain(id)
+  if (playOn.value) songRestoreLevels() // a song faded out before, the transport still running
+  else { clearTimeout(songRestoreTimer); songRestoreTimer = null; songFaded = false } // the Play's Fade In takes them up
   const r = startRun(song, i)
   songRun.value = r
   songLine = null
@@ -1606,6 +1696,22 @@ function stopSong() {
     s.display = 'Song: called off'
     return
   }
+  const song = songOf(r)
+  const b = gridRunning() ? nextBarLine(performance.now()) : null
+  const bars = song ? songFadeBars(song, rigOutBars()) : 0
+  // with a fade-out: the section goes on (looping) until the bar line the fade ends on; pressed again: now
+  if (song && b && b.barMs > 0 && bars > 0 && !r.outAt && !r.fading) {
+    const at = fadeStopLine(performance.now(), b.t, b.barMs, bars)
+    if (at > b.t + 1) {
+      r.outAt = at
+      r.queued = null
+      songFadeOutTo(song, at, b.barMs)
+      s.display = `Song ${song.name}: fading out over ${bars === 0.5 ? '½' : bars} bar${bars > 1 ? 's' : ''} — Stop song again: now`
+      return
+    }
+    songFadeOutTo(song, b.t, b.barMs)
+  }
+  r.outAt = null
   r.stopping = true
   r.stay = false
   r.queued = null
@@ -1614,13 +1720,31 @@ function stopSong() {
 function holdSong(on) {
   const r = songRun.value
   if (!r) return
+  if (on && (r.fading || r.outAt)) { r.fading = false; r.outAt = null; songRestoreLevels() } // Hold calls the fade off
   songStep(setHold(r, songOf(r), on))
   if (on) s.display = `Song: Hold on ${songOf(r)?.sections[r.index]?.name ?? ''}`
 }
 function jumpSong(i) {
   const r = songRun.value
+  if (r && (r.fading || r.outAt)) songRestoreLevels() // a section picked: the fade is called off (jumpTo clears it)
   if (r) songStep(jumpTo(r, songOf(r), i))
 }
+// the Session Browser's buttons (lib/songs.ts songCommand): taken here, the player is this panel's
+watch(songCommand, c => {
+  if (!c) return
+  songCommand.value = null
+  if (c.cmd === 'play') { if (!live.value) { s.display = 'Songs play in LIVE mode: switch the Rig to LIVE'; return } playSong(c.index) }
+  else if (c.cmd === 'stop') stopSong()
+  else if (c.cmd === 'hold') holdSong(c.on)
+  else if (c.cmd === 'jump') jumpSong(c.index)
+  else if (c.cmd === 'mute') muteLane(c.lane)
+  else if (c.cmd === 'solo') toggleSolo(s, c.lane)
+}, { immediate: true })
+// the lanes' Mute / Solo for the Session Browser (the Rig's own state; nothing muted once it is closed)
+watch(() => s.apps.map(a => `${a.id}:${a.muted ? 1 : 0}${a.solo ? 1 : 0}`).join(','), () => {
+  rigLaneMutes.value = Object.fromEntries(s.apps.filter(a => SONG_LANES.includes(a.id)).map(a => [a.id, { muted: !!a.muted, solo: !!a.solo }]))
+}, { immediate: true })
+onUnmounted(() => { rigLaneMutes.value = {} })
 
 // ── Tailwind classes ──────────────────────────────────────────────────────
 const SLOT_CLASS = {
@@ -1669,12 +1793,14 @@ const lpTop = computed(() => LP_TOP_LABELS.map((label, i) => {
 function lpPad(row, col) {
   if (row < 5) {
     const a = s.apps[row]
-    // The row's first pad names its app (Chord A, Drum A…).
-    const short = col === 0 ? `${a.label} ${SLOT_LABELS[col]}` : SLOT_LABELS[col]
-    if (live.value && !isLiveRow(a.id)) return { label: `${a.label} ${SLOT_LABELS[col]} (not connected)`, short, color: 'off' }
+    // The row's first pad names its app (Chord A, Drum A…); a slot with a name shows it (Verse-A)
+    const nm = rigSlotName(a.id, col)
+    const short = col === 0 ? `${a.label} ${SLOT_LABELS[col]}` : nm ? `${nm.slice(0, 6)}-${SLOT_LABELS[col]}` : SLOT_LABELS[col]
+    const full = `${a.label} ${slotLabelOf(nm, col)}`
+    if (live.value && !isLiveRow(a.id)) return { label: `${full} (not connected)`, short, color: 'off' }
     const st = padState(a, col)
     const color = a.muted && st === 'playing' ? 'red' : slotColor(st)
-    return { label: `${a.label} ${SLOT_LABELS[col]}`, short, color }
+    return { label: full, short, color }
   }
   // Row 6: Fill (the Drum Machine's), Auto Fill (its Autofill on / off), the Fill's Now / Bar, Repeat
   // (hold: the Drum Machine's Repeat), Seq Free (the Sequencer decoupled from the Chord Prog), Drum / Chord / Seq Chain.
@@ -2539,7 +2665,7 @@ provide(RIG_CONTROLS_CTX, {
       <!-- ═══════════ LAUNCHPAD MINI MK1 ═══════════ -->
       <!-- ═══════════ SONGS (Session > Songs) ═══════════ -->
       <RigSongsView v-else-if="shownView === 'songs'" :lib="songLib" :run="songRun" :filled="songFilled" :lanes-on="songLanesOn"
-                    :live="live" :chains="songChains" :idle="songIdle" :material-pending="materialPending" :channels="fadeLanes" :chord-counts="songChordCounts"
+                    :live="live" :chains="songChains" :idle="songIdle" :material-pending="materialPending" :channels="fadeLanes" :chord-counts="songChordCounts" :name-keys="songNameKeys"
                     @play="playSong" @stop="stopSong" @hold="holdSong" @jump="jumpSong" @own="songOwn" @capture="songCapture" />
       <div v-else-if="shownView === 'launchpad'" :class="play ? 'flex-1 min-h-0 flex justify-center' : 'flex gap-6 items-start'">
         <div :class="play ? 'h-full aspect-square max-w-full select-none [container-type:size]' : 'p-4 rounded-2xl bg-neutral-900 border border-white/10 shadow-inner select-none'">

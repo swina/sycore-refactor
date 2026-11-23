@@ -1,4 +1,5 @@
 <script setup>
+import { slotLabel, promptSlotName } from '@/lib/slot-names'
 import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import { journaled } from '@/lib/session-takes'
@@ -79,6 +80,13 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
 
 const showAiPrompt = ref(false)
 const showSongComposer = ref(false)
+const composerAutoSong = ref(false) // opened from the Session Browser: Load also makes the song
+// the Session Browser's "New song › With the AI Composer" (window event 'open-song-composer')
+{
+  const openComposer = e => { composerAutoSong.value = !!e?.detail?.autoSong; showSongComposer.value = true }
+  window.addEventListener('open-song-composer', openComposer)
+  onUnmounted(() => window.removeEventListener('open-song-composer', openComposer))
+}
 const aiLoading = ref(false)
 const midiFileInputRef = ref(null)
 const midiImportResult = ref(null)
@@ -686,7 +694,7 @@ function velBarColor(v) {
             <Sparkles class="w-4 h-4" />
           </button>
           <button
-            @click.stop="showSongComposer = true"
+            @click.stop="composerAutoSong = false; showSongComposer = true"
             title="Compose Song (AI): key + style + tempo → slots, chain and drums"
             class="p-1.5 rounded-lg text-neutral-500 hover:text-synth-neon hover:bg-synth-neon/10 transition-colors"
           >
@@ -742,8 +750,9 @@ function velBarColor(v) {
             v-for="i in store.SLOT_COUNT"
             :key="i"
             @click.stop="handleSlotSelect(i - 1)"
+            @dblclick.stop="promptSlotName('chord', i - 1, 'Chord slot')"
             @contextmenu.prevent="openSlotContextMenu(i - 1, $event)"
-            :title="store.isPlaying && store.playingSlotIndex === i - 1 ? 'Now playing (chain)' : undefined"
+            :title="`${slotLabel('chord', i - 1)}${store.isPlaying && store.playingSlotIndex === i - 1 ? ' · now playing (chain)' : ''} — double-click: name`"
             :class="[
               'relative w-8 h-8 flex items-center justify-center rounded text-[10px] font-bold font-mono transition-colors',
               store.activeSlotIndex === i - 1
@@ -1983,6 +1992,10 @@ function velBarColor(v) {
       >Slot {{ String.fromCharCode(64 + i) }}</button>
       <div class="border-t border-neutral-800" />
       <button
+        @click="promptSlotName('chord', slotContextMenu.idx, 'Chord slot'); closeSlotContextMenu()"
+        class="w-full text-left px-3 py-1.5 text-neutral-300 hover:bg-purple-700/40 hover:text-white transition-colors"
+      >Name…</button>
+      <button
         @click="favoriteSlotAsChords(slotContextMenu.idx); closeSlotContextMenu()"
         class="w-full text-left px-3 py-1.5 text-neutral-300 hover:bg-amber-700/40 hover:text-amber-300 transition-colors flex items-center gap-1.5"
       ><Star class="w-3 h-3" /> Favorite All Chords</button>
@@ -2007,6 +2020,6 @@ function velBarColor(v) {
       @result="handleAiResult"
       @close="showAiPrompt = false"
     />
-    <SongComposerDialog v-if="showSongComposer" @close="showSongComposer = false" />
+    <SongComposerDialog v-if="showSongComposer" :auto-song="composerAutoSong" @close="showSongComposer = false; composerAutoSong = false" />
   </div>
 </template>

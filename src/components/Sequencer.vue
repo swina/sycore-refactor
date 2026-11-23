@@ -1,4 +1,5 @@
 <script setup>
+import { slotLabel, promptSlotName } from '@/lib/slot-names'
 import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
@@ -618,6 +619,8 @@ let generateHidden = ref(false)
             <button
               v-for="(name, i) in BANK_NAMES" :key="name"
               @click="selectBank(i)"
+              @dblclick.stop="promptSlotName(lane === 'main' ? 'seq' : lane, i, `${panelTitle} pattern`)"
+              :title="`${slotLabel(lane === 'main' ? 'seq' : lane, i)} — double-click: name`"
               @contextmenu.prevent="openMenu($event, { name: L('bank_' + i), label: LL('Pattern ' + name) })"
               :class="['px-2.5 py-0.5 rounded font-bold transition-all uppercase tracking-wider', seqStore.activeBankIndex === i ? 'bg-synth-amber text-black font-black shadow-[0_0_8px_rgba(0,255,136,0.3)]' : 'text-neutral-500 hover:text-white']"
             >

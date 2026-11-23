@@ -17,6 +17,7 @@
  * uiStore.isSequencer2Open, props.globalTranspose → uiStore.seqGlobalTranspose,
  * props.currentPresetCCValues → presetStore.lastPreset.data; unmounting the panel stops nothing.
  */
+import { autoName } from '@/lib/slot-names'
 import { ref, computed, watch, effectScope, onScopeDispose } from 'vue'
 import { getTransport, start as toneStart } from 'tone'
 import { drawAt, uiTimeout } from '@/lib/ui-clock'
@@ -999,6 +1000,7 @@ function createSequencerEngine(lane = 'main') {
    * change together). 100 = all new (the default), 0 = nothing.
    */
   function _generateSequence(amount = varyAmount.value) {
+    autoName(lane === 'main' ? 'seq' : lane, seqStore.activeBankIndex, String(selectedStyle.value ?? ''))
     const before = steps.value.map(st => ({ ...st, notes: [...(st.notes ?? [])] }))
     _generateFresh()
     if (amount < 100 && before.length === steps.value.length) {

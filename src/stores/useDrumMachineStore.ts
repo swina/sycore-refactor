@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { autoName } from '@/lib/slot-names'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 import { userKey } from '@/lib/userKey'
@@ -1356,6 +1357,7 @@ return (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const).reduce((acc, key) => 
     const variant = cfg.variants[Math.floor(rand() * cfg.variants.length)]
     const pattern = sequences.value[activeSequence.value]
     if (!pattern) return
+    autoName('drum', 'ABCDEFGH'.indexOf(activeSequence.value), String(style))
     variant.forEach((rolePattern: any[], trackIdx: number) => {
       if (trackIdx >= pattern.length) return
       pattern[trackIdx].steps = rolePattern.map((v: any) =>

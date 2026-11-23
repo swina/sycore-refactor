@@ -5,10 +5,12 @@
 import { computed, ref, watch } from 'vue'
 import { Play, Square, Pause, Plus, Copy, Trash2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
-  SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, MAX_SECTIONS, VOL_BAR_OPTIONS, songVolKeys,
+  SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, MAX_SECTIONS, VOL_BAR_OPTIONS, SONG_FADE_OPTIONS, setSectionBars, setLaneClips, hasOwnClips, songVolKeys,
   newSong, newSection, exampleSong, songBars, sectionStartBar, activeLanes, barsLeft,
 } from '@/lib/songs'
 import { copyMaterial, dropMaterial, songMaterial } from '@/lib/song-material'
+import { sessions, currentSession, copySongToSession } from '@/core/sessions'
+import { slotName, slotLabel, promptSlotName } from '@/lib/slot-names'
 
 const props = defineProps({
   lib: { type: Object, required: true },      // SongLibrary (reactive, saved by the panel)
@@ -19,7 +21,8 @@ const props = defineProps({
   chains: { type: Array, default: () => [] },  // the apps with their own chain on
   idle: { type: Boolean, default: true },      // the apps stopped: material can be switched
   materialPending: { type: Boolean, default: false }, // the song open waits for a stop to load its material
-  chordCounts: { type: Array, default: () => [] }, // the Chord Prog slots' step counts (A–H)
+  chordCounts: { type: Array, default: () => [] },
+  nameKeys: { type: Object, default: () => ({ drum: 'drum', chord: 'chord', seq: 'seq', bass: 'bass', arp: 'arp' }) }, // lane → slot-names key // the Chord Prog slots' step counts (A–H)
   channels: { type: Array, default: () => [] }, // the lanes' MIDI channels: { id, rows: [{ key, device, ch }] } (the Fade modal's)
 })
 const emit = defineEmits(['play', 'stop', 'hold', 'jump', 'own', 'capture'])
@@ -61,6 +64,19 @@ async function deleteSong() {
   props.lib.currentId = props.lib.songs[Math.max(0, i - 1)].id
 }
 
+// ── Copy to another session of the project (with its own material) ──
+const otherSessions = computed(() => sessions.value.filter(x => x.id !== currentSession.value?.id))
+const copyMsg = ref('')
+async function copyTo(e) {
+  const id = e.target.value
+  e.target.value = ''
+  if (!id || !song.value) return
+  const name = await copySongToSession(song.value.id, id)
+  const to = sessions.value.find(x => x.id === id)?.name ?? ''
+  copyMsg.value = name ? `“${name}” copied to ${to}${song.value.own ? ' with its material' : " (it plays that session's slots)"}` : 'Not copied'
+  setTimeout(() => { copyMsg.value = '' }, 5000)
+}
+
 // ── Sections ──
 function addSection() {
   const secs = song.value.sections
@@ -75,6 +91,7 @@ function duplicateSection() {
   if (!section.value || song.value.sections.length >= MAX_SECTIONS) return
   const s = newSection(section.value.name, section.value.bars, { ...section.value.lanes })
   s.vol = { ...section.value.vol }; s.volBars = section.value.volBars; s.chordSteps = section.value.chordSteps; s.drumDensity = section.value.drumDensity
+  if (section.value.clips) s.clips = JSON.parse(JSON.stringify(section.value.clips))
   song.value.sections.splice(sel.value + 1, 0, s)
   sel.value += 1
 }
@@ -89,7 +106,8 @@ function moveSection(d) {
   ;[secs[sel.value], secs[j]] = [secs[j], secs[sel.value]]
   sel.value = j
 }
-const setSlot = (lane, v) => { section.value.lanes[lane] = section.value.lanes[lane] === v ? null : v }
+// a slot picked here: one clip over the whole section (clips placed in the Session Browser are replaced)
+const setSlot = (lane, v) => { const n = section.value.lanes[lane] === v && !hasOwnClips(section.value, lane) ? null : v; setLaneClips(section.value, lane, n === null ? [] : [{ slot: n, start: 1, len: section.value.bars }]) }
 
 // ── Volumes per channel (% of the channel's Max in the Fade modal) ──
 const laneChannels = lane => props.channels.find(c => c.id === lane)?.rows ?? []
@@ -108,6 +126,12 @@ const stepsOver = computed(() => section.value?.chordSteps != null && chordCount
 // ── Drum lane: the Rig's Density in the section ──
 const densityUsed = computed(() => song.value?.sections.some(s => s.drumDensity != null) ?? false)
 const densityShown = computed(() => section.value?.drumDensity ?? (densityUsed.value ? 127 : null))
+
+// ── Slot names (lib/slot-names.ts): `Verse-A` ──
+const nameOf = (lane, v) => (v == null ? '' : slotName(props.nameKeys[lane] ?? lane, v))
+const labelFor = (lane, v) => (v == null ? '–' : slotLabel(props.nameKeys[lane] ?? lane, v))
+/** The strip: the lanes playing in a section, by their slot's label. */
+const sectionLanes = sec => activeLanes(sec).map(l => `${SONG_LANE_LABELS[l]} ${labelFor(l, sec.lanes[l])}`).join(', ')
 
 // ── Look ──
 const isCurrent = i => playingHere.value && props.run.index === i && props.run.bar > 0
@@ -164,12 +188,24 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
       <button :class="[btn, 'border-white/15 hover:bg-white/10']" title="Duplicate the song" @click="duplicateSong"><Copy class="w-3 h-3 inline" /></button>
       <button :class="[btn, 'border-white/15 hover:bg-white/10']" :disabled="lib.songs.length <= 1 || playingHere" title="Delete the song" @click="deleteSong"><Trash2 class="w-3 h-3 inline" /></button>
       <button :class="[btn, 'border-white/15 hover:bg-white/10']" title="Add the example song (Nightline)" @click="addExample">+ Example</button>
+      <select v-if="otherSessions.length" class="bg-black/40 border border-white/10 rounded px-1 py-1 text-[10px] text-neutral-300"
+              :title="song.own ? 'Copy this song, with its own material, into another session of the project' : 'Copy this song into another session (it plays that session\'s slots A–H: give it its own material first to take its patterns along)'"
+              @change="copyTo">
+        <option value="">Copy to session…</option>
+        <option v-for="x in otherSessions" :key="x.id" :value="x.id">{{ x.name }}</option>
+      </select>
       <label class="flex items-center gap-1 text-[10px] uppercase tracking-wider text-neutral-500">End
         <select v-model="song.end" class="bg-black/40 border border-white/10 rounded px-1 py-1 text-white normal-case">
           <option value="stop">Stop</option>
           <option value="loop">Loop</option>
           <option value="stay">Stay on last bar</option>
           <option value="staySection">Stay on section</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1 text-[10px] uppercase tracking-wider text-neutral-500"
+             title="Fade Out before the lanes stop (Stop song, End Stop) — Rig: the Fade Out set in Performance · Cut: none · bars: this song's own, on every channel">Out
+        <select v-model="song.fadeOut" class="bg-black/40 border border-white/10 rounded px-1 py-1 text-white normal-case">
+          <option v-for="v in SONG_FADE_OPTIONS" :key="String(v)" :value="v">{{ v === 'rig' ? 'Rig (Performance)' : v === 0 ? 'Cut' : `${v === 0.5 ? '½' : v} bar${v > 1 ? 's' : ''}` }}</option>
         </select>
       </label>
       <span class="ml-auto flex items-center gap-2">
@@ -184,6 +220,7 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
       </span>
     </div>
 
+    <div v-if="copyMsg" class="text-[10px] font-mono text-sky-300">{{ copyMsg }}</div>
     <div class="flex flex-wrap items-center gap-2 text-[10px]">
       <span class="font-bold uppercase tracking-widest text-neutral-500">Material</span>
       <button :class="[btn, song.own ? 'bg-sky-500/70 border-sky-300 text-black' : 'border-white/15 hover:bg-white/10']"
@@ -206,13 +243,13 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
       <button v-for="(sec, i) in song.sections" :key="sec.id"
               class="relative shrink-0 min-w-[64px] h-16 rounded border px-1.5 py-1 text-left overflow-hidden transition-colors"
               :class="blockClass(i)" :style="{ flexGrow: sec.bars, flexBasis: 0 }"
-              :title="`${sec.name} · ${sec.bars} bars · ${activeLanes(sec).map(l => SONG_LANE_LABELS[l]).join(', ') || 'silent'}${playingHere ? ' — double-click: go there on the next bar line' : ''}`"
+              :title="`${sec.name} · ${sec.bars} bars · ${sectionLanes(sec) || 'silent'}${playingHere ? ' — double-click: go there on the next bar line' : ''}`"
               @click="sel = i" @dblclick="playingHere && emit('jump', i)">
         <div class="text-[10px] font-black uppercase tracking-wider text-white truncate">{{ sec.name }}</div>
         <div class="text-[9px] font-mono text-neutral-400">{{ sec.bars }} bars</div>
         <div class="absolute bottom-1.5 left-1.5 right-1.5 flex gap-0.5">
           <span v-for="l in SONG_LANES" :key="l" class="h-1.5 flex-1 rounded-sm"
-                :class="sec.lanes[l] !== null ? 'bg-amber-300/80' : 'bg-white/10'" :title="`${SONG_LANE_LABELS[l]}: ${sec.lanes[l] !== null ? SONG_SLOTS[sec.lanes[l]] : 'silent'}`"></span>
+                :class="sec.lanes[l] !== null ? 'bg-amber-300/80' : 'bg-white/10'" :title="`${SONG_LANE_LABELS[l]}: ${sec.lanes[l] !== null ? labelFor(l, sec.lanes[l]) : 'silent'}`"></span>
         </div>
         <div v-if="isCurrent(i)" class="absolute top-0 left-0 h-0.5 bg-emerald-300" :style="{ width: `${progress(i) * 100}%` }"></div>
       </button>
@@ -225,7 +262,7 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
         <span class="text-[10px] uppercase tracking-wider text-neutral-500">Bars</span>
         <div class="flex rounded border border-white/10 overflow-hidden">
           <button v-for="b in SECTION_BAR_OPTIONS" :key="b" class="px-2 py-1 text-[10px] font-mono"
-                  :class="section.bars === b ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'" @click="section.bars = b">{{ b }}</button>
+                  :class="section.bars === b ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'" @click="setSectionBars(section, b)">{{ b }}</button>
         </div>
         <span class="ml-auto flex items-center gap-1">
           <button :class="[btn, 'border-white/15 hover:bg-white/10']" :disabled="sel === 0 || playingHere" title="Move left" @click="moveSection(-1)"><ChevronLeft class="w-3 h-3" /></button>
@@ -245,13 +282,22 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
         <span class="text-[10px] text-neutral-500">bars · volume per channel: % of its Max (Fade modal), sent as CC 7</span>
       </div>
       <template v-for="l in SONG_LANES" :key="l">
-      <div class="flex items-center gap-2" :class="lanesOn[l] ? '' : 'opacity-40'">
+      <div class="flex flex-wrap items-center gap-1" :class="lanesOn[l] ? '' : 'opacity-40'">
         <span class="w-12 text-[10px] font-bold uppercase tracking-wider" :title="lanesOn[l] ? '' : 'This row is not on a lane / not connected: the song leaves it alone'">{{ SONG_LANE_LABELS[l] }}</span>
-        <button class="w-7 py-1 rounded border text-[10px] font-mono"
+        <button class="w-9 h-10 rounded border text-[11px] font-mono"
                 :class="section.lanes[l] === null ? 'bg-white/15 border-white/30 text-white' : 'border-white/10 text-neutral-500 hover:bg-white/10'"
-                title="Silent in this section" @click="section.lanes[l] = null">–</button>
-        <button v-for="(L, v) in SONG_SLOTS" :key="L" class="w-7 py-1 rounded border text-[10px] font-mono"
-                :class="slotClass(l, v)" :title="`${SONG_LANE_LABELS[l]} slot ${L}${filled[l]?.[v] ? '' : ' (empty)'}`" @click="setSlot(l, v)">{{ L }}</button>
+                title="Silent in this section" @click="setLaneClips(section, l, [])">–</button>
+        <button v-for="(L, v) in SONG_SLOTS" :key="L" class="relative w-16 h-10 px-1 rounded border font-mono flex items-center justify-center"
+                :class="slotClass(l, v)" :title="`${SONG_LANE_LABELS[l]} ${labelFor(l, v)}${filled[l]?.[v] ? '' : ' (empty)'} — right-click: name`"
+                @click="setSlot(l, v)" @contextmenu.prevent="promptSlotName(nameKeys[l] ?? l, v, `${SONG_LANE_LABELS[l]} slot`)">
+          <template v-if="nameOf(l, v)">
+            <span class="absolute top-0.5 left-1 text-[8px] font-bold opacity-70">{{ L }}</span>
+            <span class="text-[9px] leading-[1.1] font-sans font-semibold text-center break-words overflow-hidden mt-1"
+                  style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical">{{ nameOf(l, v) }}</span>
+          </template>
+          <span v-else class="text-[11px] font-bold">{{ L }}</span>
+        </button>
+        <span v-if="hasOwnClips(section, l)" class="text-[9px] text-sky-300" title="Clips placed on some bars (Session Browser): a slot picked here plays it over the whole section">{{ (section.clips[l] || []).length }} clips · Browser</span>
         <template v-if="l === 'drum' && section.lanes.drum !== null">
           <span class="ml-2 text-[10px] uppercase tracking-wider text-neutral-500" title="The Rig's Drum Density in this section: 127 as written, lower the weakest steps go first (the downbeat stays). On the section's bar line">Density</span>
           <input type="range" min="0" max="127" step="1" class="w-28 accent-sky-400" :class="densityShown === null ? 'opacity-40' : ''"

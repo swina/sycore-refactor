@@ -24,6 +24,8 @@ export function loadSongMaterial(): Promise<void> {
   return loading
 }
 const persist = () => bigSave(userKey(LS_MATERIAL), JSON.parse(JSON.stringify(songMaterial.byKey))).catch(() => {})
+/** Saves the songs' material (after a change made outside this module: the sessions). */
+export const persistSongMaterial = persist
 
 /** The material key now in the apps. */
 export const loadedKey = (lib: SongLibrary): string => lib.loadedId ?? SESSION_MATERIAL
@@ -37,6 +39,19 @@ export async function captureInto(lib: SongLibrary, song: Song): Promise<void> {
   if (from !== song.id) songMaterial.byKey[from] = JSON.parse(JSON.stringify(snap))
   song.own = true
   songMaterial.byKey[song.id] = snap
+  lib.loadedId = song.id
+  await persist()
+}
+
+/**
+ * The apps' slots are `song`'s own material from now on, and it is the one loaded. `before`: the
+ * apps before they were replaced (the AI Song Composer's Load) — what was loaded then keeps it.
+ */
+export async function adoptApps(lib: SongLibrary, song: Song, before?: EngineSnapshot | null): Promise<void> {
+  await loadSongMaterial()
+  if (before) songMaterial.byKey[loadedKey(lib)] = before
+  song.own = true
+  songMaterial.byKey[song.id] = captureEngines()
   lib.loadedId = song.id
   await persist()
 }

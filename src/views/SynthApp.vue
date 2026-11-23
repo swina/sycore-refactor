@@ -63,11 +63,13 @@ import { installControllerProfiles } from '@/core/midi/controller-profiles'
 import { installLedFeedback } from '@/core/midi/led-feedback-service'
 import { installDesignerPresets } from '@/core/midi/designer-presets'
 import { installProjects } from '@/core/projects'
+import { installSessions } from '@/core/sessions'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
 import SessionTakesPanel from '@/components/SessionTakesPanel.vue'
+import SessionBrowserPanel from '@/components/SessionBrowserPanel.vue'
 import MidiPerformancePanel from '@/components/MidiPerformancePanel.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import Welcome from '@/components/Welcome.vue'
@@ -144,6 +146,7 @@ useControllerManager()
   installLedFeedback()
   installDesignerPresets()
   installProjects()
+  installSessions()
 }
 const { captureNotesRef, captureNoteCount, captureEnabled, resetCapture } = useMidiCapture()
 const { restoreSubscription, isSubscribed, subscribe } = usePushNotifications()
@@ -221,6 +224,7 @@ const simpleTogglePanels = [
   { openId: 'rig-controls', focusKey: 'rigControls', component: RigControlsPanel, transition: null },
   { openId: 'chord-now', focusKey: 'chordNow', component: ChordNowPanel, transition: null },
   { openId: 'session-takes', focusKey: 'sessionTakes', component: SessionTakesPanel, transition: null },
+  { openId: 'session-browser', focusKey: 'sessionBrowser', component: SessionBrowserPanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {

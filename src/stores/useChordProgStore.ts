@@ -1,4 +1,5 @@
 import { customChordName, normalizeCustomStep } from '@/lib/chord-custom'
+import { autoName, copySlotName } from '@/lib/slot-names'
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { keyPhrase, keyRoot, progressionKey, NOTE_NAMES as KEY_NOTE_NAMES, type KeyMode } from '@/lib/chord-key'
@@ -318,6 +319,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
       playMode: src.playMode,
       arpRate: src.arpRate,
     }
+    copySlotName('chord', fromIndex, toIndex)
     persistSlots()
   }
 
@@ -552,6 +554,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
       root: modalRoot.value, style: genStyle.value, numSteps: numSteps.value, name,
     })
     if (!gen) return false
+    autoName('chord', activeSlotIndex.value, String(genStyle.value ?? ''))
     gen.steps.forEach((g, i) => {
       steps.value[i] = {
         ...DEFAULT_CHORD_STEP,

@@ -13,6 +13,7 @@ import { useSeqLaneStore } from '@/stores/useStepSequencerStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { SEQ_LANES, laneEvent, type SeqLane } from '@/lib/seq-lanes'
+import { captureNames, applyNames, type SlotNamesData } from '@/lib/slot-names'
 
 export interface EngineSnapshot {
   v: 1
@@ -24,6 +25,8 @@ export interface EngineSnapshot {
   drum: { sequences: Record<string, unknown>; basslineSequences: Record<string, unknown>; activeSequence: string; chainEnabled: boolean; swing: number }
   lanes: Partial<Record<SeqLane, { banks: unknown[]; chain: unknown; chainEnabled: boolean; activeBankIndex: number }>>
   bpm: number
+  /** the slots' names (lib/slot-names.ts); missing (taken before them): none */
+  names?: SlotNamesData
 }
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v ?? null))
@@ -45,6 +48,7 @@ export function captureEngines(): EngineSnapshot {
     },
     lanes: Object.fromEntries(SEQ_LANES.map(l => [l, useSeqLaneStore(l).captureAllBanks()])),
     bpm: useArpStore().arpBpm,
+    names: captureNames(),
   }
 }
 
@@ -79,4 +83,5 @@ export function applyEngines(s: EngineSnapshot): void {
     window.dispatchEvent(new CustomEvent(laneEvent(l, 'banks-reloaded')))
   }
   if (s.bpm > 0) useMidiStore().setGlobalBpm(s.bpm)
+  applyNames(s.names ?? null)
 }

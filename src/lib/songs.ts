@@ -10,7 +10,9 @@
  * one playing, so every lane switches on the bar line (SG2: a section ends by itself after its bars;
  * Hold keeps it looping). Several songs per session (SG3), saved per user.
  */
+import { reactive, ref } from 'vue'
 import { userKey } from './userKey'
+import type { SongPlan } from './song-plan'
 
 export const SONG_LANES = ['drum', 'chord', 'seq', 'bass', 'arp'] as const
 export type SongLane = typeof SONG_LANES[number]
@@ -25,6 +27,11 @@ export const VOL_BAR_OPTIONS = [0, 0.5, 1, 2, 4] as const
  *  the last section's lanes stay on, the Chord holding the chord of its last bar (the song's Latch), until Stop song / Stop */
 /** staySection: the last section loops (as on Hold) until Stop song / Stop */
 export type SongEnd = 'stop' | 'loop' | 'stay' | 'staySection'
+
+/** The song's Fade Out (Stop song, End Stop): 'rig' = the Rig's Fade Out (Performance), else bars (0 = Cut: none). */
+export type SongFadeOut = 'rig' | number
+export const SONG_FADE_OPTIONS: readonly SongFadeOut[] = ['rig', 0, 0.5, 1, 2, 4]
+const okFadeOut = (v: unknown): SongFadeOut => (typeof v === 'number' && SONG_FADE_OPTIONS.includes(v) ? v : 'rig')
 
 export interface SongSection {
   id: string
@@ -44,13 +51,23 @@ export interface SongSection {
   chordSteps: number | null
   /** Drum lane: the Rig's Density 0–127 in this section (null: 127 if another section sets it, else left alone) */
   drumDensity: number | null
+  /**
+   * The clips of a lane placed in the section (bars `start`…`start+len-1`, 1-based): each plays its
+   * slot from the pattern's start (looping if shorter), silent between them. A lane with none listed
+   * here: one clip of `lanes[l]` over the whole section. `lanes[l]` = the slot of its first clip.
+   */
+  clips?: Partial<Record<SongLane, SongClip[]>>
 }
+
+export interface SongClip { slot: number; start: number; len: number }
 
 export interface Song {
   id: string
   name: string
   sections: SongSection[]
   end: SongEnd
+  /** Stop song / End Stop: the fade-out before the lanes stop */
+  fadeOut: SongFadeOut
   /** SG4: the song has its own material (its slots A–H, lib/song-material.ts); false = the session's slots */
   own: boolean
 }
@@ -67,7 +84,7 @@ export function newSection(name = 'Section', bars = 8, lanes: Partial<Record<Son
 }
 
 export function newSong(name = 'New song'): Song {
-  return { id: uid(), name, end: 'stop', own: false, sections: [newSection('Intro', 8, { chord: 0 })] }
+  return { id: uid(), name, end: 'stop', fadeOut: 'rig', own: false, sections: [newSection('Intro', 8, { chord: 0 })] }
 }
 
 /** The example song (Session > Songs plan): six sections over the lanes' slots. */
@@ -81,6 +98,7 @@ export function exampleSong(): Song {
     id: uid(),
     name: 'Nightline',
     end: 'stop',
+    fadeOut: 'rig',
     own: false,
     sections: [
       newSection('Intro', 8, L('- A - - A')),
@@ -108,6 +126,69 @@ export function nextSectionIndex(song: Song, i: number): number | null {
   return song.end === 'loop' && song.sections.length ? 0 : null
 }
 
+// ── Clips in a section (pure) ────────────────────────────────────────────
+/** The lane's clips in the section, in order, inside its bars (none listed: one over the whole section). */
+export function laneClips(sec: SongSection, l: SongLane): SongClip[] {
+  const own = sec.clips?.[l]
+  if (!own) return sec.lanes[l] !== null ? [{ slot: sec.lanes[l] as number, start: 1, len: sec.bars }] : []
+  return own
+    .filter(c => c.start >= 1 && c.start <= sec.bars)
+    .map(c => ({ ...c, len: Math.max(1, Math.min(c.len, sec.bars - c.start + 1)) }))
+    .sort((a, b) => a.start - b.start)
+}
+/** The lane's clips placed by hand (not one over the whole section). */
+export const hasOwnClips = (sec: SongSection, l: SongLane): boolean => !!sec.clips?.[l]
+/** The clip playing on `bar` (1-based) and whether it starts there. */
+export function clipAt(sec: SongSection, l: SongLane, bar: number): { clip: SongClip; starts: boolean } | null {
+  for (const c of laneClips(sec, l)) if (bar >= c.start && bar < c.start + c.len) return { clip: c, starts: bar === c.start }
+  return null
+}
+/** Each lane's slot on `bar` (null: silent) and the lanes whose clip starts there. */
+export function lanesAt(sec: SongSection, bar: number): { lanes: Record<SongLane, number | null>; starts: SongLane[] } {
+  const lanes = emptyLanes()
+  const starts: SongLane[] = []
+  for (const l of SONG_LANES) {
+    const at = clipAt(sec, l, bar)
+    lanes[l] = at ? at.clip.slot : null
+    if (at?.starts) starts.push(l)
+  }
+  return { lanes, starts }
+}
+/** No two clips on the same bars: in order, each cut where the next starts; inside the section. */
+export function normalizeClips(clips: SongClip[], bars: number): SongClip[] {
+  const out: SongClip[] = []
+  for (const c of [...clips].sort((a, b) => a.start - b.start)) {
+    const start = Math.max(1, Math.min(bars, Math.round(c.start)))
+    let len = Math.max(1, Math.min(Math.round(c.len), bars - start + 1))
+    const prev = out[out.length - 1]
+    if (prev && prev.start + prev.len > start) {
+      if (prev.start === start) continue
+      prev.len = start - prev.start
+    }
+    out.push({ slot: c.slot, start, len })
+  }
+  return out
+}
+/** Sets a lane's clips: one over the whole section (or none) goes back to the plain slot. */
+export function setLaneClips(sec: SongSection, l: SongLane, clips: SongClip[]): void {
+  const n = normalizeClips(clips, sec.bars)
+  sec.lanes[l] = n[0]?.slot ?? null
+  const plain = n.length === 0 || (n.length === 1 && n[0].start === 1 && n[0].len === sec.bars)
+  if (plain) { if (sec.clips) { delete sec.clips[l]; if (!Object.keys(sec.clips).length) delete sec.clips } return }
+  sec.clips = { ...(sec.clips ?? {}), [l]: n }
+}
+/** A section's length changed: its clips cut to it (those past its end gone). */
+export function setSectionBars(sec: SongSection, bars: number): void {
+  const before = Object.fromEntries(SONG_LANES.filter(l => sec.clips?.[l]).map(l => [l, laneClips({ ...sec, bars }, l)]))
+  sec.bars = bars
+  for (const [l, cs] of Object.entries(before)) setLaneClips(sec, l as SongLane, cs)
+}
+/** Would a clip at `start` for `len` bars fit on the lane (no other clip on those bars, but `skip`)? */
+export function clipFits(sec: SongSection, l: SongLane, start: number, len: number, skip = -1): boolean {
+  if (start < 1 || len < 1 || start + len - 1 > sec.bars) return false
+  return laneClips(sec, l).every((c, i) => i === skip || start + len <= c.start || c.start + c.len <= start)
+}
+
 // ── Validation / storage ─────────────────────────────────────────────────
 const clampBars = (b: unknown) => {
   const n = Math.round(Number(b))
@@ -125,6 +206,19 @@ function parseVol(raw: unknown): Record<string, number> {
   return out
 }
 
+function parseClips(raw: unknown, bars: number): SongSection['clips'] {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: Partial<Record<SongLane, SongClip[]>> = {}
+  for (const l of SONG_LANES) {
+    const arr = (raw as any)[l]
+    if (!Array.isArray(arr)) continue
+    const ok = arr.filter((c: any) => slotOrNull(c?.slot) !== null && Number.isFinite(Number(c?.start)) && Number.isFinite(Number(c?.len)))
+      .map((c: any) => ({ slot: c.slot, start: Number(c.start), len: Number(c.len) }))
+    out[l] = normalizeClips(ok, bars)
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 export function parseSong(raw: any): Song | null {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.sections)) return null
   const sections = raw.sections.slice(0, MAX_SECTIONS).map((s: any) => ({
@@ -136,11 +230,17 @@ export function parseSong(raw: any): Song | null {
     volBars: (VOL_BAR_OPTIONS as readonly number[]).includes(Number(s?.volBars)) ? Number(s.volBars) : 0,
     chordSteps: Number.isInteger(s?.chordSteps) && s.chordSteps >= 1 && s.chordSteps <= 16 ? s.chordSteps : null,
     drumDensity: typeof s?.drumDensity === 'number' && Number.isFinite(s.drumDensity) ? Math.max(0, Math.min(127, Math.round(s.drumDensity))) : null,
+    clips: parseClips(s?.clips, clampBars(s?.bars)),
   }))
+  for (const sec of sections) {
+    if (!sec.clips) { delete sec.clips; continue }
+    for (const l of SONG_LANES) if (sec.clips[l]) sec.lanes[l] = sec.clips[l]![0]?.slot ?? null
+  }
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : uid(),
     name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.slice(0, 40) : 'Song',
     end: raw.end === 'loop' || raw.end === 'stay' || raw.end === 'staySection' ? raw.end : 'stop',
+    fadeOut: okFadeOut(raw.fadeOut),
     own: raw.own === true,
     sections,
   }
@@ -162,6 +262,40 @@ export function saveSongs(lib: SongLibrary): void {
   try { localStorage.setItem(userKey(LS_SONGS), JSON.stringify(lib)) } catch {}
 }
 
+/** The library, one for the page: the Rig panel's Songs view and the AI Song Composer share it. */
+let _lib: SongLibrary | null = null
+export function songLibrary(): SongLibrary {
+  return (_lib ??= reactive(loadSongs()) as SongLibrary)
+}
+/** A song added to the library (saved) and opened. */
+export function addSong(song: Song): void {
+  const lib = songLibrary()
+  lib.songs.push(song)
+  lib.currentId = song.id
+  saveSongs(lib)
+}
+
+// ── From the AI Song Composer's plan ──────────────────────────────────────
+/**
+ * The song of an AI Song Composer plan, once loaded into the apps (applySongPlan): its sections
+ * are slots A–H of the Chord Prog, the Drum Machine and the Sequencer (the letter of the plan's
+ * section); the song plays them in the plan's form, each for its bars. A lane with nothing for that
+ * section (no drum grid nor drum style, no sequence nor bass line) is silent there. Bass / Arp:
+ * silent (the Sequencer's part goes to its Main lane). The caller gives it its own material (adoptApps).
+ */
+export function planToSong(plan: SongPlan): Song {
+  const LETTERS = SONG_SLOTS as readonly string[]
+  const byId = new Map(plan.sections.map(s => [s.id, s]))
+  const sections = plan.form.map(id => byId.get(id)).filter(Boolean).slice(0, MAX_SECTIONS).map(sec => {
+    const slot = LETTERS.indexOf(sec!.id)
+    const drums = Object.keys(sec!.drums ?? {}).length > 0 || !!plan.style.drumStyle
+    const seq = !!sec!.sequence || !!sec!.bass
+    return newSection(sec!.name.slice(0, 24), clampBars(sec!.bars), { chord: slot, drum: drums ? slot : null, seq: seq ? slot : null })
+  })
+  if (!sections.length) sections.push(newSection('Intro', 8, { chord: 0 }))
+  return { id: uid(), name: (plan.title || 'AI song').slice(0, 40), end: 'stop', fadeOut: 'rig', own: false, sections }
+}
+
 // ── Player (pure): what to do at each bar line ───────────────────────────
 export interface SongRun {
   songId: string
@@ -177,6 +311,10 @@ export interface SongRun {
   stopping: boolean
   /** End Stay: the song is over but holds (the Chord on its last chord) until stopped */
   stay?: boolean
+  /** Stop song with a fade-out: the lanes stop on this bar line (performance.now() ms); the section loops till then */
+  outAt?: number | null
+  /** the fade-out to the song's end has started */
+  fading?: boolean
 }
 
 export type SongStep =
@@ -185,6 +323,30 @@ export type SongStep =
   | { kind: 'stay' }                  // End Stay: the lanes stay on, the Chord holds its last chord
   | { kind: 'done' }                  // the song is over
   | null
+
+/** The song playing (the Rig panel's player runs it; the Session Browser shows it). */
+export const songRun = ref<SongRun | null>(null)
+/** A command for the Rig panel's player (the Session Browser's buttons): it takes it and clears it. */
+export type SongCommand = { cmd: 'play'; index: number } | { cmd: 'stop' } | { cmd: 'hold'; on: boolean } | { cmd: 'jump'; index: number }
+  | { cmd: 'mute'; lane: SongLane } | { cmd: 'solo'; lane: SongLane }
+export const songCommand = ref<SongCommand | null>(null)
+/** The Rig's Mute / Solo per lane (live, not part of the song), as the Rig panel has them; {} while it is closed. */
+export const rigLaneMutes = ref<Partial<Record<SongLane, { muted: boolean; solo: boolean }>>>({})
+
+/** The MIDI channels each lane reaches ({ id, label, rows: [{ key: 'device|ch0', device, ch }] }), as the Rig
+ *  last saw them (it is mounted only while open): the Session Browser sets the volumes per channel on them. */
+export interface SongChannelRow { key: string; device: string; ch: number }
+export interface SongChannelLane { id: string; label: string; rows: SongChannelRow[] }
+const LS_CHANNELS = 'SYCORE_SONG_CHANNELS'
+export const songChannels = ref<SongChannelLane[]>((() => {
+  try { const v = JSON.parse(localStorage.getItem(LS_CHANNELS) ?? 'null'); return Array.isArray(v) ? v : [] } catch { return [] }
+})())
+export function setSongChannels(lanes: SongChannelLane[]): void {
+  const next = lanes.map(l => ({ id: l.id, label: l.label, rows: l.rows.map(r => ({ key: r.key, device: r.device, ch: r.ch })) }))
+  if (JSON.stringify(next) === JSON.stringify(songChannels.value)) return
+  songChannels.value = next
+  try { localStorage.setItem(LS_CHANNELS, JSON.stringify(next)) } catch {}
+}
 
 export function startRun(song: Song, from = 0): SongRun {
   return { songId: song.id, index: Math.max(0, Math.min(from, song.sections.length - 1)), bar: 0, queued: null, hold: false, stopping: false }
@@ -206,7 +368,7 @@ export function songBarLine(run: SongRun, song: Song): SongStep {
 /** In the section's last bar (not held): the next section, or the end. */
 function lastBarStep(run: SongRun, song: Song): SongStep {
   const sec = song.sections[run.index]
-  if (!sec || run.hold || run.queued !== null || run.bar !== sec.bars) return null
+  if (!sec || run.hold || run.outAt || run.queued !== null || run.bar !== sec.bars) return null
   const next = nextSectionIndex(song, run.index)
   if (next === null && song.end === 'staySection') return null // the last section again, until stopped
   if (next === null) {
@@ -223,6 +385,8 @@ export function jumpTo(run: SongRun, song: Song, index: number): SongStep {
   if (index < 0 || index >= song.sections.length) return null
   run.stopping = false
   run.stay = false
+  run.outAt = null
+  run.fading = false
   if (run.bar === 0) { run.index = index; return { kind: 'launch', index } }
   run.queued = index
   return { kind: 'launch', index }
@@ -235,6 +399,23 @@ export function setHold(run: SongRun, song: Song, on: boolean): SongStep {
 }
 
 /** Bars left in the section playing (for the display). */
+/** The bars to the song's own end (End Stop), counting the bar now: only in its last section, not held; else null. */
+export function barsToEnd(run: SongRun, song: Song): number | null {
+  const sec = song.sections[run.index]
+  if (!sec || song.end !== 'stop' || run.hold || run.outAt || run.stopping || run.queued !== null || run.bar < 1) return null
+  if (nextSectionIndex(song, run.index) !== null) return null
+  return Math.max(0, sec.bars - run.bar + 1)
+}
+
+/** The fade-out bars of a song: its own, else the Rig's (the longest Out set there). */
+export const songFadeBars = (song: Song, rigOut: number): number => (song.fadeOut === 'rig' ? Math.max(0, rigOut) : song.fadeOut)
+
+/** Stop song with `bars` of fade: the bar line the lanes stop on, at least `bars` from `now` (the next one, at least). */
+export function fadeStopLine(now: number, nextLine: number, barMs: number, bars: number): number {
+  if (!(barMs > 0) || !(bars > 0)) return nextLine
+  return nextLine + Math.max(0, Math.ceil((now + bars * barMs - nextLine) / barMs - 1e-6)) * barMs
+}
+
 export const barsLeft = (run: SongRun, song: Song): number => Math.max(0, (song.sections[run.index]?.bars ?? 0) - run.bar)
 
 // ── Volumes per channel (pure): what a section sends as CC 7 ─────────────

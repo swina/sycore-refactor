@@ -13,8 +13,13 @@ import {
 } from '@/lib/song-composer'
 import { NOTE_NAMES, MODES, type ModeName } from '@/lib/music-theory'
 import type { SongPlan, PlanIssue } from '@/lib/song-plan'
+import { planToSong, addSong, songLibrary } from '@/lib/songs'
+import { adoptApps } from '@/lib/song-material'
+import { captureEngines, type EngineSnapshot } from '@/lib/engine-snapshot'
 
 const emit = defineEmits<{ close: [] }>()
+/** opened from the Session Browser (New song › With the AI Composer): Load also makes it a song */
+const props = defineProps<{ autoSong?: boolean }>()
 const aiStore = useAiAgentStore()
 
 const LS = 'SYCORE_SONG_COMPOSER_INPUT'
@@ -70,6 +75,7 @@ async function compose() {
   isLoading.value = true
   error.value = ''
   applied.value = false
+  songAdded.value = ''
   const input = {
     root: root.value, mode: mode.value, style: style.value, bpm: bpm.value, bars: bars.value,
     presets: presets.value, chordsMode: chordsMode.value, ...(presets.value !== 'keep' ? { categories: partCategories() } : {}),
@@ -84,8 +90,11 @@ async function compose() {
   saveLastGeneration(last.value)
 }
 
+let enginesBefore: EngineSnapshot | null = null // the apps before the Load: kept by their song / the session (Make it a song)
 function apply() {
   if (!plan.value) return
+  enginesBefore = captureEngines()
+  songAdded.value = ''
   const r = applySongPlan(plan.value, { presets: presets.value, chordsMode: chordsMode.value })
   undo.value = r.before
   sessionUndo.set(r.before)
@@ -93,6 +102,7 @@ function apply() {
   applied.value = true
   markLastGenerationApplied(true)
   last.value = loadLastGeneration()
+  if (props.autoSong) makeSong()
 }
 
 function revert() {
@@ -103,6 +113,18 @@ function revert() {
   applied.value = false
   markLastGenerationApplied(false)
   last.value = loadLastGeneration()
+}
+
+// Session > Songs: the plan as a song (its sections in the form, on slots A–H just loaded)
+const songAdded = ref('')
+async function makeSong() {
+  if (!plan.value) return
+  const s = planToSong(plan.value)
+  addSong(s)
+  // its own material: the slots just loaded (the session's / another song's stay theirs)
+  await adoptApps(songLibrary(), songLibrary().songs.find(x => x.id === s.id) ?? s, enginesBefore)
+  enginesBefore = null
+  songAdded.value = `“${s.name}” added to Session > Songs (${s.sections.length} sections, its own material): play it from the Rig's Songs view`
 }
 
 const sectionName = (id: string) => plan.value?.sections.find(s => s.id === id)?.name ?? id
@@ -252,12 +274,18 @@ const sectionName = (id: string) => plan.value?.sections.find(s => s.id === id)?
               <span class="flex-1 text-[11px] font-mono text-emerald-400 self-center">
                 Loaded: start the Chord Prog (chain on, Follow on) with the Drum Machine and the Sequencer.
               </span>
-              <button v-if="undo" @click="revert"
+              <button @click="makeSong" :disabled="!!songAdded"
+                :title="songAdded || 'A song in Session > Songs: the plan\'s sections in its form, each for its bars, on the slots A–H just loaded, as its own material'"
+                class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-sky-500/60 text-sky-300 text-xs font-bold uppercase hover:bg-sky-500/20 disabled:opacity-40">
+                <ListMusic class="w-4 h-4" /> {{ songAdded ? 'Song added' : 'Make it a song' }}
+              </button>
+              <button v-if="undo && !songAdded" @click="revert"
                 class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-700 text-neutral-300 text-xs font-bold uppercase hover:text-white">
                 <Undo2 class="w-4 h-4" /> Undo
               </button>
             </template>
           </div>
+          <div v-if="songAdded" class="text-[11px] font-mono text-sky-300">{{ songAdded }}</div>
         </template>
       </div>
     </div>

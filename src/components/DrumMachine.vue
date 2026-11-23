@@ -1,4 +1,5 @@
 <script setup>
+import { slotLabel, promptSlotName } from '@/lib/slot-names'
 import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import { journaled } from '@/lib/session-takes'
@@ -1874,6 +1875,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
           >
             <button
               @click.stop="clickSequenceTab(seq)"
+              @dblclick.stop="promptSlotName('drum', SEQUENCES.indexOf(seq), 'Drum sequence')"
               @contextmenu.prevent="openMenu($event, { name: 'dm_seq_' + seq.toLowerCase(), label: 'Drum Machine: Seq ' + seq })"
               :class="[
                 'w-8 h-8 text-[11px] font-black rounded border transition-colors',
@@ -1883,7 +1885,7 @@ const SEQUENCES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
                     ? 'bg-neutral-800 border-sky-400/60 text-purple-300 animate-pulse'
                     : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-sky-500 hover:text-amber-300'
               ]"
-              :title="pendingSequence === seq ? ('Switching to ' + seq + ' at next bar…') : seq"
+              :title="pendingSequence === seq ? ('Switching to ' + slotLabel('drum', SEQUENCES.indexOf(seq)) + ' at next bar…') : slotLabel('drum', SEQUENCES.indexOf(seq)) + ' — double-click: name'"
             >{{ seq }}</button>
             <span
               v-if="mappingStore.learningParamName === ('dm_seq_' + seq.toLowerCase())"

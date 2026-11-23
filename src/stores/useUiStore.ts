@@ -85,6 +85,7 @@ export interface PanelVisibility {
   isRigControlsOpen: boolean
   isChordNowOpen: boolean
   isSessionTakesOpen: boolean
+  isSessionBrowserOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -191,6 +192,7 @@ export const useUiStore = defineStore('ui', () => {
   const isRigControlsOpen             = ref(false)
   const isChordNowOpen                = ref(false)
   const isSessionTakesOpen            = ref(false)
+  const isSessionBrowserOpen          = ref(false)
   const midiActionsActiveTab = ref('mapper')
   const midiActionsSelectedDevice = ref('')
   const enabledControllerDesignerPresetIds = ref<string[]>([])
@@ -315,6 +317,7 @@ export const useUiStore = defineStore('ui', () => {
     rigControls:           () => isRigControlsOpen.value,
     chordNow:              () => isChordNowOpen.value,
     sessionTakes:          () => isSessionTakesOpen.value,
+    sessionBrowser:        () => isSessionBrowserOpen.value,
   }
 
   const openModalKeys: ComputedRef<string[]> = computed(() =>
@@ -379,6 +382,7 @@ export const useUiStore = defineStore('ui', () => {
     rigControls:           isRigControlsOpen,
     chordNow:              isChordNowOpen,
     sessionTakes:          isSessionTakesOpen,
+    sessionBrowser:        isSessionBrowserOpen,
   }
 
   function cycleFocusedModal(reverse = false) {
@@ -474,6 +478,7 @@ export const useUiStore = defineStore('ui', () => {
     isRigControlsOpen.value = false
     isChordNowOpen.value = false
     isSessionTakesOpen.value = false
+    isSessionBrowserOpen.value = false
     isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -553,6 +558,7 @@ export const useUiStore = defineStore('ui', () => {
     'rig-controls': isRigControlsOpen,
     'chord-now': isChordNowOpen,
     'session-takes': isSessionTakesOpen,
+    'session-browser': isSessionBrowserOpen,
   }
 
   function isPanelOpen(id: string): boolean {
@@ -727,7 +733,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isLiveInputOpen, isMidiControllerDesignerOpen,
-    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen, isRigControlsOpen, isChordNowOpen, isSessionTakesOpen,
+    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen, isRigControlsOpen, isChordNowOpen, isSessionTakesOpen, isSessionBrowserOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen, midiFlowTab,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,
