@@ -494,6 +494,7 @@ function createChordProgEngine() {
 
   watch(() => store.isPlaying, (playing) => {
     if (!playing) {
+      if (_hold) { _hold = null; _cpCutVoicesAt(performance.now()) }
       _stopSystemClock()
       _cpCueSlot = null
       _cpCueSteps = 0
@@ -533,6 +534,8 @@ function createChordProgEngine() {
     _activeNoteKeys.clear()
     _cpVoices.clear()
     playStateRef.current = buildPlayState()
+    // a song's section launched for this start: its step count from the first chord
+    if (store.stepLimitNext) _takeStepLimit(store.stepLimitNext)
     // Latched before Play: start on that chord
     { const li = _latch(playStateRef.current); if (li >= 0) playStateRef.current.stepPointer = li }
 
@@ -570,6 +573,7 @@ function createChordProgEngine() {
           _cpCueSteps = 0
           _cpCueAtEnd = false
           // The old slot's notes end on the bar line, not where their own note-offs were.
+          _releaseHold()
           if (_sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
           handleSlotSelect(idx)
           state.steps = store.steps
@@ -625,11 +629,38 @@ function createChordProgEngine() {
         // Un-capped: a chain's flattened step count can exceed 16 (multiple
         // slots concatenated), unlike a single slot which the UI already
         // bounds to 16 — capping here silently truncated longer chains.
-        const activeCount = Math.max(1, state.numSteps)
+        // A song's section: its step count, adopted on the bar line (the progression from its first chord)
+        if (store.stepLimitNext && songTick % 384 === 0) {
+          const latchOn = !!store.stepLimitNext.latch && store.latchStep !== 0
+          const latchOff = store.songLatch && !store.stepLimitNext.latch
+          if (latchOff && _hold) { _releaseHold(); state.stepPointer = 0; state.tickCounter = 0 }
+          if (_takeStepLimit(store.stepLimitNext) || latchOn) {
+            if (!state.chainSlotIndices && state.stepPointer !== 0) {
+              if (state.tickCounter !== 0 && _sysTickMs != null) _cpCutVoicesAt(_sysTickMs)
+              state.stepPointer = 0
+              state.tickCounter = 0
+              state.arpPatternStates = new Map()
+            }
+          }
+        }
+        const lim = !state.chainSlotIndices && store.stepLimit > 0 ? store.stepLimit : 0
+        const activeCount = Math.max(1, lim ? Math.min(lim, state.numSteps) : state.numSteps)
+        // the limit lowered under the pointer (a live edit): back to the first chord
+        if (state.stepPointer >= activeCount && state.tickCounter === 0) state.stepPointer = 0
         const step = state.steps[state.stepPointer]
         const ticksNeeded = DURATION_TICKS[step?.duration] ?? 32
         // Per-step Chord/Arp override — unset means "inherit the slot's global playMode".
         const effectiveMode = stepPlayMode(store.progMode, step?.stepMode, state.playMode) // the header's AUTO / CHORD / ARP
+        // The song's Latch (a section on 1 chord): the chord is held, not struck again at each of its ends
+        let holdNew = false, holdSkip = false
+        if (state.tickCounter === 0) {
+          const want = store.songLatch && !state.chainSlotIndices && effectiveMode !== 'arp' && _latch(state) === state.stepPointer
+          const same = _hold && _hold.steps === state.steps && _hold.pointer === state.stepPointer
+          if (_hold && !(want && same)) _releaseHold()
+          holdSkip = want && same
+          holdNew = want && !same
+          if (holdNew) _hold = { steps: state.steps, pointer: state.stepPointer, tids: new Set() }
+        }
 
         if (state.chainSlotIndices && store.drumFollow) cueNextSection(state)
 
@@ -643,7 +674,7 @@ function createChordProgEngine() {
             store.playingChordBars = ticksNeeded / 384
             store.playingChordSeq++
             const li = _latch(state)
-            const nx = li >= 0 ? { step: state.steps[li], wraps: false } : chordAfter(state.steps, state.numSteps, state.stepPointer, state.loop)
+            const nx = li >= 0 ? { step: state.steps[li], wraps: false } : chordAfter(state.steps, activeCount, state.stepPointer, state.loop)
             store.nextChord = nx ? { name: nx.step.chordName, duration: nx.step.duration, wraps: nx.wraps } : null
             if (state.chainSlotIndices) {
               const slotIdx = state.chainSlotIndices[state.stepPointer]
@@ -668,10 +699,11 @@ function createChordProgEngine() {
             }
           }, time)
 
-          if (step?.active && step.velocity > 0 && step.notes?.length > 0 && effectiveMode !== 'arp') {
+          if (!holdSkip && step?.active && step.velocity > 0 && step.notes?.length > 0 && effectiveMode !== 'arp') {
             const tickMs = 60000 / (state.bpm * 96)
             const stepMs = tickMs * ticksNeeded
-            const noteDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
+            const noteDurationMs = holdNew ? HOLD_MS : Math.max(10, stepMs * ((step.gate ?? 80) / 100))
+            const held = holdNew ? _hold : null
             const channel = state.channel
 
             if (_sysTickMs != null) {
@@ -700,6 +732,7 @@ function createChordProgEngine() {
                   _activeNoteKeys.delete(noteKey)
                 }, noteDurationMs)
                 _pendingTimeouts.add(tid)
+                held?.tids.add(tid)
               })
             } else {
               // Staggered strum in step.chordMode's direction. Spread across a
@@ -723,6 +756,7 @@ function createChordProgEngine() {
                     _activeNoteKeys.delete(noteKey)
                   }, noteDurationMs)
                   _pendingTimeouts.add(offTid)
+                  if (held && _hold === held) held.tids.add(offTid)
                 }, strumStepMs * i)
                 _pendingTimeouts.add(onTid)
               })
@@ -730,12 +764,12 @@ function createChordProgEngine() {
           }  // closes if (effectiveMode !== 'arp')
 
           // Bass note: send lowest note to dedicated bass device/channel on step start
-          if (bassEnabled.value && bassDevice.value && step?.active && step.velocity > 0 && step.notes?.length > 0) {
+          if (!holdSkip && bassEnabled.value && bassDevice.value && step?.active && step.velocity > 0 && step.notes?.length > 0) {
             const bassNote = getBassNote(step, (state.transpose || 0) + (step.transpose || 0))
             if (bassNote !== null) {
               const tickMs = 60000 / (state.bpm * 96)
               const stepMs = tickMs * ticksNeeded
-              const bassDurationMs = Math.max(10, stepMs * ((step.gate ?? 80) / 100))
+              const bassDurationMs = holdNew ? HOLD_MS : Math.max(10, stepMs * ((step.gate ?? 80) / 100))
               if (_sysTickMs == null) sendBassNoteOn(bassNote, step.velocity, bassDurationMs)
               else {
                 const play = _chase(_sysTickMs, bassDurationMs)
@@ -815,6 +849,35 @@ function createChordProgEngine() {
       transportManager.acquireTransport()
     })
   })
+
+  // The song's Latch held chord: its notes on until released (another chord, the section after, a stop).
+  // CLK SYS: its voices end on the tick (bar line) it is released; else its long note-offs are sent now.
+  const HOLD_MS = 30 * 60000
+  let _hold = null // { steps, pointer, tids }
+  function _releaseHold() {
+    const h = _hold
+    if (!h) return
+    _hold = null
+    if (_sysTickMs != null) { _cpCutVoicesAt(_sysTickMs); return }
+    h.tids.forEach(tid => { clearTimeout(tid); _pendingTimeouts.delete(tid) })
+    for (const k of [..._activeNoteKeys]) {
+      const [note, ch] = k.split('-').map(Number)
+      midiStore.sendNoteOff(note, 0, ch, MidiSource.CHORD_PROG)
+      _activeNoteKeys.delete(k)
+    }
+    stopBassNote()
+  }
+
+  // A song section's step count (store.stepLimitNext): its limit, and on 1 chord the Latch on chord 1
+  // (the song's; off again when a section after it isn't on 1). True: the limit changed.
+  function _takeStepLimit(next) {
+    store.stepLimitNext = null
+    if (next.latch) { store.latchStep = 0; store.songLatch = true }
+    else if (store.songLatch) { if (store.latchStep === 0) store.latchStep = null; store.songLatch = false }
+    const changed = next.v !== store.stepLimit
+    store.stepLimit = next.v
+    return changed
+  }
 
   // Latch (store.latchStep, the Rig's row 8): the position of the latched chord of the slot playing
   // (-1: none — the progression goes on).

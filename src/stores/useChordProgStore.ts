@@ -161,6 +161,14 @@ export const useChordProgStore = defineStore('chordProg', () => {
   // Latch (the Rig's row 8): chord 0–7 of the slot playing repeats instead of the progression going
   // on — from the end of the chord sounding; null = the progression (it goes on after the latched chord).
   const latchStep = ref<number | null>(null)
+  // A song's section (Session > Songs): the slot loops on its first N chords (null = all of them).
+  // Runtime only. stepLimitNext: the one adopted on the next bar line (a section launched in the
+  // last bar of the one playing), then the progression restarts from its first chord.
+  // latch: a section on 1 chord holds it with the Latch (latchStep 0) instead of looping; songLatch:
+  // the Latch on is the song's (released by the next section / the song's end).
+  const stepLimit = ref<number | null>(null)
+  const stepLimitNext = ref<{ v: number | null; latch?: boolean } | null>(null)
+  const songLatch = ref(false)
   const selectedStepIdx = ref(0)
   // Modal Chords is the default library (once for a state saved before, on another key file).
   const MODAL_DEFAULT_FLAG = 'SYCORE_CP_MODAL_DEFAULT'
@@ -835,7 +843,7 @@ export const useChordProgStore = defineStore('chordProg', () => {
   })
 
   return {
-    steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, playingChordMs, playingChordBars, playingChordSeq, nextChord, latchStep, selectedStepIdx,
+    steps, numSteps, isPlaying, currentStep, playingChordName, playingChordDuration, playingChordMs, playingChordBars, playingChordSeq, nextChord, latchStep, stepLimit, stepLimitNext, songLatch, selectedStepIdx,
     selectedKey, keyMode, genStyle, modalRoot, progMode, detectedKey, playMode, arpRate, midiChannel,
     libraryPatterns, loadingLibrary,
     setStep, replaceStep, moveStep, toggleStepActive, assignChordToStep, cycleDuration,
