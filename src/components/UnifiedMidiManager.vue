@@ -1,7 +1,7 @@
 <script setup>
 import { computed, watch } from 'vue'
 import {
-  X, Minus, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2, Download
+  X, Minus, Cpu, GitFork, Zap, Radio, Activity, Sliders, Settings, Link2, Download, Waves
 } from 'lucide-vue-next'
 import { useUiStore }      from '@/stores/useUiStore'
 import { useMidiStore }    from '@/stores/useMidiStore'
@@ -18,6 +18,7 @@ import MidiMonitorPanel     from './MidiMonitorPanel.vue'
 import AppMidiMapper        from './AppMidiMapper.vue'
 import MidiSettingsPanel    from './MidiSettingsPanel.vue'
 import MidiSyncMatrix       from './MidiSyncMatrix.vue'
+import MicroFreakProbePanel from './MicroFreakProbePanel.vue'
 
 const uiStore      = useUiStore()
 const midiStore    = useMidiStore()
@@ -42,6 +43,7 @@ const TABS = [
   { id: 'actions',     label: 'Actions',     icon: Sliders },
   // { id: 'sync',        label: 'Sync',        icon: Link2   },
   { id: 'monitor',     label: 'Monitor',     icon: Activity },
+  { id: 'microfreak',  label: 'MicroFreak',  icon: Waves   },
   { id: 'settings',    label: 'Settings',    icon: Settings },
 ]
 
@@ -294,6 +296,11 @@ function downloadCsv() {
 
           <MidiSyncMatrix
             v-else-if="activeTab === 'sync'"
+            class="h-full"
+          />
+
+          <MicroFreakProbePanel
+            v-else-if="activeTab === 'microfreak'"
             class="h-full"
           />
 

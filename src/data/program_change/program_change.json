@@ -1,23 +1,13 @@
 {
     "Arturia MicroFreak": {
-        "Factory Bank 6": {
-            "data": "./microfreak/microfreak_sounds.json",
+        "New Presets 4": {
+            "data": "./microfreak/synth_bank.json",
             "msb": false,
             "lsb": false,
             "category_field": "category",
             "program_field": "program",
             "program_base": -1,
             "offset": 0,
-            "bank_size": 128
-        },
-        "New Presets 4": {
-            "data": "./microfreak/microfreak_sounds.json",
-            "msb": false,
-            "lsb": false,
-            "category_field": "category",
-            "program_field": "program",
-            "program_base": -1,
-            "offset": 385,
             "bank_size": 128
         }
     },

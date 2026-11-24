@@ -83,7 +83,7 @@ Sound data files are lazy-loaded at runtime via `fetch()` when a bank is selecte
 
 | Device key | Banks |
 |---|---|
-| `Arturia MicroFreak` | Factory Bank 6, New Presets 4 |
+| `Arturia MicroFreak` | New Presets 4 |
 | `SEQTRAK-1` | AWM2, DX, Drums, Sampler |
 
 User-imported banks are device-scoped and stored client-side; they are visually distinguished with a teal color scheme and a `FolderOpen` icon.
@@ -132,6 +132,7 @@ SY.CORE supports multiple import formats for loading preset banks into the Progr
 | **.db.db3** | Arturia Analog Lab | SQLite database from Arturia Analog Lab. Every playlist becomes its own bank, with each preset's playlist position preserved as the bank-select value. |
 | **.syx (Kawai K1)** | Kawai K1 | SysEx dump from a Kawai K1 synthesizer. Parsed into a named bank. |
 | **.syx (OsTirus-Access Virus Emulation)** | OsTirus | SysEx bank dump containing up to 128 single-program dumps. Names extracted from the @-prefixed field at offset 248. |
+| **Scan synth (MicroFreak)** | The MicroFreak itself, over USB | No file: **Scan synth** reads every slot's name, category and oscillator over SysEx (about a minute, **Stop** any time) — 4 banks of 128, the trailing empty "Init" slots left out, presets numbered as on the synth. Needs the browser's SysEx permission. |
 | **Standard JSON** | Any | Simple JSON file — an array of `{ pc, name }` entries (see `src/data/program_change/json/standard.json`). |
 
 ### Parse pipeline (.mfprojz)
@@ -142,6 +143,13 @@ SY.CORE supports multiple import formats for loading preset banks into the Progr
 4. Parse the MBP binary header with a fixed-width regex to extract preset name and category ID.
 5. Map category ID to string via `CATEGORY_MAP` (12 categories: Bass → Vocoder).
 6. Sort by slot, then map to the standard preset schema: `{ category, no, name, msb, lsb, bank, program }`.
+
+### Scan synth (MicroFreak)
+
+1. Shown when the device is a MicroFreak (template **Arturia MicroFreak**, or a device whose name matches it).
+2. For each slot 1–512: a name request, then the first 2 data chunks (enough for the oscillator) — `lib/microfreak/reader.ts`.
+3. `bankFromScan` (`lib/microfreak/sysex.ts`) turns the result into the preset schema, with `program` = the number on the synth (bank = (program − 1) / 128).
+4. The rename dialog opens with `MicroFreak synth <date>`; the bank is a user bank like an import.
 
 ### In-component flow (all formats)
 

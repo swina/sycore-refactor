@@ -86,6 +86,7 @@ export interface PanelVisibility {
   isChordNowOpen: boolean
   isSessionTakesOpen: boolean
   isSessionBrowserOpen: boolean
+  isMicroFreakEditorOpen: boolean
 }
 
 /** A sound-folder-assign target descriptor */
@@ -191,6 +192,7 @@ export const useUiStore = defineStore('ui', () => {
   const isLiveMapOpen                 = ref(false)
   const isRigControlsOpen             = ref(false)
   const isChordNowOpen                = ref(false)
+  const isMicroFreakEditorOpen        = ref(false)
   const isSessionTakesOpen            = ref(false)
   const isSessionBrowserOpen          = ref(false)
   const midiActionsActiveTab = ref('mapper')
@@ -318,6 +320,7 @@ export const useUiStore = defineStore('ui', () => {
     chordNow:              () => isChordNowOpen.value,
     sessionTakes:          () => isSessionTakesOpen.value,
     sessionBrowser:        () => isSessionBrowserOpen.value,
+    microFreakEditor:      () => isMicroFreakEditorOpen.value,
   }
 
   const openModalKeys: ComputedRef<string[]> = computed(() =>
@@ -383,6 +386,7 @@ export const useUiStore = defineStore('ui', () => {
     chordNow:              isChordNowOpen,
     sessionTakes:          isSessionTakesOpen,
     sessionBrowser:        isSessionBrowserOpen,
+    microFreakEditor:      isMicroFreakEditorOpen,
   }
 
   function cycleFocusedModal(reverse = false) {
@@ -479,6 +483,7 @@ export const useUiStore = defineStore('ui', () => {
     isChordNowOpen.value = false
     isSessionTakesOpen.value = false
     isSessionBrowserOpen.value = false
+    isMicroFreakEditorOpen.value = false
     isChordProgOpen.value                 = false
     isSoundFolderBrowserOpen.value = false
     soundFolderAssignTarget.value  = null
@@ -559,6 +564,7 @@ export const useUiStore = defineStore('ui', () => {
     'chord-now': isChordNowOpen,
     'session-takes': isSessionTakesOpen,
     'session-browser': isSessionBrowserOpen,
+    'microfreak-editor': isMicroFreakEditorOpen,
   }
 
   function isPanelOpen(id: string): boolean {
@@ -733,7 +739,7 @@ export const useUiStore = defineStore('ui', () => {
     isMainMenuOpen, mainMenuSelectedIndex, isSideMenuOpen, isSessionOpen, isLooperOpen, isMidiMatrixOpen, isAboutOpen,
     isMidiPerformanceOpen, isProgramChangeBrowserOpen, isDeviceProgramChangePanelOpen, isMidiMonitorOpen, isSoundEngineOpen, isGuidesOpen, isChordProgOpen, isAudioMixerOpen, isSoundFolderBrowserOpen, soundFolderAssignTarget,
     isFreesoundBrowserOpen, isLoopMachineOpen, isDrumMachineOpen, isSamplerOpen, isLiveInputOpen, isMidiControllerDesignerOpen,
-    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen, isRigControlsOpen, isChordNowOpen, isSessionTakesOpen, isSessionBrowserOpen,
+    isMidiDevicesOpen, isInstrumentCockpitOpen, isAiAgentOpen, isFm1EmulatorOpen, isAudioDiagnosticsOpen, isVirtualDevicePanelOpen, isRigControllerOpen, isLiveMapOpen, isRigControlsOpen, isChordNowOpen, isSessionTakesOpen, isSessionBrowserOpen, isMicroFreakEditorOpen,
     isLivePerformancePadOpen, isLiveTimelineOpen, isHelpSlideshowOpen, isCaptureRecording,
     showUnifiedMidiManager, unifiedMidiManagerTab, isMidiWizardOpen, isMidiFlowOpen, midiFlowTab,
     midiActionsActiveTab, midiActionsSelectedDevice, enabledControllerDesignerPresetIds,

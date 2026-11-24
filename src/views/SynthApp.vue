@@ -66,6 +66,7 @@ import { installDesignerPresets } from '@/core/midi/designer-presets'
 import { installProjects } from '@/core/projects'
 import { installSessions } from '@/core/sessions'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
+import MicroFreakEditorPanel from '@/components/MicroFreakEditorPanel.vue'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
@@ -229,6 +230,7 @@ const simpleTogglePanels = [
   { openId: 'chord-now', focusKey: 'chordNow', component: ChordNowPanel, transition: null },
   { openId: 'session-takes', focusKey: 'sessionTakes', component: SessionTakesPanel, transition: null },
   { openId: 'session-browser', focusKey: 'sessionBrowser', component: SessionBrowserPanel, transition: null },
+  { openId: 'microfreak-editor', focusKey: 'microFreakEditor', component: MicroFreakEditorPanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {
