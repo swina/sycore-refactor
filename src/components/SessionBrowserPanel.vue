@@ -8,6 +8,7 @@ import { computed, ref, watch, nextTick } from 'vue'
 import { ChevronRight, ChevronLeft, Plus, Copy, Trash2, Play, Square, Pause, Lock, Link2, Sparkles, Save, Pencil, ArrowLeft, ArrowRight } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import PlayPanelHeader from '@/components/play/PlayPanelHeader.vue'
+import { usePlayView } from '@/composables/usePlayView'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import { useUiStore } from '@/stores/useUiStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
@@ -41,6 +42,8 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bri
 })
 
 const ui = useUiStore()
+// Performance (play views): the song as in EDIT, without the Slots pane (dragging slots into the song: EDIT)
+const { play: playMode } = usePlayView('session-browser')
 const cp = useChordProgStore()
 const dm = useDrumMachineStore()
 const arp = useArpStore()
@@ -485,7 +488,7 @@ const slotClass = (l, v, on) => on
 
 <template>
   <div class="bg-neutral-950 border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden relative text-neutral-200" :style="panelStyle" v-show="!isMinimized" @mousedown.capture="bringToFront" @keydown.stop>
-    <PlayPanelHeader title="Session Browser" panel-id="session-browser" :edit="false" accent="text-sky-300"
+    <PlayPanelHeader title="Session Browser" panel-id="session-browser" accent="text-sky-300"
                      @pointerdown="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize">
       <span class="text-[11px] text-neutral-400">{{ currentSession?.name ?? '—' }}</span>
       <template v-if="song">
@@ -591,7 +594,7 @@ const slotClass = (l, v, on) => on
       </div>
 
       <!-- ── Slots of each lane ── -->
-      <div v-if="song" class="w-[200px] shrink-0 flex flex-col gap-2 p-2 border-r border-white/10 bg-black/20 overflow-y-auto">
+      <div v-if="song && !playMode" class="w-[200px] shrink-0 flex flex-col gap-2 p-2 border-r border-white/10 bg-black/20 overflow-y-auto">
         <div class="flex items-baseline justify-between"><span class="text-[9px] font-black uppercase tracking-widest text-neutral-500">Slots</span><span class="text-[9px] text-neutral-500">drag · right-click: name</span></div>
         <div v-for="l in SONG_LANES" :key="l" class="flex flex-col gap-1">
           <span class="text-[10px] font-black uppercase tracking-wider">{{ laneLabel(l) }}</span>

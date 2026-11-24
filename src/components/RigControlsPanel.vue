@@ -9,6 +9,8 @@ import { Play, Square } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useRigEngine } from '@/core/engines/rig'
 import { countIn } from '@/lib/count-in'
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore'
+import { useUiStore } from '@/stores/useUiStore'
 
 defineEmits(['close'])
 const { panelStyle, onDragStart, onResizeStart, isMinimized, bringToFront } = useDraggableResizable({
@@ -22,6 +24,8 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, bringToFront } = us
   panelId: 'rig-controls',
 })
 const { s, live, playOn, togglePlay, learnedRing, learnMenu } = useRigEngine()
+const ws = useWorkspaceStore()
+const ui = useUiStore()
 </script>
 
 <template>
@@ -31,6 +35,12 @@ const { s, live, playOn, togglePlay, learnedRing, learnMenu } = useRigEngine()
       <div class="flex flex-col gap-2 text-xs min-h-0 h-full">
         <RigControlSections only="transport" />
         <RigControlSections only="performance" />
+        <!-- Performance: the Audio Mixer, floating over the layout (open / close) -->
+        <button v-if="ws.floatingPanels.includes('audio-mixer')" type="button"
+                class="shrink-0 px-2 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wider"
+                :class="ui.isPanelOpen('audio-mixer') ? 'bg-amber-500/80 border-amber-300 text-black' : 'bg-white/[0.04] border-white/10 text-neutral-300 hover:bg-white/10'"
+                :title="ui.isPanelOpen('audio-mixer') ? 'Close the Audio Mixer' : 'The Audio Mixer, floating over the layout'"
+                @click="ui.isPanelOpen('audio-mixer') ? ui.closePanel('audio-mixer') : ui.openPanel('audio-mixer')">Mixer</button>
         <!-- no Controller template here: set up in EDIT (the Rig layout), not while performing -->
         <!-- Now / Next (the Chord Prog's chords) right above Play -->
         <ChordNowDisplay stacked class="mt-auto" />

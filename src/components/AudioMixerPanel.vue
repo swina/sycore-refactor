@@ -10,8 +10,12 @@ import { useMidiContextMenu } from '@/composables/useMidiContextMenu'
 import { loadMixerConfigs, persistMixerConfigs, createMixerConfig } from '@/lib/audio-mixer-configs'
 import { typeMeta } from '@/lib/device-type-meta'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
+import { usePlayView } from '@/composables/usePlayView'
 
 const emit = defineEmits(['close'])
+// Performance (play views): its header thin (the configuration is set up already); EDIT: the full header
+const { play: playMode } = usePlayView('audio-mixer')
 
 const uiStore    = useUiStore()
 const mixer      = useAudioMixerStore()
@@ -221,12 +225,26 @@ const TYPE_FILL = {
         @mousedown.capture="bringToFront"
       >
         <!-- Header ────────────────────────────────────────────────────── -->
+        <!-- Performance (play views): a thin header — set up already, the sliders matter (EDIT: the full one) -->
         <div
+          v-if="playMode"
+          class="shrink-0 flex items-center gap-2 px-3 py-1 border-b border-neutral-800 bg-black/40 cursor-grab active:cursor-grabbing select-none"
+          @mousedown.stop="onDragStart"
+        >
+          <span class="text-[11px] font-black uppercase tracking-widest text-amber-300">Mixer</span>
+          <span class="text-[10px] font-mono text-neutral-500 truncate">{{ activeConfig?.name || '' }}</span>
+          <PlayEditToggle panel-id="audio-mixer" />
+          <div class="flex-1" />
+          <div @mousedown.stop><MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" /></div>
+        </div>
+        <div
+          v-else
           class="shrink-0 flex items-center gap-2 px-4 py-4 border-b border-neutral-800 bg-neutral-900/60 cursor-grab active:cursor-grabbing"
           @mousedown.stop="onDragStart"
         >
           <SlidersHorizontal class="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span class="text-[14px] font-mono font-bold uppercase tracking-widest text-synth-neon select-none">Audio Mixer</span>
+          <PlayEditToggle panel-id="audio-mixer" />
 
           <!-- Current configuration chip -->
           <div
@@ -345,10 +363,10 @@ const TYPE_FILL = {
 
               <div class="text-center select-none w-full px-1">
                 <div class="text-[9px] font-black text-neutral-500 tracking-wider leading-none">CH {{ ch.slotNum }}</div>
-                <div class="text-[10px] font-black uppercase tracking-wider text-white leading-none truncate mt-0.5" :title="ch.label">
+                <div class="text-[10px] font-black uppercase tracking-wider text-white leading-none truncate mt-0.5" :title="ch.title ?? ch.label">
                   {{ ch.label.length > 8 ? ch.label.slice(0, 7) + '…' : ch.label }}
                 </div>
-                <div class="text-[8px] text-neutral-600 font-mono leading-none mt-0.5 truncate">{{ ch.sub }}</div>
+                <div class="text-[8px] text-neutral-600 font-mono leading-none mt-0.5 truncate" :title="ch.title ?? ch.sub">{{ ch.sub }}</div>
               </div>
 
               <!-- dB readout -->

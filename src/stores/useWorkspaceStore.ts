@@ -4,13 +4,13 @@
  * Remembered per user: the active workspace and, per workspace, the panels' places moved by hand.
  */
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { userKey } from '@/lib/userKey'
 import { useUiStore } from '@/stores/useUiStore'
 import { setPanelGeometry, getPanelGeometry, onPanelGeometryChange, setResizeMinimum } from '@/composables/useDraggableResizable'
 import { WORKSPACES, workspaceById, layoutOf, PANEL_STORAGE_KEYS, tileToPx, type TileRect } from '@/core/workspaces/registry'
 import { useMidiStore } from '@/stores/useMidiStore'
-import { LINK_OUTPUT_NAME } from '@/stores/useLinkStore'
+import { LINK_OUTPUT_NAME, useLinkStore } from '@/stores/useLinkStore'
 
 const LS_ACTIVE = 'SYCORE_WORKSPACE'
 const LS_LAYOUTS = 'SYCORE_WORKSPACE_LAYOUTS'
@@ -26,14 +26,30 @@ function load<T>(key: string, def: T): T {
 }
 function save(key: string, v: unknown) { try { localStorage.setItem(userKey(key), JSON.stringify(v)) } catch {} }
 
+// Four contexts (2026-11-24): the Performance workspace before them is Studio now — the places moved
+// by hand in it go with it (once; the new Performance starts from its tiles).
+const LS_LAYOUTS_V = 'SYCORE_WORKSPACE_LAYOUTS_V'
+function migrateLayouts(l: Layouts): Layouts {
+  if (load(LS_LAYOUTS_V, 0) >= 2) return l
+  const out = { ...l }
+  for (const [from, to] of [['performance', 'studio'], ['performance+live', 'studio+live']]) {
+    if (out[from] && !out[to]) out[to] = out[from]
+    delete out[from]
+  }
+  save(LS_LAYOUTS, out)
+  save(LS_LAYOUTS_V, 2)
+  return out
+}
+
 export const useWorkspaceStore = defineStore('workspace', () => {
   const uiStore = useUiStore()
   const midiStore = useMidiStore()
   /** Ableton Live set up in MIDI Flow: the "Live (M4L)" destination exists (SY.CORE Link). */
   const liveConfigured = () => !!midiStore.routingConfig?.registrations?.[LINK_OUTPUT_NAME] || midiStore.panelOutputs.includes(LINK_OUTPUT_NAME)
-  const layout = (wsId: string) => layoutOf(workspaceById(wsId), liveConfigured())
+  const linkStore = useLinkStore()
+  const layout = (wsId: string) => layoutOf(workspaceById(wsId), liveConfigured(), { linked: linkStore.connected })
   const active = ref<string>(workspaceById(load(LS_ACTIVE, 'classic')).id)
-  const layouts = ref<Layouts>(load(LS_LAYOUTS, {}))
+  const layouts = ref<Layouts>(migrateLayouts(load(LS_LAYOUTS, {})))
   let classic: ClassicSnapshot | null = load(LS_CLASSIC, null)
 
   const managedPanels = () => [...new Set(WORKSPACES.flatMap(w => [...(w.panels ?? []), ...(w.withLive?.panels ?? [])]))]
@@ -78,7 +94,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     applyEffects()
     const l = layout(ws.id)
     if (!l) return
-    for (const id of [...uiStore.openPanelIds]) if (!l.panels.includes(id)) uiStore.closePanel(id)
+    const floating = ws.floating ?? []
+    for (const id of [...uiStore.openPanelIds]) if (!l.panels.includes(id) && !floating.includes(id)) uiStore.closePanel(id)
     for (const id of l.panels) {
       const r = rectOf(ws.id, id)
       if (r) setPanelGeometry(id, PANEL_STORAGE_KEYS[id], r)
@@ -118,5 +135,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     save(LS_LAYOUTS, layouts.value)
   })
 
-  return { active, layouts, workspaces: WORKSPACES, switchTo, apply, resetLayout, rectOf }
+  /** Rig Controls' Mixer: the floating panels this workspace allows (Performance: the Audio Mixer). */
+  const floatingPanels = computed(() => workspaceById(active.value).floating ?? [])
+  // SY.CORE Link connecting / dropping in a workspace whose Map needs it: the Map comes / goes
+  watch(() => layout(active.value)?.key, (k, old) => { if (k && old && k !== old) apply() })
+
+  return { active, layouts, workspaces: WORKSPACES, switchTo, apply, resetLayout, rectOf, floatingPanels }
 })

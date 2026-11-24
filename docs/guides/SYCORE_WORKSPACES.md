@@ -1,4 +1,4 @@
-# Workspaces — Classic and Performance
+# Workspaces — Classic, Performance and Studio
 
 > One screen per way of working: the panels of a scenario side by side, the others closed. What plays keeps playing.
 
@@ -6,18 +6,27 @@
 
 ## Switching
 
-The **workspace switch** is in the footer: **Classic | Performance**. The workspace of the last session comes back at start.
+The **workspace switch** is in the footer: **Classic | Performance | Studio**. The workspace of the last session comes back at start.
 
 | Workspace | What it does |
 |---|---|
 | **Classic** | Manages nothing: the floating panels as you place them. Back to Classic, the panels open and their places are the ones Classic was left with. |
-| **Performance** | A stage screen: the players, the Rig's controls and the Rig side by side (tiled, no overlap), every other panel closed, lighter visual effects (no blur, no transitions). |
+| **Performance** | The stage: the **song** (the Session Browser without its Slots pane), the Rig's controls with Play, the Rig (Launchpad layout) and the **Virtual Device** (bottom right) side by side — **Mixer** (Rig Controls, under Performance) opens the Audio Mixer floating over them; the Map · Live Instruments only while SY.CORE Link is connected. The players are not shown: the song drives them. Lighter visual effects (no blur, no transitions). |
+| **Studio** | Composing and trying parts (the Performance screen before the songs): the players, the Rig's controls and the Rig side by side (tiled, no overlap), every other panel closed, lighter visual effects. The places you moved panels to in the old Performance are Studio's now. |
 
 Switching never stops the music: the Drum Machine, Chord Prog and Sequencer play on whether their panels are open or not.
 
 ---
 
-## The Performance layout
+## The song on stage (Performance)
+
+The Session Browser shows the song as in EDIT — sections, lanes and their clips (the section playing in green, each clip's preset), Bar / Section / Now → Next, Play · Hold · Stop song, M / S per lane — without the **Slots** pane (dragging slots into the song: **EDIT** in its header). Everything goes to the Rig engine: it plays with the Rig panel closed.
+
+The **Audio Mixer** (Mixer button) has a thin header in Performance: its configuration name, EDIT (the full header: save / load, assignments) and the window buttons — the sliders get the room.
+
+---
+
+## The Studio layout
 
 | Column | Panels |
 |---|---|

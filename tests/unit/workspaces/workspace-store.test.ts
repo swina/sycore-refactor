@@ -31,11 +31,11 @@ describe('workspaces', () => {
     }
   })
 
-  it('Performance: opens its panels in their tiles (players left, Rig Controls, Rig right), closes the others, low effects on', () => {
+  it('Studio: opens its panels in their tiles (players left, Rig Controls, Rig right), closes the others, low effects on', () => {
     const ui = useUiStore()
     ui.openPanel('midi-flow')
     const ws = useWorkspaceStore()
-    ws.switchTo('performance')
+    ws.switchTo('studio')
     for (const id of ['rig-controller', 'rig-controls', 'chord-prog', 'drum-machine', 'sequencer2']) expect(ui.isPanelOpen(id)).toBe(true)
     expect(ui.isPanelOpen('chord-now')).toBe(false) // Now / Next is in Rig Controls, above Play
     expect(ui.isPanelOpen('midi-flow')).toBe(false)
@@ -71,16 +71,52 @@ describe('workspaces', () => {
     setActivePinia(createPinia())
     expect(useWorkspaceStore().active).toBe('performance')
   })
-  it('Performance with Live (M4L) set up in MIDI Flow: Map · Live Instruments too, under the Rig', () => {
+  it('Studio with Live (M4L) set up in MIDI Flow: Map · Live Instruments too, under the Rig', () => {
     const ui = useUiStore()
     useMidiStore().addRegistration('Live (M4L)')
-    useWorkspaceStore().switchTo('performance')
+    useWorkspaceStore().switchTo('studio')
     expect(ui.isPanelOpen('live-map')).toBe(true)
     const map = JSON.parse(localStorage.getItem(userKey('SYCORE_POS_LIVE_MAP'))!)
     const rig = JSON.parse(localStorage.getItem(userKey('SYCORE_POS_RIG_CONTROLLER'))!)
     expect(map.x).toBe(rig.x)
     expect(map.y).toBe(rig.y + rig.h + 4)
     expect(map.y + map.h).toBe(1040)
+  })
+})
+
+describe('Performance (four contexts C1): the song on stage', () => {
+  beforeEach(() => { localStorage.clear(); setActivePinia(createPinia()) })
+  it('opens the song (Session Browser), Rig Controls, the Rig and the Virtual Device — no players', () => {
+    const ui = useUiStore()
+    ui.openPanel('drum-machine')
+    useWorkspaceStore().switchTo('performance')
+    for (const id of ['session-browser', 'rig-controls', 'rig-controller', 'virtual-device']) expect(ui.isPanelOpen(id)).toBe(true)
+    expect(ui.isPanelOpen('audio-mixer')).toBe(false)
+    for (const id of ['drum-machine', 'chord-prog', 'sequencer2']) expect(ui.isPanelOpen(id)).toBe(false)
+    const song = JSON.parse(localStorage.getItem(userKey('SYCORE_POS_SESSION_BROWSER'))!)
+    expect(song).toMatchObject({ x: 0, y: 0 })
+  })
+  it('the Audio Mixer floats over it: opened (Rig Controls\' Mixer), it stays open when the layout is applied again', () => {
+    const ui = useUiStore()
+    const ws = useWorkspaceStore()
+    ws.switchTo('performance')
+    ui.openPanel('audio-mixer')
+    ws.apply()
+    expect(ui.isPanelOpen('audio-mixer')).toBe(true)
+    expect(ui.isPanelOpen('virtual-device')).toBe(true)
+    expect(ws.floatingPanels).toEqual(['audio-mixer'])
+  })
+  it('the Map only with SY.CORE Link connected (Live set up in MIDI Flow is not enough)', () => {
+    const ui = useUiStore()
+    useMidiStore().addRegistration('Live (M4L)')
+    useWorkspaceStore().switchTo('performance')
+    expect(ui.isPanelOpen('live-map')).toBe(false)
+  })
+  it('the places moved by hand in the old Performance go to Studio (once)', () => {
+    localStorage.setItem(userKey('SYCORE_WORKSPACE_LAYOUTS'), JSON.stringify({ performance: { 'rig-controller': { x: 1, y: 2, w: 3, h: 4 } } }))
+    const ws = useWorkspaceStore()
+    expect(ws.layouts.studio).toEqual({ 'rig-controller': { x: 1, y: 2, w: 3, h: 4 } })
+    expect(ws.layouts.performance).toBeUndefined()
   })
 })
 

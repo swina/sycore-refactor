@@ -4,6 +4,30 @@ import { useAudioMixerStore } from '@/stores/useAudioMixerStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { useDeviceRegistry } from '@/composables/useDeviceRegistry'
 import { typeMeta } from '@/lib/device-type-meta'
+import { songChannels } from '@/lib/songs'
+import { rowLane } from '@/lib/rig-live'
+
+// The apps MIDI Flow sends on a device's channel (the Rig's lanes: lib/songs.ts songChannels, the
+// device + channels each lane reaches): a mixer channel is named after them ("Seq Arp"), not "CH 4".
+const FLOW_APP_LABEL = {
+  drum: () => 'Drum',
+  chord: () => 'Chords',
+  seq: () => 'Seq',
+  bass: () => (rowLane('bass') ? 'Seq Bass' : 'DM Bass'),
+  arp: () => (rowLane('arp') ? 'Seq Arp' : 'Arp'),
+}
+export function flowAppsOn(device, ch) {
+  const out = []
+  for (const lane of songChannels.value) {
+    if (lane.rows.some(r => r.device === device && r.ch === ch)) out.push(FLOW_APP_LABEL[lane.id]?.() ?? lane.label)
+  }
+  return out
+}
+/** A channel strip's label and sub: the apps on it (MIDI Flow) when known, else the device. */
+function flowNamed(device, ch, label, sub) {
+  const apps = flowAppsOn(device, ch)
+  return apps.length ? { label: apps.join(' + '), sub: `${sub} · ${device}`, title: `${device} ${sub}: ${apps.join(', ')} (MIDI Flow)` } : { label, sub, title: `${device} ${sub}` }
+}
 
 // Catalog of all controllable "app" audio sources — single source of truth,
 // shared by AudioMixerPanel.vue's UI and useAppActions.js's mixer_chN_*
@@ -148,6 +172,7 @@ export function useAudioMixerChannels() {
     return {
       key:    `${name}:${ch}`,
       name,
+      ch,
       label:  `CH ${ch + 1}`,
       vol:    () => mixer.getVirtualChannelVol(name, ch),
       muted:  () => mixer.isVirtualChannelMuted(name, ch),
@@ -194,6 +219,7 @@ export function useAudioMixerChannels() {
     return {
       key:    v.name,
       name:   v.name,
+      ch:     reg?.outChannel ?? 0,
       label:  'CH ' + ((reg?.outChannel ?? 0) + 1),
       vol:    () => mixer.getInstrumentVol(v.name),
       muted:  () => mixer.isInstrumentMuted(v.name),
@@ -252,7 +278,7 @@ export function useAudioMixerChannels() {
       const strip = channelStripOf(assignment.id, instrumentChannels.value)
       if (!strip) return null
       return {
-        kind: 'virtual', id: 'virt:' + strip.key, label: strip.name, sub: strip.label,
+        kind: 'virtual', id: 'virt:' + strip.key, ...flowNamed(strip.name, strip.ch, strip.name, strip.label),
         icon: Piano,
         vol: strip.vol, muted: strip.muted, soloed: strip.soloed,
         setVol: strip.setVol, toggleMute: strip.mute, toggleSolo: strip.solo,
@@ -263,7 +289,7 @@ export function useAudioMixerChannels() {
         ?? channelStripOf(assignment.id, midiStore.virtualInstruments)
       if (!strip) return null
       return {
-        kind: 'virtual', id: 'virt:' + strip.key, label: strip.name, sub: strip.label,
+        kind: 'virtual', id: 'virt:' + strip.key, ...flowNamed(strip.name, strip.ch, strip.name, strip.label),
         icon: typeMeta('virtual').icon,
         vol: strip.vol, muted: strip.muted, soloed: strip.soloed,
         setVol: strip.setVol, toggleMute: strip.mute, toggleSolo: strip.solo,

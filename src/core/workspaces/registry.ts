@@ -12,8 +12,11 @@ export interface WorkspaceManifest {
   panels: string[] | null
   /** Each panel's tile, as fractions of the free area (0–1). */
   tiles?: Record<string, TileRect>
-  /** With Ableton Live configured in MIDI Flow ("Live (M4L)"): more panels, and the tiles then. */
-  withLive?: { panels: string[]; tiles: Record<string, TileRect> }
+  /** With Ableton Live configured in MIDI Flow ("Live (M4L)"): more panels, and the tiles then.
+   *  needsLink: only while SY.CORE Link is on and connected. */
+  withLive?: { panels: string[]; tiles: Record<string, TileRect>; needsLink?: boolean }
+  /** Panels it leaves open (floating, not tiled): e.g. the Audio Mixer opened from Rig Controls. */
+  floating?: string[]
   /** No backdrop blur and no CSS transitions (blinking / pulsing animations stay). */
   lowEffects?: boolean
   /** The players show what plays (their settings folded away; EDIT opens them). */
@@ -23,8 +26,39 @@ export interface WorkspaceManifest {
 export const WORKSPACES: WorkspaceManifest[] = [
   { id: 'classic', label: 'Classic', panels: null },
   {
+    // Four contexts C1: the stage — the song (the Session Browser as in EDIT, without its Slots pane),
+    // the Rig's controls with Play, the Rig (its Launchpad layout) and the Virtual Device (the presets,
+    // changed on the fly); Rig Controls' Mixer opens the Audio Mixer floating over them. The players are not
+    // shown (the song drives them; their views are in Studio). With SY.CORE Link connected: the Map.
     id: 'performance',
     label: 'Performance',
+    panels: ['session-browser', 'rig-controls', 'rig-controller', 'virtual-device'],
+    tiles: {
+      'session-browser': { x: 0, y: 0, w: 0.6, h: 1 },
+      'rig-controls':    { x: 0.6, y: 0, w: 0.13, h: 1 },
+      'rig-controller':  { x: 0.73, y: 0, w: 0.27, h: 0.55 },
+      'virtual-device':  { x: 0.73, y: 0.55, w: 0.27, h: 0.45 },
+    },
+    withLive: {
+      panels: ['live-map'],
+      needsLink: true,
+      tiles: {
+        'session-browser': { x: 0, y: 0, w: 0.6, h: 1 },
+        'rig-controls':    { x: 0.6, y: 0, w: 0.13, h: 1 },
+        'rig-controller':  { x: 0.73, y: 0, w: 0.27, h: 0.48 },
+        'live-map':        { x: 0.73, y: 0.48, w: 0.27, h: 0.2 },
+        'virtual-device':  { x: 0.73, y: 0.68, w: 0.27, h: 0.32 },
+      },
+    },
+    floating: ['audio-mixer'],
+    lowEffects: true,
+    playViews: true,
+  },
+  {
+    // (the Performance workspace before the four contexts) composing / trying parts: the players, the
+    // Rig's controls, the Rig
+    id: 'studio',
+    label: 'Studio',
     // Left: the players stacked (Drum, Chord Prog, Sequencer); middle: the Rig's controls, Now / Next
     // above Play; right: the Rig (its Launchpad layout), with Live the Map below it.
     panels: ['drum-machine', 'chord-prog', 'sequencer2', 'rig-controls', 'rig-controller'],
@@ -55,11 +89,14 @@ export const WORKSPACES: WorkspaceManifest[] = [
 export const workspaceById = (id: string): WorkspaceManifest =>
   WORKSPACES.find(w => w.id === id) ?? WORKSPACES[0]
 
-/** The panels a workspace shows and their tiles, with or without Live (M4L) set up. */
-export function layoutOf(ws: WorkspaceManifest, live: boolean): { key: string; panels: string[]; tiles: Record<string, TileRect> } | null {
+/** The panels a workspace shows and their tiles, with or without Live (M4L) set up (`linked`: SY.CORE
+ *  Link on and connected, for a withLive that needs it). */
+export function layoutOf(ws: WorkspaceManifest, live: boolean, opts: { linked?: boolean } = {}): { key: string; panels: string[]; tiles: Record<string, TileRect> } | null {
   if (!ws.panels) return null
-  if (live && ws.withLive) return { key: `${ws.id}+live`, panels: [...ws.panels, ...ws.withLive.panels], tiles: ws.withLive.tiles }
-  return { key: ws.id, panels: ws.panels, tiles: ws.tiles ?? {} }
+  const withLive = live && ws.withLive && (!ws.withLive.needsLink || opts.linked)
+  return withLive
+    ? { key: `${ws.id}+live`, panels: [...ws.panels, ...ws.withLive!.panels], tiles: ws.withLive!.tiles }
+    : { key: ws.id, panels: ws.panels, tiles: ws.tiles ?? {} }
 }
 
 /** The geometry storage key of each managed panel (its useDraggableResizable storageKey). */
@@ -71,6 +108,8 @@ export const PANEL_STORAGE_KEYS: Record<string, string> = {
   'live-map':       'SYCORE_POS_LIVE_MAP',
   'rig-controls':   'SYCORE_POS_RIG_CONTROLS',
   'chord-now':      'SYCORE_POS_CHORD_NOW',
+  'session-browser': 'SYCORE_POS_SESSION_BROWSER',
+  'virtual-device': 'SYCORE_POS_VIRTUAL_DEVICE',
 }
 
 /** A tile in pixels: the free area is the window minus the footer, `gap` px between tiles. */
