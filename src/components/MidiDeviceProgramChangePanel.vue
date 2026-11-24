@@ -1,4 +1,5 @@
 <script setup>
+import PanelHeader from '@/components/ui/PanelHeader.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { X, Minus, Music2, Search, Send, ChevronDown, AlertTriangle, Loader2, Zap, Layers, Star, Save, RotateCcw, Trash2, Plus, BookOpen, Radio, Upload, Download, FolderOpen, LayoutGrid, FileText, Copy, Braces, Database, CheckCircle2, ScanLine, Square } from 'lucide-vue-next'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -32,6 +33,8 @@ import { on } from '@/types/events'
 import { pcBrowse, recordDeviceCategories, matchCategory } from '@/lib/pc-browse'
 import { mappedParamFor, isVirtualDeviceControl } from '@/composables/useMidiCCListener'
 import { askLearnConflict, registerLearnOwnerProvider } from '@/lib/midi-learn-conflicts'
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore'
+import { soundDesignDevice } from '@/lib/sound-design'
 
 const emit = defineEmits(['close'])
 
@@ -1403,6 +1406,12 @@ onUnmounted(() => {
 })
 
 // ── PC Toast Notification ───────────────────────────────────────
+// Sound Design: the device comes from its Sound Devices list (this panel's own list hidden), and follows it.
+const inSoundDesign = computed(() => useWorkspaceStore().active === 'sound-design')
+watch([inSoundDesign, soundDesignDevice], ([on, d]) => {
+  if (on && d && d !== selectedDeviceName.value && midiStore.routingConfig.registrations[d]) selectedDeviceName.value = d
+}, { immediate: true })
+
 function selectDevice(name) {
   selectedDeviceName.value = name
   const reg = midiStore.routingConfig.registrations[name]
@@ -1663,20 +1672,8 @@ function assignToPad(setId, padIdx) {
       <div class="bg-neutral-900 max-h-[94vh] border border-violet-500/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col" :style="panelStyle" v-show="!isMinimized" @mousedown.capture="bringToFront">
 
         <!-- Header -->
-        <div class="px-4 py-2 border-b border-neutral-800 flex items-center justify-between bg-gradient-to-r from-violet-950/40 to-transparent shrink-0 cursor-grab active:cursor-grabbing select-none" @mousedown="onDragStart">
-          <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-              <Music2 class="w-5 h-5 text-violet-400" />
-            </div>
-            <div>
-              <h2 class="text-sm font-black uppercase tracking-[0.2em] text-white leading-none mb-1">MULTI SOUND</h2>
-              <p class="text-[9px] font-mono text-violet-500/60 uppercase tracking-widest">Per-Device Bank & Preset Browser</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1">
-            <MacOsButtons @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
-          </div>
-        </div>
+        <PanelHeader title="Multi Sound" :subtitle="inSoundDesign && selectedDeviceName ? selectedDeviceName : 'Banks & presets per device'" :icon="Music2" accent="text-violet-300"
+                     @mousedown="onDragStart" @close="emit('close')" @minimize="toggleMinimize" @maximize="maximize" />
 
         <!-- Body: two columns -->
         <div class="flex flex-1 overflow-hidden">
@@ -1684,8 +1681,8 @@ function assignToPad(setId, padIdx) {
           <!-- ── LEFT: PC-enabled device list + Performance Sets ── -->
           <div class="w-64 shrink-0 border-r border-neutral-800 flex flex-col overflow-hidden">
 
-            <!-- Device list (scrollable) -->
-            <div class="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+            <!-- Device list (scrollable) — hidden in Sound Design (its Sound Devices list picks the device) -->
+            <div v-if="!inSoundDesign" class="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
               <div class="px-4 py-3 border-b border-neutral-800 shrink-0">
                 <span class="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">PC Devices</span>
               </div>
@@ -1758,7 +1755,7 @@ function assignToPad(setId, padIdx) {
             </div>
 
             <!-- ── Performance Sets / Solo Sets section ── -->
-            <div class="shrink-0 border-t border-neutral-900 flex flex-col max-h-[45%]">
+            <div class="border-t border-neutral-900 flex flex-col" :class="inSoundDesign ? 'flex-1 min-h-0 overflow-y-auto custom-scrollbar' : 'shrink-0 max-h-[45%]'">
 
               <!-- Sub-tab bar -->
               <div class="flex shrink-0 border-b border-neutral-800">
@@ -2043,8 +2040,8 @@ function assignToPad(setId, padIdx) {
             <template v-else>
 
               <!-- ── 1. Device header + channel selector ── -->
-              <div class="shrink-0 px-6 pt-5 pb-4 flex items-center justify-between border-b border-neutral-900">
-                <div class="flex items-center gap-3">
+              <div class="shrink-0 px-5 pt-3 pb-3 flex flex-col gap-2 border-b border-neutral-900">
+                <div class="flex items-center gap-3 flex-wrap">
                   <div :class="['w-2 h-2 rounded-full', isDeviceOffline ? 'bg-neutral-700' : 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]']" />
                   <span class="text-sm font-black text-white uppercase tracking-wider">{{ selectedDeviceName }}</span>
                   <span v-if="isDeviceOffline" class="text-[8px] font-black bg-amber-950/40 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase">Offline</span>
@@ -2082,47 +2079,23 @@ function assignToPad(setId, padIdx) {
                       </button>
                     </div>
                   </div>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-[9px] font-mono text-neutral-500 uppercase">Channel</span>
-                  <!-- Multipart device: one button per channel mapped in MIDI Flow, each with its own preset -->
-                  <template v-if="mappedChannels.length > 0">
-                    <div class="flex gap-1 flex-wrap max-w-[420px]">
-                      <button
-                        v-for="ch in mappedChannels"
-                        :key="ch"
-                        @click="setChannel(ch + 1)"
-                        :class="[
-                          'flex flex-col items-center gap-0.5 px-2 py-1 rounded border text-[8px] font-black font-mono transition-all',
-                          (selectedReg?.pcChannel ?? 0) === ch
-                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-[0_0_6px_rgba(245,158,11,0.2)]'
-                            : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200'
-                        ]"
-                        :title="selectedReg?.pcChannels?.[ch]?.soundName || `CH ${ch + 1} — no preset assigned`"
-                      >
-                        <span>CH {{ ch + 1 }}</span>
-                        <span class="text-[6px] font-mono font-normal max-w-[48px] truncate leading-none"
-                          :class="selectedReg?.pcChannels?.[ch]?.soundName ? 'text-amber-400/70' : 'text-neutral-700'">
-                          {{ selectedReg?.pcChannels?.[ch]?.soundName ?? '—' }}
-                        </span>
-                      </button>
-                    </div>
-                    <!-- MIDI Learn: a button (momentary or toggle) or pad cycles through the mapped channels -->
-                    <MidiButtonLearn
-                      v-if="mappedChannels.length > 1"
-                      :map="chNextLearn.map.value"
-                      :learning="chNextLearn.isLearning.value"
-                      :icon="Radio"
-                      learn-hint="MIDI Learn: press a controller button (CC) or pad/key (note) to step to the next mapped channel"
-                      mapped-hint="Steps to the next mapped channel (wraps around)"
-                      @learn="chNextLearn.startLearn()"
-                      @cancel="chNextLearn.cancelLearn()"
-                      @clear="chNextLearn.clear()"
-                      @toggle-mode="chNextLearn.toggleMode()"
-                    />
-                  </template>
+                  <div class="flex-1" />
+                  <!-- MIDI Learn: a button (momentary or toggle) or pad cycles through the mapped channels -->
+                  <MidiButtonLearn
+                    v-if="mappedChannels.length > 1"
+                    :map="chNextLearn.map.value"
+                    :learning="chNextLearn.isLearning.value"
+                    :icon="Radio"
+                    learn-hint="MIDI Learn: press a controller button (CC) or pad/key (note) to step to the next mapped channel"
+                    mapped-hint="Steps to the next mapped channel (wraps around)"
+                    @learn="chNextLearn.startLearn()"
+                    @cancel="chNextLearn.cancelLearn()"
+                    @clear="chNextLearn.clear()"
+                    @toggle-mode="chNextLearn.toggleMode()"
+                  />
                   <!-- Single channel: normal dropdown -->
-                  <template v-else>
+                  <div v-if="!mappedChannels.length" class="flex items-center gap-2">
+                    <span class="text-[9px] font-mono text-neutral-500 uppercase">Channel</span>
                     <div class="relative">
                       <select
                         :value="(selectedReg?.pcChannel ?? 0) + 1"
@@ -2133,7 +2106,28 @@ function assignToPad(setId, padIdx) {
                       </select>
                       <ChevronDown class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-600 pointer-events-none" />
                     </div>
-                  </template>
+                  </div>
+                </div>
+                <!-- Multipart device: one cell per channel mapped in MIDI Flow, each with its own preset -->
+                <div v-if="mappedChannels.length" class="grid gap-1" style="grid-template-columns: repeat(auto-fill, minmax(104px, 1fr))">
+                  <button
+                    v-for="ch in mappedChannels"
+                    :key="ch"
+                    @click="setChannel(ch + 1)"
+                    :class="[
+                      'flex flex-col items-start gap-0.5 px-2 py-1 rounded border text-left transition-all min-w-0',
+                      (selectedReg?.pcChannel ?? 0) === ch
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-[0_0_6px_rgba(245,158,11,0.2)]'
+                        : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200'
+                    ]"
+                    :title="selectedReg?.pcChannels?.[ch]?.soundName || `CH ${ch + 1} — no preset assigned`"
+                  >
+                    <span class="text-[9px] font-black font-mono">CH {{ ch + 1 }}</span>
+                    <span class="text-[10px] font-mono w-full truncate leading-tight"
+                      :class="selectedReg?.pcChannels?.[ch]?.soundName ? ((selectedReg?.pcChannel ?? 0) === ch ? 'text-amber-200' : 'text-neutral-300') : 'text-neutral-700'">
+                      {{ selectedReg?.pcChannels?.[ch]?.soundName ?? '—' }}
+                    </span>
+                  </button>
                 </div>
               </div>
 

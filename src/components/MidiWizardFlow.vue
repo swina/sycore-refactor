@@ -20,7 +20,7 @@ import { designerPresets } from '@/core/midi/designer-presets'
 import { currentProject, saveSetupAsProject } from '@/core/projects'
 import MidiSyncFlow from '@/components/MidiSyncFlow.vue'
 import ControlFlowView from '@/components/ControlFlowView.vue'
-import MacOsButtons from '@/components/ui/MacOsButtons.vue'
+import PanelHeader from '@/components/ui/PanelHeader.vue'
 import MidiMapContextMenu from '@/components/ui/MidiMapContextMenu.vue'
 
 const midiStore  = useMidiStore()
@@ -83,6 +83,17 @@ const allDevices = computed(() =>
       type:   deviceType(reg.name),
     }))
 )
+
+// The sidebar's devices grouped by kind; the apps (right pane) in alphabetical order.
+const DEVICE_GROUPS = [
+  { key: 'instruments', label: 'Instruments', types: ['instrument-single', 'instrument-multi'] },
+  { key: 'virtual', label: 'Virtual Instruments', types: ['virtual'] },
+  { key: 'controller', label: 'Controllers', types: ['controller'] },
+]
+const deviceGroups = computed(() => DEVICE_GROUPS
+  .map(g => ({ ...g, devices: allDevices.value.filter(d => g.types.includes(d.type)).sort((a, b) => a.name.localeCompare(b.name)) }))
+  .filter(g => g.devices.length))
+const sortedApps = computed(() => [...MIDI_APPS].sort((a, b) => a.name.localeCompare(b.name)))
 
 // ── Canvas state ──
 const canvasEl    = ref(null)
@@ -952,14 +963,9 @@ function pendingPath() {
 
     <div class="h-full flex flex-col bg-neutral-950 border border-synth-neon/30 rounded-2xl overflow-hidden shadow-2xl">
 
-      <!-- Header -->
-      <div
-        class="flex items-center gap-3 px-4 py-3 bg-neutral-900/60 border-b border-neutral-800 cursor-grab active:cursor-grabbing shrink-0"
-        @mousedown.stop="onDragStart"
-      >
-        <span class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-synth-neon shrink-0">
-          <Cable class="w-4 h-4" /> MIDI FLOW
-        </span>
+      <!-- Header (ui/PanelHeader: the common header) -->
+      <PanelHeader title="MIDI Flow" :icon="Cable" accent="text-synth-neon"
+                   @mousedown="onDragStart" @close="uiStore.isMidiFlowOpen = false" @minimize="toggleMinimize" @maximize="maximize">
         <!-- Tabs: the project's two first parts -->
         <div class="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 shrink-0" @mousedown.stop>
           <button
@@ -987,10 +993,10 @@ function pendingPath() {
             :class="activeTab === 'sync' ? 'bg-synth-neon text-black' : 'text-neutral-500 hover:text-white'"
           >Sync Flow</button>
         </div> -->
-        <span v-if="activeTab === 'routing'" class="text-[9px] font-mono text-neutral-600 flex-1 truncate">
+        <span v-if="activeTab === 'routing'" class="text-[9px] font-mono text-neutral-600 truncate min-w-0">
           Drag devices → canvas &nbsp;·&nbsp; OUT● → ●IN to connect &nbsp;·&nbsp; click cable to remove
         </span>
-        <span class="flex-1" v-else />
+        <template #actions>
 
         <!-- Saved canvas configurations -->
         <div v-if="activeTab === 'routing'" class="relative shrink-0">
@@ -1130,8 +1136,8 @@ function pendingPath() {
         >
           <Settings class="w-4 h-4" />
         </button>
-        <MacOsButtons @close="uiStore.isMidiFlowOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
-      </div>
+        </template>
+      </PanelHeader>
 
       <!-- Control tab -->
       <div v-if="activeTab === 'control'" class="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -1170,64 +1176,33 @@ function pendingPath() {
             </button>
           </div>
           <template v-if="showDevicesSection">
-            <!-- Type legend -->
-            <div class="flex flex-col gap-0.5 px-1 mb-1.5">
-              <span v-for="(meta, key) in DEVICE_TYPE_META" :key="key" class="flex items-center gap-1.5 text-[7px] font-mono text-neutral-500">
-                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="meta.dot" />{{ meta.label }}
-              </span>
-            </div>
             <div v-if="!allDevices.length" class="text-[9px] text-neutral-700 font-mono text-center pt-2">
               No devices detected
             </div>
-            <div
-              v-for="dev in allDevices"
-              :key="dev.name"
-              draggable="true"
-              @dragstart="onSidebarDragStart($event, dev)"
-              class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-l-2 border-neutral-800 bg-neutral-900 hover:bg-neutral-800/60 cursor-grab active:cursor-grabbing transition-colors"
-              :class="typeMeta(dev.type).accent"
-            >
-              <span class="flex items-center gap-1.5 min-w-0">
-                <component :is="typeMeta(dev.type).icon" class="w-2.5 h-2.5 shrink-0" :class="typeMeta(dev.type).text" />
-                <span class="text-[9px] font-mono font-bold text-white truncate leading-tight">{{ dev.name }}</span>
-              </span>
-              <div class="flex gap-1">
-                <span v-if="dev.hasIn"  class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wide">IN</span>
-                <span v-if="dev.hasOut" class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-synth-neon/20 text-synth-neon uppercase tracking-wide">OUT</span>
+            <template v-for="g in deviceGroups" :key="g.key">
+              <div class="flex items-center gap-1.5 px-1 mt-1.5 text-[8px] font-black uppercase tracking-widest" :class="typeMeta(g.types[0]).text">
+                <component :is="typeMeta(g.types[0]).icon" class="w-2.5 h-2.5" />{{ g.label }}
+                <span class="text-neutral-600 font-mono">{{ g.devices.length }}</span>
               </div>
-            </div>
-          </template>
-
-          <!-- MIDI Apps -->
-          <button
-            @click="showAppsSection = !showAppsSection"
-            class="flex items-center justify-between px-1 mt-2 group bg-emerald-900/60 p-1 rounded"
-          >
-            <span class="text-[8px] font-bold uppercase tracking-widest text-white-600 group-hover:text-neutral-400 transition-colors">MIDI Apps</span>
-            <ChevronDown
-              class="w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform"
-              :class="showAppsSection ? '' : '-rotate-90'"
-            />
-          </button>
-          <template v-if="showAppsSection">
-            <div
-              v-for="app in MIDI_APPS"
-              :key="app.sourceId"
-              draggable="true"
-              @dragstart="onSidebarDragStart($event, { name: app.name, sourceId: app.sourceId, hasIn: app.hasIn ?? false, hasOut: true })"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:border-purple-500/50 hover:bg-purple-900/20 cursor-grab active:cursor-grabbing transition-colors"
-            >
-              <component :is="app.icon" class="w-3 h-3 text-purple-400 shrink-0" />
-              <span class="text-[9px] font-mono font-bold text-purple-200 truncate leading-tight flex-1">{{ app.name }}</span>
-              <button
-                v-if="APP_PANEL_ID[app.sourceId]"
-                @click.stop="openApp(app.sourceId)"
-                class="text-purple-400/50 hover:text-purple-300 transition-colors cursor-pointer shrink-0"
-                title="Open app"
+              <div
+                v-for="dev in g.devices"
+                :key="dev.name"
+                draggable="true"
+                @dragstart="onSidebarDragStart($event, dev)"
+                class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-l-2 border-neutral-800 bg-neutral-900 hover:bg-neutral-800/60 cursor-grab active:cursor-grabbing transition-colors"
+                :class="typeMeta(dev.type).accent"
+                :title="typeMeta(dev.type).label + ' — drag onto the canvas'"
               >
-                <ExternalLink class="w-3 h-3" />
-              </button>
-            </div>
+                <span class="flex items-center gap-1.5 min-w-0">
+                  <component :is="typeMeta(dev.type).icon" class="w-2.5 h-2.5 shrink-0" :class="typeMeta(dev.type).text" />
+                  <span class="text-[9px] font-mono font-bold text-white truncate leading-tight">{{ dev.name }}</span>
+                </span>
+                <div class="flex gap-1">
+                  <span v-if="dev.hasIn"  class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wide">IN</span>
+                  <span v-if="dev.hasOut" class="text-[7px] font-bold px-1.5 py-0.5 rounded bg-synth-neon/20 text-synth-neon uppercase tracking-wide">OUT</span>
+                </div>
+              </div>
+            </template>
           </template>
         </div>
 
@@ -1627,6 +1602,40 @@ function pendingPath() {
               <title>OUT — drag to connect</title>
             </svg>
           </div>
+        </div>
+        <!-- Right pane: the apps, A–Z -->
+        <div class="w-44 shrink-0 bg-neutral-900/40 border-l border-neutral-800 flex flex-col overflow-y-auto custom-scrollbar p-3 gap-1.5">
+          <!-- MIDI Apps -->
+          <button
+            @click="showAppsSection = !showAppsSection"
+            class="flex items-center justify-between px-1 group bg-emerald-900/60 p-1 rounded"
+          >
+            <span class="text-[8px] font-bold uppercase tracking-widest text-white-600 group-hover:text-neutral-400 transition-colors">MIDI Apps</span>
+            <ChevronDown
+              class="w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform"
+              :class="showAppsSection ? '' : '-rotate-90'"
+            />
+          </button>
+          <template v-if="showAppsSection">
+            <div
+              v-for="app in sortedApps"
+              :key="app.sourceId"
+              draggable="true"
+              @dragstart="onSidebarDragStart($event, { name: app.name, sourceId: app.sourceId, hasIn: app.hasIn ?? false, hasOut: true })"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:border-purple-500/50 hover:bg-purple-900/20 cursor-grab active:cursor-grabbing transition-colors"
+            >
+              <component :is="app.icon" class="w-3 h-3 text-purple-400 shrink-0" />
+              <span class="text-[9px] font-mono font-bold text-purple-200 truncate leading-tight flex-1">{{ app.name }}</span>
+              <button
+                v-if="APP_PANEL_ID[app.sourceId]"
+                @click.stop="openApp(app.sourceId)"
+                class="text-purple-400/50 hover:text-purple-300 transition-colors cursor-pointer shrink-0"
+                title="Open app"
+              >
+                <ExternalLink class="w-3 h-3" />
+              </button>
+            </div>
+          </template>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 <script setup>
+import PanelHeader from '@/components/ui/PanelHeader.vue'
 // Virtual Device view (the floating Virtual Device Panel and the DECK's device view share it): one
 // UI per virtual instrument (multipart ones too) — an LCD-style display
 // (preset position, browse TYPE All/Category, channel, bank:program, preset name, category) with
@@ -8,6 +9,7 @@
 // dial or a ▼▲ button for MIDI Learn. The header is a drag handle for the panel ('header-mousedown');
 // slot `actions` takes the host's buttons (window controls, back to DECK…).
 import { ref, computed, watch } from 'vue'
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore'
 import { SlidersHorizontal, ChevronDown, ChevronUp, ChevronRight, Save, X, Music2, Table2 } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
@@ -48,6 +50,12 @@ const device = computed(() => vd.activeDevice)
 // its image (uploaded in the Devices list), shown in the header in place of the icon
 const { images: deviceImages } = useDeviceImages()
 const deviceImage = computed(() => (device.value && deviceImages.value[device.value]) || '')
+
+// Sound Design (its middle pane): the open bank's categories as buttons, always shown, under the face.
+const ws = useWorkspaceStore()
+const showCategories = computed(() => ws.active === 'sound-design')
+// the device shown listed in the picker even when it is not a virtual instrument (a hardware one from Sound Design)
+const deviceOptions = computed(() => (device.value && !vd.devices.includes(device.value) ? [device.value, ...vd.devices] : vd.devices))
 
 const channel = computed(() => device.value ? vd.channel(device.value) : 0)
 const channelList = computed(() => device.value ? vd.channels(device.value) : [])
@@ -168,17 +176,10 @@ function openCcTable() {
 
 <template>
   <div class="flex flex-col min-h-0 max-h-full">
-    <!-- Header -->
-    <div class="flex items-center justify-between gap-3 px-4 py-2 bg-gradient-to-b from-white/5 to-transparent shrink-0 select-none" :class="grab ? 'cursor-grab active:cursor-grabbing' : ''" @mousedown="emit('header-mousedown', $event)">
-      <div class="flex items-center gap-3 min-w-0">
-        <img v-if="deviceImage" :src="deviceImage" :alt="device" class="w-8 h-8 rounded-lg object-cover border border-teal-500/30 shrink-0" />
-        <div v-else class="p-1.5 bg-teal-500/20 rounded-lg border border-teal-500/20">
-          <SlidersHorizontal class="w-4 h-4 text-teal-300" />
-        </div>
-        <h2 class="text-sm font-black text-white tracking-[0.1em] uppercase whitespace-nowrap truncate max-w-[260px]" :title="device ? 'Virtual Device: ' + device : 'Virtual Device'">{{ device || 'Virtual Device' }}</h2>
-        <span class="bg-amber-400/70 text-[8px] rounded font-mono px-2 text-black">BETA</span>
-      </div>
-      <div class="flex items-center gap-2" @mousedown.stop>
+    <!-- Header (ui/PanelHeader, bare: the host's window buttons come in slot `actions`) -->
+    <PanelHeader bare :title="device || 'Virtual Device'" :image="deviceImage" :icon="SlidersHorizontal" accent="text-teal-200" badge="BETA"
+                 :class="grab ? '' : 'cursor-default active:cursor-default'" @mousedown="emit('header-mousedown', $event)">
+      <template #actions>
         <!-- LCD theme -->
         <div class="flex items-center gap-1" :title="'LCD color of ' + (device || 'the Virtual Device')">
           <button v-for="t in LCD_THEMES" :key="t.id" @click="vd.setLcdTheme(device, t.id)" :title="t.label + (device ? ' — ' + device : '')"
@@ -186,17 +187,17 @@ function openCcTable() {
             :class="themeId === t.id ? 'border-white ring-1 ring-white/60' : 'border-neutral-600'"
             :style="{ background: `linear-gradient(135deg, ${t.bg[0]} 50%, ${t.text} 50%)` }" />
         </div>
-        <select v-if="vd.devices.length" :value="device" @change="e => vd.selectedDevice = e.target.value"
+        <select v-if="deviceOptions.length && !showCategories" :value="device" @change="e => vd.selectedDevice = e.target.value"
           class="bg-neutral-900 border border-white/10 rounded px-2 py-1 text-[11px] text-white font-mono max-w-[200px]" title="Virtual instrument">
-          <option v-for="d in vd.devices" :key="d" :value="d">{{ d }}</option>
+          <option v-for="d in deviceOptions" :key="d" :value="d">{{ d }}</option>
         </select>
         <button class="p-1.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white" title="Open in Program Change"
           @click="device && dispatch('device-pc-open', { deviceName: device })">
           <Music2 class="w-3.5 h-3.5" />
         </button>
         <slot name="actions" />
-      </div>
-    </div>
+      </template>
+    </PanelHeader>
 
     <div v-if="!device" class="flex-1 flex items-center justify-center text-[11px] text-neutral-500 px-6 text-center">
       No virtual instruments yet — add one in MIDI Devices.
@@ -280,6 +281,18 @@ function openCcTable() {
           <span class="font-mono normal-case tracking-normal text-[10px] text-neutral-900 truncate">
             {{ categoryList.length ? categoryList[categoryIdx] : 'none in the open bank' }}
           </span>
+        </div>
+      </div>
+
+      <!-- Sound Design: the open bank's categories, all shown (a click sends its first preset) -->
+      <div v-if="showCategories" class="rounded-xl border border-white/10 bg-neutral-900/60 px-3 py-2">
+        <div class="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-1.5">Categories<template v-if="categoryList.length"> · {{ categoryList.length }}</template></div>
+        <p v-if="!categoryList.length" class="text-[10px] text-neutral-600 italic">None in the open bank (Multi Sound: open a bank with categories).</p>
+        <div v-else class="flex flex-wrap gap-1">
+          <button v-for="(c, i) in categoryList" :key="c + i" @click="vd.selectCategory(device, i)"
+            class="px-2 py-0.5 rounded border text-[10px] font-mono transition-colors"
+            :class="vd.categoryIndex(device) === i ? 'border-teal-400 bg-teal-500/20 text-teal-100' : 'border-white/10 text-neutral-300 hover:border-white/40'"
+            :title="'Category ' + c + ': its first preset is sent'">{{ c }}</button>
         </div>
       </div>
 

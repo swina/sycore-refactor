@@ -67,6 +67,8 @@ import { installProjects } from '@/core/projects'
 import { installSessions } from '@/core/sessions'
 import { useExternalClockStore } from '@/stores/useExternalClockStore'
 import MicroFreakEditorPanel from '@/components/MicroFreakEditorPanel.vue'
+import SoundDevicesPanel from '@/components/SoundDevicesPanel.vue'
+import ProjectsListPanel from '@/components/ProjectsListPanel.vue'
 import LiveMapPanel from '@/components/LiveMapPanel.vue'
 import RigControlsPanel from '@/components/RigControlsPanel.vue'
 import ChordNowPanel from '@/components/ChordNowPanel.vue'
@@ -231,6 +233,8 @@ const simpleTogglePanels = [
   { openId: 'session-takes', focusKey: 'sessionTakes', component: SessionTakesPanel, transition: null },
   { openId: 'session-browser', focusKey: 'sessionBrowser', component: SessionBrowserPanel, transition: null },
   { openId: 'microfreak-editor', focusKey: 'microFreakEditor', component: MicroFreakEditorPanel, transition: null },
+  { openId: 'sound-devices', focusKey: 'soundDevices', component: SoundDevicesPanel, transition: null },
+  { openId: 'projects-list', focusKey: 'projectsList', component: ProjectsListPanel, transition: null },
 ]
 
 async function handleStepSequencerSave(config) {
@@ -349,8 +353,9 @@ onMounted(() => {
 
     <!-- Main Content Area -->
     <div class="flex-1 overflow-hidden">
+      <!-- (a second SoundEngine here, never shown — no isOpen — took the panel id 'sound-engine' from the
+           floating one: a workspace's tile went to it) -->
       <Welcome v-if="!authStore.user || !presetStore.showResults" />
-      <SoundEngine  v-else/>
       <!-- <ResultsPanel v-else /> -->
     </div>
 

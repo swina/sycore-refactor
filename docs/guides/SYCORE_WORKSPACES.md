@@ -1,4 +1,4 @@
-# Workspaces — Classic, Studio, Arrange and Performance
+# Workspaces — Classic, Studio, Arrange, Performance, Sound Design and MIDI Flow
 
 > One screen per way of working: the panels of a scenario side by side, the others closed. What plays keeps playing.
 
@@ -6,13 +6,15 @@
 
 ## Switching
 
-The **workspace switch** is in the footer: **Classic | Studio | Arrange | Performance**. The workspace of the last session comes back at start.
+The **workspace switch** is in the footer: **Classic | Studio | Arrange | Performance | Sound Design | MIDI Flow**. The workspace of the last session comes back at start.
 
 | Workspace | What it does |
 |---|---|
 | **Classic** | Manages nothing: the floating panels as you place them. Back to Classic, the panels open and their places are the ones Classic was left with. |
 | **Performance** | The stage: the **song** (the Session Browser without its Slots pane), the Rig's controls with Play, the Rig (Launchpad layout) and the **Virtual Device** (bottom right) side by side — **Mixer** (Rig Controls, under Performance) opens the Audio Mixer floating over them; the Map · Live Instruments only while SY.CORE Link is connected. The players are not shown: the song drives them. Lighter visual effects (no blur, no transitions). |
 | **Arrange** | Building the song: the **Session Browser** alone, full screen, in EDIT (sections, lanes, clips, its Slots pane, Save presets, Preview); the engines play on behind it. |
+| **Sound Design** | The sound of each device. Left: the **sound devices** cabled in MIDI Flow (instruments and virtual instruments, with their image from MIDI Devices). A click opens its editor in the middle — **Roland S-1**: the Sound Engine; **Arturia MicroFreak**: the MicroFreak Editor; any other: the **Virtual Device**, large (face and sounds, the open bank's categories — a click sends the first preset — and the controls) — and takes **Multi Sound** (banks and presets, right) to it. The editor shown comes back next time. The Sound Folder, the Program Change drawer, the Sampler and Freesound stay open when opened here. |
+| **MIDI Flow** | The setup, what goes where: **MIDI Flow** large on the left (devices grouped as Instruments / Virtual Instruments / Controllers, the canvas, the apps A–Z on the right), **Projects** on the right — the projects and the MIDI Flow setups: a click shows what is in one, **Load** loads it. MIDI Devices, the Virtual Device, the Controller Designer, the MIDI Manager, Live Input, the controller profiles, the FM-1 and the MIDI Monitor stay open when opened here. |
 | **Studio** | Composing and trying parts (the Performance screen before the songs): the players, the Rig's controls and the Rig side by side (tiled, no overlap), every other panel closed, lighter visual effects. The places you moved panels to in the old Performance are Studio's now. |
 
 Switching never stops the music: the Drum Machine, Chord Prog and Sequencer play on whether their panels are open or not.

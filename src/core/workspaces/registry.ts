@@ -21,6 +21,9 @@ export interface WorkspaceManifest {
   lowEffects?: boolean
   /** The players show what plays (their settings folded away; EDIT opens them). */
   playViews?: boolean
+  /** One tile shared by several panels, one shown at a time (Sound Design: the device's editor) — the one
+   *  shown is remembered; `default` the first time. */
+  slot?: { tile: TileRect; panels: string[]; default: string }
 }
 
 export const WORKSPACES: WorkspaceManifest[] = [
@@ -93,6 +96,35 @@ export const WORKSPACES: WorkspaceManifest[] = [
     lowEffects: true,
     playViews: true,
   },
+  {
+    // Four contexts, Sound Design: the sound of each device — the sound devices cabled in MIDI Flow on the left
+    // (lib/sound-design.ts), the device's editor in the middle (S-1: the Sound Engine, MicroFreak: its editor,
+    // any other: the Virtual Device, large), Multi Sound (banks and presets) on the right. The Sound Folder,
+    // the Program Change drawer, the Sampler and Freesound stay open when opened from here (floating).
+    id: 'sound-design',
+    label: 'Sound Design',
+    panels: ['sound-devices', 'device-program-change'],
+    tiles: {
+      'sound-devices':         { x: 0, y: 0, w: 0.14, h: 1 },
+      'device-program-change': { x: 0.64, y: 0, w: 0.36, h: 1 },
+    },
+    slot: { tile: { x: 0.14, y: 0, w: 0.5, h: 1 }, panels: ['sound-engine', 'microfreak-editor', 'virtual-device'], default: 'virtual-device' },
+    floating: ['sound-folder-browser', 'program-change', 'sampler', 'freesound-browser'],
+  },
+  {
+    // Four contexts, MIDI Flow (was "MIDI Orchestrator"): the setup, what goes where — MIDI Flow large on the
+    // left (devices · canvas · apps), the projects and MIDI Flow setups on the right (loaded only with their Load
+    // button). The MIDI devices, the Virtual Device, the Controller Designer, the MIDI Manager, Live Input, the
+    // controller profiles, the FM-1 and the MIDI Monitor stay open when opened from here (floating).
+    id: 'midi-flow',
+    label: 'MIDI Flow',
+    panels: ['midi-flow', 'projects-list'],
+    tiles: {
+      'midi-flow':     { x: 0, y: 0, w: 0.78, h: 1 },
+      'projects-list': { x: 0.78, y: 0, w: 0.22, h: 1 },
+    },
+    floating: ['midi-devices', 'virtual-device', 'controller-designer', 'midi-manager', 'live-input', 'midi-performance', 'fm1-emulator', 'midi-monitor'],
+  },
 ]
 
 export const workspaceById = (id: string): WorkspaceManifest =>
@@ -119,6 +151,12 @@ export const PANEL_STORAGE_KEYS: Record<string, string> = {
   'chord-now':      'SYCORE_POS_CHORD_NOW',
   'session-browser': 'SYCORE_POS_SESSION_BROWSER',
   'virtual-device': 'SYCORE_POS_VIRTUAL_DEVICE',
+  'sound-engine':   'SYCORE_POS_SOUND_ENGINE',
+  'microfreak-editor': 'SYCORE_POS_MICROFREAK_EDITOR',
+  'sound-devices':  'SYCORE_POS_SOUND_DEVICES',
+  'device-program-change': 'SYCORE_POS_DEVICE_PC',
+  'midi-flow':      'SYCORE_POS_MIDI_FLOW',
+  'projects-list':  'SYCORE_POS_PROJECTS_LIST',
 }
 
 /** A tile in pixels: the free area is the window minus the footer, `gap` px between tiles. */

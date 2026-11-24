@@ -15,6 +15,7 @@ import { LINK_OUTPUT_NAME, useLinkStore } from '@/stores/useLinkStore'
 const LS_ACTIVE = 'SYCORE_WORKSPACE'
 const LS_LAYOUTS = 'SYCORE_WORKSPACE_LAYOUTS'
 const LS_CLASSIC = 'SYCORE_WORKSPACE_CLASSIC'
+const LS_SLOTS = 'SYCORE_WORKSPACE_SLOTS'
 const FOOTER_H = 40 // AppFooter h-10
 
 type Layouts = Record<string, Record<string, TileRect>> // workspace → panel → px rect
@@ -51,8 +52,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const active = ref<string>(workspaceById(load(LS_ACTIVE, 'classic')).id)
   const layouts = ref<Layouts>(migrateLayouts(load(LS_LAYOUTS, {})))
   let classic: ClassicSnapshot | null = load(LS_CLASSIC, null)
+  /** Per workspace with a slot: the panel it shows there (Sound Design: the device's editor). */
+  const slots = ref<Record<string, string>>(load(LS_SLOTS, {}))
+  function slotPanelOf(wsId: string): string | null {
+    const s = workspaceById(wsId).slot
+    if (!s) return null
+    const id = slots.value[wsId]
+    return id && s.panels.includes(id) ? id : s.default
+  }
 
-  const managedPanels = () => [...new Set(WORKSPACES.flatMap(w => [...(w.panels ?? []), ...(w.withLive?.panels ?? [])]))]
+  const managedPanels = () => [...new Set(WORKSPACES.flatMap(w => [...(w.panels ?? []), ...(w.withLive?.panels ?? []), ...(w.slot?.panels ?? [])]))]
   function snapshotClassic() {
     const rects: ClassicSnapshot['rects'] = {}
     for (const id of managedPanels()) rects[id] = getPanelGeometry(id, PANEL_STORAGE_KEYS[id])
@@ -80,7 +89,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!l) return null
     const saved = layouts.value[l.key]?.[panelId]
     if (saved) return saved
-    const tile = l.tiles[panelId]
+    const slot = workspaceById(wsId).slot
+    const tile = l.tiles[panelId] ?? (slot?.panels.includes(panelId) ? slot.tile : undefined)
     return tile ? tileToPx(tile, area()) : null
   }
 
@@ -95,8 +105,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const l = layout(ws.id)
     if (!l) return
     const floating = ws.floating ?? []
-    for (const id of [...uiStore.openPanelIds]) if (!l.panels.includes(id) && !floating.includes(id)) uiStore.closePanel(id)
-    for (const id of l.panels) {
+    const inSlot = slotPanelOf(ws.id)
+    const shown = inSlot ? [...l.panels, inSlot] : l.panels
+    for (const id of [...uiStore.openPanelIds]) if (!shown.includes(id) && !floating.includes(id)) uiStore.closePanel(id)
+    for (const id of shown) {
       const r = rectOf(ws.id, id)
       if (r) setPanelGeometry(id, PANEL_STORAGE_KEYS[id], r)
       uiStore.openPanel(id)
@@ -111,6 +123,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     save(LS_ACTIVE, active.value)
     if (next === 'classic') { applyEffects(); restoreClassic(); return }
     apply()
+  }
+
+  /** A panel into the active workspace's slot (the others of the slot closed), in its place; with no slot for
+   *  it (Classic, another workspace): just opened. */
+  function showInSlot(id: string) {
+    const ws = workspaceById(active.value)
+    if (!ws.slot?.panels.includes(id)) { uiStore.openPanel(id); return }
+    slots.value = { ...slots.value, [ws.id]: id }
+    save(LS_SLOTS, slots.value)
+    for (const other of ws.slot.panels) if (other !== id) uiStore.closePanel(other)
+    const r = rectOf(ws.id, id)
+    if (r) setPanelGeometry(id, PANEL_STORAGE_KEYS[id], r)
+    uiStore.openPanel(id)
   }
 
   /** Back to the tiles (forget the places moved by hand) and show them. */
@@ -130,7 +155,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // A managed panel moved / resized by hand: remembered for the active workspace.
   onPanelGeometryChange((panelId: string, rect: TileRect) => {
     const l = layout(active.value)
-    if (!l?.panels.includes(panelId)) return
+    if (!l || !(l.panels.includes(panelId) || slotPanelOf(active.value) === panelId)) return
     layouts.value = { ...layouts.value, [l.key]: { ...(layouts.value[l.key] ?? {}), [panelId]: rect } }
     save(LS_LAYOUTS, layouts.value)
   })
@@ -140,5 +165,5 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // SY.CORE Link connecting / dropping in a workspace whose Map needs it: the Map comes / goes
   watch(() => layout(active.value)?.key, (k, old) => { if (k && old && k !== old) apply() })
 
-  return { active, layouts, workspaces: WORKSPACES, switchTo, apply, resetLayout, rectOf, floatingPanels }
+  return { active, layouts, workspaces: WORKSPACES, switchTo, apply, resetLayout, rectOf, floatingPanels, showInSlot, slotPanelOf }
 })

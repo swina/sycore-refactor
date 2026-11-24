@@ -1,4 +1,5 @@
 <script setup>
+import PanelHeader from '@/components/ui/PanelHeader.vue'
 import { watch } from 'vue'
 import { Cpu, Minus, X } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
@@ -41,22 +42,8 @@ watch(() => props.isOpen, (v) => { if (v) bringToFront() })
       <div @mousedown.stop="e => onResizeStart(e, 'sw')" class="absolute bottom-0 left-0   w-3 h-3  cursor-sw-resize z-50" />
 
       <!-- ── Header (drag handle) ─────────────────────────────────── -->
-      <div
-        class="px-4 py-4 border-b border-neutral-900 flex items-center justify-between gap-4 shrink-0 bg-black/40 backdrop-blur-md cursor-grab active:cursor-grabbing select-none"
-        @mousedown="onDragStart"
-      >
-        <!-- <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
-        </div> -->
-        <div class="flex items-center gap-2 pointer-events-none">
-          <Cpu class="ml-4 w-4 h-4 text-synth-neon" />
-          <span class="text-sm font-black uppercase tracking-[0.3em] text-synth-neon">Sound Engine</span>
-        </div>
-        <div class="flex items-center gap-1 pointer-events-auto" @mousedown.stop>
-
-          <MacOsButtons @close="() => { emit('close'); uiStore.isSequencerOpen = false }" @minimize="toggleMinimize" @maximize="maximize" />
-        </div>
-        
-      </div>
+      <PanelHeader title="Sound Engine" subtitle="Roland S-1" :icon="Cpu" accent="text-synth-neon"
+                   @mousedown="onDragStart" @close="() => { emit('close'); uiStore.isSequencerOpen = false }" @minimize="toggleMinimize" @maximize="maximize" />
 
       <!-- ── Content ──────────────────────────────────────────────── -->
       <div class="flex-1 min-h-0 overflow-hidden">

@@ -109,8 +109,10 @@ export const useVirtualDeviceStore = defineStore('virtualDevice', () => {
 
   const devices = computed(() => midiStore.virtualInstruments.map(v => v.name))
   // the device shown: the selected one, else the first virtual instrument ('' when none)
+  // (a hardware instrument registered in MIDI Devices too — picked in Sound Design: its presets, channel, sounds)
   const activeDevice = computed(() =>
-    devices.value.includes(selectedDevice.value) ? selectedDevice.value : (devices.value[0] ?? ''))
+    devices.value.includes(selectedDevice.value) || (selectedDevice.value && midiStore.routingConfig?.registrations?.[selectedDevice.value])
+      ? selectedDevice.value : (devices.value[0] ?? ''))
 
   function ccTable(device: string) {
     return midiStore.virtualInstruments.find(v => v.name === device)?.ccTable ?? []

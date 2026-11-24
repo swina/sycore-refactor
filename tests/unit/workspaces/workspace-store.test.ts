@@ -32,7 +32,29 @@ describe('workspaces', () => {
     for (const id of ['rig-controls', 'rig-controller', 'drum-machine', 'chord-prog', 'sequencer2']) expect(ui.isPanelOpen(id)).toBe(false)
     expect(usePlayView('session-browser').play.value).toBe(false) // EDIT: its Slots pane there
     expect(JSON.parse(localStorage.getItem(userKey('SYCORE_POS_SESSION_BROWSER'))!)).toMatchObject({ x: 0, y: 0, w: 1920, h: 1040 })
-    expect(WORKSPACES.map(w => w.id)).toEqual(['classic', 'studio', 'arrange', 'performance'])
+    expect(WORKSPACES.map(w => w.id)).toEqual(['classic', 'studio', 'arrange', 'performance', 'sound-design', 'midi-flow'])
+  })
+
+  it('Sound Design: devices, Multi Sound and the slot (one editor at a time, remembered); MIDI Flow: projects', () => {
+    const ui = useUiStore()
+    const ws = useWorkspaceStore()
+    ui.openPanel('drum-machine'); ui.openPanel('sound-folder-browser')
+    ws.switchTo('sound-design')
+    for (const id of ['sound-devices', 'device-program-change', 'virtual-device']) expect(ui.isPanelOpen(id)).toBe(true) // the slot's default
+    expect(ui.isPanelOpen('drum-machine')).toBe(false)
+    expect(ui.isPanelOpen('sound-folder-browser')).toBe(true) // floating
+    ws.showInSlot('sound-engine')
+    expect(ui.isPanelOpen('sound-engine')).toBe(true)
+    expect(ui.isPanelOpen('virtual-device')).toBe(false)
+    expect(JSON.parse(localStorage.getItem(userKey('SYCORE_POS_SOUND_ENGINE'))!)).toMatchObject({ x: Math.round(0.14 * 1920 + 2), y: 0 })
+    ui.openPanel('midi-monitor')
+    ws.switchTo('midi-flow')
+    for (const id of ['midi-flow', 'projects-list']) expect(ui.isPanelOpen(id)).toBe(true)
+    for (const id of ['sound-engine', 'sound-devices', 'sound-folder-browser']) expect(ui.isPanelOpen(id)).toBe(false)
+    expect(ui.isPanelOpen('midi-monitor')).toBe(true) // floating
+    ws.switchTo('sound-design')
+    expect(ui.isPanelOpen('sound-engine')).toBe(true) // the slot remembered
+    expect(ui.isPanelOpen('virtual-device')).toBe(false)
   })
 
   it('every managed panel has a storage key and a tile', () => {

@@ -1,6 +1,6 @@
 <script setup>
-// Workspace switcher (footer): Classic (floating, as before) / Performance (Rig, Chord Prog, Drum,
-// Sequencer tiled). Switching never stops what plays. Reset: the tiles again.
+// Workspace switcher (footer): Classic (floating, as before) and the managed workspaces (registry.ts:
+// their panels tiled). Switching never stops what plays. Reset: the tiles again.
 import { RotateCcw } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore'
 

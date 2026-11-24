@@ -1,10 +1,11 @@
 <script setup>
+import PanelHeader from '@/components/ui/PanelHeader.vue'
 // MicroFreak Editor — the synth's CC controls by section, loaded from a preset
 // read over SysEx, a sound generator (random by character, mutate) and
 // snapshots kept in SY.CORE. The synth itself stores a sound only with its own
 // Save (no SysEx write yet).
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Download, Loader2, Shuffle, Dices, Undo2, Save, Trash2, Send, Lock } from 'lucide-vue-next'
+import { SlidersHorizontal, Download, Loader2, Shuffle, Dices, Undo2, Save, Trash2, Send, Lock } from 'lucide-vue-next'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import MacOsButtons from '@/components/ui/MacOsButtons.vue'
 import KnobDial from '@/components/ui/KnobDial.vue'
@@ -12,6 +13,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useMidiStore } from '@/stores/useMidiStore'
 import { midiService } from '@/core/midi/midi-service'
 import { userKey } from '@/lib/userKey'
+import { soundDesignPort } from '@/lib/sound-design'
 import { decodeRows, CHUNKS_PARAMS, PRESET_SLOTS } from '@/lib/microfreak/sysex'
 import { createMicroFreakReader, microFreakOutput } from '@/lib/microfreak/reader'
 import {
@@ -53,6 +55,8 @@ const devices = computed(() => {
 const device = ref((() => { try { return localStorage.getItem(userKey(LS_DEVICE)) ?? '' } catch { return '' } })())
 watch(devices, list => { if (!list.includes(device.value)) device.value = list[0] ?? '' }, { immediate: true })
 watch(device, d => { try { localStorage.setItem(userKey(LS_DEVICE), d) } catch {} })
+// Sound Design: the MicroFreak picked there (its port: its own, or the one its virtual instrument plays through)
+watch(soundDesignPort, p => { if (p && devices.value.includes(p)) device.value = p }, { immediate: true })
 
 const regCh = (name, fallback = 0) => Math.max(0, midiStore.routingConfig?.registrations?.[name]?.pcChannel ?? fallback)
 /** Where this MicroFreak's Program Changes are recorded: the port, and the virtual instruments on it. */
@@ -247,19 +251,16 @@ onMounted(() => {
     @mousedown.capture="bringToFront"
   >
     <!-- Header -->
-    <div class="flex items-center justify-between border-b border-neutral-800 px-3 py-2 bg-teal-900/10 gap-2 flex-wrap cursor-move select-none shrink-0" @mousedown="onDragStart">
-      <div class="flex items-center gap-2">
-        <MacOsButtons @close="uiStore.isMicroFreakEditorOpen = false" @minimize="toggleMinimize" @maximize="maximize" />
-        <span class="text-sm font-black text-white tracking-widest uppercase pointer-events-none">MicroFreak Editor</span>
-      </div>
-      <div class="flex items-center gap-2" @mousedown.stop>
+    <PanelHeader title="MicroFreak Editor" :icon="SlidersHorizontal" accent="text-teal-300" badge="BETA"
+                 @mousedown="onDragStart" @close="uiStore.isMicroFreakEditorOpen = false" @minimize="toggleMinimize" @maximize="maximize">
+      <template #actions>
         <select v-model="device" class="bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] font-mono text-teal-300 focus:outline-none">
           <option v-if="!devices.length" value="">No MicroFreak</option>
           <option v-for="d in devices" :key="d" :value="d">{{ d }}</option>
         </select>
         <span class="text-[10px] font-mono text-neutral-500">CH {{ channel + 1 }}</span>
-      </div>
-    </div>
+      </template>
+    </PanelHeader>
 
     <!-- Toolbar -->
     <div class="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-neutral-800 shrink-0">
