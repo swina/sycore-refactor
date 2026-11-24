@@ -20,13 +20,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { useRigEngine, _resetRigEngine } from '@/core/engines/rig'
 import { _resetDrumMachineEngine } from '@/core/engines/drum-machine'
-import { songCommand, songRun, rigLaneMutes, exampleSong } from '@/lib/songs'
+import { songCommand, songRun, songPaused, rigLaneMutes, exampleSong } from '@/lib/songs'
 
 const flush = async () => { for (let i = 0; i < 5; i++) { await nextTick(); await Promise.resolve() } }
 
 // The Rig's logic without its panel (Four contexts C2): the Session Browser's commands reach it.
 describe('Rig engine — no panel mounted', () => {
-  beforeEach(() => { localStorage.clear(); setActivePinia(createPinia()); songRun.value = null; songCommand.value = null })
+  beforeEach(() => { localStorage.clear(); setActivePinia(createPinia()); songRun.value = null; songCommand.value = null; songPaused.value = null })
   afterEach(() => { _resetRigEngine(); _resetDrumMachineEngine(); vi.restoreAllMocks() })
 
   it('is one instance for the app', () => {
@@ -103,6 +103,28 @@ describe('Rig engine — no panel mounted', () => {
     expect(songRun.value?.waitPlay).toBe(true) // its bars count from the Play, not before
   })
 
+  it('Play after a Pause goes on from its section; with nothing paused (a Stop) it starts from the first', async () => {
+    const rig = useRigEngine()
+    const song = exampleSong()
+    rig.songLib.songs.push(song)
+    rig.songLib.currentId = song.id
+    songPaused.value = { songId: song.id, index: 2 }
+    rig.togglePlay()
+    await flush()
+    expect(songRun.value?.index).toBe(2)
+    expect(songPaused.value).toBeNull()
+    rig.doPanic()
+    rig.togglePlay()
+    await flush()
+    expect(songRun.value?.index).toBe(0)
+  })
+
+  it('Pause with no song playing says so', () => {
+    const rig = useRigEngine()
+    rig.pauseSong()
+    expect(rig.s.display).toMatch(/no song playing/)
+  })
+
   it('Play with a slot armed by hand: no song, the usual Play', async () => {
     const rig = useRigEngine()
     const song = exampleSong()
@@ -116,10 +138,32 @@ describe('Rig engine — no panel mounted', () => {
     rigArmed.drum = null
   })
 
-  it("Launchpad top row: pad 7 is Play / Stop", () => {
+  it("Launchpad top row: pad 5 is Song, pad 7 is Play / Stop", () => {
     const rig = useRigEngine()
+    expect(rig.lpTop.value[4].label).toBe('Song')
     expect(rig.lpTop.value[6].label).toBe('Play')
     expect(rig.lpTop.value[7].label).toBe('Panic')
+  })
+
+  it("Launchpad Song page: the bottom row shows the song's sections, Shift the songs; a song pressed stopped opens it", async () => {
+    const rig = useRigEngine()
+    const a = exampleSong(), b = { ...exampleSong(), id: 'song-b', name: 'Second' }
+    rig.songLib.songs.push(a, b)
+    rig.songLib.currentId = a.id
+    expect(rig.lpPad(7, 0).short).toMatch(/^L1/) // Latch 1–8 by default
+    rig.lpTopDown(4)
+    expect(rig.songPage.value).toBe(true)
+    expect(rig.lpPad(7, 0).label).toMatch(/Intro/)
+    expect(rig.lpPad(7, 7).color).toBe('off') // six sections
+    rig.toggleShift()
+    const n = rig.songLib.songs.length
+    expect(rig.lpPad(7, n - 1).label).toMatch(/Second/)
+    rig.lpPadDown(7, n - 1)
+    expect(rig.songLib.currentId).toBe('song-b')
+    expect(songRun.value).toBeNull()
+    rig.toggleShift()
+    rig.lpTopDown(4)
+    expect(rig.songPage.value).toBe(false)
   })
 
   it('Stop song with nothing playing does nothing', async () => {

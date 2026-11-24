@@ -25,8 +25,9 @@ export const VOL_BAR_OPTIONS = [0, 0.5, 1, 2, 4] as const
 
 /** stop: the lanes stop after the last section · loop: from the first again · stay:
  *  the last section's lanes stay on, the Chord holding the chord of its last bar (the song's Latch), until Stop song / Stop */
-/** staySection: the last section loops (as on Hold) until Stop song / Stop */
-export type SongEnd = 'stop' | 'loop' | 'stay' | 'staySection'
+/** staySection: the last section loops (as on Hold) until Stop song / Stop · next: the session's next song
+ *  starts on the bar line (the last one stops) */
+export type SongEnd = 'stop' | 'loop' | 'stay' | 'staySection' | 'next'
 
 /** The song's Fade Out (Stop song, End Stop): 'rig' = the Rig's Fade Out (Performance), else bars (0 = Cut: none). */
 export type SongFadeOut = 'rig' | number
@@ -68,6 +69,9 @@ export interface Song {
   end: SongEnd
   /** Stop song / End Stop: the fade-out before the lanes stop */
   fadeOut: SongFadeOut
+  /** Another song coming in (End Next, a song picked while one plays): its fade-in after the gap — 'rig' = the Rig's
+   *  Fade In, else bars (0 = Cut). Absent: 'rig'. */
+  fadeIn?: SongFadeOut
   /** SG4: the song has its own material (its slots A–H, lib/song-material.ts); false = the session's slots */
   own: boolean
 }
@@ -239,8 +243,9 @@ export function parseSong(raw: any): Song | null {
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : uid(),
     name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.slice(0, 40) : 'Song',
-    end: raw.end === 'loop' || raw.end === 'stay' || raw.end === 'staySection' ? raw.end : 'stop',
+    end: raw.end === 'loop' || raw.end === 'stay' || raw.end === 'staySection' || raw.end === 'next' ? raw.end : 'stop',
     fadeOut: okFadeOut(raw.fadeOut),
+    fadeIn: okFadeOut(raw.fadeIn),
     own: raw.own === true,
     sections,
   }
@@ -315,21 +320,42 @@ export interface SongRun {
   outAt?: number | null
   /** the fade-out to the song's end has started */
   fading?: boolean
+  /** End Next / a song picked while it plays: the song after it (its fade-out, the gap, then that one) */
+  nextSongId?: string | null
+  nextIndex?: number
+  /** came in after another song: its fade-in on its first bar line */
+  fadeInPending?: boolean
 }
 
 export type SongStep =
   | { kind: 'launch'; index: number } // launch that section now, to start on the next bar line
   | { kind: 'stop' }                  // stop every lane on the next bar line
   | { kind: 'stay' }                  // End Stay: the lanes stay on, the Chord holds its last chord
+  | { kind: 'next' }                  // End Next: the session's next song, on the next bar line
   | { kind: 'done' }                  // the song is over
   | null
 
 /** The song playing (the Rig panel's player runs it; the Session Browser shows it). */
 export const songRun = ref<SongRun | null>(null)
 /** A command for the Rig panel's player (the Session Browser's buttons): it takes it and clears it. */
-export type SongCommand = { cmd: 'play'; index: number } | { cmd: 'stop' } | { cmd: 'hold'; on: boolean } | { cmd: 'jump'; index: number }
+export type SongCommand = { cmd: 'play'; index: number } | { cmd: 'stop' } | { cmd: 'pause' } | { cmd: 'resume' } | { cmd: 'hold'; on: boolean } | { cmd: 'jump'; index: number }
   | { cmd: 'mute'; lane: SongLane } | { cmd: 'solo'; lane: SongLane }
 export const songCommand = ref<SongCommand | null>(null)
+/** A song paused (Pause: the transport stopped, the song kept): Play goes on from its section. A Stop rewinds. */
+export const songPaused = ref<{ songId: string; index: number } | null>(null)
+
+/** Song gap (every song, not part of a song / session): between two songs (End Next, a song picked while one
+ *  plays) — the song before fades out (its Out), these bars of silence, then the new one fades in (its In).
+ *  0: the new one starts on the bar line the one before ends on. */
+export const SONG_XFADE_OPTIONS = [0, 1, 2, 4] as const
+const LS_XFADE = 'SYCORE_SONG_XFADE'
+export const songXfadeBars = ref<number>((() => {
+  try { const v = Number(localStorage.getItem(LS_XFADE) ?? 2); return (SONG_XFADE_OPTIONS as readonly number[]).includes(v) ? v : 2 } catch { return 2 }
+})())
+export function setSongXfade(bars: number): void {
+  songXfadeBars.value = bars
+  try { localStorage.setItem(LS_XFADE, String(bars)) } catch {}
+}
 /** The Rig's Mute / Solo per lane (live, not part of the song), as the Rig panel has them; {} while it is closed. */
 export const rigLaneMutes = ref<Partial<Record<SongLane, { muted: boolean; solo: boolean }>>>({})
 
@@ -371,6 +397,7 @@ function lastBarStep(run: SongRun, song: Song): SongStep {
   if (!sec || run.hold || run.outAt || run.queued !== null || run.bar !== sec.bars) return null
   const next = nextSectionIndex(song, run.index)
   if (next === null && song.end === 'staySection') return null // the last section again, until stopped
+  if (next === null && song.end === 'next') return { kind: 'next' } // the player picks the next song (or stops)
   if (next === null) {
     run.stopping = true
     if (song.end === 'stay') { run.stay = true; return { kind: 'stay' } }
@@ -402,7 +429,7 @@ export function setHold(run: SongRun, song: Song, on: boolean): SongStep {
 /** The bars to the song's own end (End Stop), counting the bar now: only in its last section, not held; else null. */
 export function barsToEnd(run: SongRun, song: Song): number | null {
   const sec = song.sections[run.index]
-  if (!sec || song.end !== 'stop' || run.hold || run.outAt || run.stopping || run.queued !== null || run.bar < 1) return null
+  if (!sec || (song.end !== 'stop' && song.end !== 'next') || run.hold || run.outAt || run.stopping || run.queued !== null || run.bar < 1) return null
   if (nextSectionIndex(song, run.index) !== null) return null
   return Math.max(0, sec.bars - run.bar + 1)
 }

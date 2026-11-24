@@ -13,6 +13,8 @@
  *   rig_section_<1–8>      section: every app to that slot                             button
  *   rig_key_down / rig_key_up / rig_key_mode   Key ◀ ▶, Maj/Min                       button
  *   rig_play               Play / Stop (Rig Controls' big button: Live's, over SY.CORE Link) button
+ *   rig_pause              Pause the song (Play goes on from its section; a Stop rewinds)  button
+ *   rig_mixer              the Audio Mixer open / closed (Rig Controls' Mixer, floating)  button
  *   rig_tap / rig_tempo_down / rig_tempo_up    TAP (whole BPM), tempo − / + (1 BPM; Shift 0.1) button
  *   rig_tempo_round        the tempo to a whole BPM                                    button
  *   rig_tempo              tempo knob: each step it moves = 0.5 BPM (relative: no jump) knob
@@ -34,7 +36,7 @@ const SLOTS = 'abcdefgh'
 export type RigAction =
   | { kind: 'slot'; app: RigActionApp; slot: number }
   | { kind: 'gen' | 'mute' | 'solo' | 'sync' | 'intensity'; app: RigActionApp }
-  | { kind: 'fill' | 'seq_free' | 'play' | 'key_down' | 'key_up' | 'key_mode' | 'global' | 'tap' | 'tempo_down' | 'tempo_up' | 'tempo_round' | 'tempo' }
+  | { kind: 'fill' | 'seq_free' | 'play' | 'pause' | 'mixer' | 'key_down' | 'key_up' | 'key_mode' | 'global' | 'tap' | 'tempo_down' | 'tempo_up' | 'tempo_round' | 'tempo' }
   | { kind: 'section'; index: number }
   | { kind: 'density'; app: 'drum' | 'seq' | 'bass' | 'arp' }
   | { kind: 'chain'; app: 'drum' | 'chord' | 'seq' }
@@ -45,7 +47,7 @@ const isApp = (s: string): s is RigActionApp => (RIG_ACTION_APPS as readonly str
 export function parseRigAction(name: string): RigAction | null {
   if (!name.startsWith('rig_')) return null
   const rest = name.slice(4)
-  if (rest === 'fill' || rest === 'seq_free' || rest === 'play' || rest === 'key_down' || rest === 'key_up' || rest === 'key_mode' || rest === 'global' || rest === 'tap' || rest === 'tempo_down' || rest === 'tempo_up' || rest === 'tempo_round' || rest === 'tempo') return { kind: rest }
+  if (rest === 'fill' || rest === 'seq_free' || rest === 'play' || rest === 'pause' || rest === 'mixer' || rest === 'key_down' || rest === 'key_up' || rest === 'key_mode' || rest === 'global' || rest === 'tap' || rest === 'tempo_down' || rest === 'tempo_up' || rest === 'tempo_round' || rest === 'tempo') return { kind: rest }
   let m = /^slot_([a-z]+)_([a-h])$/.exec(rest)
   if (m && isApp(m[1])) return { kind: 'slot', app: m[1], slot: SLOTS.indexOf(m[2]) }
   m = /^(gen|mute|solo|sync|intensity)_([a-z]+)$/.exec(rest)
@@ -93,6 +95,8 @@ export function rigActionCatalog(): { paramName: string; label: string }[] {
   out.push({ paramName: 'rig_key_up', label: 'Key +' })
   out.push({ paramName: 'rig_key_mode', label: 'Key Maj/Min' })
   out.push({ paramName: 'rig_play', label: 'Play / Stop' })
+  out.push({ paramName: 'rig_pause', label: 'Pause song' })
+  out.push({ paramName: 'rig_mixer', label: 'Audio Mixer (open / close)' })
   out.push({ paramName: 'rig_tap', label: 'Tap tempo' })
   out.push({ paramName: 'rig_tempo_down', label: 'Tempo −' })
   out.push({ paramName: 'rig_tempo_up', label: 'Tempo +' })

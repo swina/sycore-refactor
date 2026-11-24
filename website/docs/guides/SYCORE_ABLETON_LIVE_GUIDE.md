@@ -207,7 +207,7 @@ Each track has a **Trigger sync** in its *Track options*, equivalent to Live's l
 | **2 bars** | the next 2-bar line of the song grid |
 | **4 bars** | the next 4-bar line (a phrase) |
 
-Sync points are on **Live's song grid**: a drum pattern launched on beat 2 with *1 beat* keeps beat 2 as its own start, exactly as a clip launched with 1-beat quantization. On **SY.CORE's own clock** (no Live) they are on SY.CORE's bar grid while its transport runs: a Drum pad on *Bar* waits for the next bar line there too. On the Launchpad, the top **Sync** button cycles the focused track's Trigger sync.
+Sync points are on **Live's song grid**: a drum pattern launched on beat 2 with *1 beat* keeps beat 2 as its own start, exactly as a clip launched with 1-beat quantization. On **SY.CORE's own clock** (no Live) they are on SY.CORE's bar grid while its transport runs: a Drum pad on *Bar* waits for the next bar line there too. The Rig panel's Sync (or a MIDI-learned `rig_sync_<app>`) cycles the focused track's Trigger sync.
 
 ### Fades
 
@@ -337,7 +337,7 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 | **Row 7** | **Sections 1–8** — or **Captures 1–8** (side **S·SEC / S·CAP**, below) |
 | **Row 8** | **Latch 1–8**: the Chord Prog stays on chord 1–8 of the slot playing, without advancing (amber: a chord there · blinking: waits for the chord sounding to end · green: holding); press it again and the progression goes on from the chord after it. Another Latch pad moves the hold to that chord; Panic releases it. (To silence an app: its slot pads, the MIDImix's Mute, the panel's **M**.) |
 | **Side** | **GEN** Drum, Chord, Seq, Bass, Arp (**Shift: Mute** that lane, red while muted; Mutate: the panel's Shift + GEN) · **DJ** Filter (hold: the cutoff CC — default 21, set in the Launchpad panel's **DJ Filter CC** — closes on every real app, release: opens) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
-| **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Sync** · Rig · **Play / Stop** (as Rig Controls' Play) · Panic (hold: stops every lane and the song at once, all notes off) |
+| **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Song** (the bottom row: the song's sections, Shift + bottom row: the session's songs — on the next bar line; off: Latch 1–8) · Rig · **Play / Stop** (as Rig Controls' Play) · Panic (hold: stops every lane and the song at once, all notes off) |
 
 ### Captures (row 7 in Captures mode)
 
@@ -382,7 +382,7 @@ You don't need a Launchpad: **every Rig Controller function can be MIDI-learned 
 - **LED feedback**: SY.CORE sends the same note or CC back to the controller. On a **Launchpad Mini MK1** the colours match its Rig mode: a slot that holds something amber, playing green, queued or armed blinking green, Mute red. On other controllers a pad is lit (127) while it plays, blinks while queued or armed, and is dark otherwise; Mute and Solo are lit while on. This works on controllers that light a pad when they receive its own note / CC; other colours and LED protocols need a controller template.
 - The panel and the controller drive the same values: move either one and the other follows.
 - The same actions are listed under **Rig Controller** in the **Controller Designer**, to build an on-screen layout of your controller.
-- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_seq_free`, `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`, `rig_play` (Rig Controls' Play / Stop), `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode`, `rig_tap`, `rig_tempo_down`, `rig_tempo_up`, `rig_tempo_round`, `rig_tempo` (`<app>` = chord, drum, seq, bass, arp).
+- Parameter names, for reference: `rig_slot_<app>_<a–h>`, `rig_gen_<app>`, `rig_mute_<app>`, `rig_solo_<app>`, `rig_sync_<app>`, `rig_intensity_<app>`, `rig_density_drum`, `rig_density_seq`, `rig_density_arp` (Arp octave; `rig_intensity_arp` is its rate), `rig_global`, `rig_fill`, `rig_seq_free`, `rig_chain_drum` / `rig_chain_chord` / `rig_chain_seq`, `rig_play` (Rig Controls' Play / Stop), `rig_pause` (Pause the song: Play goes on from its section), `rig_mixer` (Rig Controls' Mixer: the Audio Mixer open / closed), `rig_section_<1–8>`, `rig_key_down`, `rig_key_up`, `rig_key_mode`, `rig_tap`, `rig_tempo_down`, `rig_tempo_up`, `rig_tempo_round`, `rig_tempo` (`<app>` = chord, drum, seq, bass, arp).
 
 ### Live or Performance: one controller, two roles
 

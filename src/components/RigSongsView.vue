@@ -148,7 +148,7 @@ const status = computed(() => {
   if (r.stay) return r.bar <= sec.bars ? 'Last bar · Stay: the lanes stay on, the Chord holds its last chord' : 'Stay: the lanes stay on, the Chord holds its last chord — Stop song to end'
   if (r.stopping) return 'Last bar · the lanes stop on the next bar line'
   if (r.bar === 0) return `${sec.name}: waiting for the bar line / Play`
-  const next = r.queued !== null ? s.sections[r.queued].name : r.hold ? 'Hold' : s.end === 'staySection' && r.index === s.sections.length - 1 ? 'Stay on section (Stop song to end)' : null
+  const next = r.queued !== null ? s.sections[r.queued].name : r.hold ? 'Hold' : s.end === 'staySection' && r.index === s.sections.length - 1 ? 'Stay on section (Stop song to end)' : s.end === 'next' && r.index === s.sections.length - 1 ? 'the next song' : null
   return `${sec.name} · bar ${r.bar}/${sec.bars} (song bar ${sectionStartBar(s, r.index) + r.bar - 1}) · ${barsLeft(r, s)} left${next ? ` · next: ${next}` : ''}`
 })
 const slotClass = (lane, v) => {
@@ -200,11 +200,18 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
           <option value="loop">Loop</option>
           <option value="stay">Stay on last bar</option>
           <option value="staySection">Stay on section</option>
+          <option value="next">Next song</option>
         </select>
       </label>
       <label class="flex items-center gap-1 text-[10px] uppercase tracking-wider text-neutral-500"
              title="Fade Out before the lanes stop (Stop song, End Stop) — Rig: the Fade Out set in Performance · Cut: none · bars: this song's own, on every channel">Out
         <select v-model="song.fadeOut" class="bg-black/40 border border-white/10 rounded px-1 py-1 text-white normal-case">
+          <option v-for="v in SONG_FADE_OPTIONS" :key="String(v)" :value="v">{{ v === 'rig' ? 'Rig (Performance)' : v === 0 ? 'Cut' : `${v === 0.5 ? '½' : v} bar${v > 1 ? 's' : ''}` }}</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1 text-[10px] uppercase tracking-wider text-neutral-500"
+             title="Fade In when this song comes after another (End Next, a song picked while one plays) — Rig: the Fade In set in Performance · Cut: at once · bars: this song's own">In
+        <select :value="song.fadeIn ?? 'rig'" class="bg-black/40 border border-white/10 rounded px-1 py-1 text-white normal-case" @change="song.fadeIn = $event.target.value === 'rig' ? 'rig' : Number($event.target.value)">
           <option v-for="v in SONG_FADE_OPTIONS" :key="String(v)" :value="v">{{ v === 'rig' ? 'Rig (Performance)' : v === 0 ? 'Cut' : `${v === 0.5 ? '½' : v} bar${v > 1 ? 's' : ''}` }}</option>
         </select>
       </label>

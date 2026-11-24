@@ -19,7 +19,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { laneSoundLabel } from '@/lib/lane-sound'
 import { rowLane, chordSnapshot, drumSnapshot, seqSnapshot, bassSnapshot } from '@/lib/rig-live'
 import {
-  songLibrary, songRun, songCommand, rigLaneMutes, SONG_FADE_OPTIONS, songChannels, songVolKeys, SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, laneClips, hasOwnClips, setLaneClips, clipFits, setSectionBars, VOL_BAR_OPTIONS,
+  songLibrary, songRun, songCommand, songPaused, songXfadeBars, setSongXfade, SONG_XFADE_OPTIONS, rigLaneMutes, SONG_FADE_OPTIONS, songChannels, songVolKeys, SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, laneClips, hasOwnClips, setLaneClips, clipFits, setSectionBars, VOL_BAR_OPTIONS,
   MAX_SECTIONS, newSong, newSection, exampleSong, songBars, sectionStartBar, barsLeft,
 } from '@/lib/songs'
 import {
@@ -469,6 +469,10 @@ function clipPreset(l, slot) {
 const laneSilenced = l => { const m = rigLaneMutes.value; return !!m[l]?.muted || (Object.values(m).some(x => x?.solo) && !m[l]?.solo) }
 const play = () => command({ cmd: 'play', index: sel.value })
 const stop = () => command({ cmd: 'stop' })
+const pause = () => command({ cmd: 'pause' })
+const resume = () => command({ cmd: 'resume' })
+/** This song paused: Resume goes on from its section */
+const pausedHere = computed(() => !songRun.value && songPaused.value?.songId === song.value?.id ? song.value.sections[songPaused.value.index] ?? null : null)
 const hold = () => command({ cmd: 'hold', on: !run.value?.hold })
 const jump = i => { if (playingHere.value) command({ cmd: 'jump', index: i }) }
 const songBar = computed(() => (run.value && run.value.bar > 0 ? sectionStartBar(song.value, run.value.index) + Math.min(run.value.bar, song.value.sections[run.value.index]?.bars ?? 0) - 1 : 0))
@@ -477,7 +481,7 @@ const isCurrent = i => !!run.value && run.value.index === i && run.value.bar > 0
 const isQueued = i => !!run.value && (run.value.queued === i || (run.value.bar === 0 && run.value.index === i))
 
 const fadeLabel = v => (v === 'rig' ? 'Rig' : v === 0 ? 'Cut' : v === 0.5 ? '½' : String(v))
-const END_OPTIONS = [['stop', 'Stop'], ['loop', 'Loop'], ['stay', 'Stay · bar'], ['staySection', 'Stay · section']]
+const END_OPTIONS = [['stop', 'Stop'], ['loop', 'Loop'], ['stay', 'Stay · bar'], ['staySection', 'Stay · section'], ['next', 'Next song']]
 const barLabel = b => (b === 0.5 ? '½' : b === 0 ? 'Cut' : String(b))
 const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider disabled:opacity-30'
 const laneLabel = l => SONG_LANE_LABELS[l]
@@ -631,13 +635,25 @@ const slotClass = (l, v, on) => on
             <span class="px-2 py-1 text-neutral-500 uppercase tracking-wider border-r border-white/15">Out</span>
             <button v-for="(v, i) in SONG_FADE_OPTIONS" :key="String(v)" class="px-2 py-1" :class="[i ? 'border-l border-white/15' : '', song.fadeOut === v ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10']" @click="song.fadeOut = v">{{ fadeLabel(v) }}</button>
           </div>
+          <div class="flex rounded border border-white/15 overflow-hidden text-[10px] font-bold"
+               title="Fade In when this song comes after another (End Next, a song picked while one plays) — Rig: the Fade In set in Performance · Cut: at once · bars: this song's own, on every channel">
+            <span class="px-2 py-1 text-neutral-500 uppercase tracking-wider border-r border-white/15">In</span>
+            <button v-for="(v, i) in SONG_FADE_OPTIONS" :key="String(v)" class="px-2 py-1" :class="[i ? 'border-l border-white/15' : '', (song.fadeIn ?? 'rig') === v ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10']" @click="song.fadeIn = v">{{ fadeLabel(v) }}</button>
+          </div>
+          <div class="flex rounded border border-white/15 overflow-hidden text-[10px] font-bold"
+               title="Between two songs (every song): the song before fades out (its Out), these bars of silence, then the next fades in (its In) — Cut: no gap, the next song starts on the bar line the one before ends on (its own material needs a gap: it loads there)">
+            <span class="px-2 py-1 text-neutral-500 uppercase tracking-wider border-r border-white/15">X-fade</span>
+            <button v-for="(v, i) in SONG_XFADE_OPTIONS" :key="v" class="px-2 py-1" :class="[i ? 'border-l border-white/15' : '', songXfadeBars === v ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10']" @click="setSongXfade(v)">{{ v === 0 ? 'Cut' : v }}</button>
+          </div>
           <span class="flex-1" />
           <span v-if="msg" class="text-[10px] text-emerald-300 truncate max-w-[280px]">{{ msg }}</span>
           <template v-if="playingHere">
             <button :class="[btn, run.hold ? 'bg-amber-500/80 border-amber-300 text-black' : 'border-amber-400/50 text-amber-300 hover:bg-amber-500/20']" title="Hold: the section playing loops until released" @click="hold"><Pause class="w-3 h-3 inline" /> Hold</button>
-            <button :class="[btn, 'border-red-400/50 text-red-300 hover:bg-red-500/20']" title="Stop the song on the next bar line" @click="stop"><Square class="w-3 h-3 inline" /> Stop song</button>
+            <button :class="[btn, 'border-sky-400/50 text-sky-300 hover:bg-sky-500/20']" title="Pause: the transport stops at the bar end, the song is kept — Play / Resume goes on from this section" @click="pause"><Pause class="w-3 h-3 inline" /> Pause</button>
+            <button :class="[btn, 'border-red-400/50 text-red-300 hover:bg-red-500/20']" title="Stop the song on the next bar line (the next Play starts it from the start)" @click="stop"><Square class="w-3 h-3 inline" /> Stop song</button>
           </template>
           <button v-else :class="[btn, 'border-emerald-400/60 text-emerald-300 hover:bg-emerald-500/20']" title="Play from the section selected (in the Rig, LIVE): playing, on the next bar line; stopped, it starts the Play" @click="play"><Play class="w-3 h-3 inline" /> Play from {{ section?.name }}</button>
+          <button v-if="pausedHere" :class="[btn, 'border-sky-400/60 text-sky-300 hover:bg-sky-500/20']" title="Paused: goes on from the section it was paused in (with the Play's count-in)" @click="resume"><Play class="w-3 h-3 inline" /> Resume {{ pausedHere.name }}</button>
         </div>
 
         <div class="flex-1 min-h-0 overflow-auto px-3 pt-2">

@@ -5,7 +5,8 @@ import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 // Rig Controls (Performance): the Rig Controller's controls in their own column — Transport / Clock,
 // Performance, Now / Next and Play. Their state and actions are the Rig engine's (core/engines/rig.js):
 // they work with the Rig panel closed.
-import { Play, Square } from 'lucide-vue-next'
+import { Play, Square, Pause } from 'lucide-vue-next'
+import { songRun, songPaused } from '@/lib/songs'
 import { useDraggableResizable } from '@/composables/useDraggableResizable'
 import { useRigEngine } from '@/core/engines/rig'
 import { countIn } from '@/lib/count-in'
@@ -23,7 +24,7 @@ const { panelStyle, onDragStart, onResizeStart, isMinimized, bringToFront } = us
   zIndex: 160,
   panelId: 'rig-controls',
 })
-const { s, live, playOn, togglePlay, learnedRing, learnMenu } = useRigEngine()
+const { s, live, playOn, togglePlay, toggleMixer, pauseSong, learnedRing, learnMenu } = useRigEngine()
 const ws = useWorkspaceStore()
 const ui = useUiStore()
 </script>
@@ -38,12 +39,20 @@ const ui = useUiStore()
         <!-- Performance: the Audio Mixer, floating over the layout (open / close) -->
         <button v-if="ws.floatingPanels.includes('audio-mixer')" type="button"
                 class="shrink-0 px-2 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wider"
-                :class="ui.isPanelOpen('audio-mixer') ? 'bg-amber-500/80 border-amber-300 text-black' : 'bg-white/[0.04] border-white/10 text-neutral-300 hover:bg-white/10'"
-                :title="ui.isPanelOpen('audio-mixer') ? 'Close the Audio Mixer' : 'The Audio Mixer, floating over the layout'"
-                @click="ui.isPanelOpen('audio-mixer') ? ui.closePanel('audio-mixer') : ui.openPanel('audio-mixer')">Mixer</button>
+                :class="[ui.isPanelOpen('audio-mixer') ? 'bg-amber-500/80 border-amber-300 text-black' : 'bg-white/[0.04] border-white/10 text-neutral-300 hover:bg-white/10', learnedRing('rig_mixer')]"
+                :title="(ui.isPanelOpen('audio-mixer') ? 'Close the Audio Mixer' : 'The Audio Mixer, floating over the layout') + ' — right-click: MIDI Learn'"
+                @click="toggleMixer" @contextmenu="learnMenu($event, 'rig_mixer', 'Mixer')">Mixer</button>
         <!-- no Controller template here: set up in EDIT (the Rig layout), not while performing -->
         <!-- Now / Next (the Chord Prog's chords) right above Play -->
         <ChordNowDisplay stacked class="mt-auto" />
+        <!-- Pause: the song kept (Play goes on from its section); Play's Stop rewinds it -->
+        <button v-if="songRun || songPaused" type="button"
+                class="shrink-0 px-2 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1"
+                :class="[songPaused && !songRun ? 'bg-sky-500/80 border-sky-300 text-black' : 'bg-white/[0.04] border-sky-400/40 text-sky-300 hover:bg-sky-500/20', learnedRing('rig_pause')]"
+                :title="(songPaused && !songRun ? 'Paused: press (or Play) to go on from its section' : 'Pause the song: the transport stops at the bar end, Play goes on from this section (Stop: from the start)') + ' — right-click: MIDI Learn'"
+                @click="pauseSong" @contextmenu="learnMenu($event, 'rig_pause', 'Pause song')">
+          <Pause class="w-3 h-3" /> {{ songPaused && !songRun ? 'Paused' : 'Pause' }}
+        </button>
         <button class="shrink-0 h-14 flex items-center justify-center gap-2 rounded-lg border text-sm font-black uppercase tracking-widest select-none"
                 :class="[playOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-neutral-800 border-white/15 text-neutral-200 hover:bg-neutral-700', learnedRing('rig_play')]"
                 :title="(live && s.clock.source === 'EXT' ? 'Play / Stop Ableton Live (SY.CORE Link)' : 'Play / Stop the clock') + ' — right-click: MIDI Learn'"

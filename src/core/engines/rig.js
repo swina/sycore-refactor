@@ -15,7 +15,7 @@
 import { reactive, ref, computed, watch, effectScope, onScopeDispose } from 'vue'
 import { RIG_SETTINGS_EVENT, materialPending, syncSongMaterial } from '@/core/sessions'
 import { slotName, labelOf as slotLabelOf } from '@/lib/slot-names'
-import { SONG_LANES, emptyLanes, songLibrary, saveSongs, songRun as sharedSongRun, songCommand, rigLaneMutes, setSongChannels, lanesAt, laneClips, barsToEnd, songFadeBars, fadeStopLine, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
+import { SONG_LANES, emptyLanes, songLibrary, saveSongs, songRun as sharedSongRun, songCommand, songPaused, songXfadeBars, rigLaneMutes, setSongChannels, lanesAt, laneClips, barsToEnd, songFadeBars, fadeStopLine, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
 import { needsSwitch, switchMaterial, captureInto, dropMaterial } from '@/lib/song-material'
 import { keyLabel, keyRoot, keyFile, progressionKeyDetail, NOTE_NAMES as KEY_NOTE_NAMES } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
@@ -267,7 +267,7 @@ function createRigEngine() {
   watch(songLib, v => saveSongs(v), { deep: true })
   const songRun = sharedSongRun
   // the song the transport's Stop ended (its section): the next Play (Rig Controls, the Launchpad) goes on from there
-  let songResume = null
+  let pausing = false // the transport stop under the song is a Pause (it keeps the song)
   let songArmed = false // the first section starts with the grid (armed for Play, or nothing running): its first bar counts at once
   const { openMenu } = useMidiContextMenu()
   /** Right-click on a Density control (LIVE, Drum / Seq): MIDI Learn it, e.g. on a Worlde encoder. */
@@ -702,12 +702,22 @@ function createRigEngine() {
     if (!live.value || playOn.value || countIn.active || songRun.value) return null
     const song = currentSong()
     if (!song?.sections.length) return null
-    const r = songResume
-    songResume = null
+    const r = songPaused.value
+    songPaused.value = null
     if (r && r.songId === song.id) return Math.min(r.index, song.sections.length - 1)
     return activeSlotRows().some(id => rigArmed[id] != null) ? null : 0
   }
+  /** Pause (Session Browser, Rig Controls, rig_pause): the transport stops, the song is kept — Play goes on
+   *  from its section. Paused: Pause again = Play. */
+  function pauseSong() {
+    if (songPaused.value && !songRun.value) return togglePlay()
+    const r = songRun.value
+    if (!r || r.bar === 0 || !playOn.value) { s.display = 'Pause: no song playing'; return }
+    pausing = true
+    transportToggle()
+  }
   function togglePlay() {
+    if (!playOn.value) pausing = false
     const from = songForPlay()
     if (from !== null) { playSong(from, { viaPlay: true }); return } // it arms the section's slots, then this Play
     transportToggle()
@@ -831,7 +841,9 @@ function createRigEngine() {
   // Panic: the song and every lane stop at once (no bar end, no fade), nothing armed or waiting, all notes off
   const doPanic = () => {
     songRun.value = null
-    songResume = null
+    pendingNext.value = null
+    songPaused.value = null
+    pausing = false
     panic(s)
     chordStore.latchStep = null
     uiStore.seqDecoupled = false
@@ -1174,6 +1186,8 @@ function createRigEngine() {
       case 'seq_free': return toggleSeqFree()
       case 'chain': return toggleChain(a.app)
       case 'play': return togglePlay()
+      case 'pause': return pauseSong()
+      case 'mixer': return toggleMixer()
       case 'section': return onSection(a.index)
       case 'key_down': return onKeyShift(-1)
       case 'key_up': return onKeyShift(1)
@@ -1220,6 +1234,11 @@ function createRigEngine() {
     return q !== null && q !== undefined && q !== chordStore.playingSlotIndex ? chordStore.slots[q] ?? null : null
   }
 
+  /** The Audio Mixer open / closed (Rig Controls' Mixer, a learned rig_mixer). */
+  function toggleMixer() {
+    if (uiStore.isPanelOpen('audio-mixer')) uiStore.closePanel('audio-mixer')
+    else uiStore.openPanel('audio-mixer')
+  }
   /** Right-click on a rig control: MIDI Learn it (any controller). The learned ones get an amber ring. */
   const mappingStore = useMappingStore()
   function learnMenu(ev, name, label) {
@@ -1432,6 +1451,19 @@ function createRigEngine() {
     const b = !now && gridRunning() ? nextBarLine(performance.now()) : null
     startChRamps(sectionVolRamps(targets, { ...chValue }, b ? b.t : performance.now(), b?.barMs ?? barMsNow(), b ? sec.volBars : 0))
   }
+  /** A song coming in after another (faded out, the gap): its fade-in from its first bar line — the Rig's
+   *  Fade In, or its own bars to each channel's level (the section's volume, else the channel's Max) and Master / Drum full. */
+  function songFadeIn(song) {
+    clearTimeout(songRestoreTimer); songRestoreTimer = null
+    songFaded = false
+    const fi = song.fadeIn ?? 'rig'
+    if (fi === 'rig') { fadeIn(); return }
+    const now = performance.now(), len = fi > 0 ? fi * barMsNow() : 0
+    const t = songTargets()
+    startChRamps(allChKeys().map(k => ({ key: k, from: chValue[k] ?? 0, to: t[k] ?? chFadeOf(k).max, t0: now, t1: now + len })))
+    startRamps(['master', 'drum'].map(k => ({ key: k, from: fade[k] ?? 0, to: 1, t0: now, t1: now + len })))
+    s.display = `Song ${song.name}: fading in${fi > 0 ? ` over ${fi === 0.5 ? '½' : fi} bar${fi > 1 ? 's' : ''}` : ''}`
+  }
   /** The Chord lane's step count of a section: on its bar line (or now, nothing running). Silent: unchanged. */
   function songChordSteps(sec, now = false) {
     if (!sec || sec.lanes.chord === null) return
@@ -1466,7 +1498,7 @@ function createRigEngine() {
     const r = songRun.value
     const song = songOf(r)
     if (!st || !song) return
-    if ((st.kind === 'launch' || st.kind === 'stop' || st.kind === 'stay') && r.bar > 0 && gridRunning()) {
+    if ((st.kind === 'launch' || st.kind === 'stop' || st.kind === 'stay' || st.kind === 'next') && r.bar > 0 && gridRunning()) {
       clearTimeout(songDeferTimer); songDeferTimer = null
       const now = performance.now()
       const b = nextBarLine(now)
@@ -1504,12 +1536,30 @@ function createRigEngine() {
         chordStore.songLatch = true
       }
       s.display = `Song ${song.name}: Stay — the lanes stay on, the Chord holds its last chord (Stop song: off)`
+    } else if (st.kind === 'next') {
+      // End Next: the session's next song on the bar line; the last one stops
+      const nx = songLib.songs[songLib.songs.findIndex(x => x.id === song.id) + 1]
+      r.stopping = true
+      if (!nx) { launchLanes(emptyLanes()); s.display = `Song ${song.name}: the last song — ends on the next bar line`; return }
+      // its fade-out ran to its end (End Next fades as End Stop): the gap, then the next one
+      r.nextSongId = nx.id
+      r.nextIndex = 0
+      songStepNow({ kind: 'stop' })
     } else if (st.kind === 'stop') {
+      // no gap, the same slots: the next song takes the lanes on the bar line this one ends on
+      const nx = r.nextSongId ? songLib.songs.find(x => x.id === r.nextSongId) : null
+      if (nx && songXfadeBars.value === 0 && !needsSwitch(songLib, nx)) { startAfter(nx, r.nextIndex ?? 0); return }
       launchLanes(emptyLanes())
-      s.display = `Song ${song.name}: ends on the next bar line`
+      s.display = r.nextSongId ? `Song ${song.name}: ends on the next bar line — then ${songLib.songs.find(x => x.id === r.nextSongId)?.name ?? 'the next song'} (its own material loads)` : `Song ${song.name}: ends on the next bar line`
     } else {
       songRun.value = null
       s.display = `Song ${song.name}: ended`
+      if (r.nextSongId) {
+        // the gap: Song X-fade bars at the level the fade-out left (the levels stay down), then the next song
+        pendingNext.value = { id: r.nextSongId, index: r.nextIndex ?? 0, wait: Math.max(0, songXfadeBars.value - 1), line: null }
+        s.display = `Song ${song.name}: ended — ${songLib.songs.find(x => x.id === r.nextSongId)?.name ?? 'the next song'} in ${Math.max(1, songXfadeBars.value)} bar${songXfadeBars.value > 1 ? 's' : ''}`
+        return
+      }
       // faded out: the levels back up a bar later, the lanes stopped (else the next pad played here is silent)
       if (songFaded) { clearTimeout(songRestoreTimer); songRestoreTimer = setTimeout(songRestoreLevels, barMsNow()) }
     }
@@ -1583,10 +1633,18 @@ function createRigEngine() {
     songFadeOutTo(song, b.t + (left - 1) * b.barMs, b.barMs)
     s.display = `Song ${song.name}: fading out to its end`
   }
+  /** A bar line went by under the song. */
+  function songLineBy(r, song, b) {
+    songStep(songBarLine(r, song))
+    songFadeLine(r, song, b)
+    songClipLine(r, song, b)
+    if (r.fadeInPending && r.bar >= 1 && songRun.value === r) { r.fadeInPending = false; songFadeIn(song) }
+  }
   function songFrame() {
     const idle = appsIdle()
     if (songIdle.value !== idle) songIdle.value = idle
     if (idle && materialPending.value) syncMaterial()
+    if (pendingNext.value && !songRun.value) loadPendingNext()
     const r = songRun.value
     if (!r) return
     const song = songOf(r)
@@ -1599,17 +1657,25 @@ function createRigEngine() {
     const b = gridRunning() ? nextBarLine(now) : null
     if (!b || !(b.barMs > 0)) {
       // the transport stopped under the song (Live's Stop, Stop): the song is over
-      if (songLine !== null && r.bar > 0) { songRun.value = null; songResume = { songId: r.songId, index: r.index }; s.display = `Song ${song.name}: stopped — Play: on from ${song.sections[r.index]?.name ?? 'its section'}` }
+      // Pause: Play goes on from its section; any other Stop rewinds (Play: from the start)
+      if (songLine !== null && r.bar > 0) {
+        songRun.value = null
+        if (pausing) { songPaused.value = { songId: r.songId, index: r.index }; s.display = `Song ${song.name}: paused — Play: on from ${song.sections[r.index]?.name ?? 'its section'}` }
+        else { songPaused.value = null; s.display = `Song ${song.name}: stopped — Play: from the start` }
+        pausing = false
+        // the Stop armed the slots that were playing (the next Play would start them, not the song): the song's, dropped
+        for (const id of activeSlotRows()) { cancelWait(id); rigArmed[id] = null }
+      }
       songLine = null
       return
     }
     if (songLine === null) {
       songLine = b.t
       // the grid just started (Play) and its first bar is already running: that is the section's bar 1
-      if (r.bar === 0 && songArmed && b.t - now > b.barMs * 0.5) { songStep(songBarLine(r, song)); songFadeLine(r, song, b); songClipLine(r, song, b) }
+      if (r.bar === 0 && songArmed && b.t - now > b.barMs * 0.5) songLineBy(r, song, b)
       return
     }
-    if (b.t > songLine + b.barMs * 0.5) { songLine = b.t; songStep(songBarLine(r, song)); songFadeLine(r, song, b); songClipLine(r, song, b) }
+    if (b.t > songLine + b.barMs * 0.5) { songLine = b.t; songLineBy(r, song, b) }
   }
   // A slot changed in the section playing (or the one launched next): that lane follows on the next bar line
   const songLanesKey = () => {
@@ -1700,6 +1766,9 @@ function createRigEngine() {
   async function playSong(i, { viaPlay = false } = {}) {
     const song = songLib.songs.find(x => x.id === songLib.currentId)
     if (!song || !live.value) return
+    // another song playing: it fades out, the gap, then this one (from section i)
+    const cur = songRun.value
+    if (cur && cur.songId !== song.id && cur.bar > 0 && gridRunning()) { goToSong(song, i); return }
     if (needsSwitch(songLib, song)) {
       if (!appsIdle()) { s.display = `Song ${song.name}: its material loads at a stop — stop first, then Play`; materialPending.value = true; return }
       await switchMaterial(songLib, song)
@@ -1709,7 +1778,7 @@ function createRigEngine() {
     for (const id of ['drum', 'chord', 'seq']) if (chainOn(id)) toggleChain(id)
     if (playOn.value) songRestoreLevels() // a song faded out before, the transport still running
     else { clearTimeout(songRestoreTimer); songRestoreTimer = null; songFaded = false } // the Play's Fade In takes them up
-    songResume = null
+    songPaused.value = null
     const r = startRun(song, i)
     if (viaPlay) r.forceArm = true
     songRun.value = r
@@ -1719,10 +1788,65 @@ function createRigEngine() {
     if (viaPlay) transportToggle()
     else if (arming() && !playOn.value && !countIn.active) transportToggle()
   }
-  function stopSong() {
-    songResume = null
+  // ── Another song while one plays (End Next; the Launchpad's Shift + bottom row; Play on another song) ──
+  // No real crossfade (one set of lanes): the song playing fades out (its Out, as Stop song), the Song
+  // X-fade bars of silence (the gap; its own material loads there), then the new one fades in (its In).
+  const pendingNext = ref(null) // { id, index, wait: bar lines left, line } — the gap before the next song
+  let nextBusy = false
+  function goToSong(nx, index = 0) {
+    const r = songRun.value
+    if (!r || r.bar === 0 || !gridRunning()) {
+      if (r) stopSong() // armed, not started: called off
+      songLib.currentId = nx.id
+      s.display = `Song ${nx.name}: open — Play starts it`
+      return
+    }
+    if (r.songId === nx.id && !r.stopping) { s.display = `Song ${nx.name}: already playing`; return }
+    r.nextSongId = nx.id
+    r.nextIndex = index
+    s.display = `Song ${nx.name}: next — after this one's fade-out and the gap`
+    if (r.stopping || r.outAt) return // already ending (its fade-out running): the next one after it
+    stopSong({ keepNext: true })
+  }
+  /** The next song in, its lanes on the next bar line, fading in on its first one. */
+  function startAfter(nx, index) {
+    songLib.currentId = nx.id
+    const nr = startRun(nx, index)
+    nr.fadeInPending = true
+    songRun.value = nr
+    songStep({ kind: 'launch', index: nr.index })
+  }
+  async function loadPendingNext() {
+    if (nextBusy) return
+    const p = pendingNext.value
+    if (!gridRunning()) { // stopped in the gap: it is the song open, the levels back
+      pendingNext.value = null; songLib.currentId = p.id
+      if (songFaded) songRestoreLevels()
+      return
+    }
+    const b = nextBarLine(performance.now())
+    if (!b || !(b.barMs > 0)) return
+    if (p.line === null) p.line = b.t
+    else if (b.t > p.line + b.barMs * 0.5) { p.line = b.t; p.wait -= 1 }
+    if (p.wait > 0) return
+    if (drumStore.isPlaying || chordStore.isPlaying || rigReports.seqPlaying) return // the lanes still stopping
+    pendingNext.value = null
+    const nx = songLib.songs.find(x => x.id === p.id)
+    if (!nx) return
+    if (needsSwitch(songLib, nx)) {
+      nextBusy = true
+      try { await switchMaterial(songLib, nx); materialPending.value = false } finally { nextBusy = false }
+      if (!gridRunning() || songRun.value) return
+    }
+    for (const id of ['drum', 'chord', 'seq']) if (chainOn(id)) toggleChain(id)
+    startAfter(nx, Math.min(p.index, nx.sections.length - 1))
+  }
+  function stopSong({ keepNext = false } = {}) {
+    songPaused.value = null
+    pendingNext.value = null
     const r = songRun.value
     if (!r) return
+    if (!keepNext) r.nextSongId = null
     if (r.bar === 0) { // not started: nothing plays from it yet
       for (const id of activeSlotRows()) { cancelWait(id); rigArmed[id] = null }
       songRun.value = null
@@ -1759,6 +1883,7 @@ function createRigEngine() {
   }
   function jumpSong(i) {
     const r = songRun.value
+    if (r) r.nextSongId = null // a section picked: this song goes on
     if (r && (r.fading || r.outAt)) songRestoreLevels() // a section picked: the fade is called off (jumpTo clears it)
     if (r) songStep(jumpTo(r, songOf(r), i))
   }
@@ -1768,6 +1893,8 @@ function createRigEngine() {
     songCommand.value = null
     if (c.cmd === 'play') { if (!live.value) { s.display = 'Songs play in LIVE mode: switch the Rig to LIVE'; return } playSong(c.index) }
     else if (c.cmd === 'stop') stopSong()
+    else if (c.cmd === 'pause') pauseSong()
+    else if (c.cmd === 'resume') togglePlay()
     else if (c.cmd === 'hold') holdSong(c.on)
     else if (c.cmd === 'jump') jumpSong(c.index)
     else if (c.cmd === 'mute') muteLane(c.lane)
@@ -1813,14 +1940,11 @@ function createRigEngine() {
     if (i === 1) color = s.clock.source === 'EXT' ? 'green' : 'red'
     if (i === 2) color = s.shift ? 'green' : 'amber'
     if (i === 3) color = s.generateMode === 'ai' ? 'green' : 'amber'
-    const tg = syncSettings.scope === 'global' ? syncSettings.global : focused.value.opts.triggerSync
-    const tgWho = syncSettings.scope === 'global' ? 'All' : focused.value.label
-    if (i === 4) color = tg === '4' ? 'amber' : tg === 'off' ? 'red' : 'green'
     if (i === 5) color = 'amber'
     if (i === 6) color = countIn.active ? 'amberFlash' : playOn.value ? 'green' : 'amber'
     if (i === 7) color = holding.panic ? 'amberFlash' : 'red'
-    // Sync shows the focused track and its value (it cycles that track's Trigger sync)
-    if (i === 4) return { label: `${tgWho} ${SYNC_SHORT[tg] ?? tg}`, color, id: `CC ${lpTopCc(i)}`, title: `Trigger sync of ${tgWho === 'All' ? 'every lane (Global)' : tgWho}: ${TRIGGER_SYNC_OPTIONS.find(o => o.value === tg)?.label ?? tg}${syncSettings.startOnly ? ' · start only' : ''} (press: next)` }
+    // Song: the bottom row shows the song's sections (Shift: the session's songs) instead of Latch 1–8
+    if (i === 4) return { label, color: songPage.value ? 'green' : 'amber', id: `CC ${lpTopCc(i)}`, title: songPage.value ? 'Song page on: bottom row = the song\'s sections, Shift + bottom row = the songs (press: Latch 1–8)' : 'Song page (press: bottom row = the song\'s sections, Shift = the songs)' }
     return { label, color, id: `CC ${lpTopCc(i)}` }
   }))
 
@@ -1878,7 +2002,47 @@ function createRigEngine() {
     }
     // Row 8: Latch 1–8 = the Chord Prog stays on chord 1–8 of the slot playing (no advance); off: the
     // progression goes on. (Muting an app: its slot pads stop it, the MIDImix's Mute, the panel's M.)
-    return latchPad(col)
+    return songPage.value ? songPad(col) : latchPad(col)
+  }
+
+  // The Launchpad's Song page (top Song): the bottom row = the song's sections 1–8 (green playing, blinking
+  // launched / armed; press: on the next bar line, or the song starts there); Shift = the session's songs 1–8
+  // (green playing, amber the one open, blinking next; press: on the next bar line, stopped: it opens).
+  const LS_LP_SONG = 'S1_RIG_LP_SONG_PAGE'
+  const songPage = ref((() => { try { return localStorage.getItem(LS_LP_SONG) === '1' } catch { return false } })())
+  watch(songPage, v => { try { localStorage.setItem(LS_LP_SONG, v ? '1' : '0') } catch {} })
+  function toggleSongPage() {
+    songPage.value = !songPage.value
+    s.display = songPage.value ? 'Launchpad Song page: bottom row = the song\'s sections, Shift + bottom row = the songs' : 'Launchpad: bottom row = Latch 1–8'
+  }
+  function songPad(col) {
+    const r = songRun.value
+    if (s.shift) {
+      const sg = songLib.songs[col]
+      if (!sg) return { label: `Song ${col + 1}: none in this session`, short: '', color: 'off' }
+      const next = r?.nextSongId === sg.id || pendingNext.value?.id === sg.id
+      const color = next ? 'amberFlash' : r?.songId === sg.id ? 'green' : songLib.currentId === sg.id ? 'amber' : 'redDim'
+      return { label: `Song ${col + 1}: ${sg.name}${r?.songId === sg.id ? ' · playing' : next ? ' · next' : ''}`, short: sg.name.slice(0, 6), color }
+    }
+    const song = songOf(r) ?? currentSong()
+    const sec = song?.sections[col]
+    if (!sec) return { label: `Section ${col + 1}: none${song ? ` in ${song.name}` : ' (no song open)'}`, short: '', color: 'off' }
+    const here = r && r.songId === song.id
+    const color = here && (r.queued === col || (r.bar === 0 && r.index === col)) ? 'amberFlash' : here && r.index === col ? 'green' : 'amber'
+    return { label: `${song.name} · ${sec.name}${here && r.index === col ? ' · playing' : ''}`, short: sec.name.slice(0, 6), color }
+  }
+  function songPadDown(col) {
+    if (s.shift) {
+      const sg = songLib.songs[col]
+      if (sg) goToSong(sg); else s.display = `Song ${col + 1}: none in this session`
+      return
+    }
+    const r = songRun.value
+    const song = songOf(r) ?? currentSong()
+    if (!song?.sections[col]) { s.display = `Section ${col + 1}: none${song ? ` in ${song.name}` : ' (open a song in Session)'}`; return }
+    if (r) return jumpSong(col)
+    if (!live.value) { s.display = 'Songs play in LIVE mode: switch the Rig to LIVE'; return }
+    playSong(col)
   }
 
   // Latch 1–8: green while that chord holds, blinking while it waits for the chord sounding to end;
@@ -1925,7 +2089,7 @@ function createRigEngine() {
     if (i === 1) holdStart('int', doInt)
     if (i === 2) toggleShift()
     if (i === 3) toggleGenMode()
-    if (i === 4) cycleSync()
+    if (i === 4) toggleSongPage()
     if (i === 5) view.value = 'rig'
     if (i === 6) togglePlay() // Play / Stop, as Rig Controls' Play
     if (i === 7) holdStart('panic', doPanic)
@@ -1967,6 +2131,7 @@ function createRigEngine() {
       return
     }
     if (row === 6) return sMode.value === 'captures' ? onCapturePad(col) : onSection(col)
+    if (songPage.value) return songPadDown(col)
     toggleLatch(col)
   }
   function lpPadUp(row, col) {
@@ -2509,6 +2674,11 @@ function createRigEngine() {
     offStopGateGrid,
     countedPlay,
     togglePlay,
+    toggleMixer,
+    pauseSong,
+    songPage,
+    toggleSongPage,
+    goToSong,
     notConnected,
     setTempo,
     tap,

@@ -5,7 +5,7 @@ import {
   songFadeBars, barsToEnd, fadeStopLine, laneClips, hasOwnClips, setLaneClips, lanesAt, clipAt, normalizeClips, clipFits, setSectionBars,
 } from '@/lib/songs'
 
-const song = (bars: number[], end: 'stop' | 'loop' = 'stop'): Song =>
+const song = (bars: number[], end: Song['end'] = 'stop'): Song =>
   ({ id: 's', name: 'T', end, sections: bars.map((b, i) => newSection(`S${i}`, b, { chord: i })) })
 
 describe('songs', () => {
@@ -133,6 +133,25 @@ describe('songs', () => {
     expect(songBarLine(r, s)).toBeNull() // its last bar: nothing launched, no stop
     expect(songBarLine(r, s)).toBeNull()
     expect([r.index, r.bar, r.stopping]).toEqual([1, 1, false])
+  })
+
+  it('end Next: the last bar of the last section asks for the next song (the run untouched), parsed back', () => {
+    const s = song([2, 2], 'next')
+    const r = startRun(s, 1)
+    expect(songBarLine(r, s)).toBeNull()
+    expect(songBarLine(r, s)).toEqual({ kind: 'next' })
+    expect([r.stopping, r.queued]).toEqual([false, null])
+    expect(parseSong({ end: 'next', sections: [] })!.end).toBe('next')
+  })
+
+  it("End Next fades out to the song's end as End Stop; the song's In parsed (absent / bad: Rig)", () => {
+    const s = song([2, 2], 'next')
+    const r = startRun(s, 1)
+    songBarLine(r, s)
+    expect(barsToEnd(r, s)).toBe(2)
+    expect(parseSong({ fadeIn: 2, sections: [] })!.fadeIn).toBe(2)
+    expect(parseSong({ sections: [] })!.fadeIn).toBe('rig')
+    expect(parseSong({ fadeIn: 'x', sections: [] })!.fadeIn).toBe('rig')
   })
 
   it('planToSong: the form in order, each section on its letter, lanes with nothing silent', () => {
