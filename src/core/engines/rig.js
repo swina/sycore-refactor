@@ -1957,7 +1957,7 @@ function createRigEngine() {
       if (!linkClient.sendPlay(true)) s.display = 'Preview: Play Live (SY.CORE Link 1.5+ plays it from here)'
       return
     }
-    playAll()
+    playAll({ countIn: false }) // (the global Play counts in by default)
   }
   /** The preview's clip again: everything stops now (not at the end of the next bar), nothing armed after it. */
   let previewStopping = false
@@ -2028,6 +2028,7 @@ function createRigEngine() {
     if (c.cmd === 'play') { if (!live.value) { s.display = 'Songs play in LIVE mode: switch the Rig to LIVE'; return } playSong(c.index) }
     else if (c.cmd === 'stop') stopSong()
     else if (c.cmd === 'pause') pauseSong()
+    else if (c.cmd === 'previewStop') { if (songPreview.value) previewStop() }
     else if (c.cmd === 'preview') { if (!live.value) { s.display = 'Preview plays in LIVE mode: switch the Rig to LIVE'; return } previewClip(c) }
     else if (c.cmd === 'resume') togglePlay()
     else if (c.cmd === 'hold') holdSong(c.on)

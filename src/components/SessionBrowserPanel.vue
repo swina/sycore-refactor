@@ -479,6 +479,8 @@ const channelPresets = computed(() => {
 const savePresets = ref(false)
 /** Preview (EDIT): a click on a clip plays it on its own — with Save presets, its sound is set there, the song stopped. */
 const previewOn = ref(false)
+// Preview off: the clip previewing stops too (else nothing would stop it)
+watch(previewOn, on => { if (!on && songPreview.value) command({ cmd: 'previewStop' }) })
 const previewHere = computed(() => !!songPreview.value && songPreview.value.songId === song.value?.id ? songPreview.value : null)
 const isPreviewed = (i, l, c) => { const p = previewHere.value; return !!p && p.index === i && p.lane === l && p.start === c.start }
 watch(() => {

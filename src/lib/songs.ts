@@ -389,7 +389,7 @@ export type SongStep =
 /** The song playing (the Rig panel's player runs it; the Session Browser shows it). */
 export const songRun = ref<SongRun | null>(null)
 /** A command for the Rig panel's player (the Session Browser's buttons): it takes it and clears it. */
-export type SongCommand = { cmd: 'play'; index: number } | { cmd: 'stop' } | { cmd: 'pause' } | { cmd: 'resume' } | { cmd: 'preview'; index: number; lane: SongLane; start: number } | { cmd: 'hold'; on: boolean } | { cmd: 'jump'; index: number }
+export type SongCommand = { cmd: 'play'; index: number } | { cmd: 'stop' } | { cmd: 'pause' } | { cmd: 'resume' } | { cmd: 'preview'; index: number; lane: SongLane; start: number } | { cmd: 'previewStop' } | { cmd: 'hold'; on: boolean } | { cmd: 'jump'; index: number }
   | { cmd: 'mute'; lane: SongLane } | { cmd: 'solo'; lane: SongLane }
 export const songCommand = ref<SongCommand | null>(null)
 /** A clip playing on its own (the Session Browser's Preview, EDIT): its section, lane and start; null none. */

@@ -129,7 +129,10 @@ describe('Rig engine — no panel mounted', () => {
     expect(songPreview.value).toMatchObject({ songId: song.id, index: 2, lane: 'drum', start: 1 })
     expect(songRun.value).toBeNull()
     expect(rig.s.display).toMatch(/Preview: Drum C/)
-    songPreview.value = null
+    songCommand.value = { cmd: 'previewStop' } // Preview turned off: the clip stops
+    await flush()
+    expect(songPreview.value).toBeNull()
+    expect(rig.s.display).toMatch(/Preview: stopped/)
     songCommand.value = { cmd: 'play', index: 0 }
     await flush()
     songCommand.value = { cmd: 'preview', index: 2, lane: 'drum', start: 1 }
