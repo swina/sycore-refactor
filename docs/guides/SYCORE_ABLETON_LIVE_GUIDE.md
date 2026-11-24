@@ -337,7 +337,7 @@ Turn on **Launchpad Rig** in the Rig Controller's mode bar. The Launchpad then b
 | **Row 7** | **Sections 1–8** — or **Captures 1–8** (side **S·SEC / S·CAP**, below) |
 | **Row 8** | **Latch 1–8**: the Chord Prog stays on chord 1–8 of the slot playing, without advancing (amber: a chord there · blinking: waits for the chord sounding to end · green: holding); press it again and the progression goes on from the chord after it. Another Latch pad moves the hold to that chord; Panic releases it. (To silence an app: its slot pads, the MIDImix's Mute, the panel's **M**.) |
 | **Side** | **GEN** Drum, Chord, Seq, Bass, Arp (**Shift: Mute** that lane, red while muted; Mutate: the panel's Shift + GEN) · **DJ** Filter (hold: the cutoff CC — default 21, set in the Launchpad panel's **DJ Filter CC** — closes on every real app, release: opens) · **Capt** · **S·SEC / S·CAP** (row 7: Sections / Captures) |
-| **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Sync** · Rig · — · Panic (hold) |
+| **Top** | Beat/Tap · EXT/INT (hold) · **Shift** · Gen AI · **Sync** · Rig · **Play / Stop** (as Rig Controls' Play) · Panic (hold: stops every lane and the song at once, all notes off) |
 
 ### Captures (row 7 in Captures mode)
 

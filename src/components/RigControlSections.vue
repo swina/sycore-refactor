@@ -1,10 +1,11 @@
 <script setup>
 // The Rig Controller's controls (Transport / Clock, Performance, Safety, Controller template), one
-// section per `only`. The state and actions are the Rig panel's (provided as RIG_CONTROLS_CTX): shown in
-// its Rig layout and, in Performance, in the Rig Controls panel (teleported there by the Rig panel).
-import { inject, ref } from 'vue'
+// section per `only`. The state and actions are the Rig engine's (core/engines/rig.js): shown in the
+// Rig panel's layout and in the Rig Controls panel (Performance), either open without the other.
+import { ref } from 'vue'
 import { undo } from '@/lib/rig-controller'
-import { RIG_CONTROLS_CTX } from '@/lib/rig-controls-host'
+import { rigFollowPlay } from '@/lib/rig-live'
+import { useRigEngine } from '@/core/engines/rig'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSessionTakesStore } from '@/stores/useSessionTakesStore'
 
@@ -12,9 +13,9 @@ defineProps({ only: { type: String, required: true } }) // transport | template 
 const {
   s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, syncButton, fadesOpen, isRigApp, learnMenu,
   tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg,
-  onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode,
+  onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, toggleFollowPlay, keyText, onKeyMode,
   knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
-} = inject(RIG_CONTROLS_CTX)
+} = useRigEngine()
 const tplFile = ref(null)
 // the knobs' app buttons: short names (they fit the column)
 const KNOB_APP_SHORT = { drum: 'DR', chord: 'CHR', seq: 'SEQ', bass: 'BAS', arp: 'ARP' }

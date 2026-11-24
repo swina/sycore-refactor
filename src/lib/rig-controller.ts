@@ -524,6 +524,6 @@ export function slotColor(st: SlotState): LpColor {
 }
 
 /** Labels of the Launchpad's top row (CC 104–111) and right column (rows 5–7). */
-export const LP_TOP_LABELS = ['Beat', 'EXT/INT', 'Shift', 'Gen AI', 'Sync', 'Rig', '—', 'Panic'] as const
+export const LP_TOP_LABELS = ['Beat', 'EXT/INT', 'Shift', 'Gen AI', 'Sync', 'Rig', 'Play', 'Panic'] as const
 export const LP_ROW6_LABELS = ['Split 1', 'Split 2', 'Split 3', 'Split 4', 'Fill', 'Repeat', 'Latch', 'Rel all'] as const
 export const LP_SIDE_LOW_LABELS = ['Undo', 'Key −', 'Key +'] as const

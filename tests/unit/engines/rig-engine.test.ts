@@ -74,6 +74,54 @@ describe('Rig engine — no panel mounted', () => {
     expect(songRun.value).toBeNull()
   })
 
+  it('Panic: the song ends and every lane is stopped at once (Chord, Drum, Seq)', async () => {
+    const rig = useRigEngine()
+    const song = exampleSong()
+    rig.songLib.songs.push(song)
+    rig.songLib.currentId = song.id
+    songCommand.value = { cmd: 'play', index: 0 }
+    await flush()
+    expect(songRun.value).not.toBeNull()
+    const seen: string[] = []
+    const orig = window.dispatchEvent.bind(window)
+    vi.spyOn(window, 'dispatchEvent').mockImplementation((e: Event) => { seen.push(e.type); return orig(e) })
+    rig.doPanic()
+    expect(songRun.value).toBeNull()
+    expect(seen).toEqual(expect.arrayContaining(['cp-stop', 'dm-play-stop']))
+    expect(rig.s.display).toMatch(/PANIC/)
+  })
+
+  it('Play with the song open in Session and nothing armed: the song starts, armed for that Play', async () => {
+    const rig = useRigEngine()
+    const song = exampleSong()
+    rig.songLib.songs.push(song)
+    rig.songLib.currentId = song.id
+    rig.togglePlay()
+    await flush()
+    expect(songRun.value?.songId).toBe(song.id)
+    expect(songRun.value?.index).toBe(0)
+    expect(songRun.value?.waitPlay).toBe(true) // its bars count from the Play, not before
+  })
+
+  it('Play with a slot armed by hand: no song, the usual Play', async () => {
+    const rig = useRigEngine()
+    const song = exampleSong()
+    rig.songLib.songs.push(song)
+    rig.songLib.currentId = song.id
+    const { rigArmed } = await import('@/lib/rig-live')
+    rigArmed.drum = 2
+    rig.togglePlay()
+    await flush()
+    expect(songRun.value).toBeNull()
+    rigArmed.drum = null
+  })
+
+  it("Launchpad top row: pad 7 is Play / Stop", () => {
+    const rig = useRigEngine()
+    expect(rig.lpTop.value[6].label).toBe('Play')
+    expect(rig.lpTop.value[7].label).toBe('Panic')
+  })
+
   it('Stop song with nothing playing does nothing', async () => {
     useRigEngine()
     songCommand.value = { cmd: 'stop' }

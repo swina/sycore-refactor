@@ -1,12 +1,10 @@
 <script setup>
-import { ref, computed, provide } from 'vue'
+import { ref, computed } from 'vue'
 import ResizeHandles from '@/components/ui/ResizeHandles.vue'
 import PlayEditToggle from '@/components/ui/PlayEditToggle.vue'
 import RigControlSections from '@/components/RigControlSections.vue'
-import ChordNowDisplay from '@/components/ChordNowDisplay.vue'
 import RigSongsView from '@/components/RigSongsView.vue'
 import { materialPending } from '@/core/sessions'
-import { rigControlsHost, RIG_CONTROLS_CTX } from '@/lib/rig-controls-host'
 import { usePlayView } from '@/composables/usePlayView'
 import { PLAY_LED_CLASS } from '@/lib/play-colors'
 import { FADE_BARS } from '@/lib/rig-fades'
@@ -21,7 +19,6 @@ import { roleId } from '@/lib/rig-midimix'
 import { toggleLabel, toggleShortLabel, RIG_TOGGLE_SLOTS } from '@/lib/rig-toggle'
 import { djFilter, djFilterCc } from '@/lib/dj-filter'
 import { clipSummary } from '@/lib/rig-captures'
-import { countIn } from '@/lib/count-in'
 import { useRigEngine } from '@/core/engines/rig'
 // Rig Controller — the view: its logic and state are the Rig engine's (core/engines/rig.js),
 // which keeps playing (songs, pads, controllers) with this panel closed.
@@ -43,7 +40,6 @@ const {
   onSaveSet,
   onLoadSet,
   onDeleteSet,
-  playOn,
   setLaneRow,
   knobLabel,
   knobValue,
@@ -210,11 +206,6 @@ const arcPath = v => {
   return `M${cx + r * Math.cos(a0)} ${cy + r * Math.sin(a0)} A${r} ${r} 0 ${large} 1 ${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`
 }
 
-// The controls' sections (RigControlSections): here in the Rig layout, and in the Rig Controls panel
-// (Performance), teleported there while it is open.
-provide(RIG_CONTROLS_CTX, {
-  s, live, focused, btn, btnIdle, btnOn, tap, cycleSync, SYNC_SHORT, syncButton, fadesOpen, isRigApp, learnMenu, tplDevice, refreshInputs, tplDevices, mappedDevices, tplLeds, tplCount, exportTemplate, importTemplate, clearTemplate, tplMsg, onFill, repeaterOn, repeaterOff, toggleSeqFree, chainOn, toggleChain, setFocus, learnedRing, onKeyShift, tempoStep, tempoDrag, tempoRound, drumStore, fillClass, toggleAutoFill, autoFillEvery, cycleAutoFillEvery, rigFollowPlay, toggleFollowPlay, keyText, onKeyMode, knobLabel, knobTitle, knobValue, densityMenu, toggleGenMode, holding, holdStart, holdEnd, doPanic, doInt, toggleShift,
-})
 </script>
 
 <template>
@@ -705,22 +696,6 @@ provide(RIG_CONTROLS_CTX, {
             </p>
           </div>
         </div>
-      </div>
-    </Teleport>
-    <!-- Performance: the controls in the Rig Controls panel (lib/rig-controls-host.ts) -->
-    <Teleport v-if="play && rigControlsHost" :to="rigControlsHost">
-      <div class="flex flex-col gap-2 text-xs min-h-0 h-full">
-        <RigControlSections only="transport" />
-        <RigControlSections only="performance" />
-        <!-- no Controller template here: set up in EDIT (the Rig layout), not while performing -->
-        <!-- Now / Next (the Chord Prog's chords) right above Play -->
-        <ChordNowDisplay stacked class="mt-auto" />
-        <button class="shrink-0 h-14 flex items-center justify-center gap-2 rounded-lg border text-sm font-black uppercase tracking-widest select-none"
-                :class="[playOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'bg-neutral-800 border-white/15 text-neutral-200 hover:bg-neutral-700', learnedRing('rig_play')]"
-                :title="(live && s.clock.source === 'EXT' ? 'Play / Stop Ableton Live (SY.CORE Link)' : 'Play / Stop the clock') + ' — right-click: MIDI Learn'"
-                @click="togglePlay" @contextmenu="learnMenu($event, 'rig_play', 'Play / Stop')">
-          <component :is="playOn ? Square : Play" class="w-5 h-5" /> {{ countIn.active ? `Count ${countIn.left}` : playOn ? 'Stop' : 'Play' }}
-        </button>
       </div>
     </Teleport>
   </div>

@@ -266,6 +266,8 @@ function createRigEngine() {
   const songLib = songLibrary()
   watch(songLib, v => saveSongs(v), { deep: true })
   const songRun = sharedSongRun
+  // the song the transport's Stop ended (its section): the next Play (Rig Controls, the Launchpad) goes on from there
+  let songResume = null
   let songArmed = false // the first section starts with the grid (armed for Play, or nothing running): its first bar counts at once
   const { openMenu } = useMidiContextMenu()
   /** Right-click on a Density control (LIVE, Drum / Seq): MIDI Learn it, e.g. on a Worlde encoder. */
@@ -604,7 +606,7 @@ function createRigEngine() {
   // gone: no bar left to finish on), armed slots are kept and the slots that were playing are armed
   // (the next Play starts them again; a press on an armed pad disarms it).
   function startArmed() {
-    if (!rigFollowPlay.value) { s.display = 'Live Play: nothing started (Live Play off)'; return }
+    if (!rigFollowPlay.value && !songRun.value?.waitPlay) { s.display = 'Live Play: nothing started (Live Play off)'; return }
     for (const id of activeSlotRows()) {
       const slot = rigArmed[id]
       if (slot === null) continue
@@ -694,7 +696,23 @@ function createRigEngine() {
     primeFades()
     if (!startCountIn(syncStore.countInBars, s.clock.bpm, go)) go()
   }
+  /** Play with no song running: the song open in Session (songLib.currentId) starts with it — from the
+   *  section a Stop left it in, else from its first one when no slot is armed by hand. */
+  function songForPlay() {
+    if (!live.value || playOn.value || countIn.active || songRun.value) return null
+    const song = currentSong()
+    if (!song?.sections.length) return null
+    const r = songResume
+    songResume = null
+    if (r && r.songId === song.id) return Math.min(r.index, song.sections.length - 1)
+    return activeSlotRows().some(id => rigArmed[id] != null) ? null : 0
+  }
   function togglePlay() {
+    const from = songForPlay()
+    if (from !== null) { playSong(from, { viaPlay: true }); return } // it arms the section's slots, then this Play
+    transportToggle()
+  }
+  function transportToggle() {
     if (live.value) {
       if (s.clock.source === 'EXT') {
         // Live is the clock: Play / Stop Live itself (SY.CORE Link 1.5+); its transport report follows
@@ -810,7 +828,23 @@ function createRigEngine() {
     if (holding[key]) s.display = 'Hold to confirm'
     holding[key] = false
   }
-  const doPanic = () => { songRun.value = null; panic(s); chordStore.latchStep = null; uiStore.seqDecoupled = false; if (live.value) midiStore.panic() }
+  // Panic: the song and every lane stop at once (no bar end, no fade), nothing armed or waiting, all notes off
+  const doPanic = () => {
+    songRun.value = null
+    songResume = null
+    panic(s)
+    chordStore.latchStep = null
+    uiStore.seqDecoupled = false
+    if (!live.value) return
+    cancelCountIn()
+    clearBarStop()
+    stopArm = null
+    for (const id of Object.keys(rigWait)) cancelWait(id)
+    for (const id of SLOT_ROWS) rigArmed[id] = null
+    stopAll()
+    midiStore.panic()
+    s.display = 'PANIC · every lane stopped, All Notes Off'
+  }
   const doInt = () => { if (live.value) return notConnected('EXT/INT (use Clock › Source in the transport)'); toggleClockSource(s) }
 
   // ── Actions shared by the three views ─────────────────────────────────────
@@ -1363,8 +1397,8 @@ function createRigEngine() {
   /** Every lane to its slot in `lanes` (null: stopped) on the next bar line; stopped transport: armed. */
   /** restart: the lanes whose clip starts (from the pattern's start, even on the slot playing);
    *  partial: only the lanes listed in `lanes` (a clip starting / ending inside a section). */
-  function launchLanes(lanes, restart = [], partial = false) {
-    const armed = arming()
+  function launchLanes(lanes, restart = [], partial = false, forceArm = false) {
+    const armed = forceArm || arming()
     const running = gridRunning()
     for (const id of activeSlotRows()) {
       const a = s.apps.find(x => x.id === id)
@@ -1449,13 +1483,17 @@ function createRigEngine() {
     const song = songOf(r)
     if (!st || !song) return
     if (st.kind === 'launch') {
-      if (r.bar === 0) songArmed = arming() || !gridRunning() // no bar line to wait for: its bar 1 is now
+      const armNow = r.bar === 0 && (r.forceArm || arming())
+      r.forceArm = false
+      // armed: the bars count from the Play (after its count-in), not from bar lines going by before it
+      if (armNow) r.waitPlay = true
+      if (r.bar === 0) songArmed = armNow || !gridRunning() // no bar line to wait for: its bar 1 is now
       const at1 = lanesAt(song.sections[st.index], 1)
-      launchLanes(at1.lanes, at1.starts)
+      launchLanes(at1.lanes, at1.starts, false, armNow)
       songVolumes(song.sections[st.index])
       songChordSteps(song.sections[st.index], r.bar === 0 && !gridRunning())
       songDrumDensity(song, song.sections[st.index])
-      s.display = `Song ${song.name}: ${song.sections[st.index].name} ${arming() ? `armed, starts on ${playName()}` : 'on the next bar'}`
+      s.display = `Song ${song.name}: ${song.sections[st.index].name} ${armNow ? `armed, starts on ${playName()}` : 'on the next bar'}`
     } else if (st.kind === 'stay') {
       // End Stay: every lane of the last section stays on (nothing launched); the Chord holds the
       // chord sounding now (the song's Latch: struck once more where it ends, then held)
@@ -1553,11 +1591,15 @@ function createRigEngine() {
     if (!r) return
     const song = songOf(r)
     if (!song) { songRun.value = null; return }
+    if (r.waitPlay) {
+      if (!playOn.value) { songLine = null; return } // armed: waiting for the Play (its count-in)
+      r.waitPlay = false
+    }
     const now = performance.now()
     const b = gridRunning() ? nextBarLine(now) : null
     if (!b || !(b.barMs > 0)) {
       // the transport stopped under the song (Live's Stop, Stop): the song is over
-      if (songLine !== null && r.bar > 0) { songRun.value = null; s.display = `Song ${song.name}: stopped` }
+      if (songLine !== null && r.bar > 0) { songRun.value = null; songResume = { songId: r.songId, index: r.index }; s.display = `Song ${song.name}: stopped — Play: on from ${song.sections[r.index]?.name ?? 'its section'}` }
       songLine = null
       return
     }
@@ -1654,7 +1696,8 @@ function createRigEngine() {
     await captureInto(songLib, song)
     s.display = `Song ${song.name}: material captured from the apps`
   }
-  async function playSong(i) {
+  /** viaPlay: started by a Play press (Rig Controls, the Launchpad): the section's slots armed for it, then that Play. */
+  async function playSong(i, { viaPlay = false } = {}) {
     const song = songLib.songs.find(x => x.id === songLib.currentId)
     if (!song || !live.value) return
     if (needsSwitch(songLib, song)) {
@@ -1666,14 +1709,18 @@ function createRigEngine() {
     for (const id of ['drum', 'chord', 'seq']) if (chainOn(id)) toggleChain(id)
     if (playOn.value) songRestoreLevels() // a song faded out before, the transport still running
     else { clearTimeout(songRestoreTimer); songRestoreTimer = null; songFaded = false } // the Play's Fade In takes them up
+    songResume = null
     const r = startRun(song, i)
+    if (viaPlay) r.forceArm = true
     songRun.value = r
     songLine = null
     songStep({ kind: 'launch', index: r.index })
     // Stopped: Play from is the real Play too (the Performance's: count-in, fades, Live's Play over Link)
-    if (arming() && !playOn.value && !countIn.active) togglePlay()
+    if (viaPlay) transportToggle()
+    else if (arming() && !playOn.value && !countIn.active) transportToggle()
   }
   function stopSong() {
+    songResume = null
     const r = songRun.value
     if (!r) return
     if (r.bar === 0) { // not started: nothing plays from it yet
@@ -1770,6 +1817,7 @@ function createRigEngine() {
     const tgWho = syncSettings.scope === 'global' ? 'All' : focused.value.label
     if (i === 4) color = tg === '4' ? 'amber' : tg === 'off' ? 'red' : 'green'
     if (i === 5) color = 'amber'
+    if (i === 6) color = countIn.active ? 'amberFlash' : playOn.value ? 'green' : 'amber'
     if (i === 7) color = holding.panic ? 'amberFlash' : 'red'
     // Sync shows the focused track and its value (it cycles that track's Trigger sync)
     if (i === 4) return { label: `${tgWho} ${SYNC_SHORT[tg] ?? tg}`, color, id: `CC ${lpTopCc(i)}`, title: `Trigger sync of ${tgWho === 'All' ? 'every lane (Global)' : tgWho}: ${TRIGGER_SYNC_OPTIONS.find(o => o.value === tg)?.label ?? tg}${syncSettings.startOnly ? ' · start only' : ''} (press: next)` }
@@ -1879,6 +1927,7 @@ function createRigEngine() {
     if (i === 3) toggleGenMode()
     if (i === 4) cycleSync()
     if (i === 5) view.value = 'rig'
+    if (i === 6) togglePlay() // Play / Stop, as Rig Controls' Play
     if (i === 7) holdStart('panic', doPanic)
   }
   function lpTopUp(i) {
