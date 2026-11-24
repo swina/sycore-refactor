@@ -389,7 +389,7 @@ function createRigEngine() {
       const ch0 = Math.max(0, appChannel(id) ?? 0)
       const rows = []
       for (const device of midiService.getCableTargets(src)) {
-        for (const ch of midiService.appChannelsOn(src, device, ch0, exact)) {
+        for (const ch of midiService.appChannelsOn(src, device, ch0, exact, !!rowLane(id))) {
           const key = chKey(device, ch)
           if (!rows.some(r => r.key === key)) rows.push({ key, device, ch })
         }
@@ -506,7 +506,7 @@ function createRigEngine() {
     // Bass on the Drum Machine: on the bassline's own channel, as its notes (rigCc7 sends Bass only when it has
     // one); a lane on a channel of its own: that channel as is, as its notes
     const exact = rowLane(id) ? laneCh(id) >= 1 : id === 'bass'
-    const opts = { ...(targets.length ? { onlyTargets: targets } : {}), ...(exact ? { exactChannel: true } : {}) }
+    const opts = { ...(targets.length ? { onlyTargets: targets } : {}), ...(exact ? { exactChannel: true, cableWins: !!rowLane(id) } : {}) }
     midiService.sendCC(7, value, Math.max(0, appChannel(id) ?? 0), source, null, Object.keys(opts).length ? opts : undefined)
   }
   function flushCc7() {
@@ -551,7 +551,7 @@ function createRigEngine() {
     for (const a of s.apps) {
       if (!isLiveRow(a.id)) continue
       const exact = rowLane(a.id) ? laneCh(a.id) >= 1 : a.id === 'bass' && drumStore.basslineMidiChannel >= 1
-      const t = { source: liveAppSource(a.id), ch: Math.max(0, appChannel(a.id) ?? 0), opts: exact ? { exactChannel: true } : undefined }
+      const t = { source: liveAppSource(a.id), ch: Math.max(0, appChannel(a.id) ?? 0), opts: exact ? { exactChannel: true, cableWins: !!rowLane(a.id) } : undefined }
       const key = `${t.source}|${t.ch}|${exact}`
       if (seen.has(key)) continue
       seen.add(key)

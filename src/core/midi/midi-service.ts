@@ -55,10 +55,12 @@ function _parseSysExString(input: string): number[] | null {
 }
 
 /** The channels a message on `channel` goes out on to a device: the cable's OUT channels, else the
- *  device's fanout / OUT remap, else as is (exactChannel: always as is). */
-function outChannelsFor(config: any, outputFilter: any, channel: number, exactChannel: boolean): number[] {
-  if (exactChannel) return [channel];
+ *  device's fanout / OUT remap, else as is (exactChannel: always as is). cableWins (with exactChannel:
+ *  a source that is one app, e.g. a Seq lane on its own CH 2): the device's remap is ignored, but the
+ *  cable's OUT channels — set for this app → device cable — still win (Seq Bass on CH 2 + 9: both). */
+function outChannelsFor(config: any, outputFilter: any, channel: number, exactChannel: boolean, cableWins = false): number[] {
   const cableChs = cableOutChannels(outputFilter);
+  if (exactChannel) return cableWins && cableChs.length > 0 ? cableChs : [channel];
   if (cableChs.length > 0) return cableChs;   // the cable's own OUT channels win
   if (config?.outChannels && config.outChannels.length > 0) return config.outChannels;
   if (config?.isMulti) return [channel];
@@ -70,6 +72,9 @@ function outChannelsFor(config: any, outputFilter: any, channel: number, exactCh
 export interface BroadcastOptions {
   /** send on exactly `channel`, bypassing the cable / device OUT channel remap and channel filter */
   exactChannel?: boolean
+  /** with exactChannel: the cable's own OUT channels (MIDI Flow) still win — for a source that is
+   *  one app on its own channel (a Seq lane), unlike the Drum Machine's bassline (drums share its cable) */
+  cableWins?: boolean
   /** a scheduled send (real port or virtual output) is delivered by a
    *  Worker-timed queue, instead of a timestamped send (real ports) or a page
    *  setTimeout (virtual outputs, which stutters with the page and is throttled
@@ -98,6 +103,7 @@ interface HeldNote {
   channel: number
   skipDeviceId: string | null
   exactChannel?: boolean
+  cableWins?: boolean
   onlyTargets?: string[]
   /** sent with sendNoteTo (an app's dedicated output) */
   device?: string
@@ -948,6 +954,7 @@ export class MidiService {
   private restrikeOpts(h: HeldNote, device?: string): BroadcastOptions | null {
     const opts: BroadcastOptions = {};
     if (h.exactChannel) opts.exactChannel = true;
+    if (h.cableWins) opts.cableWins = true;
     if (device) {
       const d = device.toLowerCase().trim();
       if (h.onlyTargets && !h.onlyTargets.some(n => n.toLowerCase().trim() === d)) return null;
@@ -992,10 +999,10 @@ export class MidiService {
 
   /** The channels an app's message on `channel` (0-based) reaches on a cabled device, after the
    *  cable / device OUT remaps and the cable's channel filter (as broadcast sends to a real port). */
-  appChannelsOn(source: MidiSource | string, deviceName: string, channel: number, exactChannel = false): number[] {
+  appChannelsOn(source: MidiSource | string, deviceName: string, channel: number, exactChannel = false, cableWins = false): number[] {
     const config = this.routingConfig?.registrations[deviceName];
     const filter = this.getOutputRouteFilter(source as string, deviceName);
-    const chs = outChannelsFor(config, filter, channel, exactChannel).map(c => c & 0x0f);
+    const chs = outChannelsFor(config, filter, channel, exactChannel, cableWins).map(c => c & 0x0f);
     if (exactChannel || !filter?.channels?.length) return chs;
     return chs.filter(c => filter.channels!.includes(c));
   }
@@ -1210,7 +1217,7 @@ export class MidiService {
    * delivered by a timer at that time.
    */
   sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions): void {
-    if (velocity > 0) this.holdNote(source, { note, velocity, channel, skipDeviceId, exactChannel: opts?.exactChannel, onlyTargets: opts?.onlyTargets });
+    if (velocity > 0) this.holdNote(source, { note, velocity, channel, skipDeviceId, exactChannel: opts?.exactChannel, cableWins: opts?.cableWins, onlyTargets: opts?.onlyTargets });
     else this.unholdNote(source, note, channel); // a note-on at 0 is a note-off
     if (this.mutedSources.size && this.mutedSources.has(source)) return;
     const vf = this.sourceVelocityScale.get(source);
@@ -1746,7 +1753,7 @@ export class MidiService {
       // outChannels (multi-timbral fanout) takes precedence over the single
       // outChannel remap when set — duplicates the message onto every
       // listed channel instead of picking just one.
-      const channels = outChannelsFor(config, outputFilter, channel, exactChannel);
+      const channels = outChannelsFor(config, outputFilter, channel, exactChannel, !!opts?.cableWins);
 
       const applyLatch = config?.latchEnabled || (this.latch.isActive && config?.smartLatch);
       channels.forEach(targetChannel => {
@@ -1836,9 +1843,10 @@ export class MidiService {
       }
       if (!shouldAdd) return;
 
-      const cableChs = cableOutChannels(outputFilter);   // the cable's own OUT channels win
+      // the cable's own OUT channels win (exactChannel too), then the device's fanout / OUT remap
+      const cableChs = cableOutChannels(outputFilter);
       const channels = exactChannel
-        ? [channel]
+        ? (opts?.cableWins && cableChs.length > 0 ? cableChs : [channel])
         : cableChs.length > 0
         ? cableChs
         : (config.outChannels && config.outChannels.length > 0)

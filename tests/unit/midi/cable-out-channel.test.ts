@@ -102,3 +102,29 @@ describe('app → virtual output with exactChannel (Drum Machine bassline channe
     expect(virt).toEqual([[0x99, 36, 100], [0x92, 40, 100], [0x82, 40, 0]])
   })
 })
+
+describe('a Seq lane on its own channel (exactChannel + cableWins): the cable OUT channels still win', () => {
+  const setup = () => {
+    const svc = new MidiService() as any
+    svc.midiAccess = { inputs: new Map(), outputs: new Map() }
+    svc.setRoutingConfig({
+      registrations: { 'Synth': { name: 'Synth', outEnabled: true, notes: true, cc: true, outChannel: 4 } },
+    })
+    const virt: number[][] = []
+    svc.registerVirtualOutput('Synth', (data: number[]) => virt.push(data))
+    svc.router.matrix.set(MidiSource.SEQ_BASS, new Set(['Synth']))
+    return { svc, virt }
+  }
+  it('Seq Bass on CH 2, cabled on CH 2 + 9: both', () => {
+    const { svc, virt } = setup()
+    svc.setOutputRouteFilters({ [`${MidiSource.SEQ_BASS}→Synth`]: { outChannels: [1, 8] } })
+    svc.sendNoteOn(40, 100, 1, MidiSource.SEQ_BASS, null, undefined, { exactChannel: true, cableWins: true })
+    expect(virt).toEqual([[0x91, 40, 100], [0x98, 40, 100]])
+    expect(svc.appChannelsOn(MidiSource.SEQ_BASS, 'Synth', 1, true, true)).toEqual([1, 8])
+  })
+  it('no cable OUT channels: its own channel, not the device remap', () => {
+    const { svc, virt } = setup()
+    svc.sendNoteOn(40, 100, 1, MidiSource.SEQ_BASS, null, undefined, { exactChannel: true, cableWins: true })
+    expect(virt).toEqual([[0x91, 40, 100]])
+  })
+})

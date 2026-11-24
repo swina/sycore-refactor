@@ -14,6 +14,8 @@ import { useChordProgStore } from '@/stores/useChordProgStore'
 import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useSeqLaneStore } from '@/stores/useStepSequencerStore'
 import { useArpStore } from '@/stores/useArpStore'
+import { useMidiStore } from '@/stores/useMidiStore'
+import { laneSoundLabel } from '@/lib/lane-sound'
 import { rowLane, chordSnapshot, drumSnapshot, seqSnapshot, bassSnapshot } from '@/lib/rig-live'
 import {
   songLibrary, songRun, songCommand, rigLaneMutes, SONG_FADE_OPTIONS, songChannels, songVolKeys, SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, laneClips, hasOwnClips, setLaneClips, clipFits, setSectionBars, VOL_BAR_OPTIONS,
@@ -43,6 +45,7 @@ const cp = useChordProgStore()
 const dm = useDrumMachineStore()
 const arp = useArpStore()
 const lanes = { main: useSeqLaneStore('main'), bass: useSeqLaneStore('bass'), arp: useSeqLaneStore('arp') }
+const midiStore = useMidiStore()
 const lib = songLibrary()
 
 const msg = ref('')
@@ -427,10 +430,38 @@ async function setOwn(on) {
 // ── Playing (the Rig's player) ──
 const playingHere = computed(() => !!songRun.value && songRun.value.songId === song.value?.id)
 const run = computed(() => (playingHere.value ? songRun.value : null))
-function command(c) {
-  if (!ui.isRigControllerOpen) ui.isRigControllerOpen = true // the player is the Rig panel's
-  nextTick(() => { songCommand.value = c })
+// the player is the Rig engine (core/engines/rig.js): it plays with the Rig panel closed
+function command(c) { songCommand.value = c }
+// The clips of the section playing (background), the one sounding now brighter
+const playingSec = i => !!run.value && run.value.bar > 0 && !run.value.stopping && run.value.index === i
+const soundingClip = (i, c) => playingSec(i) && run.value.bar >= c.start && run.value.bar < c.start + c.len
+
+// ── The preset of each clip: its slot's own sound (a Sequencer lane's bank), else the one now on the
+//    lane's MIDI channel (MIDI Flow's Program Change state); the Chord Prog on several channels: MULTI ──
+const SEQ_LANE_OF = { seq: 'main', bass: 'bass', arp: 'arp' }
+const presetName = p => (p ? p.soundName || (p.program != null ? `PC ${p.program + 1}` : '') : '')
+const channelPresets = computed(() => {
+  void JSON.stringify(midiStore.routingMatrix)
+  const regs = midiStore.routingConfig?.registrations ?? {}
+  return Object.fromEntries(SONG_LANES.map(l => {
+    const rows = laneChannels(l)
+    const names = rows.map(r => presetName(regs[r.device]?.pcChannels?.[r.ch])).filter(Boolean)
+    return [l, { rows: rows.length, names }]
+  }))
+})
+function clipPreset(l, slot) {
+  const lane = SEQ_LANE_OF[l]
+  if (lane && (l === 'seq' || rowLane(l))) {
+    const own = laneSoundLabel(lanes[lane].banks?.[slot]?.sound)
+    if (own) return own
+  }
+  const cur = channelPresets.value[l]
+  if (!cur?.rows) return ''
+  if (l === 'chord' && cur.rows > 1) return 'MULTI'
+  if (!cur.names.length) return ''
+  return cur.names.length > 1 && new Set(cur.names).size > 1 ? `${cur.names[0]} +${cur.names.length - 1}` : cur.names[0]
 }
+
 /** Muted, or another lane soloed (the Rig's Mute / Solo). */
 const laneSilenced = l => { const m = rigLaneMutes.value; return !!m[l]?.muted || (Object.values(m).some(x => x?.solo) && !m[l]?.solo) }
 const play = () => command({ cmd: 'play', index: sel.value })
@@ -676,7 +707,10 @@ const slotClass = (l, v, on) => on
               <div v-for="(c, k) in laneClips(sec, l)" :key="`${c.start}`"
                    class="absolute inset-y-0 rounded-md flex flex-col gap-1 px-2 py-1.5 overflow-hidden select-none touch-none"
                    :style="clipStyle(sec, c)"
-                   :class="[sel === i && selLane === l && selClip === k ? 'bg-sky-700/60 border-2 border-sky-100 ring-2 ring-sky-300/40' : 'bg-sky-950/70 border border-sky-400/35 hover:bg-sky-900/60',
+                   :class="[sel === i && selLane === l && selClip === k ? 'bg-sky-700/60 border-2 border-sky-100 ring-2 ring-sky-300/40'
+                              : soundingClip(i, c) ? 'bg-emerald-700/55 border border-emerald-300/70'
+                              : playingSec(i) ? 'bg-emerald-950/70 border border-emerald-400/45 hover:bg-emerald-900/60'
+                              : 'bg-sky-950/70 border border-sky-400/35 hover:bg-sky-900/60',
                             clipDrag && clipDrag.i === i && clipDrag.l === l && clipDrag.k === k && clipDrag.mode !== 'copy' ? 'cursor-grabbing' : 'cursor-grab']"
                    :title="`${laneLabel(l)} ${slotLabel(l, c.slot)} · bars ${c.start}–${c.start + c.len - 1} of ${sec.name} — drag: move (Alt: a copy) · right edge: length`"
                    @click.stop
@@ -686,6 +720,7 @@ const slotClass = (l, v, on) => on
                   <span class="font-mono">{{ clipExtra(sec, l) }}</span>
                 </span>
                 <span class="text-[12px] font-medium leading-snug text-sky-50 break-words overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical">{{ slotLabel(l, c.slot) }}</span>
+                <span v-if="clipPreset(l, c.slot)" class="mt-auto text-[9px] text-sky-200/60 truncate" :title="`Preset: ${clipPreset(l, c.slot)}`">♪ {{ clipPreset(l, c.slot) }}</span>
                 <span class="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-sky-300/30" title="Drag: the clip's length"
                       @pointerdown="onClipPointerDown($event, i, l, k, 'len')" @pointermove="onClipPointerMove" @pointerup="onClipPointerUp"></span>
               </div>

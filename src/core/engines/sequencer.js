@@ -211,7 +211,8 @@ function createSequencerEngine(lane = 'main') {
   // the lane's MIDI channel (seqStore.midiChannel): 0 = the global one, with MIDI Flow's remaps; 1–16 =
   // that channel as is (exactChannel: no cable / device OUT channel remap)
   const channel = () => (seqStore.midiChannel >= 1 ? seqStore.midiChannel : midiStore.midiChannel)
-  const chOpts = (o) => (seqStore.midiChannel >= 1 ? { ...(o ?? {}), exactChannel: true } : o)
+  // (the lane's cable OUT channels in MIDI Flow still win: cableWins — Seq Bass on CH 2 + 9 sends on both)
+  const chOpts = (o) => (seqStore.midiChannel >= 1 ? { ...(o ?? {}), exactChannel: true, cableWins: true } : o)
   const laneChannel = computed({ get: () => seqStore.midiChannel, set: (v) => { seqStore.midiChannel = v } })
   // SYNC (seqStore.syncStart): a start waits for the next bar; startPending: started, its first step not yet played
   const laneSync = computed({ get: () => seqStore.syncStart, set: (v) => { seqStore.syncStart = !!v } })
@@ -226,7 +227,7 @@ function createSequencerEngine(lane = 'main') {
     const ch0 = channel() - 1
     const exact = seqStore.midiChannel >= 1
     const regs = midiStore.routingConfig?.registrations ?? {}
-    return midiService.getCableTargets(SRC).map(device => ({ device, chs: midiService.appChannelsOn(SRC, device, ch0, exact), pcChannels: regs[device]?.pcChannels }))
+    return midiService.getCableTargets(SRC).map(device => ({ device, chs: midiService.appChannelsOn(SRC, device, ch0, exact, true), pcChannels: regs[device]?.pcChannels }))
   }
   /** The active bank takes the sound now on the lane's channel (null: no preset recorded there). */
   function assignBankSound() {

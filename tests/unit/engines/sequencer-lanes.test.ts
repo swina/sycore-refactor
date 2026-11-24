@@ -85,7 +85,7 @@ describe('Sequencer lanes (Main / Bass / Arp)', () => {
     expect(rigReports.seqPlaying).toBe(false) // the Rig's Seq row: Main's
     expect(repeats.length).toBe(1)
     repeats[0](0)
-    expect(on).toEqual([{ note: 36, ch: 3, src: MidiSource.SEQ_BASS, opts: { exactChannel: true } }])
+    expect(on).toEqual([{ note: 36, ch: 3, src: MidiSource.SEQ_BASS, opts: { exactChannel: true, cableWins: true } }])
 
     on.length = 0
     window.dispatchEvent(new CustomEvent('toggle-sequencer2', { detail: { play: true } }))
