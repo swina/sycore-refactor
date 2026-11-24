@@ -12,6 +12,7 @@ import { useMidiStore } from '@/stores/useMidiStore'
 import { useChordProgEngine } from '@/core/engines/chord-prog'
 import { useSequencerEngine } from '@/core/engines/sequencer'
 import { useDrumMachineEngine } from '@/core/engines/drum-machine'
+import { useRigEngine } from '@/core/engines/rig'
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePresetStore } from '@/stores/usePresetStore'
@@ -122,6 +123,9 @@ useChordProgEngine()
 useSequencerEngine()
 // And the Drum Machine: core/engines/drum-machine.js (its samples, last preset and Default Kit load here).
 useDrumMachineEngine()
+// And the Rig (core/engines/rig.js): pads, fades, controllers in Rig mode and the Session > Songs player,
+// with the Rig panel closed (after the three players: it drives them).
+useRigEngine()
 // The workspace of the last session (its panels in their places, its effects level).
 const workspaceStore = useWorkspaceStore()
 onMounted(() => workspaceStore.apply())

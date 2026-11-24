@@ -761,7 +761,7 @@ const slotClass = (l, v, on) => on
                 <span class="w-8 text-right font-mono" :class="section.vol[r.key] !== undefined ? 'text-white' : 'text-neutral-600'">{{ volOf(r.key) === null ? '—' : `${volOf(r.key)}%` }}</span>
                 <button v-if="section.vol[r.key] !== undefined" class="text-neutral-500 hover:text-white" title="Not set in this section (100% if the song sets it elsewhere)" @click="clearVol(r.key)">×</button>
               </span>
-              <span v-if="!laneChannels(selLane).length" class="text-[9px]">no MIDI channel known for this lane: open the Rig once (LIVE) to list them</span>
+              <span v-if="!laneChannels(selLane).length" class="text-[9px]">no MIDI channel known for this lane: the Rig lists them in LIVE mode</span>
             </span>
           </template>
           <span class="flex-1" />

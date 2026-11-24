@@ -91,6 +91,18 @@ export interface BroadcastOptions {
 /** A note-on velocity scaled by `f` (0–1); never below 1, as velocity 0 would be a note-off. */
 export const scaleVelocity = (v: number, f: number): number => (f >= 1 ? v : Math.max(1, Math.min(127, Math.round(v * Math.max(0, f)))))
 
+/** A note an app holds (MidiService.heldNotes): how it was sent, to end / strike it again. */
+interface HeldNote {
+  note: number
+  velocity: number
+  channel: number
+  skipDeviceId: string | null
+  exactChannel?: boolean
+  onlyTargets?: string[]
+  /** sent with sendNoteTo (an app's dedicated output) */
+  device?: string
+}
+
 /** Key of one app → device cable for setMutedCables(). */
 export const cableMuteKey = (source: string, deviceName: string): string => `${source}→${deviceName.toLowerCase().trim()}`
 
@@ -192,6 +204,10 @@ export class MidiService {
   private mutedSources = new Set<MidiSource>();
   // Single cables (app → device, as in MIDI Flow) whose note-ons are dropped: cableMuteKey().
   private mutedCables = new Set<string>();
+  // The notes each app holds now (note-on sent or dropped by a Mute, no note-off yet), so a Mute
+  // ends the ones sounding and an unmute strikes again the ones still held (a latched / long chord
+  // would stay on through a Mute, or stay silent after it until the next chord). source → key → note.
+  private heldNotes = new Map<string, Map<string, HeldNote>>();
   // Note-on velocity scales (the Rig Controller's Intensity): per source (whole app)
   // and per cable (cableMuteKey()); 1 = as played.
   private sourceVelocityScale = new Map<string, number>();
@@ -886,9 +902,58 @@ export class MidiService {
     this.profileGate = fn;
   }
 
-  /** Drop the note-ons of these sources (empty: none). */
+  /** Drop the note-ons of these sources (empty: none). A source muted now: its notes sounding end;
+   *  unmuted: the notes it still holds sound again (the lane back in time, not at its next note). */
   setMutedSources(sources: Iterable<MidiSource>): void {
+    const was = this.mutedSources;
     this.mutedSources = new Set(sources);
+    for (const src of this.mutedSources) if (!was.has(src)) this.releaseHeld(src);
+    for (const src of was) if (!this.mutedSources.has(src)) this.restrikeHeld(src);
+  }
+
+  private holdNote(source: string, h: HeldNote): void {
+    if (source === MidiSource.KEYBOARD) return;
+    let m = this.heldNotes.get(source);
+    if (!m) this.heldNotes.set(source, (m = new Map()));
+    m.set(`${h.channel}:${h.note}:${h.device ?? ''}`, h);
+  }
+
+  private unholdNote(source: string, note: number, channel: number, device?: string): void {
+    this.heldNotes.get(source)?.delete(`${channel}:${note}:${device ?? ''}`);
+  }
+
+  /** The held notes of `source` off now (all its cables, or only `device`'s cable). */
+  private releaseHeld(source: string, device?: string): void {
+    for (const h of this.heldNotes.get(source)?.values() ?? []) {
+      if (h.device) { if (!device) this.sendNoteTo(h.device, 'noteoff', h.note, 0, h.channel, source as MidiSource, undefined, { exactChannel: true }); continue; }
+      const opts = this.restrikeOpts(h, device);
+      if (opts) this.broadcast('noteoff', { note: h.note, velocity: 0 }, h.channel, source as MidiSource, h.skipDeviceId, undefined, opts);
+    }
+  }
+
+  /** The held notes of `source` on again now (all its cables, or only `device`'s cable). */
+  private restrikeHeld(source: string, device?: string): void {
+    for (const h of [...(this.heldNotes.get(source)?.values() ?? [])]) {
+      if (h.device) { if (!device) this.sendNoteTo(h.device, 'noteon', h.note, h.velocity, h.channel, source as MidiSource); continue; }
+      const opts = this.restrikeOpts(h, device);
+      if (!opts) continue;
+      if (this.mutedSources.has(source as MidiSource)) continue;
+      const vf = this.sourceVelocityScale.get(source);
+      const velocity = vf !== undefined ? scaleVelocity(h.velocity, vf) : h.velocity;
+      this.broadcast('noteon', { note: h.note, velocity }, h.channel, source as MidiSource, h.skipDeviceId, undefined, opts);
+    }
+  }
+
+  /** A held note's send options for a release / restrike now (no schedule); null: not on `device`'s cable. */
+  private restrikeOpts(h: HeldNote, device?: string): BroadcastOptions | null {
+    const opts: BroadcastOptions = {};
+    if (h.exactChannel) opts.exactChannel = true;
+    if (device) {
+      const d = device.toLowerCase().trim();
+      if (h.onlyTargets && !h.onlyTargets.some(n => n.toLowerCase().trim() === d)) return null;
+      opts.onlyTargets = [device];
+    } else if (h.onlyTargets) opts.onlyTargets = h.onlyTargets;
+    return opts;
   }
 
   isSourceMuted(source: MidiSource): boolean {
@@ -897,7 +962,15 @@ export class MidiService {
 
   /** Drop the note-ons of these cables only (keys from cableMuteKey(); empty: none). */
   setMutedCables(keys: Iterable<string>): void {
+    const was = this.mutedCables;
     this.mutedCables = new Set(keys);
+    // a cable muted now: the notes its app holds end on that device; unmuted: they sound there again
+    const each = (key: string, fn: (src: string, dev: string) => void) => {
+      const i = key.indexOf('→');
+      if (i > 0) fn(key.slice(0, i), key.slice(i + 1));
+    };
+    for (const k of this.mutedCables) if (!was.has(k)) each(k, (src, dev) => this.releaseHeld(src, dev));
+    for (const k of was) if (!this.mutedCables.has(k)) each(k, (src, dev) => this.restrikeHeld(src, dev));
   }
 
   isCableMuted(source: MidiSource | string, deviceName: string): boolean {
@@ -1137,6 +1210,8 @@ export class MidiService {
    * delivered by a timer at that time.
    */
   sendNoteOn(note: number, velocity = 100, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions): void {
+    if (velocity > 0) this.holdNote(source, { note, velocity, channel, skipDeviceId, exactChannel: opts?.exactChannel, onlyTargets: opts?.onlyTargets });
+    else this.unholdNote(source, note, channel); // a note-on at 0 is a note-off
     if (this.mutedSources.size && this.mutedSources.has(source)) return;
     const vf = this.sourceVelocityScale.get(source);
     if (vf !== undefined) velocity = scaleVelocity(velocity, vf);
@@ -1148,6 +1223,7 @@ export class MidiService {
   }
 
   sendNoteOff(note: number, velocity = 0, channel = 0, source: MidiSource = MidiSource.UI, skipDeviceId: string | null = null, at?: number, opts?: BroadcastOptions): void {
+    this.unholdNote(source, note, channel);
     if (source === MidiSource.KEYBOARD && this.splitConfig?.enabled) {
       this.sendNoteSplit('noteoff', note, velocity, channel);
       return;
@@ -1170,6 +1246,8 @@ export class MidiService {
   sendNoteTo(deviceName: string, type: 'noteon' | 'noteoff', note: number, velocity: number, channel: number,
     source: MidiSource = MidiSource.UI, at?: number, opts?: BroadcastOptions): boolean {
     if (!deviceName) return false;
+    if (type === 'noteon' && velocity > 0) this.holdNote(source, { note, velocity, channel, skipDeviceId: null, device: deviceName });
+    else this.unholdNote(source, note, channel, deviceName);
     if (type === 'noteon' && this.mutedSources.has(source)) return true;
     const vf = this.sourceVelocityScale.get(source);
     if (type === 'noteon' && vf !== undefined) velocity = scaleVelocity(velocity, vf);
@@ -1238,6 +1316,7 @@ export class MidiService {
   }
 
   panic(): void {
+    this.heldNotes.clear(); // nothing held after a Panic: an unmute strikes nothing again
     console.log('[MIDI] PANIC! Sending All Notes Off to all devices and channels.');
     // SY.CORE Link: drop what is pending there (Live's track and the ports) and end what sounds
     try { this.linkPort?.clear(); } catch {}
