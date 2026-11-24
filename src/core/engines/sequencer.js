@@ -52,6 +52,7 @@ import { paramValue } from '@/lib/seq-gen/params'
 import { progressionKey, progressionKeyDetail } from '@/lib/chord-key'
 import { paramTargets, hasDeviceRoutes } from '@/lib/seq-device-params'
 import { captureLaneSound, laneSoundMessages, laneSoundLabel } from '@/lib/lane-sound'
+import { markPresetSent } from '@/lib/songs'
 import { useSeqDeviceParamsStore } from '@/stores/useSeqDeviceParamsStore'
 import { useChordProgStore } from '@/stores/useChordProgStore'
 
@@ -250,7 +251,8 @@ function createSequencerEngine(lane = 'main') {
     // the devices' panels show it as their channel's preset
     for (const t of sound.targets) {
       const reg = midiStore.routingConfig?.registrations?.[t.device]
-      if (reg) midiStore.updateRegistration(t.device, 'pcChannels', { ...(reg.pcChannels ?? {}), [t.ch]: { ...t.preset } })
+      // (the song's Save presets: the bank's own sound, not one the user picked)
+      if (reg) { markPresetSent(`${t.device}|${t.ch}`, t.preset); midiStore.updateRegistration(t.device, 'pcChannels', { ...(reg.pcChannels ?? {}), [t.ch]: { ...t.preset } }) }
     }
   }
   // Local state — active bank working copy

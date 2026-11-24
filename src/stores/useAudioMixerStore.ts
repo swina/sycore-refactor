@@ -157,6 +157,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     masterVol.value = v
     _dispatchBacking(); _dispatchTracks(); _dispatchLooper(); _dispatchLM(); _dispatchDrums()
     _dispatchSampler(); _dispatchLiveperf()
+    if (!masterOnLive.value) _masterMidiSoon()
   }
   /** The master Fade (Rig): the audio apps' volume follows it, the saved master volume stays. */
   function setMasterFade(f: number) {
@@ -213,13 +214,45 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     localStorage.setItem(userKey('S1_MIX_INST_NO_CC7'), JSON.stringify([...next]))
   }
 
-  function _sendInstCC(name: string) {
+  // ── Master on the MIDI channels (no Live): every CC 7 SY.CORE sends is scaled by √Master — CC 7 follows the GM
+  // curve on the synths (dB = 40·log10(cc/127)), so they follow the dB the Master fader shows. With Live's Master
+  // (SY.CORE Link 1.9+, masterOnLive) the CC 7 are left alone. A channel the Rig has a level on (song volumes, fades)
+  // is the Rig's: the strip there doesn't send on a Master move (two values on one channel = the level jumping).
+  const masterOnLive = ref(false)
+  function midiMaster(): number { return masterOnLive.value ? 1 : Math.sqrt(Math.max(0, Math.min(1, masterVol.value))) }
+  let rigOwns: ((device: string, ch: number) => boolean) | null = null
+  function setRigChannelOwner(fn: ((device: string, ch: number) => boolean) | null) { rigOwns = fn }
+  const _ccSent = new Map<string, number>()
+  function _sendCC7(name: string, ch: number, cc7: number, force = true) {
+    const k = `${name}|${ch}`
+    if (!force && _ccSent.get(k) === cc7) return
+    _ccSent.set(k, cc7)
+    midiService.sendRawCC(name, 7, cc7, ch)
+  }
+  /** The MIDI strips on the mixer's channels again (Master moved): only the values that changed, not the Rig's channels. */
+  function _resendMidiStrips() {
+    for (const a of channelSlots.value) {
+      if (!a || (a.type !== 'instrument' && a.type !== 'instrumentCh' && a.type !== 'virtual')) continue
+      const sep = a.id.lastIndexOf(':')
+      const ch = sep > 0 ? Number(a.id.slice(sep + 1)) : NaN
+      if (a.type !== 'instrument' && Number.isInteger(ch) && ch >= 0 && ch <= 15) { if (!rigOwns?.(a.id.slice(0, sep), ch)) _sendVirtChanCC(a.id.slice(0, sep), ch, false) }
+      else if (!rigOwns?.(a.id, _regOutChannel(a.id))) _sendInstCC(a.id, false)
+    }
+  }
+  // at most every 50 ms while Master moves (the last value always sent)
+  let _masterAt = 0, _masterTimer: ReturnType<typeof setTimeout> | null = null
+  function _masterMidiSoon() {
+    if (_masterTimer) return
+    const run = () => { _masterTimer = null; _masterAt = performance.now(); _resendMidiStrips() }
+    const wait = 50 - (performance.now() - _masterAt)
+    if (wait <= 0) run(); else _masterTimer = setTimeout(run, wait)
+  }
+  function _sendInstCC(name: string, force = true) {
     if (instrumentNoCC7.value.has(name)) return
     const ownMuted = !!instrumentMuted.value[name]
     const muted = isEffectivelyMuted('inst:' + name, ownMuted)
     const vol   = muted ? 0 : (instrumentVols.value[name] ?? 0.8)
-    const cc7   = Math.round(vol * 127)
-    midiService.sendRawCC(name, 7, cc7, _regOutChannel(name))
+    _sendCC7(name, _regOutChannel(name), Math.round(vol * midiMaster() * 127), force)
   }
 
   function getInstrumentVol(name: string): number  { return instrumentVols.value[name] ?? 0.8 }
@@ -278,13 +311,12 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     return isSoloed('virt:' + _virtKey(name, ch))
   }
 
-  function _sendVirtChanCC(name: string, ch: number) {
+  function _sendVirtChanCC(name: string, ch: number, force = true) {
     const key = _virtKey(name, ch)
     const ownMuted = !!virtualChannelMuted.value[key]
     const muted = isEffectivelyMuted('virt:' + key, ownMuted)
     const vol   = muted ? 0 : (virtualChannelVols.value[key] ?? 0.8)
-    const cc7   = Math.round(vol * 127)
-    midiService.sendRawCC(name, 7, cc7, ch)
+    _sendCC7(name, ch, Math.round(vol * midiMaster() * 127), force)
   }
 
   const _persistVirtualChannelVols = debounce(() => {
@@ -427,6 +459,7 @@ export const useAudioMixerStore = defineStore('audioMixer', () => {
     channelSlots,
     assignChannelSlot,
     clearChannelSlot,
+    midiMaster, masterOnLive, setRigChannelOwner,
     backingVol, tracksVol, looperVol, lmVol, drumsVol, drumsLevelVol, samplerVol, liveperfVol, basslineVol, masterVol, masterFade, setMasterFade,
     backingMuted, tracksMuted, looperMuted, lmMuted, drumsMuted, drumsLevelMuted, samplerMuted, liveperfMuted, basslineMuted,
     effectiveDrumsLevel,

@@ -20,13 +20,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { useRigEngine, _resetRigEngine } from '@/core/engines/rig'
 import { _resetDrumMachineEngine } from '@/core/engines/drum-machine'
-import { songCommand, songRun, songPaused, rigLaneMutes, exampleSong } from '@/lib/songs'
+import { songCommand, songRun, songPaused, songPreview, rigLaneMutes, exampleSong } from '@/lib/songs'
 
 const flush = async () => { for (let i = 0; i < 5; i++) { await nextTick(); await Promise.resolve() } }
 
 // The Rig's logic without its panel (Four contexts C2): the Session Browser's commands reach it.
 describe('Rig engine — no panel mounted', () => {
-  beforeEach(() => { localStorage.clear(); setActivePinia(createPinia()); songRun.value = null; songCommand.value = null; songPaused.value = null })
+  beforeEach(() => { localStorage.clear(); setActivePinia(createPinia()); songRun.value = null; songCommand.value = null; songPaused.value = null; songPreview.value = null })
   afterEach(() => { _resetRigEngine(); _resetDrumMachineEngine(); vi.restoreAllMocks() })
 
   it('is one instance for the app', () => {
@@ -117,6 +117,25 @@ describe('Rig engine — no panel mounted', () => {
     rig.togglePlay()
     await flush()
     expect(songRun.value?.index).toBe(0)
+  })
+
+  it('Preview: a clip on its own, the song not running; with the song playing it is refused', async () => {
+    const rig = useRigEngine()
+    const song = exampleSong()
+    rig.songLib.songs.push(song)
+    rig.songLib.currentId = song.id
+    songCommand.value = { cmd: 'preview', index: 2, lane: 'drum', start: 1 }
+    await flush()
+    expect(songPreview.value).toMatchObject({ songId: song.id, index: 2, lane: 'drum', start: 1 })
+    expect(songRun.value).toBeNull()
+    expect(rig.s.display).toMatch(/Preview: Drum C/)
+    songPreview.value = null
+    songCommand.value = { cmd: 'play', index: 0 }
+    await flush()
+    songCommand.value = { cmd: 'preview', index: 2, lane: 'drum', start: 1 }
+    await flush()
+    expect(songPreview.value).toBeNull()
+    expect(rig.s.display).toMatch(/song is playing/)
   })
 
   it('Pause with no song playing says so', () => {

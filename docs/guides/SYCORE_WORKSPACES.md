@@ -20,7 +20,7 @@ Switching never stops the music: the Drum Machine, Chord Prog and Sequencer play
 
 ## The song on stage (Performance)
 
-The Session Browser shows the song as in EDIT — sections, lanes and their clips (the section playing in green, each clip's preset), Bar / Section / Now → Next, Play · Hold · Pause · Stop song (Stop rewinds: the next Play starts from the first section; Pause: Resume goes on from its section), M / S per lane, In / Out and X-fade (another song: fade out, X-fade bars of silence, fade in) — without the **Slots** pane (dragging slots into the song: **EDIT** in its header). Everything goes to the Rig engine: it plays with the Rig panel closed.
+The Session Browser shows the song as in EDIT — sections, lanes and their clips (the section playing in green, each clip's preset), Bar / Section / Now → Next, Play · Hold · Pause · Stop song (Stop rewinds: the next Play starts from the first section; Pause: Resume goes on from its section), M / S per lane, In / Out and X-fade (another song: fade out, X-fade bars of silence, fade in), ● Save presets (EDIT: the presets changed while it plays go into the clips) — without the **Slots** pane (dragging slots into the song: **EDIT** in its header). Everything goes to the Rig engine: it plays with the Rig panel closed.
 
 The **Audio Mixer** (Mixer button) has a thin header in Performance: its configuration name, EDIT (the full header: save / load, assignments) and the window buttons — the sliders get the room.
 

@@ -12,10 +12,11 @@
  * The code is moved from RigControllerPanel.vue as it was (2026-11-24); its onUnmounted cleanups
  * are the scope's (onScopeDispose: tests only).
  */
+import { presetMessages } from '@/lib/virtual-device'
 import { reactive, ref, computed, watch, effectScope, onScopeDispose } from 'vue'
 import { RIG_SETTINGS_EVENT, materialPending, syncSongMaterial } from '@/core/sessions'
 import { slotName, labelOf as slotLabelOf } from '@/lib/slot-names'
-import { SONG_LANES, emptyLanes, songLibrary, saveSongs, songRun as sharedSongRun, songCommand, songPaused, songXfadeBars, rigLaneMutes, setSongChannels, lanesAt, laneClips, barsToEnd, songFadeBars, fadeStopLine, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
+import { SONG_LANES, emptyLanes, songLibrary, saveSongs, songRun as sharedSongRun, songCommand, songPaused, songPreview, SONG_LANE_LABELS, SONG_SLOTS, songXfadeBars, clipAt, samePreset, markPresetSent, rigLaneMutes, setSongChannels, lanesAt, laneClips, barsToEnd, songFadeBars, fadeStopLine, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
 import { needsSwitch, switchMaterial, captureInto, dropMaterial } from '@/lib/song-material'
 import { keyLabel, keyRoot, keyFile, progressionKeyDetail, NOTE_NAMES as KEY_NOTE_NAMES } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
@@ -359,6 +360,14 @@ function createRigEngine() {
   /** The lane-level fades in use: Master (the audio mixer) and Drum (its own sounds); the MIDI lanes fade per channel. */
   const laneFadeSettings = () => Object.fromEntries(FADE_KEYS.map(k => [k, k === 'master' || k === 'drum' ? fadeSettings[k] : { in: 0, out: 0, max: 127 }]))
   function fadeIn() {
+    // a clip preview (Session Browser): no Fade In — everything at its level at once
+    if (songPreview.value) {
+      fadeRamps = []; clearInterval(fadeTimer); fadeTimer = null
+      chRamps = []; clearInterval(chTimer); chTimer = null
+      for (const k of FADE_KEYS) setFade(k, 1)
+      for (const k of allChKeys()) sendCh(k, chFadeOf(k).max)
+      return
+    }
     chFadeIn()
     const { ramps, full } = planFadeIn(laneFadeSettings(), performance.now(), barMsNow())
     if (ramps.length) s.display = `Fade In: ${ramps.map(r => `${r.key === 'master' ? 'Master' : s.apps.find(a => a.id === r.key)?.label ?? r.key} → ${Math.round(r.to * 127)}`).join(', ')}`
@@ -406,12 +415,32 @@ function createRigEngine() {
     if (!lanes) return
     for (const l of lanes) for (const r of l.rows) if (!chFadeSettings[r.key]) chFadeSettings[r.key] = { in: 0, out: 0, max: 127 }
   })
+  // (chValue: the level before the Audio Mixer's Master — without Live, the CC 7 sent is scaled by it: mixer.midiMaster)
+  const chSent = {}
   function sendCh(key, v) {
     if (chValue[key] === v) return
     chValue[key] = v
-    const i = key.lastIndexOf('|')
-    midiService.sendRawToDeviceByName(key.slice(0, i), [0xB0 | (Number(key.slice(i + 1)) & 0x0f), 7, v])
+    sendChOut(key)
   }
+  function sendChOut(key) {
+    const out = Math.round(chValue[key] * mixer.midiMaster())
+    if (chSent[key] === out) return
+    chSent[key] = out
+    const i = key.lastIndexOf('|')
+    midiService.sendRawToDeviceByName(key.slice(0, i), [0xB0 | (Number(key.slice(i + 1)) & 0x0f), 7, out])
+  }
+  // the Rig's channels are its own on a Master move (the mixer's strip there doesn't send too)
+  mixer.setRigChannelOwner((device, ch) => `${device}|${ch}` in chValue)
+  onScopeDispose(() => mixer.setRigChannelOwner(null))
+  // Master moved (no Live): the Rig's channels again, at most every 50 ms, only the values that changed
+  let chMasterAt = 0, chMasterTimer = null
+  watch(() => mixer.midiMaster(), () => {
+    if (chMasterTimer) return
+    const run = () => { chMasterTimer = null; chMasterAt = performance.now(); for (const k of Object.keys(chValue)) sendChOut(k) }
+    const wait = 50 - (performance.now() - chMasterAt)
+    if (wait <= 0) run(); else chMasterTimer = setTimeout(run, wait)
+  })
+  onScopeDispose(() => clearTimeout(chMasterTimer))
   function runChRamps() {
     const now = performance.now()
     for (const r of chRamps) sendCh(r.key, chRampAt(r, now))
@@ -441,6 +470,7 @@ function createRigEngine() {
    * silence — the fade began only when the clock was seen running, after the first notes / audio.
    */
   function primeFades() {
+    if (songPreview.value) return // a clip preview: no Fade In
     for (const k of allChKeys()) { const f = chFadeSettings[k]; if (f?.in > 0) { chRamps = chRamps.filter(r => r.key !== k); sendCh(k, 0) } }
     for (const k of ['master', 'drum']) if (fadeSettings[k].in > 0) { fadeRamps = fadeRamps.filter(r => r.key !== k); setFade(k, 0) }
   }
@@ -466,6 +496,19 @@ function createRigEngine() {
   // the Fade Out took them — back to full, a pad's long release jumped (a glitch on some presets).
   watch(() => s.clock.running, (run, was) => { if (run && !was) fadeIn() })
   onScopeDispose(() => mixer.setMasterFade(1))
+  // The Audio Mixer's Master → Live's Master volume (SY.CORE Link 1.9+): the synths' audio is in Live, SY.CORE can't
+  // reach it otherwise. As Live's own fader: Master full = 0 dB (0.85 there). Sent at most every 40 ms, the last value kept.
+  let masterSentAt = 0, masterTimer = null
+  const sendLiveMaster = () => { masterTimer = null; masterSentAt = performance.now(); linkClient.sendMaster(0.85 * Math.max(0, Math.min(1, mixer.masterVol))) }
+  // with Live's Master the MIDI channels' CC 7 are left alone (mixer.masterOnLive)
+  watch(() => [linkStore.ready, linkStore.deviceVersion], () => { mixer.masterOnLive = !!(linkStore.ready && linkClient.masterSupported) }, { immediate: true })
+  onScopeDispose(() => { mixer.masterOnLive = false })
+  watch(() => mixer.masterVol, () => {
+    if (!linkClient.masterSupported || masterTimer) return
+    const wait = 40 - (performance.now() - masterSentAt)
+    if (wait <= 0) sendLiveMaster(); else masterTimer = setTimeout(sendLiveMaster, wait)
+  })
+  onScopeDispose(() => clearTimeout(masterTimer))
   /** The apps / Global intensity with their fades (what CC 7 and velocity send). */
   // (The MIDI lanes fade per channel — their Intensity and the Global one are not faded here.)
   const fadedApps = () => s.apps
@@ -606,7 +649,7 @@ function createRigEngine() {
   // gone: no bar left to finish on), armed slots are kept and the slots that were playing are armed
   // (the next Play starts them again; a press on an armed pad disarms it).
   function startArmed() {
-    if (!rigFollowPlay.value && !songRun.value?.waitPlay) { s.display = 'Live Play: nothing started (Live Play off)'; return }
+    if (!rigFollowPlay.value && !songRun.value?.waitPlay && !songPreview.value) { s.display = 'Live Play: nothing started (Live Play off)'; return }
     for (const id of activeSlotRows()) {
       const slot = rigArmed[id]
       if (slot === null) continue
@@ -623,7 +666,9 @@ function createRigEngine() {
   let stopArm = null
   const offLiveGrid = externalGrid.on(e => {
     if (!live.value || e.type !== 'stop') return
-    armPlaying(stopArm ?? playingSlots()); stopArm = null
+    // (a clip preview stopped: nothing armed after it)
+    if (previewStopping) { previewStopping = false; stopArm = null } else armPlaying(stopArm ?? playingSlots())
+    stopArm = null
     for (const id of stopRows()) for (const ev of stopEvents(id)) dispatchRig(ev)
   })
   onScopeDispose(() => {
@@ -673,7 +718,7 @@ function createRigEngine() {
     const at = endOfNextBar(now, nextBarLine)
     if (at == null) { stop(); return }
     stopGate.set(at)
-    fadeOut(at) // Fade Out: ends on that bar line
+    if (!songPreview.value) fadeOut(at) // Fade Out: ends on that bar line (a clip preview: none)
     window.dispatchEvent(new CustomEvent('dm-end-fill')) // +Fill: the Drum Machine's fill on the last bar
     s.display = 'Stop at the end of the next bar — press again: now'
     barStop = {
@@ -844,6 +889,7 @@ function createRigEngine() {
     pendingNext.value = null
     songPaused.value = null
     pausing = false
+    for (const x of songPcTimers) clearTimeout(x); songPcTimers = []
     panic(s)
     chordStore.latchStep = null
     uiStore.seqDecoupled = false
@@ -1522,6 +1568,7 @@ function createRigEngine() {
       if (r.bar === 0) songArmed = armNow || !gridRunning() // no bar line to wait for: its bar 1 is now
       const at1 = lanesAt(song.sections[st.index], 1)
       launchLanes(at1.lanes, at1.starts, false, armNow)
+      songClipPresets(song.sections[st.index], 1, null)
       songVolumes(song.sections[st.index])
       songChordSteps(song.sections[st.index], r.bar === 0 && !gridRunning())
       songDrumDensity(song, song.sections[st.index])
@@ -1611,6 +1658,7 @@ function createRigEngine() {
       songClipTimer = null
       if (songRun.value !== r || r.index !== song.sections.indexOf(sec) || r.bar !== bar || r.stopping || r.queued !== null) return
       launchLanes(lanes, nxt.starts, true)
+      songClipPresets(sec, next, Object.keys(lanes))
       if ('chord' in lanes && lanes.chord !== null) songChordSteps(sec)
     }
     const at = b.t - b.barMs / 2, now = performance.now()
@@ -1632,6 +1680,39 @@ function createRigEngine() {
     r.fading = true
     songFadeOutTo(song, b.t + (left - 1) * b.barMs, b.barMs)
     s.display = `Song ${song.name}: fading out to its end`
+  }
+  // ── Clip presets (the Session Browser's Save presets): each clip's sound on its lane's channels, sent just before
+  // its bar line (the downbeat on the new sound), and only when the channel plays another one (no PC for nothing).
+  let songPcTimers = []
+  onScopeDispose(() => { for (const x of songPcTimers) clearTimeout(x); songPcTimers = [] })
+  function songClipPresets(sec, bar, lanes) {
+    const want = []
+    for (const l of SONG_LANES) {
+      if (lanes && !lanes.includes(l)) continue
+      const p = clipAt(sec, l, bar)?.clip.presets
+      if (p) for (const [key, st] of Object.entries(p)) want.push({ key, st })
+    }
+    if (!want.length) return
+    const fire = () => {
+      for (const { key, st } of want) {
+        const i = key.lastIndexOf('|'), device = key.slice(0, i), ch = Number(key.slice(i + 1))
+        const reg = midiStore.routingConfig.registrations[device]
+        if (samePreset(reg?.pcChannels?.[ch], st)) continue
+        const msgs = presetMessages(st, ch)
+        if (!msgs.length) continue
+        for (const m of msgs) midiService.sendRawToDeviceByName(device, m)
+        const next = { ...st, msgs }
+        markPresetSent(key, next)
+        midiStore.updateRegistration(device, 'pcChannels', { ...(reg?.pcChannels ?? {}), [ch]: next })
+      }
+    }
+    const b = gridRunning() ? nextBarLine(performance.now()) : null
+    if (!b) { fire(); return }
+    // before the bar line (the downbeat on the new sound), and once more just after it: a Sequencer bank with its
+    // own sound sends it as it starts — the clip's preset wins (sent again only if the channel changed)
+    const at = t0 => { const id = setTimeout(() => { songPcTimers = songPcTimers.filter(x => x !== id); fire() }, Math.max(0, t0 - performance.now())); songPcTimers.push(id) }
+    at(b.t - 30)
+    at(b.t + 25)
   }
   /** A bar line went by under the song. */
   function songLineBy(r, song, b) {
@@ -1841,6 +1922,59 @@ function createRigEngine() {
     for (const id of ['drum', 'chord', 'seq']) if (chainOn(id)) toggleChain(id)
     startAfter(nx, Math.min(p.index, nx.sections.length - 1))
   }
+  // ── Clip preview (Session Browser, EDIT, Preview on): one clip on its own — the other lanes stopped, its saved
+  // presets sent, the transport started for it (as a Play); another clip: on the next bar line; the same one: Stop.
+  async function previewClip(c) {
+    if (songRun.value) { s.display = 'Preview: the song is playing (stop it first)'; return }
+    const song = currentSong()
+    const sec = song?.sections[c.index]
+    const at = sec ? clipAt(sec, c.lane, c.start) : null
+    if (!at) return
+    const p = songPreview.value
+    const running = playOn.value || countIn.active || gridRunning()
+    if (running && p && p.songId === song.id && p.index === c.index && p.lane === c.lane && p.start === c.start) { previewStop(); return }
+    if (needsSwitch(songLib, song)) {
+      if (!appsIdle()) { s.display = `Preview: ${song.name}'s material loads at a stop — stop first`; return }
+      await switchMaterial(songLib, song)
+      materialPending.value = false
+    }
+    for (const id of ['drum', 'chord', 'seq']) if (chainOn(id)) toggleChain(id)
+    songPreview.value = { songId: song.id, index: c.index, lane: c.lane, start: c.start }
+    const lanes = emptyLanes()
+    lanes[c.lane] = at.clip.slot
+    launchLanes(lanes, [c.lane], false, !running) // stopped: armed, it starts with the transport
+    songClipPresets(sec, c.start, [c.lane])
+    if (c.lane === 'chord') songChordSteps(sec, !gridRunning())
+    if (!running) previewStart()
+    s.display = `Preview: ${SONG_LANE_LABELS[c.lane]} ${SONG_SLOTS[at.clip.slot]} (${sec.name}, bar ${c.start})${running ? ' — on the next bar line' : ''}`
+  }
+  /** The transport for a preview: at once (no count-in, no fades). */
+  function previewStart() {
+    if (!live.value) { startClock(s); restartTimer(); return }
+    clearBarStop()
+    if (s.clock.source === 'EXT') {
+      stopArm = null
+      if (!linkClient.sendPlay(true)) s.display = 'Preview: Play Live (SY.CORE Link 1.5+ plays it from here)'
+      return
+    }
+    playAll()
+  }
+  /** The preview's clip again: everything stops now (not at the end of the next bar), nothing armed after it. */
+  let previewStopping = false
+  function previewStop() {
+    cancelCountIn()
+    clearBarStop()
+    stopArm = null
+    if (live.value && s.clock.source === 'EXT' && linkClient.sendPlay(false)) { previewStopping = true; setTimeout(() => { previewStopping = false }, 2000) }
+    stopAll()
+    for (const id of activeSlotRows()) { cancelWait(id); rigArmed[id] = null }
+    if (!live.value) { stopClock(s); restartTimer() }
+    songPreview.value = null
+    s.display = 'Preview: stopped'
+  }
+  // the transport stopped (or a song started): no clip previewing any more
+  watch(playOn, (on, was) => { if (was && !on) songPreview.value = null })
+  watch(songRun, r => { if (r) songPreview.value = null })
   function stopSong({ keepNext = false } = {}) {
     songPaused.value = null
     pendingNext.value = null
@@ -1894,6 +2028,7 @@ function createRigEngine() {
     if (c.cmd === 'play') { if (!live.value) { s.display = 'Songs play in LIVE mode: switch the Rig to LIVE'; return } playSong(c.index) }
     else if (c.cmd === 'stop') stopSong()
     else if (c.cmd === 'pause') pauseSong()
+    else if (c.cmd === 'preview') { if (!live.value) { s.display = 'Preview plays in LIVE mode: switch the Rig to LIVE'; return } previewClip(c) }
     else if (c.cmd === 'resume') togglePlay()
     else if (c.cmd === 'hold') holdSong(c.on)
     else if (c.cmd === 'jump') jumpSong(c.index)

@@ -16,11 +16,13 @@ import { useDrumMachineStore } from '@/stores/useDrumMachineStore'
 import { useSeqLaneStore } from '@/stores/useStepSequencerStore'
 import { useArpStore } from '@/stores/useArpStore'
 import { useMidiStore } from '@/stores/useMidiStore'
+import { useVirtualDeviceStore } from '@/stores/useVirtualDeviceStore'
 import { laneSoundLabel } from '@/lib/lane-sound'
 import { rowLane, chordSnapshot, drumSnapshot, seqSnapshot, bassSnapshot } from '@/lib/rig-live'
 import {
-  songLibrary, songRun, songCommand, songPaused, songXfadeBars, setSongXfade, SONG_XFADE_OPTIONS, rigLaneMutes, SONG_FADE_OPTIONS, songChannels, songVolKeys, SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, laneClips, hasOwnClips, setLaneClips, clipFits, setSectionBars, VOL_BAR_OPTIONS,
+  songLibrary, songRun, songCommand, songPaused, songPreview, songXfadeBars, setSongXfade, SONG_XFADE_OPTIONS, rigLaneMutes, SONG_FADE_OPTIONS, songChannels, songVolKeys, SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, laneClips, hasOwnClips, setLaneClips, clipFits, setSectionBars, VOL_BAR_OPTIONS,
   MAX_SECTIONS, newSong, newSection, exampleSong, songBars, sectionStartBar, barsLeft,
+  clipAt, samePreset, setClipPreset, clearClipPresets, isPresetEcho,
 } from '@/lib/songs'
 import {
   sessions, currentSession, pendingSession, loadSession, newSession, renameSession, duplicateSession, deleteSession,
@@ -205,6 +207,13 @@ function clipExtra(sec, l) {
 }
 function pickClip(i, l, c = 0) { sel.value = i; selLane.value = l; selClip.value = c }
 function pickSection(i) { sel.value = i; selLane.value = null; selClip.value = null }
+/** EDIT, the song playing: a click on a section takes the song there on the next bar line (Hold on: it stays there,
+ *  to set its sounds with Save presets); the section playing or already launched: just picked. */
+function onSectionClick(i) {
+  pickSection(i)
+  const r = run.value
+  if (!playMode.value && r && !(r.queued === i || (r.queued === null && r.index === i))) jump(i)
+}
 
 // ── Clips placed in a section (start + length, in bars; lib/songs.ts) ──
 const selClip = ref(null) // index in the lane's clips (null: none — an empty spot of the lane)
@@ -327,9 +336,21 @@ function onClipPointerMove(e) {
     d.ghost = delta !== 0 && clipFits(sec, d.l, start, d.len) ? start : null
   }
 }
+const vd = useVirtualDeviceStore()
+function vdToLane(l) {
+  const rows = laneChannels(l).filter(r => vd.devices.includes(r.device))
+  if (!rows.length) return
+  const r = rows.reduce((a, b) => (b.ch < a.ch ? b : a))
+  vd.selectedDevice = r.device
+  vd.setChannel(r.device, r.ch)
+}
 function onClipPointerUp() {
   const d = clipDrag.value
   clipDrag.value = null
+  // EDIT, a click on a clip: the Virtual Device goes to its lane's device and channel (on several: the lowest)
+  if (d && !d.moved && d.mode === 'move' && !playMode.value) vdToLane(d.l)
+  // Preview on (EDIT, the song not playing): a click on a clip plays it on its own (again: stops it)
+  if (d && !d.moved && d.mode === 'move' && previewOn.value && !playMode.value && !playingHere.value) command({ cmd: 'preview', index: d.i, lane: d.l, start: d.start })
   if (!d || d.mode !== 'copy' || d.ghost == null) return
   const sec = song.value.sections[d.i]
   const slot = laneClips(sec, d.l)[d.k]?.slot
@@ -452,6 +473,74 @@ const channelPresets = computed(() => {
     return [l, { rows: rows.length, names }]
   }))
 })
+// ── Save presets (EDIT, while the song plays): a preset changed on a lane's channel (the Virtual Device, a PC
+// panel…) goes into that lane's clip selected, else into the one sounding — the song player sends it before
+// that clip's bar line, only when the channel plays another sound (so the same clip can change sound).
+const savePresets = ref(false)
+/** Preview (EDIT): a click on a clip plays it on its own — with Save presets, its sound is set there, the song stopped. */
+const previewOn = ref(false)
+const previewHere = computed(() => !!songPreview.value && songPreview.value.songId === song.value?.id ? songPreview.value : null)
+const isPreviewed = (i, l, c) => { const p = previewHere.value; return !!p && p.index === i && p.lane === l && p.start === c.start }
+watch(() => {
+  if (!savePresets.value || !(playingHere.value || previewHere.value)) return null
+  const regs = midiStore.routingConfig?.registrations ?? {}
+  const out = {}
+  for (const l of SONG_LANES) for (const r of laneChannels(l)) out[`${r.device}|${r.ch}`] = regs[r.device]?.pcChannels?.[r.ch] ?? null
+  return out
+}, (cur, old) => {
+  if (!cur || !old) return // just turned on (or the song started): what is there now is the reference
+  for (const [k, st] of Object.entries(cur)) {
+    if (!st || samePreset(st, old[k]) || isPresetEcho(k, st)) continue
+    savePresetFor(k, st)
+  }
+}, { deep: true })
+function savePresetFor(key, st) {
+  const r = run.value, s = song.value, p = previewHere.value
+  if (!(r || p) || !s) return
+  for (const l of SONG_LANES) {
+    if (!laneChannels(l).some(x => `${x.device}|${x.ch}` === key)) continue
+    let sec = null, clip = null
+    if (p) { if (p.lane !== l) continue; sec = s.sections[p.index]; clip = sec ? clipAt(sec, l, p.start)?.clip ?? null : null }
+    else if (selLane.value === l && clipOf.value) { sec = section.value; clip = clipOf.value }
+    else { sec = s.sections[r.index]; clip = sec && r.bar > 0 ? clipAt(sec, l, Math.min(r.bar, sec.bars))?.clip ?? null : null }
+    if (!sec || !clip) continue
+    if (setClipPreset(sec, l, clip.start, key, st)) say(`Preset ${presetName(st) || '?'} saved in ${laneLabel(l)} ${SONG_SLOTS[clip.slot]} (${sec.name}, bar ${clip.start})`)
+  }
+}
+/** The presets saved in a clip: a name, MULTI for several sounds, '' none. */
+function savedPreset(c) {
+  const names = Object.values(c.presets ?? {}).map(presetName).filter(Boolean)
+  if (!names.length) return ''
+  return new Set(names).size > 1 ? 'MULTI' : names[0]
+}
+/** A Sequencer lane's slot with its own sound (the bank's SOUND): its label, '' none. */
+function slotSound(l, slot) {
+  const lane = SEQ_LANE_OF[l]
+  return lane && (l === 'seq' || rowLane(l)) ? laneSoundLabel(lanes[lane].banks?.[slot]?.sound) : ''
+}
+/**
+ * What a clip plays, played from the song's start: its own preset (saved in it), else its slot's sound (a Sequencer
+ * bank's), else the sound the clips before it left on the channel; with none of these the channel's preset now
+ * (the Chord on several channels: MULTI).
+ */
+function clipSound(i, l, c) {
+  const own = savedPreset(c)
+  if (own) return { text: own, kind: 'saved', title: `Saved in the clip: ${Object.values(c.presets).map(presetName).join(', ')} — sent before its bar line when the channel plays another sound` }
+  const bank = slotSound(l, c.slot)
+  if (bank) return { text: bank, kind: 'slot', title: `Slot ${SONG_SLOTS[c.slot]}'s own sound (the Sequencer's SOUND): every clip of this slot` }
+  let left = null
+  const secs = song.value?.sections ?? []
+  for (let j = 0; j <= i && j < secs.length; j++) {
+    for (const x of laneClips(secs[j], l)) {
+      if (j === i && x.start >= c.start) break
+      const s = savedPreset(x) || slotSound(l, x.slot)
+      if (s) left = { text: s, from: `${secs[j].name}, ${SONG_SLOTS[x.slot]}` }
+    }
+  }
+  if (left) return { text: left.text, kind: 'carried', title: `From the clip before (${left.from}): the channel keeps that sound` }
+  const now = clipPreset(l, c.slot)
+  return now ? { text: now, kind: 'now', title: now === 'MULTI' ? 'The Chord on several channels (nothing saved in this clip)' : `The channel's preset now (nothing saved in this clip)` } : null
+}
 function clipPreset(l, slot) {
   const lane = SEQ_LANE_OF[l]
   if (lane && (l === 'seq' || rowLane(l))) {
@@ -645,6 +734,14 @@ const slotClass = (l, v, on) => on
             <span class="px-2 py-1 text-neutral-500 uppercase tracking-wider border-r border-white/15">X-fade</span>
             <button v-for="(v, i) in SONG_XFADE_OPTIONS" :key="v" class="px-2 py-1" :class="[i ? 'border-l border-white/15' : '', songXfadeBars === v ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10']" @click="setSongXfade(v)">{{ v === 0 ? 'Cut' : v }}</button>
           </div>
+          <button v-if="!playMode" class="px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider"
+                  :class="savePresets ? 'bg-amber-500/80 border-amber-300 text-black' : 'border-white/15 text-neutral-400 hover:bg-white/10'"
+                  :title="savePresets ? 'Save presets on: while the song plays, a preset changed on a lane\'s channel (Virtual Device, PC…) is saved in that lane\'s clip selected, else the one sounding' : 'Save presets: while the song plays, the presets you change go into the clips (sent before each clip\'s bar line, only when the sound changes)'"
+                  @click="savePresets = !savePresets">● Save presets</button>
+          <button v-if="!playMode" class="px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider"
+                  :class="previewOn ? 'bg-emerald-500/80 border-emerald-300 text-black' : 'border-white/15 text-neutral-400 hover:bg-white/10'"
+                  :title="previewOn ? 'Preview on: a click on a clip plays it on its own (the other lanes stopped, its saved preset sent); a click on it again: stop. With Save presets: its sound is set there, without playing the song' : 'Preview: a click on a clip plays it on its own (the song not playing)'"
+                  @click="previewOn = !previewOn">▶ Preview</button>
           <span class="flex-1" />
           <span v-if="msg" class="text-[10px] text-emerald-300 truncate max-w-[280px]">{{ msg }}</span>
           <template v-if="playingHere">
@@ -681,10 +778,10 @@ const slotClass = (l, v, on) => on
             <button v-for="(sec, i) in song.sections" :key="sec.id" class="relative min-w-[52px] flex items-center justify-between gap-1 px-1.5 py-1 rounded-t text-left"
                     :style="{ flex: `${sec.bars} 1 0` }"
                     :class="isCurrent(i) ? 'bg-emerald-500/30 text-emerald-50' : isQueued(i) ? 'bg-amber-500/25 text-amber-50 animate-pulse' : sel === i && !selLane ? 'bg-neutral-100 text-neutral-900' : sel === i ? 'bg-white/20' : 'bg-white/[0.06] hover:bg-white/10'"
-                    :title="`${sec.name} · ${sec.bars} bars — click: the section · double-click: ${playingHere ? 'go there on the next bar line' : 'rename · drag: move it'}`"
+                    :title="`${sec.name} · ${sec.bars} bars — ${playingHere && !playMode ? 'click: the song goes there on the next bar line (with Hold: it stays there — set its sounds)' : `click: the section · double-click: ${playingHere ? 'go there on the next bar line' : 'rename · drag: move it'}`}`"
                     :draggable="!playingHere" @dragstart="onSectionDragStart($event, i)" @dragover="onSectionDragOver($event, i)" @drop.prevent="onSectionDrop"
                     @dragend="drag = null; secDrop = null"
-                    @click="pickSection(i)" @dblclick="playingHere ? jump(i) : renameSection(i)">
+                    @click="onSectionClick(i)" @dblclick="playingHere ? (playMode && jump(i)) : renameSection(i)">
               <span v-if="secDrop?.i === i" class="absolute -top-0.5 -bottom-2 w-1 rounded bg-amber-400 pointer-events-none" :class="secDrop.after ? '-right-[3px]' : '-left-[3px]'"></span>
               <span class="text-[10px] font-semibold uppercase tracking-wide truncate">{{ i + 1 }} {{ sec.name }}</span>
               <span class="text-[9px] font-mono opacity-75">{{ sec.bars }}</span>
@@ -727,7 +824,7 @@ const slotClass = (l, v, on) => on
                    class="absolute inset-y-0 rounded-md flex flex-col gap-1 px-2 py-1.5 overflow-hidden select-none touch-none"
                    :style="clipStyle(sec, c)"
                    :class="[sel === i && selLane === l && selClip === k ? 'bg-sky-700/60 border-2 border-sky-100 ring-2 ring-sky-300/40'
-                              : soundingClip(i, c) ? 'bg-emerald-700/55 border border-emerald-300/70'
+                              : soundingClip(i, c) || isPreviewed(i, l, c) ? 'bg-emerald-700/55 border border-emerald-300/70'
                               : playingSec(i) ? 'bg-emerald-950/70 border border-emerald-400/45 hover:bg-emerald-900/60'
                               : 'bg-sky-950/70 border border-sky-400/35 hover:bg-sky-900/60',
                             clipDrag && clipDrag.i === i && clipDrag.l === l && clipDrag.k === k && clipDrag.mode !== 'copy' ? 'cursor-grabbing' : 'cursor-grab']"
@@ -738,8 +835,14 @@ const slotClass = (l, v, on) => on
                   <span class="whitespace-nowrap">{{ laneLabel(l) }} · {{ SONG_SLOTS[c.slot] }}<template v-if="hasOwnClips(sec, l)"> · {{ c.start }}–{{ c.start + c.len - 1 }}</template></span>
                   <span class="font-mono">{{ clipExtra(sec, l) }}</span>
                 </span>
-                <span class="text-[12px] font-medium leading-snug text-sky-50 break-words overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical">{{ slotLabel(l, c.slot) }}</span>
-                <span v-if="clipPreset(l, c.slot)" class="mt-auto text-[9px] text-sky-200/60 truncate" :title="`Preset: ${clipPreset(l, c.slot)}`">♪ {{ clipPreset(l, c.slot) }}</span>
+                <span class="min-h-0 text-[12px] font-medium leading-snug text-sky-50 break-words overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical">{{ slotLabel(l, c.slot) }}</span>
+                <span v-if="clipSound(i, l, c)" class="mt-auto shrink-0 flex items-center gap-1 text-[9px] leading-tight min-w-0"
+                      :class="{ saved: 'text-amber-200/90', slot: 'text-sky-200/70', carried: 'text-sky-200/50 italic', now: 'text-sky-200/60' }[clipSound(i, l, c).kind]"
+                      :title="clipSound(i, l, c).title">
+                  <span class="truncate">{{ clipSound(i, l, c).kind === 'saved' ? '●' : '♪' }} {{ clipSound(i, l, c).text }}</span>
+                  <button v-if="clipSound(i, l, c).kind === 'saved' && !playMode" class="shrink-0 px-0.5 leading-none text-amber-200/60 hover:text-white" title="Take the preset off this clip"
+                          @pointerdown.stop @click.stop="clearClipPresets(sec, l, c.start)">×</button>
+                </span>
                 <span class="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-sky-300/30" title="Drag: the clip's length"
                       @pointerdown="onClipPointerDown($event, i, l, k, 'len')" @pointermove="onClipPointerMove" @pointerup="onClipPointerUp"></span>
               </div>

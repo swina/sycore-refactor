@@ -178,7 +178,7 @@ export class LinkClient {
   /** Diagnostics: a note sent with its exact beat, and how far (ms) its converted time was. */
   onExactBeat: ((ms: number) => void) | null = null
   transport: LinkTransport = { playing: false, beat: 0, tempo: 120, num: 4, den: 4, at: 0 }
-  device: { name: string; version: string; track: string; sim: boolean; ports: boolean; play: boolean; tempo: boolean; mapTrack: boolean } | null = null
+  device: { name: string; version: string; track: string; sim: boolean; ports: boolean; play: boolean; tempo: boolean; mapTrack: boolean; master: boolean } | null = null
   /** Mean of the last round trips, ms (null until measured). */
   rttMs: number | null = null
   private rtts: number[] = []
@@ -307,7 +307,7 @@ export class LinkClient {
     const now = this.now()
     switch (m.type) {
       case 'hello':
-        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports, play: !!m.play, tempo: !!m.tempo, mapTrack: !!m.mapTrack }
+        this.device = { name: String(m.device ?? ''), version: String(m.version ?? ''), track: String(m.track ?? ''), sim: !!m.sim, ports: !!m.ports, play: !!m.play, tempo: !!m.tempo, mapTrack: !!m.mapTrack, master: !!m.master }
         this.emit({ type: 'hello', device: this.device.name, version: this.device.version, track: this.device.track, sim: this.device.sim })
         break
       case 'transport': {
@@ -548,6 +548,15 @@ export class LinkClient {
   sendTempo(bpm: number): boolean {
     if (!this.isReady || !this.tempoSupported || !Number.isFinite(bpm)) return false
     return this.sendRaw({ type: 'tempo', bpm: Math.round(Math.max(20, Math.min(999, bpm)) * 100) / 100 })
+  }
+
+  /** The device can set Live's Master volume (bridge 1.9+: `master`). */
+  get masterSupported(): boolean { return !!this.device?.master }
+
+  /** Live's Master volume, as Live's own fader: 0–1 (0.85 = 0 dB). False: not sent. */
+  sendMaster(value: number): boolean {
+    if (!this.isReady || !this.masterSupported || !Number.isFinite(value)) return false
+    return this.sendRaw({ type: 'master', value: Math.max(0, Math.min(1, value)) })
   }
 
   /** Drop everything queued in the device and end the notes sounding (stop, panic). */

@@ -540,7 +540,9 @@ function selectBank(bank) {
 // (reg.pcBank, written by selectBank and recordChannelState): picking a different channel row in
 // "Current Program Change" keeps it. A channel's own saved bank (reg.pcChannels[ch].bank) is only
 // the fallback for a device that has no bank yet.
-watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel], (_, [, oldDev]) => {
+// The bank list too: the user banks (an Emulator X3's…) come from IndexedDB after the panel starts — before, the
+// last bank wasn't in the list yet, no bank was open after a restart, and the Virtual Device had no categories.
+watch([catalogDevice, selectedDeviceName, () => selectedReg.value?.pcChannel, () => availableBanks.value.join('|')], (_, [, oldDev]) => {
   // restore last-used bank if available, else reset
   const reg = selectedReg.value
   const activeCh = reg?.pcChannel ?? 0

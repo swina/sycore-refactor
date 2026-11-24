@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   exampleSong, songBars, sectionStartBar, nextSectionIndex, parseLibrary, parseSong,
   startRun, songBarLine, jumpTo, setHold, newSection, songVolKeys, sectionVolTargets, sectionVolRamps, sectionDrumDensity, planToSong, type Song,
+  setClipPreset, clearClipPresets, samePreset, markPresetSent, isPresetEcho,
   songFadeBars, barsToEnd, fadeStopLine, laneClips, hasOwnClips, setLaneClips, lanesAt, clipAt, normalizeClips, clipFits, setSectionBars,
 } from '@/lib/songs'
 
@@ -152,6 +153,29 @@ describe('songs', () => {
     expect(parseSong({ fadeIn: 2, sections: [] })!.fadeIn).toBe(2)
     expect(parseSong({ sections: [] })!.fadeIn).toBe('rig')
     expect(parseSong({ fadeIn: 'x', sections: [] })!.fadeIn).toBe('rig')
+  })
+
+  it('clip presets: saved on a whole-section clip (kept as a clip), parsed back, taken off', () => {
+    const s = song([4])
+    const sec = s.sections[0]
+    const pc = { program: 12, bank: null, soundName: 'Pad', category: null, msb: 0, lsb: 0, msgs: [[0xc3, 12]] }
+    expect(setClipPreset(sec, 'chord', 1, 'X3|3', pc)).toBe(true)
+    expect(laneClips(sec, 'chord')[0].presets?.['X3|3'].soundName).toBe('Pad')
+    const back = parseSong(JSON.parse(JSON.stringify(s)))!
+    expect(laneClips(back.sections[0], 'chord')[0].presets?.['X3|3'].program).toBe(12)
+    clearClipPresets(sec, 'chord', 1)
+    expect(sec.clips).toBeUndefined() // a plain clip again
+    expect(setClipPreset(sec, 'chord', 3, 'X3|3', pc)).toBe(false) // no clip starts there
+  })
+
+  it('samePreset compares what is sent (the channel aside); the player\'s own sends are told apart', () => {
+    const a = { program: 5, bank: null, soundName: 'A', category: null, msb: 0, lsb: 0, msgs: [[0xc0, 5]] }
+    expect(samePreset(a, { ...a, soundName: 'other name', msgs: [[0xc7, 5]] })).toBe(true)
+    expect(samePreset(a, { ...a, program: 6, msgs: [[0xc0, 6]] })).toBe(false)
+    expect(samePreset(null, a)).toBe(false)
+    markPresetSent('X3|0', a)
+    expect(isPresetEcho('X3|0', a)).toBe(true)
+    expect(isPresetEcho('X3|0', a)).toBe(false) // once
   })
 
   it('planToSong: the form in order, each section on its letter, lanes with nothing silent', () => {

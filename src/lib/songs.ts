@@ -13,6 +13,7 @@
 import { reactive, ref } from 'vue'
 import { userKey } from './userKey'
 import type { SongPlan } from './song-plan'
+import type { PcChannelState } from '@/types/midi'
 
 export const SONG_LANES = ['drum', 'chord', 'seq', 'bass', 'arp'] as const
 export type SongLane = typeof SONG_LANES[number]
@@ -60,7 +61,10 @@ export interface SongSection {
   clips?: Partial<Record<SongLane, SongClip[]>>
 }
 
-export interface SongClip { slot: number; start: number; len: number }
+/** A clip's sounds (the Session Browser's Save presets): per MIDI channel of its lane ('device|ch'), the preset as the
+ *  Virtual Device sent it — sent before the clip's bar line when that channel plays another one. */
+export type ClipPresets = Record<string, PcChannelState>
+export interface SongClip { slot: number; start: number; len: number; presets?: ClipPresets }
 
 export interface Song {
   id: string
@@ -169,7 +173,7 @@ export function normalizeClips(clips: SongClip[], bars: number): SongClip[] {
       if (prev.start === start) continue
       prev.len = start - prev.start
     }
-    out.push({ slot: c.slot, start, len })
+    out.push(c.presets && Object.keys(c.presets).length ? { slot: c.slot, start, len, presets: c.presets } : { slot: c.slot, start, len })
   }
   return out
 }
@@ -177,7 +181,7 @@ export function normalizeClips(clips: SongClip[], bars: number): SongClip[] {
 export function setLaneClips(sec: SongSection, l: SongLane, clips: SongClip[]): void {
   const n = normalizeClips(clips, sec.bars)
   sec.lanes[l] = n[0]?.slot ?? null
-  const plain = n.length === 0 || (n.length === 1 && n[0].start === 1 && n[0].len === sec.bars)
+  const plain = n.length === 0 || (n.length === 1 && n[0].start === 1 && n[0].len === sec.bars && !n[0].presets)
   if (plain) { if (sec.clips) { delete sec.clips[l]; if (!Object.keys(sec.clips).length) delete sec.clips } return }
   sec.clips = { ...(sec.clips ?? {}), [l]: n }
 }
@@ -210,6 +214,53 @@ function parseVol(raw: unknown): Record<string, number> {
   return out
 }
 
+function parsePresets(raw: unknown): ClipPresets | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: ClipPresets = {}
+  for (const [k, v] of Object.entries(raw as Record<string, any>)) {
+    if (!/\|\d+$/.test(k) || !v || typeof v !== 'object') continue
+    if (!Number.isInteger(v.program) && !Array.isArray(v.msgs)) continue
+    out[k] = v as PcChannelState
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+/** The same sound (what is sent for it): program, bank select, the messages. */
+export function samePreset(a: PcChannelState | null | undefined, b: PcChannelState | null | undefined): boolean {
+  if (!a || !b) return !a && !b
+  const sig = (x: PcChannelState) => JSON.stringify([x.program ?? null, x.msb ?? 0, x.lsb ?? 0, x.engine ?? null, (x.msgs ?? []).map(m => m.slice(1))])
+  return sig(a) === sig(b)
+}
+
+/** Save presets: `state` becomes the sound of the lane's clip starting on `start`, on channel `key` ('device|ch'). */
+export function setClipPreset(sec: SongSection, l: SongLane, start: number, key: string, state: PcChannelState): boolean {
+  const cs = laneClips(sec, l).map(c => ({ ...c }))
+  const c = cs.find(x => x.start === start)
+  if (!c) return false
+  const { soundName, category, program, bank, msb, lsb, msgs, engine } = state
+  c.presets = { ...(c.presets ?? {}), [key]: JSON.parse(JSON.stringify({ program, bank, soundName, category, msb, lsb, msgs, engine })) }
+  setLaneClips(sec, l, cs)
+  return true
+}
+/** The clip's preset (all of them) taken off. */
+export function clearClipPresets(sec: SongSection, l: SongLane, start: number): void {
+  const cs = laneClips(sec, l).map(c => ({ ...c }))
+  const c = cs.find(x => x.start === start)
+  if (!c?.presets) return
+  delete c.presets
+  setLaneClips(sec, l, cs)
+}
+
+/** The presets the song player just sent (so Save presets does not take them for the user's). */
+const presetEcho = new Map<string, string>()
+export function markPresetSent(key: string, state: PcChannelState): void { presetEcho.set(key, JSON.stringify(state)) }
+export function isPresetEcho(key: string, state: PcChannelState | null | undefined): boolean {
+  const e = presetEcho.get(key)
+  if (e === undefined || !state) return false
+  presetEcho.delete(key)
+  return samePreset(JSON.parse(e), state)
+}
+
 function parseClips(raw: unknown, bars: number): SongSection['clips'] {
   if (!raw || typeof raw !== 'object') return undefined
   const out: Partial<Record<SongLane, SongClip[]>> = {}
@@ -217,7 +268,7 @@ function parseClips(raw: unknown, bars: number): SongSection['clips'] {
     const arr = (raw as any)[l]
     if (!Array.isArray(arr)) continue
     const ok = arr.filter((c: any) => slotOrNull(c?.slot) !== null && Number.isFinite(Number(c?.start)) && Number.isFinite(Number(c?.len)))
-      .map((c: any) => ({ slot: c.slot, start: Number(c.start), len: Number(c.len) }))
+      .map((c: any) => ({ slot: c.slot, start: Number(c.start), len: Number(c.len), presets: parsePresets(c.presets) }))
     out[l] = normalizeClips(ok, bars)
   }
   return Object.keys(out).length ? out : undefined
@@ -338,9 +389,11 @@ export type SongStep =
 /** The song playing (the Rig panel's player runs it; the Session Browser shows it). */
 export const songRun = ref<SongRun | null>(null)
 /** A command for the Rig panel's player (the Session Browser's buttons): it takes it and clears it. */
-export type SongCommand = { cmd: 'play'; index: number } | { cmd: 'stop' } | { cmd: 'pause' } | { cmd: 'resume' } | { cmd: 'hold'; on: boolean } | { cmd: 'jump'; index: number }
+export type SongCommand = { cmd: 'play'; index: number } | { cmd: 'stop' } | { cmd: 'pause' } | { cmd: 'resume' } | { cmd: 'preview'; index: number; lane: SongLane; start: number } | { cmd: 'hold'; on: boolean } | { cmd: 'jump'; index: number }
   | { cmd: 'mute'; lane: SongLane } | { cmd: 'solo'; lane: SongLane }
 export const songCommand = ref<SongCommand | null>(null)
+/** A clip playing on its own (the Session Browser's Preview, EDIT): its section, lane and start; null none. */
+export const songPreview = ref<{ songId: string; index: number; lane: SongLane; start: number } | null>(null)
 /** A song paused (Pause: the transport stopped, the song kept): Play goes on from its section. A Stop rewinds. */
 export const songPaused = ref<{ songId: string; index: number } | null>(null)
 

@@ -59,7 +59,7 @@ SY.CORE (browser)                          Ableton Live
 
 1. **Put the devices where Live sees them.** Unzip `SYCORE-Live-Devices-<version>` and keep its files together (the devices load the scripts and `node_modules` next to them, by name). Put the folder in your User Library (e.g. `Presets\MIDI Effects\Max MIDI Effect\`) or add it under Places.
 
-   **Updating**: quit Live, replace the folder's files with the new version's (with Live open, `node_modules` may be locked), open Live again and reload SY.CORE. Play / Stop of Live from SY.CORE needs bridge **1.5** or later, its tempo **1.6**, the Launchpad layout in SY.CORE Rig **1.7**.
+   **Updating**: quit Live, replace the folder's files with the new version's (with Live open, `node_modules` may be locked), open Live again and reload SY.CORE. Play / Stop of Live from SY.CORE needs bridge **1.5** or later, its tempo **1.6**, the Launchpad layout in SY.CORE Rig **1.7**, the Audio Mixer's Master on Live's Master volume **1.9**.
 2. **Add the bridge.** Drag `sycore-link.amxd` onto a MIDI track. Only one per set; a dedicated track such as "SY.CORE Control" is a good home.
 3. **Check it started.** The device panel shows:
    - **status LED**: amber = waiting for SY.CORE, green = connected, red = error (e.g. port 9400 already in use);

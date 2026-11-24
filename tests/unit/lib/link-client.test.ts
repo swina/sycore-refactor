@@ -190,6 +190,16 @@ describe('LinkClient', () => {
     expect(ws.sent.at(-1)).toMatchObject({ type: 'tempo', bpm: 20 })
   })
 
+  it("Live's Master volume (bridge 1.9): sent only when the bridge takes it, 0–1", () => {
+    const { client, ws } = connected()
+    expect(client.sendMaster(0.85)).toBe(false) // hello without master
+    ws.recv({ type: 'hello', device: 'sycore-link', version: '1.9.0', track: '', sim: false, ports: true, play: true, tempo: true, master: true })
+    expect(client.sendMaster(0.85)).toBe(true)
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'master', value: 0.85 })
+    client.sendMaster(3)
+    expect(ws.sent.at(-1)).toMatchObject({ type: 'master', value: 1 })
+  })
+
   it('sends MIDI without a beat when stopped or already due', () => {
     const { client, ws } = connected()
     client.sendMidi([0xb0, 7, 64])
