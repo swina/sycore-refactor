@@ -24,6 +24,17 @@ describe('workspaces', () => {
     expect(a.x + a.w).toBeLessThan(b.x)
   })
 
+  it('Arrange: the Session Browser alone, full screen, in EDIT; the order Classic, Studio, Arrange, Performance', () => {
+    const ui = useUiStore()
+    const ws = useWorkspaceStore()
+    ws.switchTo('arrange')
+    expect(ui.isPanelOpen('session-browser')).toBe(true)
+    for (const id of ['rig-controls', 'rig-controller', 'drum-machine', 'chord-prog', 'sequencer2']) expect(ui.isPanelOpen(id)).toBe(false)
+    expect(usePlayView('session-browser').play.value).toBe(false) // EDIT: its Slots pane there
+    expect(JSON.parse(localStorage.getItem(userKey('SYCORE_POS_SESSION_BROWSER'))!)).toMatchObject({ x: 0, y: 0, w: 1920, h: 1040 })
+    expect(WORKSPACES.map(w => w.id)).toEqual(['classic', 'studio', 'arrange', 'performance'])
+  })
+
   it('every managed panel has a storage key and a tile', () => {
     for (const ws of WORKSPACES) for (const id of ws.panels ?? []) {
       expect(PANEL_STORAGE_KEYS[id]).toBeTruthy()

@@ -15,9 +15,23 @@ import { userKey } from './userKey'
 import type { SongPlan } from './song-plan'
 import type { PcChannelState } from '@/types/midi'
 
-export const SONG_LANES = ['drum', 'chord', 'seq', 'bass', 'arp'] as const
+export const SONG_LANES = ['drum', 'chord', 'seq', 'bass', 'arp', 'track', 'capture', 'sample'] as const
 export type SongLane = typeof SONG_LANES[number]
-export const SONG_LANE_LABELS: Record<SongLane, string> = { drum: 'Drum', chord: 'Chord', seq: 'Seq', bass: 'Bass', arp: 'Arp' }
+export const SONG_LANE_LABELS: Record<SongLane, string> = { drum: 'Drum', chord: 'Chord', seq: 'Seq', bass: 'Bass', arp: 'Arp', track: 'Tracks', capture: 'Capture', sample: 'Samples' }
+/** The lanes the Rig plays (its apps' slots A–H). */
+export const RIG_SONG_LANES = ['drum', 'chord', 'seq', 'bass', 'arp'] as const
+/** The song's audio lanes (core/engines/song-audio.js): their 8 slots are the song's own (song.audio). */
+export const AUDIO_SONG_LANES = ['track', 'sample'] as const
+export type AudioSongLane = typeof AUDIO_SONG_LANES[number]
+/** A Track slot: a backing track of the Tracks library (users/<uid>/backing_tracks). */
+/** retrigger: from its start at every clip (else it runs on while the same slot follows; the song starting over restarts it). */
+/** fit: 'varispeed' — its speed follows the song's tempo (song BPM ÷ its BPM; the pitch moves too), else at its own speed. */
+export interface SongTrackRef { id: string; label: string; bpm?: number | null; duration?: number | null; retrigger?: boolean; fit?: 'off' | 'varispeed' }
+/** A Sample slot: a sound file picked in the Sound Folder Browser, kept in IndexedDB (lib/song-samples.ts) —
+ *  One-shot (once from the clip's bar line) or Loop (again and again until the clip ends). */
+export interface SongSampleRef { id: string; name: string; mode: 'oneshot' | 'loop' }
+export interface SongAudio { track: (SongTrackRef | null)[]; sample: (SongSampleRef | null)[] }
+export const emptyAudio = (): SongAudio => ({ track: Array(8).fill(null), sample: Array(8).fill(null) })
 export const SONG_SLOTS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const
 export const SECTION_BAR_OPTIONS = [1, 2, 4, 8, 12, 16, 24, 32] as const
 export const MAX_SECTIONS = 16
@@ -33,6 +47,15 @@ export type SongEnd = 'stop' | 'loop' | 'stay' | 'staySection' | 'next'
 /** The song's Fade Out (Stop song, End Stop): 'rig' = the Rig's Fade Out (Performance), else bars (0 = Cut: none). */
 export type SongFadeOut = 'rig' | number
 export const SONG_FADE_OPTIONS: readonly SongFadeOut[] = ['rig', 0, 0.5, 1, 2, 4]
+/** A tempo the song can set (20–999 BPM, 0.1), else null. */
+export const okBpm = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 20 && v <= 999 ? Math.round(v * 10) / 10 : null)
+/** The tempo of a section: its own, else the song's; null: the tempo as it is. */
+export const sectionBpm = (song: Song | null | undefined, sec: SongSection | null | undefined): number | null => okBpm(sec?.bpm) ?? okBpm(song?.bpm)
+/** A Track's playback rate at `bpm`: varispeed, its BPM known: bpm ÷ its BPM (within 0.5–2), else 1. */
+export function trackRate(ref: SongTrackRef | null | undefined, bpm: number | null | undefined): number {
+  if (!ref || ref.fit !== 'varispeed' || !(Number(ref.bpm) > 0) || !(Number(bpm) > 0)) return 1
+  return Math.max(0.5, Math.min(2, Number(bpm) / Number(ref.bpm)))
+}
 const okFadeOut = (v: unknown): SongFadeOut => (typeof v === 'number' && SONG_FADE_OPTIONS.includes(v) ? v : 'rig')
 
 export interface SongSection {
@@ -49,6 +72,8 @@ export interface SongSection {
   vol: Record<string, number>
   /** the volumes reach their level over these bars from the section's first bar line (0 = on it) */
   volBars: number
+  /** its tempo, from its first bar line (null / absent: the song's) */
+  bpm?: number | null
   /** Chord lane: the slot loops on its first N chords in this section (null = all) */
   chordSteps: number | null
   /** Drum lane: the Rig's Density 0–127 in this section (null: 127 if another section sets it, else left alone) */
@@ -78,6 +103,10 @@ export interface Song {
   fadeIn?: SongFadeOut
   /** SG4: the song has its own material (its slots A–H, lib/song-material.ts); false = the session's slots */
   own: boolean
+  /** Its Tracks / Samples lanes' slots A–H (always the song's own). Absent: none. */
+  audio?: SongAudio
+  /** The song sets the tempo: its BPM (a section can have its own); null / absent: the tempo as it is. */
+  bpm?: number | null
 }
 
 /** currentId: the song open · loadedId: the song whose own material is in the apps (null: the session's) */
@@ -85,7 +114,7 @@ export interface SongLibrary { songs: Song[]; currentId: string | null; loadedId
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
-export const emptyLanes = (): Record<SongLane, number | null> => ({ drum: null, chord: null, seq: null, bass: null, arp: null })
+export const emptyLanes = (): Record<SongLane, number | null> => ({ drum: null, chord: null, seq: null, bass: null, arp: null, track: null, capture: null, sample: null })
 
 export function newSection(name = 'Section', bars = 8, lanes: Partial<Record<SongLane, number | null>> = {}): SongSection {
   return { id: uid(), name, bars, lanes: { ...emptyLanes(), ...lanes }, vol: {}, volBars: 0, chordSteps: null, drumDensity: null }
@@ -214,6 +243,22 @@ function parseVol(raw: unknown): Record<string, number> {
   return out
 }
 
+function parseAudio(raw: any): SongAudio {
+  const a = emptyAudio()
+  for (let i = 0; i < 8; i++) {
+    const t = raw?.track?.[i]
+    if (t && typeof t.id === 'string') a.track[i] = { id: t.id, label: String(t.label ?? 'Track'), bpm: Number.isFinite(t.bpm) ? t.bpm : null, duration: Number.isFinite(t.duration) ? t.duration : null, ...(t.retrigger === true ? { retrigger: true } : {}), ...(t.fit === 'varispeed' ? { fit: 'varispeed' } : {}) }
+    const s = raw?.sample?.[i]
+    if (s && typeof s.id === 'string') a.sample[i] = { id: s.id, name: String(s.name ?? 'Sample'), mode: s.mode === 'loop' ? 'loop' : 'oneshot' }
+  }
+  return a
+}
+/** A song's audio slots, made when first needed. */
+export function songAudioOf(song: Song): SongAudio {
+  if (!song.audio) song.audio = emptyAudio()
+  return song.audio
+}
+
 function parsePresets(raw: unknown): ClipPresets | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const out: ClipPresets = {}
@@ -286,6 +331,7 @@ export function parseSong(raw: any): Song | null {
     chordSteps: Number.isInteger(s?.chordSteps) && s.chordSteps >= 1 && s.chordSteps <= 16 ? s.chordSteps : null,
     drumDensity: typeof s?.drumDensity === 'number' && Number.isFinite(s.drumDensity) ? Math.max(0, Math.min(127, Math.round(s.drumDensity))) : null,
     clips: parseClips(s?.clips, clampBars(s?.bars)),
+    ...(okBpm(s?.bpm) ? { bpm: okBpm(s.bpm) } : {}),
   }))
   for (const sec of sections) {
     if (!sec.clips) { delete sec.clips; continue }
@@ -298,6 +344,8 @@ export function parseSong(raw: any): Song | null {
     fadeOut: okFadeOut(raw.fadeOut),
     fadeIn: okFadeOut(raw.fadeIn),
     own: raw.own === true,
+    ...(okBpm(raw.bpm) ? { bpm: okBpm(raw.bpm) } : {}),
+    ...(raw.audio ? { audio: parseAudio(raw.audio) } : {}),
     sections,
   }
 }

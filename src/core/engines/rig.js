@@ -13,10 +13,11 @@
  * are the scope's (onScopeDispose: tests only).
  */
 import { presetMessages } from '@/lib/virtual-device'
+import { useSongAudio } from '@/core/engines/song-audio'
 import { reactive, ref, computed, watch, effectScope, onScopeDispose } from 'vue'
 import { RIG_SETTINGS_EVENT, materialPending, syncSongMaterial } from '@/core/sessions'
 import { slotName, labelOf as slotLabelOf } from '@/lib/slot-names'
-import { SONG_LANES, emptyLanes, songLibrary, saveSongs, songRun as sharedSongRun, songCommand, songPaused, songPreview, SONG_LANE_LABELS, SONG_SLOTS, songXfadeBars, clipAt, samePreset, markPresetSent, rigLaneMutes, setSongChannels, lanesAt, laneClips, barsToEnd, songFadeBars, fadeStopLine, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
+import { SONG_LANES, AUDIO_SONG_LANES, emptyLanes, songLibrary, saveSongs, songRun as sharedSongRun, songCommand, songPaused, songPreview, SONG_LANE_LABELS, SONG_SLOTS, songXfadeBars, clipAt, samePreset, markPresetSent, sectionBpm, trackRate, rigLaneMutes, setSongChannels, lanesAt, laneClips, barsToEnd, songFadeBars, fadeStopLine, startRun, songBarLine, jumpTo, setHold, sectionVolTargets, sectionVolRamps, sectionDrumDensity } from '@/lib/songs'
 import { needsSwitch, switchMaterial, captureInto, dropMaterial } from '@/lib/song-material'
 import { keyLabel, keyRoot, keyFile, progressionKeyDetail, NOTE_NAMES as KEY_NOTE_NAMES } from '@/lib/chord-key'
 import { externalGrid } from '@/core/midi/external-grid'
@@ -890,6 +891,8 @@ function createRigEngine() {
     songPaused.value = null
     pausing = false
     for (const x of songPcTimers) clearTimeout(x); songPcTimers = []
+    clearTimeout(songTempoTimer); songTempoTimer = null
+    songAudioStopAll()
     panic(s)
     chordStore.latchStep = null
     uiStore.seqDecoupled = false
@@ -1483,6 +1486,52 @@ function createRigEngine() {
       else for (const ev of rowPadEvents(id, from, a.playing, running ? 16 : 0)) dispatchRig(ev)
     }
   }
+  // ── The song's other lanes: Tracks / Samples (core/engines/song-audio.js, on the bar line, audio clock) and
+  // Capture (the Rig's capture pads C1–C8, rig-captures.js). Stopped transport: they start on its first bar line.
+  const songAudio = useSongAudio()
+  const pendingAudio = {} // lane → { slot, ref }: waiting for the transport's first bar line
+  /** Every lane of the song to its slot on the next bar line: the Rig's apps, the audio lanes, the Capture lane. */
+  /** fromTop: the song (re)starting at its first section — a Track runs from its start again. */
+  /** bpm: the tempo on that bar line (the section's): a Track on Varispeed plays at its speed. */
+  function songLaunch(lanes, starts = [], partial = false, forceArm = false, fromTop = false, bpm = null) {
+    launchLanes(lanes, starts, partial, forceArm)
+    songAudioLanes(lanes, starts, partial, forceArm || arming(), fromTop, bpm)
+  }
+  function songAudioLanes(lanes, starts = [], partial = false, armed = false, fromTop = false, bpm = null) {
+    const song = songOf(songRun.value) ?? currentSong()
+    const b = gridRunning() ? nextBarLine(performance.now()) : null
+    const tempo = bpm ?? s.clock.bpm
+    for (const l of AUDIO_SONG_LANES) {
+      if (partial && !(l in lanes)) continue
+      const slot = lanes[l] ?? null
+      const ref = slot !== null ? song?.audio?.[l]?.[slot] ?? null : null
+      const cur = songAudio.state[l]
+      // a Track runs across clips / sections: the same slot goes on (from its start again after another slot, a gap,
+      // with Retrigger on at every clip, and when the song starts over)
+      const goesOn = l === 'track' ? !ref?.retrigger && !fromTop : !starts.includes(l)
+      const rate = l === 'track' ? trackRate(ref, tempo) : 1
+      if (ref && cur.slot === slot && cur.id === ref.id && goesOn && !pendingAudio[l]) { if (l === 'track') songAudio.setRate(l, rate, b ? b.t : performance.now()); continue }
+      if (!ref && cur.slot === null && !pendingAudio[l]) continue
+      if (ref) songAudio.preload(l, ref)
+      if (!ref) { delete pendingAudio[l]; songAudio.stop(l, b ? b.t : performance.now()); continue }
+      if (armed && !b) { pendingAudio[l] = { slot, ref, rate }; continue }
+      delete pendingAudio[l]
+      songAudio.play(l, slot, ref, b ? b.t : performance.now(), rate)
+    }
+    if (!partial || 'capture' in lanes) captures.playOnly(lanes.capture ?? null)
+  }
+  /** The transport started: the audio lanes waiting start on its first bar line (gone by a frame: late, at their point). */
+  function songAudioFrame(now) {
+    if (!Object.keys(pendingAudio).length || !gridRunning()) return
+    const b = nextBarLine(now)
+    if (!b || !(b.barMs > 0)) return
+    const at = b.t - now > b.barMs * 0.5 ? b.t - b.barMs : b.t
+    for (const [l, p] of Object.entries(pendingAudio)) { delete pendingAudio[l]; songAudio.play(l, p.slot, p.ref, at, p.rate) }
+  }
+  function songAudioStopAll() {
+    for (const l of Object.keys(pendingAudio)) delete pendingAudio[l]
+    songAudio.stopAll()
+  }
   /** The CC 7 per channel of the song's section playing (or launched next): {} with no song / volumes. */
   function songTargets() {
     const r = songRun.value
@@ -1567,7 +1616,9 @@ function createRigEngine() {
       if (armNow) r.waitPlay = true
       if (r.bar === 0) songArmed = armNow || !gridRunning() // no bar line to wait for: its bar 1 is now
       const at1 = lanesAt(song.sections[st.index], 1)
-      launchLanes(at1.lanes, at1.starts, false, armNow)
+      const bpm = sectionBpm(song, song.sections[st.index])
+      songTempo(bpm, r.bar === 0 && (armNow || !gridRunning()))
+      songLaunch(at1.lanes, at1.starts, false, armNow, st.index === 0, bpm)
       songClipPresets(song.sections[st.index], 1, null)
       songVolumes(song.sections[st.index])
       songChordSteps(song.sections[st.index], r.bar === 0 && !gridRunning())
@@ -1587,7 +1638,7 @@ function createRigEngine() {
       // End Next: the session's next song on the bar line; the last one stops
       const nx = songLib.songs[songLib.songs.findIndex(x => x.id === song.id) + 1]
       r.stopping = true
-      if (!nx) { launchLanes(emptyLanes()); s.display = `Song ${song.name}: the last song — ends on the next bar line`; return }
+      if (!nx) { songLaunch(emptyLanes()); s.display = `Song ${song.name}: the last song — ends on the next bar line`; return }
       // its fade-out ran to its end (End Next fades as End Stop): the gap, then the next one
       r.nextSongId = nx.id
       r.nextIndex = 0
@@ -1596,7 +1647,7 @@ function createRigEngine() {
       // no gap, the same slots: the next song takes the lanes on the bar line this one ends on
       const nx = r.nextSongId ? songLib.songs.find(x => x.id === r.nextSongId) : null
       if (nx && songXfadeBars.value === 0 && !needsSwitch(songLib, nx)) { startAfter(nx, r.nextIndex ?? 0); return }
-      launchLanes(emptyLanes())
+      songLaunch(emptyLanes())
       s.display = r.nextSongId ? `Song ${song.name}: ends on the next bar line — then ${songLib.songs.find(x => x.id === r.nextSongId)?.name ?? 'the next song'} (its own material loads)` : `Song ${song.name}: ends on the next bar line`
     } else {
       songRun.value = null
@@ -1657,7 +1708,7 @@ function createRigEngine() {
     const fire = () => {
       songClipTimer = null
       if (songRun.value !== r || r.index !== song.sections.indexOf(sec) || r.bar !== bar || r.stopping || r.queued !== null) return
-      launchLanes(lanes, nxt.starts, true)
+      songLaunch(lanes, nxt.starts, true, false, false, sectionBpm(song, sec))
       songClipPresets(sec, next, Object.keys(lanes))
       if ('chord' in lanes && lanes.chord !== null) songChordSteps(sec)
     }
@@ -1714,6 +1765,18 @@ function createRigEngine() {
     at(b.t - 30)
     at(b.t + 25)
   }
+  // ── The song sets the tempo (lib/songs.ts sectionBpm): a section's own, else the song's — on its first bar line
+  // (sent just before it, as the Drum Density); not started yet (armed, stopped): at once, before the Play.
+  let songTempoTimer = null
+  onScopeDispose(() => clearTimeout(songTempoTimer))
+  function songTempo(bpm, now = false) {
+    clearTimeout(songTempoTimer); songTempoTimer = null
+    if (!(bpm > 0) || Math.abs(bpm - s.clock.bpm) < 0.05) return
+    const b = !now && gridRunning() ? nextBarLine(performance.now()) : null
+    const set = () => { songTempoTimer = null; const said = setTempo(bpm); if (said) s.display = `Song tempo · ${said}` }
+    if (b) songTempoTimer = setTimeout(set, Math.max(0, b.t - 15 - performance.now()))
+    else set()
+  }
   /** A bar line went by under the song. */
   function songLineBy(r, song, b) {
     songStep(songBarLine(r, song))
@@ -1726,6 +1789,7 @@ function createRigEngine() {
     if (songIdle.value !== idle) songIdle.value = idle
     if (idle && materialPending.value) syncMaterial()
     if (pendingNext.value && !songRun.value) loadPendingNext()
+    songAudioFrame(performance.now())
     const r = songRun.value
     if (!r) return
     const song = songOf(r)
@@ -1740,6 +1804,7 @@ function createRigEngine() {
       // the transport stopped under the song (Live's Stop, Stop): the song is over
       // Pause: Play goes on from its section; any other Stop rewinds (Play: from the start)
       if (songLine !== null && r.bar > 0) {
+        songAudioStopAll()
         songRun.value = null
         if (pausing) { songPaused.value = { songId: r.songId, index: r.index }; s.display = `Song ${song.name}: paused — Play: on from ${song.sections[r.index]?.name ?? 'its section'}` }
         else { songPaused.value = null; s.display = `Song ${song.name}: stopped — Play: from the start` }
@@ -1773,7 +1838,7 @@ function createRigEngine() {
     if (!sec) return
     // the lanes as on the next bar (the section launched next: its bar 1)
     const bar = r.queued !== null ? 1 : r.bar < sec.bars ? r.bar + 1 : 1
-    launchLanes(lanesAt(sec, bar).lanes)
+    songLaunch(lanesAt(sec, bar).lanes)
     s.display = `Song: ${sec.name} changed — on the next bar`
   })
   // A volume changed in the section playing: at once (by ear); in the one launched next: on its bar line
@@ -1942,7 +2007,9 @@ function createRigEngine() {
     songPreview.value = { songId: song.id, index: c.index, lane: c.lane, start: c.start }
     const lanes = emptyLanes()
     lanes[c.lane] = at.clip.slot
-    launchLanes(lanes, [c.lane], false, !running) // stopped: armed, it starts with the transport
+    const pbpm = sectionBpm(song, sec)
+    if (!running) songTempo(pbpm, true)
+    songLaunch(lanes, [c.lane], false, !running, false, pbpm ?? s.clock.bpm) // stopped: armed, it starts with the transport
     songClipPresets(sec, c.start, [c.lane])
     if (c.lane === 'chord') songChordSteps(sec, !gridRunning())
     if (!running) previewStart()
@@ -1969,6 +2036,7 @@ function createRigEngine() {
     stopAll()
     for (const id of activeSlotRows()) { cancelWait(id); rigArmed[id] = null }
     if (!live.value) { stopClock(s); restartTimer() }
+    songAudioStopAll()
     songPreview.value = null
     s.display = 'Preview: stopped'
   }
@@ -2033,12 +2101,16 @@ function createRigEngine() {
     else if (c.cmd === 'resume') togglePlay()
     else if (c.cmd === 'hold') holdSong(c.on)
     else if (c.cmd === 'jump') jumpSong(c.index)
-    else if (c.cmd === 'mute') muteLane(c.lane)
+    else if (c.cmd === 'mute') { if (AUDIO_SONG_LANES.includes(c.lane)) songAudio.toggleMute(c.lane); else muteLane(c.lane) }
     else if (c.cmd === 'solo') toggleSolo(s, c.lane)
   }, { immediate: true })
   // the lanes' Mute / Solo for the Session Browser (the Rig's own state, kept with the Rig panel closed)
-  watch(() => s.apps.map(a => `${a.id}:${a.muted ? 1 : 0}${a.solo ? 1 : 0}`).join(','), () => {
-    rigLaneMutes.value = Object.fromEntries(s.apps.filter(a => SONG_LANES.includes(a.id)).map(a => [a.id, { muted: !!a.muted, solo: !!a.solo }]))
+  watch(() => s.apps.map(a => `${a.id}:${a.muted ? 1 : 0}${a.solo ? 1 : 0}`).join(',') + AUDIO_SONG_LANES.map(l => songAudio.state[l].muted ? 1 : 0).join(''), () => {
+    rigLaneMutes.value = {
+      ...Object.fromEntries(s.apps.filter(a => SONG_LANES.includes(a.id)).map(a => [a.id, { muted: !!a.muted, solo: !!a.solo }])),
+      // the audio lanes' Mute (song-audio.js; no Solo there)
+      ...Object.fromEntries(AUDIO_SONG_LANES.map(l => [l, { muted: songAudio.state[l].muted, solo: false }])),
+    }
   }, { immediate: true })
   onScopeDispose(() => { rigLaneMutes.value = {} })
 

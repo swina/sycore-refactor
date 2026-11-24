@@ -22,7 +22,7 @@ import { rowLane, chordSnapshot, drumSnapshot, seqSnapshot, bassSnapshot } from 
 import {
   songLibrary, songRun, songCommand, songPaused, songPreview, songXfadeBars, setSongXfade, SONG_XFADE_OPTIONS, rigLaneMutes, SONG_FADE_OPTIONS, songChannels, songVolKeys, SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, laneClips, hasOwnClips, setLaneClips, clipFits, setSectionBars, VOL_BAR_OPTIONS,
   MAX_SECTIONS, newSong, newSection, exampleSong, songBars, sectionStartBar, barsLeft,
-  clipAt, samePreset, setClipPreset, clearClipPresets, isPresetEcho,
+  clipAt, samePreset, setClipPreset, clearClipPresets, isPresetEcho, AUDIO_SONG_LANES, songAudioOf, okBpm,
 } from '@/lib/songs'
 import {
   sessions, currentSession, pendingSession, loadSession, newSession, renameSession, duplicateSession, deleteSession,
@@ -30,6 +30,11 @@ import {
 } from '@/core/sessions'
 import { captureInto, dropMaterial, copyMaterial } from '@/lib/song-material'
 import { slotName, promptSlotName, labelOf, setSlotName, SLOT_NAME_MAX } from '@/lib/slot-names'
+import { saveSongSample } from '@/lib/song-samples'
+import { useRigCaptures } from '@/core/engines/rig-captures'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { useArpStore as useTempoStore } from '@/stores/useArpStore'
+import { collection, query, orderBy, getDocs, db } from '@/lib/idb'
 
 const emit = defineEmits(['close'])
 const { panelStyle, onDragStart, onResizeStart, isMinimized, toggleMinimize, bringToFront, maximize } = useDraggableResizable({
@@ -169,8 +174,20 @@ const total = computed(() => (song.value ? songBars(song.value) : 0))
 
 // slot names per lane: Bass is the Sequencer's Bass lane, or the Drum Machine's basslines
 const nameKey = l => (l === 'bass' ? (rowLane('bass') ? 'bass' : 'dmBass') : l)
-const slotLabel = (l, v) => (v == null ? '–' : labelOf(slotName(nameKey(l), v), v))
-const nameOf = (l, v) => (v == null ? '' : slotName(nameKey(l), v))
+// The song's own lanes: Tracks / Samples (song.audio, their slots the song's) and Capture (the Rig's pads C1–C8)
+const captures = useRigCaptures()
+const isAudioLane = l => AUDIO_SONG_LANES.includes(l)
+const ownLane = l => isAudioLane(l) || l === 'capture'
+const audioSlot = (l, v) => song.value?.audio?.[l]?.[v] ?? null
+const slotLetter = (l, v) => (l === 'capture' ? `C${v + 1}` : SONG_SLOTS[v])
+const nameOf = (l, v) => {
+  if (v == null) return ''
+  if (l === 'track') { const t = audioSlot(l, v); return t ? `${t.label}${t.retrigger ? ' ↻' : ''}` : '' }
+  if (l === 'sample') { const s = audioSlot(l, v); return s ? `${s.name}${s.mode === 'loop' ? ' ⟳' : ''}` : '' }
+  if (l === 'capture') return ''
+  return slotName(nameKey(l), v)
+}
+const slotLabel = (l, v) => (v == null ? '–' : ownLane(l) ? nameOf(l, v) || slotLetter(l, v) : labelOf(slotName(nameKey(l), v), v))
 
 // ── Volumes per channel (% of the channel's Max in the Rig's Fade modal), per section ──
 const chName = r => `${r.device.replace(/\s*\(.*\)$/, '')} ch${r.ch + 1}`
@@ -187,7 +204,72 @@ const filled = computed(() => ({
   seq: seqSnapshot(lanes.main.banks, lanes.main.activeBankIndex, false, null).filled,
   bass: rowLane('bass') ? seqSnapshot(lanes.bass.banks, lanes.bass.activeBankIndex, false, null).filled : bassSnapshot(dm.basslineSequences, true, dm.activeSequence, false, null).filled,
   arp: rowLane('arp') ? seqSnapshot(lanes.arp.banks, lanes.arp.activeBankIndex, false, null).filled : Array(8).fill(true),
+  track: Array.from({ length: 8 }, (_, v) => !!audioSlot('track', v)),
+  sample: Array.from({ length: 8 }, (_, v) => !!audioSlot('sample', v)),
+  capture: Array.from({ length: 8 }, (_, v) => !!captures.state.clips[v]),
 }))
+
+// ── The Tracks / Samples slots (right-click): a library track · a sound from the Sound Folder Browser, One-shot / Loop ──
+const authStore = useAuthStore()
+const tempoStore = useTempoStore()
+const audioMenu = ref(null) // { lane, v, x, y }
+const libTracks = ref([])
+async function openAudioMenu(e, l, v) {
+  audioMenu.value = { lane: l, v, x: Math.min(e.clientX, window.innerWidth - 300), y: Math.min(e.clientY, window.innerHeight - 340) }
+  if (l !== 'track') return
+  const uid = authStore.user?.uid
+  if (!uid) { libTracks.value = []; return }
+  try {
+    const snap = await getDocs(query(collection(db, 'users', uid, 'backing_tracks'), orderBy('createdAt', 'desc')))
+    const ts = []
+    snap.forEach(d => { const x = d.data(); ts.push({ id: d.id, label: x.label || 'Track', bpm: x.bpm ?? null, duration: x.duration ?? null }) })
+    libTracks.value = ts
+  } catch { libTracks.value = [] }
+}
+function setTrackSlot(t) {
+  const m = audioMenu.value
+  if (!m || !song.value) return
+  const prev = songAudioOf(song.value).track[m.v]
+  songAudioOf(song.value).track[m.v] = t ? { id: t.id, label: t.label, bpm: t.bpm, duration: t.duration, ...(prev?.retrigger ? { retrigger: true } : {}), ...(prev?.fit === 'varispeed' && t.bpm ? { fit: 'varispeed' } : {}) } : null
+  audioMenu.value = null
+  if (t) say(`Tracks ${SONG_SLOTS[m.v]}: ${t.label}`)
+}
+const tempoOff = t => !!t?.bpm && Math.abs(t.bpm - (song.value?.bpm || tempoStore.arpBpm || 120)) > 0.5
+/** A BPM typed (empty: none); the song's / a section's tempo. */
+const bpmIn = v => { const n = okBpm(Number(String(v).replace(',', '.'))); return String(v).trim() === '' ? null : n }
+function setSongBpm(v) { if (!song.value) return; const n = bpmIn(v); if (n == null) delete song.value.bpm; else song.value.bpm = n }
+function setSectionBpm(v) { if (!section.value) return; const n = bpmIn(v); if (n == null) delete section.value.bpm; else section.value.bpm = n }
+function setTrackBpm(v) { const t = audioMenu.value && audioSlot('track', audioMenu.value.v); if (t) t.bpm = bpmIn(v) }
+function scaleTrackBpm(k) { const t = audioMenu.value && audioSlot('track', audioMenu.value.v); if (t?.bpm) t.bpm = okBpm(t.bpm * k) ?? t.bpm }
+function pickSampleFile() {
+  const m = audioMenu.value
+  if (!m || !song.value) return
+  const s = song.value, v = m.v
+  audioMenu.value = null
+  ui.soundFolderAssignTarget = {
+    label: `Song ${s.name} · Samples ${SONG_SLOTS[v]}`,
+    onAssign: async (file) => {
+      const f = await file.handle.getFile()
+      const id = await saveSongSample(f)
+      const prev = songAudioOf(s).sample[v]
+      songAudioOf(s).sample[v] = { id, name: file.name.replace(/\.[^.]+$/, ''), mode: prev?.mode ?? 'oneshot' }
+      ui.soundFolderAssignTarget = null
+      ui.isSoundFolderBrowserOpen = false
+      say(`Samples ${SONG_SLOTS[v]}: ${file.name}`)
+    },
+  }
+  ui.isSoundFolderBrowserOpen = true
+}
+function setSampleMode(mode) {
+  const m = audioMenu.value
+  const s = m && audioSlot('sample', m.v)
+  if (s) s.mode = mode
+}
+function clearSampleSlot() {
+  const m = audioMenu.value
+  if (m && song.value) songAudioOf(song.value).sample[m.v] = null
+  audioMenu.value = null
+}
 const chordCount = v => (v == null ? 0 : cp.slots[v]?.numSteps ?? 0)
 /** The chords of a section: its Chord slot's (as far as its Steps go). */
 function chordsOf(sec) {
@@ -697,13 +779,14 @@ const slotClass = (l, v, on) => on
             <button v-for="(L, v) in SONG_SLOTS" :key="L" draggable="true" @dragstart="onSlotDragStart($event, l, v)" @dragend="drag = null; dropCell = null"
                     class="relative h-9 px-0.5 rounded border flex items-center justify-center cursor-grab"
                     :class="slotClass(l, v, false)"
-                    :title="`${laneLabel(l)} ${slotLabel(l, v)}${filled[l]?.[v] ? '' : ' (empty)'} — drag into a section · right-click: name`"
-                    @click="selLane === l && setClipSlot(v)" @contextmenu.prevent="promptSlotName(nameKey(l), v, `${laneLabel(l)} slot`)">
+                    :title="`${laneLabel(l)} ${slotLabel(l, v)}${filled[l]?.[v] ? '' : ' (empty)'} — drag into a section · right-click: ${l === 'track' ? 'a library track' : l === 'sample' ? 'a sound, One-shot / Loop' : l === 'capture' ? 'record it with Capt (Launchpad / Rig)' : 'name'}`"
+                    @click="selLane === l && setClipSlot(v)"
+                    @contextmenu.prevent="isAudioLane(l) ? openAudioMenu($event, l, v) : l === 'capture' ? null : promptSlotName(nameKey(l), v, `${laneLabel(l)} slot`)">
               <template v-if="nameOf(l, v)">
-                <span class="absolute top-0.5 left-1 text-[8px] font-mono font-bold opacity-70">{{ L }}</span>
+                <span class="absolute top-0.5 left-1 text-[8px] font-mono font-bold opacity-70">{{ slotLetter(l, v) }}</span>
                 <span class="mt-1.5 text-[9px] leading-[1.1] font-semibold text-center break-words overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical">{{ nameOf(l, v) }}</span>
               </template>
-              <span v-else class="text-[11px] font-mono font-bold">{{ L }}</span>
+              <span v-else class="text-[11px] font-mono font-bold">{{ slotLetter(l, v) }}</span>
             </button>
           </div>
         </div>
@@ -731,6 +814,12 @@ const slotClass = (l, v, on) => on
             <span class="px-2 py-1 text-neutral-500 uppercase tracking-wider border-r border-white/15">In</span>
             <button v-for="(v, i) in SONG_FADE_OPTIONS" :key="String(v)" class="px-2 py-1" :class="[i ? 'border-l border-white/15' : '', (song.fadeIn ?? 'rig') === v ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10']" @click="song.fadeIn = v">{{ fadeLabel(v) }}</button>
           </div>
+          <label class="flex items-center gap-1 rounded border border-white/15 px-1.5 py-0.5 text-[10px] font-bold"
+                 title="The song's tempo: set when it starts (and between songs); a section can have its own. Empty: the tempo as it is">
+            <span class="text-neutral-500 uppercase tracking-wider">BPM</span>
+            <input type="text" inputmode="decimal" class="w-12 bg-black/40 rounded px-1 py-0.5 font-mono text-white text-center" :value="song.bpm ?? ''" :placeholder="String(Math.round(tempoStore.arpBpm || 120))" @change="setSongBpm($event.target.value)" />
+            <button v-if="song.bpm == null" class="text-neutral-400 hover:text-white" title="The tempo now becomes the song's" @click="song.bpm = okBpm(tempoStore.arpBpm)">now</button>
+          </label>
           <div class="flex rounded border border-white/15 overflow-hidden text-[10px] font-bold"
                title="Between two songs (every song): the song before fades out (its Out), these bars of silence, then the next fades in (its In) — Cut: no gap, the next song starts on the bar line the one before ends on (its own material needs a gap: it loads there)">
             <span class="px-2 py-1 text-neutral-500 uppercase tracking-wider border-r border-white/15">X-fade</span>
@@ -802,9 +891,9 @@ const slotClass = (l, v, on) => on
             <span class="w-[61px] shrink-0 flex flex-col justify-center gap-1">
               <span class="text-[10px] font-semibold uppercase tracking-wider" :class="laneSilenced(l) ? 'text-neutral-600 line-through' : 'text-neutral-300'">{{ laneLabel(l) }}</span>
               <span class="flex gap-1">
-                <button class="w-6 h-5 rounded border text-[9px] font-bold" :class="rigLaneMutes[l]?.muted ? 'bg-rose-500 border-rose-300 text-black' : 'border-white/15 text-neutral-400 hover:bg-white/10'"
+                <button v-if="l !== 'capture'" class="w-6 h-5 rounded border text-[9px] font-bold" :class="rigLaneMutes[l]?.muted ? 'bg-rose-500 border-rose-300 text-black' : 'border-white/15 text-neutral-400 hover:bg-white/10'"
                         title="Mute (the Rig's, live: not saved in the song) — the lane goes on playing silently, back in time when unmuted" @click="command({ cmd: 'mute', lane: l })">M</button>
-                <button class="w-6 h-5 rounded border text-[9px] font-bold" :class="rigLaneMutes[l]?.solo ? 'bg-sky-500 border-sky-300 text-black' : 'border-white/15 text-neutral-400 hover:bg-white/10'"
+                <button v-if="!ownLane(l)" class="w-6 h-5 rounded border text-[9px] font-bold" :class="rigLaneMutes[l]?.solo ? 'bg-sky-500 border-sky-300 text-black' : 'border-white/15 text-neutral-400 hover:bg-white/10'"
                         title="Solo (the Rig's, live: not saved in the song)" @click="command({ cmd: 'solo', lane: l })">S</button>
               </span>
             </span>
@@ -834,7 +923,7 @@ const slotClass = (l, v, on) => on
                    @click.stop
                    @pointerdown="onClipPointerDown($event, i, l, k, 'move')" @pointermove="onClipPointerMove" @pointerup="onClipPointerUp" @pointercancel="clipDrag = null">
                 <span class="flex items-baseline justify-between gap-1 text-[9px] text-sky-200/70">
-                  <span class="whitespace-nowrap">{{ laneLabel(l) }} · {{ SONG_SLOTS[c.slot] }}<template v-if="hasOwnClips(sec, l)"> · {{ c.start }}–{{ c.start + c.len - 1 }}</template></span>
+                  <span class="whitespace-nowrap">{{ laneLabel(l) }} · {{ slotLetter(l, c.slot) }}<template v-if="hasOwnClips(sec, l)"> · {{ c.start }}–{{ c.start + c.len - 1 }}</template></span>
                   <span class="font-mono">{{ clipExtra(sec, l) }}</span>
                 </span>
                 <span class="min-h-0 text-[12px] font-medium leading-snug text-sky-50 break-words overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical">{{ slotLabel(l, c.slot) }}</span>
@@ -875,7 +964,7 @@ const slotClass = (l, v, on) => on
                      :value="nameOf(selLane, clipOf.slot)"
                      @change="setSlotName(nameKey(selLane), clipOf.slot, $event.target.value)"
                      @keydown.enter="$event.target.blur()" @keydown.stop />
-              <span class="font-mono text-[10px] text-sky-200">-{{ SONG_SLOTS[clipOf.slot] }}</span>
+              <span class="font-mono text-[10px] text-sky-200">-{{ slotLetter(selLane, clipOf.slot) }}</span>
             </label>
             <span v-if="clipOf" class="flex flex-wrap items-center gap-1.5 text-[10px] text-neutral-500"
                   title="The clip plays its slot from the pattern's start (looping if shorter) on these bars of the section; silent outside its clips">
@@ -933,6 +1022,10 @@ const slotClass = (l, v, on) => on
             <span class="flex rounded border border-white/10 overflow-hidden">
               <button v-for="b in VOL_BAR_OPTIONS" :key="b" class="px-1.5 py-0.5 font-mono" :class="section.volBars === b ? 'bg-white/20 text-white' : 'hover:bg-white/10'" @click="section.volBars = b">{{ barLabel(b) }}</button>
             </span>
+            · BPM
+            <input type="text" inputmode="decimal" class="w-12 bg-black/40 border border-white/10 rounded px-1 py-0.5 font-mono text-white text-center"
+                   :title="'This section\'s tempo, from its first bar line — empty: the song\'s' + (song.bpm ? ` (${song.bpm})` : ' (none: the tempo as it is)')"
+                   :value="section.bpm ?? ''" :placeholder="song.bpm ? String(song.bpm) : '—'" @change="setSectionBpm($event.target.value)" />
             <button :class="[btn, 'border-white/15 hover:bg-white/10']" :disabled="sel === 0 || playingHere" title="Move left" @click="moveSection(-1)"><ArrowLeft class="w-3 h-3" /></button>
             <button :class="[btn, 'border-white/15 hover:bg-white/10']" :disabled="sel === song.sections.length - 1 || playingHere" title="Move right" @click="moveSection(1)"><ArrowRight class="w-3 h-3" /></button>
             <button :class="[btn, 'border-white/15 hover:bg-white/10']" :disabled="song.sections.length >= MAX_SECTIONS" title="Add a section after this one (same clips)" @click="addSection"><Plus class="w-3 h-3 inline" /></button>
@@ -943,6 +1036,59 @@ const slotClass = (l, v, on) => on
       </div>
       <div v-else class="flex-1 flex items-center justify-center text-[11px] text-neutral-500">Open a song (or make one with New) to see it here.</div>
     </div>
+    <!-- Tracks / Samples slot (right-click in the Slots pane) -->
+    <Teleport to="body"><template v-if="audioMenu">
+      <div class="fixed inset-0 z-[10000]" @click="audioMenu = null" @contextmenu.prevent="audioMenu = null"></div>
+      <div class="fixed z-[10001] w-[280px] rounded-lg border border-white/15 bg-neutral-900/95 shadow-2xl p-2 flex flex-col gap-1.5 text-[11px]"
+           :style="{ left: `${audioMenu.x}px`, top: `${audioMenu.y}px` }">
+        <div class="text-[10px] font-black uppercase tracking-wider text-neutral-400">{{ laneLabel(audioMenu.lane) }} {{ SONG_SLOTS[audioMenu.v] }} · {{ song?.name }}</div>
+        <template v-if="audioMenu.lane === 'track'">
+          <div class="max-h-60 overflow-y-auto flex flex-col gap-0.5">
+            <button v-for="t in libTracks" :key="t.id" class="text-left px-2 py-1 rounded hover:bg-white/10 flex justify-between gap-2"
+                    :class="audioSlot('track', audioMenu.v)?.id === t.id ? 'bg-sky-500/25 text-sky-100' : 'text-neutral-200'"
+                    :title="tempoOff(t) ? `${t.bpm} BPM — the song's tempo is ${tempoStore.arpBpm || 120} (no time-stretch)` : t.label"
+                    @click="setTrackSlot(t)">
+              <span class="truncate">{{ t.label }}</span>
+              <span v-if="t.bpm" class="shrink-0 font-mono" :class="tempoOff(t) ? 'text-amber-300' : 'text-neutral-500'">{{ Math.round(t.bpm) }}</span>
+            </button>
+            <span v-if="!libTracks.length" class="px-2 py-1 text-neutral-500">No tracks in the library (Tracks Player: add some)</span>
+          </div>
+          <div v-if="audioSlot('track', audioMenu.v)" class="flex items-center gap-1.5">
+            <span class="text-[10px] uppercase tracking-wider text-neutral-500">BPM</span>
+            <input type="text" inputmode="decimal" class="w-14 bg-black/40 border border-white/10 rounded px-1 py-0.5 font-mono text-white text-center"
+                   :class="tempoOff(audioSlot('track', audioMenu.v)) ? 'text-amber-300' : ''" title="The track's tempo (detection is often off: ×2 / ÷2, or type it)"
+                   :value="audioSlot('track', audioMenu.v).bpm ?? ''" placeholder="?" @change="setTrackBpm($event.target.value)" />
+            <button class="px-1.5 py-0.5 rounded border border-white/10 font-mono hover:bg-white/10" @click="scaleTrackBpm(2)">×2</button>
+            <button class="px-1.5 py-0.5 rounded border border-white/10 font-mono hover:bg-white/10" @click="scaleTrackBpm(0.5)">÷2</button>
+          </div>
+          <div v-if="audioSlot('track', audioMenu.v)" class="flex items-center gap-1.5">
+            <span class="text-[10px] uppercase tracking-wider text-neutral-500">Fit</span>
+            <div class="flex flex-1 rounded border border-white/15 overflow-hidden font-bold">
+              <button class="flex-1 px-2 py-1" :class="audioSlot('track', audioMenu.v).fit !== 'varispeed' ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'" title="Off: at its own speed (free intros, ambient, unsteady tracks)" @click="audioSlot('track', audioMenu.v).fit = 'off'">Off</button>
+              <button class="flex-1 px-2 py-1 border-l border-white/15" :class="audioSlot('track', audioMenu.v).fit === 'varispeed' ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'"
+                      :disabled="!audioSlot('track', audioMenu.v).bpm" title="Varispeed: its speed follows the song's tempo (song BPM ÷ its BPM; the pitch moves too — fine for small gaps). Needs its BPM" @click="audioSlot('track', audioMenu.v).fit = 'varispeed'">Varispeed</button>
+            </div>
+          </div>
+          <div v-if="audioSlot('track', audioMenu.v)" class="flex items-center gap-1.5">
+            <span class="text-[10px] uppercase tracking-wider text-neutral-500">Retrigger</span>
+            <div class="flex flex-1 rounded border border-white/15 overflow-hidden font-bold">
+              <button class="flex-1 px-2 py-1" :class="!audioSlot('track', audioMenu.v).retrigger ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'" title="Off: it runs on while this slot follows, clip after clip, section after section (the song starting over: from its start)" @click="audioSlot('track', audioMenu.v).retrigger = false">Off</button>
+              <button class="flex-1 px-2 py-1 border-l border-white/15" :class="audioSlot('track', audioMenu.v).retrigger ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'" title="On: from its start at every clip" @click="audioSlot('track', audioMenu.v).retrigger = true">On</button>
+            </div>
+          </div>
+          <button v-if="audioSlot('track', audioMenu.v)" class="px-2 py-1 rounded border border-white/10 text-neutral-300 hover:bg-white/10" @click="setTrackSlot(null)">Clear the slot</button>
+        </template>
+        <template v-else>
+          <span class="px-1 text-neutral-200 truncate">{{ audioSlot('sample', audioMenu.v)?.name ?? 'Empty' }}</span>
+          <button class="px-2 py-1 rounded border border-sky-400/40 text-sky-200 hover:bg-sky-500/20" @click="pickSampleFile">Pick from the Sound Folder…</button>
+          <div v-if="audioSlot('sample', audioMenu.v)" class="flex rounded border border-white/15 overflow-hidden font-bold">
+            <button class="flex-1 px-2 py-1" :class="audioSlot('sample', audioMenu.v).mode === 'oneshot' ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'" title="Once, from the clip's bar line" @click="setSampleMode('oneshot')">One-shot</button>
+            <button class="flex-1 px-2 py-1 border-l border-white/15" :class="audioSlot('sample', audioMenu.v).mode === 'loop' ? 'bg-white/20 text-white' : 'text-neutral-400 hover:bg-white/10'" title="Again and again until the clip ends" @click="setSampleMode('loop')">Loop</button>
+          </div>
+          <button v-if="audioSlot('sample', audioMenu.v)" class="px-2 py-1 rounded border border-white/10 text-neutral-300 hover:bg-white/10" @click="clearSampleSlot">Clear the slot</button>
+        </template>
+      </div>
+    </template></Teleport>
     <ResizeHandles :start="onResizeStart" />
   </div>
 </template>

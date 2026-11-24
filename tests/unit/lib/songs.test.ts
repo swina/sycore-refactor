@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   exampleSong, songBars, sectionStartBar, nextSectionIndex, parseLibrary, parseSong,
   startRun, songBarLine, jumpTo, setHold, newSection, songVolKeys, sectionVolTargets, sectionVolRamps, sectionDrumDensity, planToSong, type Song,
-  setClipPreset, clearClipPresets, samePreset, markPresetSent, isPresetEcho,
+  setClipPreset, clearClipPresets, songAudioOf, sectionBpm, trackRate, samePreset, markPresetSent, isPresetEcho,
   songFadeBars, barsToEnd, fadeStopLine, laneClips, hasOwnClips, setLaneClips, lanesAt, clipAt, normalizeClips, clipFits, setSectionBars,
 } from '@/lib/songs'
 
@@ -15,7 +15,7 @@ describe('songs', () => {
     expect(s.sections.map(x => x.name)).toEqual(['Intro', 'Build', 'Theme', 'Bridge', 'Theme II', 'Outro'])
     expect(songBars(s)).toBe(72)
     expect(sectionStartBar(s, 2)).toBe(25)
-    expect(s.sections[2].lanes).toEqual({ drum: 2, chord: 2, seq: 2, bass: 1, arp: null })
+    expect(s.sections[2].lanes).toEqual({ drum: 2, chord: 2, seq: 2, bass: 1, arp: null, track: null, capture: null, sample: null })
   })
 
   it('end: stop or loop', () => {
@@ -27,7 +27,7 @@ describe('songs', () => {
     const p = parseSong({ name: '', sections: [{ bars: 999, lanes: { drum: 9, chord: 2 } }] })!
     expect(p.name).toBe('Song')
     expect(p.sections[0].bars).toBe(64)
-    expect(p.sections[0].lanes).toEqual({ drum: null, chord: 2, seq: null, bass: null, arp: null })
+    expect(p.sections[0].lanes).toEqual({ drum: null, chord: 2, seq: null, bass: null, arp: null, track: null, capture: null, sample: null })
     const lib = parseLibrary(null)
     expect(lib.songs[0].name).toBe('Nightline')
     expect(lib.currentId).toBe(lib.songs[0].id)
@@ -155,6 +155,33 @@ describe('songs', () => {
     expect(parseSong({ fadeIn: 'x', sections: [] })!.fadeIn).toBe('rig')
   })
 
+  it('the Tracks / Samples slots: the song\'s own, parsed back (bad ones dropped)', () => {
+    const s = song([4])
+    const a = songAudioOf(s)
+    a.track[0] = { id: 't1', label: 'Groove', bpm: 98, duration: 180 }
+    a.sample[2] = { id: 's1', name: 'Rise', mode: 'loop' }
+    const back = parseSong(JSON.parse(JSON.stringify({ ...s, audio: { ...a, sample: [...a.sample.slice(0, 3), { name: 'no id' }] } })))!
+    expect(back.audio!.track[0]).toEqual({ id: 't1', label: 'Groove', bpm: 98, duration: 180 })
+    expect(parseSong({ sections: [], audio: { track: [{ id: 't', label: 'T', retrigger: true }] } })!.audio!.track[0]!.retrigger).toBe(true)
+    expect(back.audio!.sample[2]).toEqual({ id: 's1', name: 'Rise', mode: 'loop' })
+    expect(back.audio!.sample[3]).toBeNull()
+    expect(parseSong({ sections: [] })!.audio).toBeUndefined()
+  })
+
+  it('tempo: a section\'s own, else the song\'s, else none; a Track\'s varispeed rate', () => {
+    const s = song([4, 4])
+    expect(sectionBpm(s, s.sections[0])).toBeNull()
+    s.bpm = 120
+    s.sections[1].bpm = 90
+    expect(sectionBpm(s, s.sections[0])).toBe(120)
+    expect(sectionBpm(s, s.sections[1])).toBe(90)
+    const back = parseSong(JSON.parse(JSON.stringify(s)))!
+    expect([back.bpm, back.sections[1].bpm, back.sections[0].bpm]).toEqual([120, 90, undefined])
+    expect(trackRate({ id: 't', label: 'T', bpm: 100, fit: 'varispeed' }, 110)).toBeCloseTo(1.1)
+    expect(trackRate({ id: 't', label: 'T', bpm: 100 }, 110)).toBe(1) // Off: its own speed
+    expect(trackRate({ id: 't', label: 'T', fit: 'varispeed' }, 110)).toBe(1) // no BPM known
+  })
+
   it('clip presets: saved on a whole-section clip (kept as a clip), parsed back, taken off', () => {
     const s = song([4])
     const sec = s.sections[0]
@@ -189,8 +216,8 @@ describe('songs', () => {
     const s = planToSong(plan)
     expect(s.name).toBe('Night Drive')
     expect(s.sections.map(x => [x.name, x.bars])).toEqual([['Verse', 8], ['Chorus', 16], ['Verse', 8]])
-    expect(s.sections[0].lanes).toEqual({ drum: 0, chord: 0, seq: null, bass: null, arp: null })
-    expect(s.sections[1].lanes).toEqual({ drum: null, chord: 1, seq: 1, bass: null, arp: null })
+    expect(s.sections[0].lanes).toEqual({ drum: 0, chord: 0, seq: null, bass: null, arp: null, track: null, capture: null, sample: null })
+    expect(s.sections[1].lanes).toEqual({ drum: null, chord: 1, seq: 1, bass: null, arp: null, track: null, capture: null, sample: null })
     plan.style.drumStyle = 'house'
     expect(planToSong(plan).sections[1].lanes.drum).toBe(1) // a drum style fills the sections without a grid
   })

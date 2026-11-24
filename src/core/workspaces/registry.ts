@@ -26,35 +26,6 @@ export interface WorkspaceManifest {
 export const WORKSPACES: WorkspaceManifest[] = [
   { id: 'classic', label: 'Classic', panels: null },
   {
-    // Four contexts C1: the stage — the song (the Session Browser as in EDIT, without its Slots pane),
-    // the Rig's controls with Play, the Rig (its Launchpad layout) and the Virtual Device (the presets,
-    // changed on the fly); Rig Controls' Mixer opens the Audio Mixer floating over them. The players are not
-    // shown (the song drives them; their views are in Studio). With SY.CORE Link connected: the Map.
-    id: 'performance',
-    label: 'Performance',
-    panels: ['session-browser', 'rig-controls', 'rig-controller', 'virtual-device'],
-    tiles: {
-      'session-browser': { x: 0, y: 0, w: 0.6, h: 1 },
-      'rig-controls':    { x: 0.6, y: 0, w: 0.13, h: 1 },
-      'rig-controller':  { x: 0.73, y: 0, w: 0.27, h: 0.55 },
-      'virtual-device':  { x: 0.73, y: 0.55, w: 0.27, h: 0.45 },
-    },
-    withLive: {
-      panels: ['live-map'],
-      needsLink: true,
-      tiles: {
-        'session-browser': { x: 0, y: 0, w: 0.6, h: 1 },
-        'rig-controls':    { x: 0.6, y: 0, w: 0.13, h: 1 },
-        'rig-controller':  { x: 0.73, y: 0, w: 0.27, h: 0.48 },
-        'live-map':        { x: 0.73, y: 0.48, w: 0.27, h: 0.2 },
-        'virtual-device':  { x: 0.73, y: 0.68, w: 0.27, h: 0.32 },
-      },
-    },
-    floating: ['audio-mixer'],
-    lowEffects: true,
-    playViews: true,
-  },
-  {
     // (the Performance workspace before the four contexts) composing / trying parts: the players, the
     // Rig's controls, the Rig
     id: 'studio',
@@ -81,6 +52,44 @@ export const WORKSPACES: WorkspaceManifest[] = [
         'live-map':       { x: 0.63, y: 0.73, w: 0.37, h: 0.27 },
       },
     },
+    lowEffects: true,
+    playViews: true,
+  },
+  {
+    // Four contexts, Arrange: the song built — the Session Browser alone, full screen, in EDIT (sections, lanes,
+    // clips, its Slots pane, Save presets, Preview). The engines play on behind it.
+    id: 'arrange',
+    label: 'Arrange',
+    panels: ['session-browser'],
+    tiles: { 'session-browser': { x: 0, y: 0, w: 1, h: 1 } },
+    lowEffects: true,
+  },
+  {
+    // Four contexts C1: the stage — the song (the Session Browser as in EDIT, without its Slots pane),
+    // the Rig's controls with Play, the Rig (its Launchpad layout) and the Virtual Device (the presets,
+    // changed on the fly); Rig Controls' Mixer opens the Audio Mixer floating over them. The players are not
+    // shown (the song drives them; their views are in Studio). With SY.CORE Link connected: the Map.
+    id: 'performance',
+    label: 'Performance',
+    panels: ['session-browser', 'rig-controls', 'rig-controller', 'virtual-device'],
+    tiles: {
+      'session-browser': { x: 0, y: 0, w: 0.6, h: 1 },
+      'rig-controls':    { x: 0.6, y: 0, w: 0.13, h: 1 },
+      'rig-controller':  { x: 0.73, y: 0, w: 0.27, h: 0.55 },
+      'virtual-device':  { x: 0.73, y: 0.55, w: 0.27, h: 0.45 },
+    },
+    withLive: {
+      panels: ['live-map'],
+      needsLink: true,
+      tiles: {
+        'session-browser': { x: 0, y: 0, w: 0.6, h: 1 },
+        'rig-controls':    { x: 0.6, y: 0, w: 0.13, h: 1 },
+        'rig-controller':  { x: 0.73, y: 0, w: 0.27, h: 0.48 },
+        'live-map':        { x: 0.73, y: 0.48, w: 0.27, h: 0.2 },
+        'virtual-device':  { x: 0.73, y: 0.68, w: 0.27, h: 0.32 },
+      },
+    },
+    floating: ['audio-mixer'],
     lowEffects: true,
     playViews: true,
   },

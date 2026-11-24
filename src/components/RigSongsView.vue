@@ -5,7 +5,7 @@
 import { computed, ref, watch } from 'vue'
 import { Play, Square, Pause, Plus, Copy, Trash2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
-  SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, MAX_SECTIONS, VOL_BAR_OPTIONS, SONG_FADE_OPTIONS, setSectionBars, setLaneClips, hasOwnClips, songVolKeys,
+  SONG_LANES, RIG_SONG_LANES, SONG_LANE_LABELS, SONG_SLOTS, SECTION_BAR_OPTIONS, MAX_SECTIONS, VOL_BAR_OPTIONS, SONG_FADE_OPTIONS, setSectionBars, setLaneClips, hasOwnClips, songVolKeys,
   newSong, newSection, exampleSong, songBars, sectionStartBar, activeLanes, barsLeft,
 } from '@/lib/songs'
 import { copyMaterial, dropMaterial, songMaterial } from '@/lib/song-material'
@@ -255,7 +255,7 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
         <div class="text-[10px] font-black uppercase tracking-wider text-white truncate">{{ sec.name }}</div>
         <div class="text-[9px] font-mono text-neutral-400">{{ sec.bars }} bars</div>
         <div class="absolute bottom-1.5 left-1.5 right-1.5 flex gap-0.5">
-          <span v-for="l in SONG_LANES" :key="l" class="h-1.5 flex-1 rounded-sm"
+          <span v-for="l in RIG_SONG_LANES" :key="l" class="h-1.5 flex-1 rounded-sm"
                 :class="sec.lanes[l] !== null ? 'bg-amber-300/80' : 'bg-white/10'" :title="`${SONG_LANE_LABELS[l]}: ${sec.lanes[l] !== null ? labelFor(l, sec.lanes[l]) : 'silent'}`"></span>
         </div>
         <div v-if="isCurrent(i)" class="absolute top-0 left-0 h-0.5 bg-emerald-300" :style="{ width: `${progress(i) * 100}%` }"></div>
@@ -288,7 +288,8 @@ const btn = 'px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-w
         </div>
         <span class="text-[10px] text-neutral-500">bars · volume per channel: % of its Max (Fade modal), sent as CC 7</span>
       </div>
-      <template v-for="l in SONG_LANES" :key="l">
+      <!-- the Rig's lanes (Tracks / Capture / Samples: in the Session Browser) -->
+      <template v-for="l in RIG_SONG_LANES" :key="l">
       <div class="flex flex-wrap items-center gap-1" :class="lanesOn[l] ? '' : 'opacity-40'">
         <span class="w-12 text-[10px] font-bold uppercase tracking-wider" :title="lanesOn[l] ? '' : 'This row is not on a lane / not connected: the song leaves it alone'">{{ SONG_LANE_LABELS[l] }}</span>
         <button class="w-9 h-10 rounded border text-[11px] font-mono"

@@ -275,6 +275,18 @@ export function useRigCaptures() {
     else if (p === 'playing') state.play[i] = 'stopping'
     else state.play[i] = 'playing'
   }
+  /** The song's Capture lane: only pad `i` plays — from the next bar (nothing playing: it waits for Play), the others
+   *  end on the next bar; null: they all end there. The pad already playing goes on. */
+  function playOnly(i) {
+    for (let j = 0; j < CLIP_SLOTS; j++) {
+      if (j === i) continue
+      if (state.play[j] === 'playing') state.play[j] = 'stopping'
+      else if (state.play[j] === 'queued') state.play[j] = 'idle'
+    }
+    if (i == null || !state.clips[i]) return
+    if (state.play[i] === 'idle') { state.play[i] = 'queued'; if (clockRunning()) startGrid() }
+    else if (state.play[i] === 'stopping') state.play[i] = 'playing'
+  }
   /** Stop a slot now (`now`) or leave it be. */
   function stopSlot(i, now) {
     if (now) state.play[i] = 'idle'
@@ -326,7 +338,7 @@ export function useRigCaptures() {
 
   // every Stop All stops the clips (stopRigCaptures)
   offStopAll = onStopAll(() => stopRigCaptures())
-  engine = { state, hasOutCable, staleNode, outTargets, toggleRecording, startRecording, stopRecording, select, clear, setClip, toggleSlot, stopAllClips, clockRunning, saveSet, loadSet, deleteSet, setsReady }
+  engine = { state, hasOutCable, staleNode, outTargets, toggleRecording, startRecording, stopRecording, select, clear, setClip, toggleSlot, playOnly, stopAllClips, clockRunning, saveSet, loadSet, deleteSet, setsReady }
   return engine
 }
 

@@ -42,6 +42,21 @@ describe('Rig captures engine', () => {
   })
   afterEach(() => { externalGrid.emit({ type: 'stop' }); _resetRigCaptures(); vi.restoreAllMocks() })
 
+  it("the song's Capture lane: only its pad plays (from the next bar), the others end there; null: all end", () => {
+    const { eng } = setup()
+    const clip = { steps: 16, notes: [{ step: 0, pitch: 60, velocity: 100, len: 1, channel: 1 }] } as any
+    eng.setClip(0, clip); eng.setClip(1, clip)
+    eng.playOnly(0)
+    expect(eng.state.play[0]).toBe('queued')
+    eng.state.play[0] = 'playing'
+    eng.playOnly(1)
+    expect([eng.state.play[0], eng.state.play[1]]).toEqual(['stopping', 'queued'])
+    eng.playOnly(0) // back before the bar: it goes on, the queued one called off
+    expect([eng.state.play[0], eng.state.play[1]]).toEqual(['playing', 'idle'])
+    eng.playOnly(null)
+    expect(eng.state.play[0]).toBe('stopping')
+  })
+
   it('Capt records a phrase into the first empty pad; its pad loops it from the bar', () => {
     const { eng, on, play } = setup()
     eng.toggleRecording()
